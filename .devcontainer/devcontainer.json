@@ -1,0 +1,46 @@
+{
+    "name": "Karakept Development",
+    "image": "mcr.microsoft.com/devcontainers/java:1-17-bookworm",
+    "features": {
+        "ghcr.io/CASL0/devcontainer-features/android-sdk:1": {
+            "installNdk": "true",
+            "installCmake": "true"
+        },
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "lts"
+        },
+        "ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
+            "packages": "curl,nano,vim,ninja-build,python3,libgtk-3-dev,libwebkit2gtk-4.1-dev,xvfb,mesa-utils,libxcursor1,libxrandr2,libxi6,libxxf86vm1"
+        }
+    },
+    "remoteEnv": {
+        "ANDROID_HOME": "/usr/local/android",
+        "ANDROID_SDK_ROOT": "/usr/local/android",
+        "ANDROID_NDK_ROOT": "/usr/local/android/ndk/26.1.10909125"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "fwcd.kotlin",
+                "mathiasfrohlich.Kotlin",
+                "vscjava.vscode-java-pack",
+                "vscjava.vscode-gradle",
+                "usernamehw.errorlens"
+            ]
+        }
+    },
+    "postCreateCommand": "bash .devcontainer/setup.sh",
+    "runArgs": [
+        "--privileged"
+    ],
+    "mounts": [
+        "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind",
+        "source=${localEnv:XDG_RUNTIME_DIR}/${localEnv:WAYLAND_DISPLAY},target=/tmp/wayland-0,type=bind"
+    ],
+    "containerEnv": {
+        "DISPLAY": "${localEnv:DISPLAY}",
+        "WAYLAND_DISPLAY": "wayland-0",
+        "XDG_RUNTIME_DIR": "/tmp",
+        "QT_QPA_PLATFORM": "wayland"
+    }
+}
