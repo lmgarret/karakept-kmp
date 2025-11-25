@@ -48,6 +48,8 @@ class BookmarkRepository(
                         url = url,
                         title = title,
                         content = content,
+                        imageUrl = dto.content.imageUrl,
+                        description = dto.content.description,
                         createdAt = createdAtMillis,
                         isArchived = dto.archived,
                         isStarred = dto.favourited

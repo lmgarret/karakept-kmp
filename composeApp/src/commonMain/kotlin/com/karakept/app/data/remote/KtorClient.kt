@@ -24,7 +24,7 @@ fun createHttpClient(): HttpClient {
         
         install(Logging) {
             logger = Logger.SIMPLE
-            level = LogLevel.ALL
+            level = LogLevel.INFO
         }
         
         defaultRequest {

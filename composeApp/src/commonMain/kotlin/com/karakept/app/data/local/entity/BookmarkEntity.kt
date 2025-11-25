@@ -11,6 +11,8 @@ data class BookmarkEntity(
     val url: String,
     val title: String,
     val content: String?,
+    val imageUrl: String?,
+    val description: String?,
     val createdAt: Long,
     val isArchived: Boolean,
     val isStarred: Boolean

@@ -13,6 +13,9 @@ interface ServerDao {
     @Query("SELECT * FROM servers")
     fun getAllServers(): Flow<List<ServerEntity>>
 
+    @Query("SELECT * FROM servers")
+    suspend fun getAllServersSync(): List<ServerEntity>
+
     @Query("SELECT * FROM servers WHERE id = :id")
     suspend fun getServerById(id: String): ServerEntity?
 

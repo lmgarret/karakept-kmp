@@ -1,5 +1,7 @@
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.SlideTransition
 import com.karakept.app.di.appModule
@@ -13,8 +15,21 @@ fun App() {
         modules(appModule)
     }) {
         com.karakept.app.ui.theme.AppTheme {
-            Navigator(com.karakept.app.ui.screens.LoginScreen()) { navigator ->
-                SlideTransition(navigator)
+            val serverRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.ServerRepository>()
+            var initialScreen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<cafe.adriel.voyager.core.screen.Screen?>(null) }
+
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                if (serverRepository.hasServers()) {
+                    initialScreen = com.karakept.app.ui.screens.MainScreen()
+                } else {
+                    initialScreen = com.karakept.app.ui.screens.LoginScreen()
+                }
+            }
+
+            if (initialScreen != null) {
+                Navigator(initialScreen!!) { navigator ->
+                    SlideTransition(navigator)
+                }
             }
         }
     }

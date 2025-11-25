@@ -63,4 +63,6 @@ actual fun getDatabaseBuilder(): RoomDatabase.Builder<AppDatabase> {
         context = ctx,
         name = dbFile.absolutePath
     )
+        .addMigrations(MIGRATION_1_2)
+        .fallbackToDestructiveMigration(true)
 }

@@ -1,11 +1,7 @@
 package com.karakept.app.ui.screens
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,7 +9,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Card
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -31,13 +26,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
+import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.LayoutType
+import com.karakept.app.ui.components.BookmarkCardLayout
+import com.karakept.app.ui.components.BookmarkListLayout
 import kotlinx.coroutines.launch
 
 class MainScreen : Screen {
@@ -46,10 +43,12 @@ class MainScreen : Screen {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = getScreenModel<MainScreenModel>()
+        val settingsScreenModel = koinScreenModel<SettingsScreenModel>()
         val servers by screenModel.servers.collectAsState()
         val selectedServer by screenModel.selectedServer.collectAsState()
         val bookmarks by screenModel.bookmarks.collectAsState()
-        
+        val layoutType by settingsScreenModel.layoutType.collectAsState()
+
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val scope = rememberCoroutineScope()
 
@@ -75,6 +74,14 @@ class MainScreen : Screen {
                         selected = false,
                         onClick = {
                             navigator.push(LoginScreen())
+                            scope.launch { drawerState.close() }
+                        }
+                    )
+                    NavigationDrawerItem(
+                        label = { Text("Settings") },
+                        selected = false,
+                        onClick = {
+                            navigator.push(SettingsScreen())
                             scope.launch { drawerState.close() }
                         }
                     )
@@ -110,37 +117,19 @@ class MainScreen : Screen {
                     modifier = Modifier.padding(padding).fillMaxSize()
                 ) {
                     items(bookmarks) { bookmark ->
-                        BookmarkItem(bookmark) {
-                             navigator.push(BookmarkViewerScreen(bookmark.localId))
+                        when (layoutType) {
+                            LayoutType.CARD -> BookmarkCardLayout(
+                                bookmark = bookmark,
+                                onClick = { navigator.push(BookmarkViewerScreen(bookmark.localId)) }
+                            )
+                            LayoutType.LIST -> BookmarkListLayout(
+                                bookmark = bookmark,
+                                onClick = { navigator.push(BookmarkViewerScreen(bookmark.localId)) }
+                            )
                         }
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun BookmarkItem(bookmark: BookmarkEntity, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = bookmark.title,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = bookmark.url,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }

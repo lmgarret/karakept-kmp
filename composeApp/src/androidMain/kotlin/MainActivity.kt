@@ -9,6 +9,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.karakept.app.data.local.AndroidContext.context = applicationContext
+        com.karakept.app.data.local.initializeDataStore(applicationContext)
         setContent {
             App()
         }

@@ -33,6 +33,22 @@ class RemoteDataSource(private val client: HttpClient) {
             throw ApiException("Error fetching bookmarks: ${e.message}", e)
         }
     }
+
+    suspend fun testConnection(url: String, apiKey: String): Boolean {
+        return try {
+            val response: HttpResponse = client.get(url) {
+                url {
+                    appendPathSegments("api", "v1", "bookmarks")
+                    parameters.append("page", "1")
+                    parameters.append("per_page", "1")
+                }
+                header("Authorization", "Bearer $apiKey")
+            }
+            response.status.isSuccess()
+        } catch (e: Exception) {
+            false
+        }
+    }
 }
 
 class ApiException(message: String, cause: Throwable? = null) : Exception(message, cause)

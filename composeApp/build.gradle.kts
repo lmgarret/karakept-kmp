@@ -30,6 +30,7 @@ kotlin {
                 implementation(compose.ui)
                 implementation(compose.components.resources)
                 implementation(compose.components.uiToolingPreview)
+                implementation(compose.materialIconsExtended)
                 
                 // Voyager
                 implementation(libs.voyager.navigator)
@@ -64,6 +65,9 @@ kotlin {
                 
                 // DateTime
                 implementation(libs.kotlinx.datetime)
+
+                // DataStore
+                implementation(libs.androidx.datastore.preferences)
             }
         }
         val androidMain by getting {

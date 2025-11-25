@@ -11,6 +11,10 @@ class ServerRepository(private val serverDao: ServerDao) {
         entities.map { it.toDomain() }
     }
 
+    suspend fun hasServers(): Boolean {
+        return serverDao.getAllServersSync().isNotEmpty()
+    }
+
     suspend fun addServer(url: String, apiKey: String, label: String) {
         val id = url.hashCode().toString() // Simple ID generation
         serverDao.insertServer(ServerEntity(id, url, apiKey, label))

@@ -16,13 +16,14 @@ junit = "4.13.2"
 kotlin = "2.1.0"
 ktor = "3.3.2"
 voyager = "1.1.0-beta03"
-coil = "3.3.0"
+coil = "3.0.0"
 koin = "4.0.0"
 room = "2.7.0-alpha11" # Using alpha for KMP support as per search results, or 2.8.4 if stable available. Search said 2.8.4 is latest stable with KMP.
 sqlite = "2.5.0-alpha11" 
 kotlinx-coroutines = "1.9.0"
 kotlinx-serialization = "1.7.3"
 kotlinx-datetime = "0.6.1"
+datastore = "1.1.1"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -77,6 +78,9 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 
 # DateTime
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
+
+# DataStore
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
