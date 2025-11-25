@@ -1,7 +1,9 @@
 package com.karakept.app.ui.screens
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -27,6 +29,7 @@ import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.ui.components.HtmlContent
 
 data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -61,12 +64,22 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                     .padding(16.dp)
             ) {
                 bookmark?.let { b ->
-                    Text(text = b.url, style = MaterialTheme.typography.labelSmall)
-                    // Render HTML content here. For now, just text.
-                    // To render HTML, we might need a WebView or a HTML parser.
-                    // Since KMP WebView is tricky, we can use a simple text display or a library like `multiplatform-markdown-renderer` if it was markdown.
-                    // For HTML, we can try to strip tags or display as is for now.
-                    Text(text = b.content ?: "No content", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = b.url,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Render HTML content safely
+                    HtmlContent(
+                        html = b.content,
+                        onLinkClick = { url ->
+                            // Navigate to WebViewScreen to display the link
+                            navigator.push(WebViewScreen(url))
+                        }
+                    )
                 }
             }
         }

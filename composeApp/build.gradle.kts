@@ -66,6 +66,9 @@ kotlin {
 
                 // DataStore
                 implementation(libs.androidx.datastore.preferences)
+
+                // HTML Parsing
+                implementation(libs.jsoup)
             }
         }
         val androidMain by getting {
@@ -86,6 +89,8 @@ kotlin {
                 implementation(libs.ktor.client.okhttp)
                 // Coroutines Swing dispatcher for desktop Main dispatcher
                 implementation(libs.kotlinx.coroutines.swing)
+                // WebView for HTML rendering
+                implementation(libs.compose.webview.multiplatform)
             }
         }
     }

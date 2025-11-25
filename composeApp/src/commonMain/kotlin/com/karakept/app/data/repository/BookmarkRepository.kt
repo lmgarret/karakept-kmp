@@ -38,9 +38,9 @@ class BookmarkRepository(
                     
                     // Use content title if bookmark title is null
                     val title = dto.title ?: dto.content.title ?: "Untitled"
-                    
-                    // Get text content from either note or content description
-                    val content = dto.note ?: dto.content.description ?: dto.content.text
+
+                    // Get HTML content - prioritize htmlContent, then fall back to other fields
+                    val content = dto.content.htmlContent ?: dto.note ?: dto.content.description ?: dto.content.text
                     
                     BookmarkEntity(
                         remoteId = dto.id.hashCode().toLong(), // Convert string ID to long

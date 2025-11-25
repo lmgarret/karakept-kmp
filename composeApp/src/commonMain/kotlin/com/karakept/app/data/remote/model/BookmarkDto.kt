@@ -34,5 +34,6 @@ data class BookmarkContent(
     val title: String? = null,
     val description: String? = null,
     val imageUrl: String? = null,
-    val text: String? = null
+    val text: String? = null,
+    val htmlContent: String? = null
 )
