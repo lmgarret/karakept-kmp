@@ -39,7 +39,7 @@ val appModule = module {
     single { SettingsRepository(get()) }
 
     factory { LoginScreenModel(get(), get()) }
-    factory { MainScreenModel(get(), get()) }
+    factory { MainScreenModel(get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get()) }
     factory { SettingsScreenModel(get(), get()) }
 }

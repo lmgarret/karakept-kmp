@@ -7,8 +7,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -44,7 +48,7 @@ class MainScreen : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = getScreenModel<MainScreenModel>()
         val settingsScreenModel = koinScreenModel<SettingsScreenModel>()
-        val servers by screenModel.servers.collectAsState()
+        val lists by screenModel.lists.collectAsState()
         val selectedServer by screenModel.selectedServer.collectAsState()
         val bookmarks by screenModel.bookmarks.collectAsState()
         val layoutType by settingsScreenModel.layoutType.collectAsState()
@@ -57,26 +61,62 @@ class MainScreen : Screen {
             drawerContent = {
                 ModalDrawerSheet {
                     Spacer(Modifier.height(12.dp))
-                    Text("Servers", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
-                    servers.forEach { server ->
+                    Text("Lists", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+                    lists.forEach { list ->
                         NavigationDrawerItem(
-                            label = { Text(server.label) },
-                            selected = server.id == selectedServer?.id,
+                            label = { Text("${list.icon} ${list.name}") },
+                            selected = false,
                             onClick = {
-                                screenModel.selectServer(server.id)
+                                // TODO: Filter bookmarks by list
                                 scope.launch { drawerState.close() }
                             }
                         )
                     }
-                    Spacer(Modifier.weight(1f))
+                    
+                    Spacer(Modifier.height(16.dp))
+                    Text("Filters", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+                    
                     NavigationDrawerItem(
-                        label = { Text("Add Server") },
+                        label = { Text("All Bookmarks") },
                         selected = false,
+                        icon = { Icon(Icons.Default.Book, contentDescription = null) },
                         onClick = {
-                            navigator.push(LoginScreen())
+                            screenModel.clearFilter()
                             scope.launch { drawerState.close() }
                         }
                     )
+                    
+                    NavigationDrawerItem(
+                        label = { Text("Favorites") },
+                        selected = false,
+                        icon = { Icon(Icons.Default.Star, contentDescription = null) },
+                        onClick = {
+                            screenModel.applyFilter("is:fav")
+                            scope.launch { drawerState.close() }
+                        }
+                    )
+                    
+                    NavigationDrawerItem(
+                        label = { Text("Not Archived") },
+                        selected = false,
+                        icon = { Icon(Icons.Default.Inbox, contentDescription = null) },
+                        onClick = {
+                            screenModel.applyFilter("-is:archived")
+                            scope.launch { drawerState.close() }
+                        }
+                    )
+                    
+                    NavigationDrawerItem(
+                        label = { Text("Archived") },
+                        selected = false,
+                        icon = { Icon(Icons.Default.Archive, contentDescription = null) },
+                        onClick = {
+                            screenModel.applyFilter("is:archived")
+                            scope.launch { drawerState.close() }
+                        }
+                    )
+                    
+                    Spacer(Modifier.weight(1f))
                     NavigationDrawerItem(
                         label = { Text("Settings") },
                         selected = false,
@@ -99,7 +139,7 @@ class MainScreen : Screen {
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text(selectedServer?.label ?: "Karakept") },
+                        title = { Text("Karakept") },
                         navigationIcon = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                 Icon(Icons.Default.Menu, contentDescription = "Menu")
