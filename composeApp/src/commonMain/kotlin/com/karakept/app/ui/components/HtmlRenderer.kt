@@ -21,5 +21,6 @@ expect fun HtmlRenderer(
     html: String,
     viewerMode: ViewerMode,
     modifier: Modifier = Modifier,
-    onLinkClick: ((String) -> Unit)? = null
+    onLinkClick: ((String) -> Unit)? = null,
+    onLoaded: (() -> Unit)? = null
 )

@@ -1,14 +1,16 @@
 package com.karakept.app.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Visibility
@@ -20,16 +22,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
@@ -59,29 +63,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         }
 
         Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        when (val state = loadingState) {
-                            is BookmarkLoadingState.TitleLoaded -> Text(state.title)
-                            is BookmarkLoadingState.ThumbnailLoaded -> Text(state.title)
-                            is BookmarkLoadingState.FullyLoaded -> Text(state.bookmark.title)
-                            else -> Text("Loading...")
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    },
-                    actions = {
-                        // Viewer mode toggle button
-                        IconButton(onClick = { showModeDialog = true }) {
-                            Icon(Icons.Default.Visibility, contentDescription = "Viewer Mode")
-                        }
-                    }
-                )
-            }
+            // topBar removed for custom parallax header implementation
         ) { padding ->
             when (val state = loadingState) {
                 is BookmarkLoadingState.Initial -> {
@@ -97,55 +79,159 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                     )
                 }
                 is BookmarkLoadingState.ThumbnailLoaded -> {
-                    Column(modifier = Modifier.padding(padding)) {
-                        HeroImageBanner(
+                    // Similar structure to FullyLoaded but with loading content
+                    // We can reuse the parallax structure here too for consistency
+                    Box(modifier = Modifier.fillMaxSize()) {
+                         HeroImageBanner(
                             imageUrl = state.imageUrl,
-                            title = state.title
+                            title = state.title,
+                            modifier = Modifier.align(Alignment.TopCenter)
                         )
-                        BookmarkContentLoader(
-                            loadingState = state,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                        
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = 300.dp) // Offset by banner height
+                                .background(MaterialTheme.colorScheme.background)
+                        ) {
+                             BookmarkContentLoader(
+                                loadingState = state,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
                     }
                 }
                 is BookmarkLoadingState.FullyLoaded -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(padding)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        HeroImageBanner(
-                            imageUrl = state.bookmark.imageUrl,
-                            title = state.bookmark.title
-                        )
+                    val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
+                    val bannerHeight = 320.dp
+                    val toolbarHeight = 64.dp
+                    
+                    // Calculate scroll progress for parallax and sticky title
+                    // We use derivedStateOf to minimize recompositions
+                    val showStickyTitle by remember {
+                        androidx.compose.runtime.derivedStateOf {
+                            val firstVisibleItemIndex = scrollState.firstVisibleItemIndex
+                            val firstVisibleItemScrollOffset = scrollState.firstVisibleItemScrollOffset
+                            
+                            // Show sticky title when we've scrolled past the banner
+                            firstVisibleItemIndex > 0 || firstVisibleItemScrollOffset > 300
+                        }
+                    }
 
-                        // Archive mode badge
-                        if (viewerMode == ViewerMode.ARCHIVE) {
-                            ArchiveModeBadge(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                            )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Parallax Header (Behind the list)
+                        // We only render this if the first item is visible to save resources
+                        if (scrollState.firstVisibleItemIndex == 0) {
+                            Box(
+                                modifier = Modifier
+                                    .height(bannerHeight)
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        // Parallax effect: translate Y by half the scroll offset
+                                        translationY = -scrollState.firstVisibleItemScrollOffset * 0.5f
+                                        alpha = 1f - (scrollState.firstVisibleItemScrollOffset / 1000f).coerceIn(0f, 1f)
+                                    }
+                            ) {
+                                HeroImageBanner(
+                                    imageUrl = state.bookmark.imageUrl,
+                                    title = state.bookmark.title,
+                                    url = state.bookmark.url
+                                )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        // Content List
+                        androidx.compose.foundation.lazy.LazyColumn(
+                            state = scrollState,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            // Transparent spacer for the header
+                            item {
+                                Spacer(modifier = Modifier.height(bannerHeight))
+                            }
 
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = state.bookmark.url,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            // Content Body
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.background)
+                                        .padding(16.dp)
+                                ) {
+                                    // Archive mode badge
+                                    if (viewerMode == ViewerMode.ARCHIVE) {
+                                        ArchiveModeBadge(
+                                            modifier = Modifier.padding(bottom = 16.dp)
+                                        )
+                                    }
 
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // Render HTML content
-                            HtmlContent(
-                                html = state.bookmark.content,
-                                viewerMode = viewerMode,
-                                onLinkClick = { url ->
-                                    navigator.push(WebViewScreen(url))
+                                    // Render HTML content
+                                    HtmlContent(
+                                        html = state.bookmark.content,
+                                        viewerMode = viewerMode,
+                                        onLinkClick = { url ->
+                                            navigator.push(WebViewScreen(url))
+                                        }
+                                    )
+                                    
+                                    // Add extra padding at bottom for better scrolling experience
+                                    Spacer(modifier = Modifier.height(80.dp))
                                 }
-                            )
+                            }
+                        }
+                        
+                        // Custom Top Bar (Overlay)
+                        // We implement a custom top bar to handle the sticky title transition
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(toolbarHeight)
+                                .background(
+                                    color = MaterialTheme.colorScheme.surface.copy(
+                                        alpha = if (showStickyTitle) 1f else 0f
+                                    )
+                                )
+                                .align(Alignment.TopCenter)
+                        ) {
+                            // Back Button (Always visible, changes color based on background)
+                            IconButton(
+                                onClick = { navigator.pop() },
+                                modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
+                                )
+                            }
+                            
+                            // Sticky Title
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showStickyTitle,
+                                enter = androidx.compose.animation.fadeIn(),
+                                exit = androidx.compose.animation.fadeOut(),
+                                modifier = Modifier.align(Alignment.Center).padding(horizontal = 48.dp)
+                            ) {
+                                Text(
+                                    text = state.bookmark.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            
+                            // Viewer Mode Toggle
+                            IconButton(
+                                onClick = { showModeDialog = true },
+                                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = "Viewer Mode",
+                                    tint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
+                                )
+                            }
                         }
                     }
                 }

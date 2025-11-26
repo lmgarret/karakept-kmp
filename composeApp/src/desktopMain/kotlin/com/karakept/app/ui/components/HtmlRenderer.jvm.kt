@@ -23,7 +23,8 @@ actual fun HtmlRenderer(
     html: String,
     viewerMode: ViewerMode,
     modifier: Modifier,
-    onLinkClick: ((String) -> Unit)?
+    onLinkClick: ((String) -> Unit)?,
+    onLoaded: (() -> Unit)?
 ) {
     // Debug output
     println("HtmlRenderer (Desktop): Rendering HTML, length=${html.length}, first 100 chars=${html.take(100)}")
@@ -115,6 +116,14 @@ actual fun HtmlRenderer(
 
         onDispose {
             // Cleanup if needed
+        }
+    }
+
+    // Observe loading state
+    val loadingState = webViewState.loadingState
+    androidx.compose.runtime.LaunchedEffect(loadingState) {
+        if (loadingState is com.multiplatform.webview.web.LoadingState.Finished) {
+            onLoaded?.invoke()
         }
     }
 

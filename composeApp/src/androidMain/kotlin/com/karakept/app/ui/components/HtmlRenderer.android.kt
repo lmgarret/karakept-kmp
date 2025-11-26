@@ -27,7 +27,8 @@ actual fun HtmlRenderer(
     html: String,
     viewerMode: ViewerMode,
     modifier: Modifier,
-    onLinkClick: ((String) -> Unit)?
+    onLinkClick: ((String) -> Unit)?,
+    onLoaded: (() -> Unit)?
 ) {
     val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val backgroundColor = MaterialTheme.colorScheme.surface.toArgb()
@@ -166,6 +167,11 @@ actual fun HtmlRenderer(
                             return true
                         }
                         return false
+                    }
+
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
+                        onLoaded?.invoke()
                     }
                 }
 

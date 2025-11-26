@@ -21,10 +21,14 @@ object HtmlArchiveProcessor {
         return try {
             val doc = Jsoup.parse(html)
 
+            // Optimize: Disable pretty printing
+            doc.outputSettings().prettyPrint(false)
+
             // Remove ALL script tags
             doc.select("script").remove()
 
             // Remove inline event handlers (defense in depth)
+            // Optimize: Select only elements with these attributes instead of iterating all elements
             val eventHandlers = listOf(
                 "onclick", "onload", "onerror", "onmouseover", "onmouseout",
                 "onfocus", "onblur", "onchange", "onsubmit", "onkeydown",
@@ -32,8 +36,10 @@ object HtmlArchiveProcessor {
                 "onmousemove", "onmouseleave", "onmouseenter", "oncontextmenu",
                 "oninput", "onscroll", "onwheel", "oncopy", "oncut", "onpaste"
             )
-
-            doc.select("*").forEach { element ->
+            
+            // Build a selector for all event handlers: [onclick], [onload], ...
+            val selector = eventHandlers.joinToString(", ") { "[$it]" }
+            doc.select(selector).forEach { element ->
                 eventHandlers.forEach { handler ->
                     element.removeAttr(handler)
                 }

@@ -41,7 +41,9 @@ object HtmlSanitizer {
         }
 
         return try {
-            Jsoup.clean(html, safelist)
+            // Optimize: Disable pretty printing to save time and memory on serialization
+            val outputSettings = Jsoup.parse("").outputSettings().prettyPrint(false)
+            Jsoup.clean(html, "", safelist, outputSettings)
         } catch (e: Exception) {
             // If sanitization fails, return empty string as a safe fallback
             ""

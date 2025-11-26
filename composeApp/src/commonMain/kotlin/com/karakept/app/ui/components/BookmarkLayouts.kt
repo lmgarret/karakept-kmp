@@ -23,6 +23,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.karakept.app.data.local.entity.BookmarkEntity
 
 @Composable
@@ -40,13 +43,18 @@ fun BookmarkCardLayout(
         Column {
             if (bookmark.imageUrl != null) {
                 AsyncImage(
-                    model = bookmark.imageUrl,
+                    model = ImageRequest.Builder(LocalPlatformContext.current)
+                        .data(bookmark.imageUrl)
+                        .size(600) // Request a reasonable size for the card
+                        .crossfade(true)
+                        .build(),
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(200.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium
                 )
             } else {
                 Box(
@@ -98,13 +106,18 @@ fun BookmarkListLayout(
         ) {
             if (bookmark.imageUrl != null) {
                 AsyncImage(
-                    model = bookmark.imageUrl,
+                    model = ImageRequest.Builder(LocalPlatformContext.current)
+                        .data(bookmark.imageUrl)
+                        .size(300) // Request a smaller size for the list item
+                        .crossfade(true)
+                        .build(),
                     contentDescription = null,
                     modifier = Modifier
                         .size(80.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Crop,
+                    filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
                 )
             } else {
                 Box(

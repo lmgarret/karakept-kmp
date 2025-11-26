@@ -2,16 +2,24 @@ package com.karakept.app.ui.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.animation.Crossfade
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.utils.HtmlArchiveProcessor
+import com.karakept.app.utils.HtmlCache
 import com.karakept.app.utils.HtmlSanitizer
 
 /**
@@ -39,53 +47,89 @@ fun HtmlContent(
     // Debug output
     println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode")
 
-    // Process HTML based on viewer mode
-    val processedHtml = remember(html, viewerMode) {
-        try {
-            val result = when (viewerMode) {
-                ViewerMode.READER -> HtmlSanitizer.sanitize(html)
-                ViewerMode.ARCHIVE -> HtmlArchiveProcessor.processForArchive(html)
+    // Process HTML based on viewer mode asynchronously
+    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode) {
+        if (html == null) {
+            value = null
+            return@produceState
+        }
+
+        val cacheKey = HtmlCache.generateKey(html, viewerMode.name)
+        val cached = HtmlCache.get(cacheKey)
+        
+        if (cached != null) {
+            value = cached
+        } else {
+            value = withContext(Dispatchers.Default) {
+                try {
+                    val result = when (viewerMode) {
+                        ViewerMode.READER -> HtmlSanitizer.sanitize(html)
+                        ViewerMode.ARCHIVE -> HtmlArchiveProcessor.processForArchive(html)
+                    }
+                    println("HtmlContent: Processed HTML length=${result.length}, isBlank=${result.isBlank()}")
+                    HtmlCache.put(cacheKey, result)
+                    result
+                } catch (e: Exception) {
+                    println("HtmlContent: Processing failed: ${e.message}")
+                    null // Processing failed
+                }
             }
-            println("HtmlContent: Processed HTML length=${result.length}, isBlank=${result.isBlank()}")
-            result
-        } catch (e: Exception) {
-            println("HtmlContent: Processing failed: ${e.message}")
-            null // Processing failed
         }
     }
 
     Box(modifier = modifier) {
-        when {
-            html.isNullOrBlank() -> {
-                Text(
-                    text = "No content available",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        if (html.isNullOrBlank()) {
+            Text(
+                text = "No content available",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            // State to track if WebView has finished rendering
+            var isContentLoaded by remember { mutableStateOf(false) }
+
+            // Reset state when content changes
+            androidx.compose.runtime.LaunchedEffect(processedHtml) {
+                if (processedHtml == null) {
+                    isContentLoaded = false
+                }
             }
-            processedHtml == null -> {
-                // Processing failed - show error
-                Text(
-                    text = "Content could not be processed safely",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-            processedHtml.isBlank() -> {
-                // Content was processed to nothing
-                Text(
-                    text = "Content could not be displayed safely",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-            else -> {
-                HtmlRenderer(
-                    html = processedHtml,
-                    viewerMode = viewerMode,
-                    modifier = Modifier.fillMaxWidth(),
-                    onLinkClick = onLinkClick
-                )
+
+            Box(modifier = Modifier.fillMaxWidth()) {
+                // Always render HtmlRenderer if content is processed, but keep it invisible until loaded
+                // This allows the WebView to load in the background
+                if (processedHtml != null && processedHtml!!.isNotBlank()) {
+                    // Use a Box with alpha to hide the renderer until it reports loaded
+                    // This prevents the white flash of an empty WebView
+                    Box(modifier = Modifier.alpha(if (isContentLoaded) 1f else 0f)) {
+                        HtmlRenderer(
+                            html = processedHtml!!,
+                            viewerMode = viewerMode,
+                            modifier = Modifier.fillMaxWidth(),
+                            onLinkClick = onLinkClick,
+                            onLoaded = { 
+                                isContentLoaded = true 
+                            }
+                        )
+                    }
+                } else if (processedHtml != null && processedHtml!!.isBlank()) {
+                     Text(
+                        text = "Content could not be displayed safely",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                // Show SkeletonLoader until content is fully loaded
+                // Use a crossfade for smoother transition
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !isContentLoaded || processedHtml == null,
+                    exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(300))
+                ) {
+                    SkeletonLoader(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     }

@@ -66,7 +66,7 @@ class MainScreenModel(
         } else {
             flowOf(emptyList())
         }
-    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(screenModelScope, SharingStarted.Lazily, emptyList())
 
     private fun applyFilterToBookmarks(bookmarks: List<BookmarkEntity>, filter: String?): List<BookmarkEntity> {
         return when (filter) {

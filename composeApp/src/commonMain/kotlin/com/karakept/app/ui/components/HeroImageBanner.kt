@@ -2,6 +2,7 @@ package com.karakept.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,6 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 
 /**
  * Material You hero banner with image and title overlay.
@@ -31,17 +35,21 @@ import coil3.compose.AsyncImage
 fun HeroImageBanner(
     imageUrl: String?,
     title: String,
+    url: String? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(280.dp)
+            .height(320.dp) // Increased height for better parallax effect
     ) {
         if (imageUrl != null) {
             // Image background
             AsyncImage(
-                model = imageUrl,
+                model = ImageRequest.Builder(LocalPlatformContext.current)
+                    .data(imageUrl)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
@@ -55,7 +63,7 @@ fun HeroImageBanner(
                         Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                                Color.Black.copy(alpha = 0.7f) // Darker scrim for better text contrast
                             ),
                             startY = 100f,
                             endY = Float.POSITIVE_INFINITY
@@ -77,14 +85,26 @@ fun HeroImageBanner(
             }
         }
 
-        // Title at bottom
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+        // Title and metadata at bottom
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(16.dp)
-        )
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White, // Always white on image/scrim
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            if (url != null) {
+                Text(
+                    text = url,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            }
+        }
     }
 }

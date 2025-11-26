@@ -2,7 +2,9 @@ package com.karakept.app.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import androidx.compose.runtime.Immutable
 
+@Immutable
 @Entity(tableName = "bookmarks")
 data class BookmarkEntity(
     @PrimaryKey(autoGenerate = true) val localId: Long = 0,

@@ -12,6 +12,7 @@ A Kotlin Multiplatform application for managing bookmarks with support for Andro
 
 ### Option 1: Android (Recommended for Devcontainer)
 
+#### Debug Build (Development)
 Build the Android APK:
 ```bash
 ./gradlew assembleDebug
@@ -22,6 +23,21 @@ The APK will be located at: `composeApp/build/outputs/apk/debug/composeApp-debug
 Install on a connected device or emulator:
 ```bash
 ./gradlew installDebug
+```
+
+#### Release Build (Optimized)
+Build the release APK:
+```bash
+./gradlew assembleRelease
+```
+
+The APK will be located at: `composeApp/build/outputs/apk/release/composeApp-release.apk`
+
+> **Note**: The release build uses debug signing for convenience. For production deployment, configure proper release signing in `composeApp/build.gradle.kts`.
+
+Install release version:
+```bash
+./gradlew installRelease
 ```
 
 ### Option 2: Desktop with Wayland/X11 Forwarding

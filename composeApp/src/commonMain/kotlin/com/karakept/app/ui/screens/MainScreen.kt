@@ -28,6 +28,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -156,15 +157,21 @@ class MainScreen : Screen {
                 LazyColumn(
                     modifier = Modifier.padding(padding).fillMaxSize()
                 ) {
-                    items(bookmarks) { bookmark ->
+                    items(bookmarks, key = { it.localId }) { bookmark ->
+                        // Remember the click action to avoid recomposing the item when MainScreen recomposes
+                        // (though MainScreen shouldn't recompose often if state is stable)
+                        val onClick = remember(bookmark.localId, navigator) {
+                            { navigator.push(BookmarkViewerScreen(bookmark.localId)) }
+                        }
+                        
                         when (layoutType) {
                             LayoutType.CARD -> BookmarkCardLayout(
                                 bookmark = bookmark,
-                                onClick = { navigator.push(BookmarkViewerScreen(bookmark.localId)) }
+                                onClick = onClick
                             )
                             LayoutType.LIST -> BookmarkListLayout(
                                 bookmark = bookmark,
-                                onClick = { navigator.push(BookmarkViewerScreen(bookmark.localId)) }
+                                onClick = onClick
                             )
                         }
                     }

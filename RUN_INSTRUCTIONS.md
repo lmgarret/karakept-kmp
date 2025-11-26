@@ -19,6 +19,7 @@ I've successfully restored the Gradle wrapper and fixed the build configuration.
 
 The Android build is now working. To install on a device or emulator:
 
+#### Debug Build (Development)
 ```bash
 # Build the debug APK
 ./gradlew assembleDebug
@@ -27,9 +28,24 @@ The Android build is now working. To install on a device or emulator:
 # composeApp/build/outputs/apk/debug/composeApp-debug.apk
 ```
 
+#### Release Build (Optimized)
+```bash
+# Build the release APK (uses debug signing for testing)
+./gradlew assembleRelease
+
+# The APK will be at:
+# composeApp/build/outputs/apk/release/composeApp-release.apk
+```
+
+> **Note**: The release build currently uses debug signing for convenience. For production deployment, you should configure proper release signing in `composeApp/build.gradle.kts`.
+
 To install on a connected device/emulator:
 ```bash
+# Install debug version
 ./gradlew installDebug
+
+# Or install release version
+./gradlew installRelease
 ```
 
 **Note**: You need to connect an Android device via ADB or set up an emulator. From outside the devcontainer, you can use:

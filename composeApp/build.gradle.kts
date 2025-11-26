@@ -119,6 +119,9 @@ android {
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
+            // Use debug signing for testing release builds
+            // For production, replace with proper release signing configuration
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
