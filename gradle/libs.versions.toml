@@ -25,6 +25,7 @@ kotlinx-serialization = "1.7.3"
 kotlinx-datetime = "0.6.1"
 datastore = "1.1.1"
 jsoup = "1.17.2"
+javafx = "21.0.1"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -86,6 +87,14 @@ androidx-datastore-preferences-android = { module = "androidx.datastore:datastor
 
 # HTML Parsing
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+
+# JavaFX
+javafx-base = { module = "org.openjfx:javafx-base", version.ref = "javafx" }
+javafx-graphics = { module = "org.openjfx:javafx-graphics", version.ref = "javafx" }
+javafx-controls = { module = "org.openjfx:javafx-controls", version.ref = "javafx" }
+javafx-swing = { module = "org.openjfx:javafx-swing", version.ref = "javafx" }
+javafx-web = { module = "org.openjfx:javafx-web", version.ref = "javafx" }
+javafx-media = { module = "org.openjfx:javafx-media", version.ref = "javafx" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

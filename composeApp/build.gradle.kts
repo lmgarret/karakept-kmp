@@ -89,6 +89,22 @@ kotlin {
                 implementation(libs.ktor.client.okhttp)
                 // Coroutines Swing dispatcher for desktop Main dispatcher
                 implementation(libs.kotlinx.coroutines.swing)
+                
+                // JavaFX
+                val osName = System.getProperty("os.name")
+                val targetOs = when {
+                    osName == "Mac OS X" -> "mac"
+                    osName.startsWith("Win") -> "win"
+                    osName.startsWith("Linux") -> "linux"
+                    else -> error("Unsupported OS: $osName")
+                }
+
+                implementation("org.openjfx:javafx-base:21.0.1:$targetOs")
+                implementation("org.openjfx:javafx-graphics:21.0.1:$targetOs")
+                implementation("org.openjfx:javafx-controls:21.0.1:$targetOs")
+                implementation("org.openjfx:javafx-swing:21.0.1:$targetOs")
+                implementation("org.openjfx:javafx-web:21.0.1:$targetOs")
+                implementation("org.openjfx:javafx-media:21.0.1:$targetOs")
             }
         }
     }
