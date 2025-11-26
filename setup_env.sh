@@ -18,7 +18,7 @@ echo "Accepting licenses..."
 yes | sdkmanager --licenses
 
 echo "Installing platforms and build-tools..."
-sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
 echo "Android SDK setup complete at $ANDROID_HOME"
 echo "Please add 'export ANDROID_HOME=$HOME/android-sdk' to your shell profile."

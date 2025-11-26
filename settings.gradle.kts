@@ -25,8 +25,6 @@ dependencyResolutionManagement {
             }
         }
         mavenCentral()
-        // JogAmp repository for JOGL dependencies (required by compose-webview-multiplatform)
-        maven("https://jogamp.org/deployment/maven/")
     }
 }
 

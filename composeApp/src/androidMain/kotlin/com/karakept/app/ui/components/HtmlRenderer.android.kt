@@ -1,5 +1,7 @@
 package com.karakept.app.ui.components
 
+import android.graphics.Color
+import android.view.ViewGroup
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -57,7 +59,7 @@ actual fun HtmlRenderer(
                         }
                         body {
                             color: $textColorHex;
-                            background-color: $backgroundColorHex;
+                            background-color: transparent;
                             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                             font-size: 16px;
                             line-height: 1.6;
@@ -134,8 +136,12 @@ actual fun HtmlRenderer(
         modifier = modifier,
         factory = { context ->
             WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
                 // Start invisible to prevent white flash
-                alpha = 0f
+                setBackgroundColor(Color.TRANSPARENT)
                 
                 // Security settings
                 settings.javaScriptEnabled = false
@@ -149,9 +155,6 @@ actual fun HtmlRenderer(
                 @Suppress("DEPRECATION")
                 settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
-                // Fix white background flash - set background color to match theme
-                setBackgroundColor(backgroundColor)
-                
                 // Set up WebViewClient to intercept link clicks
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(
@@ -177,27 +180,7 @@ actual fun HtmlRenderer(
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        
-                        // Use postVisualStateCallback to wait for the first visual commit
-                        // This prevents the white flash by ensuring pixels are painted before we fade out the skeleton
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                            view?.postVisualStateCallback(0, object : WebView.VisualStateCallback() {
-                                override fun onComplete(requestId: Long) {
-                                    // Add a small delay to be absolutely sure
-                                    view.postDelayed({
-                                        // Fade in the WebView
-                                        view.animate().alpha(1f).setDuration(200).start()
-                                        onLoaded?.invoke()
-                                    }, 50)
-                                }
-                            })
-                        } else {
-                            // Fallback for older devices
-                            view?.postDelayed({
-                                view.animate().alpha(1f).setDuration(200).start()
-                                onLoaded?.invoke()
-                            }, 200)
-                        }
+                        onLoaded?.invoke()
                     }
                 }
 
@@ -207,7 +190,7 @@ actual fun HtmlRenderer(
         },
         update = { webView ->
             // Update background color in case theme changes
-            webView.setBackgroundColor(backgroundColor)
+            // webView.setBackgroundColor(Color.TRANSPARENT)
             webView.loadDataWithBaseURL(null, themedHtml, "text/html", "UTF-8", null)
         }
     )

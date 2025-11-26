@@ -89,8 +89,6 @@ kotlin {
                 implementation(libs.ktor.client.okhttp)
                 // Coroutines Swing dispatcher for desktop Main dispatcher
                 implementation(libs.kotlinx.coroutines.swing)
-                // WebView for HTML rendering
-                implementation(libs.compose.webview.multiplatform)
             }
         }
     }

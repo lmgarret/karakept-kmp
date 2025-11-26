@@ -6,9 +6,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
-import com.karakept.app.data.model.ViewerMode
-import com.multiplatform.webview.web.WebView
-import com.multiplatform.webview.web.rememberWebViewStateWithHTMLData
+import com.karakept.app.data.model.viewerMode
 
 /**
  * Desktop (JVM) implementation of HtmlRenderer using compose-webview-multiplatform.
@@ -107,18 +105,6 @@ actual fun HtmlRenderer(
         }
     }
 
-    val webViewState = rememberWebViewStateWithHTMLData(data = styledHtml)
-
-    DisposableEffect(Unit) {
-        // Disable JavaScript for security
-        webViewState.webSettings.isJavaScriptEnabled = false
-        println("WebView: JavaScript disabled for security")
-
-        onDispose {
-            // Cleanup if needed
-        }
-    }
-
     // Observe loading state
     val loadingState = webViewState.loadingState
     androidx.compose.runtime.LaunchedEffect(loadingState) {
@@ -127,9 +113,4 @@ actual fun HtmlRenderer(
         }
     }
 
-    WebView(
-        state = webViewState,
-        modifier = modifier,
-        captureBackPresses = false
-    )
 }

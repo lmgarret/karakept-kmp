@@ -169,12 +169,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                         }
                                         
                                         // Show skeleton on top until content ready (top layer)
-                                        androidx.compose.animation.AnimatedVisibility(
-                                            visible = !htmlContentReady,
-                                            exit = androidx.compose.animation.fadeOut(
-                                                animationSpec = androidx.compose.animation.core.tween(300)
-                                            )
-                                        ) {
+                                        if (!htmlContentReady) {
                                             BookmarkContentLoader(
                                                 loadingState = state,
                                                 modifier = Modifier.background(MaterialTheme.colorScheme.background)
