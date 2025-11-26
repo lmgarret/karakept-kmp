@@ -40,6 +40,6 @@ val appModule = module {
 
     factory { LoginScreenModel(get(), get()) }
     factory { MainScreenModel(get(), get(), get()) }
-    factory { BookmarkViewerScreenModel(get()) }
+    factory { BookmarkViewerScreenModel(get(), get()) }
     factory { SettingsScreenModel(get(), get()) }
 }

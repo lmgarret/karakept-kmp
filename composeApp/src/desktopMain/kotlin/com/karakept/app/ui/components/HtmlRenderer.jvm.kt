@@ -6,6 +6,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import com.karakept.app.data.model.ViewerMode
 import com.multiplatform.webview.web.WebView
 import com.multiplatform.webview.web.rememberWebViewStateWithHTMLData
 
@@ -14,10 +15,13 @@ import com.multiplatform.webview.web.rememberWebViewStateWithHTMLData
  *
  * This uses JCEF (Java Chromium Embedded Framework) for proper HTML rendering.
  * Much better than JEditorPane, supports modern HTML/CSS.
+ *
+ * Security: JavaScript is ALWAYS disabled in both modes.
  */
 @Composable
 actual fun HtmlRenderer(
     html: String,
+    viewerMode: ViewerMode,
     modifier: Modifier,
     onLinkClick: ((String) -> Unit)?
 ) {
@@ -33,54 +37,73 @@ actual fun HtmlRenderer(
     val backgroundColorHex = String.format("#%06X", 0xFFFFFF and backgroundColor)
     val linkColorHex = String.format("#%06X", 0xFFFFFF and linkColor)
 
-    val styledHtml = remember(html, textColorHex, backgroundColorHex, linkColorHex) {
-        """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                body {
-                    font-family: sans-serif;
-                    font-size: 14px;
-                    line-height: 1.6;
-                    color: $textColorHex;
-                    background-color: $backgroundColorHex;
-                    margin: 16px;
-                    padding: 0;
-                }
-                a {
-                    color: $linkColorHex;
-                    text-decoration: none;
-                }
-                a:hover {
-                    text-decoration: underline;
-                }
-                pre {
-                    background-color: rgba(0, 0, 0, 0.05);
-                    padding: 8px;
-                    overflow: auto;
-                    border-radius: 4px;
-                }
-                code {
-                    font-family: monospace;
-                }
-                blockquote {
-                    border-left: 3px solid $linkColorHex;
-                    padding-left: 10px;
-                    margin-left: 0;
-                }
-                img {
-                    max-width: 100%;
-                    height: auto;
-                }
-            </style>
-        </head>
-        <body>
-        $html
-        </body>
-        </html>
-        """.trimIndent()
+    val styledHtml = remember(html, viewerMode, textColorHex, backgroundColorHex, linkColorHex) {
+        when (viewerMode) {
+            ViewerMode.READER -> {
+                // Reader mode: wrap with base styles
+                """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        body {
+                            font-family: sans-serif;
+                            font-size: 14px;
+                            line-height: 1.6;
+                            color: $textColorHex;
+                            background-color: $backgroundColorHex;
+                            margin: 16px;
+                            padding: 0;
+                        }
+                        a {
+                            color: $linkColorHex;
+                            text-decoration: none;
+                        }
+                        a:hover {
+                            text-decoration: underline;
+                        }
+                        pre {
+                            background-color: rgba(0, 0, 0, 0.05);
+                            padding: 8px;
+                            overflow: auto;
+                            border-radius: 4px;
+                        }
+                        code {
+                            font-family: monospace;
+                        }
+                        blockquote {
+                            border-left: 3px solid $linkColorHex;
+                            padding-left: 10px;
+                            margin-left: 0;
+                        }
+                        img {
+                            max-width: 100%;
+                            height: auto;
+                        }
+                    </style>
+                </head>
+                <body>
+                $html
+                </body>
+                </html>
+                """.trimIndent()
+            }
+            ViewerMode.ARCHIVE -> {
+                // Archive mode: minimal wrapper, preserve original styles
+                """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                </head>
+                <body>
+                $html
+                </body>
+                </html>
+                """.trimIndent()
+            }
+        }
     }
 
     val webViewState = rememberWebViewStateWithHTMLData(data = styledHtml)

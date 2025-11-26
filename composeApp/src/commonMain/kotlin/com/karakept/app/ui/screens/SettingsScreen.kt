@@ -33,6 +33,8 @@ import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.data.model.ViewerMode
+
 
 class SettingsScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -41,6 +43,7 @@ class SettingsScreen : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
         val currentLayoutType by screenModel.layoutType.collectAsState()
+        val currentViewerMode by screenModel.viewerMode.collectAsState()
 
         Scaffold(
             topBar = {
@@ -81,6 +84,30 @@ class SettingsScreen : Screen {
                     description = "Show thumbnails on the left with title and description on the right",
                     isSelected = currentLayoutType == LayoutType.LIST,
                     onClick = { screenModel.setLayoutType(LayoutType.LIST) }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    text = "Viewer Mode",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                LayoutOption(
+                    title = "Reader",
+                    description = "Sanitized content with safe HTML only",
+                    isSelected = currentViewerMode == ViewerMode.READER,
+                    onClick = { screenModel.setViewerMode(ViewerMode.READER) }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LayoutOption(
+                    title = "Archive",
+                    description = "Original HTML with stylesheets (JavaScript disabled)",
+                    isSelected = currentViewerMode == ViewerMode.ARCHIVE,
+                    onClick = { screenModel.setViewerMode(ViewerMode.ARCHIVE) }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))

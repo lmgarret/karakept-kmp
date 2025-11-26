@@ -10,12 +10,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
+import com.karakept.app.data.model.ViewerMode
 
 /**
  * Android implementation of HtmlRenderer using WebView.
  *
  * Security measures:
- * - JavaScript disabled
+ * - JavaScript disabled (always, in both modes)
  * - File access disabled
  * - Content access disabled
  * - Mixed content blocked
@@ -24,6 +25,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 @Composable
 actual fun HtmlRenderer(
     html: String,
+    viewerMode: ViewerMode,
     modifier: Modifier,
     onLinkClick: ((String) -> Unit)?
 ) {
@@ -36,75 +38,95 @@ actual fun HtmlRenderer(
     val backgroundColorHex = String.format("#%06X", 0xFFFFFF and backgroundColor)
     val linkColorHex = String.format("#%06X", 0xFFFFFF and linkColor)
 
-    val themedHtml = remember(html, textColorHex, backgroundColorHex, linkColorHex) {
-        """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data:; style-src 'unsafe-inline';">
-            <style>
-                * {
-                    margin: 0;
-                    padding: 0;
-                    box-sizing: border-box;
-                }
-                body {
-                    color: $textColorHex;
-                    background-color: $backgroundColorHex;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                    font-size: 16px;
-                    line-height: 1.6;
-                    padding: 0;
-                    margin: 0;
-                    word-wrap: break-word;
-                    overflow-wrap: break-word;
-                }
-                a {
-                    color: $linkColorHex;
-                    text-decoration: underline;
-                }
-                img {
-                    max-width: 100%;
-                    height: auto;
-                    display: block;
-                    margin: 8px 0;
-                }
-                pre {
-                    overflow-x: auto;
-                    padding: 8px;
-                    background-color: rgba(127, 127, 127, 0.1);
-                    border-radius: 4px;
-                    margin: 8px 0;
-                }
-                code {
-                    font-family: "Courier New", Courier, monospace;
-                    font-size: 14px;
-                }
-                blockquote {
-                    border-left: 4px solid $linkColorHex;
-                    padding-left: 12px;
-                    margin: 8px 0;
-                    font-style: italic;
-                }
-                ul, ol {
-                    padding-left: 24px;
-                    margin: 8px 0;
-                }
-                p {
-                    margin: 8px 0;
-                }
-                h1, h2, h3, h4, h5, h6 {
-                    margin: 12px 0 8px 0;
-                    font-weight: bold;
-                }
-            </style>
-        </head>
-        <body>
-        $html
-        </body>
-        </html>
-        """.trimIndent()
+    val themedHtml = remember(html, viewerMode, textColorHex, backgroundColorHex, linkColorHex) {
+        when (viewerMode) {
+            ViewerMode.READER -> {
+                // Reader mode: wrap with base styles
+                """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data:; style-src 'unsafe-inline'; script-src 'none';">
+                    <style>
+                        * {
+                            margin: 0;
+                            padding: 0;
+                            box-sizing: border-box;
+                        }
+                        body {
+                            color: $textColorHex;
+                            background-color: $backgroundColorHex;
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                            font-size: 16px;
+                            line-height: 1.6;
+                            padding: 0;
+                            margin: 0;
+                            word-wrap: break-word;
+                            overflow-wrap: break-word;
+                        }
+                        a {
+                            color: $linkColorHex;
+                            text-decoration: underline;
+                        }
+                        img {
+                            max-width: 100%;
+                            height: auto;
+                            display: block;
+                            margin: 8px 0;
+                        }
+                        pre {
+                            overflow-x: auto;
+                            padding: 8px;
+                            background-color: rgba(127, 127, 127, 0.1);
+                            border-radius: 4px;
+                            margin: 8px 0;
+                        }
+                        code {
+                            font-family: "Courier New", Courier, monospace;
+                            font-size: 14px;
+                        }
+                        blockquote {
+                            border-left: 4px solid $linkColorHex;
+                            padding-left: 12px;
+                            margin: 8px 0;
+                            font-style: italic;
+                        }
+                        ul, ol {
+                            padding-left: 24px;
+                            margin: 8px 0;
+                        }
+                        p {
+                            margin: 8px 0;
+                        }
+                        h1, h2, h3, h4, h5, h6 {
+                            margin: 12px 0 8px 0;
+                            font-weight: bold;
+                        }
+                    </style>
+                </head>
+                <body>
+                $html
+                </body>
+                </html>
+                """.trimIndent()
+            }
+            ViewerMode.ARCHIVE -> {
+                // Archive mode: minimal wrapper, preserve original styles
+                """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data:; style-src 'unsafe-inline' http: https:; script-src 'none';">
+                </head>
+                <body>
+                $html
+                </body>
+                </html>
+                """.trimIndent()
+            }
+        }
     }
 
     AndroidView(

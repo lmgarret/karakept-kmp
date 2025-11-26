@@ -4,6 +4,7 @@ import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -21,6 +22,13 @@ class SettingsScreenModel(
         initialValue = LayoutType.CARD
     )
 
+    // Viewer mode flow
+    val viewerMode: StateFlow<ViewerMode> = settingsRepository.viewerMode.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ViewerMode.READER
+    )
+
     val servers: StateFlow<List<Server>> = serverRepository.servers.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -36,6 +44,12 @@ class SettingsScreenModel(
     fun setLayoutType(layoutType: LayoutType) {
         screenModelScope.launch {
             settingsRepository.setLayoutType(layoutType)
+        }
+    }
+
+    fun setViewerMode(mode: ViewerMode) {
+        screenModelScope.launch {
+            settingsRepository.setViewerMode(mode)
         }
     }
 

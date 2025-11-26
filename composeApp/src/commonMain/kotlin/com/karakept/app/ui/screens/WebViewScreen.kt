@@ -98,6 +98,7 @@ data class WebViewScreen(val url: String) : Screen {
                     else -> {
                         HtmlContent(
                             html = htmlContent,
+                            viewerMode = com.karakept.app.data.model.ViewerMode.READER,
                             modifier = Modifier.fillMaxSize(),
                             onLinkClick = { clickedUrl ->
                                 // Navigate to another WebViewScreen for the clicked link
