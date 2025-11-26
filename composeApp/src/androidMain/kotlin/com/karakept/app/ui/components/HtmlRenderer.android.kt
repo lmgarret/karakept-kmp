@@ -134,6 +134,9 @@ actual fun HtmlRenderer(
         modifier = modifier,
         factory = { context ->
             WebView(context).apply {
+                // Start invisible to prevent white flash
+                alpha = 0f
+                
                 // Security settings
                 settings.javaScriptEnabled = false
                 settings.allowFileAccess = false
@@ -174,7 +177,27 @@ actual fun HtmlRenderer(
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        onLoaded?.invoke()
+                        
+                        // Use postVisualStateCallback to wait for the first visual commit
+                        // This prevents the white flash by ensuring pixels are painted before we fade out the skeleton
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                            view?.postVisualStateCallback(0, object : WebView.VisualStateCallback() {
+                                override fun onComplete(requestId: Long) {
+                                    // Add a small delay to be absolutely sure
+                                    view.postDelayed({
+                                        // Fade in the WebView
+                                        view.animate().alpha(1f).setDuration(200).start()
+                                        onLoaded?.invoke()
+                                    }, 50)
+                                }
+                            })
+                        } else {
+                            // Fallback for older devices
+                            view?.postDelayed({
+                                view.animate().alpha(1f).setDuration(200).start()
+                                onLoaded?.invoke()
+                            }, 200)
+                        }
                     }
                 }
 
