@@ -33,17 +33,26 @@ object HtmlSanitizer {
      * Sanitizes HTML content by removing dangerous elements and attributes.
      *
      * @param html Raw HTML content (potentially unsafe)
+     * @param removeFirstImage Whether to remove the first image (useful when hero banner shows the article thumbnail)
      * @return Sanitized HTML with only safe elements and attributes
      */
-    fun sanitize(html: String?): String {
+    fun sanitize(html: String?, removeFirstImage: Boolean = false): String {
         if (html.isNullOrBlank()) {
             return ""
         }
 
         return try {
-            // Optimize: Disable pretty printing to save time and memory on serialization
-            val outputSettings = Jsoup.parse("").outputSettings().prettyPrint(false)
-            Jsoup.clean(html, "", safelist, outputSettings)
+            // Parse and sanitize
+            val doc = Jsoup.parse(html)
+            
+            // Remove first image if requested
+            if (removeFirstImage) {
+                doc.selectFirst("img")?.remove()
+            }
+            
+            // Apply safelist and return
+            val outputSettings = doc.outputSettings().prettyPrint(false)
+            Jsoup.clean(doc.html(), "", safelist, outputSettings)
         } catch (e: Exception) {
             // If sanitization fails, return empty string as a safe fallback
             ""

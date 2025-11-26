@@ -44,6 +44,7 @@ class SettingsScreen : Screen {
         val screenModel = koinScreenModel<SettingsScreenModel>()
         val currentLayoutType by screenModel.layoutType.collectAsState()
         val currentViewerMode by screenModel.viewerMode.collectAsState()
+        val hideArticleThumbnails by screenModel.hideArticleThumbnails.collectAsState()
 
         Scaffold(
             topBar = {
@@ -109,6 +110,48 @@ class SettingsScreen : Screen {
                     isSelected = currentViewerMode == ViewerMode.ARCHIVE,
                     onClick = { screenModel.setViewerMode(ViewerMode.ARCHIVE) }
                 )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Reader Mode Settings
+                Text(
+                    text = "Reader Mode Settings",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { screenModel.setHideArticleThumbnails(!hideArticleThumbnails) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = hideArticleThumbnails,
+                            onCheckedChange = { screenModel.setHideArticleThumbnails(it) }
+                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 12.dp)
+                        ) {
+                            Text(
+                                text = "Hide Article Thumbnails",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Remove first image from article content to avoid duplicates with hero banner",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 

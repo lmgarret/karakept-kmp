@@ -42,19 +42,21 @@ fun HtmlContent(
     html: String?,
     viewerMode: ViewerMode,
     modifier: Modifier = Modifier,
-    onLinkClick: ((String) -> Unit)? = null
+    onLinkClick: ((String) -> Unit)? = null,
+    hideArticleThumbnails: Boolean = false,
+    onReady: (() -> Unit)? = null  // Callback when content is fully processed and loaded
 ) {
     // Debug output
-    println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode")
+    println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode, hideThumb=$hideArticleThumbnails")
 
     // Process HTML based on viewer mode asynchronously
-    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode) {
+    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, hideArticleThumbnails) {
         if (html == null) {
             value = null
             return@produceState
         }
 
-        val cacheKey = HtmlCache.generateKey(html, viewerMode.name)
+        val cacheKey = HtmlCache.generateKey(html, "${viewerMode.name}_hideThumb=$hideArticleThumbnails")
         val cached = HtmlCache.get(cacheKey)
         
         if (cached != null) {
@@ -63,7 +65,7 @@ fun HtmlContent(
             value = withContext(Dispatchers.Default) {
                 try {
                     val result = when (viewerMode) {
-                        ViewerMode.READER -> HtmlSanitizer.sanitize(html)
+                        ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = hideArticleThumbnails)
                         ViewerMode.ARCHIVE -> HtmlArchiveProcessor.processForArchive(html)
                     }
                     println("HtmlContent: Processed HTML length=${result.length}, isBlank=${result.isBlank()}")
@@ -74,6 +76,15 @@ fun HtmlContent(
                     null // Processing failed
                 }
             }
+        }
+    }
+
+    var isContentLoaded by remember { mutableStateOf(false) }
+    
+    // Notify parent when both processed and loaded
+    androidx.compose.runtime.LaunchedEffect(processedHtml, isContentLoaded) {
+        if (processedHtml != null && isContentLoaded && onReady != null) {
+            onReady()
         }
     }
 
@@ -99,19 +110,17 @@ fun HtmlContent(
                 // Always render HtmlRenderer if content is processed, but keep it invisible until loaded
                 // This allows the WebView to load in the background
                 if (processedHtml != null && processedHtml!!.isNotBlank()) {
-                    // Use a Box with alpha to hide the renderer until it reports loaded
-                    // This prevents the white flash of an empty WebView
-                    Box(modifier = Modifier.alpha(if (isContentLoaded) 1f else 0f)) {
-                        HtmlRenderer(
-                            html = processedHtml!!,
-                            viewerMode = viewerMode,
-                            modifier = Modifier.fillMaxWidth(),
-                            onLinkClick = onLinkClick,
-                            onLoaded = { 
-                                isContentLoaded = true 
-                            }
-                        )
-                    }
+                    // WebView now has matching background color, so we can render it directly
+                    // The skeleton will overlay it until content is loaded
+                    HtmlRenderer(
+                        html = processedHtml!!,
+                        viewerMode = viewerMode,
+                        modifier = Modifier.fillMaxWidth(),
+                        onLinkClick = onLinkClick,
+                        onLoaded = { 
+                            isContentLoaded = true 
+                        }
+                    )
                 } else if (processedHtml != null && processedHtml!!.isBlank()) {
                      Text(
                         text = "Content could not be displayed safely",

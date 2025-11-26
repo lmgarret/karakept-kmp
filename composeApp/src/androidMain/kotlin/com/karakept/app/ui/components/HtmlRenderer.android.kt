@@ -146,6 +146,9 @@ actual fun HtmlRenderer(
                 @Suppress("DEPRECATION")
                 settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
+                // Fix white background flash - set background color to match theme
+                setBackgroundColor(backgroundColor)
+                
                 // Set up WebViewClient to intercept link clicks
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(
@@ -180,6 +183,8 @@ actual fun HtmlRenderer(
             }
         },
         update = { webView ->
+            // Update background color in case theme changes
+            webView.setBackgroundColor(backgroundColor)
             webView.loadDataWithBaseURL(null, themedHtml, "text/html", "UTF-8", null)
         }
     )

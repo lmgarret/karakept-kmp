@@ -41,6 +41,12 @@ class SettingsScreenModel(
         initialValue = null
     )
 
+    val hideArticleThumbnails: StateFlow<Boolean> = settingsRepository.hideArticleThumbnails.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
     fun setLayoutType(layoutType: LayoutType) {
         screenModelScope.launch {
             settingsRepository.setLayoutType(layoutType)
@@ -56,6 +62,12 @@ class SettingsScreenModel(
     fun setActiveServer(id: String) {
         screenModelScope.launch {
             settingsRepository.setActiveServerId(id)
+        }
+    }
+
+    fun setHideArticleThumbnails(hide: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setHideArticleThumbnails(hide)
         }
     }
 }

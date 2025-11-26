@@ -16,6 +16,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     private val VIEWER_MODE_KEY = stringPreferencesKey("viewer_mode")
 
+    private val HIDE_ARTICLE_THUMBNAILS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("hide_article_thumbnails")
+
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
         val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.CARD.name
         LayoutType.fromString(layoutString)
@@ -28,6 +30,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val viewerMode: Flow<ViewerMode> = dataStore.data.map { preferences ->
         val modeString = preferences[VIEWER_MODE_KEY] ?: ViewerMode.READER.name
         ViewerMode.fromString(modeString)
+    }
+
+    val hideArticleThumbnails: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[HIDE_ARTICLE_THUMBNAILS_KEY] ?: true // Default to true to avoid duplicates
     }
 
     suspend fun setLayoutType(layoutType: LayoutType) {
@@ -45,6 +51,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setViewerMode(mode: ViewerMode) {
         dataStore.edit { preferences ->
             preferences[VIEWER_MODE_KEY] = mode.name
+        }
+    }
+
+    suspend fun setHideArticleThumbnails(hide: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[HIDE_ARTICLE_THUMBNAILS_KEY] = hide
         }
     }
 }

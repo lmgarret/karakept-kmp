@@ -66,58 +66,6 @@ fun BookmarkContentLoader(
                 }
             }
         }
-        is BookmarkLoadingState.TitleLoaded -> {
-            // Banner skeleton + content skeleton
-            Column(modifier = modifier.fillMaxWidth()) {
-                // Banner skeleton
-                ShimmerBox(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp)
-                )
-
-                // Content area skeleton
-                Column(modifier = Modifier.padding(16.dp)) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .height(16.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    repeat(5) {
-                        ShimmerBox(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(20.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                }
-            }
-        }
-        is BookmarkLoadingState.ThumbnailLoaded -> {
-            // Only content skeleton (banner will be rendered by parent)
-            Column(modifier = modifier.fillMaxWidth()) {
-                ShimmerBox(
-                    modifier = Modifier
-                        .fillMaxWidth(0.6f)
-                        .height(16.dp)
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                repeat(5) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(20.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-        }
         else -> {
             // Should not render - parent handles FullyLoaded and Error
         }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -55,11 +56,24 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
 
         val loadingState by screenModel.loadingState.collectAsState()
         val viewerMode by screenModel.viewerMode.collectAsState()
+        val hideArticleThumbnails by screenModel.hideArticleThumbnails.collectAsState()
 
         var showModeDialog by remember { mutableStateOf(false) }
 
         LaunchedEffect(bookmarkId) {
             screenModel.loadBookmark(bookmarkId)
+        }
+
+        // Hoist state management OUTSIDE the when to prevent recomposition flash
+        val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val bannerHeight = 320.dp
+        val toolbarHeight = 64.dp
+        
+        // Calculate scroll progress - this remains stable across state transitions
+        val showStickyTitle by remember(bookmarkId) {
+            androidx.compose.runtime.derivedStateOf {
+                scrollState.firstVisibleItemIndex > 0 || scrollState.firstVisibleItemScrollOffset > 300
+            }
         }
 
         Scaffold(
@@ -72,86 +86,59 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                         modifier = Modifier.padding(padding)
                     )
                 }
-                is BookmarkLoadingState.TitleLoaded -> {
-                    BookmarkContentLoader(
-                        loadingState = state,
-                        modifier = Modifier.padding(padding)
-                    )
-                }
-                is BookmarkLoadingState.ThumbnailLoaded -> {
-                    // Similar structure to FullyLoaded but with loading content
-                    // We can reuse the parallax structure here too for consistency
-                    Box(modifier = Modifier.fillMaxSize()) {
-                         HeroImageBanner(
-                            imageUrl = state.imageUrl,
-                            title = state.title,
-                            modifier = Modifier.align(Alignment.TopCenter)
-                        )
-                        
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(top = 300.dp) // Offset by banner height
-                                .background(MaterialTheme.colorScheme.background)
-                        ) {
-                             BookmarkContentLoader(
-                                loadingState = state,
-                                modifier = Modifier.padding(16.dp)
-                            )
-                        }
-                    }
-                }
                 is BookmarkLoadingState.FullyLoaded -> {
-                    val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
-                    val bannerHeight = 320.dp
-                    val toolbarHeight = 64.dp
+                    // Use same UI structure for both states to prevent flashing
                     
-                    // Calculate scroll progress for parallax and sticky title
-                    // We use derivedStateOf to minimize recompositions
-                    val showStickyTitle by remember {
-                        androidx.compose.runtime.derivedStateOf {
-                            val firstVisibleItemIndex = scrollState.firstVisibleItemIndex
-                            val firstVisibleItemScrollOffset = scrollState.firstVisibleItemScrollOffset
-                            
-                            // Show sticky title when we've scrolled past the banner
-                            firstVisibleItemIndex > 0 || firstVisibleItemScrollOffset > 300
-                        }
+                    // Extract data based on state type
+                    val title = when (state) {
+                        is BookmarkLoadingState.FullyLoaded -> state.bookmark.title
+                        else -> ""
                     }
+                    val imageUrl = when (state) {
+                        is BookmarkLoadingState.FullyLoaded -> state.bookmark.imageUrl
+                        else -> null
+                    }
+                    val url = when (state) {
+                        is BookmarkLoadingState.FullyLoaded -> state.bookmark.url
+                        else -> ""
+                    }
+                    val isFullyLoaded = state is BookmarkLoadingState.FullyLoaded
+                    
+                    // Track when HTML content is truly ready (processed + rendered)
+                    var htmlContentReady by remember { mutableStateOf(false) }
 
                     Box(modifier = Modifier.fillMaxSize()) {
-                        // Parallax Header (Behind the list)
-                        // We only render this if the first item is visible to save resources
+                        // Parallax Header (Behind the list) - Stable across state transitions
                         if (scrollState.firstVisibleItemIndex == 0) {
                             Box(
                                 modifier = Modifier
                                     .height(bannerHeight)
                                     .fillMaxWidth()
                                     .graphicsLayer {
-                                        // Parallax effect: translate Y by half the scroll offset
                                         translationY = -scrollState.firstVisibleItemScrollOffset * 0.5f
                                         alpha = 1f - (scrollState.firstVisibleItemScrollOffset / 1000f).coerceIn(0f, 1f)
                                     }
                             ) {
                                 HeroImageBanner(
-                                    imageUrl = state.bookmark.imageUrl,
-                                    title = state.bookmark.title,
-                                    url = state.bookmark.url
+                                    imageUrl = imageUrl,
+                                    title = title,
+                                    url = url
                                 )
                             }
                         }
 
-                        // Content List
+                        // Content List - Stable LazyColumn with stable scrollState
                         androidx.compose.foundation.lazy.LazyColumn(
                             state = scrollState,
                             modifier = Modifier.fillMaxSize()
                         ) {
                             // Transparent spacer for the header
-                            item {
+                            item(key = "header_spacer") {
                                 Spacer(modifier = Modifier.height(bannerHeight))
                             }
 
-                            // Content Body
-                            item {
+                            // Content Body - Use Crossfade for smooth transition without recomposition
+                            item(key = "content_body") {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -159,29 +146,49 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                         .padding(16.dp)
                                 ) {
                                     // Archive mode badge
-                                    if (viewerMode == ViewerMode.ARCHIVE) {
+                                    if (htmlContentReady && viewerMode == ViewerMode.ARCHIVE) {
                                         ArchiveModeBadge(
                                             modifier = Modifier.padding(bottom = 16.dp)
                                         )
                                     }
 
-                                    // Render HTML content
-                                    HtmlContent(
-                                        html = state.bookmark.content,
-                                        viewerMode = viewerMode,
-                                        onLinkClick = { url ->
-                                            navigator.push(WebViewScreen(url))
+                                    // Render content area with overlay approach
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        // Always render HtmlContent when data arrives (bottom layer)
+                                        if (isFullyLoaded) {
+                                            val fullyLoadedState = state as BookmarkLoadingState.FullyLoaded
+                                            HtmlContent(
+                                                html = fullyLoadedState.bookmark.content,
+                                                viewerMode = viewerMode,
+                                                hideArticleThumbnails = hideArticleThumbnails,
+                                                onLinkClick = { url ->
+                                                    navigator.push(WebViewScreen(url))
+                                                },
+                                                onReady = { htmlContentReady = true }
+                                            )
                                         }
-                                    )
+                                        
+                                        // Show skeleton on top until content ready (top layer)
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = !htmlContentReady,
+                                            exit = androidx.compose.animation.fadeOut(
+                                                animationSpec = androidx.compose.animation.core.tween(300)
+                                            )
+                                        ) {
+                                            BookmarkContentLoader(
+                                                loadingState = state,
+                                                modifier = Modifier.background(MaterialTheme.colorScheme.background)
+                                            )
+                                        }
+                                    }
                                     
-                                    // Add extra padding at bottom for better scrolling experience
+                                    // Add extra padding at bottom
                                     Spacer(modifier = Modifier.height(80.dp))
                                 }
                             }
                         }
                         
-                        // Custom Top Bar (Overlay)
-                        // We implement a custom top bar to handle the sticky title transition
+                        // Custom Top Bar (Overlay) - Stable across state transitions
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -193,7 +200,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                 )
                                 .align(Alignment.TopCenter)
                         ) {
-                            // Back Button (Always visible, changes color based on background)
+                            // Back Button
                             IconButton(
                                 onClick = { navigator.pop() },
                                 modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp)
@@ -213,7 +220,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                 modifier = Modifier.align(Alignment.Center).padding(horizontal = 48.dp)
                             ) {
                                 Text(
-                                    text = state.bookmark.title,
+                                    text = title,
                                     style = MaterialTheme.typography.titleMedium,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,

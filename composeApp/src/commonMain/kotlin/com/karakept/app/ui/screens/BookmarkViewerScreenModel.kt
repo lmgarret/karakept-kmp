@@ -23,6 +23,9 @@ class BookmarkViewerScreenModel(
     val viewerMode: StateFlow<ViewerMode> = settingsRepository.viewerMode
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ViewerMode.READER)
 
+    val hideArticleThumbnails: StateFlow<Boolean> = settingsRepository.hideArticleThumbnails
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     fun loadBookmark(id: Long) {
         screenModelScope.launch {
             try {
@@ -30,18 +33,6 @@ class BookmarkViewerScreenModel(
                 val bookmark = bookmarkDao.getBookmarkById(id)
                     ?: throw Exception("Bookmark not found")
 
-                // Stage 1: Title (immediate)
-                _loadingState.value = BookmarkLoadingState.TitleLoaded(bookmark.title)
-                delay(50) // Smooth animation timing
-
-                // Stage 2: Thumbnail
-                _loadingState.value = BookmarkLoadingState.ThumbnailLoaded(
-                    bookmark.title,
-                    bookmark.imageUrl
-                )
-                delay(100) // Allow banner to render
-
-                // Stage 3: Full content
                 _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
             } catch (e: Exception) {
                 _loadingState.value = BookmarkLoadingState.Error(
