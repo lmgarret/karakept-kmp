@@ -1,5 +1,6 @@
 package com.karakept.app.ui.screens
 
+import androidx.compose.ui.graphics.Color
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
@@ -25,6 +26,9 @@ class BookmarkViewerScreenModel(
 
     val hideArticleThumbnails: StateFlow<Boolean> = settingsRepository.hideArticleThumbnails
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val htmlTextColor: StateFlow<Color?> = settingsRepository.htmlTextColor
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun loadBookmark(id: Long) {
         screenModelScope.launch {

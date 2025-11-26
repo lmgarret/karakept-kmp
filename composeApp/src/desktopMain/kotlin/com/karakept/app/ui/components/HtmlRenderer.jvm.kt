@@ -7,6 +7,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.karakept.app.data.model.ViewerMode
 import javafx.application.Platform
@@ -35,7 +36,8 @@ actual fun HtmlRenderer(
     viewerMode: ViewerMode,
     modifier: Modifier,
     onLinkClick: ((String) -> Unit)?,
-    onLoaded: (() -> Unit)?
+    onLoaded: (() -> Unit)?,
+    customTextColor: Color?
 ) {
     // Debug output
     println("HtmlRenderer (Desktop): Rendering HTML, length=${html.length}, first 100 chars=${html.take(100)}")
@@ -52,7 +54,7 @@ actual fun HtmlRenderer(
         // Ignore if toolkit not initialized yet, JFXPanel will do it
     }
 
-    val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
+    val textColor = (customTextColor ?: MaterialTheme.colorScheme.onSurface).toArgb()
     val backgroundColor = MaterialTheme.colorScheme.surface.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
 

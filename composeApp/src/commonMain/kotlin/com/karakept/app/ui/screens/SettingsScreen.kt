@@ -1,16 +1,26 @@
 package com.karakept.app.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -27,12 +37,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.data.model.ViewerMode
 
 
@@ -45,6 +59,9 @@ class SettingsScreen : Screen {
         val currentLayoutType by screenModel.layoutType.collectAsState()
         val currentViewerMode by screenModel.viewerMode.collectAsState()
         val hideArticleThumbnails by screenModel.hideArticleThumbnails.collectAsState()
+        val currentThemeMode by screenModel.themeMode.collectAsState()
+        val currentAccentColor by screenModel.accentColor.collectAsState()
+        val currentHtmlTextColor by screenModel.htmlTextColor.collectAsState()
 
         Scaffold(
             topBar = {
@@ -62,9 +79,67 @@ class SettingsScreen : Screen {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.Top
             ) {
+                // Theme Mode Section
+                Text(
+                    text = "Theme",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                LayoutOption(
+                    title = "Light",
+                    description = "Light theme",
+                    isSelected = currentThemeMode == ThemeMode.LIGHT,
+                    onClick = { screenModel.setThemeMode(ThemeMode.LIGHT) }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LayoutOption(
+                    title = "Dark",
+                    description = "Dark theme",
+                    isSelected = currentThemeMode == ThemeMode.DARK,
+                    onClick = { screenModel.setThemeMode(ThemeMode.DARK) }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LayoutOption(
+                    title = "AMOLED",
+                    description = "Pure black for AMOLED screens",
+                    isSelected = currentThemeMode == ThemeMode.AMOLED,
+                    onClick = { screenModel.setThemeMode(ThemeMode.AMOLED) }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LayoutOption(
+                    title = "System",
+                    description = "Follow system theme",
+                    isSelected = currentThemeMode == ThemeMode.SYSTEM,
+                    onClick = { screenModel.setThemeMode(ThemeMode.SYSTEM) }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Accent Color Section
+                Text(
+                    text = "Accent Color",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                AccentColorPicker(
+                    currentAccentColor = currentAccentColor,
+                    onColorSelected = { screenModel.setAccentColor(it) }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
                 Text(
                     text = "Article Display Layout",
                     style = MaterialTheme.typography.titleLarge,
@@ -152,6 +227,20 @@ class SettingsScreen : Screen {
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // HTML Viewer Settings
+                Text(
+                    text = "HTML Viewer Settings",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                HtmlTextColorPicker(
+                    currentColor = currentHtmlTextColor,
+                    onColorSelected = { screenModel.setHtmlTextColor(it) }
+                )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -277,4 +366,157 @@ private fun ServerOption(
             }
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AccentColorPicker(
+    currentAccentColor: AccentColor,
+    onColorSelected: (AccentColor) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Choose your accent color",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                AccentColor.entries.forEach { accentColor ->
+                    ColorSwatch(
+                        color = getAccentColorPreview(accentColor),
+                        label = accentColor.name.lowercase().replaceFirstChar { it.uppercase() },
+                        isSelected = currentAccentColor == accentColor,
+                        onClick = { onColorSelected(accentColor) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HtmlTextColorPicker(
+    currentColor: Color?,
+    onColorSelected: (Color?) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "HTML Viewer Text Color",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Theme Default option
+                ColorSwatch(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    label = "Theme",
+                    isSelected = currentColor == null,
+                    onClick = { onColorSelected(null) }
+                )
+
+                // Preset colors
+                val presetColors = listOf(
+                    Color.Black to "Black",
+                    Color.White to "White",
+                    Color(0xFF212121) to "Dark Gray",
+                    Color(0xFFE0E0E0) to "Light Gray",
+                    Color(0xFF1976D2) to "Blue",
+                    Color(0xFF388E3C) to "Green"
+                )
+
+                presetColors.forEach { (color, label) ->
+                    ColorSwatch(
+                        color = color,
+                        label = label,
+                        isSelected = currentColor == color,
+                        onClick = { onColorSelected(color) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorSwatch(
+    color: Color,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(color)
+                .border(
+                    width = if (isSelected) 3.dp else 1.dp,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+// Helper function to get preview color for accent colors
+private fun getAccentColorPreview(accentColor: AccentColor): Color {
+    return when (accentColor) {
+        AccentColor.PURPLE -> Color(0xFF6750A4)
+        AccentColor.BLUE -> Color(0xFF1976D2)
+        AccentColor.GREEN -> Color(0xFF388E3C)
+        AccentColor.ORANGE -> Color(0xFFE65100)
+        AccentColor.RED -> Color(0xFFC62828)
+        AccentColor.PINK -> Color(0xFFC2185B)
+    }
+}
+
+// Extension function for color luminance calculation
+private fun Color.luminance(): Float {
+    return (0.299f * red + 0.587f * green + 0.114f * blue)
 }

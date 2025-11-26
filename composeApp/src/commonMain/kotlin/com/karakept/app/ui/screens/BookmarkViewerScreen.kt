@@ -57,6 +57,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         val loadingState by screenModel.loadingState.collectAsState()
         val viewerMode by screenModel.viewerMode.collectAsState()
         val hideArticleThumbnails by screenModel.hideArticleThumbnails.collectAsState()
+        val htmlTextColor by screenModel.htmlTextColor.collectAsState()
 
         var showModeDialog by remember { mutableStateOf(false) }
 
@@ -164,7 +165,8 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                                 onLinkClick = { url ->
                                                     navigator.push(WebViewScreen(url))
                                                 },
-                                                onReady = { htmlContentReady = true }
+                                                onReady = { htmlContentReady = true },
+                                                customTextColor = htmlTextColor
                                             )
                                         }
                                         

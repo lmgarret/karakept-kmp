@@ -1,9 +1,12 @@
 package com.karakept.app.ui.screens
 
+import androidx.compose.ui.graphics.Color
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -47,6 +50,24 @@ class SettingsScreenModel(
         initialValue = true
     )
 
+    val themeMode: StateFlow<ThemeMode> = settingsRepository.themeMode.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ThemeMode.SYSTEM
+    )
+
+    val accentColor: StateFlow<AccentColor> = settingsRepository.accentColor.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = AccentColor.PURPLE
+    )
+
+    val htmlTextColor: StateFlow<Color?> = settingsRepository.htmlTextColor.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
     fun setLayoutType(layoutType: LayoutType) {
         screenModelScope.launch {
             settingsRepository.setLayoutType(layoutType)
@@ -68,6 +89,24 @@ class SettingsScreenModel(
     fun setHideArticleThumbnails(hide: Boolean) {
         screenModelScope.launch {
             settingsRepository.setHideArticleThumbnails(hide)
+        }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        screenModelScope.launch {
+            settingsRepository.setThemeMode(mode)
+        }
+    }
+
+    fun setAccentColor(color: AccentColor) {
+        screenModelScope.launch {
+            settingsRepository.setAccentColor(color)
+        }
+    }
+
+    fun setHtmlTextColor(color: Color?) {
+        screenModelScope.launch {
+            settingsRepository.setHtmlTextColor(color)
         }
     }
 }

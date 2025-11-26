@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,7 +45,8 @@ fun HtmlContent(
     modifier: Modifier = Modifier,
     onLinkClick: ((String) -> Unit)? = null,
     hideArticleThumbnails: Boolean = false,
-    onReady: (() -> Unit)? = null  // Callback when content is fully processed and loaded
+    onReady: (() -> Unit)? = null,  // Callback when content is fully processed and loaded
+    customTextColor: Color? = null  // Custom text color for HTML viewer
 ) {
     // Debug output
     println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode, hideThumb=$hideArticleThumbnails")
@@ -119,7 +121,8 @@ fun HtmlContent(
                         onLinkClick = onLinkClick,
                         onLoaded = { 
                             isContentLoaded = true 
-                        }
+                        },
+                        customTextColor = customTextColor
                     )
                 } else if (processedHtml != null && processedHtml!!.isBlank()) {
                      Text(

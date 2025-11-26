@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import com.karakept.app.data.model.ViewerMode
+import androidx.compose.ui.graphics.Color as ComposeColor
 
 /**
  * Android implementation of HtmlRenderer using WebView.
@@ -30,9 +31,10 @@ actual fun HtmlRenderer(
     viewerMode: ViewerMode,
     modifier: Modifier,
     onLinkClick: ((String) -> Unit)?,
-    onLoaded: (() -> Unit)?
+    onLoaded: (() -> Unit)?,
+    customTextColor: ComposeColor?
 ) {
-    val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
+    val textColor = (customTextColor ?: MaterialTheme.colorScheme.onSurface).toArgb()
     val backgroundColor = MaterialTheme.colorScheme.surface.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
 

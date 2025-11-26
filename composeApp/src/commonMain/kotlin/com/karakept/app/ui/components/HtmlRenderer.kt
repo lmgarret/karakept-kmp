@@ -2,6 +2,7 @@ package com.karakept.app.ui.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.karakept.app.data.model.ViewerMode
 
 /**
@@ -15,6 +16,8 @@ import com.karakept.app.data.model.ViewerMode
  * @param viewerMode Viewer mode (READER or ARCHIVE)
  * @param modifier Modifier for layout
  * @param onLinkClick Callback when a link is clicked (receives the URL)
+ * @param onLoaded Callback when content is loaded
+ * @param customTextColor Optional custom text color for HTML content
  */
 @Composable
 expect fun HtmlRenderer(
@@ -22,5 +25,6 @@ expect fun HtmlRenderer(
     viewerMode: ViewerMode,
     modifier: Modifier = Modifier,
     onLinkClick: ((String) -> Unit)? = null,
-    onLoaded: (() -> Unit)? = null
+    onLoaded: (() -> Unit)? = null,
+    customTextColor: Color? = null
 )
