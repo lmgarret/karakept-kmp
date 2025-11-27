@@ -1,7 +1,9 @@
 package com.karakept.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,6 +20,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.animation.Crossfade
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.utils.HtmlArchiveProcessor
 import com.karakept.app.utils.HtmlCache
@@ -45,20 +48,23 @@ fun HtmlContent(
     modifier: Modifier = Modifier,
     onLinkClick: ((String) -> Unit)? = null,
     hideArticleThumbnails: Boolean = false,
-    onReady: (() -> Unit)? = null,  // Callback when content is fully processed and loaded
-    customTextColor: Color? = null  // Custom text color for HTML viewer
+    onReady: (() -> Unit)? = null,
+    customTextColor: Color? = null,
+    customBackgroundColor: Color? = null,
+    customFontSize: Int = 16,
+    customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM
 ) {
     // Debug output
     println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode, hideThumb=$hideArticleThumbnails")
 
     // Process HTML based on viewer mode asynchronously
-    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, hideArticleThumbnails) {
+    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, hideArticleThumbnails, customFontSize, customFontFamily) {
         if (html == null) {
             value = null
             return@produceState
         }
 
-        val cacheKey = HtmlCache.generateKey(html, "${viewerMode.name}_hideThumb=$hideArticleThumbnails")
+        val cacheKey = HtmlCache.generateKey(html, "${viewerMode.name}_hideThumb=${hideArticleThumbnails}_font=${customFontSize}-${customFontFamily.name}")
         val cached = HtmlCache.get(cacheKey)
         
         if (cached != null) {
@@ -112,18 +118,27 @@ fun HtmlContent(
                 // Always render HtmlRenderer if content is processed, but keep it invisible until loaded
                 // This allows the WebView to load in the background
                 if (processedHtml != null && processedHtml!!.isNotBlank()) {
-                    // WebView now has matching background color, so we can render it directly
-                    // The skeleton will overlay it until content is loaded
-                    HtmlRenderer(
-                        html = processedHtml!!,
-                        viewerMode = viewerMode,
-                        modifier = Modifier.fillMaxWidth(),
-                        onLinkClick = onLinkClick,
-                        onLoaded = { 
-                            isContentLoaded = true 
-                        },
-                        customTextColor = customTextColor
-                    )
+                    // Background wrapper (only for READER mode with custom background color)
+                    val wrapperModifier = if (viewerMode == ViewerMode.READER && customBackgroundColor != null) {
+                        Modifier.fillMaxWidth().fillMaxHeight().background(customBackgroundColor)
+                    } else {
+                        Modifier.fillMaxWidth()
+                    }
+
+                    Box(modifier = wrapperModifier) {
+                        HtmlRenderer(
+                            html = processedHtml!!,
+                            viewerMode = viewerMode,
+                            modifier = Modifier.fillMaxWidth(),
+                            onLinkClick = onLinkClick,
+                            onLoaded = {
+                                isContentLoaded = true
+                            },
+                            customTextColor = customTextColor,
+                            customFontSize = customFontSize,
+                            customFontFamily = customFontFamily
+                        )
+                    }
                 } else if (processedHtml != null && processedHtml!!.isBlank()) {
                      Text(
                         text = "Content could not be displayed safely",

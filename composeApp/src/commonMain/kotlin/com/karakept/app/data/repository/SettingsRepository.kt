@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.data.model.ViewerMode
 import kotlinx.coroutines.flow.Flow
@@ -22,6 +23,9 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
     private val ACCENT_COLOR_KEY = stringPreferencesKey("accent_color")
     private val HTML_TEXT_COLOR_KEY = intPreferencesKey("html_text_color") // Store as ARGB int, null means use theme default
+    private val HTML_BACKGROUND_COLOR_KEY = intPreferencesKey("html_background_color") // Store as ARGB int, null means transparent
+    private val HTML_FONT_SIZE_KEY = intPreferencesKey("html_font_size") // Default: 16px
+    private val HTML_FONT_FAMILY_KEY = stringPreferencesKey("html_font_family") // Enum name
 
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
         val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.CARD.name
@@ -53,6 +57,19 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     val htmlTextColor: Flow<Color?> = dataStore.data.map { preferences ->
         preferences[HTML_TEXT_COLOR_KEY]?.let { Color(it) }
+    }
+
+    val htmlBackgroundColor: Flow<Color?> = dataStore.data.map { preferences ->
+        preferences[HTML_BACKGROUND_COLOR_KEY]?.let { Color(it) }
+    }
+
+    val htmlFontSize: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[HTML_FONT_SIZE_KEY] ?: 16
+    }
+
+    val htmlFontFamily: Flow<ReaderFontFamily> = dataStore.data.map { preferences ->
+        val familyString = preferences[HTML_FONT_FAMILY_KEY] ?: ReaderFontFamily.SYSTEM.name
+        ReaderFontFamily.fromString(familyString)
     }
 
     suspend fun setLayoutType(layoutType: LayoutType) {
@@ -98,6 +115,37 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             } else {
                 preferences.remove(HTML_TEXT_COLOR_KEY)
             }
+        }
+    }
+
+    suspend fun setHtmlBackgroundColor(color: Color?) {
+        dataStore.edit { preferences ->
+            if (color != null) {
+                preferences[HTML_BACKGROUND_COLOR_KEY] = color.toArgb()
+            } else {
+                preferences.remove(HTML_BACKGROUND_COLOR_KEY)
+            }
+        }
+    }
+
+    suspend fun setHtmlFontSize(size: Int) {
+        dataStore.edit { preferences ->
+            preferences[HTML_FONT_SIZE_KEY] = size
+        }
+    }
+
+    suspend fun setHtmlFontFamily(family: ReaderFontFamily) {
+        dataStore.edit { preferences ->
+            preferences[HTML_FONT_FAMILY_KEY] = family.name
+        }
+    }
+
+    suspend fun resetReaderAppearance() {
+        dataStore.edit { preferences ->
+            preferences.remove(HTML_TEXT_COLOR_KEY)
+            preferences.remove(HTML_BACKGROUND_COLOR_KEY)
+            preferences.remove(HTML_FONT_SIZE_KEY)
+            preferences.remove(HTML_FONT_FAMILY_KEY)
         }
     }
 }

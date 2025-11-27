@@ -3,6 +3,7 @@ package com.karakept.app.ui.components
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 
 /**
@@ -26,5 +27,7 @@ expect fun HtmlRenderer(
     modifier: Modifier = Modifier,
     onLinkClick: ((String) -> Unit)? = null,
     onLoaded: (() -> Unit)? = null,
-    customTextColor: Color? = null
+    customTextColor: Color? = null,
+    customFontSize: Int = 16,
+    customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM
 )

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,12 +46,16 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.WebModeBadge
 import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.HeroImageBanner
 import com.karakept.app.ui.components.HtmlContent
+import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
 import com.karakept.app.ui.components.ViewerModeToggle
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -58,13 +63,18 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = getScreenModel<BookmarkViewerScreenModel>()
+        val scope = rememberCoroutineScope()
 
         val loadingState by screenModel.loadingState.collectAsState()
         val viewerMode by screenModel.viewerMode.collectAsState()
         val hideArticleThumbnails by screenModel.hideArticleThumbnails.collectAsState()
         val htmlTextColor by screenModel.htmlTextColor.collectAsState()
+        val htmlBackgroundColor by screenModel.htmlBackgroundColor.collectAsState()
+        val htmlFontSize by screenModel.htmlFontSize.collectAsState()
+        val htmlFontFamily by screenModel.htmlFontFamily.collectAsState()
 
         var showModeDialog by remember { mutableStateOf(false) }
+        var showAppearancePanel by remember { mutableStateOf(false) }
 
         LaunchedEffect(bookmarkId) {
             screenModel.loadBookmark(bookmarkId)
@@ -180,7 +190,10 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                                     navigator.push(WebViewScreen(url))
                                                 },
                                                 onReady = { htmlContentReady = true },
-                                                customTextColor = htmlTextColor
+                                                customTextColor = htmlTextColor,
+                                                customBackgroundColor = htmlBackgroundColor,
+                                                customFontSize = htmlFontSize,
+                                                customFontFamily = htmlFontFamily
                                             )
                                         }
                                         
@@ -256,6 +269,18 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                 )
                             }
                             
+                            // Appearance Settings
+                            IconButton(
+                                onClick = { showAppearancePanel = true },
+                                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 52.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Palette,
+                                    contentDescription = "Appearance",
+                                    tint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
+                                )
+                            }
+
                             // Viewer Mode Toggle
                             IconButton(
                                 onClick = { showModeDialog = true },
@@ -312,6 +337,30 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                         Text("Close")
                     }
                 }
+            )
+        }
+
+        // Reader appearance bottom panel overlay
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            ReaderAppearanceBottomPanel(
+                visible = showAppearancePanel,
+                textColor = htmlTextColor,
+                backgroundColor = htmlBackgroundColor,
+                fontSize = htmlFontSize,
+                fontFamily = htmlFontFamily,
+                onTextColorChange = { screenModel.setHtmlTextColor(it) },
+                onBackgroundColorChange = { screenModel.setHtmlBackgroundColor(it) },
+                onFontSizeChange = { screenModel.setHtmlFontSize(it) },
+                onFontFamilyChange = { screenModel.setHtmlFontFamily(it) },
+                onReset = {
+                    scope.launch {
+                        screenModel.resetReaderAppearance()
+                    }
+                },
+                onDismiss = { showAppearancePanel = false }
             )
         }
     }

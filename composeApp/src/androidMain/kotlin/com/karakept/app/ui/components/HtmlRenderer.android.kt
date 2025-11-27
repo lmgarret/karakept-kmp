@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
+import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color as ComposeColor
@@ -33,7 +34,9 @@ actual fun HtmlRenderer(
     modifier: Modifier,
     onLinkClick: ((String) -> Unit)?,
     onLoaded: (() -> Unit)?,
-    customTextColor: ComposeColor?
+    customTextColor: ComposeColor?,
+    customFontSize: Int,
+    customFontFamily: ReaderFontFamily
 ) {
     // Use custom text color if provided, otherwise default to a fixed color (e.g., Black/White based on theme) 
     // or keep using onSurface but ensure it's what the user wants.
@@ -72,7 +75,7 @@ actual fun HtmlRenderer(
     val backgroundColorHex = String.format("#%06X", 0xFFFFFF and backgroundColor)
     val linkColorHex = String.format("#%06X", 0xFFFFFF and linkColor)
 
-    val themedHtml = remember(html, viewerMode, textColorHex, backgroundColorHex, linkColorHex) {
+    val themedHtml = remember(html, viewerMode, textColorHex, backgroundColorHex, linkColorHex, customFontSize, customFontFamily) {
         when (viewerMode) {
             ViewerMode.READER -> {
                 // Reader mode: wrap with base styles
@@ -91,10 +94,10 @@ actual fun HtmlRenderer(
                         body {
                             color: $textColorHex;
                             background-color: transparent;
-                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                            font-size: 16px;
+                            font-family: ${customFontFamily.cssValue};
+                            font-size: ${customFontSize}px;
                             line-height: 1.6;
-                            padding: 0;
+                            padding: 16px;
                             margin: 0;
                             word-wrap: break-word;
                             overflow-wrap: break-word;

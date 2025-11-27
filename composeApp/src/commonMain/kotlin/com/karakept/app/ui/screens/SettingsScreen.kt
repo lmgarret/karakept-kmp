@@ -20,8 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -230,17 +232,46 @@ class SettingsScreen : Screen {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // HTML Viewer Settings
+                // Reader Appearance
                 Text(
-                    text = "HTML Viewer Settings",
+                    text = "Reader Appearance",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                HtmlTextColorPicker(
-                    currentColor = currentHtmlTextColor,
-                    onColorSelected = { screenModel.setHtmlTextColor(it) }
-                )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { navigator.push(ReaderAppearanceScreen()) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Customize Reader Appearance",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Text color, background, font size, and font family",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Open"
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 

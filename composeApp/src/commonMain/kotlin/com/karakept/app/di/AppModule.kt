@@ -14,6 +14,7 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
+import com.karakept.app.ui.screens.ReaderAppearanceScreenModel
 import com.karakept.app.ui.screens.SettingsScreenModel
 
 val appModule = module {
@@ -42,4 +43,5 @@ val appModule = module {
     factory { MainScreenModel(get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get(), get()) }
     factory { SettingsScreenModel(get(), get()) }
+    factory { ReaderAppearanceScreenModel(get()) }
 }

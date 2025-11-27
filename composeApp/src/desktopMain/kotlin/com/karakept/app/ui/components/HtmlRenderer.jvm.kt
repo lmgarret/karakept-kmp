@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import javafx.application.Platform
 import javafx.embed.swing.JFXPanel
@@ -37,7 +38,9 @@ actual fun HtmlRenderer(
     modifier: Modifier,
     onLinkClick: ((String) -> Unit)?,
     onLoaded: (() -> Unit)?,
-    customTextColor: Color?
+    customTextColor: Color?,
+    customFontSize: Int,
+    customFontFamily: ReaderFontFamily
 ) {
     // Debug output
     println("HtmlRenderer (Desktop): Rendering HTML, length=${html.length}, first 100 chars=${html.take(100)}")
@@ -63,7 +66,7 @@ actual fun HtmlRenderer(
     val backgroundColorHex = String.format("#%06X", 0xFFFFFF and backgroundColor)
     val linkColorHex = String.format("#%06X", 0xFFFFFF and linkColor)
 
-    val styledHtml = remember(html, viewerMode, textColorHex, backgroundColorHex, linkColorHex) {
+    val styledHtml = remember(html, viewerMode, textColorHex, backgroundColorHex, linkColorHex, customFontSize, customFontFamily) {
         when (viewerMode) {
             ViewerMode.READER -> {
                 // Reader mode: wrap with base styles
@@ -74,13 +77,13 @@ actual fun HtmlRenderer(
                     <meta charset="UTF-8">
                     <style>
                         body {
-                            font-family: sans-serif;
-                            font-size: 14px;
+                            font-family: ${customFontFamily.cssValue};
+                            font-size: ${customFontSize}px;
                             line-height: 1.6;
                             color: $textColorHex;
-                            background-color: $backgroundColorHex;
-                            margin: 16px;
-                            padding: 0;
+                            background-color: transparent;
+                            margin: 0;
+                            padding: 16px;
                             overflow-y: hidden; /* Hide scrollbar as we resize to fit */
                         }
                         a {

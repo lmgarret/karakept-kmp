@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
+import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.repository.SettingsRepository
 import kotlinx.coroutines.delay
@@ -30,6 +31,15 @@ class BookmarkViewerScreenModel(
     val htmlTextColor: StateFlow<Color?> = settingsRepository.htmlTextColor
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val htmlBackgroundColor: StateFlow<Color?> = settingsRepository.htmlBackgroundColor
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val htmlFontSize: StateFlow<Int> = settingsRepository.htmlFontSize
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), 16)
+
+    val htmlFontFamily: StateFlow<ReaderFontFamily> = settingsRepository.htmlFontFamily
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ReaderFontFamily.SYSTEM)
+
     fun loadBookmark(id: Long) {
         screenModelScope.launch {
             try {
@@ -50,5 +60,33 @@ class BookmarkViewerScreenModel(
         screenModelScope.launch {
             settingsRepository.setViewerMode(mode)
         }
+    }
+
+    fun setHtmlTextColor(color: Color?) {
+        screenModelScope.launch {
+            settingsRepository.setHtmlTextColor(color)
+        }
+    }
+
+    fun setHtmlBackgroundColor(color: Color?) {
+        screenModelScope.launch {
+            settingsRepository.setHtmlBackgroundColor(color)
+        }
+    }
+
+    fun setHtmlFontSize(size: Int) {
+        screenModelScope.launch {
+            settingsRepository.setHtmlFontSize(size)
+        }
+    }
+
+    fun setHtmlFontFamily(family: ReaderFontFamily) {
+        screenModelScope.launch {
+            settingsRepository.setHtmlFontFamily(family)
+        }
+    }
+
+    suspend fun resetReaderAppearance() {
+        settingsRepository.resetReaderAppearance()
     }
 }
