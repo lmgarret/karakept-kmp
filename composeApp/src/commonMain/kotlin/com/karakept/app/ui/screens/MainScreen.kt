@@ -11,12 +11,17 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -26,11 +31,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
@@ -42,8 +51,17 @@ import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkListLayout
 import kotlinx.coroutines.launch
 
+import getPlatform
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
+
 class MainScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -53,6 +71,14 @@ class MainScreen : Screen {
         val selectedServer by screenModel.selectedServer.collectAsState()
         val bookmarks by screenModel.bookmarks.collectAsState()
         val layoutType by settingsScreenModel.layoutType.collectAsState()
+        val isSyncing by screenModel.isSyncing.collectAsState()
+
+        val isDesktop = remember { getPlatform().name.contains("Java") }
+
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = isSyncing,
+            onRefresh = { screenModel.syncBookmarks() }
+        )
 
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val scope = rememberCoroutineScope()
@@ -147,34 +173,65 @@ class MainScreen : Screen {
                             }
                         },
                         actions = {
-                            IconButton(onClick = { screenModel.syncBookmarks() }) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Sync")
+                            if (isDesktop) {
+                                IconButton(onClick = { screenModel.syncBookmarks() }) {
+                                    Icon(Icons.Default.Refresh, contentDescription = "Sync")
+                                }
                             }
                         }
                     )
                 }
             ) { padding ->
-                LazyColumn(
-                    modifier = Modifier.padding(padding).fillMaxSize()
-                ) {
-                    items(bookmarks, key = { it.localId }) { bookmark ->
-                        // Remember the click action to avoid recomposing the item when MainScreen recomposes
-                        // (though MainScreen shouldn't recompose often if state is stable)
-                        val onClick = remember(bookmark.localId, navigator) {
-                            { navigator.push(BookmarkViewerScreen(bookmark.localId)) }
+                Box(
+                    modifier = Modifier
+                        .padding(padding)
+                        .fillMaxSize()
+                        .pullRefresh(pullRefreshState)
+                        .onKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown && 
+                                event.key == Key.R && 
+                                (event.isCtrlPressed || event.isMetaPressed)) {
+                                screenModel.syncBookmarks()
+                                true
+                            } else {
+                                false
+                            }
                         }
-                        
-                        when (layoutType) {
-                            LayoutType.CARD -> BookmarkCardLayout(
-                                bookmark = bookmark,
-                                onClick = onClick
-                            )
-                            LayoutType.LIST -> BookmarkListLayout(
-                                bookmark = bookmark,
-                                onClick = onClick
-                            )
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(bookmarks, key = { it.localId }) { bookmark ->
+                            // Remember the click action to avoid recomposing the item when MainScreen recomposes
+                            // (though MainScreen shouldn't recompose often if state is stable)
+                            val onClick = remember(bookmark.localId, navigator) {
+                                { navigator.push(BookmarkViewerScreen(bookmark.localId)) }
+                            }
+                            
+                            when (layoutType) {
+                                LayoutType.CARD -> BookmarkCardLayout(
+                                    bookmark = bookmark,
+                                    onClick = onClick
+                                )
+                                LayoutType.LIST -> BookmarkListLayout(
+                                    bookmark = bookmark,
+                                    onClick = onClick
+                                )
+                            }
                         }
                     }
+
+                    if (isSyncing) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)
+                        )
+                    }
+
+                    PullRefreshIndicator(
+                        refreshing = isSyncing,
+                        state = pullRefreshState,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
                 }
             }
         }

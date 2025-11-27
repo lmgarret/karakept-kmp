@@ -82,13 +82,19 @@ class MainScreenModel(
         _selectedServerId.value = serverId
     }
 
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing
+
     fun syncBookmarks() {
         screenModelScope.launch {
             selectedServer.value?.let { server ->
                 try {
+                    _isSyncing.value = true
                     bookmarkRepository.syncBookmarks(server)
                 } catch (e: Exception) {
                     // Handle error
+                } finally {
+                    _isSyncing.value = false
                 }
             }
         }
