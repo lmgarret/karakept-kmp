@@ -13,7 +13,7 @@ import com.karakept.app.data.model.ViewerMode
  * - Desktop: Uses compose-webview-multiplatform with JCEF
  *
  * @param html Processed HTML content to render
- * @param viewerMode Viewer mode (READER or ARCHIVE)
+ * @param viewerMode Viewer mode (READER or WEB)
  * @param modifier Modifier for layout
  * @param onLinkClick Callback when a link is clicked (receives the URL)
  * @param onLoaded Callback when content is loaded

@@ -34,7 +34,7 @@ import com.karakept.app.utils.HtmlSanitizer
  * - Uses platform-specific renderer
  *
  * @param html Raw HTML content (will be processed based on viewerMode)
- * @param viewerMode Viewer mode (READER for sanitized, ARCHIVE for original styles)
+ * @param viewerMode Viewer mode (READER for sanitized, WEB for original styles)
  * @param modifier Modifier for layout
  * @param onLinkClick Callback when a link is clicked
  */
@@ -68,7 +68,7 @@ fun HtmlContent(
                 try {
                     val result = when (viewerMode) {
                         ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = hideArticleThumbnails)
-                        ViewerMode.ARCHIVE -> HtmlArchiveProcessor.processForArchive(html)
+                        ViewerMode.WEB -> HtmlArchiveProcessor.processForArchive(html)
                     }
                     println("HtmlContent: Processed HTML length=${result.length}, isBlank=${result.isBlank()}")
                     HtmlCache.put(cacheKey, result)

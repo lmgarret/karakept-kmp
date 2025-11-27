@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -36,6 +37,7 @@ fun HeroImageBanner(
     imageUrl: String?,
     title: String,
     url: String? = null,
+    scrollProgress: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -85,11 +87,18 @@ fun HeroImageBanner(
             }
         }
 
-        // Title and metadata at bottom
+        // Title and metadata at bottom with scale effect
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(16.dp)
+                .graphicsLayer {
+                    // Scale from 1.0 to 0.85 as user scrolls
+                    val scale = 1f - (scrollProgress * 0.15f)
+                    scaleX = scale
+                    scaleY = scale
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 1f) // Scale from bottom-left
+                }
         ) {
             Text(
                 text = title,

@@ -180,10 +180,10 @@ class SettingsScreen : Screen {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 LayoutOption(
-                    title = "Archive",
-                    description = "Original HTML with stylesheets (JavaScript disabled)",
-                    isSelected = currentViewerMode == ViewerMode.ARCHIVE,
-                    onClick = { screenModel.setViewerMode(ViewerMode.ARCHIVE) }
+                    title = "Web",
+                    description = "Web view with original HTML and stylesheets (JavaScript disabled)",
+                    isSelected = currentViewerMode == ViewerMode.WEB,
+                    onClick = { screenModel.setViewerMode(ViewerMode.WEB) }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))

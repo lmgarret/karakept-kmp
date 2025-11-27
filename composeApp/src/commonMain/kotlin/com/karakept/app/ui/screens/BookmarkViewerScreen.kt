@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -35,13 +39,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.ViewerMode
-import com.karakept.app.ui.components.ArchiveModeBadge
+import com.karakept.app.ui.components.WebModeBadge
 import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.HeroImageBanner
 import com.karakept.app.ui.components.HtmlContent
@@ -68,12 +73,20 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         // Hoist state management OUTSIDE the when to prevent recomposition flash
         val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
         val bannerHeight = 320.dp
-        val toolbarHeight = 64.dp
+        val toolbarHeight = 56.dp
+        
+        // Calculate when to show sticky title based on banner height
+        // Show when scrolled past banner minus the space for status bar + top bar
+        val density = LocalDensity.current
+        val bannerHeightPx = with(density) { bannerHeight.toPx() }
+        val toolbarHeightPx = with(density) { toolbarHeight.toPx() }
+        val statusBarInsets = WindowInsets.statusBars.getTop(density)
+        val showStickyTitleThreshold = (bannerHeightPx - toolbarHeightPx - statusBarInsets).toInt()
         
         // Calculate scroll progress - this remains stable across state transitions
         val showStickyTitle by remember(bookmarkId) {
             androidx.compose.runtime.derivedStateOf {
-                scrollState.firstVisibleItemIndex > 0 || scrollState.firstVisibleItemScrollOffset > 300
+                scrollState.firstVisibleItemIndex > 0 || scrollState.firstVisibleItemScrollOffset > showStickyTitleThreshold
             }
         }
 
@@ -123,7 +136,8 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                 HeroImageBanner(
                                     imageUrl = imageUrl,
                                     title = title,
-                                    url = url
+                                    url = url,
+                                    scrollProgress = (scrollState.firstVisibleItemScrollOffset / 300f).coerceIn(0f, 1f)
                                 )
                             }
                         }
@@ -146,9 +160,9 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                         .background(MaterialTheme.colorScheme.background)
                                         .padding(16.dp)
                                 ) {
-                                    // Archive mode badge
-                                    if (htmlContentReady && viewerMode == ViewerMode.ARCHIVE) {
-                                        ArchiveModeBadge(
+                                    // Web mode badge
+                                    if (htmlContentReady && viewerMode == ViewerMode.WEB) {
+                                        WebModeBadge(
                                             modifier = Modifier.padding(bottom = 16.dp)
                                         )
                                     }
@@ -185,10 +199,27 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                             }
                         }
                         
+                        
+                        
+                        
+                        // Status bar background - fades in with top bar for parallax effect
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .windowInsetsTopHeight(WindowInsets.statusBars)
+                                .background(
+                                    color = MaterialTheme.colorScheme.background.copy(
+                                        alpha = if (showStickyTitle) 1f else 0f
+                                    )
+                                )
+                                .align(Alignment.TopCenter)
+                        )
+                        
                         // Custom Top Bar (Overlay) - Stable across state transitions
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .statusBarsPadding()
                                 .height(toolbarHeight)
                                 .background(
                                     color = MaterialTheme.colorScheme.surface.copy(

@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.ViewerMode
 
 /**
- * Segmented button control for Reader/Archive viewer modes.
+ * Segmented button control for Reader/Web viewer modes.
  */
 @Composable
 fun ViewerModeToggle(
@@ -28,9 +28,9 @@ fun ViewerModeToggle(
             label = { Text("Reader") }
         )
         FilterChip(
-            selected = currentMode == ViewerMode.ARCHIVE,
-            onClick = { onModeChange(ViewerMode.ARCHIVE) },
-            label = { Text("Archive") }
+            selected = currentMode == ViewerMode.WEB,
+            onClick = { onModeChange(ViewerMode.WEB) },
+            label = { Text("Web") }
         )
     }
 }

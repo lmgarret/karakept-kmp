@@ -16,13 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 /**
- * Persistent indicator badge when Archive mode is active.
+ * Persistent indicator badge when Web mode is active.
  *
- * Shows a warning icon and "Archive Mode" text to remind users
+ * Shows a warning icon and "Web Mode" text to remind users
  * they are viewing content with original stylesheets.
  */
 @Composable
-fun ArchiveModeBadge(modifier: Modifier = Modifier) {
+fun WebModeBadge(modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.secondaryContainer,
@@ -40,7 +40,7 @@ fun ArchiveModeBadge(modifier: Modifier = Modifier) {
                 tint = MaterialTheme.colorScheme.onSecondaryContainer
             )
             Text(
-                text = "Archive Mode",
+                text = "Web Mode",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )

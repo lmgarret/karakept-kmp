@@ -116,7 +116,7 @@ actual fun HtmlRenderer(
                 </html>
                 """.trimIndent()
             }
-            ViewerMode.ARCHIVE -> {
+            ViewerMode.WEB -> {
                 // Archive mode: minimal wrapper, preserve original styles
                 """
                 <!DOCTYPE html>
