@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import com.karakept.app.data.model.ViewerMode
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color as ComposeColor
 
 /**
@@ -34,7 +35,35 @@ actual fun HtmlRenderer(
     onLoaded: (() -> Unit)?,
     customTextColor: ComposeColor?
 ) {
-    val textColor = (customTextColor ?: MaterialTheme.colorScheme.onSurface).toArgb()
+    // Use custom text color if provided, otherwise default to a fixed color (e.g., Black/White based on theme) 
+    // or keep using onSurface but ensure it's what the user wants.
+    // The user requested that text color should NOT change with dynamic color.
+    // If we use onSurface, it WILL change with dynamic color.
+    // So we should probably default to a standard color if customTextColor is null, 
+    // OR we can rely on the fact that onSurface might be tinted in dynamic themes.
+    // Let's use a more neutral default if customTextColor is null, or just stick to onSurface 
+    // but maybe the user implies they want a specific color that doesn't shift.
+    // However, the best way to "stay the same" is to use the custom color logic.
+    // If the user hasn't set a custom color, it defaults to onSurface.
+    // If onSurface changes with dynamic theme (which it does), that's the issue.
+    // We should probably default to a non-dynamic color if no custom color is set, 
+    // OR explicitly set a default that isn't influenced by the dynamic palette if that's the preference.
+    // But standard Material Design says onSurface SHOULD match the theme.
+    // If the user wants it to "stay the same", they might mean "stay black/white" regardless of the pink/blue tint.
+    
+    // Let's check if we can get a non-dynamic onSurface. 
+    // Actually, if the user selects "Dynamic", the whole theme is dynamic.
+    // If they want the text to NOT be dynamic, they should probably set a custom color.
+    // BUT, if they haven't set a custom color, maybe we should default to standard Black/White 
+    // based on dark mode, ignoring the dynamic tint.
+    
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme() // This might not match app theme if forced
+    // Better to check the luminance of the background or surface to decide default text color
+    // But we don't have easy access to "isDark" boolean here directly without passing it.
+    // However, MaterialTheme.colorScheme.surface is available.
+    
+    val defaultTextColor = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) ComposeColor.Black else ComposeColor.White
+    val textColor = (customTextColor ?: defaultTextColor).toArgb()
     val backgroundColor = MaterialTheme.colorScheme.surface.toArgb()
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
 

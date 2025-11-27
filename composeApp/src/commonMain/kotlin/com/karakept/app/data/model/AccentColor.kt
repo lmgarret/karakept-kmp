@@ -9,7 +9,8 @@ enum class AccentColor {
     GREEN,
     ORANGE,
     RED,
-    PINK;
+    PINK,
+    DYNAMIC;
 
     companion object {
         fun fromString(value: String): AccentColor {

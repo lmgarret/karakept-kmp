@@ -479,7 +479,25 @@ private fun ColorSwatch(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(color)
+                .then(
+                    if (label == "Dynamic") {
+                        Modifier.background(
+                            androidx.compose.ui.graphics.Brush.sweepGradient(
+                                listOf(
+                                    Color(0xFF6750A4),
+                                    Color(0xFF1976D2),
+                                    Color(0xFF388E3C),
+                                    Color(0xFFE65100),
+                                    Color(0xFFC62828),
+                                    Color(0xFFC2185B),
+                                    Color(0xFF6750A4)
+                                )
+                            )
+                        )
+                    } else {
+                        Modifier.background(color)
+                    }
+                )
                 .border(
                     width = if (isSelected) 3.dp else 1.dp,
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
@@ -491,7 +509,7 @@ private fun ColorSwatch(
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = "Selected",
-                    tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
+                    tint = if (label == "Dynamic" || color.luminance() > 0.5f) Color.Black else Color.White,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -513,6 +531,7 @@ private fun getAccentColorPreview(accentColor: AccentColor): Color {
         AccentColor.ORANGE -> Color(0xFFE65100)
         AccentColor.RED -> Color(0xFFC62828)
         AccentColor.PINK -> Color(0xFFC2185B)
+        AccentColor.DYNAMIC -> Color.Transparent // Handled specially in UI
     }
 }
 

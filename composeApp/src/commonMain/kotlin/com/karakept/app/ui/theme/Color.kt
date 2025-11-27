@@ -63,6 +63,7 @@ private val PinkTertiaryDark = Color(0xFFB39DDB)
 /**
  * Generate a ColorScheme based on theme mode and accent color.
  */
+@androidx.compose.runtime.Composable
 fun getColorScheme(themeMode: ThemeMode, accentColor: AccentColor, isDarkTheme: Boolean): androidx.compose.material3.ColorScheme {
     val isDark = when (themeMode) {
         ThemeMode.LIGHT -> false
@@ -73,8 +74,10 @@ fun getColorScheme(themeMode: ThemeMode, accentColor: AccentColor, isDarkTheme: 
     val isAmoled = themeMode == ThemeMode.AMOLED
 
     return if (isDark) {
-        val baseScheme = when (accentColor) {
-            AccentColor.PURPLE -> darkColorScheme(
+        val dynamicScheme = if (accentColor == AccentColor.DYNAMIC) getDynamicColorScheme(true) else null
+        
+        val baseScheme = dynamicScheme ?: when (accentColor) {
+            AccentColor.PURPLE, AccentColor.DYNAMIC -> darkColorScheme(
                 primary = PurpleDark,
                 secondary = PurpleSecondaryDark,
                 tertiary = PurpleTertiaryDark
@@ -120,8 +123,10 @@ fun getColorScheme(themeMode: ThemeMode, accentColor: AccentColor, isDarkTheme: 
             baseScheme
         }
     } else {
-        when (accentColor) {
-            AccentColor.PURPLE -> lightColorScheme(
+        val dynamicScheme = if (accentColor == AccentColor.DYNAMIC) getDynamicColorScheme(false) else null
+        
+        dynamicScheme ?: when (accentColor) {
+            AccentColor.PURPLE, AccentColor.DYNAMIC -> lightColorScheme(
                 primary = PurpleLight,
                 secondary = PurpleSecondaryLight,
                 tertiary = PurpleTertiaryLight
