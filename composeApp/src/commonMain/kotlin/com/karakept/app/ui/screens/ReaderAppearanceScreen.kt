@@ -1,7 +1,9 @@
 package com.karakept.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -83,21 +85,62 @@ class ReaderAppearanceScreen : Screen {
                         .padding(16.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Text(
-                        text = """
-                            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Preview Text",
+                            color = textColor ?: MaterialTheme.colorScheme.onSurface,
+                            fontSize = (fontSize * 1.5f).sp,
+                            fontFamily = getFontFamily(fontFamily),
+                            lineHeight = (fontSize * 2f).sp,
+                            style = MaterialTheme.typography.headlineMedium
+                        )
 
-                            Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+                        Text(
+                            text = "Adjust the settings below to customize how articles appear in reader mode. This is example text to help you preview your changes.",
+                            color = textColor ?: MaterialTheme.colorScheme.onSurface,
+                            fontSize = fontSize.sp,
+                            fontFamily = getFontFamily(fontFamily),
+                            lineHeight = (fontSize * 1.6f).sp
+                        )
 
-                            Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+                        Text(
+                            text = "Reading Experience",
+                            color = textColor ?: MaterialTheme.colorScheme.onSurface,
+                            fontSize = (fontSize * 1.3f).sp,
+                            fontFamily = getFontFamily(fontFamily),
+                            lineHeight = (fontSize * 1.8f).sp,
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
 
-                            Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
-                        """.trimIndent(),
-                        color = textColor ?: MaterialTheme.colorScheme.onSurface,
-                        fontSize = fontSize.sp,
-                        fontFamily = getFontFamily(fontFamily),
-                        lineHeight = (fontSize * 1.6f).sp
-                    )
+                        Text(
+                            text = "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet, making it perfect for previewing fonts.",
+                            color = textColor ?: MaterialTheme.colorScheme.onSurface,
+                            fontSize = fontSize.sp,
+                            fontFamily = getFontFamily(fontFamily),
+                            lineHeight = (fontSize * 1.6f).sp
+                        )
+
+                        Text(
+                            text = "Customization Options",
+                            color = textColor ?: MaterialTheme.colorScheme.onSurface,
+                            fontSize = (fontSize * 1.3f).sp,
+                            fontFamily = getFontFamily(fontFamily),
+                            lineHeight = (fontSize * 1.8f).sp,
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+
+                        Text(
+                            text = "You can change the text size, font family, text color, and background color to suit your reading preferences. All changes are saved automatically and apply only to reader mode.",
+                            color = textColor ?: MaterialTheme.colorScheme.onSurface,
+                            fontSize = fontSize.sp,
+                            fontFamily = getFontFamily(fontFamily),
+                            lineHeight = (fontSize * 1.6f).sp
+                        )
+                    }
                 }
 
                 // Bottom panel overlay
@@ -120,7 +163,8 @@ class ReaderAppearanceScreen : Screen {
                                 screenModel.resetReaderAppearance()
                             }
                         },
-                        onDismiss = { showBottomPanel = false }
+                        onDismiss = { showBottomPanel = false },
+                        allowDismiss = false
                     )
                 }
             }

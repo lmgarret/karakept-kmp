@@ -19,13 +19,18 @@ enum class ReaderFontFamily(
     ),
     SANS_SERIF(
         "Sans Serif",
-        "Arial, Roboto, 'Open Sans', sans-serif",
+        "Arial, Roboto, 'Open Sans', 'Helvetica Neue', sans-serif",
         FontFamily.SansSerif
+    ),
+    OPEN_DYSLEXIC(
+        "OpenDyslexic",
+        "'OpenDyslexic', 'Comic Sans MS', sans-serif",
+        FontFamily.Default
     ),
     ROBOTO(
         "Roboto",
         "Roboto, 'Helvetica Neue', Arial, sans-serif",
-        FontFamily.SansSerif
+        FontFamily.Default
     ),
     MERRIWEATHER(
         "Merriweather",
@@ -37,14 +42,9 @@ enum class ReaderFontFamily(
         "Lora, Georgia, serif",
         FontFamily.Serif
     ),
-    OPEN_DYSLEXIC(
-        "OpenDyslexic",
-        "OpenDyslexic, Arial, sans-serif",
-        FontFamily.SansSerif
-    ),
     MONOSPACE(
         "Monospace",
-        "'Courier New', Courier, Consolas, monospace",
+        "'Courier New', Courier, Consolas, 'Liberation Mono', monospace",
         FontFamily.Monospace
     );
 

@@ -1,6 +1,8 @@
 package com.karakept.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -72,7 +74,8 @@ fun ReaderAppearanceBottomPanel(
     onFontSizeChange: (Int) -> Unit,
     onFontFamilyChange: (ReaderFontFamily) -> Unit,
     onReset: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    allowDismiss: Boolean = true
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     var showResetDialog by remember { mutableStateOf(false) }
@@ -80,26 +83,41 @@ fun ReaderAppearanceBottomPanel(
 
     AnimatedVisibility(
         visible = visible,
-        enter = slideInVertically(initialOffsetY = { it }),
-        exit = slideOutVertically(targetOffsetY = { it })
+        enter = slideInVertically(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            ),
+            initialOffsetY = { it }
+        ),
+        exit = slideOutVertically(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            ),
+            targetOffsetY = { it }
+        )
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset { IntOffset(0, offsetY.roundToInt()) }
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragEnd = {
-                            if (offsetY > 100) {
-                                onDismiss()
+                .pointerInput(allowDismiss) {
+                    if (allowDismiss) {
+                        detectVerticalDragGestures(
+                            onDragEnd = {
+                                if (offsetY > 100) {
+                                    onDismiss()
+                                } else {
+                                    offsetY = 0f
+                                }
+                            },
+                            onVerticalDrag = { _, dragAmount ->
+                                val newOffset = offsetY + dragAmount
+                                offsetY = if (newOffset > 0) newOffset else 0f
                             }
-                            offsetY = 0f
-                        },
-                        onVerticalDrag = { _, dragAmount ->
-                            val newOffset = offsetY + dragAmount
-                            offsetY = if (newOffset > 0) newOffset else 0f
-                        }
-                    )
+                        )
+                    }
                 },
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
             shadowElevation = 8.dp,
@@ -125,7 +143,7 @@ fun ReaderAppearanceBottomPanel(
                 // Tab Row with matching background
                 TabRow(
                     selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = MaterialTheme.colorScheme.onSurface
                 ) {
                     Tab(

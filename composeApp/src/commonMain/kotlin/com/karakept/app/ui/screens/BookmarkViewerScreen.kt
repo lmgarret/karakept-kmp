@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,6 +79,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
 
         var showModeDialog by remember { mutableStateOf(false) }
         var showAppearancePanel by remember { mutableStateOf(false) }
+        var showMenu by remember { mutableStateOf(false) }
 
         LaunchedEffect(bookmarkId) {
             screenModel.loadBookmark(bookmarkId)
@@ -269,28 +274,47 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                 )
                             }
                             
-                            // Appearance Settings
-                            IconButton(
-                                onClick = { showAppearancePanel = true },
-                                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 52.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Palette,
-                                    contentDescription = "Appearance",
-                                    tint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
-                                )
-                            }
+                            // Menu button
+                            Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) {
+                                IconButton(onClick = { showMenu = true }) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "More options",
+                                        tint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
+                                    )
+                                }
 
-                            // Viewer Mode Toggle
-                            IconButton(
-                                onClick = { showModeDialog = true },
-                                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Visibility,
-                                    contentDescription = "Viewer Mode",
-                                    tint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
-                                )
+                                DropdownMenu(
+                                    expanded = showMenu,
+                                    onDismissRequest = { showMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Reader Appearance") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Palette,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            showAppearancePanel = true
+                                            showMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Viewer Mode") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Visibility,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            showModeDialog = true
+                                            showMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -340,28 +364,45 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
             )
         }
 
-        // Reader appearance bottom panel overlay
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            ReaderAppearanceBottomPanel(
-                visible = showAppearancePanel,
-                textColor = htmlTextColor,
-                backgroundColor = htmlBackgroundColor,
-                fontSize = htmlFontSize,
-                fontFamily = htmlFontFamily,
-                onTextColorChange = { screenModel.setHtmlTextColor(it) },
-                onBackgroundColorChange = { screenModel.setHtmlBackgroundColor(it) },
-                onFontSizeChange = { screenModel.setHtmlFontSize(it) },
-                onFontFamilyChange = { screenModel.setHtmlFontFamily(it) },
-                onReset = {
-                    scope.launch {
-                        screenModel.resetReaderAppearance()
-                    }
-                },
-                onDismiss = { showAppearancePanel = false }
-            )
+        // Reader appearance bottom panel overlay with click-outside-to-close
+        if (showAppearancePanel) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Clickable overlay above the panel
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            showAppearancePanel = false
+                        }
+                )
+
+                // Bottom panel (not clickable to close)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    ReaderAppearanceBottomPanel(
+                        visible = showAppearancePanel,
+                        textColor = htmlTextColor,
+                        backgroundColor = htmlBackgroundColor,
+                        fontSize = htmlFontSize,
+                        fontFamily = htmlFontFamily,
+                        onTextColorChange = { screenModel.setHtmlTextColor(it) },
+                        onBackgroundColorChange = { screenModel.setHtmlBackgroundColor(it) },
+                        onFontSizeChange = { screenModel.setHtmlFontSize(it) },
+                        onFontFamilyChange = { screenModel.setHtmlFontFamily(it) },
+                        onReset = {
+                            scope.launch {
+                                screenModel.resetReaderAppearance()
+                            }
+                        },
+                        onDismiss = { showAppearancePanel = false }
+                    )
+                }
+            }
         }
     }
 }
