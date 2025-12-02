@@ -1,19 +1,39 @@
 package com.karakept.app.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.ui.components.FilterBottomPanel
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
@@ -61,7 +81,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 
 class MainScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -72,6 +92,10 @@ class MainScreen : Screen {
         val bookmarks by screenModel.bookmarks.collectAsState()
         val layoutType by settingsScreenModel.layoutType.collectAsState()
         val isSyncing by screenModel.isSyncing.collectAsState()
+        val savedFilters by screenModel.savedFilters.collectAsState()
+        val currentFilter by screenModel.currentFilter.collectAsState()
+
+        var showFilterDialog by remember { mutableStateOf(false) }
 
         val isDesktop = remember { getPlatform().name.contains("Java") }
 
@@ -82,30 +106,38 @@ class MainScreen : Screen {
 
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val scope = rememberCoroutineScope()
+        
+        val allBookmarks by screenModel.allBookmarks.collectAsState()
+
+        // Extract all unique tags from ALL bookmarks for filter dialog
+        val allAvailableTags = remember(allBookmarks) {
+            allBookmarks.flatMap { it.tags.split(",").filter { tag -> tag.isNotBlank() } }.distinct().sortedBy { it.lowercase() }
+        }
+        
+        // Get top 10 most used tags with counts
+        val topTagsWithCounts = remember(allBookmarks) {
+            allBookmarks
+                .flatMap { it.tags.split(",").filter { tag -> tag.isNotBlank() } }
+                .groupingBy { it }
+                .eachCount()
+                .entries
+                .sortedByDescending { it.value }
+                .take(10)
+                .map { "${it.key} (${it.value})" }
+        }
 
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
                 ModalDrawerSheet {
                     Spacer(Modifier.height(12.dp))
-                    Text("Lists", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
-                    lists.forEach { list ->
-                        NavigationDrawerItem(
-                            label = { Text("${list.icon} ${list.name}") },
-                            selected = false,
-                            onClick = {
-                                // TODO: Filter bookmarks by list
-                                scope.launch { drawerState.close() }
-                            }
-                        )
-                    }
                     
-                    Spacer(Modifier.height(16.dp))
-                    Text("Filters", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+                    // Quick Filters Section
+                    Text("Quick Filters", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
                     
                     NavigationDrawerItem(
                         label = { Text("All Bookmarks") },
-                        selected = false,
+                        selected = currentFilter == FilterConfig(),
                         icon = { Icon(Icons.Default.Book, contentDescription = null) },
                         onClick = {
                             screenModel.clearFilter()
@@ -115,34 +147,82 @@ class MainScreen : Screen {
                     
                     NavigationDrawerItem(
                         label = { Text("Favorites") },
-                        selected = false,
+                        selected = currentFilter == FilterConfig(status = FilterStatus.FAVORITES),
                         icon = { Icon(Icons.Default.Star, contentDescription = null) },
                         onClick = {
-                            screenModel.applyFilter("is:fav")
+                            screenModel.applyFilter(FilterConfig(status = FilterStatus.FAVORITES))
                             scope.launch { drawerState.close() }
                         }
                     )
                     
                     NavigationDrawerItem(
                         label = { Text("Not Archived") },
-                        selected = false,
+                        selected = currentFilter == FilterConfig(status = FilterStatus.NOT_ARCHIVED),
                         icon = { Icon(Icons.Default.Inbox, contentDescription = null) },
                         onClick = {
-                            screenModel.applyFilter("-is:archived")
+                            screenModel.applyFilter(FilterConfig(status = FilterStatus.NOT_ARCHIVED))
                             scope.launch { drawerState.close() }
                         }
                     )
                     
                     NavigationDrawerItem(
                         label = { Text("Archived") },
-                        selected = false,
+                        selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
                         icon = { Icon(Icons.Default.Archive, contentDescription = null) },
                         onClick = {
-                            screenModel.applyFilter("is:archived")
+                            screenModel.applyFilter(FilterConfig(status = FilterStatus.ARCHIVED))
                             scope.launch { drawerState.close() }
                         }
                     )
-                    
+
+                    // Lists Section
+                    if (lists.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        Text("Lists", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+                        lists.forEach { list ->
+                            NavigationDrawerItem(
+                                label = { Text("${list.icon} ${list.name}") },
+                                selected = currentFilter.lists.contains(list.id),
+                                onClick = {
+                                    screenModel.applyFilter(FilterConfig(lists = listOf(list.id)))
+                                    scope.launch { drawerState.close() }
+                                }
+                            )
+                        }
+                    }
+
+                    // Saved Filters Section (Shortcuts)
+                    if (savedFilters.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Saved Filters", style = MaterialTheme.typography.titleMedium)
+                            IconButton(onClick = { 
+                                navigator.push(FilterManagementScreen())
+                                scope.launch { drawerState.close() }
+                            }) {
+                                Icon(Icons.Default.Settings, contentDescription = "Manage Filters")
+                            }
+                        }
+                        savedFilters.forEach { savedFilter ->
+                            val isSelected = try {
+                                kotlinx.serialization.json.Json.decodeFromString<FilterConfig>(savedFilter.configJson) == currentFilter
+                            } catch (e: Exception) { false }
+                            
+                            SavedFilterItem(
+                                savedFilter = savedFilter,
+                                selected = isSelected,
+                                onApply = {
+                                    screenModel.applySavedFilter(savedFilter)
+                                    scope.launch { drawerState.close() }
+                                }
+                            )
+                        }
+                    }
+
                     Spacer(Modifier.weight(1f))
                     NavigationDrawerItem(
                         label = { Text("Settings") },
@@ -173,6 +253,9 @@ class MainScreen : Screen {
                             }
                         },
                         actions = {
+                            IconButton(onClick = { showFilterDialog = true }) {
+                                Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                            }
                             if (isDesktop) {
                                 IconButton(onClick = { screenModel.syncBookmarks() }) {
                                     Icon(Icons.Default.Refresh, contentDescription = "Sync")
@@ -202,8 +285,6 @@ class MainScreen : Screen {
                         modifier = Modifier.fillMaxSize()
                     ) {
                         items(bookmarks, key = { it.localId }) { bookmark ->
-                            // Remember the click action to avoid recomposing the item when MainScreen recomposes
-                            // (though MainScreen shouldn't recompose often if state is stable)
                             val onClick = remember(bookmark.localId, navigator) {
                                 { navigator.push(BookmarkViewerScreen(bookmark.localId)) }
                             }
@@ -234,6 +315,53 @@ class MainScreen : Screen {
                     )
                 }
             }
+        }
+
+        // Back Handler for filter panel
+        androidx.activity.compose.BackHandler(enabled = showFilterDialog) {
+            showFilterDialog = false
+        }
+
+        // Scrim for Filter Panel
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showFilterDialog,
+            enter = androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        showFilterDialog = false
+                    }
+            )
+        }
+
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            FilterBottomPanel(
+                visible = showFilterDialog,
+                currentFilter = currentFilter,
+                availableTags = topTagsWithCounts,
+                allTags = allAvailableTags,
+                availableLists = lists,
+                onDismiss = { showFilterDialog = false },
+                onFilterChange = { filter ->
+                    screenModel.applyFilter(filter)
+                },
+                onSaveFilter = { name, icon, isDefault ->
+                    screenModel.saveFilter(name, icon = icon, isDefault = isDefault)
+                },
+                onReset = {
+                    screenModel.applyFilter(FilterConfig())
+                }
+            )
         }
     }
 }

@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 2,
-    "identityHash": "94d05f21aa409e87d1127cddc3df9ca0",
+    "version": 5,
+    "identityHash": "ca4bbe0c8b1a391e416f1759dee948ca",
     "entities": [
       {
         "tableName": "servers",
@@ -129,7 +129,7 @@
       },
       {
         "tableName": "saved_filters",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `configJson` TEXT NOT NULL, `isDefault` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `configJson` TEXT NOT NULL, `isDefault` INTEGER NOT NULL, `displayOrder` INTEGER NOT NULL, `isVisibleInDrawer` INTEGER NOT NULL, `isQuickFilter` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -144,6 +144,12 @@
             "notNull": true
           },
           {
+            "fieldPath": "icon",
+            "columnName": "icon",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
             "fieldPath": "configJson",
             "columnName": "configJson",
             "affinity": "TEXT",
@@ -152,6 +158,24 @@
           {
             "fieldPath": "isDefault",
             "columnName": "isDefault",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayOrder",
+            "columnName": "displayOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isVisibleInDrawer",
+            "columnName": "isVisibleInDrawer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isQuickFilter",
+            "columnName": "isQuickFilter",
             "affinity": "INTEGER",
             "notNull": true
           }
@@ -166,7 +190,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '94d05f21aa409e87d1127cddc3df9ca0')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ca4bbe0c8b1a391e416f1759dee948ca')"
     ]
   }
 }

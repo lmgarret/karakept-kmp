@@ -10,12 +10,14 @@ import org.koin.dsl.module
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.BookmarkRepository
+import com.karakept.app.data.repository.SavedFilterRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
 import com.karakept.app.ui.screens.ReaderAppearanceScreenModel
 import com.karakept.app.ui.screens.SettingsScreenModel
+import com.karakept.app.ui.screens.FilterManagementScreenModel
 
 val appModule = module {
     single<AppDatabase> {
@@ -32,16 +34,19 @@ val appModule = module {
     
     single { get<AppDatabase>().serverDao() }
     single { get<AppDatabase>().bookmarkDao() }
+    single { get<AppDatabase>().savedFilterDao() }
     
     single { createDataStore() }
 
     single { ServerRepository(get()) }
     single { BookmarkRepository(get(), get()) }
+    single { SavedFilterRepository(get()) }
     single { SettingsRepository(get()) }
 
     factory { LoginScreenModel(get(), get()) }
-    factory { MainScreenModel(get(), get(), get()) }
+    factory { MainScreenModel(get(), get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get(), get()) }
     factory { SettingsScreenModel(get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }
+    factory { FilterManagementScreenModel(get(), get(), get(), get()) }
 }

@@ -70,6 +70,9 @@ kotlin {
 
                 // HTML Parsing
                 implementation(libs.jsoup)
+
+                // Drag and Drop Reordering
+                implementation(libs.reorderable)
             }
         }
         val androidMain by getting {

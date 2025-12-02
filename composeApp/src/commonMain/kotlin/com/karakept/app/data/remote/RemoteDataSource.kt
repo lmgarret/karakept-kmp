@@ -56,6 +56,27 @@ class RemoteDataSource(private val client: HttpClient) {
         }
     }
 
+    suspend fun fetchBookmarksForList(server: Server, listId: String): List<BookmarkDto> {
+        return try {
+            val response: HttpResponse = client.get(server.url) {
+                url {
+                    appendPathSegments("api", "v1", "lists", listId, "bookmarks")
+                }
+                header("Authorization", "Bearer ${server.apiKey}")
+            }
+            
+            if (!response.status.isSuccess()) {
+                throw ApiException("Failed to fetch bookmarks for list $listId: ${response.status}")
+            }
+            
+            val paginatedResponse: PaginatedBookmarksResponse = response.body()
+            paginatedResponse.bookmarks
+        } catch (e: Exception) {
+            // If a list fetch fails, we return empty list to not break the whole sync
+            emptyList()
+        }
+    }
+
     suspend fun testConnection(url: String, apiKey: String): Boolean {
         return try {
             val response: HttpResponse = client.get(url) {

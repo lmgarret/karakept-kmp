@@ -19,7 +19,24 @@ class BookmarkRepository(
 
     suspend fun syncBookmarks(server: Server) {
         try {
+            // 1. Fetch all bookmarks
             val remoteBookmarks = remoteDataSource.fetchBookmarks(server)
+            
+            // 2. Fetch all lists to map bookmark membership
+            val lists = remoteDataSource.fetchLists(server)
+            val bookmarkListMap = mutableMapOf<String, MutableList<String>>() // BookmarkID -> List<ListID>
+            
+            lists.forEach { list ->
+                try {
+                    val listBookmarks = remoteDataSource.fetchBookmarksForList(server, list.id)
+                    listBookmarks.forEach { bookmark ->
+                        bookmarkListMap.getOrPut(bookmark.id) { mutableListOf() }.add(list.id)
+                    }
+                } catch (e: Exception) {
+                    // Ignore errors for individual lists
+                }
+            }
+
             val entities = remoteBookmarks.mapNotNull { dto ->
                 try {
                     // Extract URL from content based on type
@@ -42,8 +59,14 @@ class BookmarkRepository(
                     // Get HTML content - prioritize htmlContent, then fall back to other fields
                     val content = dto.content.htmlContent ?: dto.note ?: dto.content.description ?: dto.content.text
                     
+                    // Process tags
+                    val tagsString = dto.tags.joinToString(",") { it.name }
+                    
+                    // Process lists
+                    val listIdsString = bookmarkListMap[dto.id]?.joinToString(",") ?: ""
+
                     BookmarkEntity(
-                        remoteId = dto.id.hashCode().toLong(), // Convert string ID to long
+                        remoteId = dto.id.hashCode().toLong(), // Convert string ID to long (Note: this might cause collisions but keeping existing logic)
                         serverId = server.id,
                         url = url,
                         title = title,
@@ -52,7 +75,9 @@ class BookmarkRepository(
                         description = dto.content.description,
                         createdAt = createdAtMillis,
                         isArchived = dto.archived,
-                        isStarred = dto.favourited
+                        isStarred = dto.favourited,
+                        tags = tagsString,
+                        listIds = listIdsString
                     )
                 } catch (e: Exception) {
                     // Log and skip malformed bookmarks

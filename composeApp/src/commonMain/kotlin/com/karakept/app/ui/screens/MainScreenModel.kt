@@ -3,9 +3,13 @@ package com.karakept.app.ui.screens
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.BookmarkRepository
+import com.karakept.app.data.repository.SavedFilterRepository
 import com.karakept.app.data.repository.ServerRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,7 +24,8 @@ import kotlinx.coroutines.launch
 class MainScreenModel(
     private val serverRepository: ServerRepository,
     private val bookmarkRepository: BookmarkRepository,
-    private val remoteDataSource: RemoteDataSource
+    private val remoteDataSource: RemoteDataSource,
+    private val savedFilterRepository: SavedFilterRepository
 ) : ScreenModel {
 
     // For simplicity, we just pick the first server for now, or allow switching.
@@ -29,25 +34,53 @@ class MainScreenModel(
     val servers = serverRepository.servers
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _selectedServerId = MutableStateFlow<String?>(null)
-    
-    val selectedServer: StateFlow<Server?> = combine(servers, _selectedServerId) { list, id ->
-        if (id != null) list.find { it.id == id } else list.firstOrNull()
-    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
+    private val _selectedServer = MutableStateFlow<Server?>(null)
+    val selectedServer: StateFlow<Server?> = _selectedServer
+
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing
+
+    private val _currentFilter = MutableStateFlow(FilterConfig())
+    val currentFilter: StateFlow<FilterConfig> = _currentFilter
+
+    val savedFilters = savedFilterRepository.visibleFilters
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _lists = MutableStateFlow<List<com.karakept.app.data.remote.model.ListDto>>(emptyList())
     val lists: StateFlow<List<com.karakept.app.data.remote.model.ListDto>> = _lists
 
-    private val _currentFilter = MutableStateFlow<String?>(null)
+    // All bookmarks without filtering - for tag extraction
+    val allBookmarks = selectedServer
+        .flatMapLatest { server ->
+            if (server != null) {
+                bookmarkRepository.getBookmarks(server)
+            } else {
+                flowOf(emptyList())
+            }
+        }
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        // Load lists when the selected server changes
+        // Initialize selected server
         screenModelScope.launch {
-            selectedServer.collect { server ->
-                if (server != null) {
+            servers.collect { serverList ->
+                if (_selectedServer.value == null && serverList.isNotEmpty()) {
+                    _selectedServer.value = serverList.first()
                     loadLists()
-                } else {
-                    _lists.value = emptyList()
+                } else if (serverList.isEmpty()) {
+                    _selectedServer.value = null
+                }
+            }
+        }
+
+        // Load default filter on startup
+        screenModelScope.launch {
+            savedFilterRepository.getDefaultFilter()?.let { saved ->
+                try {
+                    val config = kotlinx.serialization.json.Json.decodeFromString<FilterConfig>(saved.configJson)
+                    _currentFilter.value = config
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         }
@@ -68,22 +101,51 @@ class MainScreenModel(
         }
     }.stateIn(screenModelScope, SharingStarted.Lazily, emptyList())
 
-    private fun applyFilterToBookmarks(bookmarks: List<BookmarkEntity>, filter: String?): List<BookmarkEntity> {
-        return when (filter) {
-            "is:fav" -> bookmarks.filter { it.isStarred }
-            "is:archived" -> bookmarks.filter { it.isArchived }
-            "-is:archived" -> bookmarks.filter { !it.isArchived }
-            null -> bookmarks
-            else -> bookmarks
+    private fun applyFilterToBookmarks(bookmarks: List<BookmarkEntity>, filter: FilterConfig): List<BookmarkEntity> {
+        var result = bookmarks
+
+        // 1. Status Filter
+        result = when (filter.status) {
+            FilterStatus.FAVORITES -> result.filter { it.isStarred }
+            FilterStatus.ARCHIVED -> result.filter { it.isArchived }
+            FilterStatus.NOT_ARCHIVED -> result.filter { !it.isArchived }
+            FilterStatus.ALL -> result
         }
+
+        // 2. Tags Filter (OR logic: bookmark must have AT LEAST ONE of the selected tags)
+        if (filter.tags.isNotEmpty()) {
+            result = result.filter { bookmark ->
+                val bookmarkTags = bookmark.tags.split(",").filter { it.isNotEmpty() }
+                filter.tags.any { tag -> bookmarkTags.contains(tag) }
+            }
+        }
+
+        // 3. Lists Filter (OR logic: bookmark must be in AT LEAST ONE of the selected lists)
+        // Usually list filtering is "Show me items in List A OR List B".
+        if (filter.lists.isNotEmpty()) {
+            result = result.filter { bookmark ->
+                val bookmarkLists = bookmark.listIds.split(",").filter { it.isNotEmpty() }
+                filter.lists.any { listId -> bookmarkLists.contains(listId) }
+            }
+        }
+
+        // 4. Sort
+        result = when (filter.sort) {
+            SortOption.NEWEST -> result.sortedByDescending { it.createdAt }
+            SortOption.OLDEST -> result.sortedBy { it.createdAt }
+            SortOption.TITLE_AZ -> result.sortedBy { it.title.lowercase() }
+            SortOption.TITLE_ZA -> result.sortedByDescending { it.title.lowercase() }
+        }
+
+        return result
     }
 
     fun selectServer(serverId: String) {
-        _selectedServerId.value = serverId
+        screenModelScope.launch {
+            val server = servers.value.find { it.id == serverId }
+            _selectedServer.value = server
+        }
     }
-
-    private val _isSyncing = MutableStateFlow(false)
-    val isSyncing: StateFlow<Boolean> = _isSyncing
 
     fun syncBookmarks() {
         screenModelScope.launch {
@@ -114,11 +176,48 @@ class MainScreenModel(
         }
     }
 
-    fun applyFilter(filter: String) {
+    fun applyFilter(filter: FilterConfig) {
         _currentFilter.value = filter
     }
 
     fun clearFilter() {
-        _currentFilter.value = null
+        _currentFilter.value = FilterConfig()
+    }
+    
+    fun saveFilter(name: String, icon: String = "📋", isDefault: Boolean = false) {
+        screenModelScope.launch {
+            val configJson = kotlinx.serialization.json.Json.encodeToString(FilterConfig.serializer(), _currentFilter.value)
+            savedFilterRepository.saveFilter(
+                name = name,
+                icon = icon,
+                configJson = configJson,
+                isDefault = isDefault,
+                isVisibleInDrawer = true
+            )
+        }
+    }
+    
+    fun deleteSavedFilter(filter: com.karakept.app.data.local.entity.SavedFilterEntity) {
+        screenModelScope.launch {
+            savedFilterRepository.deleteFilter(filter)
+        }
+    }
+    
+    fun updateSavedFilterName(filter: com.karakept.app.data.local.entity.SavedFilterEntity, newName: String) {
+        screenModelScope.launch {
+            val updated = filter.copy(name = newName)
+            savedFilterRepository.updateFilter(updated)
+        }
+    }
+    
+    fun applySavedFilter(filter: com.karakept.app.data.local.entity.SavedFilterEntity) {
+        screenModelScope.launch {
+            try {
+                val config = kotlinx.serialization.json.Json.decodeFromString(FilterConfig.serializer(), filter.configJson)
+                _currentFilter.value = config
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 }

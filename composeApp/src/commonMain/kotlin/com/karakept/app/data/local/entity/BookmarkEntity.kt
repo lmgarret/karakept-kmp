@@ -17,5 +17,7 @@ data class BookmarkEntity(
     val description: String?,
     val createdAt: Long,
     val isArchived: Boolean,
-    val isStarred: Boolean
+    val isStarred: Boolean,
+    val tags: String = "", // Comma-separated tags
+    val listIds: String = "" // Comma-separated list IDs
 )

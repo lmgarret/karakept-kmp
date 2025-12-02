@@ -336,6 +336,12 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
             }
         }
 
+        // Back Handler for panels
+        androidx.activity.compose.BackHandler(enabled = showAppearancePanel || showModeDialog) {
+            if (showAppearancePanel) showAppearancePanel = false
+            if (showModeDialog) showModeDialog = false
+        }
+
         // Viewer mode dialog
         if (showModeDialog) {
             AlertDialog(
@@ -364,45 +370,48 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
             )
         }
 
-        // Reader appearance bottom panel overlay with click-outside-to-close
-        if (showAppearancePanel) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                // Clickable overlay above the panel
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            showAppearancePanel = false
-                        }
-                )
+        // Reader appearance bottom panel
+        // Scrim
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showAppearancePanel,
+            enter = androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        showAppearancePanel = false
+                    }
+            )
+        }
 
-                // Bottom panel (not clickable to close)
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.BottomCenter
-                ) {
-                    ReaderAppearanceBottomPanel(
-                        visible = showAppearancePanel,
-                        textColor = htmlTextColor,
-                        backgroundColor = htmlBackgroundColor,
-                        fontSize = htmlFontSize,
-                        fontFamily = htmlFontFamily,
-                        onTextColorChange = { screenModel.setHtmlTextColor(it) },
-                        onBackgroundColorChange = { screenModel.setHtmlBackgroundColor(it) },
-                        onFontSizeChange = { screenModel.setHtmlFontSize(it) },
-                        onFontFamilyChange = { screenModel.setHtmlFontFamily(it) },
-                        onReset = {
-                            scope.launch {
-                                screenModel.resetReaderAppearance()
-                            }
-                        },
-                        onDismiss = { showAppearancePanel = false }
-                    )
-                }
-            }
+        // Panel (always in composition, visibility controlled by prop for animation)
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            ReaderAppearanceBottomPanel(
+                visible = showAppearancePanel,
+                textColor = htmlTextColor,
+                backgroundColor = htmlBackgroundColor,
+                fontSize = htmlFontSize,
+                fontFamily = htmlFontFamily,
+                onTextColorChange = { screenModel.setHtmlTextColor(it) },
+                onBackgroundColorChange = { screenModel.setHtmlBackgroundColor(it) },
+                onFontSizeChange = { screenModel.setHtmlFontSize(it) },
+                onFontFamilyChange = { screenModel.setHtmlFontFamily(it) },
+                onReset = {
+                    scope.launch {
+                        screenModel.resetReaderAppearance()
+                    }
+                },
+                onDismiss = { showAppearancePanel = false }
+            )
         }
     }
 }

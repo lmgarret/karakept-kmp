@@ -26,6 +26,7 @@ kotlinx-datetime = "0.6.1"
 datastore = "1.1.1"
 jsoup = "1.17.2"
 javafx = "21.0.1"
+reorderable = "0.9.6"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -87,6 +88,9 @@ androidx-datastore-preferences-android = { module = "androidx.datastore:datastor
 
 # HTML Parsing
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+
+# Drag and Drop Reordering
+reorderable = { module = "org.burnoutcrew.composereorderable:reorderable", version.ref = "reorderable" }
 
 # JavaFX
 javafx-base = { module = "org.openjfx:javafx-base", version.ref = "javafx" }
