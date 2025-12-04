@@ -17,7 +17,8 @@ data class BookmarkDto(
     val source: String? = null,
     val userId: String? = null,
     val tags: List<BookmarkTag> = emptyList(),
-    val content: BookmarkContent
+    val content: BookmarkContent,
+    val assets: List<AssetDto> = emptyList()
 )
 
 @Serializable

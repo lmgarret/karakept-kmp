@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
+import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.repository.SettingsRepository
@@ -17,6 +18,7 @@ import kotlinx.coroutines.launch
 
 class BookmarkViewerScreenModel(
     private val bookmarkDao: BookmarkDao,
+    private val assetDao: AssetDao,
     private val settingsRepository: SettingsRepository
 ) : ScreenModel {
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
@@ -40,6 +42,9 @@ class BookmarkViewerScreenModel(
     val htmlFontFamily: StateFlow<ReaderFontFamily> = settingsRepository.htmlFontFamily
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ReaderFontFamily.SYSTEM)
 
+    private val _precrawledAssetPath = MutableStateFlow<String?>(null)
+    val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()
+
     fun loadBookmark(id: Long) {
         screenModelScope.launch {
             try {
@@ -48,6 +53,11 @@ class BookmarkViewerScreenModel(
                     ?: throw Exception("Bookmark not found")
 
                 _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
+                
+                // Load precrawled asset if exists
+                val assets = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+                val archive = assets.find { it.assetType == "precrawledArchive" }
+                _precrawledAssetPath.value = archive?.localPath
             } catch (e: Exception) {
                 _loadingState.value = BookmarkLoadingState.Error(
                     e.message ?: "Unknown error"

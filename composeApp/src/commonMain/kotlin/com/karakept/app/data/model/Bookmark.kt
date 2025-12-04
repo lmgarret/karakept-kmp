@@ -11,5 +11,6 @@ data class Bookmark(
     val content: String?, // HTML content
     val createdAt: Long,
     val isArchived: Boolean = false,
-    val isStarred: Boolean = false
+    val isStarred: Boolean = false,
+    val assets: List<Asset> = emptyList()
 )

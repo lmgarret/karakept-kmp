@@ -1,6 +1,7 @@
 package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.BookmarkDao
+import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
@@ -11,6 +12,7 @@ import kotlinx.datetime.Instant
 
 class BookmarkRepository(
     private val bookmarkDao: BookmarkDao,
+    private val assetDao: AssetDao,
     private val remoteDataSource: RemoteDataSource
 ) {
     fun getBookmarks(server: Server): Flow<List<BookmarkEntity>> {
@@ -89,6 +91,50 @@ class BookmarkRepository(
             // Simple sync: delete all for this server and re-insert
             bookmarkDao.deleteAllBookmarksForServer(server.id)
             bookmarkDao.insertBookmarks(entities)
+
+            // Sync Assets
+            // First delete existing assets for this server
+            assetDao.deleteAllAssetsForServer(server.id)
+            
+            val assetsDir = com.karakept.app.utils.FileUtils.getAssetsDirectory()
+            val assetEntities = mutableListOf<com.karakept.app.data.local.entity.AssetEntity>()
+
+            remoteBookmarks.forEach { bookmark ->
+                bookmark.assets.forEach { asset ->
+                    if (asset.assetType == "precrawledArchive") {
+                        try {
+                            val content = remoteDataSource.downloadAsset(server, asset.id)
+                            // Use fileName if available, otherwise use asset ID with .html extension
+                            val fileName = if (asset.fileName != null) {
+                                "${asset.id}_${asset.fileName}"
+                            } else {
+                                "${asset.id}.html"
+                            }
+                            val localPath = com.karakept.app.utils.FileUtils.saveFile(assetsDir, fileName, content)
+                            
+                            assetEntities.add(
+                                com.karakept.app.data.local.entity.AssetEntity(
+                                    id = asset.id,
+                                    bookmarkRemoteId = bookmark.id.hashCode().toLong(),
+                                    serverId = server.id,
+                                    assetType = asset.assetType,
+                                    fileName = asset.fileName,
+                                    contentType = asset.contentType,
+                                    localPath = localPath
+                                )
+                            )
+                        } catch (e: Exception) {
+                            // Log error but continue syncing other assets
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
+            
+            if (assetEntities.isNotEmpty()) {
+                assetDao.insertAssets(assetEntities)
+            }
+
         } catch (e: Exception) {
             // Handle error (log, etc.)
             e.printStackTrace()

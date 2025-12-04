@@ -152,7 +152,9 @@ class MainScreenModel(
             selectedServer.value?.let { server ->
                 try {
                     _isSyncing.value = true
-                    bookmarkRepository.syncBookmarks(server)
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        bookmarkRepository.syncBookmarks(server)
+                    }
                 } catch (e: Exception) {
                     // Handle error
                 } finally {

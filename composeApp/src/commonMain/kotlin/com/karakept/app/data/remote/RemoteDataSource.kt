@@ -92,6 +92,24 @@ class RemoteDataSource(private val client: HttpClient) {
             false
         }
     }
+    suspend fun downloadAsset(server: Server, assetId: String): ByteArray {
+        return try {
+            val response: HttpResponse = client.get(server.url) {
+                url {
+                    appendPathSegments("api", "v1", "assets", assetId)
+                }
+                header("Authorization", "Bearer ${server.apiKey}")
+            }
+            
+            if (!response.status.isSuccess()) {
+                throw ApiException("Failed to download asset $assetId: ${response.status}")
+            }
+            
+            response.body()
+        } catch (e: Exception) {
+            throw ApiException("Error downloading asset: ${e.message}", e)
+        }
+    }
 }
 
 class ApiException(message: String, cause: Throwable? = null) : Exception(message, cause)

@@ -29,5 +29,6 @@ expect fun HtmlRenderer(
     onLoaded: (() -> Unit)? = null,
     customTextColor: Color? = null,
     customFontSize: Int = 16,
-    customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM
+    customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
+    localFilePath: String? = null
 )

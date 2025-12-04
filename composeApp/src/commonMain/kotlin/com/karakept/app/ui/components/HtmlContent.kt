@@ -52,13 +52,21 @@ fun HtmlContent(
     customTextColor: Color? = null,
     customBackgroundColor: Color? = null,
     customFontSize: Int = 16,
-    customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM
+    customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
+    localFilePath: String? = null
 ) {
     // Debug output
     println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode, hideThumb=$hideArticleThumbnails")
 
     // Process HTML based on viewer mode asynchronously
-    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, hideArticleThumbnails, customFontSize, customFontFamily) {
+    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, hideArticleThumbnails, customFontSize, customFontFamily, localFilePath) {
+        if (localFilePath != null) {
+            // If we have a local file, we don't need to process HTML string
+            // Just return a placeholder to trigger rendering
+            value = " " 
+            return@produceState
+        }
+
         if (html == null) {
             value = null
             return@produceState
@@ -115,9 +123,8 @@ fun HtmlContent(
             }
 
             Box(modifier = Modifier.fillMaxWidth()) {
-                // Always render HtmlRenderer if content is processed, but keep it invisible until loaded
-                // This allows the WebView to load in the background
-                if (processedHtml != null && processedHtml!!.isNotBlank()) {
+                // Always render HtmlRenderer if content is processed OR we have a local file
+                if ((processedHtml != null && processedHtml!!.isNotBlank()) || localFilePath != null) {
                     // Background wrapper (only for READER mode with custom background color)
                     val wrapperModifier = if (viewerMode == ViewerMode.READER && customBackgroundColor != null) {
                         Modifier.fillMaxWidth().fillMaxHeight().background(customBackgroundColor)
@@ -127,7 +134,7 @@ fun HtmlContent(
 
                     Box(modifier = wrapperModifier) {
                         HtmlRenderer(
-                            html = processedHtml!!,
+                            html = processedHtml ?: "",
                             viewerMode = viewerMode,
                             modifier = Modifier.fillMaxWidth(),
                             onLinkClick = onLinkClick,
@@ -136,7 +143,8 @@ fun HtmlContent(
                             },
                             customTextColor = customTextColor,
                             customFontSize = customFontSize,
-                            customFontFamily = customFontFamily
+                            customFontFamily = customFontFamily,
+                            localFilePath = localFilePath
                         )
                     }
                 } else if (processedHtml != null && processedHtml!!.isBlank()) {
@@ -150,7 +158,7 @@ fun HtmlContent(
                 // Show SkeletonLoader until content is fully loaded
                 // Use a crossfade for smoother transition
                 androidx.compose.animation.AnimatedVisibility(
-                    visible = !isContentLoaded || processedHtml == null,
+                    visible = !isContentLoaded || (processedHtml == null && localFilePath == null),
                     exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(300))
                 ) {
                     SkeletonLoader(

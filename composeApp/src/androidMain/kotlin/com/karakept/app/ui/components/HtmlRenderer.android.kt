@@ -36,7 +36,8 @@ actual fun HtmlRenderer(
     onLoaded: (() -> Unit)?,
     customTextColor: ComposeColor?,
     customFontSize: Int,
-    customFontFamily: ReaderFontFamily
+    customFontFamily: ReaderFontFamily,
+    localFilePath: String?
 ) {
     // Use custom text color if provided, otherwise default to a fixed color (e.g., Black/White based on theme) 
     // or keep using onSurface but ensure it's what the user wants.
@@ -179,7 +180,8 @@ actual fun HtmlRenderer(
                 
                 // Security settings
                 settings.javaScriptEnabled = false
-                settings.allowFileAccess = false
+                // Allow file access only when we need to load local files
+                settings.allowFileAccess = localFilePath != null
                 settings.allowContentAccess = false
                 settings.setSupportZoom(true)
                 settings.builtInZoomControls = true
@@ -218,14 +220,25 @@ actual fun HtmlRenderer(
                     }
                 }
 
-                // Load the HTML content
-                loadDataWithBaseURL(null, themedHtml, "text/html", "UTF-8", null)
+                // Load the HTML content or local file
+                if (localFilePath != null) {
+                    loadUrl("file://$localFilePath")
+                } else {
+                    loadDataWithBaseURL(null, themedHtml, "text/html", "UTF-8", null)
+                }
             }
         },
         update = { webView ->
             // Update background color in case theme changes
             // webView.setBackgroundColor(Color.TRANSPARENT)
-            webView.loadDataWithBaseURL(null, themedHtml, "text/html", "UTF-8", null)
+            if (localFilePath != null) {
+                // Only reload if URL changed? For now, just reload to be safe or check url
+                if (webView.url != "file://$localFilePath") {
+                    webView.loadUrl("file://$localFilePath")
+                }
+            } else {
+                webView.loadDataWithBaseURL(null, themedHtml, "text/html", "UTF-8", null)
+            }
         }
     )
 

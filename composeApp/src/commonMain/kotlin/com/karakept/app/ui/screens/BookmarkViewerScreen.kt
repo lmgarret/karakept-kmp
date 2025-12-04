@@ -76,6 +76,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         val htmlBackgroundColor by screenModel.htmlBackgroundColor.collectAsState()
         val htmlFontSize by screenModel.htmlFontSize.collectAsState()
         val htmlFontFamily by screenModel.htmlFontFamily.collectAsState()
+        val precrawledAssetPath by screenModel.precrawledAssetPath.collectAsState()
 
         var showModeDialog by remember { mutableStateOf(false) }
         var showAppearancePanel by remember { mutableStateOf(false) }
@@ -198,7 +199,8 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                                 customTextColor = htmlTextColor,
                                                 customBackgroundColor = htmlBackgroundColor,
                                                 customFontSize = htmlFontSize,
-                                                customFontFamily = htmlFontFamily
+                                                customFontFamily = htmlFontFamily,
+                                                localFilePath = if (viewerMode == ViewerMode.WEB) precrawledAssetPath else null
                                             )
                                         }
                                         

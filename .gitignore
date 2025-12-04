@@ -33,3 +33,4 @@ composeApp/build
 .gradle
 
 kcef-bundle
+build/

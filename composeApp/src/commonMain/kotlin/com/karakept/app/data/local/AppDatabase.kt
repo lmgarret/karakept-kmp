@@ -9,17 +9,21 @@ import com.karakept.app.data.local.entity.ServerEntity
 
 import com.karakept.app.data.local.dao.SavedFilterDao
 import com.karakept.app.data.local.entity.SavedFilterEntity
+import com.karakept.app.data.local.dao.AssetDao
+import com.karakept.app.data.local.entity.AssetEntity
 
 @Database(
     entities = [
         ServerEntity::class,
         BookmarkEntity::class,
-        SavedFilterEntity::class
+        SavedFilterEntity::class,
+        AssetEntity::class
     ],
-    version = 5
+    version = 7
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun savedFilterDao(): SavedFilterDao
+    abstract fun assetDao(): AssetDao
 }

@@ -35,17 +35,18 @@ val appModule = module {
     single { get<AppDatabase>().serverDao() }
     single { get<AppDatabase>().bookmarkDao() }
     single { get<AppDatabase>().savedFilterDao() }
+    single { get<AppDatabase>().assetDao() }
     
     single { createDataStore() }
 
     single { ServerRepository(get()) }
-    single { BookmarkRepository(get(), get()) }
+    single { BookmarkRepository(get(), get(), get()) }
     single { SavedFilterRepository(get()) }
     single { SettingsRepository(get()) }
 
     factory { LoginScreenModel(get(), get()) }
     factory { MainScreenModel(get(), get(), get(), get()) }
-    factory { BookmarkViewerScreenModel(get(), get()) }
+    factory { BookmarkViewerScreenModel(get(), get(), get()) }
     factory { SettingsScreenModel(get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }
     factory { FilterManagementScreenModel(get(), get(), get(), get()) }

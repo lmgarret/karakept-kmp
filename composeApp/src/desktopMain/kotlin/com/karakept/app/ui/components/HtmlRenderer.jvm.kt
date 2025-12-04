@@ -40,7 +40,8 @@ actual fun HtmlRenderer(
     onLoaded: (() -> Unit)?,
     customTextColor: Color?,
     customFontSize: Int,
-    customFontFamily: ReaderFontFamily
+    customFontFamily: ReaderFontFamily,
+    localFilePath: String?
 ) {
     // Debug output
     println("HtmlRenderer (Desktop): Rendering HTML, length=${html.length}, first 100 chars=${html.take(100)}")
@@ -180,7 +181,11 @@ actual fun HtmlRenderer(
                         scene = Scene(webView)
                         
                         println("HtmlRenderer (Desktop): Loading content")
-                        webEngine.loadContent(styledHtml, "text/html")
+                        if (localFilePath != null) {
+                            webEngine.load("file://$localFilePath")
+                        } else {
+                            webEngine.loadContent(styledHtml, "text/html")
+                        }
 
                         webEngine.loadWorker.stateProperty().addListener { _, _, newState: javafx.concurrent.Worker.State? ->
                             println("HtmlRenderer (Desktop): Load state changed to $newState")

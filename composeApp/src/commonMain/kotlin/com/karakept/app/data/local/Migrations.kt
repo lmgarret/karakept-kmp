@@ -41,3 +41,37 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         connection.execSQL("ALTER TABLE saved_filters ADD COLUMN isQuickFilter INTEGER NOT NULL DEFAULT 0")
     }
 }
+
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("""
+            CREATE TABLE IF NOT EXISTS assets (
+                id TEXT NOT NULL PRIMARY KEY,
+                bookmarkRemoteId INTEGER NOT NULL,
+                serverId TEXT NOT NULL,
+                assetType TEXT NOT NULL,
+                fileName TEXT NOT NULL,
+                contentType TEXT,
+                localPath TEXT
+            )
+        """)
+    }
+}
+
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(connection: SQLiteConnection) {
+        // Recreate assets table with nullable fileName
+        connection.execSQL("DROP TABLE IF EXISTS assets")
+        connection.execSQL("""
+            CREATE TABLE IF NOT EXISTS assets (
+                id TEXT NOT NULL PRIMARY KEY,
+                bookmarkRemoteId INTEGER NOT NULL,
+                serverId TEXT NOT NULL,
+                assetType TEXT NOT NULL,
+                fileName TEXT,
+                contentType TEXT,
+                localPath TEXT
+            )
+        """)
+    }
+}
