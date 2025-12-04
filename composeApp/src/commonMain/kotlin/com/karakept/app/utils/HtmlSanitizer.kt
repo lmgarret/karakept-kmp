@@ -17,7 +17,7 @@ object HtmlSanitizer {
     private val safelist: Safelist by lazy {
         Safelist.relaxed()
             // Add additional tags beyond relaxed() defaults
-            .addTags("div", "span", "pre", "code")
+            .addTags("div", "span", "pre", "code", "figcaption", "figure", "picture", "img")
             // Configure link attributes
             .addAttributes("a", "href", "title")
             .addProtocols("a", "href", "http", "https")

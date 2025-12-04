@@ -112,6 +112,17 @@ actual fun HtmlRenderer(
                             max-width: 100%;
                             height: auto;
                         }
+                        figure {
+                            margin: 16px 0;
+                        }
+                        figcaption {
+                            text-align: center;
+                            font-size: 14px;
+                            font-style: italic;
+                            color: rgba(${(textColor shr 16) and 0xFF}, ${(textColor shr 8) and 0xFF}, ${textColor and 0xFF}, 0.7);
+                            margin-top: 8px;
+                            margin-bottom: 8px;
+                        }
                     </style>
                 </head>
                 <body>
