@@ -230,7 +230,7 @@ class MainScreen : Screen {
                                 navigator.push(FilterManagementScreen())
                                 scope.launch { drawerState.close() }
                             }) {
-                                Icon(Icons.Default.Settings, contentDescription = "Manage Filters")
+                                Icon(Icons.Default.FilterList, contentDescription = "Manage Filters")
                             }
                         }
                         savedFilters.forEach { savedFilter ->
@@ -253,6 +253,7 @@ class MainScreen : Screen {
                     NavigationDrawerItem(
                         label = { Text("Settings") },
                         selected = false,
+                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                         colors = NavigationDrawerItemDefaults.colors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                             selectedIconColor = MaterialTheme.colorScheme.primary,

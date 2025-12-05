@@ -104,34 +104,51 @@ fun BookmarkListLayout(
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (bookmark.imageUrl != null) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            ) {
+                if (bookmark.imageUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalPlatformContext.current)
+                            .data(bookmark.imageUrl)
+                            .size(300) // Request a smaller size for the list item
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentScale = ContentScale.Crop,
+                        filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "📰",
+                            style = MaterialTheme.typography.headlineMedium
+                        )
+                    }
+                }
+
+                // Favicon overlay
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalPlatformContext.current)
-                        .data(bookmark.imageUrl)
-                        .size(300) // Request a smaller size for the list item
-                        .crossfade(true)
-                        .build(),
+                    model = com.karakept.app.utils.FaviconUtils.getFaviconUrl(bookmark.url),
                     contentDescription = null,
                     modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentScale = ContentScale.Crop,
-                    filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                        .size(16.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.surface),
+                    contentScale = ContentScale.Fit
                 )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "📰",
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                }
             }
             Column(
                 modifier = Modifier

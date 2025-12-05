@@ -9,9 +9,34 @@ import com.karakept.app.di.appModule
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.KoinApplication
 
+import coil3.ImageLoader
+import coil3.compose.setSingletonImageLoaderFactory
+import coil3.disk.DiskCache
+import coil3.memory.MemoryCache
+import coil3.request.crossfade
+
 @Composable
 @Preview
 fun App() {
+    setSingletonImageLoaderFactory { context ->
+        ImageLoader.Builder(context)
+            .memoryCache {
+                MemoryCache.Builder()
+                    .maxSizePercent(context, 0.25)
+                    .build()
+            }
+            .diskCache {
+                getCacheDir(context)?.let { cacheDir ->
+                    DiskCache.Builder()
+                        .directory(cacheDir)
+                        .maxSizePercent(0.02)
+                        .build()
+                }
+            }
+            .crossfade(true)
+            .build()
+    }
+
     KoinApplication(application = {
         modules(appModule)
     }) {

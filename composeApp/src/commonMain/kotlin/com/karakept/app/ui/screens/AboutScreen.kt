@@ -40,6 +40,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
+import com.karakept.app.utils.FaviconUtils
 
 data class FossLibrary(
     val name: String,
@@ -183,7 +184,7 @@ fun FossLibraryCard(library: FossLibrary, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
-                model = "https://s2.googleusercontent.com/s2/favicons?domain_url=${library.url}&sz=64",
+                model = FaviconUtils.getFaviconUrl(library.url),
                 contentDescription = null,
                 modifier = Modifier
                     .size(32.dp)
