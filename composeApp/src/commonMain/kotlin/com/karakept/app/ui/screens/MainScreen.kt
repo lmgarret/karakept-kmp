@@ -263,19 +263,7 @@ class MainScreen : Screen {
                             scope.launch { drawerState.close() }
                         }
                     )
-                    NavigationDrawerItem(
-                        label = { Text("About") },
-                        selected = false,
-                        colors = NavigationDrawerItemDefaults.colors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary
-                        ),
-                        onClick = {
-                            navigator.push(AboutScreen())
-                            scope.launch { drawerState.close() }
-                        }
-                    )
+
                 }
             }
         ) {

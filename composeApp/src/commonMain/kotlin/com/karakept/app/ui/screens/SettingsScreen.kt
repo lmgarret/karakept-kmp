@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -110,6 +111,15 @@ class SettingsScreen : Screen {
                         description = "Manage connected servers",
                         icon = Icons.Default.Dns,
                         onClick = { navigator.push(ServerSettingsScreen()) }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SettingsNavigationItem(
+                        title = "About",
+                        description = "App version and open source licenses",
+                        icon = Icons.Default.Info,
+                        onClick = { navigator.push(AboutScreen()) }
                     )
                 }
 
