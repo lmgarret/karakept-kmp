@@ -83,6 +83,7 @@ kotlin {
                 implementation(libs.koin.android)
                 implementation(libs.kotlinx.coroutines.android)
                 implementation(libs.androidx.datastore.preferences.android)
+                implementation(libs.androidx.core.splashscreen)
             }
         }
         val desktopMain by getting {

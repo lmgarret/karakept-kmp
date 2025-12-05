@@ -22,4 +22,29 @@ actual object FileUtils {
         file.writeBytes(content)
         return file.absolutePath
     }
+
+    actual fun getStorageInfo(): StorageInfo {
+        val context = AndroidContext.context
+        val filesDir = context.filesDir
+        val totalSpace = filesDir.totalSpace
+        val freeSpace = filesDir.freeSpace
+        val usedByApp = getFolderSize(filesDir)
+
+        return StorageInfo(
+            usedBytes = usedByApp,
+            freeBytes = freeSpace,
+            totalBytes = totalSpace
+        )
+    }
+
+    private fun getFolderSize(file: File): Long {
+        if (!file.exists()) return 0
+        if (!file.isDirectory) return file.length()
+        var size: Long = 0
+        val files = file.listFiles() ?: return 0
+        for (child in files) {
+            size += getFolderSize(child)
+        }
+        return size
+    }
 }

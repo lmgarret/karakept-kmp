@@ -16,6 +16,9 @@ import com.karakept.app.ui.components.FilterIcon
  * Simplified saved filter item showing only icon and name.
  * Filter management (edit/delete/reorder) is now done in FilterManagementScreen.
  */
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationDrawerItemDefaults
+
 @Composable
 fun SavedFilterItem(
     savedFilter: SavedFilterEntity,
@@ -34,6 +37,11 @@ fun SavedFilterItem(
             }
         },
         selected = selected,
+        colors = NavigationDrawerItemDefaults.colors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            selectedIconColor = MaterialTheme.colorScheme.primary,
+            selectedTextColor = MaterialTheme.colorScheme.primary
+        ),
         badge = if (savedFilter.isDefault) { { Text("Default") } } else null,
         onClick = onApply
     )

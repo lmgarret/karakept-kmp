@@ -46,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -139,6 +140,11 @@ class MainScreen : Screen {
                         label = { Text("All Bookmarks") },
                         selected = currentFilter == FilterConfig(),
                         icon = { Icon(Icons.Default.Book, contentDescription = null) },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary
+                        ),
                         onClick = {
                             screenModel.clearFilter()
                             scope.launch { drawerState.close() }
@@ -149,6 +155,11 @@ class MainScreen : Screen {
                         label = { Text("Favorites") },
                         selected = currentFilter == FilterConfig(status = FilterStatus.FAVORITES),
                         icon = { Icon(Icons.Default.Star, contentDescription = null) },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary
+                        ),
                         onClick = {
                             screenModel.applyFilter(FilterConfig(status = FilterStatus.FAVORITES))
                             scope.launch { drawerState.close() }
@@ -159,6 +170,11 @@ class MainScreen : Screen {
                         label = { Text("Not Archived") },
                         selected = currentFilter == FilterConfig(status = FilterStatus.NOT_ARCHIVED),
                         icon = { Icon(Icons.Default.Inbox, contentDescription = null) },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary
+                        ),
                         onClick = {
                             screenModel.applyFilter(FilterConfig(status = FilterStatus.NOT_ARCHIVED))
                             scope.launch { drawerState.close() }
@@ -169,6 +185,11 @@ class MainScreen : Screen {
                         label = { Text("Archived") },
                         selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
                         icon = { Icon(Icons.Default.Archive, contentDescription = null) },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary
+                        ),
                         onClick = {
                             screenModel.applyFilter(FilterConfig(status = FilterStatus.ARCHIVED))
                             scope.launch { drawerState.close() }
@@ -183,6 +204,11 @@ class MainScreen : Screen {
                             NavigationDrawerItem(
                                 label = { Text("${list.icon} ${list.name}") },
                                 selected = currentFilter.lists.contains(list.id),
+                                colors = NavigationDrawerItemDefaults.colors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary
+                                ),
                                 onClick = {
                                     screenModel.applyFilter(FilterConfig(lists = listOf(list.id)))
                                     scope.launch { drawerState.close() }
@@ -227,6 +253,11 @@ class MainScreen : Screen {
                     NavigationDrawerItem(
                         label = { Text("Settings") },
                         selected = false,
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary
+                        ),
                         onClick = {
                             navigator.push(SettingsScreen())
                             scope.launch { drawerState.close() }
@@ -235,6 +266,11 @@ class MainScreen : Screen {
                     NavigationDrawerItem(
                         label = { Text("About") },
                         selected = false,
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary
+                        ),
                         onClick = {
                             navigator.push(AboutScreen())
                             scope.launch { drawerState.close() }
