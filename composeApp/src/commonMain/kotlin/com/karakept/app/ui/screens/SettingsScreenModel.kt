@@ -86,6 +86,12 @@ class SettingsScreenModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = ReaderFontFamily.SYSTEM
     )
+    
+    val offlineMode: StateFlow<Boolean> = settingsRepository.offlineMode.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
 
     fun setLayoutType(layoutType: LayoutType) {
         screenModelScope.launch {
@@ -144,6 +150,12 @@ class SettingsScreenModel(
     fun setHtmlFontFamily(family: ReaderFontFamily) {
         screenModelScope.launch {
             settingsRepository.setHtmlFontFamily(family)
+        }
+    }
+    
+    fun setOfflineMode(enabled: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setOfflineMode(enabled)
         }
     }
 }

@@ -10,6 +10,7 @@ import org.koin.dsl.module
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.BookmarkRepository
+import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.SavedFilterRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.ui.screens.LoginScreenModel
@@ -36,16 +37,27 @@ val appModule = module {
     single { get<AppDatabase>().bookmarkDao() }
     single { get<AppDatabase>().savedFilterDao() }
     single { get<AppDatabase>().assetDao() }
+    single { get<AppDatabase>().pendingActionDao() }
     
     single { createDataStore() }
 
     single { ServerRepository(get()) }
-    single { BookmarkRepository(get(), get(), get()) }
-    single { SavedFilterRepository(get()) }
     single { SettingsRepository(get()) }
+    single { SavedFilterRepository(get()) }
+    
+    // BookmarkActionsRepository created first (doesn't depend on BookmarkRepository in constructor)
+    single { BookmarkActionsRepository(get(), get(), get(), get(), get()) }
+    
+    // BookmarkRepository depends on BookmarkActionsRepository
+    single { 
+        BookmarkRepository(get(), get(), get(), get()).also {
+            // Wire up circular dependency: BookmarkActionsRepository needs BookmarkRepository
+            get<BookmarkActionsRepository>().setBookmarkRepository(it)
+        }
+    }
 
     factory { LoginScreenModel(get(), get()) }
-    factory { MainScreenModel(get(), get(), get(), get()) }
+    factory { MainScreenModel(get(), get(), get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get(), get(), get()) }
     factory { SettingsScreenModel(get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }

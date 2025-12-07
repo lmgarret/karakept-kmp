@@ -99,9 +99,9 @@ class FilterManagementScreenModel(
         }
     }
 
-    fun updateFilterIcon(filter: SavedFilterEntity, newIcon: String) {
+    fun updateFilterAppearance(filter: SavedFilterEntity, newIcon: String, newColor: Long?) {
         screenModelScope.launch {
-            savedFilterRepository.updateFilterIcon(filter, newIcon)
+            savedFilterRepository.updateFilter(filter.copy(icon = newIcon, color = newColor))
         }
     }
 
@@ -160,12 +160,13 @@ class FilterManagementScreenModel(
         }
     }
 
-    fun saveNewFilter(name: String, icon: String, config: FilterConfig, isDefault: Boolean, isVisibleInDrawer: Boolean = true, isQuickFilter: Boolean = false) {
+    fun saveNewFilter(name: String, icon: String, color: Long?, config: FilterConfig, isDefault: Boolean, isVisibleInDrawer: Boolean = true, isQuickFilter: Boolean = false) {
         screenModelScope.launch {
             val configJson = Json.encodeToString(FilterConfig.serializer(), config)
             savedFilterRepository.saveFilter(
                 name = name,
                 icon = icon,
+                color = color,
                 configJson = configJson,
                 isDefault = isDefault,
                 isVisibleInDrawer = isVisibleInDrawer,

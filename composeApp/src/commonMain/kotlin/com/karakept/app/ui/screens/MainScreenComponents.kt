@@ -30,7 +30,8 @@ fun SavedFilterItem(
             Row {
                 FilterIcon(
                     iconName = savedFilter.icon,
-                    fontSize = 20.sp
+                    fontSize = 20.sp,
+                    tint = if (savedFilter.color != null) androidx.compose.ui.graphics.Color(savedFilter.color) else MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(savedFilter.name)

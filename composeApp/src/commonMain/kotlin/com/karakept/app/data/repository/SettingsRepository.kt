@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.karakept.app.data.model.AccentColor
@@ -26,6 +27,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val HTML_BACKGROUND_COLOR_KEY = intPreferencesKey("html_background_color") // Store as ARGB int, null means transparent
     private val HTML_FONT_SIZE_KEY = intPreferencesKey("html_font_size") // Default: 16px
     private val HTML_FONT_FAMILY_KEY = stringPreferencesKey("html_font_family") // Enum name
+    private val OFFLINE_MODE_KEY = booleanPreferencesKey("offline_mode")
 
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
         val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.CARD.name
@@ -70,6 +72,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val htmlFontFamily: Flow<ReaderFontFamily> = dataStore.data.map { preferences ->
         val familyString = preferences[HTML_FONT_FAMILY_KEY] ?: ReaderFontFamily.SYSTEM.name
         ReaderFontFamily.fromString(familyString)
+    }
+    
+    val offlineMode: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[OFFLINE_MODE_KEY] ?: false
     }
 
     suspend fun setLayoutType(layoutType: LayoutType) {
@@ -146,6 +152,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             preferences.remove(HTML_BACKGROUND_COLOR_KEY)
             preferences.remove(HTML_FONT_SIZE_KEY)
             preferences.remove(HTML_FONT_FAMILY_KEY)
+        }
+    }
+    
+    suspend fun setOfflineMode(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[OFFLINE_MODE_KEY] = enabled
         }
     }
 }

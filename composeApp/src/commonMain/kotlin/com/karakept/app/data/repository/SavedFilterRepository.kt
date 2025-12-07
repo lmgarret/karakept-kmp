@@ -17,6 +17,7 @@ class SavedFilterRepository(
     suspend fun saveFilter(
         name: String,
         icon: String = "📋",
+        color: Long? = null,
         configJson: String,
         isDefault: Boolean = false,
         isVisibleInDrawer: Boolean = true,
@@ -38,6 +39,7 @@ class SavedFilterRepository(
             SavedFilterEntity(
                 name = name,
                 icon = icon,
+                color = color,
                 configJson = configJson,
                 isDefault = isDefault,
                 displayOrder = 0,

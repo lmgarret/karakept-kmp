@@ -59,7 +59,7 @@ class FilterManagementScreen : Screen {
             topTagsWithCounts = topTagsWithCounts,
             availableLists = availableLists,
             onBack = { navigator.pop() },
-            onUpdateIcon = screenModel::updateFilterIcon,
+            onUpdateAppearance = screenModel::updateFilterAppearance,
             onUpdateConfig = screenModel::updateFilterConfig,
             onSetDefault = screenModel::setFilterAsDefault,
             onUnsetDefault = screenModel::unsetDefaultFilter,
@@ -68,8 +68,8 @@ class FilterManagementScreen : Screen {
             onReorderHidden = screenModel::reorderHiddenFilters,
             onMoveToVisible = screenModel::moveFilterToVisible,
             onMoveToHidden = screenModel::moveFilterToHidden,
-            onSaveNewFilter = { name, icon, config, isDefault, isQuickFilter ->
-                screenModel.saveNewFilter(name, icon, config, isDefault, isVisibleInDrawer = false, isQuickFilter = isQuickFilter)
+            onSaveNewFilter = { name, icon, color, config, isDefault, isQuickFilter ->
+                screenModel.saveNewFilter(name, icon, color, config, isDefault, isVisibleInDrawer = false, isQuickFilter = isQuickFilter)
             }
         )
     }
@@ -85,7 +85,7 @@ private fun FilterManagementContent(
     topTagsWithCounts: List<Pair<String, Int>>,
     availableLists: List<com.karakept.app.data.remote.model.ListDto>,
     onBack: () -> Unit,
-    onUpdateIcon: (SavedFilterEntity, String) -> Unit,
+    onUpdateAppearance: (SavedFilterEntity, String, Long?) -> Unit,
     onUpdateConfig: (SavedFilterEntity, FilterConfig) -> Unit,
     onSetDefault: (SavedFilterEntity) -> Unit,
     onUnsetDefault: (SavedFilterEntity) -> Unit,
@@ -94,7 +94,7 @@ private fun FilterManagementContent(
     onReorderHidden: (List<SavedFilterEntity>) -> Unit,
     onMoveToVisible: (SavedFilterEntity) -> Unit,
     onMoveToHidden: (SavedFilterEntity) -> Unit,
-    onSaveNewFilter: (String, String, FilterConfig, Boolean, Boolean) -> Unit
+    onSaveNewFilter: (String, String, Long?, FilterConfig, Boolean, Boolean) -> Unit
 ) {
     var visibleList by remember { mutableStateOf(visibleFilters) }
     var hiddenList by remember { mutableStateOf(hiddenFilters) }
@@ -103,6 +103,7 @@ private fun FilterManagementContent(
     // Editing state
     var editingFilter by remember { mutableStateOf<SavedFilterEntity?>(null) }
     var editingConfig by remember { mutableStateOf<FilterConfig?>(null) }
+    var editingAppearanceFilter by remember { mutableStateOf<SavedFilterEntity?>(null) }
 
     // Update lists when source changes
     LaunchedEffect(visibleFilters) {
@@ -229,7 +230,7 @@ private fun FilterManagementContent(
                             onSetDefault(existing)
                         } else {
                             // Create new hidden quick filter and set as default
-                            onSaveNewFilter(name, icon, config, true, true)
+                            onSaveNewFilter(name, icon, null, config, true, true)
                         }
                     },
                     onUnsetDefault = {
@@ -286,6 +287,7 @@ private fun FilterManagementContent(
                                     editingConfig = FilterConfig()
                                 }
                             },
+                            onEditAppearance = { editingAppearanceFilter = filter },
                             onSetDefault = { onSetDefault(filter) },
                             onUnsetDefault = { onUnsetDefault(filter) },
                             onDelete = { deleteConfirmFilter = filter },
@@ -339,6 +341,7 @@ private fun FilterManagementContent(
                                     editingConfig = FilterConfig()
                                 }
                             },
+                            onEditAppearance = { editingAppearanceFilter = filter },
                             onSetDefault = { onSetDefault(filter) },
                             onUnsetDefault = { onUnsetDefault(filter) },
                             onDelete = { deleteConfirmFilter = filter },
@@ -382,7 +385,7 @@ private fun FilterManagementContent(
                 editingConfig = null
             },
             onFilterChange = { editingConfig = it },
-            onSaveFilter = { _, _, _ -> }, // Not used in update mode
+            onSaveFilter = { _, _, _, _ -> }, // Not used in update mode
             onUpdateFilter = { newConfig ->
                 editingFilter?.let { filter ->
                     onUpdateConfig(filter, newConfig)
@@ -415,6 +418,19 @@ private fun FilterManagementContent(
                 TextButton(onClick = { deleteConfirmFilter = null }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    // Icon/Color Picker for editing appearance
+    editingAppearanceFilter?.let { filter ->
+        IconPickerDialog(
+            currentIcon = filter.icon,
+            currentColor = filter.color,
+            onDismiss = { editingAppearanceFilter = null },
+            onIconSelected = { newIcon, newColor ->
+                onUpdateAppearance(filter, newIcon, newColor)
+                editingAppearanceFilter = null
             }
         )
     }
@@ -510,6 +526,7 @@ private fun FilterListItem(
     filter: SavedFilterEntity,
     isDragging: Boolean,
     onEdit: () -> Unit,
+    onEditAppearance: () -> Unit,
     onSetDefault: () -> Unit,
     onUnsetDefault: () -> Unit,
     onDelete: () -> Unit,
@@ -555,7 +572,8 @@ private fun FilterListItem(
                 // Icon
                 FilterIcon(
                     iconName = filter.icon,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(18.dp),
+                    tint = if (filter.color != null) androidx.compose.ui.graphics.Color(filter.color) else LocalContentColor.current
                 )
 
                 // Name and default badge
@@ -591,6 +609,14 @@ private fun FilterListItem(
                         leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
                         onClick = {
                             onEdit()
+                            showMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Edit Appearance") },
+                        leadingIcon = { Icon(Icons.Default.Palette, contentDescription = null) },
+                        onClick = {
+                            onEditAppearance()
                             showMenu = false
                         }
                     )

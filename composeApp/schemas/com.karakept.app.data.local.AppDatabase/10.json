@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 7,
-    "identityHash": "552f8f058e02d30b817c2330e1c29e3a",
+    "version": 10,
+    "identityHash": "3d7eb55abefb41ba208619aff3f626a3",
     "entities": [
       {
         "tableName": "servers",
@@ -42,7 +42,7 @@
       },
       {
         "tableName": "bookmarks",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `remoteId` INTEGER NOT NULL, `serverId` TEXT NOT NULL, `url` TEXT NOT NULL, `title` TEXT NOT NULL, `content` TEXT, `imageUrl` TEXT, `description` TEXT, `createdAt` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL, `isStarred` INTEGER NOT NULL, `tags` TEXT NOT NULL, `listIds` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `remoteId` INTEGER NOT NULL, `originalRemoteId` TEXT NOT NULL, `serverId` TEXT NOT NULL, `url` TEXT NOT NULL, `title` TEXT NOT NULL, `content` TEXT, `imageUrl` TEXT, `description` TEXT, `createdAt` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL, `isStarred` INTEGER NOT NULL, `isRead` INTEGER NOT NULL, `tags` TEXT NOT NULL, `listIds` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "localId",
@@ -54,6 +54,12 @@
             "fieldPath": "remoteId",
             "columnName": "remoteId",
             "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "originalRemoteId",
+            "columnName": "originalRemoteId",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -104,6 +110,12 @@
           {
             "fieldPath": "isStarred",
             "columnName": "isStarred",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isRead",
+            "columnName": "isRead",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -242,11 +254,70 @@
             "id"
           ]
         }
+      },
+      {
+        "tableName": "pending_actions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `bookmarkRemoteId` INTEGER NOT NULL, `serverId` TEXT NOT NULL, `actionType` TEXT NOT NULL, `actionData` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `retryCount` INTEGER NOT NULL, `lastError` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bookmarkRemoteId",
+            "columnName": "bookmarkRemoteId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverId",
+            "columnName": "serverId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actionType",
+            "columnName": "actionType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actionData",
+            "columnName": "actionData",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "retryCount",
+            "columnName": "retryCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "lastError",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '552f8f058e02d30b817c2330e1c29e3a')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3d7eb55abefb41ba208619aff3f626a3')"
     ]
   }
 }

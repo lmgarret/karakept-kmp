@@ -13,7 +13,8 @@ import kotlinx.datetime.Instant
 class BookmarkRepository(
     private val bookmarkDao: BookmarkDao,
     private val assetDao: AssetDao,
-    private val remoteDataSource: RemoteDataSource
+    private val remoteDataSource: RemoteDataSource,
+    private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository
 ) {
     fun getBookmarks(server: Server): Flow<List<BookmarkEntity>> {
         return bookmarkDao.getBookmarksForServer(server.id)
@@ -21,6 +22,17 @@ class BookmarkRepository(
 
     suspend fun syncBookmarks(server: Server) {
         try {
+            // IMPORTANT: Process pending actions FIRST, before fetching fresh data
+            // This ensures offline changes are synced to server before we overwrite with fresh data
+            println("BookmarkRepository: About to process pending actions for server ${server.id}")
+            try {
+                bookmarkActionsRepository.processPendingActions(server)
+                println("BookmarkRepository: Successfully processed pending actions")
+            } catch (e: Exception) {
+                println("BookmarkRepository: Error processing pending actions: ${e.message}")
+                e.printStackTrace()
+            }
+            
             // 1. Fetch all bookmarks
             val remoteBookmarks = remoteDataSource.fetchBookmarks(server)
             
@@ -69,6 +81,7 @@ class BookmarkRepository(
 
                     BookmarkEntity(
                         remoteId = dto.id.hashCode().toLong(), // Convert string ID to long (Note: this might cause collisions but keeping existing logic)
+                        originalRemoteId = dto.id, // Store ORIGINAL string ID for API calls
                         serverId = server.id,
                         url = url,
                         title = title,

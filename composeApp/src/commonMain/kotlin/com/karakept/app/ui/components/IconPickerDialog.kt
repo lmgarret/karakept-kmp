@@ -16,12 +16,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -43,19 +46,44 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun IconPickerDialog(
     currentIcon: String,
+    currentColor: Long?,
     onDismiss: () -> Unit,
-    onIconSelected: (String) -> Unit
+    onIconSelected: (String, Long?) -> Unit
 ) {
     var selectedIcon by remember { mutableStateOf(currentIcon) }
+    var selectedColor by remember { mutableStateOf(currentColor) }
     var selectedTab by remember { mutableStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
 
     val categories = MaterialIconHelper.categories.keys.toList()
     val currentCategory = categories.getOrNull(selectedTab) ?: categories.first()
 
+    val colors = listOf(
+        null, // Default
+        0xFFF44336, // Red
+        0xFFE91E63, // Pink
+        0xFF9C27B0, // Purple
+        0xFF673AB7, // Deep Purple
+        0xFF3F51B5, // Indigo
+        0xFF2196F3, // Blue
+        0xFF03A9F4, // Light Blue
+        0xFF00BCD4, // Cyan
+        0xFF009688, // Teal
+        0xFF4CAF50, // Green
+        0xFF8BC34A, // Light Green
+        0xFFCDDC39, // Lime
+        0xFFFFEB3B, // Yellow
+        0xFFFFC107, // Amber
+        0xFFFF9800, // Orange
+        0xFFFF5722, // Deep Orange
+        0xFF795548, // Brown
+        0xFF9E9E9E, // Grey
+        0xFF607D8B  // Blue Grey
+    )
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Icon") },
+        title = { Text("Select Icon & Color") },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth()
@@ -69,13 +97,52 @@ fun IconPickerDialog(
                     singleLine = true
                 )
 
+                // Color Picker
+                Text("Color", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(vertical = 4.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    colors.forEach { color ->
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(if (color != null) Color(color) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                                .border(
+                                    width = if (selectedColor == color) 2.dp else 1.dp,
+                                    color = if (selectedColor == color) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    shape = CircleShape
+                                )
+                                .clickable { selectedColor = color },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (color == null) {
+                                Icon(Icons.Default.Close, contentDescription = "Default", modifier = Modifier.size(16.dp))
+                            }
+                            if (selectedColor == color) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = if (color != null) Color.White else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
                 // Category tabs
                 if (searchQuery.isEmpty()) {
-                    TabRow(
+                    ScrollableTabRow(
                         selectedTabIndex = selectedTab,
                         modifier = Modifier.fillMaxWidth(),
                         containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.primary
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        edgePadding = 0.dp
                     ) {
                         categories.forEachIndexed { index, category ->
                             Tab(
@@ -109,7 +176,8 @@ fun IconPickerDialog(
                         IconItem(
                             iconName = iconName,
                             isSelected = iconName == selectedIcon,
-                            onClick = { selectedIcon = iconName }
+                            onClick = { selectedIcon = iconName },
+                            tint = if (selectedColor != null) Color(selectedColor!!) else MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -118,7 +186,7 @@ fun IconPickerDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onIconSelected(selectedIcon)
+                    onIconSelected(selectedIcon, selectedColor)
                     onDismiss()
                 }
             ) {
@@ -137,6 +205,7 @@ fun IconPickerDialog(
 private fun IconItem(
     iconName: String,
     isSelected: Boolean,
+    tint: Color,
     onClick: () -> Unit
 ) {
     Box(
@@ -144,12 +213,12 @@ private fun IconItem(
             .size(48.dp)
             .clip(CircleShape)
             .background(
-                if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                if (isSelected) tint.copy(alpha = 0.2f)
                 else MaterialTheme.colorScheme.surfaceVariant
             )
             .border(
                 width = if (isSelected) 2.dp else 0.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                color = if (isSelected) tint else MaterialTheme.colorScheme.surfaceVariant,
                 shape = CircleShape
             )
             .clickable(onClick = onClick),
@@ -158,7 +227,7 @@ private fun IconItem(
         FilterIcon(
             iconName = iconName,
             modifier = Modifier.size(24.dp),
-            tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+            tint = if (isSelected) tint else MaterialTheme.colorScheme.onSurfaceVariant
         )
         
         if (isSelected) {
@@ -168,9 +237,9 @@ private fun IconItem(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .size(16.dp)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    .background(tint, CircleShape)
                     .padding(2.dp),
-                tint = MaterialTheme.colorScheme.onPrimary
+                tint = MaterialTheme.colorScheme.surface
             )
         }
     }

@@ -1,7 +1,8 @@
 package com.karakept.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,17 +29,22 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.karakept.app.data.local.entity.BookmarkEntity
 
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BookmarkCardLayout(
     bookmark: BookmarkEntity,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Column {
             if (bookmark.imageUrl != null) {
@@ -86,17 +92,22 @@ fun BookmarkCardLayout(
     }
 }
 
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BookmarkListLayout(
     bookmark: BookmarkEntity,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable(onClick = onClick)
+           .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Row(
             modifier = Modifier

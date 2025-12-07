@@ -37,7 +37,7 @@ fun FilterBottomPanel(
     availableLists: List<ListDto>,
     onDismiss: () -> Unit,
     onFilterChange: (FilterConfig) -> Unit,
-    onSaveFilter: (String, String, Boolean) -> Unit, // name, icon, isDefault
+    onSaveFilter: (String, String, Long?, Boolean) -> Unit, // name, icon, color, isDefault
     onUpdateFilter: ((FilterConfig) -> Unit)? = null, // New callback for updating existing filter
     onReset: () -> Unit
 ) {
@@ -288,8 +288,8 @@ fun FilterBottomPanel(
     if (onUpdateFilter == null && showSaveDialog) {
         SaveFilterDialogWithIcon(
             onDismiss = { showSaveDialog = false },
-            onSave = { name, icon, isDefault ->
-                onSaveFilter(name, icon, isDefault)
+            onSave = { name, icon, color, isDefault ->
+                onSaveFilter(name, icon, color, isDefault)
                 showSaveDialog = false
                 onDismiss() // Close the drawer after saving
             }
@@ -391,10 +391,11 @@ private fun FilterCheckbox(
 @Composable
 private fun SaveFilterDialogWithIcon(
     onDismiss: () -> Unit,
-    onSave: (String, String, Boolean) -> Unit // name, icon, isDefault
+    onSave: (String, String, Long?, Boolean) -> Unit // name, icon, color, isDefault
 ) {
     var name by remember { mutableStateOf("") }
     var icon by remember { mutableStateOf("Bookmark") }
+    var color by remember { mutableStateOf<Long?>(null) }
     var isDefault by remember { mutableStateOf(false) }
     var showIconPicker by remember { mutableStateOf(false) }
 
@@ -417,7 +418,8 @@ private fun SaveFilterDialogWithIcon(
                         ) {
                             FilterIcon(
                                 iconName = icon,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(24.dp),
+                                tint = if (color != null) androidx.compose.ui.graphics.Color(color!!) else LocalContentColor.current
                             )
                             Icon(
                                 imageVector = Icons.Default.Edit,
@@ -443,7 +445,7 @@ private fun SaveFilterDialogWithIcon(
         },
         confirmButton = {
             Button(
-                onClick = { onSave(name, icon, isDefault) },
+                onClick = { onSave(name, icon, color, isDefault) },
                 enabled = name.isNotBlank()
             ) {
                 Text("Save")
@@ -459,9 +461,11 @@ private fun SaveFilterDialogWithIcon(
     if (showIconPicker) {
         IconPickerDialog(
             currentIcon = icon,
+            currentColor = color,
             onDismiss = { showIconPicker = false },
-            onIconSelected = { selectedIcon ->
+            onIconSelected = { selectedIcon, selectedColor ->
                 icon = selectedIcon
+                color = selectedColor
                 showIconPicker = false
             }
         )

@@ -74,6 +74,43 @@ class ServerSettingsScreen : Screen {
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
+                
+                // Offline Mode Toggle
+                val offlineMode by screenModel.offlineMode.collectAsState()
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Offline Mode",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = if (offlineMode) "Actions queue but won't auto-sync" else "Auto-sync after each action",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = offlineMode,
+                            onCheckedChange = { screenModel.setOfflineMode(it) }
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    text = "Connected Servers",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
 
                 servers.forEach { server ->
                     ServerOption(

@@ -25,7 +25,8 @@ class MainScreenModel(
     private val serverRepository: ServerRepository,
     private val bookmarkRepository: BookmarkRepository,
     private val remoteDataSource: RemoteDataSource,
-    private val savedFilterRepository: SavedFilterRepository
+    private val savedFilterRepository: SavedFilterRepository,
+    private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository
 ) : ScreenModel {
 
     // For simplicity, we just pick the first server for now, or allow switching.
@@ -186,12 +187,13 @@ class MainScreenModel(
         _currentFilter.value = FilterConfig()
     }
     
-    fun saveFilter(name: String, icon: String = "📋", isDefault: Boolean = false) {
+    fun saveFilter(name: String, icon: String = "📋", color: Long? = null, isDefault: Boolean = false) {
         screenModelScope.launch {
             val configJson = kotlinx.serialization.json.Json.encodeToString(FilterConfig.serializer(), _currentFilter.value)
             savedFilterRepository.saveFilter(
                 name = name,
                 icon = icon,
+                color = color,
                 configJson = configJson,
                 isDefault = isDefault,
                 isVisibleInDrawer = true
@@ -220,6 +222,83 @@ class MainScreenModel(
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+    
+    // Bookmark Actions
+    
+    fun toggleBookmarkArchive(bookmark: BookmarkEntity, onActionComplete: (String) -> Unit = {}) {
+        screenModelScope.launch {
+            val isOnline = !_isSyncing.value // Simple check, could be improved
+            if (bookmark.isArchived) {
+                bookmarkActionsRepository.unarchiveBookmark(bookmark.remoteId, bookmark.serverId)
+                onActionComplete("Bookmark unarchived")
+            } else {
+                bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
+                onActionComplete("Bookmark archived")
+            }
+        }
+    }
+    
+    fun toggleBookmarkFavorite(bookmark: BookmarkEntity, onActionComplete: (String) -> Unit = {}) {
+        screenModelScope.launch {
+            val isOnline = !_isSyncing.value
+            bookmarkActionsRepository.toggleFavourite(
+                bookmark.remoteId,
+                bookmark.serverId,
+                bookmark.isStarred
+            )
+            onActionComplete(if (bookmark.isStarred) "Removed from favorites" else "Added to favorites")
+        }
+    }
+    
+    fun toggleBookmarkRead(bookmark: BookmarkEntity, onActionComplete: (String) -> Unit = {}) {
+        screenModelScope.launch {
+            val isOnline = !_isSyncing.value
+            if (bookmark.isRead) {
+                val tags = bookmark.tags.split(",").filter { it.isNotBlank() }
+                bookmarkActionsRepository.markAsUnread(bookmark.remoteId, bookmark.serverId, tags)
+                onActionComplete("Marked as unread")
+            } else {
+                bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
+                onActionComplete("Marked as read")
+            }
+        }
+    }
+    
+    fun deleteBookmark(bookmark: BookmarkEntity, onActionComplete: (String) -> Unit = {}) {
+        screenModelScope.launch {
+            val isOnline = !_isSyncing.value
+            bookmarkActionsRepository.deleteBookmark(
+                bookmark.localId,
+                bookmark.remoteId,
+                bookmark.serverId
+            )
+            onActionComplete("Bookmark deleted")
+        }
+    }
+    
+    fun updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<String>) {
+        screenModelScope.launch {
+            val isOnline = !_isSyncing.value
+            bookmarkActionsRepository.updateTags(
+                bookmark.remoteId,
+                bookmark.serverId,
+                newTags,
+                isOnline
+            )
+        }
+    }
+    
+    fun moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
+        screenModelScope.launch {
+            val isOnline = !_isSyncing.value
+            bookmarkActionsRepository.moveToList(
+                bookmark.remoteId,
+                bookmark.serverId,
+                listId,
+                isOnline
+            )
         }
     }
 }

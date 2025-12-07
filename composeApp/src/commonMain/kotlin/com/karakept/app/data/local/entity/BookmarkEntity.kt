@@ -8,7 +8,8 @@ import androidx.compose.runtime.Immutable
 @Entity(tableName = "bookmarks")
 data class BookmarkEntity(
     @PrimaryKey(autoGenerate = true) val localId: Long = 0,
-    val remoteId: Long,
+    val remoteId: Long, // Hashed ID for local indexing 
+    val originalRemoteId: String, // ORIGINAL string ID from API (used for API calls)
     val serverId: String,
     val url: String,
     val title: String,
@@ -18,6 +19,7 @@ data class BookmarkEntity(
     val createdAt: Long,
     val isArchived: Boolean,
     val isStarred: Boolean,
+    val isRead: Boolean = false,
     val tags: String = "", // Comma-separated tags
     val listIds: String = "" // Comma-separated list IDs
 )

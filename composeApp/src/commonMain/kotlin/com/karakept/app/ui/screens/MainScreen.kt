@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -70,6 +71,10 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkListLayout
+import com.karakept.app.ui.components.BookmarkActionsMenu
+import com.karakept.app.ui.components.BookmarkAction
+import com.karakept.app.ui.components.SwipeableBookmarkItem
+import com.karakept.app.data.model.SwipeAction
 import kotlinx.coroutines.launch
 
 import getPlatform
@@ -97,6 +102,8 @@ class MainScreen : Screen {
         val currentFilter by screenModel.currentFilter.collectAsState()
 
         var showFilterDialog by remember { mutableStateOf(false) }
+        var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
+        val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
 
         val isDesktop = remember { getPlatform().name.contains("Java") }
 
@@ -269,6 +276,16 @@ class MainScreen : Screen {
             }
         ) {
             Scaffold(
+                modifier = Modifier.fillMaxSize().onKeyEvent { keyEvent ->
+                    if ((keyEvent.isCtrlPressed || keyEvent.isMetaPressed) &&
+                        keyEvent.key == Key.R &&
+                        keyEvent.type == KeyEventType.KeyDown) {
+                        screenModel.syncBookmarks()
+                        true
+                    } else {
+                        false
+                    }
+                },
                 topBar = {
                     TopAppBar(
                         title = { Text("Karakept") },
@@ -288,7 +305,8 @@ class MainScreen : Screen {
                             }
                         }
                     )
-                }
+                },
+                snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) }
             ) { padding ->
                 Box(
                     modifier = Modifier
@@ -314,15 +332,66 @@ class MainScreen : Screen {
                                 { navigator.push(BookmarkViewerScreen(bookmark.localId)) }
                             }
                             
-                            when (layoutType) {
-                                LayoutType.CARD -> BookmarkCardLayout(
-                                    bookmark = bookmark,
-                                    onClick = onClick
-                                )
-                                LayoutType.LIST -> BookmarkListLayout(
-                                    bookmark = bookmark,
-                                    onClick = onClick
-                                )
+                            // For now, use hardcoded swipe actions (will add settings later)
+                            SwipeableBookmarkItem(
+                                leftSwipeAction = SwipeAction.MARK_READ,
+                                rightSwipeAction = SwipeAction.ARCHIVE,
+                                onActionTriggered = { action ->
+                                    when (action) {
+                                        SwipeAction.ARCHIVE -> {
+                                            screenModel.toggleBookmarkArchive(bookmark)
+                                            // Show toast
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    message = if (bookmark.isArchived) "Unarchived" else "Archived",
+                                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                                )
+                                            }
+                                        }
+                                        SwipeAction.MARK_READ -> {
+                                            screenModel.toggleBookmarkRead(bookmark)
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    message = if (bookmark.isRead) "Marked as unread" else "Marked as read",
+                                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                                )
+                                            }
+                                        }
+                                        SwipeAction.FAVOURITE -> {
+                                            screenModel.toggleBookmarkFavorite(bookmark)
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    message = if (bookmark.isStarred) "Removed from favorites" else "Added to favorites",
+                                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                                )
+                                            }
+                                        }
+                                        SwipeAction.DELETE -> selectedBookmarkForActions = bookmark // Show dialog for confirmation
+                                        SwipeAction.SHARE -> {
+                                            com.karakept.app.utils.ShareUtils.shareText(bookmark.url, bookmark.title)
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    message = "Shared",
+                                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                                )
+                                            }
+                                        }
+                                        SwipeAction.NONE -> {}
+                                    }
+                                }
+                            ) {
+                                when (layoutType) {
+                                    LayoutType.CARD -> BookmarkCardLayout(
+                                        bookmark = bookmark,
+                                        onClick = onClick,
+                                        onLongClick = { selectedBookmarkForActions = bookmark }
+                                    )
+                                    LayoutType.LIST -> BookmarkListLayout(
+                                        bookmark = bookmark,
+                                        onClick = onClick,
+                                        onLongClick = { selectedBookmarkForActions = bookmark }
+                                    )
+                                }
                             }
                         }
                     }
@@ -380,12 +449,65 @@ class MainScreen : Screen {
                 onFilterChange = { filter ->
                     screenModel.applyFilter(filter)
                 },
-                onSaveFilter = { name, icon, isDefault ->
-                    screenModel.saveFilter(name, icon = icon, isDefault = isDefault)
+                onSaveFilter = { name, icon, color, isDefault ->
+                    screenModel.saveFilter(name, icon = icon, color = color, isDefault = isDefault)
                 },
                 onReset = {
                     screenModel.applyFilter(FilterConfig())
                 }
+            )
+        }
+        
+        // Bookmark Actions Menu
+        if (selectedBookmarkForActions != null) {
+            BookmarkActionsMenu(
+                bookmark = selectedBookmarkForActions!!,
+                availableLists = lists,
+                onAction = { action ->
+                    when (action) {
+                        is BookmarkAction.ToggleArchive -> {
+                            screenModel.toggleBookmarkArchive(selectedBookmarkForActions!!) { message ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(message)
+                                }
+                            }
+                        }
+                        is BookmarkAction.ToggleFavorite -> {
+                            screenModel.toggleBookmarkFavorite(selectedBookmarkForActions!!) { message ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(message)
+                                }
+                            }
+                        }
+                        is BookmarkAction.ToggleRead -> {
+                            screenModel.toggleBookmarkRead(selectedBookmarkForActions!!) { message ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(message)
+                                }
+                            }
+                        }
+                        is BookmarkAction.MoveToList -> {
+                            screenModel.moveBookmarkToList(selectedBookmarkForActions!!, action.listId)
+                        }
+                        is BookmarkAction.UpdateTags -> {
+                            screenModel.updateBookmarkTags(selectedBookmarkForActions!!, action.tags)
+                        }
+                        is BookmarkAction.Delete -> {
+                            screenModel.deleteBookmark(selectedBookmarkForActions!!) { message ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(message)
+                                }
+                            }
+                        }
+                        is BookmarkAction.Share -> {
+                            com.karakept.app.utils.ShareUtils.shareText(selectedBookmarkForActions!!.url, selectedBookmarkForActions!!.title)
+                        }
+                        is BookmarkAction.OpenInBrowser -> {
+                            // Open in browser - would need platform-specific implementation
+                        }
+                    }
+                },
+                onDismiss = { selectedBookmarkForActions = null }
             )
         }
     }

@@ -11,19 +11,23 @@ import com.karakept.app.data.local.dao.SavedFilterDao
 import com.karakept.app.data.local.entity.SavedFilterEntity
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.AssetEntity
+import com.karakept.app.data.local.dao.PendingActionDao
+import com.karakept.app.data.local.entity.PendingActionEntity
 
 @Database(
     entities = [
         ServerEntity::class,
         BookmarkEntity::class,
         SavedFilterEntity::class,
-        AssetEntity::class
+        AssetEntity::class,
+        PendingActionEntity::class
     ],
-    version = 7
+    version = 10 // Added originalRemoteId to BookmarkEntity
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun savedFilterDao(): SavedFilterDao
     abstract fun assetDao(): AssetDao
+    abstract fun pendingActionDao(): PendingActionDao
 }

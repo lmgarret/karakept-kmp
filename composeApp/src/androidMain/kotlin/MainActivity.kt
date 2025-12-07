@@ -18,6 +18,10 @@ class MainActivity : ComponentActivity() {
         com.karakept.app.data.local.AndroidContext.context = applicationContext
         com.karakept.app.data.local.initializeDataStore(applicationContext)
         
+        // Initialize platform-specific utilities
+        com.karakept.app.utils.HapticUtils.init(this)
+        com.karakept.app.utils.ShareUtils.init(this)
+        
         // Warm up WebView to reduce latency on first open
         try {
             android.webkit.WebView(applicationContext)

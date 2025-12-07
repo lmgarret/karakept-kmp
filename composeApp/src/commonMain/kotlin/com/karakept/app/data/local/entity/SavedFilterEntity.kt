@@ -9,6 +9,7 @@ data class SavedFilterEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val icon: String = "📋", // Clipboard emoji as default
+    val color: Long? = null, // Color as ARGB Long, null means default/primary
     val configJson: String,
     val isDefault: Boolean = false,
     val displayOrder: Int = 0,
