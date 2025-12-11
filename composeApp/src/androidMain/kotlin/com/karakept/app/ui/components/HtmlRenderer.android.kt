@@ -92,6 +92,10 @@ actual fun HtmlRenderer(
                             padding: 0;
                             box-sizing: border-box;
                         }
+                        html, body {
+                            overflow-x: hidden;
+                            max-width: 100%;
+                        }
                         body {
                             color: $textColorHex;
                             background-color: transparent;

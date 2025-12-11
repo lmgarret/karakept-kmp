@@ -86,7 +86,6 @@ data class WebViewScreen(val url: String) : Screen {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(16.dp)
             ) {
                 when {
                     isLoading -> {

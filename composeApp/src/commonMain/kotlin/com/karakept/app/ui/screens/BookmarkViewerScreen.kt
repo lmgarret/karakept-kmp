@@ -179,7 +179,6 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .background(MaterialTheme.colorScheme.background)
-                                        .padding(16.dp)
                                 ) {
                                     // Web mode badge
                                     if (htmlContentReady && viewerMode == ViewerMode.WEB) {

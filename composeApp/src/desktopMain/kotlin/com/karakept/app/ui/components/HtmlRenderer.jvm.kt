@@ -77,6 +77,10 @@ actual fun HtmlRenderer(
                 <head>
                     <meta charset="UTF-8">
                     <style>
+                        html, body {
+                            overflow-x: hidden;
+                            max-width: 100%;
+                        }
                         body {
                             font-family: ${customFontFamily.cssValue};
                             font-size: ${customFontSize}px;
