@@ -15,10 +15,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class MainScreenModel(
@@ -26,7 +28,8 @@ class MainScreenModel(
     private val bookmarkRepository: BookmarkRepository,
     private val remoteDataSource: RemoteDataSource,
     private val savedFilterRepository: SavedFilterRepository,
-    private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository
+    private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository,
+    private val settingsRepository: com.karakept.app.data.repository.SettingsRepository
 ) : ScreenModel {
 
     // For simplicity, we just pick the first server for now, or allow switching.
@@ -82,6 +85,19 @@ class MainScreenModel(
                     _currentFilter.value = config
                 } catch (e: Exception) {
                     e.printStackTrace()
+                }
+            }
+        }
+
+        // Auto-sync on startup if offline mode is disabled
+        screenModelScope.launch {
+            selectedServer.collect { server ->
+                if (server != null) {
+                    val isOffline = settingsRepository.offlineMode.first()
+                    if (!isOffline && !_isSyncing.value) {
+                        syncBookmarks()
+                    }
+                    cancel()
                 }
             }
         }
@@ -150,6 +166,12 @@ class MainScreenModel(
 
     fun syncBookmarks() {
         screenModelScope.launch {
+            // Guard: Don't sync if offline mode is enabled
+            val isOffline = settingsRepository.offlineMode.first()
+            if (isOffline) {
+                return@launch
+            }
+
             selectedServer.value?.let { server ->
                 try {
                     _isSyncing.value = true

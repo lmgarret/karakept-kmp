@@ -57,7 +57,7 @@ val appModule = module {
     }
 
     factory { LoginScreenModel(get(), get()) }
-    factory { MainScreenModel(get(), get(), get(), get(), get()) }
+    factory { MainScreenModel(get(), get(), get(), get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get(), get(), get()) }
     factory { SettingsScreenModel(get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }

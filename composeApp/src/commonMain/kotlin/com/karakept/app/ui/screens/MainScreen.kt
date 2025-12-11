@@ -35,6 +35,7 @@ import androidx.compose.material3.DropdownMenuItem
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.ui.components.FilterBottomPanel
+import com.karakept.app.ui.components.OfflineModeBadge
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
@@ -100,6 +101,7 @@ class MainScreen : Screen {
         val isSyncing by screenModel.isSyncing.collectAsState()
         val savedFilters by screenModel.savedFilters.collectAsState()
         val currentFilter by screenModel.currentFilter.collectAsState()
+        val offlineMode by settingsScreenModel.offlineMode.collectAsState()
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
@@ -109,7 +111,7 @@ class MainScreen : Screen {
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isSyncing,
-            onRefresh = { screenModel.syncBookmarks() }
+            onRefresh = { if (!offlineMode) screenModel.syncBookmarks() }
         )
 
         val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -288,7 +290,15 @@ class MainScreen : Screen {
                 },
                 topBar = {
                     TopAppBar(
-                        title = { Text("Karakept") },
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Karakept")
+                                if (offlineMode) {
+                                    Spacer(Modifier.width(8.dp))
+                                    OfflineModeBadge()
+                                }
+                            }
+                        },
                         navigationIcon = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                 Icon(Icons.Default.Menu, contentDescription = "Menu")
@@ -299,7 +309,10 @@ class MainScreen : Screen {
                                 Icon(Icons.Default.FilterList, contentDescription = "Filter")
                             }
                             if (isDesktop) {
-                                IconButton(onClick = { screenModel.syncBookmarks() }) {
+                                IconButton(
+                                    onClick = { screenModel.syncBookmarks() },
+                                    enabled = !offlineMode
+                                ) {
                                     Icon(Icons.Default.Refresh, contentDescription = "Sync")
                                 }
                             }
@@ -314,9 +327,10 @@ class MainScreen : Screen {
                         .fillMaxSize()
                         .pullRefresh(pullRefreshState)
                         .onKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown && 
-                                event.key == Key.R && 
-                                (event.isCtrlPressed || event.isMetaPressed)) {
+                            if (event.type == KeyEventType.KeyDown &&
+                                event.key == Key.R &&
+                                (event.isCtrlPressed || event.isMetaPressed) &&
+                                !offlineMode) {
                                 screenModel.syncBookmarks()
                                 true
                             } else {

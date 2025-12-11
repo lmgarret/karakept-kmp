@@ -92,7 +92,7 @@ class ServerSettingsScreen : Screen {
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                text = if (offlineMode) "Actions queue but won't auto-sync" else "Auto-sync after each action",
+                                text = if (offlineMode) "Sync disabled. Actions are queued locally." else "Auto-sync enabled (after actions and on startup)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
