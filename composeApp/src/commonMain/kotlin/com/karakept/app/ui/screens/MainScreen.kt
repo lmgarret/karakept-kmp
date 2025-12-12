@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Book
@@ -107,7 +108,16 @@ class MainScreen : Screen {
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
         val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
 
+        val listState = rememberLazyListState()
         val isDesktop = remember { getPlatform().name.contains("Java") }
+
+        // Auto-scroll to top when new bookmarks are added at the beginning
+        LaunchedEffect(bookmarks.firstOrNull()?.remoteId) {
+            // Only scroll if we're near the top (first 3 items visible)
+            if (listState.firstVisibleItemIndex <= 2 && bookmarks.isNotEmpty()) {
+                listState.animateScrollToItem(0)
+            }
+        }
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isSyncing,
@@ -339,15 +349,17 @@ class MainScreen : Screen {
                         }
                 ) {
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        state = listState
                     ) {
-                        items(bookmarks, key = { it.localId }) { bookmark ->
+                        items(bookmarks, key = { it.remoteId }) { bookmark ->
                             val onClick = remember(bookmark.localId, navigator) {
                                 { navigator.push(BookmarkViewerScreen(bookmark.localId)) }
                             }
-                            
-                            // For now, use hardcoded swipe actions (will add settings later)
-                            SwipeableBookmarkItem(
+
+                            Box(modifier = Modifier.animateItemPlacement()) {
+                                // For now, use hardcoded swipe actions (will add settings later)
+                                SwipeableBookmarkItem(
                                 leftSwipeAction = SwipeAction.MARK_READ,
                                 rightSwipeAction = SwipeAction.ARCHIVE,
                                 onActionTriggered = { action ->
@@ -406,6 +418,7 @@ class MainScreen : Screen {
                                         onLongClick = { selectedBookmarkForActions = bookmark }
                                     )
                                 }
+                            }
                             }
                         }
                     }

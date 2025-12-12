@@ -8,6 +8,7 @@ import com.karakept.app.data.remote.RemoteDataSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.Instant
 
 class BookmarkRepository(
@@ -100,10 +101,43 @@ class BookmarkRepository(
                     null
                 }
             }
-            
-            // Simple sync: delete all for this server and re-insert
-            bookmarkDao.deleteAllBookmarksForServer(server.id)
-            bookmarkDao.insertBookmarks(entities)
+
+            // Differential sync: update existing, insert new, delete removed
+            val existingBookmarks = bookmarkDao.getBookmarksForServer(server.id).first()
+            val existingRemoteIds = existingBookmarks.map { it.remoteId }.toSet()
+            val incomingRemoteIds = entities.map { it.remoteId }.toSet()
+
+            // Phase 1: Update existing bookmarks (preserves localId)
+            val toUpdate = entities.filter { incoming ->
+                existingRemoteIds.contains(incoming.remoteId)
+            }.map { incoming ->
+                // Preserve the existing localId
+                val existingLocalId = existingBookmarks
+                    .find { it.remoteId == incoming.remoteId }?.localId ?: 0
+                incoming.copy(localId = existingLocalId)
+            }
+
+            // Phase 2: Insert new bookmarks
+            val toInsert = entities.filter { incoming ->
+                !existingRemoteIds.contains(incoming.remoteId)
+            }
+
+            // Phase 3: Delete removed bookmarks
+            val toDeleteRemoteIds = existingRemoteIds - incomingRemoteIds
+            val toDelete = existingBookmarks.filter {
+                toDeleteRemoteIds.contains(it.remoteId)
+            }
+
+            // Execute updates
+            if (toUpdate.isNotEmpty()) {
+                bookmarkDao.updateBookmarks(toUpdate)
+            }
+            if (toInsert.isNotEmpty()) {
+                bookmarkDao.insertBookmarks(toInsert)
+            }
+            if (toDelete.isNotEmpty()) {
+                toDelete.forEach { bookmarkDao.deleteBookmark(it) }
+            }
 
             // Sync Assets
             // First delete existing assets for this server

@@ -1,11 +1,15 @@
 package com.karakept.app.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.compose.runtime.Immutable
 
 @Immutable
-@Entity(tableName = "bookmarks")
+@Entity(
+    tableName = "bookmarks",
+    indices = [Index(value = ["remoteId", "serverId"], unique = true)]
+)
 data class BookmarkEntity(
     @PrimaryKey(autoGenerate = true) val localId: Long = 0,
     val remoteId: Long, // Hashed ID for local indexing 
