@@ -22,7 +22,7 @@ import com.karakept.app.data.local.entity.PendingActionEntity
         AssetEntity::class,
         PendingActionEntity::class
     ],
-    version = 11 // Added unique index on (remoteId, serverId) to BookmarkEntity
+    version = 1
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
