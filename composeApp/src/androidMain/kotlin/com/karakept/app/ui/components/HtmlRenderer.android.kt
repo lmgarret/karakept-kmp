@@ -103,6 +103,7 @@ actual fun HtmlRenderer(
                             font-size: ${customFontSize}px;
                             line-height: 1.6;
                             padding: 16px;
+                            padding-bottom: 28px;
                             margin: 0;
                             word-wrap: break-word;
                             overflow-wrap: break-word;

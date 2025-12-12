@@ -89,6 +89,7 @@ actual fun HtmlRenderer(
                             background-color: transparent;
                             margin: 0;
                             padding: 16px;
+                            padding-bottom: 28px;
                             overflow-y: hidden; /* Hide scrollbar as we resize to fit */
                         }
                         a {

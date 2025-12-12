@@ -125,28 +125,26 @@ fun HtmlContent(
             Box(modifier = Modifier.fillMaxWidth()) {
                 // Always render HtmlRenderer if content is processed OR we have a local file
                 if ((processedHtml != null && processedHtml!!.isNotBlank()) || localFilePath != null) {
-                    // Background wrapper (only for READER mode with custom background color)
-                    val wrapperModifier = if (viewerMode == ViewerMode.READER && customBackgroundColor != null) {
-                        Modifier.fillMaxWidth().fillMaxHeight().background(customBackgroundColor)
+                    // Apply background color directly to HtmlRenderer modifier for READER mode
+                    val rendererModifier = if (viewerMode == ViewerMode.READER && customBackgroundColor != null) {
+                        Modifier.fillMaxWidth().background(customBackgroundColor)
                     } else {
                         Modifier.fillMaxWidth()
                     }
 
-                    Box(modifier = wrapperModifier) {
-                        HtmlRenderer(
-                            html = processedHtml ?: "",
-                            viewerMode = viewerMode,
-                            modifier = Modifier.fillMaxWidth(),
-                            onLinkClick = onLinkClick,
-                            onLoaded = {
-                                isContentLoaded = true
-                            },
-                            customTextColor = customTextColor,
-                            customFontSize = customFontSize,
-                            customFontFamily = customFontFamily,
-                            localFilePath = localFilePath
-                        )
-                    }
+                    HtmlRenderer(
+                        html = processedHtml ?: "",
+                        viewerMode = viewerMode,
+                        modifier = rendererModifier,
+                        onLinkClick = onLinkClick,
+                        onLoaded = {
+                            isContentLoaded = true
+                        },
+                        customTextColor = customTextColor,
+                        customFontSize = customFontSize,
+                        customFontFamily = customFontFamily,
+                        localFilePath = localFilePath
+                    )
                 } else if (processedHtml != null && processedHtml!!.isBlank()) {
                      Text(
                         text = "Content could not be displayed safely",

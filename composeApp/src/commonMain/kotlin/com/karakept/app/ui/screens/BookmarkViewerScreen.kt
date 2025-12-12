@@ -216,9 +216,6 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                             )
                                         }
                                     }
-                                    
-                                    // Add extra padding at bottom
-                                    Spacer(modifier = Modifier.height(80.dp))
                                 }
                             }
                         }
