@@ -28,15 +28,34 @@ class RemoteDataSource(private val client: HttpClient) {
                 }
                 header("Authorization", "Bearer ${server.apiKey}")
             }
-            
+
             if (!response.status.isSuccess()) {
                 throw ApiException("Failed to fetch bookmarks: ${response.status}")
             }
-            
+
             val paginatedResponse: PaginatedBookmarksResponse = response.body()
             paginatedResponse.bookmarks
         } catch (e: Exception) {
             throw ApiException("Error fetching bookmarks: ${e.message}", e)
+        }
+    }
+
+    suspend fun fetchBookmark(server: Server, bookmarkId: String): BookmarkDto {
+        return try {
+            val response: HttpResponse = client.get(server.url) {
+                url {
+                    appendPathSegments("api", "v1", "bookmarks", bookmarkId)
+                }
+                header("Authorization", "Bearer ${server.apiKey}")
+            }
+
+            if (!response.status.isSuccess()) {
+                throw ApiException("Failed to fetch bookmark $bookmarkId: ${response.status}")
+            }
+
+            response.body()
+        } catch (e: Exception) {
+            throw ApiException("Error fetching bookmark: ${e.message}", e)
         }
     }
 

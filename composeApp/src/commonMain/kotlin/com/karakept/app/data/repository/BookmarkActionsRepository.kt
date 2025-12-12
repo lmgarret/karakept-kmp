@@ -172,18 +172,21 @@ class BookmarkActionsRepository(
     suspend fun deleteBookmark(bookmarkLocalId: Long, bookmarkRemoteId: Long, serverId: String) {
         performAction {
             withContext(Dispatchers.IO) {
-                // Delete locally
+                // Get the bookmark BEFORE deleting to preserve originalRemoteId for the API call
                 val bookmark = bookmarkDao.getBookmarkById(bookmarkLocalId)
+                val originalRemoteId = bookmark?.originalRemoteId
+
+                // Delete locally
                 bookmark?.let {
                     bookmarkDao.deleteBookmark(it)
                 }
 
-                // Queue action
+                // Queue action with the originalRemoteId stored in actionData
                 queueAction(
                     bookmarkRemoteId = bookmarkRemoteId,
                     serverId = serverId,
                     actionType = PendingActionType.DELETE,
-                    actionData = "{}"
+                    actionData = json.encodeToString(mapOf("originalRemoteId" to originalRemoteId))
                 )
 
                 // Auto-sync if not in offline mode
@@ -360,20 +363,34 @@ class BookmarkActionsRepository(
                 return
             }
             
-            // CRITICAL FIX: Get the actual bookmark to retrieve its REAL string ID from the server
-            // The bookmarkRemoteId stored in pending_actions is a hashed long, but the API needs the original string ID
-            val bookmark = bookmarkDao.getBookmarkByRemoteId(action.bookmarkRemoteId, serverId)
-            if (bookmark == null) {
-                println("BookmarkActionsRepository: Bookmark not found locally: ${action.bookmarkRemoteId}")
-                // Delete the orphaned action
-                pendingActionDao.deleteAction(action) 
-                return
+            // Get the bookmark ID to use for the API call
+            // For DELETE actions, the bookmark may already be deleted locally, so we need to get the ID from actionData
+            // For other actions, we can get it from the bookmark entity
+            val bookmarkId: String = if (action.actionType == PendingActionType.DELETE) {
+                // For DELETE, get originalRemoteId from actionData since bookmark is already deleted locally
+                val data = json.decodeFromString<Map<String, String?>>(action.actionData)
+                val id = data["originalRemoteId"]
+                if (id == null) {
+                    println("BookmarkActionsRepository: DELETE action missing originalRemoteId in actionData")
+                    pendingActionDao.deleteAction(action)
+                    return
+                }
+                id
+            } else {
+                // For other actions, get the bookmark to retrieve its REAL string ID from the server
+                // The bookmarkRemoteId stored in pending_actions is a hashed long, but the API needs the original string ID
+                val bookmark = bookmarkDao.getBookmarkByRemoteId(action.bookmarkRemoteId, serverId)
+                if (bookmark == null) {
+                    println("BookmarkActionsRepository: Bookmark not found locally: ${action.bookmarkRemoteId}")
+                    // Delete the orphaned action
+                    pendingActionDao.deleteAction(action)
+                    return
+                }
+                bookmark.originalRemoteId
             }
-            
-            // Use the ORIGINAL string ID from the bookmark entity for API calls
-            val bookmarkId = bookmark.originalRemoteId
-            println("BookmarkActionsRepository: Executing ${action.actionType} on server with bookmark ID $bookmarkId (original from entity)")
-            
+
+            println("BookmarkActionsRepository: Executing ${action.actionType} on server with bookmark ID $bookmarkId")
+
             when (action.actionType) {
                 PendingActionType.ARCHIVE -> {
                     println("BookmarkActionsRepository: Calling updateBookmark with archived=true")
@@ -408,13 +425,20 @@ class BookmarkActionsRepository(
                     remoteDataSource.attachTags(server, bookmarkId, tags)
                 }
                 PendingActionType.MARK_UNREAD -> {
-                    // Find and detach the karakept:read tag
-                    val bookmark = bookmarkDao.getBookmarkById(action.bookmarkRemoteId)
-                    val readTag = bookmark?.tags?.split(",")?.find { it == "karakept:read" }
-                    if (readTag != null) {
-                        println("BookmarkActionsRepository: Would detach read tag (not implemented)")
-                        // Would need tag IDs, for now just skip
-                        // remoteDataSource.detachTag(server, bookmarkId, tagId)
+                    // Fetch the bookmark from server to get tag IDs
+                    println("BookmarkActionsRepository: Fetching bookmark to find karakept:read tag ID")
+                    try {
+                        val bookmarkDto = remoteDataSource.fetchBookmark(server, bookmarkId)
+                        val readTag = bookmarkDto.tags.find { it.name == "karakept:read" }
+                        if (readTag != null) {
+                            println("BookmarkActionsRepository: Found karakept:read tag with ID ${readTag.id}, detaching")
+                            remoteDataSource.detachTag(server, bookmarkId, readTag.id)
+                        } else {
+                            println("BookmarkActionsRepository: karakept:read tag not found on bookmark")
+                        }
+                    } catch (e: Exception) {
+                        println("BookmarkActionsRepository: Error finding/detaching read tag: ${e.message}")
+                        throw e
                     }
                 }
                 PendingActionType.MOVE_TO_LIST -> {

@@ -76,7 +76,10 @@ class BookmarkRepository(
                     
                     // Process tags
                     val tagsString = dto.tags.joinToString(",") { it.name }
-                    
+
+                    // Check if bookmark has "karakept:read" tag to set isRead flag
+                    val isRead = dto.tags.any { it.name == "karakept:read" }
+
                     // Process lists
                     val listIdsString = bookmarkListMap[dto.id]?.joinToString(",") ?: ""
 
@@ -92,6 +95,7 @@ class BookmarkRepository(
                         createdAt = createdAtMillis,
                         isArchived = dto.archived,
                         isStarred = dto.favourited,
+                        isRead = isRead,
                         tags = tagsString,
                         listIds = listIdsString
                     )
