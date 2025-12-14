@@ -16,6 +16,9 @@ interface BookmarkDao {
 
     @Query("SELECT * FROM bookmarks WHERE localId = :id")
     suspend fun getBookmarkById(id: Long): BookmarkEntity?
+
+    @Query("SELECT * FROM bookmarks WHERE localId = :id")
+    fun observeBookmarkById(id: Long): Flow<BookmarkEntity?>
     
     @Query("SELECT * FROM bookmarks WHERE remoteId = :remoteId AND serverId = :serverId LIMIT 1")
     suspend fun getBookmarkByRemoteId(remoteId: Long, serverId: String): BookmarkEntity?

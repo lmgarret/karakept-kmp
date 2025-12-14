@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.WindowInsets
@@ -23,17 +24,42 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,7 +74,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
@@ -56,15 +86,21 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
+import com.karakept.app.data.repository.ServerRepository
+import com.karakept.app.ui.components.BookmarkAction
+import com.karakept.app.ui.components.BookmarkActionsMenu
 import com.karakept.app.ui.components.WebModeBadge
 import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.HeroImageBanner
 import com.karakept.app.ui.components.HtmlContent
 import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
 import com.karakept.app.ui.components.ViewerModeToggle
+import com.karakept.app.utils.ShareUtils
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import coil3.compose.AsyncImage
+import org.koin.compose.koinInject
 
 data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -73,6 +109,8 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = getScreenModel<BookmarkViewerScreenModel>()
         val scope = rememberCoroutineScope()
+        val serverRepository = koinInject<ServerRepository>()
+        val uriHandler = LocalUriHandler.current
 
         val loadingState by screenModel.loadingState.collectAsState()
         val viewerMode by screenModel.viewerMode.collectAsState()
@@ -82,20 +120,66 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         val htmlFontSize by screenModel.htmlFontSize.collectAsState()
         val htmlFontFamily by screenModel.htmlFontFamily.collectAsState()
         val precrawledAssetPath by screenModel.precrawledAssetPath.collectAsState()
+        val lists by screenModel.lists.collectAsState()
 
         var showModeDialog by remember { mutableStateOf(false) }
         var showAppearancePanel by remember { mutableStateOf(false) }
         var showMenu by remember { mutableStateOf(false) }
+        var fabExpanded by remember { mutableStateOf(false) }
+        var showDeleteConfirmation by remember { mutableStateOf(false) }
+        var showListPicker by remember { mutableStateOf(false) }
+        var showTagEditor by remember { mutableStateOf(false) }
+
+        val snackbarHostState = remember { SnackbarHostState() }
+        var pendingSnackbarMessage by remember { mutableStateOf<String?>(null) }
+
+        // Show pending snackbar when FAB menu closes (with delay for animation)
+        LaunchedEffect(fabExpanded, pendingSnackbarMessage) {
+            if (!fabExpanded && pendingSnackbarMessage != null) {
+                kotlinx.coroutines.delay(400) // Wait for FAB close animation (300ms + buffer)
+                snackbarHostState.showSnackbar(pendingSnackbarMessage!!)
+                pendingSnackbarMessage = null
+            }
+        }
+
+        // Dismiss any visible snackbar when FAB menu opens
+        LaunchedEffect(fabExpanded) {
+            if (fabExpanded) {
+                snackbarHostState.currentSnackbarData?.dismiss()
+            }
+        }
 
         LaunchedEffect(bookmarkId) {
             screenModel.loadBookmark(bookmarkId)
+            // Get the first available server to load lists
+            serverRepository.servers.first().firstOrNull()?.let { server ->
+                screenModel.loadLists(server)
+            }
         }
 
         // Hoist state management OUTSIDE the when to prevent recomposition flash
         val scrollState = androidx.compose.foundation.lazy.rememberLazyListState()
         val bannerHeight = 320.dp
         val toolbarHeight = 56.dp
-        
+
+        // Track scroll direction for FAB visibility
+        var previousScrollOffset by remember { mutableStateOf(0) }
+        var fabVisible by remember { mutableStateOf(true) }
+
+        LaunchedEffect(scrollState.firstVisibleItemScrollOffset, scrollState.firstVisibleItemIndex) {
+            val currentOffset = scrollState.firstVisibleItemIndex * 1000 + scrollState.firstVisibleItemScrollOffset
+            val scrollingDown = currentOffset > previousScrollOffset
+
+            // Hide FAB when scrolling down, show when scrolling up
+            if (currentOffset > 100) { // Only hide after scrolling past 100px
+                fabVisible = !scrollingDown || fabExpanded // Keep visible if expanded
+            } else {
+                fabVisible = true // Always show at top
+            }
+
+            previousScrollOffset = currentOffset
+        }
+
         // Calculate when to show sticky title based on banner height
         // Show when scrolled past banner minus the space for status bar + top bar
         val density = LocalDensity.current
@@ -111,10 +195,87 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
             }
         }
 
+        // Keep the last valid FullyLoaded state to prevent error flash during navigation
+        var lastValidState by remember { mutableStateOf<BookmarkLoadingState>(loadingState) }
+
+        LaunchedEffect(loadingState) {
+            // Only update if we get a FullyLoaded state
+            // This prevents Error states during navigation from showing
+            if (loadingState is BookmarkLoadingState.FullyLoaded) {
+                lastValidState = loadingState
+            } else if (loadingState is BookmarkLoadingState.Initial) {
+                lastValidState = loadingState
+            }
+            // Skip Error states during navigation - they'll be ignored
+        }
+
+        // Use the stable state for rendering
+        val displayState = if (loadingState is BookmarkLoadingState.Error && lastValidState is BookmarkLoadingState.FullyLoaded) {
+            lastValidState
+        } else {
+            loadingState
+        }
+
         Scaffold(
-            // topBar removed for custom parallax header implementation
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState)
+            },
+            floatingActionButton = {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = fabVisible,
+                    enter = androidx.compose.animation.slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = androidx.compose.animation.core.tween(300)
+                    ) + androidx.compose.animation.fadeIn(
+                        animationSpec = androidx.compose.animation.core.tween(300)
+                    ),
+                    exit = androidx.compose.animation.slideOutVertically(
+                        targetOffsetY = { it },
+                        animationSpec = androidx.compose.animation.core.tween(300)
+                    ) + androidx.compose.animation.fadeOut(
+                        animationSpec = androidx.compose.animation.core.tween(300)
+                    )
+                ) {
+                    if (loadingState is BookmarkLoadingState.FullyLoaded) {
+                        val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+                        BookmarkFabMenu(
+                            expanded = fabExpanded,
+                            onExpandedChange = { fabExpanded = it },
+                            bookmark = fullyLoadedState.bookmark,
+                        onFavoriteClick = {
+                            val willBeFavorited = !fullyLoadedState.bookmark.isStarred
+                            screenModel.toggleBookmarkFavorite(fullyLoadedState.bookmark)
+                            pendingSnackbarMessage = if (willBeFavorited) "Added to favorites" else "Removed from favorites"
+                            fabExpanded = false
+                        },
+                        onArchiveClick = {
+                            val willBeArchived = !fullyLoadedState.bookmark.isArchived
+                            screenModel.toggleBookmarkArchive(fullyLoadedState.bookmark)
+                            pendingSnackbarMessage = if (willBeArchived) "Archived" else "Unarchived"
+                            fabExpanded = false
+                        },
+                        onReadClick = {
+                            val willBeRead = !fullyLoadedState.bookmark.isRead
+                            screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
+                            pendingSnackbarMessage = if (willBeRead) "Marked as read" else "Marked as unread"
+                            fabExpanded = false
+                        },
+                        onShareClick = {
+                            ShareUtils.shareText(fullyLoadedState.bookmark.url, fullyLoadedState.bookmark.title)
+                            pendingSnackbarMessage = "Shared"
+                            fabExpanded = false
+                        },
+                        onOpenInBrowserClick = {
+                            uriHandler.openUri(fullyLoadedState.bookmark.url)
+                            pendingSnackbarMessage = "Opening in browser"
+                            fabExpanded = false
+                        }
+                    )
+                    }
+                }
+            }
         ) { padding ->
-            when (val state = loadingState) {
+            when (val state = displayState) {
                 is BookmarkLoadingState.Initial -> {
                     BookmarkContentLoader(
                         loadingState = state,
@@ -158,7 +319,16 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                     imageUrl = imageUrl,
                                     title = title,
                                     url = url,
-                                    scrollProgress = (scrollState.firstVisibleItemScrollOffset / 300f).coerceIn(0f, 1f)
+                                    scrollProgress = (scrollState.firstVisibleItemScrollOffset / 300f).coerceIn(0f, 1f),
+                                    onUrlClick = if (url.isNotEmpty()) {
+                                        {
+                                            try {
+                                                uriHandler.openUri(url)
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                            }
+                                        }
+                                    } else null
                                 )
                             }
                         }
@@ -173,12 +343,61 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                 Spacer(modifier = Modifier.height(bannerHeight))
                             }
 
+                            // Description Card
+                            if (isFullyLoaded) {
+                                val fullyLoadedState = state as BookmarkLoadingState.FullyLoaded
+                                val description = fullyLoadedState.bookmark.description
+                                if (!description.isNullOrBlank()) {
+                                    item(key = "description_card") {
+                                        // Mix reader background with accent color for subtle highlight (20% accent, 80% reader background)
+                                        val readerBg = htmlBackgroundColor ?: MaterialTheme.colorScheme.background
+                                        val accent = MaterialTheme.colorScheme.primaryContainer
+                                        val descriptionBgColor = androidx.compose.ui.graphics.lerp(readerBg, accent, 0.2f)
+
+                                        // Mix reader text color with accent color for text (20% accent, 80% reader text)
+                                        val readerTextColor = htmlTextColor ?: MaterialTheme.colorScheme.onBackground
+                                        val accentTextColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        val descriptionTextColor = androidx.compose.ui.graphics.lerp(readerTextColor, accentTextColor, 0.2f)
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(htmlBackgroundColor ?: MaterialTheme.colorScheme.background)
+                                        ) {
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(16.dp),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = descriptionBgColor
+                                                )
+                                            ) {
+                                                Text(
+                                                    text = description,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontSize = androidx.compose.ui.unit.TextUnit(
+                                                            htmlFontSize.toFloat(),
+                                                            androidx.compose.ui.unit.TextUnitType.Sp
+                                                        )
+                                                    ),
+                                                    color = descriptionTextColor,
+                                                    fontFamily = htmlFontFamily.composeFontFamily,
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(16.dp)
+                                                )
+                                        }
+                                        }
+                                    }
+                                }
+                            }
+
                             // Content Body - Use Crossfade for smooth transition without recomposition
                             item(key = "content_body") {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(MaterialTheme.colorScheme.background)
+                                        .background(htmlBackgroundColor ?: MaterialTheme.colorScheme.background)
                                 ) {
                                     // Web mode badge
                                     if (htmlContentReady && viewerMode == ViewerMode.WEB) {
@@ -333,6 +552,58 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                             showMenu = false
                                         }
                                     )
+
+                                    // Divider to separate sections
+                                    androidx.compose.material3.HorizontalDivider()
+
+                                    // Move to List
+                                    DropdownMenuItem(
+                                        text = { Text("Move to List") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.FolderOpen,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            showListPicker = true
+                                            showMenu = false
+                                        }
+                                    )
+
+                                    // Edit Tags
+                                    DropdownMenuItem(
+                                        text = { Text("Edit Tags") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            showTagEditor = true
+                                            showMenu = false
+                                        }
+                                    )
+
+                                    // Delete (destructive action)
+                                    DropdownMenuItem(
+                                        text = { Text("Delete") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        },
+                                        onClick = {
+                                            showDeleteConfirmation = true
+                                            showMenu = false
+                                        },
+                                        colors = androidx.compose.material3.MenuDefaults.itemColors(
+                                            textColor = MaterialTheme.colorScheme.error
+                                        )
+                                    )
                                 }
                             }
                         }
@@ -367,15 +638,31 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                 onDismissRequest = { showModeDialog = false },
                 title = { Text("Viewer Mode") },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
                             "Choose how to display bookmark content:",
-                            style = MaterialTheme.typography.bodyMedium
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(bottom = 4.dp)
                         )
-                        ViewerModeToggle(
-                            currentMode = viewerMode,
-                            onModeChange = { mode ->
-                                screenModel.setViewerMode(mode)
+
+                        ViewerModeOptionCard(
+                            title = "Reader",
+                            description = "Sanitized content with safe HTML only",
+                            icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
+                            isSelected = viewerMode == ViewerMode.READER,
+                            onClick = {
+                                screenModel.setViewerMode(ViewerMode.READER)
+                                showModeDialog = false
+                            }
+                        )
+
+                        ViewerModeOptionCard(
+                            title = "Web",
+                            description = "Web view with original HTML and stylesheets (JavaScript disabled)",
+                            icon = Icons.Default.Public,
+                            isSelected = viewerMode == ViewerMode.WEB,
+                            onClick = {
+                                screenModel.setViewerMode(ViewerMode.WEB)
                                 showModeDialog = false
                             }
                         )
@@ -431,6 +718,297 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                 },
                 onDismiss = { showAppearancePanel = false }
             )
+        }
+
+        // Delete Confirmation Dialog
+        if (showDeleteConfirmation && loadingState is BookmarkLoadingState.FullyLoaded) {
+            val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirmation = false },
+                title = { Text("Delete Bookmark?") },
+                text = { Text("This action cannot be undone. The bookmark will be permanently deleted from the server.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            screenModel.deleteBookmark(fullyLoadedState.bookmark) {
+                                navigator.pop()
+                            }
+                            showDeleteConfirmation = false
+                        }
+                    ) {
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirmation = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // List Picker Dialog
+        if (showListPicker && loadingState is BookmarkLoadingState.FullyLoaded && lists.isNotEmpty()) {
+            val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+            com.karakept.app.ui.components.ListPickerDialog(
+                lists = lists,
+                currentListIds = fullyLoadedState.bookmark.listIds.split(",").filter { it.isNotBlank() },
+                onListSelected = { listId ->
+                    screenModel.moveBookmarkToList(fullyLoadedState.bookmark, listId)
+                    showListPicker = false
+                },
+                onDismiss = { showListPicker = false }
+            )
+        }
+
+        // Tag Editor Dialog
+        if (showTagEditor && loadingState is BookmarkLoadingState.FullyLoaded) {
+            val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+            com.karakept.app.ui.components.TagEditorDialog(
+                currentTags = fullyLoadedState.bookmark.tags.split(",").filter { it.isNotBlank() },
+                onTagsUpdated = { newTags ->
+                    screenModel.updateBookmarkTags(fullyLoadedState.bookmark, newTags)
+                    showTagEditor = false
+                },
+                onDismiss = { showTagEditor = false }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ViewerModeOptionCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.padding(end = 16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            RadioButton(
+                selected = isSelected,
+                onClick = onClick
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 12.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BookmarkFabMenu(
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    bookmark: com.karakept.app.data.local.entity.BookmarkEntity,
+    onFavoriteClick: () -> Unit,
+    onArchiveClick: () -> Unit,
+    onReadClick: () -> Unit,
+    onShareClick: () -> Unit,
+    onOpenInBrowserClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Action FABs (5 actions - within M3 guidelines)
+        androidx.compose.animation.AnimatedVisibility(
+            visible = expanded,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
+        ) {
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Favorite toggle - Extended FAB with text
+                ExtendedFloatingActionButton(
+                    onClick = onFavoriteClick,
+                    containerColor = if (bookmark.isStarred) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    contentColor = if (bookmark.isStarred) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    }
+                ) {
+                    androidx.compose.animation.Crossfade(
+                        targetState = bookmark.isStarred,
+                        animationSpec = androidx.compose.animation.core.tween(200)
+                    ) { isStarred ->
+                        Icon(
+                            imageVector = if (isStarred) Icons.Default.Star else Icons.Default.StarBorder,
+                            contentDescription = null
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    androidx.compose.animation.Crossfade(
+                        targetState = bookmark.isStarred,
+                        animationSpec = androidx.compose.animation.core.tween(200)
+                    ) { isStarred ->
+                        Text(if (isStarred) "Unfavorite" else "Favorite")
+                    }
+                }
+
+                // Archive toggle - Extended FAB with text
+                ExtendedFloatingActionButton(
+                    onClick = onArchiveClick,
+                    containerColor = if (bookmark.isArchived) {
+                        MaterialTheme.colorScheme.tertiaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    contentColor = if (bookmark.isArchived) {
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    }
+                ) {
+                    androidx.compose.animation.Crossfade(
+                        targetState = bookmark.isArchived,
+                        animationSpec = androidx.compose.animation.core.tween(200)
+                    ) { isArchived ->
+                        Icon(
+                            imageVector = if (isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
+                            contentDescription = null
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    androidx.compose.animation.Crossfade(
+                        targetState = bookmark.isArchived,
+                        animationSpec = androidx.compose.animation.core.tween(200)
+                    ) { isArchived ->
+                        Text(if (isArchived) "Unarchive" else "Archive")
+                    }
+                }
+
+                // Read toggle - Extended FAB with text
+                ExtendedFloatingActionButton(
+                    onClick = onReadClick,
+                    containerColor = if (bookmark.isRead) {
+                        MaterialTheme.colorScheme.surfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    contentColor = if (bookmark.isRead) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    }
+                ) {
+                    androidx.compose.animation.Crossfade(
+                        targetState = bookmark.isRead,
+                        animationSpec = androidx.compose.animation.core.tween(200)
+                    ) { isRead ->
+                        Icon(
+                            imageVector = if (isRead) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    androidx.compose.animation.Crossfade(
+                        targetState = bookmark.isRead,
+                        animationSpec = androidx.compose.animation.core.tween(200)
+                    ) { isRead ->
+                        Text(if (isRead) "Mark unread" else "Mark read")
+                    }
+                }
+
+                // Share action - Extended FAB with text
+                ExtendedFloatingActionButton(
+                    onClick = onShareClick,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Share")
+                }
+
+                // Open in browser action - Extended FAB with text
+                ExtendedFloatingActionButton(
+                    onClick = onOpenInBrowserClick,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.OpenInBrowser,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Open")
+                }
+            }
+        }
+
+        // Main FAB with rotation animation
+        FloatingActionButton(
+            onClick = { onExpandedChange(!expanded) }
+        ) {
+            val rotation by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (expanded) 180f else 0f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+                )
+            )
+
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    rotationZ = rotation
+                }
+            ) {
+                androidx.compose.animation.Crossfade(
+                    targetState = expanded,
+                    animationSpec = androidx.compose.animation.core.tween(200)
+                ) { isExpanded ->
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.Close else Icons.Default.Bookmark,
+                        contentDescription = if (isExpanded) "Close menu" else "Bookmark actions"
+                    )
+                }
+            }
         }
     }
 }

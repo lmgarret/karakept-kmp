@@ -5,21 +5,31 @@ import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
+import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ViewerMode
+import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.data.remote.model.ListDto
+import com.karakept.app.data.repository.BookmarkActionsRepository
+import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class BookmarkViewerScreenModel(
     private val bookmarkDao: BookmarkDao,
     private val assetDao: AssetDao,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val bookmarkActionsRepository: BookmarkActionsRepository,
+    private val remoteDataSource: RemoteDataSource,
+    private val serverRepository: ServerRepository
 ) : ScreenModel {
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
     val loadingState: StateFlow<BookmarkLoadingState> = _loadingState.asStateFlow()
@@ -45,19 +55,29 @@ class BookmarkViewerScreenModel(
     private val _precrawledAssetPath = MutableStateFlow<String?>(null)
     val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()
 
+    private val _lists = MutableStateFlow<List<ListDto>>(emptyList())
+    val lists: StateFlow<List<ListDto>> = _lists.asStateFlow()
+
     fun loadBookmark(id: Long) {
         screenModelScope.launch {
             try {
-                // Load bookmark from DB immediately
-                val bookmark = bookmarkDao.getBookmarkById(id)
-                    ?: throw Exception("Bookmark not found")
+                var hasLoadedOnce = false
+                // Observe bookmark changes from DB reactively
+                bookmarkDao.observeBookmarkById(id).collect { bookmark ->
+                    if (bookmark != null) {
+                        hasLoadedOnce = true
+                        _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
 
-                _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
-                
-                // Load precrawled asset if exists
-                val assets = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
-                val archive = assets.find { it.assetType == "precrawledArchive" }
-                _precrawledAssetPath.value = archive?.localPath
+                        // Load precrawled asset if exists
+                        val assets = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+                        val archive = assets.find { it.assetType == "precrawledArchive" }
+                        _precrawledAssetPath.value = archive?.localPath
+                    } else if (!hasLoadedOnce) {
+                        // Only show error if we never loaded the bookmark
+                        // Don't show error during disposal/navigation
+                        _loadingState.value = BookmarkLoadingState.Error("Bookmark not found")
+                    }
+                }
             } catch (e: Exception) {
                 _loadingState.value = BookmarkLoadingState.Error(
                     e.message ?: "Unknown error"
@@ -98,5 +118,85 @@ class BookmarkViewerScreenModel(
 
     suspend fun resetReaderAppearance() {
         settingsRepository.resetReaderAppearance()
+    }
+
+    fun loadLists(server: Server) {
+        screenModelScope.launch {
+            try {
+                val fetchedLists = remoteDataSource.fetchLists(server)
+                _lists.value = fetchedLists
+            } catch (e: Exception) {
+                // Handle error silently or log
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // Bookmark Actions
+
+    fun toggleBookmarkArchive(bookmark: BookmarkEntity) {
+        screenModelScope.launch {
+            if (bookmark.isArchived) {
+                bookmarkActionsRepository.unarchiveBookmark(bookmark.remoteId, bookmark.serverId)
+            } else {
+                bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
+            }
+        }
+    }
+
+    fun toggleBookmarkFavorite(bookmark: BookmarkEntity) {
+        screenModelScope.launch {
+            bookmarkActionsRepository.toggleFavourite(
+                bookmark.remoteId,
+                bookmark.serverId,
+                bookmark.isStarred
+            )
+        }
+    }
+
+    fun toggleBookmarkRead(bookmark: BookmarkEntity) {
+        screenModelScope.launch {
+            if (bookmark.isRead) {
+                val tags = bookmark.tags.split(",").filter { it.isNotBlank() }
+                bookmarkActionsRepository.markAsUnread(bookmark.remoteId, bookmark.serverId, tags)
+            } else {
+                bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
+            }
+        }
+    }
+
+    fun deleteBookmark(bookmark: BookmarkEntity, onSuccess: () -> Unit) {
+        screenModelScope.launch {
+            bookmarkActionsRepository.deleteBookmark(
+                bookmark.localId,
+                bookmark.remoteId,
+                bookmark.serverId
+            )
+            onSuccess()
+        }
+    }
+
+    fun moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
+        screenModelScope.launch {
+            val isOffline = settingsRepository.offlineMode.first()
+            bookmarkActionsRepository.moveToList(
+                bookmark.remoteId,
+                bookmark.serverId,
+                listId,
+                !isOffline
+            )
+        }
+    }
+
+    fun updateBookmarkTags(bookmark: BookmarkEntity, tags: List<String>) {
+        screenModelScope.launch {
+            val isOffline = settingsRepository.offlineMode.first()
+            bookmarkActionsRepository.updateTags(
+                bookmark.remoteId,
+                bookmark.serverId,
+                tags,
+                !isOffline
+            )
+        }
     }
 }

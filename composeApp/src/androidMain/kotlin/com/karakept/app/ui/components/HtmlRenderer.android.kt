@@ -102,8 +102,7 @@ actual fun HtmlRenderer(
                             font-family: ${customFontFamily.cssValue};
                             font-size: ${customFontSize}px;
                             line-height: 1.6;
-                            padding: 16px;
-                            padding-bottom: 28px;
+                            padding: 0 28px 28px 28px;
                             margin: 0;
                             word-wrap: break-word;
                             overflow-wrap: break-word;

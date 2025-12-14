@@ -88,8 +88,7 @@ actual fun HtmlRenderer(
                             color: $textColorHex;
                             background-color: transparent;
                             margin: 0;
-                            padding: 16px;
-                            padding-bottom: 28px;
+                            padding: 0 28px 28px 28px;
                             overflow-y: hidden; /* Hide scrollbar as we resize to fit */
                         }
                         a {

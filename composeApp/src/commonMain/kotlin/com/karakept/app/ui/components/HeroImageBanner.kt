@@ -1,12 +1,14 @@
 package com.karakept.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +30,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 
 /**
+ * Extracts the domain name from a full URL.
+ * Removes protocol (http/https), www prefix, and path.
+ */
+private fun extractDomain(url: String): String {
+    return try {
+        val urlWithoutProtocol = url
+            .removePrefix("https://")
+            .removePrefix("http://")
+            .removePrefix("www.")
+
+        // Take everything before the first slash
+        urlWithoutProtocol.substringBefore("/")
+    } catch (e: Exception) {
+        url  // Fallback to full URL if parsing fails
+    }
+}
+
+/**
  * Material You hero banner with image and title overlay.
  *
  * Features:
@@ -43,6 +63,7 @@ fun HeroImageBanner(
     title: String,
     url: String? = null,
     scrollProgress: Float = 0f,
+    onUrlClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -115,7 +136,18 @@ fun HeroImageBanner(
             if (url != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .then(
+                            if (onUrlClick != null) {
+                                Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable(onClick = onUrlClick)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            } else {
+                                Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            }
+                        )
                 ) {
                     AsyncImage(
                         model = com.karakept.app.utils.FaviconUtils.getFaviconUrl(url),
@@ -127,7 +159,7 @@ fun HeroImageBanner(
                         contentScale = ContentScale.Fit
                     )
                     Text(
-                        text = url,
+                        text = extractDomain(url),
                         style = MaterialTheme.typography.labelMedium,
                         color = Color.White.copy(alpha = 0.8f)
                     )
