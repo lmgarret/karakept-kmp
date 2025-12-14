@@ -93,6 +93,18 @@ class SettingsScreenModel(
         initialValue = false
     )
 
+    val showReadingTimeBadge: StateFlow<Boolean> = settingsRepository.showReadingTimeBadge.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    val readingSpeedWpm: StateFlow<Int> = settingsRepository.readingSpeedWpm.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 250
+    )
+
     fun setLayoutType(layoutType: LayoutType) {
         screenModelScope.launch {
             settingsRepository.setLayoutType(layoutType)
@@ -156,6 +168,18 @@ class SettingsScreenModel(
     fun setOfflineMode(enabled: Boolean) {
         screenModelScope.launch {
             settingsRepository.setOfflineMode(enabled)
+        }
+    }
+
+    fun setShowReadingTimeBadge(show: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setShowReadingTimeBadge(show)
+        }
+    }
+
+    fun setReadingSpeedWpm(wpm: Int) {
+        screenModelScope.launch {
+            settingsRepository.setReadingSpeedWpm(wpm)
         }
     }
 }

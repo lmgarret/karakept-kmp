@@ -298,6 +298,10 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                         is BookmarkLoadingState.FullyLoaded -> state.bookmark.url
                         else -> ""
                     }
+                    val readingTimeMinutes = when (state) {
+                        is BookmarkLoadingState.FullyLoaded -> state.bookmark.readingTimeMinutes
+                        else -> 0
+                    }
                     val isFullyLoaded = state is BookmarkLoadingState.FullyLoaded
                     
                     // Track when HTML content is truly ready (processed + rendered)
@@ -319,6 +323,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                     imageUrl = imageUrl,
                                     title = title,
                                     url = url,
+                                    readingTimeMinutes = readingTimeMinutes,
                                     scrollProgress = (scrollState.firstVisibleItemScrollOffset / 300f).coerceIn(0f, 1f),
                                     onUrlClick = if (url.isNotEmpty()) {
                                         {

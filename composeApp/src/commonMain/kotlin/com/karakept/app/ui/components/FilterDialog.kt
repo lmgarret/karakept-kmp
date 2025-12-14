@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -276,6 +277,8 @@ private fun SortChipGroup(
                 SortOption.OLDEST -> Icons.Default.ArrowUpward
                 SortOption.TITLE_AZ -> Icons.Default.SortByAlpha
                 SortOption.TITLE_ZA -> Icons.Default.SortByAlpha
+                SortOption.READING_TIME_SHORT -> Icons.Outlined.MenuBook
+                SortOption.READING_TIME_LONG -> Icons.Outlined.MenuBook
             }
             FilterChip(
                 selected = sort == selectedSort,

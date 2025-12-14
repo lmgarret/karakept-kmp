@@ -28,6 +28,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val HTML_FONT_SIZE_KEY = intPreferencesKey("html_font_size") // Default: 16px
     private val HTML_FONT_FAMILY_KEY = stringPreferencesKey("html_font_family") // Enum name
     private val OFFLINE_MODE_KEY = booleanPreferencesKey("offline_mode")
+    private val SHOW_READING_TIME_BADGE_KEY = booleanPreferencesKey("show_reading_time_badge")
+    private val READING_SPEED_WPM_KEY = intPreferencesKey("reading_speed_wpm")
 
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
         val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.CARD.name
@@ -76,6 +78,14 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     
     val offlineMode: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[OFFLINE_MODE_KEY] ?: false
+    }
+
+    val showReadingTimeBadge: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[SHOW_READING_TIME_BADGE_KEY] ?: true // Default: show badge
+    }
+
+    val readingSpeedWpm: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[READING_SPEED_WPM_KEY] ?: 238 // Default: 238 WPM (Medium standard)
     }
 
     suspend fun setLayoutType(layoutType: LayoutType) {
@@ -158,6 +168,20 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setOfflineMode(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[OFFLINE_MODE_KEY] = enabled
+        }
+    }
+
+    suspend fun setShowReadingTimeBadge(show: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[SHOW_READING_TIME_BADGE_KEY] = show
+        }
+    }
+
+    suspend fun setReadingSpeedWpm(wpm: Int) {
+        dataStore.edit { preferences ->
+            // Clamp to reasonable range: 100-500 WPM
+            val clampedWpm = wpm.coerceIn(100, 500)
+            preferences[READING_SPEED_WPM_KEY] = clampedWpm
         }
     }
 }

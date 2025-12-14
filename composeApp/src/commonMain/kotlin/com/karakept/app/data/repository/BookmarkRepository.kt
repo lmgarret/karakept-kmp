@@ -5,6 +5,7 @@ import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.utils.ReadingTimeCalculator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -73,7 +74,10 @@ class BookmarkRepository(
 
                     // Get HTML content - prioritize htmlContent, then fall back to other fields
                     val content = dto.content.htmlContent ?: dto.note ?: dto.content.description ?: dto.content.text
-                    
+
+                    // Calculate reading time from content
+                    val readingTimeMinutes = ReadingTimeCalculator.calculateReadingTime(content)
+
                     // Process tags
                     val tagsString = dto.tags.joinToString(",") { it.name }
 
@@ -97,7 +101,8 @@ class BookmarkRepository(
                         isStarred = dto.favourited,
                         isRead = isRead,
                         tags = tagsString,
-                        listIds = listIdsString
+                        listIds = listIdsString,
+                        readingTimeMinutes = readingTimeMinutes
                     )
                 } catch (e: Exception) {
                     // Log and skip malformed bookmarks

@@ -36,6 +36,7 @@ fun BookmarkCardLayout(
     bookmark: BookmarkEntity,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    showReadingTime: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -46,46 +47,58 @@ fun BookmarkCardLayout(
                 onLongClick = onLongClick
             )
     ) {
-        Column {
-            if (bookmark.imageUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalPlatformContext.current)
-                        .data(bookmark.imageUrl)
-                        .size(600) // Request a reasonable size for the card
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
+        Box {
+            Column {
+                if (bookmark.imageUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalPlatformContext.current)
+                            .data(bookmark.imageUrl)
+                            .size(600) // Request a reasonable size for the card
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentScale = ContentScale.Crop,
+                        filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "📰",
+                            style = MaterialTheme.typography.displayLarge
+                        )
+                    }
+                }
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentScale = ContentScale.Crop,
-                    filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
+                        .padding(16.dp)
                 ) {
                     Text(
-                        text = "📰",
-                        style = MaterialTheme.typography.displayLarge
+                        text = bookmark.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = bookmark.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+
+            // Reading time badge overlay - bottom right
+            if (showReadingTime && bookmark.readingTimeMinutes > 0) {
+                ReadingTimeBadge(
+                    readingTimeMinutes = bookmark.readingTimeMinutes,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
                 )
             }
         }
@@ -99,6 +112,7 @@ fun BookmarkListLayout(
     bookmark: BookmarkEntity,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    showReadingTime: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -109,80 +123,92 @@ fun BookmarkListLayout(
                 onLongClick = onLongClick
             )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
+        Box {
+            Row(
                 modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (bookmark.imageUrl != null) {
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    if (bookmark.imageUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalPlatformContext.current)
+                                .data(bookmark.imageUrl)
+                                .size(300) // Request a smaller size for the list item
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentScale = ContentScale.Crop,
+                            filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "📰",
+                                style = MaterialTheme.typography.headlineMedium
+                            )
+                        }
+                    }
+
+                    // Favicon overlay
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalPlatformContext.current)
-                            .data(bookmark.imageUrl)
-                            .size(300) // Request a smaller size for the list item
-                            .crossfade(true)
-                            .build(),
+                        model = com.karakept.app.utils.FaviconUtils.getFaviconUrl(bookmark.url),
                         contentDescription = null,
                         modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentScale = ContentScale.Crop,
-                        filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp)
+                            .size(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.surface),
+                        contentScale = ContentScale.Fit
                     )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize(),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = bookmark.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (bookmark.description != null) {
                         Text(
-                            text = "📰",
-                            style = MaterialTheme.typography.headlineMedium
+                            text = bookmark.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 4.dp)
                         )
                     }
                 }
+            }
 
-                // Favicon overlay
-                AsyncImage(
-                    model = com.karakept.app.utils.FaviconUtils.getFaviconUrl(bookmark.url),
-                    contentDescription = null,
+            // Reading time badge overlay - bottom right
+            if (showReadingTime && bookmark.readingTimeMinutes > 0) {
+                ReadingTimeBadge(
+                    readingTimeMinutes = bookmark.readingTimeMinutes,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(4.dp)
-                        .size(16.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.surface),
-                    contentScale = ContentScale.Fit
+                        .padding(8.dp)
                 )
-            }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxSize(),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = bookmark.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (bookmark.description != null) {
-                    Text(
-                        text = bookmark.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
             }
         }
     }

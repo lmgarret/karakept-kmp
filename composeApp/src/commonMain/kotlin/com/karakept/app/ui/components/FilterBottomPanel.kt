@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -199,6 +200,38 @@ fun FilterBottomPanel(
                                 )
                             } else {
                                 Icon(Icons.Default.SortByAlpha, null, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    )
+
+                    // Reading Time (Short/Long)
+                    val isReadingTimeSelected = filter.sort == SortOption.READING_TIME_SHORT || filter.sort == SortOption.READING_TIME_LONG
+                    val readingTimeRotation by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (filter.sort == SortOption.READING_TIME_LONG) 180f else 0f,
+                        animationSpec = androidx.compose.animation.core.tween(300)
+                    )
+                    FilterChip(
+                        selected = isReadingTimeSelected,
+                        onClick = {
+                            filter = filter.copy(
+                                sort = if (filter.sort == SortOption.READING_TIME_SHORT)
+                                    SortOption.READING_TIME_LONG
+                                else
+                                    SortOption.READING_TIME_SHORT
+                            )
+                        },
+                        label = { Text("Reading Time") },
+                        leadingIcon = {
+                            if (isReadingTimeSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDownward,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .graphicsLayer { rotationZ = readingTimeRotation }
+                                )
+                            } else {
+                                Icon(Icons.Outlined.MenuBook, null, modifier = Modifier.size(18.dp))
                             }
                         }
                     )

@@ -18,7 +18,9 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Card
+import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,6 +32,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -38,6 +43,7 @@ import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.screens.FilterManagementScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
 
@@ -48,6 +54,20 @@ class BookmarkListSettingsScreen : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
         val currentLayoutType by screenModel.layoutType.collectAsState()
+        val showReadingTimeBadge by screenModel.showReadingTimeBadge.collectAsState()
+        val readingSpeedWpm by screenModel.readingSpeedWpm.collectAsState()
+        var showReadingSpeedDialog by remember { mutableStateOf(false) }
+
+        // Show reading speed dialog
+        if (showReadingSpeedDialog) {
+            ReadingSpeedDialog(
+                currentWpm = readingSpeedWpm,
+                onDismiss = { showReadingSpeedDialog = false },
+                onConfirm = { newWpm ->
+                    screenModel.setReadingSpeedWpm(newWpm)
+                }
+            )
+        }
 
         Scaffold(
             topBar = {
@@ -132,6 +152,82 @@ class BookmarkListSettingsScreen : Screen {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Open"
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Reading Time Settings
+                Text(
+                    text = "Reading Time",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                // Show Reading Time Badge Toggle
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Show Reading Time",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Display estimated reading time on bookmark cards",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = showReadingTimeBadge,
+                            onCheckedChange = { screenModel.setShowReadingTimeBadge(it) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Reading Speed Setting
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showReadingSpeedDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Speed,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Reading Speed",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "$readingSpeedWpm words per minute",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Adjust"
                         )
                     }
                 }

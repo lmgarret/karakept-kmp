@@ -21,5 +21,7 @@ enum class SortOption {
     NEWEST,
     OLDEST,
     TITLE_AZ,
-    TITLE_ZA
+    TITLE_ZA,
+    READING_TIME_SHORT,
+    READING_TIME_LONG
 }

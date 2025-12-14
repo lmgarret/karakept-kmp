@@ -25,5 +25,6 @@ data class BookmarkEntity(
     val isStarred: Boolean,
     val isRead: Boolean = false,
     val tags: String = "", // Comma-separated tags
-    val listIds: String = "" // Comma-separated list IDs
+    val listIds: String = "", // Comma-separated list IDs
+    val readingTimeMinutes: Int = 0 // Estimated reading time in minutes
 )

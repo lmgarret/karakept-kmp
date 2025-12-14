@@ -152,6 +152,8 @@ class MainScreenModel(
             SortOption.OLDEST -> result.sortedBy { it.createdAt }
             SortOption.TITLE_AZ -> result.sortedBy { it.title.lowercase() }
             SortOption.TITLE_ZA -> result.sortedByDescending { it.title.lowercase() }
+            SortOption.READING_TIME_SHORT -> result.sortedBy { it.readingTimeMinutes }
+            SortOption.READING_TIME_LONG -> result.sortedByDescending { it.readingTimeMinutes }
         }
 
         return result

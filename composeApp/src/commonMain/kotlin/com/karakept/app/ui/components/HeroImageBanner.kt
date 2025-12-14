@@ -62,6 +62,7 @@ fun HeroImageBanner(
     imageUrl: String?,
     title: String,
     url: String? = null,
+    readingTimeMinutes: Int = 0,
     scrollProgress: Float = 0f,
     onUrlClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -136,33 +137,45 @@ fun HeroImageBanner(
             if (url != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .then(
-                            if (onUrlClick != null) {
-                                Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .clickable(onClick = onUrlClick)
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            } else {
-                                Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            }
-                        )
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    AsyncImage(
-                        model = com.karakept.app.utils.FaviconUtils.getFaviconUrl(url),
-                        contentDescription = null,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
-                            .size(16.dp)
-                            .clip(CircleShape)
-                            .background(Color.White),
-                        contentScale = ContentScale.Fit
-                    )
-                    Text(
-                        text = extractDomain(url),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
+                            .then(
+                                if (onUrlClick != null) {
+                                    Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .clickable(onClick = onUrlClick)
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                } else {
+                                    Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                }
+                            )
+                    ) {
+                        AsyncImage(
+                            model = com.karakept.app.utils.FaviconUtils.getFaviconUrl(url),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(CircleShape)
+                                .background(Color.White),
+                            contentScale = ContentScale.Fit
+                        )
+                        Text(
+                            text = extractDomain(url),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+
+                    // Reading time badge
+                    if (readingTimeMinutes > 0) {
+                        ReadingTimeBadge(
+                            readingTimeMinutes = readingTimeMinutes
+                        )
+                    }
                 }
             }
         }

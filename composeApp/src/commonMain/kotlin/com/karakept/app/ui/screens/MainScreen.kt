@@ -103,6 +103,7 @@ class MainScreen : Screen {
         val savedFilters by screenModel.savedFilters.collectAsState()
         val currentFilter by screenModel.currentFilter.collectAsState()
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
+        val showReadingTimeBadge by settingsScreenModel.showReadingTimeBadge.collectAsState()
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
@@ -410,12 +411,14 @@ class MainScreen : Screen {
                                     LayoutType.CARD -> BookmarkCardLayout(
                                         bookmark = bookmark,
                                         onClick = onClick,
-                                        onLongClick = { selectedBookmarkForActions = bookmark }
+                                        onLongClick = { selectedBookmarkForActions = bookmark },
+                                        showReadingTime = showReadingTimeBadge
                                     )
                                     LayoutType.LIST -> BookmarkListLayout(
                                         bookmark = bookmark,
                                         onClick = onClick,
-                                        onLongClick = { selectedBookmarkForActions = bookmark }
+                                        onLongClick = { selectedBookmarkForActions = bookmark },
+                                        showReadingTime = showReadingTimeBadge
                                     )
                                 }
                             }
