@@ -105,6 +105,18 @@ class SettingsScreenModel(
         initialValue = 250
     )
 
+    val swipeLeftAction: StateFlow<com.karakept.app.data.model.SwipeAction> = settingsRepository.swipeLeftAction.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.karakept.app.data.model.SwipeAction.MARK_READ
+    )
+
+    val swipeRightAction: StateFlow<com.karakept.app.data.model.SwipeAction> = settingsRepository.swipeRightAction.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.karakept.app.data.model.SwipeAction.ARCHIVE
+    )
+
     fun setLayoutType(layoutType: LayoutType) {
         screenModelScope.launch {
             settingsRepository.setLayoutType(layoutType)
@@ -180,6 +192,18 @@ class SettingsScreenModel(
     fun setReadingSpeedWpm(wpm: Int) {
         screenModelScope.launch {
             settingsRepository.setReadingSpeedWpm(wpm)
+        }
+    }
+
+    fun setSwipeLeftAction(action: com.karakept.app.data.model.SwipeAction) {
+        screenModelScope.launch {
+            settingsRepository.setSwipeLeftAction(action)
+        }
+    }
+
+    fun setSwipeRightAction(action: com.karakept.app.data.model.SwipeAction) {
+        screenModelScope.launch {
+            settingsRepository.setSwipeRightAction(action)
         }
     }
 }

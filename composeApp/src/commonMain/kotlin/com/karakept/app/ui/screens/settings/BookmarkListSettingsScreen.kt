@@ -46,6 +46,8 @@ import com.karakept.app.data.model.LayoutType
 import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.screens.FilterManagementScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
+import com.karakept.app.ui.components.getIcon
+import androidx.compose.foundation.layout.width
 
 class BookmarkListSettingsScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +58,8 @@ class BookmarkListSettingsScreen : Screen {
         val currentLayoutType by screenModel.layoutType.collectAsState()
         val showReadingTimeBadge by screenModel.showReadingTimeBadge.collectAsState()
         val readingSpeedWpm by screenModel.readingSpeedWpm.collectAsState()
+        val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
+        val swipeRightAction by screenModel.swipeRightAction.collectAsState()
         var showReadingSpeedDialog by remember { mutableStateOf(false) }
 
         // Show reading speed dialog
@@ -111,6 +115,33 @@ class BookmarkListSettingsScreen : Screen {
                     icon = Icons.AutoMirrored.Filled.List,
                     isSelected = currentLayoutType == LayoutType.LIST,
                     onClick = { screenModel.setLayoutType(LayoutType.LIST) }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Gestures Section
+                Text(
+                    text = "Gestures",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                SwipeActionSettingItem(
+                    title = "Swipe Right (Left to Right)",
+                    description = "Action when swiping from left to right",
+                    selectedAction = swipeRightAction,
+                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    onActionSelected = { screenModel.setSwipeRightAction(it) }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                SwipeActionSettingItem(
+                    title = "Swipe Left (Right to Left)",
+                    description = "Action when swiping from right to left",
+                    selectedAction = swipeLeftAction,
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    onActionSelected = { screenModel.setSwipeLeftAction(it) }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -289,6 +320,118 @@ private fun LayoutOption(
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SwipeActionSettingItem(
+    title: String,
+    description: String,
+    selectedAction: com.karakept.app.data.model.SwipeAction,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onActionSelected: (com.karakept.app.data.model.SwipeAction) -> Unit
+) {
+    var showDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    if (showDialog) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { showDialog = false }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(vertical = 16.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                    )
+                    
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        com.karakept.app.data.model.SwipeAction.entries.forEach { action ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onActionSelected(action)
+                                        showDialog = false
+                                    }
+                                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = action == selectedAction,
+                                    onClick = {
+                                        onActionSelected(action)
+                                        showDialog = false
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = action.getIcon(),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = action.displayName,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = 24.dp, top = 8.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        androidx.compose.material3.TextButton(onClick = { showDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showDialog = true }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 16.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = selectedAction.displayName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = "Select"
+            )
         }
     }
 }

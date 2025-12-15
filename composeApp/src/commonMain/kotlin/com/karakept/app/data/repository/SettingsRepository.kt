@@ -30,6 +30,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val OFFLINE_MODE_KEY = booleanPreferencesKey("offline_mode")
     private val SHOW_READING_TIME_BADGE_KEY = booleanPreferencesKey("show_reading_time_badge")
     private val READING_SPEED_WPM_KEY = intPreferencesKey("reading_speed_wpm")
+    private val SWIPE_LEFT_ACTION_KEY = stringPreferencesKey("swipe_left_action")
+    private val SWIPE_RIGHT_ACTION_KEY = stringPreferencesKey("swipe_right_action")
 
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
         val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.CARD.name
@@ -86,6 +88,16 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     val readingSpeedWpm: Flow<Int> = dataStore.data.map { preferences ->
         preferences[READING_SPEED_WPM_KEY] ?: 238 // Default: 238 WPM (Medium standard)
+    }
+
+    val swipeLeftAction: Flow<com.karakept.app.data.model.SwipeAction> = dataStore.data.map { preferences ->
+        val actionString = preferences[SWIPE_LEFT_ACTION_KEY] ?: com.karakept.app.data.model.SwipeAction.MARK_READ.name
+        com.karakept.app.data.model.SwipeAction.fromString(actionString)
+    }
+
+    val swipeRightAction: Flow<com.karakept.app.data.model.SwipeAction> = dataStore.data.map { preferences ->
+        val actionString = preferences[SWIPE_RIGHT_ACTION_KEY] ?: com.karakept.app.data.model.SwipeAction.ARCHIVE.name
+        com.karakept.app.data.model.SwipeAction.fromString(actionString)
     }
 
     suspend fun setLayoutType(layoutType: LayoutType) {
@@ -182,6 +194,18 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             // Clamp to reasonable range: 100-500 WPM
             val clampedWpm = wpm.coerceIn(100, 500)
             preferences[READING_SPEED_WPM_KEY] = clampedWpm
+        }
+    }
+
+    suspend fun setSwipeLeftAction(action: com.karakept.app.data.model.SwipeAction) {
+        dataStore.edit { preferences ->
+            preferences[SWIPE_LEFT_ACTION_KEY] = action.name
+        }
+    }
+
+    suspend fun setSwipeRightAction(action: com.karakept.app.data.model.SwipeAction) {
+        dataStore.edit { preferences ->
+            preferences[SWIPE_RIGHT_ACTION_KEY] = action.name
         }
     }
 }

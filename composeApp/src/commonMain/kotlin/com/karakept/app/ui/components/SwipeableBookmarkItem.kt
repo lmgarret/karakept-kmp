@@ -51,8 +51,10 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun SwipeableBookmarkItem(
-    leftSwipeAction: SwipeAction = SwipeAction.NONE, // Swipe left reveals this
-    rightSwipeAction: SwipeAction = SwipeAction.NONE, // Swipe right reveals this
+    leftSwipeAction: SwipeAction = SwipeAction.NONE, // Swipe left reveals this (Trailing)
+    rightSwipeAction: SwipeAction = SwipeAction.NONE, // Swipe right reveals this (Leading)
+    leftIcon: ImageVector? = null, // Optional override for left action icon
+    rightIcon: ImageVector? = null, // Optional override for right action icon
     onActionTriggered: (SwipeAction) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
@@ -80,8 +82,8 @@ fun SwipeableBookmarkItem(
                 .matchParentSize()  // Match the size of the parent Box (which is sized by content)
                 .background(
                     when {
-                        offsetX > swipeThreshold -> getSwipeActionColor(rightSwipeAction)
-                        offsetX < -swipeThreshold -> getSwipeActionColor(leftSwipeAction)
+                        offsetX > swipeThreshold -> rightSwipeAction.getColor()
+                        offsetX < -swipeThreshold -> leftSwipeAction.getColor()
                         else -> Color.Transparent
                     }
                 ),
@@ -97,7 +99,7 @@ fun SwipeableBookmarkItem(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = getSwipeActionIcon(rightSwipeAction),
+                        imageVector = rightIcon ?: rightSwipeAction.getIcon(),
                         contentDescription = rightSwipeAction.displayName,
                         tint = Color.White
                     )
@@ -116,7 +118,7 @@ fun SwipeableBookmarkItem(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = getSwipeActionIcon(leftSwipeAction),
+                        imageVector = leftIcon ?: leftSwipeAction.getIcon(),
                         contentDescription = leftSwipeAction.displayName,
                         tint = Color.White
                     )
@@ -190,24 +192,4 @@ fun SwipeableBookmarkItem(
     }
 }
 
-private fun getSwipeActionIcon(action: SwipeAction): ImageVector {
-    return when (action) {
-        SwipeAction.ARCHIVE -> Icons.Default.Archive
-        SwipeAction.FAVOURITE -> Icons.Default.Star
-        SwipeAction.MARK_READ -> Icons.Default.Visibility
-        SwipeAction.DELETE -> Icons.Default.Delete
-        SwipeAction.SHARE -> Icons.Default.Share
-        SwipeAction.NONE -> Icons.Default.Archive // Fallback
-    }
-}
 
-private fun getSwipeActionColor(action: SwipeAction): Color {
-    return when (action) {
-        SwipeAction.ARCHIVE -> Color(0xFF4CAF50) // Green
-        SwipeAction.FAVOURITE -> Color(0xFFFFC107) // Amber
-        SwipeAction.MARK_READ -> Color(0xFF2196F3) // Blue
-        SwipeAction.DELETE -> Color(0xFFF44336) // Red
-        SwipeAction.SHARE -> Color(0xFF9C27B0) // Purple
-        SwipeAction.NONE -> Color.Transparent
-    }
-}

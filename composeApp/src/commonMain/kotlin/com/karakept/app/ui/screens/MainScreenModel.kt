@@ -64,6 +64,18 @@ class MainScreenModel(
         }
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val swipeLeftAction: StateFlow<com.karakept.app.data.model.SwipeAction> = settingsRepository.swipeLeftAction.stateIn(
+        screenModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        com.karakept.app.data.model.SwipeAction.MARK_READ
+    )
+
+    val swipeRightAction: StateFlow<com.karakept.app.data.model.SwipeAction> = settingsRepository.swipeRightAction.stateIn(
+        screenModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        com.karakept.app.data.model.SwipeAction.ARCHIVE
+    )
+
     init {
         // Initialize selected server
         screenModelScope.launch {

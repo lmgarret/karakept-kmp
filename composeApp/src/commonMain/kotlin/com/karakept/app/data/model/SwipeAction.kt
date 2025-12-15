@@ -9,7 +9,8 @@ enum class SwipeAction(val displayName: String) {
     FAVOURITE("Toggle Favorite"),
     MARK_READ("Mark as Read"),
     DELETE("Delete"),
-    SHARE("Share");
+    SHARE("Share"),
+    OPEN_IN_BROWSER("Open in Browser");
     
     companion object {
         fun fromString(value: String): SwipeAction {

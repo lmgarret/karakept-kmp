@@ -24,7 +24,11 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Menu
+
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -104,6 +108,8 @@ class MainScreen : Screen {
         val currentFilter by screenModel.currentFilter.collectAsState()
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
         val showReadingTimeBadge by settingsScreenModel.showReadingTimeBadge.collectAsState()
+        val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
+        val swipeRightAction by screenModel.swipeRightAction.collectAsState()
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
@@ -111,6 +117,7 @@ class MainScreen : Screen {
 
         val listState = rememberLazyListState()
         val isDesktop = remember { getPlatform().name.contains("Java") }
+        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
         // Auto-scroll to top when new bookmarks are added at the beginning
         LaunchedEffect(bookmarks.firstOrNull()?.remoteId) {
@@ -359,10 +366,20 @@ class MainScreen : Screen {
                             }
 
                             Box(modifier = Modifier.animateItemPlacement()) {
-                                // For now, use hardcoded swipe actions (will add settings later)
+                                // Dynamic icon logic for Mark Read/Unread
+                                val leftIcon = if (swipeLeftAction == SwipeAction.MARK_READ) {
+                                    if (bookmark.isRead) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                                } else null
+                                
+                                val rightIcon = if (swipeRightAction == SwipeAction.MARK_READ) {
+                                    if (bookmark.isRead) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                                } else null
+
                                 SwipeableBookmarkItem(
-                                leftSwipeAction = SwipeAction.MARK_READ,
-                                rightSwipeAction = SwipeAction.ARCHIVE,
+                                leftSwipeAction = swipeLeftAction,
+                                rightSwipeAction = swipeRightAction,
+                                leftIcon = leftIcon,
+                                rightIcon = rightIcon,
                                 onActionTriggered = { action ->
                                     when (action) {
                                         SwipeAction.ARCHIVE -> {
@@ -401,6 +418,15 @@ class MainScreen : Screen {
                                                     message = "Shared",
                                                     duration = androidx.compose.material3.SnackbarDuration.Short
                                                 )
+                                            }
+                                        }
+                                        SwipeAction.OPEN_IN_BROWSER -> {
+                                            try {
+                                                uriHandler.openUri(bookmark.url)
+                                            } catch (e: Exception) {
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("Could not open link")
+                                                }
                                             }
                                         }
                                         SwipeAction.NONE -> {}
