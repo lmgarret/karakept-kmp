@@ -59,6 +59,10 @@ fun SwipeableBookmarkItem(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val currentOnActionTriggered by androidx.compose.runtime.rememberUpdatedState(onActionTriggered)
+    val currentLeftAction by androidx.compose.runtime.rememberUpdatedState(leftSwipeAction)
+    val currentRightAction by androidx.compose.runtime.rememberUpdatedState(rightSwipeAction)
+
     var offsetX by remember { mutableFloatStateOf(0f) }
     val animatedOffset = remember { Animatable(0f) }
     val swipeThreshold = with(LocalDensity.current) { 80.dp.toPx() }
@@ -137,14 +141,14 @@ fun SwipeableBookmarkItem(
                             scope.launch {
                                 // Check if threshold was met
                                 val actionToTrigger = when {
-                                    offsetX > swipeThreshold && rightSwipeAction != SwipeAction.NONE -> rightSwipeAction
-                                    offsetX < -swipeThreshold && leftSwipeAction != SwipeAction.NONE -> leftSwipeAction
+                                    offsetX > swipeThreshold && currentRightAction != SwipeAction.NONE -> currentRightAction
+                                    offsetX < -swipeThreshold && currentLeftAction != SwipeAction.NONE -> currentLeftAction
                                     else -> null
                                 }
                                 
                                 // Trigger action if threshold met
                                 actionToTrigger?.let {
-                                    onActionTriggered(it)
+                                    currentOnActionTriggered(it)
                                 }
                                 
                                 // Reset position

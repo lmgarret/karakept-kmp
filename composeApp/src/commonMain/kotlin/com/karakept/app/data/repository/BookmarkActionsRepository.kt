@@ -9,7 +9,11 @@ import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.remote.model.UpdateBookmarkDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
@@ -35,9 +39,15 @@ class BookmarkActionsRepository(
     private val _isPerformingAction = kotlinx.coroutines.flow.MutableStateFlow(false)
     val isPerformingAction: kotlinx.coroutines.flow.StateFlow<Boolean> = _isPerformingAction
     
+    // Cache for tag IDs to handle read/unread toggling race conditions
+    private val recentlyAddedReadTagIds = mutableMapOf<String, String>() // BookmarkID -> TagID
+    
     fun setBookmarkRepository(repository: com.karakept.app.data.repository.BookmarkRepository) {
         _bookmarkRepository = repository
     }
+
+    // Scope for background operations like auto-sync
+    private val repositoryScope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
     /**
      * Archive a bookmark. Updates locally and queues for sync.
@@ -125,15 +135,36 @@ class BookmarkActionsRepository(
             withContext(Dispatchers.IO) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
-                    bookmarkDao.insertBookmark(it.copy(isRead = true))
+                    // Update isRead AND add the tag to the string if not present
+                    val currentTags = it.tags.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() }.toMutableList()
+                    if (!currentTags.contains("karakept:read")) {
+                        currentTags.add("karakept:read")
+                    }
+                    bookmarkDao.insertBookmark(it.copy(
+                        isRead = true,
+                        tags = currentTags.joinToString(",")
+                    ))
                 }
 
-                queueAction(
-                    bookmarkRemoteId = bookmarkRemoteId,
-                    serverId = serverId,
-                    actionType = PendingActionType.MARK_READ,
-                    actionData = json.encodeToString(mapOf("tags" to listOf("karakept:read")))
-                )
+                // Check if there is a pending MARK_UNREAD action for this bookmark.
+                // If so, delete it instead of queuing a new MARK_READ action.
+                val pendingStats = pendingActionDao.getPendingActionsList(serverId)
+                val pendingUnread = pendingStats.find { 
+                    it.bookmarkRemoteId == bookmarkRemoteId && 
+                    it.actionType == PendingActionType.MARK_UNREAD 
+                }
+
+                if (pendingUnread != null) {
+                    println("BookmarkActionsRepository: Found pending MARK_UNREAD for bookmark $bookmarkRemoteId. Deleting it instead of queuing MARK_READ.")
+                    pendingActionDao.deleteAction(pendingUnread)
+                } else {
+                    queueAction(
+                        bookmarkRemoteId = bookmarkRemoteId,
+                        serverId = serverId,
+                        actionType = PendingActionType.MARK_READ,
+                        actionData = json.encodeToString(mapOf("tags" to listOf("karakept:read")))
+                    )
+                }
 
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
@@ -149,16 +180,36 @@ class BookmarkActionsRepository(
             withContext(Dispatchers.IO) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
-                    bookmarkDao.insertBookmark(it.copy(isRead = false))
+                    // Update isRead AND remove the tag
+                    val currentTags = it.tags.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() }.toMutableList()
+                    currentTags.remove("karakept:read")
+                    bookmarkDao.insertBookmark(it.copy(
+                        isRead = false,
+                        tags = currentTags.joinToString(",")
+                    ))
                 }
 
-                // Find the tag ID for "karakept:read" from existing tags
-                queueAction(
-                    bookmarkRemoteId = bookmarkRemoteId,
-                    serverId = serverId,
-                    actionType = PendingActionType.MARK_UNREAD,
-                    actionData = json.encodeToString(mapOf("tagName" to "karakept:read"))
-                )
+                // Check if there is a pending MARK_READ action for this bookmark.
+                // If so, delete it instead of queuing a new MARK_UNREAD action.
+                // This effectively cancels the previous action locally, preventing the race condition.
+                val pendingStats = pendingActionDao.getPendingActionsList(serverId)
+                val pendingRead = pendingStats.find { 
+                    it.bookmarkRemoteId == bookmarkRemoteId && 
+                    it.actionType == PendingActionType.MARK_READ 
+                }
+
+                if (pendingRead != null) {
+                    println("BookmarkActionsRepository: Found pending MARK_READ for bookmark $bookmarkRemoteId. Deleting it instead of queuing MARK_UNREAD.")
+                    pendingActionDao.deleteAction(pendingRead)
+                } else {
+                    // Find the tag ID for "karakept:read" from existing tags
+                    queueAction(
+                        bookmarkRemoteId = bookmarkRemoteId,
+                        serverId = serverId,
+                        actionType = PendingActionType.MARK_UNREAD,
+                        actionData = json.encodeToString(mapOf("tagName" to "karakept:read"))
+                    )
+                }
 
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
@@ -303,20 +354,23 @@ class BookmarkActionsRepository(
      * Called after every action to sync changes to server automatically.
      */
     private suspend fun triggerAutoSync(serverId: String) {
-        try {
-            // Check if offline mode is enabled
-            if (!settingsRepository.offlineMode.first()) {
-                // Get server and trigger sync
-                val servers = serverRepository.servers.first()
-                val server = servers.find { it.id == serverId }
-                server?.let {
-                    // Sync all bookmarks (which will process pending actions first)
-                    _bookmarkRepository?.syncBookmarks(it)
+        repositoryScope.launch {
+            try {
+                // Check if offline mode is enabled
+                if (!settingsRepository.offlineMode.first()) {
+                    // Get server and trigger sync
+                    val servers = serverRepository.servers.first()
+                    val server = servers.find { it.id == serverId }
+                    server?.let {
+                        // Start processing pending actions immediately (Push only)
+                        println("BookmarkActionsRepository: Triggering push-only sync for server ${server.id}")
+                        processPendingActions(it)
+                    }
                 }
+            } catch (e: Exception) {
+                println("BookmarkActionsRepository: Error in auto-sync: ${e.message}")
+                // Don't propagate error - auto-sync is a best-effort operation
             }
-        } catch (e: Exception) {
-            println("BookmarkActionsRepository: Error in auto-sync: ${e.message}")
-            // Don't propagate error - auto-sync is a best-effort operation
         }
     }
 
@@ -332,21 +386,37 @@ class BookmarkActionsRepository(
         }
     }
 
+    // Mutex to ensure only one action processing happens at a time
+    private val actionMutex = kotlinx.coroutines.sync.Mutex()
+
     /**
      * Process all pending actions for a server. Called during sync.
+     * Returns list of bookmark remote IDs that were processed.
      */
-    suspend fun processPendingActions(server: Server) {
-        withContext(Dispatchers.IO) {
-            val actions = pendingActionDao.getPendingActionsList(server.id)
-            println("BookmarkActionsRepository: Found ${actions.size} pending actions for server ${server.id}")
-            
-            for (action in actions) {
-                println("BookmarkActionsRepository: Processing action ${action.actionType} for bookmark ${action.bookmarkRemoteId}")
-                executeAction(action, server.id)
+    suspend fun processPendingActions(server: Server): List<Long> {
+        return actionMutex.withLock {
+            withContext(Dispatchers.IO) {
+                val actions = pendingActionDao.getPendingActionsList(server.id)
+                val processedIds = mutableListOf<Long>()
+                println("BookmarkActionsRepository: Found ${actions.size} pending actions for server ${server.id}")
+                
+                for (action in actions) {
+                    println("BookmarkActionsRepository: Processing action ${action.actionType} for bookmark ${action.bookmarkRemoteId}")
+                    executeAction(action, server.id)
+                    processedIds.add(action.bookmarkRemoteId)
+                }
+                
+                println("BookmarkActionsRepository: Finished processing all pending actions")
+                processedIds
             }
-            
-            println("BookmarkActionsRepository: Finished processing all pending actions")
         }
+    }
+
+    /**
+     * Get list of bookmark remote IDs that have pending actions.
+     */
+    suspend fun getPendingActionBookmarkIds(serverId: String): List<Long> {
+        return pendingActionDao.getPendingActionsList(serverId).map { it.bookmarkRemoteId }.distinct()
     }
 
     /**
@@ -422,23 +492,43 @@ class BookmarkActionsRepository(
                     val data = json.decodeFromString<Map<String, List<String>>>(action.actionData)
                     val tags = data["tags"] ?: emptyList()
                     println("BookmarkActionsRepository: Calling attachTags for mark_read with tags: $tags")
-                    remoteDataSource.attachTags(server, bookmarkId, tags)
+                    val response = remoteDataSource.attachTags(server, bookmarkId, tags)
+                    
+                    // Cache the tag ID if it's the read tag
+                    response.attached.find { it.name == "karakept:read" }?.let { tag ->
+                        println("BookmarkActionsRepository: Caching read tag ID ${tag.id} for bookmark $bookmarkId")
+                        recentlyAddedReadTagIds[bookmarkId] = tag.id
+                    }
                 }
                 PendingActionType.MARK_UNREAD -> {
-                    // Fetch the bookmark from server to get tag IDs
-                    println("BookmarkActionsRepository: Fetching bookmark to find karakept:read tag ID")
-                    try {
-                        val bookmarkDto = remoteDataSource.fetchBookmark(server, bookmarkId)
-                        val readTag = bookmarkDto.tags.find { it.name == "karakept:read" }
-                        if (readTag != null) {
-                            println("BookmarkActionsRepository: Found karakept:read tag with ID ${readTag.id}, detaching")
-                            remoteDataSource.detachTag(server, bookmarkId, readTag.id)
-                        } else {
-                            println("BookmarkActionsRepository: karakept:read tag not found on bookmark")
+                    // Try to get tag ID from cache first
+                    var tagId = recentlyAddedReadTagIds[bookmarkId]
+                    
+                    if (tagId == null) {
+                        // Fetch the bookmark from server to get tag IDs
+                        println("BookmarkActionsRepository: Fetching bookmark to find karakept:read tag ID")
+                        try {
+                            val bookmarkDto = remoteDataSource.fetchBookmark(server, bookmarkId)
+                            val readTag = bookmarkDto.tags.find { it.name == "karakept:read" }
+                            tagId = readTag?.id
+                        } catch (e: Exception) {
+                            println("BookmarkActionsRepository: Error fetching bookmark: ${e.message}")
+                            // Start throwing so we retry? Or just log? 
+                            // If fetch fails, we probably want to retry.
+                            throw e
                         }
-                    } catch (e: Exception) {
-                        println("BookmarkActionsRepository: Error finding/detaching read tag: ${e.message}")
-                        throw e
+                    } else {
+                        println("BookmarkActionsRepository: Using cached read tag ID $tagId")
+                    }
+
+                    if (tagId != null) {
+                        println("BookmarkActionsRepository: Detaching tag $tagId")
+                        remoteDataSource.detachTag(server, bookmarkId, tagId)
+                        // Remove from cache
+                        recentlyAddedReadTagIds.remove(bookmarkId)
+                    } else {
+                        println("BookmarkActionsRepository: karakept:read tag not found on bookmark, throwing to retry")
+                        throw Exception("Read tag not found on bookmark yet, retrying")
                     }
                 }
                 PendingActionType.MOVE_TO_LIST -> {
@@ -475,6 +565,7 @@ class BookmarkActionsRepository(
             if (action.retryCount >= 5) {
                 // Could delete or mark as failed
                 println("Action failed after 5 retries: ${action.actionType} for bookmark ${action.bookmarkRemoteId}")
+                pendingActionDao.deleteAction(action) // Give up after 5 retries to prevent blocking
             }
         }
     }

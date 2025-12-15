@@ -1,5 +1,7 @@
 package com.karakept.app.ui.components
 
+import androidx.compose.ui.draw.alpha
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -37,8 +39,10 @@ fun BookmarkCardLayout(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     showReadingTime: Boolean = true,
+    dimRead: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val alpha = if (bookmark.isRead && dimRead) 0.5f else 1f
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -47,7 +51,7 @@ fun BookmarkCardLayout(
                 onLongClick = onLongClick
             )
     ) {
-        Box {
+        Box(modifier = Modifier.alpha(alpha)) {
             Column {
                 if (bookmark.imageUrl != null) {
                     AsyncImage(
@@ -113,8 +117,10 @@ fun BookmarkListLayout(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     showReadingTime: Boolean = true,
+    dimRead: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val alpha = if (bookmark.isRead && dimRead) 0.5f else 1f
     Card(
         modifier = modifier
            .fillMaxWidth()
@@ -123,7 +129,7 @@ fun BookmarkListLayout(
                 onLongClick = onLongClick
             )
     ) {
-        Box {
+        Box(modifier = Modifier.alpha(alpha)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

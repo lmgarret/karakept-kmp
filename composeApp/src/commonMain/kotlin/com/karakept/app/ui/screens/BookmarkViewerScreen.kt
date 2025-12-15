@@ -121,6 +121,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         val htmlFontFamily by screenModel.htmlFontFamily.collectAsState()
         val precrawledAssetPath by screenModel.precrawledAssetPath.collectAsState()
         val lists by screenModel.lists.collectAsState()
+        val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
 
         var showModeDialog by remember { mutableStateOf(false) }
         var showAppearancePanel by remember { mutableStateOf(false) }
@@ -166,6 +167,9 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         var previousScrollOffset by remember { mutableStateOf(0) }
         var fabVisible by remember { mutableStateOf(true) }
 
+        // Track if we've already triggered auto-read for this session to prevent spam
+        var hasTriggeredAutoRead by remember(bookmarkId) { mutableStateOf(false) }
+
         LaunchedEffect(scrollState.firstVisibleItemScrollOffset, scrollState.firstVisibleItemIndex) {
             val currentOffset = scrollState.firstVisibleItemIndex * 1000 + scrollState.firstVisibleItemScrollOffset
             val scrollingDown = currentOffset > previousScrollOffset
@@ -178,6 +182,26 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
             }
 
             previousScrollOffset = currentOffset
+            
+            // Check for auto-mark read
+            if (!hasTriggeredAutoRead && autoMarkReadOnScroll && loadingState is BookmarkLoadingState.FullyLoaded) {
+                 val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+                 if (!fullyLoadedState.bookmark.isRead) {
+                     val layoutInfo = scrollState.layoutInfo
+                     val totalItems = layoutInfo.totalItemsCount
+                     val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                     
+                     if (visibleItemsInfo.isNotEmpty()) {
+                         val lastVisibleItem = visibleItemsInfo.last()
+                         // Check if we are near the end (last item is visible)
+                         if (lastVisibleItem.index == totalItems - 1) {
+                             screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
+                             pendingSnackbarMessage = "Marked as read"
+                             hasTriggeredAutoRead = true
+                         }
+                     }
+                 }
+            }
         }
 
         // Calculate when to show sticky title based on banner height

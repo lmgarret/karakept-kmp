@@ -52,6 +52,9 @@ class BookmarkViewerScreenModel(
     val htmlFontFamily: StateFlow<ReaderFontFamily> = settingsRepository.htmlFontFamily
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ReaderFontFamily.SYSTEM)
 
+    val autoMarkReadOnScroll: StateFlow<Boolean> = settingsRepository.autoMarkReadOnScroll
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     private val _precrawledAssetPath = MutableStateFlow<String?>(null)
     val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()
 

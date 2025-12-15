@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.Instant
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class BookmarkRepository(
     private val bookmarkDao: BookmarkDao,
@@ -22,14 +24,19 @@ class BookmarkRepository(
         return bookmarkDao.getBookmarksForServer(server.id)
     }
 
+    private val mutex = kotlinx.coroutines.sync.Mutex()
+
     suspend fun syncBookmarks(server: Server) {
-        try {
-            // IMPORTANT: Process pending actions FIRST, before fetching fresh data
-            // This ensures offline changes are synced to server before we overwrite with fresh data
+        mutex.withLock {
+            try {
+                // IMPORTANT: Process pending actions FIRST, before fetching fresh data
+                val processedIds = mutableSetOf<Long>()
+            
             println("BookmarkRepository: About to process pending actions for server ${server.id}")
             try {
-                bookmarkActionsRepository.processPendingActions(server)
-                println("BookmarkRepository: Successfully processed pending actions")
+                val ids = bookmarkActionsRepository.processPendingActions(server)
+                processedIds.addAll(ids)
+                println("BookmarkRepository: Successfully processed pending actions for ${ids.size} bookmarks")
             } catch (e: Exception) {
                 println("BookmarkRepository: Error processing pending actions: ${e.message}")
                 e.printStackTrace()
@@ -117,8 +124,13 @@ class BookmarkRepository(
             val incomingRemoteIds = entities.map { it.remoteId }.toSet()
 
             // Phase 1: Update existing bookmarks (preserves localId)
+            // Filter out bookmarks that have pending actions (from before sync start) OR were just processed
+            // This prevents overwriting local optimistic updates with potentially stale server data
+            val pendingActionBookmarkIds = bookmarkActionsRepository.getPendingActionBookmarkIds(server.id).toSet()
+            val ignoredIds = processedIds + pendingActionBookmarkIds
+            
             val toUpdate = entities.filter { incoming ->
-                existingRemoteIds.contains(incoming.remoteId)
+                existingRemoteIds.contains(incoming.remoteId) && !ignoredIds.contains(incoming.remoteId)
             }.map { incoming ->
                 // Preserve the existing localId
                 val existingLocalId = existingBookmarks
@@ -191,10 +203,11 @@ class BookmarkRepository(
                 assetDao.insertAssets(assetEntities)
             }
 
-        } catch (e: Exception) {
-            // Handle error (log, etc.)
-            e.printStackTrace()
-            throw e
+            } catch (e: Exception) {
+                // Handle error (log, etc.)
+                e.printStackTrace()
+                throw e
+            }
         }
     }
 }

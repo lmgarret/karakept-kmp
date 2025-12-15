@@ -99,6 +99,38 @@ class BookmarkListSettingsScreen : Screen {
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
+                // Dim read bookmarks toggle
+                val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Dim Read Bookmarks",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Fade out the title and thumbnail of read articles",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = dimReadBookmarks,
+                            onCheckedChange = { screenModel.setDimReadBookmarks(it) }
+                        )
+                    }
+                }
+
                 LayoutOption(
                     title = "Card Layout",
                     description = "Display articles with large thumbnails on top and title below",

@@ -76,6 +76,12 @@ class MainScreenModel(
         com.karakept.app.data.model.SwipeAction.ARCHIVE
     )
 
+    val dimReadBookmarks: StateFlow<Boolean> = settingsRepository.dimReadBookmarks.stateIn(
+        screenModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
     init {
         // Initialize selected server
         screenModelScope.launch {

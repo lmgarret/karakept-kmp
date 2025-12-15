@@ -206,4 +206,28 @@ class SettingsScreenModel(
             settingsRepository.setSwipeRightAction(action)
         }
     }
+
+    val dimReadBookmarks: StateFlow<Boolean> = settingsRepository.dimReadBookmarks.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    val autoMarkReadOnScroll: StateFlow<Boolean> = settingsRepository.autoMarkReadOnScroll.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setDimReadBookmarks(dim: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setDimReadBookmarks(dim)
+        }
+    }
+
+    fun setAutoMarkReadOnScroll(autoMark: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setAutoMarkReadOnScroll(autoMark)
+        }
+    }
 }

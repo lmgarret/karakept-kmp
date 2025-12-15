@@ -110,6 +110,7 @@ class MainScreen : Screen {
         val showReadingTimeBadge by settingsScreenModel.showReadingTimeBadge.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
+        val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
@@ -383,32 +384,34 @@ class MainScreen : Screen {
                                 onActionTriggered = { action ->
                                     when (action) {
                                         SwipeAction.ARCHIVE -> {
-                                            screenModel.toggleBookmarkArchive(bookmark)
-                                            // Show toast
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    message = if (bookmark.isArchived) "Unarchived" else "Archived",
-                                                    duration = androidx.compose.material3.SnackbarDuration.Short
-                                                )
-                                            }
+                                            screenModel.toggleBookmarkArchive(bookmark, onActionComplete = { message ->
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        message = message,
+                                                        duration = androidx.compose.material3.SnackbarDuration.Short
+                                                    )
+                                                }
+                                            })
                                         }
                                         SwipeAction.MARK_READ -> {
-                                            screenModel.toggleBookmarkRead(bookmark)
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    message = if (bookmark.isRead) "Marked as unread" else "Marked as read",
-                                                    duration = androidx.compose.material3.SnackbarDuration.Short
-                                                )
-                                            }
+                                            screenModel.toggleBookmarkRead(bookmark, onActionComplete = { message ->
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        message = message,
+                                                        duration = androidx.compose.material3.SnackbarDuration.Short
+                                                    )
+                                                }
+                                            })
                                         }
                                         SwipeAction.FAVOURITE -> {
-                                            screenModel.toggleBookmarkFavorite(bookmark)
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    message = if (bookmark.isStarred) "Removed from favorites" else "Added to favorites",
-                                                    duration = androidx.compose.material3.SnackbarDuration.Short
-                                                )
-                                            }
+                                            screenModel.toggleBookmarkFavorite(bookmark, onActionComplete = { message ->
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        message = message,
+                                                        duration = androidx.compose.material3.SnackbarDuration.Short
+                                                    )
+                                                }
+                                            })
                                         }
                                         SwipeAction.DELETE -> selectedBookmarkForActions = bookmark // Show dialog for confirmation
                                         SwipeAction.SHARE -> {
@@ -438,13 +441,15 @@ class MainScreen : Screen {
                                         bookmark = bookmark,
                                         onClick = onClick,
                                         onLongClick = { selectedBookmarkForActions = bookmark },
-                                        showReadingTime = showReadingTimeBadge
+                                        showReadingTime = showReadingTimeBadge,
+                                        dimRead = dimReadBookmarks
                                     )
                                     LayoutType.LIST -> BookmarkListLayout(
                                         bookmark = bookmark,
                                         onClick = onClick,
                                         onLongClick = { selectedBookmarkForActions = bookmark },
-                                        showReadingTime = showReadingTimeBadge
+                                        showReadingTime = showReadingTimeBadge,
+                                        dimRead = dimReadBookmarks
                                     )
                                 }
                             }
