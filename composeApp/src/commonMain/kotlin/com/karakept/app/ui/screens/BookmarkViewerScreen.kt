@@ -193,11 +193,23 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                      
                      if (visibleItemsInfo.isNotEmpty()) {
                          val lastVisibleItem = visibleItemsInfo.last()
-                         // Check if we are near the end (last item is visible)
-                         if (lastVisibleItem.index == totalItems - 1) {
-                             screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
-                             pendingSnackbarMessage = "Marked as read"
-                             hasTriggeredAutoRead = true
+                         // Check if we are near the end (last item is visible AND its bottom edge is near the viewport bottom)
+                         val isLastItem = lastVisibleItem.index == totalItems - 1
+                         
+                         if (isLastItem) {
+                             // layoutInfo.viewportEndOffset gives the height of the viewport
+                             // lastVisibleItem.offset is the top position relative to viewport start
+                             // lastVisibleItem.size is the height of the item
+                             // So (offset + size) is the position of the bottom edge relative to viewport start
+                             val itemBottom = lastVisibleItem.offset + lastVisibleItem.size
+                             val viewportBottom = layoutInfo.viewportEndOffset
+                             
+                             // Trigger if the bottom of the content is within the viewport (with a small buffer of 50px)
+                             if (itemBottom <= viewportBottom + 50) {
+                                 screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
+                                 pendingSnackbarMessage = "Marked as read"
+                                 hasTriggeredAutoRead = true
+                             }
                          }
                      }
                  }
