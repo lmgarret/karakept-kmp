@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -62,6 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -85,7 +88,7 @@ import kotlinx.coroutines.launch
 
 import getPlatform
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
@@ -224,24 +227,63 @@ class MainScreen : Screen {
                         }
                     )
 
-                    // Lists Section
+                    // Lists Section (Hierarchical)
                     if (lists.isNotEmpty()) {
                         Spacer(Modifier.height(16.dp))
                         Text("Lists", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
-                        lists.forEach { list ->
-                            NavigationDrawerItem(
-                                label = { Text("${list.icon} ${list.name}") },
-                                selected = currentFilter.lists.contains(list.id),
-                                colors = NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary
-                                ),
-                                onClick = {
-                                    screenModel.applyFilter(FilterConfig(lists = listOf(list.id)))
-                                    scope.launch { drawerState.close() }
+
+                        val hierarchy = remember(lists) { buildHierarchy(lists) }
+                        val expandedIds by screenModel.expandedLists.collectAsState()
+                        val visibleHierarchy = remember(hierarchy, expandedIds) {
+                            filterExpandedHierarchy(hierarchy, expandedIds)
+                        }
+
+                        visibleHierarchy.forEach { (list, depth) ->
+                            key(list.id) {
+                                val hasChildLists = hasChildren(list.id, lists)
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                                ) {
+                                    Spacer(Modifier.width((depth * 16).dp)) // Indentation
+
+                                    // Expand/collapse icon
+                                    if (hasChildLists) {
+                                        IconButton(
+                                            onClick = { screenModel.toggleListExpanded(list.id) },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (expandedIds.contains(list.id)) {
+                                                    Icons.Default.KeyboardArrowDown
+                                                } else {
+                                                    Icons.AutoMirrored.Filled.KeyboardArrowRight
+                                                },
+                                                contentDescription = if (expandedIds.contains(list.id)) "Collapse" else "Expand",
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Spacer(Modifier.width(24.dp))
+                                    }
+
+                                    NavigationDrawerItem(
+                                        label = { Text("${list.icon} ${list.name}") },
+                                        selected = currentFilter.lists.contains(list.id),
+                                        colors = NavigationDrawerItemDefaults.colors(
+                                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                                            selectedTextColor = MaterialTheme.colorScheme.primary
+                                        ),
+                                        onClick = {
+                                            screenModel.applyFilter(FilterConfig(lists = listOf(list.id)))
+                                            scope.launch { drawerState.close() }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
                                 }
-                            )
+                            }
                         }
                     }
 
@@ -299,7 +341,7 @@ class MainScreen : Screen {
             Scaffold(
                 modifier = Modifier.fillMaxSize().onKeyEvent { keyEvent ->
                     if ((keyEvent.isCtrlPressed || keyEvent.isMetaPressed) &&
-                        keyEvent.key == Key.R &&
+                        keyEvent.keyboardKey == Key.R &&
                         keyEvent.type == KeyEventType.KeyDown) {
                         screenModel.syncBookmarks()
                         true
@@ -347,7 +389,7 @@ class MainScreen : Screen {
                         .pullRefresh(pullRefreshState)
                         .onKeyEvent { event ->
                             if (event.type == KeyEventType.KeyDown &&
-                                event.key == Key.R &&
+                                event.keyboardKey == Key.R &&
                                 (event.isCtrlPressed || event.isMetaPressed) &&
                                 !offlineMode) {
                                 screenModel.syncBookmarks()
@@ -572,4 +614,86 @@ class MainScreen : Screen {
             )
         }
     }
+}
+
+// Hierarchy helper functions for list display
+
+/**
+ * Builds a hierarchical list structure from flat list.
+ * Returns list of (ListDto, depth) pairs in display order.
+ * Reused from ListManagementScreen.kt
+ */
+private fun buildHierarchy(lists: List<com.karakept.app.data.remote.model.ListDto>): List<Pair<com.karakept.app.data.remote.model.ListDto, Int>> {
+    val result = mutableListOf<Pair<com.karakept.app.data.remote.model.ListDto, Int>>()
+    val grouped = lists.groupBy { it.parentId }
+    val visited = mutableSetOf<String>() // Prevent circular refs
+
+    fun recurse(parentId: String?, depth: Int) {
+        if (depth > 10) return // Max depth protection
+        val children = grouped[parentId] ?: return
+        children.forEach { child ->
+            if (!visited.contains(child.id)) {
+                visited.add(child.id)
+                result.add(child to depth)
+                recurse(child.id, depth + 1)
+            }
+        }
+    }
+
+    recurse(null, 0)
+
+    // Handle orphans
+    val processed = result.map { it.first.id }.toSet()
+    lists.filter { it.id !in processed }.forEach { list ->
+        result.add(list to 0)
+    }
+
+    return result
+}
+
+/**
+ * Filters hierarchy to only show expanded branches.
+ * A list is visible only if ALL its ancestors are expanded.
+ */
+private fun filterExpandedHierarchy(
+    hierarchy: List<Pair<com.karakept.app.data.remote.model.ListDto, Int>>,
+    expandedIds: Set<String>
+): List<Pair<com.karakept.app.data.remote.model.ListDto, Int>> {
+    val result = mutableListOf<Pair<com.karakept.app.data.remote.model.ListDto, Int>>()
+
+    // Build a map of list ID to its hierarchy entry for quick lookup
+    val listMap = hierarchy.associateBy { it.first.id }
+
+    hierarchy.forEach { (list, depth) ->
+        val shouldShow = if (depth == 0) {
+            true // Root items always visible
+        } else {
+            // Check if ALL ancestors in the parent chain are expanded
+            var allAncestorsExpanded = true
+            var currentParentId = list.parentId
+
+            while (currentParentId != null && allAncestorsExpanded) {
+                if (!expandedIds.contains(currentParentId)) {
+                    allAncestorsExpanded = false
+                }
+                // Move to next ancestor
+                currentParentId = listMap[currentParentId]?.first?.parentId
+            }
+
+            allAncestorsExpanded
+        }
+
+        if (shouldShow) {
+            result.add(list to depth)
+        }
+    }
+
+    return result
+}
+
+/**
+ * Checks if a list has children
+ */
+private fun hasChildren(listId: String, allLists: List<com.karakept.app.data.remote.model.ListDto>): Boolean {
+    return allLists.any { it.parentId == listId }
 }

@@ -318,6 +318,120 @@ class BookmarkRepository(
         }
     }
 
+    /**
+     * Syncs only bookmarks from a specific list.
+     * Respects content sync mode (NEVER/PER_BOOKMARK/PER_LIST/ALL).
+     */
+    suspend fun syncBookmarksForList(server: Server, listId: String) {
+        mutex.withLock {
+            try {
+                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Starting
+
+                // Process pending actions first
+                try {
+                    bookmarkActionsRepository.processPendingActions(server)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                // Fetch bookmarks for this specific list
+                _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingMetadata(1, 0)
+                val listBookmarks = remoteDataSource.fetchBookmarksForList(server, listId)
+
+                // Determine content sync strategy
+                val syncStrategy = settingsRepository.contentSyncStrategy.first()
+                val syncConfig = settingsRepository.contentSyncConfig.first()
+                val lists = remoteDataSource.fetchLists(server)
+                val effectiveSyncLists = syncConfig.getEffectiveSyncLists(lists)
+
+                // Determine if content should be fetched
+                val shouldFetchContent = when (syncStrategy) {
+                    com.karakept.app.data.model.SyncStrategy.NEVER -> false
+                    com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> false
+                    com.karakept.app.data.model.SyncStrategy.PER_LIST -> effectiveSyncLists.contains(listId)
+                    com.karakept.app.data.model.SyncStrategy.ALL -> true
+                }
+
+                // Convert DTOs to entities
+                val entities = listBookmarks.mapNotNull { dto ->
+                    try {
+                        val url = when (dto.content.type) {
+                            "link" -> dto.content.url ?: ""
+                            "text" -> ""
+                            else -> dto.content.url ?: ""
+                        }
+
+                        val createdAtMillis = try {
+                            Instant.parse(dto.createdAt).toEpochMilliseconds()
+                        } catch (e: Exception) {
+                            System.currentTimeMillis()
+                        }
+
+                        val title = dto.title ?: dto.content.title ?: "Untitled"
+
+                        val content = if (shouldFetchContent) {
+                            dto.content.htmlContent ?: dto.content.text
+                        } else {
+                            null
+                        }
+
+                        val readingTimeMinutes = if (content != null) {
+                            ReadingTimeCalculator.calculateReadingTime(content)
+                        } else {
+                            0
+                        }
+
+                        val tagsString = dto.tags.joinToString(",") { it.name }
+                        val isRead = dto.tags.any { it.name == "karakept:read" }
+
+                        BookmarkEntity(
+                            localId = 0, // Will be set on insert/update
+                            remoteId = dto.id.hashCode().toLong(),
+                            originalRemoteId = dto.id,
+                            serverId = server.id,
+                            url = url,
+                            title = title,
+                            content = content,
+                            imageUrl = dto.content.imageUrl,
+                            description = dto.content.description,
+                            createdAt = createdAtMillis,
+                            isArchived = dto.archived,
+                            isStarred = dto.favourited,
+                            isRead = isRead,
+                            tags = tagsString,
+                            listIds = listId, // This bookmark is in the current list
+                            readingTimeMinutes = readingTimeMinutes
+                        )
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        null
+                    }
+                }
+
+                // Upsert: Update existing, insert new
+                val existingBookmarksMap = bookmarkDao.getBookmarksForServer(server.id).first()
+                    .associateBy { it.originalRemoteId }
+
+                entities.forEach { entity ->
+                    val existing = existingBookmarksMap[entity.originalRemoteId]
+                    if (existing != null) {
+                        // Update existing bookmark
+                        bookmarkDao.updateBookmarks(listOf(entity.copy(localId = existing.localId)))
+                    } else {
+                        // Insert new bookmark
+                        bookmarkDao.insertBookmarks(listOf(entity))
+                    }
+                }
+
+                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
+                throw e
+            }
+        }
+    }
+
     suspend fun fetchBookmarkContent(bookmarkId: Long, serverId: String): String? {
         val server = serverRepository.servers.first().find { it.id == serverId } ?: return null
         

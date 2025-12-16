@@ -53,6 +53,14 @@ class MainScreenModel(
 
     val lists: StateFlow<List<com.karakept.app.data.remote.model.ListDto>> = listRepository.lists
 
+    // Track which lists are expanded (by list ID)
+    private val _expandedLists = MutableStateFlow<Set<String>>(emptySet())
+    val expandedLists: StateFlow<Set<String>> = _expandedLists
+
+    // Track the current active list filter (if any)
+    private val _currentListContext = MutableStateFlow<String?>(null)
+    val currentListContext: StateFlow<String?> = _currentListContext
+
     // All bookmarks without filtering - for tag extraction
     val allBookmarks = selectedServer
         .flatMapLatest { server ->
@@ -196,8 +204,17 @@ class MainScreenModel(
                 try {
                     _isSyncing.value = true
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        bookmarkRepository.syncBookmarks(server)
-                        // Also refresh lists during sync
+                        // Context-aware bookmark sync
+                        val activeListId = _currentListContext.value
+                        if (activeListId != null) {
+                            // Sync only bookmarks from the current list
+                            bookmarkRepository.syncBookmarksForList(server, activeListId)
+                        } else {
+                            // Sync all bookmarks
+                            bookmarkRepository.syncBookmarks(server)
+                        }
+
+                        // Always refresh lists metadata (lightweight)
                         listRepository.refreshLists(server)
                     }
                 } catch (e: Exception) {
@@ -219,10 +236,43 @@ class MainScreenModel(
 
     fun applyFilter(filter: FilterConfig) {
         _currentFilter.value = filter
+        // Track if we're viewing a single list
+        _currentListContext.value = if (filter.lists.size == 1) filter.lists.first() else null
+        // Auto-expand parent chain if filtering by a single list
+        if (filter.lists.size == 1) {
+            expandParentChain(filter.lists.first(), lists.value)
+        }
     }
 
     fun clearFilter() {
         _currentFilter.value = FilterConfig()
+        _currentListContext.value = null
+    }
+
+    fun toggleListExpanded(listId: String) {
+        _expandedLists.value = if (_expandedLists.value.contains(listId)) {
+            _expandedLists.value - listId
+        } else {
+            _expandedLists.value + listId
+        }
+    }
+
+    // Auto-expand parent chain when a list is selected
+    private fun expandParentChain(listId: String, allLists: List<com.karakept.app.data.remote.model.ListDto>) {
+        val toExpand = mutableSetOf<String>()
+        var currentId: String? = listId
+
+        while (currentId != null) {
+            val list = allLists.find { it.id == currentId }
+            if (list?.parentId != null) {
+                toExpand.add(list.parentId)
+                currentId = list.parentId
+            } else {
+                break
+            }
+        }
+
+        _expandedLists.value = _expandedLists.value + toExpand
     }
     
     fun saveFilter(name: String, icon: String = "📋", color: Long? = null, isDefault: Boolean = false) {

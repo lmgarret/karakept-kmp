@@ -246,6 +246,54 @@ private fun FilterManagementContent(
                 )
             }
 
+            // List Homepage Section
+            item {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = "List as Homepage",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+                Text(
+                    text = "Set a specific list to open by default",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            items(availableLists) { list ->
+                val isDefault = allSavedFilters.any {
+                    it.isDefault && it.isQuickFilter && try {
+                        val config = Json.decodeFromString<FilterConfig>(it.configJson)
+                        config.lists == listOf(list.id)
+                    } catch (e: Exception) { false }
+                }
+
+                ListAsHomepageItem(
+                    list = list,
+                    isDefault = isDefault,
+                    onSetDefault = {
+                        val config = FilterConfig(lists = listOf(list.id))
+                        onSaveNewFilter("Homepage: ${list.name}", list.icon, null, config, true, true)
+                    },
+                    onUnsetDefault = {
+                        val existing = allSavedFilters.find {
+                            it.isDefault && it.isQuickFilter && try {
+                                val config = Json.decodeFromString<FilterConfig>(it.configJson)
+                                config.lists == listOf(list.id)
+                            } catch (e: Exception) { false }
+                        }
+                        if (existing != null) {
+                            onUnsetDefault(existing)
+                        }
+                    }
+                )
+            }
+
             // Shortcuts Section Header
             item {
                 Spacer(Modifier.height(16.dp))
@@ -667,6 +715,76 @@ private fun FilterListItem(
                             showMenu = false
                         }
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ListAsHomepageItem(
+    list: com.karakept.app.data.remote.model.ListDto,
+    isDefault: Boolean,
+    onSetDefault: () -> Unit,
+    onUnsetDefault: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.padding(4.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = list.icon,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Column {
+                    Text(list.name, style = MaterialTheme.typography.bodyMedium)
+                    if (isDefault) {
+                        Text(
+                            text = "Current Homepage",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Options")
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    if (isDefault) {
+                        DropdownMenuItem(
+                            text = { Text("Unset as homepage") },
+                            onClick = {
+                                onUnsetDefault()
+                                showMenu = false
+                            }
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text("Set as homepage") },
+                            onClick = {
+                                onSetDefault()
+                                showMenu = false
+                            }
+                        )
+                    }
                 }
             }
         }
