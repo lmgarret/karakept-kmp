@@ -107,6 +107,12 @@ class SettingsScreenModel(
         initialValue = true
     )
 
+    val showTags: StateFlow<Boolean> = settingsRepository.showTags.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
     val readingSpeedWpm: StateFlow<Int> = settingsRepository.readingSpeedWpm.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -194,6 +200,12 @@ class SettingsScreenModel(
     fun setShowReadingTimeBadge(show: Boolean) {
         screenModelScope.launch {
             settingsRepository.setShowReadingTimeBadge(show)
+        }
+    }
+
+    fun setShowTags(show: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setShowTags(show)
         }
     }
 

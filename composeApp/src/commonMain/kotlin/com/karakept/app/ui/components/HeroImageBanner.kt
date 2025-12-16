@@ -62,8 +62,10 @@ fun HeroImageBanner(
     imageUrl: String?,
     title: String,
     url: String? = null,
+    tags: String = "",
     readingTimeMinutes: Int = 0,
     scrollProgress: Float = 0f,
+    showTags: Boolean = true,
     onUrlClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -118,6 +120,7 @@ fun HeroImageBanner(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
+                .fillMaxWidth()
                 .padding(16.dp)
                 .graphicsLayer {
                     // Scale from 1.0 to 0.85 as user scrolls
@@ -133,11 +136,21 @@ fun HeroImageBanner(
                 color = Color.White, // Always white on image/scrim
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            
+
+            // Tags display - above domain info
+            if (showTags && tags.isNotBlank()) {
+                BookmarkTagsDisplay(
+                    tags = tags,
+                    style = TagsDisplayStyle.READER,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
             if (url != null) {
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -170,7 +183,7 @@ fun HeroImageBanner(
                         )
                     }
 
-                    // Reading time badge
+                    // Reading time badge - right side aligned with domain
                     if (readingTimeMinutes > 0) {
                         ReadingTimeBadge(
                             readingTimeMinutes = readingTimeMinutes

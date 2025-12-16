@@ -111,6 +111,7 @@ class MainScreen : Screen {
         val currentFilter by screenModel.currentFilter.collectAsState()
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
         val showReadingTimeBadge by settingsScreenModel.showReadingTimeBadge.collectAsState()
+        val showTags by settingsScreenModel.showTags.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
@@ -484,6 +485,7 @@ class MainScreen : Screen {
                                         onClick = onClick,
                                         onLongClick = { selectedBookmarkForActions = bookmark },
                                         showReadingTime = showReadingTimeBadge,
+                                        showTags = showTags,
                                         dimRead = dimReadBookmarks
                                     )
                                     LayoutType.LIST -> BookmarkListLayout(
@@ -491,6 +493,7 @@ class MainScreen : Screen {
                                         onClick = onClick,
                                         onLongClick = { selectedBookmarkForActions = bookmark },
                                         showReadingTime = showReadingTimeBadge,
+                                        showTags = showTags,
                                         dimRead = dimReadBookmarks
                                     )
                                 }

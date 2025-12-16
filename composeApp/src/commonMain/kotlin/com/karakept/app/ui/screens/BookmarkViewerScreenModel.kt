@@ -56,6 +56,9 @@ class BookmarkViewerScreenModel(
     val autoMarkReadOnScroll: StateFlow<Boolean> = settingsRepository.autoMarkReadOnScroll
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val showTags: StateFlow<Boolean> = settingsRepository.showTags
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     private val _precrawledAssetPath = MutableStateFlow<String?>(null)
     val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()
 

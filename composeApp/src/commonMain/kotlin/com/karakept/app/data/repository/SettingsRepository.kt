@@ -34,6 +34,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val HTML_FONT_FAMILY_KEY = stringPreferencesKey("html_font_family") // Enum name
     private val OFFLINE_MODE_KEY = booleanPreferencesKey("offline_mode")
     private val SHOW_READING_TIME_BADGE_KEY = booleanPreferencesKey("show_reading_time_badge")
+    private val SHOW_TAGS_KEY = booleanPreferencesKey("show_tags")
     private val READING_SPEED_WPM_KEY = intPreferencesKey("reading_speed_wpm")
     private val SWIPE_LEFT_ACTION_KEY = stringPreferencesKey("swipe_left_action")
     private val SWIPE_RIGHT_ACTION_KEY = stringPreferencesKey("swipe_right_action")
@@ -93,6 +94,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     val showReadingTimeBadge: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[SHOW_READING_TIME_BADGE_KEY] ?: true // Default: show badge
+    }
+
+    val showTags: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[SHOW_TAGS_KEY] ?: true // Default: show tags
     }
 
     val readingSpeedWpm: Flow<Int> = dataStore.data.map { preferences ->
@@ -195,6 +200,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setShowReadingTimeBadge(show: Boolean) {
         dataStore.edit { preferences ->
             preferences[SHOW_READING_TIME_BADGE_KEY] = show
+        }
+    }
+
+    suspend fun setShowTags(show: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[SHOW_TAGS_KEY] = show
         }
     }
 

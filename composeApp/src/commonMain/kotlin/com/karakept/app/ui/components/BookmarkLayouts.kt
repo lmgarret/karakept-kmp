@@ -39,6 +39,7 @@ fun BookmarkCardLayout(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     showReadingTime: Boolean = true,
+    showTags: Boolean = true,
     dimRead: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -117,6 +118,7 @@ fun BookmarkListLayout(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     showReadingTime: Boolean = true,
+    showTags: Boolean = true,
     dimRead: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -130,79 +132,82 @@ fun BookmarkListLayout(
             )
     ) {
         Box(modifier = Modifier.alpha(alpha)) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(16.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    if (bookmark.imageUrl != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                    ) {
+                        if (bookmark.imageUrl != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalPlatformContext.current)
+                                    .data(bookmark.imageUrl)
+                                    .size(300) // Request a smaller size for the list item
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentScale = ContentScale.Crop,
+                                filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "📰",
+                                    style = MaterialTheme.typography.headlineMedium
+                                )
+                            }
+                        }
+
+                        // Favicon overlay
                         AsyncImage(
-                            model = ImageRequest.Builder(LocalPlatformContext.current)
-                                .data(bookmark.imageUrl)
-                                .size(300) // Request a smaller size for the list item
-                                .crossfade(true)
-                                .build(),
+                            model = com.karakept.app.utils.FaviconUtils.getFaviconUrl(bookmark.url),
                             contentDescription = null,
                             modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentScale = ContentScale.Crop,
-                            filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
+                                .align(Alignment.BottomEnd)
+                                .padding(4.dp)
+                                .size(16.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.surface),
+                            contentScale = ContentScale.Fit
                         )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = bookmark.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (bookmark.description != null) {
                             Text(
-                                text = "📰",
-                                style = MaterialTheme.typography.headlineMedium
+                                text = bookmark.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 4.dp)
                             )
                         }
-                    }
-
-                    // Favicon overlay
-                    AsyncImage(
-                        model = com.karakept.app.utils.FaviconUtils.getFaviconUrl(bookmark.url),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                            .size(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.surface),
-                        contentScale = ContentScale.Fit
-                    )
-                }
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxSize(),
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = bookmark.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (bookmark.description != null) {
-                        Text(
-                            text = bookmark.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
                     }
                 }
             }

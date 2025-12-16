@@ -122,6 +122,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         val precrawledAssetPath by screenModel.precrawledAssetPath.collectAsState()
         val lists by screenModel.lists.collectAsState()
         val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
+        val showTags by screenModel.showTags.collectAsState()
 
         var showModeDialog by remember { mutableStateOf(false) }
         var showAppearancePanel by remember { mutableStateOf(false) }
@@ -359,8 +360,10 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                     imageUrl = imageUrl,
                                     title = title,
                                     url = url,
+                                    tags = state.bookmark.tags,
                                     readingTimeMinutes = readingTimeMinutes,
                                     scrollProgress = (scrollState.firstVisibleItemScrollOffset / 300f).coerceIn(0f, 1f),
+                                    showTags = showTags,
                                     onUrlClick = if (url.isNotEmpty()) {
                                         {
                                             try {

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ImageNotSupported
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Card
@@ -150,6 +151,7 @@ class BookmarkViewSettingsScreen : Screen {
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { screenModel.setHideArticleThumbnails(!hideArticleThumbnails) }
+                        .padding(bottom = 12.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -182,6 +184,45 @@ class BookmarkViewSettingsScreen : Screen {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                }
+
+                val showTags by screenModel.showTags.collectAsState()
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Label,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                        ) {
+                            Text(
+                                text = "Show Tags",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Display bookmark tags in reader mode",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = showTags,
+                            onCheckedChange = { screenModel.setShowTags(it) }
+                        )
                     }
                 }
 
