@@ -11,10 +11,13 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.data.model.ViewerMode
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.karakept.app.data.model.SwipeAction
 
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val LAYOUT_TYPE_KEY = stringPreferencesKey("layout_type")
@@ -32,6 +35,9 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val READING_SPEED_WPM_KEY = intPreferencesKey("reading_speed_wpm")
     private val SWIPE_LEFT_ACTION_KEY = stringPreferencesKey("swipe_left_action")
     private val SWIPE_RIGHT_ACTION_KEY = stringPreferencesKey("swipe_right_action")
+    
+    private val CONTENT_SYNC_STRATEGY_KEY = stringPreferencesKey("content_sync_strategy")
+    private val CONTENT_SYNC_TARGET_LISTS_KEY = stringSetPreferencesKey("content_sync_target_lists")
 
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
         val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.CARD.name
@@ -206,6 +212,31 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setSwipeRightAction(action: com.karakept.app.data.model.SwipeAction) {
         dataStore.edit { preferences ->
             preferences[SWIPE_RIGHT_ACTION_KEY] = action.name
+        }
+    }
+
+    val contentSyncStrategy: Flow<SyncStrategy> = dataStore.data.map { preferences ->
+        val strategyString = preferences[CONTENT_SYNC_STRATEGY_KEY] ?: SyncStrategy.PER_BOOKMARK.name
+        try {
+            SyncStrategy.valueOf(strategyString)
+        } catch (e: Exception) {
+            SyncStrategy.PER_BOOKMARK
+        }
+    }
+
+    val contentSyncTargetLists: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[CONTENT_SYNC_TARGET_LISTS_KEY] ?: emptySet()
+    }
+
+    suspend fun setContentSyncStrategy(strategy: SyncStrategy) {
+        dataStore.edit { preferences ->
+            preferences[CONTENT_SYNC_STRATEGY_KEY] = strategy.name
+        }
+    }
+
+    suspend fun setContentSyncTargetLists(listIds: Set<String>) {
+        dataStore.edit { preferences ->
+            preferences[CONTENT_SYNC_TARGET_LISTS_KEY] = listIds
         }
     }
 

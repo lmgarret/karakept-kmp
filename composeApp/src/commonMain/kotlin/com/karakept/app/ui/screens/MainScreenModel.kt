@@ -111,7 +111,7 @@ class MainScreenModel(
         screenModelScope.launch {
             selectedServer.collect { server ->
                 if (server != null) {
-                    val isOffline = settingsRepository.offlineMode.first()
+                    val isOffline: Boolean = settingsRepository.offlineMode.first()
                     if (!isOffline && !_isSyncing.value) {
                         syncBookmarks()
                     }
@@ -187,7 +187,7 @@ class MainScreenModel(
     fun syncBookmarks() {
         screenModelScope.launch {
             // Guard: Don't sync if offline mode is enabled
-            val isOffline = settingsRepository.offlineMode.first()
+            val isOffline: Boolean = settingsRepository.offlineMode.first()
             if (isOffline) {
                 return@launch
             }

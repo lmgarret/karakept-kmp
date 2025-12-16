@@ -37,4 +37,7 @@ interface BookmarkDao {
     
     @Query("DELETE FROM bookmarks WHERE serverId = :serverId")
     suspend fun deleteAllBookmarksForServer(serverId: String)
+
+    @Query("UPDATE bookmarks SET content = :content, readingTimeMinutes = :readingTime WHERE localId = :localId")
+    suspend fun updateContent(localId: Long, content: String, readingTime: Int)
 }

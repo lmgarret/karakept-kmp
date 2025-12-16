@@ -52,7 +52,7 @@ class ServerSettingsScreen : Screen {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Servers") },
+                    title = { Text("Servers & Sync") },
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -70,7 +70,7 @@ class ServerSettingsScreen : Screen {
                 verticalArrangement = Arrangement.Top
             ) {
                 Text(
-                    text = "Manage Servers",
+                    text = "Servers & Sync",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
@@ -104,6 +104,102 @@ class ServerSettingsScreen : Screen {
                     }
                 }
                 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Content Sync Strategy
+                val syncStrategy by screenModel.contentSyncStrategy.collectAsState()
+                val strategies = com.karakept.app.data.model.SyncStrategy.values()
+                
+                Text(
+                    text = "Sync Strategy",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        strategies.forEach { strategy ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { screenModel.setContentSyncStrategy(strategy) }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = syncStrategy == strategy,
+                                    onClick = { screenModel.setContentSyncStrategy(strategy) }
+                                )
+                                Column(modifier = Modifier.padding(start = 12.dp)) {
+                                    Text(
+                                        text = when(strategy) {
+                                            com.karakept.app.data.model.SyncStrategy.NEVER -> "Never (Online Only)"
+                                            com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> "Per Bookmark (When Viewed)"
+                                            com.karakept.app.data.model.SyncStrategy.PER_LIST -> "Per List (Specific Lists)"
+                                            com.karakept.app.data.model.SyncStrategy.ALL -> "All Bookmarks (Offline Access)"
+                                        },
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(
+                                        text = when(strategy) {
+                                            com.karakept.app.data.model.SyncStrategy.NEVER -> "Content is fetched only when you open a bookmark. Nothing is stored locally."
+                                            com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> "Content is fetched and stored locally when you open a bookmark."
+                                            com.karakept.app.data.model.SyncStrategy.PER_LIST -> "Content for selected lists is automatically synced and stored."
+                                            com.karakept.app.data.model.SyncStrategy.ALL -> "Content for ALL bookmarks is verified and stored locally."
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Show List Picker if PER_LIST is selected
+                if (syncStrategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        screenModel.fetchAvailableLists()
+                    }
+                    
+                    val availableLists by screenModel.availableLists.collectAsState()
+                    val targetLists by screenModel.contentSyncTargetLists.collectAsState()
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Select Lists to Sync",
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            if (availableLists.isEmpty()) {
+                                Text("No lists found or failed to load.", style = MaterialTheme.typography.bodySmall)
+                            } else {
+                                availableLists.forEach { list ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { screenModel.toggleContentSyncTargetList(list.id) }
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        androidx.compose.material3.Checkbox(
+                                            checked = targetLists.contains(list.id),
+                                            onCheckedChange = { screenModel.toggleContentSyncTargetList(list.id) }
+                                        )
+                                        Text(
+                                            text = list.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            modifier = Modifier.padding(start = 8.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(

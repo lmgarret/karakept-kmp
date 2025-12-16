@@ -50,7 +50,7 @@ val appModule = module {
     
     // BookmarkRepository depends on BookmarkActionsRepository
     single { 
-        BookmarkRepository(get(), get(), get(), get()).also {
+        BookmarkRepository(get(), get(), get(), get(), get(), get()).also {
             // Wire up circular dependency: BookmarkActionsRepository needs BookmarkRepository
             get<BookmarkActionsRepository>().setBookmarkRepository(it)
         }
@@ -58,8 +58,8 @@ val appModule = module {
 
     factory { LoginScreenModel(get(), get()) }
     factory { MainScreenModel(get(), get(), get(), get(), get(), get()) }
-    factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get()) }
-    factory { SettingsScreenModel(get(), get()) }
+    factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get()) }
+    factory { SettingsScreenModel(get(), get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }
     factory { FilterManagementScreenModel(get(), get(), get(), get()) }
 }

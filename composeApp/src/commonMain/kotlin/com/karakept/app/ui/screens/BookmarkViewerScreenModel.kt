@@ -29,7 +29,8 @@ class BookmarkViewerScreenModel(
     private val settingsRepository: SettingsRepository,
     private val bookmarkActionsRepository: BookmarkActionsRepository,
     private val remoteDataSource: RemoteDataSource,
-    private val serverRepository: ServerRepository
+    private val serverRepository: ServerRepository,
+    private val bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository
 ) : ScreenModel {
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
     val loadingState: StateFlow<BookmarkLoadingState> = _loadingState.asStateFlow()
@@ -69,7 +70,50 @@ class BookmarkViewerScreenModel(
                 bookmarkDao.observeBookmarkById(id).collect { bookmark ->
                     if (bookmark != null) {
                         hasLoadedOnce = true
-                        _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
+                        
+                        // Check for content availability
+                        if (bookmark.content.isNullOrBlank()) {
+                            // Show existing with loading indicator if possible, or just the bookmark metadata
+                            _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
+                            
+                            // Trigger on-demand fetch
+                            try {
+                                val strategy = settingsRepository.contentSyncStrategy.first()
+                                if (strategy == com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK || 
+                                    strategy == com.karakept.app.data.model.SyncStrategy.NEVER ||
+                                    strategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
+                                    
+                                    val content = bookmarkRepository.fetchBookmarkContent(bookmark.remoteId, bookmark.serverId)
+                                    if (!content.isNullOrBlank()) {
+                                        var shouldPersist = false
+                                        
+                                        if (strategy == com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK) {
+                                            shouldPersist = true
+                                        } else if (strategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
+                                            // Check if in target list
+                                            val targetLists = settingsRepository.contentSyncTargetLists.first()
+                                            val bookmarkListIds = bookmark.listIds.split(",").filter { it.isNotBlank() }
+                                            shouldPersist = bookmarkListIds.any { targetLists.contains(it) }
+                                        }
+                                        
+                                        if (shouldPersist) {
+                                            // Persist it
+                                            val readingTime = com.karakept.app.utils.ReadingTimeCalculator.calculateReadingTime(content)
+                                            bookmarkDao.updateContent(bookmark.localId, content, readingTime)
+                                            // The flow will emit the updated bookmark automatically
+                                        } else {
+                                            // Transient (NEVER or PER_LIST outside target list)
+                                            val transientBookmark = bookmark.copy(content = content)
+                                            _loadingState.value = BookmarkLoadingState.FullyLoaded(transientBookmark)
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        } else {
+                            _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
+                        }
 
                         // Load precrawled asset if exists
                         val assets = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
@@ -159,11 +203,16 @@ class BookmarkViewerScreenModel(
 
     fun toggleBookmarkRead(bookmark: BookmarkEntity) {
         screenModelScope.launch {
-            if (bookmark.isRead) {
-                val tags = bookmark.tags.split(",").filter { it.isNotBlank() }
-                bookmarkActionsRepository.markAsUnread(bookmark.remoteId, bookmark.serverId, tags)
-            } else {
-                bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
+            try {
+                if (bookmark.isRead) {
+                    val tags = bookmark.tags.split(",").filter { it.isNotBlank() }
+                    bookmarkActionsRepository.markAsUnread(bookmark.remoteId, bookmark.serverId, tags)
+                } else {
+                    bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Ideally show an error, but at least don't crash
             }
         }
     }

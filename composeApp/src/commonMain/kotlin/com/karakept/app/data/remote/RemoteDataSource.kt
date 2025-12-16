@@ -20,11 +20,19 @@ import io.ktor.http.isSuccess
 
 class RemoteDataSource(private val client: HttpClient) {
     
-    suspend fun fetchBookmarks(server: Server): List<BookmarkDto> {
+    suspend fun fetchBookmarks(
+        server: Server, 
+        cursor: String? = null, 
+        limit: Int = 50,
+        includeContent: Boolean = false
+    ): PaginatedBookmarksResponse {
         return try {
             val response: HttpResponse = client.get(server.url) {
                 url {
                     appendPathSegments("api", "v1", "bookmarks")
+                    if (cursor != null) parameters.append("cursor", cursor)
+                    parameters.append("limit", limit.toString())
+                    parameters.append("include_content", includeContent.toString())
                 }
                 header("Authorization", "Bearer ${server.apiKey}")
             }
@@ -33,8 +41,7 @@ class RemoteDataSource(private val client: HttpClient) {
                 throw ApiException("Failed to fetch bookmarks: ${response.status}")
             }
 
-            val paginatedResponse: PaginatedBookmarksResponse = response.body()
-            paginatedResponse.bookmarks
+            response.body()
         } catch (e: Exception) {
             throw ApiException("Error fetching bookmarks: ${e.message}", e)
         }
@@ -72,8 +79,19 @@ class RemoteDataSource(private val client: HttpClient) {
                 throw ApiException("Failed to fetch lists: ${response.status}")
             }
             
-            val listsResponse: ListsResponse = response.body()
-            listsResponse.lists
+            // Try to parse as ListsResponse first (standard)
+            try {
+                val listsResponse: ListsResponse = response.body()
+                listsResponse.lists
+            } catch (e: Exception) {
+                // Fallback: Try to parse as direct List<ListDto>
+                try {
+                    val directList: List<ListDto> = response.body()
+                    directList
+                } catch (e2: Exception) {
+                    throw e // Throw original error if both fail
+                }
+            }
         } catch (e: Exception) {
             throw ApiException("Error fetching lists: ${e.message}", e)
         }
@@ -93,7 +111,7 @@ class RemoteDataSource(private val client: HttpClient) {
             }
             
             val paginatedResponse: PaginatedBookmarksResponse = response.body()
-            paginatedResponse.bookmarks
+             paginatedResponse.bookmarks
         } catch (e: Exception) {
             // If a list fetch fails, we return empty list to not break the whole sync
             emptyList()

@@ -16,9 +16,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+
 class SettingsScreenModel(
     private val settingsRepository: SettingsRepository,
-    private val serverRepository: ServerRepository
+    private val serverRepository: ServerRepository,
+    private val remoteDataSource: com.karakept.app.data.remote.RemoteDataSource
 ) : ScreenModel {
     val layoutType: StateFlow<LayoutType> = settingsRepository.layoutType.stateIn(
         scope = screenModelScope,
@@ -228,6 +232,72 @@ class SettingsScreenModel(
     fun setAutoMarkReadOnScroll(autoMark: Boolean) {
         screenModelScope.launch {
             settingsRepository.setAutoMarkReadOnScroll(autoMark)
+        }
+    }
+
+    val contentSyncStrategy: StateFlow<com.karakept.app.data.model.SyncStrategy> = settingsRepository.contentSyncStrategy.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK
+    )
+
+    fun setContentSyncStrategy(strategy: com.karakept.app.data.model.SyncStrategy) {
+        screenModelScope.launch {
+            settingsRepository.setContentSyncStrategy(strategy)
+        }
+    }
+
+    val contentSyncTargetLists: StateFlow<Set<String>> = settingsRepository.contentSyncTargetLists.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptySet()
+    )
+
+    private val _availableLists = kotlinx.coroutines.flow.MutableStateFlow<List<com.karakept.app.data.remote.model.ListDto>>(emptyList())
+    val availableLists: StateFlow<List<com.karakept.app.data.remote.model.ListDto>> = _availableLists.asStateFlow()
+
+    fun fetchAvailableLists() {
+        screenModelScope.launch {
+            var serverId = activeServerId.value
+            val servers = serverRepository.servers.first()
+            
+            println("Debugging: Initial activeServerId = $serverId")
+
+            if (serverId == null && servers.isNotEmpty()) {
+                serverId = servers.first().id
+                println("Debugging: Auto-selecting server $serverId")
+                settingsRepository.setActiveServerId(serverId)
+            }
+            
+            if (serverId != null) {
+                val server = servers.find { it.id == serverId }
+                println("Debugging: Found server object? ${server != null}")
+                if (server != null) {
+                    try {
+                        println("Debugging: Fetching lists from ${server.url}")
+                        val lists = remoteDataSource.fetchLists(server)
+                        println("Debugging: Fetched ${lists.size} lists")
+                        _availableLists.value = lists
+                    } catch (e: Exception) {
+                        println("Debugging: Failed to fetch lists: ${e.message}")
+                        e.printStackTrace()
+                    }
+                }
+            } else {
+                 println("Debugging: No server found to fetch lists from")
+            }
+        }
+    }
+    
+    fun toggleContentSyncTargetList(listId: String) {
+        screenModelScope.launch {
+            val current = contentSyncTargetLists.value.toMutableSet()
+            if (current.contains(listId)) {
+                current.remove(listId)
+            } else {
+                current.add(listId)
+            }
+            settingsRepository.setContentSyncTargetLists(current)
         }
     }
 }
