@@ -13,9 +13,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,9 +31,15 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -41,6 +52,56 @@ import com.karakept.app.ui.screens.LoginScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
 
 class ServerSettingsScreen : Screen {
+    @Composable
+    fun SyncStrategyOption(
+        strategy: com.karakept.app.data.model.SyncStrategy,
+        isSelected: Boolean,
+        onClick: () -> Unit
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = isSelected,
+                    onClick = onClick
+                )
+
+                Spacer(modifier = Modifier.padding(start = 12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = when(strategy) {
+                            com.karakept.app.data.model.SyncStrategy.NEVER -> "Never (Online Only)"
+                            com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> "Per Bookmark (When Viewed)"
+                            com.karakept.app.data.model.SyncStrategy.PER_LIST -> "Per List (Specific Lists)"
+                            com.karakept.app.data.model.SyncStrategy.ALL -> "All Bookmarks"
+                        },
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = when(strategy) {
+                            com.karakept.app.data.model.SyncStrategy.NEVER -> "Content is fetched only when you open a bookmark. Nothing is stored locally."
+                            com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> "Content is fetched and stored locally when you open a bookmark."
+                            com.karakept.app.data.model.SyncStrategy.PER_LIST -> "Content for selected lists is automatically synced and stored."
+                            com.karakept.app.data.model.SyncStrategy.ALL -> "Content for all bookmarks is stored locally. WARNING: this may cause slower sync times and increased storage usage."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
@@ -86,6 +147,12 @@ class ServerSettingsScreen : Screen {
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudOff, // Assuming CloudOff exists or similar
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Offline Mode",
@@ -106,101 +173,61 @@ class ServerSettingsScreen : Screen {
                 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Content Sync Strategy
+                // Content Sync Mode (RadioButton Group)
                 val syncStrategy by screenModel.contentSyncStrategy.collectAsState()
                 val strategies = com.karakept.app.data.model.SyncStrategy.values()
-                
+
                 Text(
-                    text = "Sync Strategy",
+                    text = "Content sync mode",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        strategies.forEach { strategy ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { screenModel.setContentSyncStrategy(strategy) }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = syncStrategy == strategy,
-                                    onClick = { screenModel.setContentSyncStrategy(strategy) }
-                                )
-                                Column(modifier = Modifier.padding(start = 12.dp)) {
-                                    Text(
-                                        text = when(strategy) {
-                                            com.karakept.app.data.model.SyncStrategy.NEVER -> "Never (Online Only)"
-                                            com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> "Per Bookmark (When Viewed)"
-                                            com.karakept.app.data.model.SyncStrategy.PER_LIST -> "Per List (Specific Lists)"
-                                            com.karakept.app.data.model.SyncStrategy.ALL -> "All Bookmarks (Offline Access)"
-                                        },
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                    Text(
-                                        text = when(strategy) {
-                                            com.karakept.app.data.model.SyncStrategy.NEVER -> "Content is fetched only when you open a bookmark. Nothing is stored locally."
-                                            com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> "Content is fetched and stored locally when you open a bookmark."
-                                            com.karakept.app.data.model.SyncStrategy.PER_LIST -> "Content for selected lists is automatically synced and stored."
-                                            com.karakept.app.data.model.SyncStrategy.ALL -> "Content for ALL bookmarks is verified and stored locally."
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    strategies.forEach { strategy ->
+                        SyncStrategyOption(
+                            strategy = strategy,
+                            isSelected = strategy == syncStrategy,
+                            onClick = { screenModel.setContentSyncStrategy(strategy) }
+                        )
                     }
                 }
-
-                // Show List Picker if PER_LIST is selected
-                if (syncStrategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
-                    androidx.compose.runtime.LaunchedEffect(Unit) {
-                        screenModel.fetchAvailableLists()
-                    }
-                    
-                    val availableLists by screenModel.availableLists.collectAsState()
-                    val targetLists by screenModel.contentSyncTargetLists.collectAsState()
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Select Lists to Sync",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                            if (availableLists.isEmpty()) {
-                                Text("No lists found or failed to load.", style = MaterialTheme.typography.bodySmall)
-                            } else {
-                                availableLists.forEach { list ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { screenModel.toggleContentSyncTargetList(list.id) }
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        androidx.compose.material3.Checkbox(
-                                            checked = targetLists.contains(list.id),
-                                            onCheckedChange = { screenModel.toggleContentSyncTargetList(list.id) }
-                                        )
-                                        Text(
-                                            text = list.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            modifier = Modifier.padding(start = 8.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
+                
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Configure List Sync Button (only shown when PER_LIST mode is selected)
+                if (syncStrategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { navigator.push(com.karakept.app.ui.screens.settings.ListManagementScreen()) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.List,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Configure List Sync",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
                 
                 Text(
                     text = "Connected Servers",

@@ -16,13 +16,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-import kotlinx.coroutines.flow.asStateFlow
+import cafe.adriel.voyager.navigator.Navigator
+import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.data.repository.ListRepository
+import com.karakept.app.data.remote.model.ListDto
 import kotlinx.coroutines.flow.first
 
 class SettingsScreenModel(
     private val settingsRepository: SettingsRepository,
     private val serverRepository: ServerRepository,
-    private val remoteDataSource: com.karakept.app.data.remote.RemoteDataSource
+    private val remoteDataSource: RemoteDataSource,
+    private val listRepository: ListRepository
 ) : ScreenModel {
     val layoutType: StateFlow<LayoutType> = settingsRepository.layoutType.stateIn(
         scope = screenModelScope,
@@ -253,51 +257,40 @@ class SettingsScreenModel(
         initialValue = emptySet()
     )
 
-    private val _availableLists = kotlinx.coroutines.flow.MutableStateFlow<List<com.karakept.app.data.remote.model.ListDto>>(emptyList())
-    val availableLists: StateFlow<List<com.karakept.app.data.remote.model.ListDto>> = _availableLists.asStateFlow()
+    val contentSyncConfig: StateFlow<com.karakept.app.data.model.ListSyncConfig> = settingsRepository.contentSyncConfig.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.karakept.app.data.model.ListSyncConfig(emptySet(), emptySet())
+    )
+
+    // Expose lists from repository
+    val availableLists: StateFlow<List<ListDto>> = listRepository.lists
+
 
     fun fetchAvailableLists() {
         screenModelScope.launch {
-            var serverId = activeServerId.value
-            val servers = serverRepository.servers.first()
-            
-            println("Debugging: Initial activeServerId = $serverId")
-
-            if (serverId == null && servers.isNotEmpty()) {
-                serverId = servers.first().id
-                println("Debugging: Auto-selecting server $serverId")
-                settingsRepository.setActiveServerId(serverId)
-            }
-            
-            if (serverId != null) {
-                val server = servers.find { it.id == serverId }
-                println("Debugging: Found server object? ${server != null}")
-                if (server != null) {
-                    try {
-                        println("Debugging: Fetching lists from ${server.url}")
-                        val lists = remoteDataSource.fetchLists(server)
-                        println("Debugging: Fetched ${lists.size} lists")
-                        _availableLists.value = lists
-                    } catch (e: Exception) {
-                        println("Debugging: Failed to fetch lists: ${e.message}")
-                        e.printStackTrace()
-                    }
-                }
-            } else {
-                 println("Debugging: No server found to fetch lists from")
-            }
+             // Use explicit type to avoid ambiguity
+             val allServers = serverRepository.servers.first()
+             var targetServerId = activeServerId.value
+             
+             if (targetServerId == null && allServers.isNotEmpty()) {
+                 val defaultServer = allServers.first()
+                 targetServerId = defaultServer.id
+                 settingsRepository.setActiveServerId(defaultServer.id)
+             }
+             
+             targetServerId?.let { id ->
+                 val server = allServers.find { it.id == id }
+                 if (server != null) {
+                     listRepository.refreshLists(server)
+                 }
+             }
         }
     }
     
     fun toggleContentSyncTargetList(listId: String) {
         screenModelScope.launch {
-            val current = contentSyncTargetLists.value.toMutableSet()
-            if (current.contains(listId)) {
-                current.remove(listId)
-            } else {
-                current.add(listId)
-            }
-            settingsRepository.setContentSyncTargetLists(current)
+            settingsRepository.toggleContentSyncTargetList(listId)
         }
     }
 }

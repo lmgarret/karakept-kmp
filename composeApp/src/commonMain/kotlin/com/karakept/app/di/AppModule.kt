@@ -13,6 +13,7 @@ import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.SavedFilterRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
@@ -44,8 +45,9 @@ val appModule = module {
     single { ServerRepository(get()) }
     single { SettingsRepository(get()) }
     single { SavedFilterRepository(get()) }
-    
-    // BookmarkActionsRepository created first (doesn't depend on BookmarkRepository in constructor)
+    single { ListRepository(get()) }
+
+    // BookmarkActionsRepository depends on BookmarkDao, PendingActionDao, RemoteDataSource, ServerRepository, SettingsRepository
     single { BookmarkActionsRepository(get(), get(), get(), get(), get()) }
     
     // BookmarkRepository depends on BookmarkActionsRepository
@@ -57,9 +59,10 @@ val appModule = module {
     }
 
     factory { LoginScreenModel(get(), get()) }
-    factory { MainScreenModel(get(), get(), get(), get(), get(), get()) }
+    factory { MainScreenModel(get(), get(), get(), get(), get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get()) }
-    factory { SettingsScreenModel(get(), get(), get()) }
+    factory { SettingsScreenModel(get(), get(), get(), get()) }
+    factory { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }
     factory { FilterManagementScreenModel(get(), get(), get(), get()) }
 }

@@ -9,7 +9,9 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.karakept.app.data.model.AccentColor
+import com.karakept.app.data.model.CheckboxState
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.data.model.ListSyncConfig
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.model.ThemeMode
@@ -38,6 +40,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     
     private val CONTENT_SYNC_STRATEGY_KEY = stringPreferencesKey("content_sync_strategy")
     private val CONTENT_SYNC_TARGET_LISTS_KEY = stringSetPreferencesKey("content_sync_target_lists")
+    private val CONTENT_SYNC_WITH_CHILDREN_KEY = stringSetPreferencesKey("content_sync_with_children")
 
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
         val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.CARD.name
@@ -228,6 +231,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         preferences[CONTENT_SYNC_TARGET_LISTS_KEY] ?: emptySet()
     }
 
+    val contentSyncConfig: Flow<ListSyncConfig> = dataStore.data.map { preferences ->
+        val targetLists = preferences[CONTENT_SYNC_TARGET_LISTS_KEY] ?: emptySet()
+        val withChildren = preferences[CONTENT_SYNC_WITH_CHILDREN_KEY] ?: emptySet()
+        ListSyncConfig(targetLists, withChildren)
+    }
+
     suspend fun setContentSyncStrategy(strategy: SyncStrategy) {
         dataStore.edit { preferences ->
             preferences[CONTENT_SYNC_STRATEGY_KEY] = strategy.name
@@ -237,6 +246,50 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setContentSyncTargetLists(listIds: Set<String>) {
         dataStore.edit { preferences ->
             preferences[CONTENT_SYNC_TARGET_LISTS_KEY] = listIds
+        }
+    }
+
+    suspend fun toggleContentSyncTargetList(listId: String) {
+        dataStore.edit { preferences ->
+            val current = (preferences[CONTENT_SYNC_TARGET_LISTS_KEY] ?: emptySet()).toMutableSet()
+            if (current.contains(listId)) {
+                current.remove(listId)
+            } else {
+                current.add(listId)
+            }
+            preferences[CONTENT_SYNC_TARGET_LISTS_KEY] = current
+        }
+    }
+
+    suspend fun updateListSyncState(listId: String, newState: CheckboxState) {
+        dataStore.edit { preferences ->
+            val currentSelected = (preferences[CONTENT_SYNC_TARGET_LISTS_KEY] ?: emptySet()).toMutableSet()
+            val currentWithChildren = (preferences[CONTENT_SYNC_WITH_CHILDREN_KEY] ?: emptySet()).toMutableSet()
+
+            when (newState) {
+                CheckboxState.UNCHECKED -> {
+                    currentSelected.remove(listId)
+                    currentWithChildren.remove(listId)
+                }
+                CheckboxState.CHECKED_PARENT_ONLY -> {
+                    currentSelected.add(listId)
+                    currentWithChildren.remove(listId)
+                }
+                CheckboxState.CHECKED_WITH_CHILDREN -> {
+                    currentSelected.add(listId)
+                    currentWithChildren.add(listId)
+                }
+            }
+
+            preferences[CONTENT_SYNC_TARGET_LISTS_KEY] = currentSelected
+            preferences[CONTENT_SYNC_WITH_CHILDREN_KEY] = currentWithChildren
+        }
+    }
+
+    suspend fun setContentSyncConfig(config: ListSyncConfig) {
+        dataStore.edit { preferences ->
+            preferences[CONTENT_SYNC_TARGET_LISTS_KEY] = config.selectedLists
+            preferences[CONTENT_SYNC_WITH_CHILDREN_KEY] = config.withChildrenMode
         }
     }
 

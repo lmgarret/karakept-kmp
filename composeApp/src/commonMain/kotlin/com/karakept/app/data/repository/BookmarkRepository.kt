@@ -124,16 +124,17 @@ class BookmarkRepository(
                         // STRICT FIX: If strategy is NEVER or PER_BOOKMARK, IGNORE incoming content during metadata sync.
                         // For PER_LIST, only allow if bookmark is in target list.
                         val incomingContent = dto.content.htmlContent ?: dto.content.text
-                        
-                        // Need target lists for PER_LIST logic
-                        val targetLists = settingsRepository.contentSyncTargetLists.first()
-                        
+
+                        // Need sync config for PER_LIST logic (includes effective lists with children)
+                        val syncConfig = settingsRepository.contentSyncConfig.first()
+                        val effectiveSyncLists = syncConfig.getEffectiveSyncLists(lists)
+
                         val newContent = when (syncStrategy) {
                             com.karakept.app.data.model.SyncStrategy.NEVER,
                             com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> null
                             com.karakept.app.data.model.SyncStrategy.PER_LIST -> {
                                 val bookmarkListIds = bookmarkListMap[dto.id] ?: emptyList()
-                                val isInTargetList = bookmarkListIds.any { targetLists.contains(it) }
+                                val isInTargetList = bookmarkListIds.any { effectiveSyncLists.contains(it) }
                                 if (isInTargetList) incomingContent else null
                             }
                             com.karakept.app.data.model.SyncStrategy.ALL -> incomingContent

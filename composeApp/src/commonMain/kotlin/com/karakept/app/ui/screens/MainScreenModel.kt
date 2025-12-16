@@ -29,7 +29,8 @@ class MainScreenModel(
     private val remoteDataSource: RemoteDataSource,
     private val savedFilterRepository: SavedFilterRepository,
     private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository,
-    private val settingsRepository: com.karakept.app.data.repository.SettingsRepository
+    private val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
+    private val listRepository: com.karakept.app.data.repository.ListRepository
 ) : ScreenModel {
 
     // For simplicity, we just pick the first server for now, or allow switching.
@@ -50,8 +51,7 @@ class MainScreenModel(
     val savedFilters = savedFilterRepository.visibleFilters
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _lists = MutableStateFlow<List<com.karakept.app.data.remote.model.ListDto>>(emptyList())
-    val lists: StateFlow<List<com.karakept.app.data.remote.model.ListDto>> = _lists
+    val lists: StateFlow<List<com.karakept.app.data.remote.model.ListDto>> = listRepository.lists
 
     // All bookmarks without filtering - for tag extraction
     val allBookmarks = selectedServer
@@ -197,6 +197,8 @@ class MainScreenModel(
                     _isSyncing.value = true
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         bookmarkRepository.syncBookmarks(server)
+                        // Also refresh lists during sync
+                        listRepository.refreshLists(server)
                     }
                 } catch (e: Exception) {
                     // Handle error
@@ -210,13 +212,7 @@ class MainScreenModel(
     private fun loadLists() {
         screenModelScope.launch {
             selectedServer.value?.let { server ->
-                try {
-                    val fetchedLists = remoteDataSource.fetchLists(server)
-                    _lists.value = fetchedLists
-                } catch (e: Exception) {
-                    // Handle error - keep existing lists or set to empty
-                    e.printStackTrace()
-                }
+                listRepository.refreshLists(server)
             }
         }
     }
