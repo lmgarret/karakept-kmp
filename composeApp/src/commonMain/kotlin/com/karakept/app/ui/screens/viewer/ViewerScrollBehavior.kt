@@ -23,11 +23,13 @@ internal fun rememberFabVisibilityState(
     autoMarkReadOnScroll: Boolean,
     isBookmarkRead: Boolean,
     onMarkAsRead: () -> Unit,
-    onSnackbarMessage: (String) -> Unit
+    onUnmarkAsRead: () -> Unit,
+    onShowSnackbarWithUndo: () -> Unit
 ): Boolean {
     var previousScrollOffset by remember { mutableStateOf(0) }
     var fabVisible by remember { mutableStateOf(true) }
     var hasTriggeredAutoRead by remember { mutableStateOf(false) }
+    var maxScrollReached by remember { mutableStateOf(0) }
 
     LaunchedEffect(scrollState.firstVisibleItemScrollOffset, scrollState.firstVisibleItemIndex) {
         val currentOffset = scrollState.firstVisibleItemIndex * 1000 + scrollState.firstVisibleItemScrollOffset
@@ -40,31 +42,48 @@ internal fun rememberFabVisibilityState(
             fabVisible = true // Always show at top
         }
 
+        // Track the maximum scroll distance reached
+        if (currentOffset > maxScrollReached) {
+            maxScrollReached = currentOffset
+        }
+
         previousScrollOffset = currentOffset
 
         // Check for auto-mark read
+        // Only trigger when user has scrolled significantly AND is at the bottom
         if (!hasTriggeredAutoRead && autoMarkReadOnScroll && !isBookmarkRead) {
             val layoutInfo = scrollState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
             val visibleItemsInfo = layoutInfo.visibleItemsInfo
 
-            if (visibleItemsInfo.isNotEmpty()) {
+            // CRITICAL: Only consider marking as read if user has scrolled at least 1000px
+            // This prevents marking as read immediately when opening short articles
+            // or when content is still loading
+            if (maxScrollReached < 1000) {
+                return@LaunchedEffect
+            }
+
+            if (visibleItemsInfo.isNotEmpty() && totalItems > 0) {
+                // The last item is the content body which contains the HTML
+                // We want to detect when the user has scrolled to near the bottom of this item
                 val lastVisibleItem = visibleItemsInfo.last()
-                // Check if we are near the end (last item is visible AND its bottom edge is near the viewport bottom)
                 val isLastItem = lastVisibleItem.index == totalItems - 1
 
                 if (isLastItem) {
-                    // layoutInfo.viewportEndOffset gives the height of the viewport
-                    // lastVisibleItem.offset is the top position relative to viewport start
-                    // lastVisibleItem.size is the height of the item
-                    // So (offset + size) is the position of the bottom edge relative to viewport start
+                    // Calculate how much of the last item has been scrolled through
+                    // lastVisibleItem.offset is negative when the item is scrolled up past the top of viewport
+                    // lastVisibleItem.size is the total height of the item
                     val itemBottom = lastVisibleItem.offset + lastVisibleItem.size
                     val viewportBottom = layoutInfo.viewportEndOffset
 
-                    // Trigger if the bottom of the content is within the viewport (with a small buffer of 50px)
-                    if (itemBottom <= viewportBottom + 50) {
+                    // Only trigger if:
+                    // 1. User has scrolled at least 1000px (checked above)
+                    // 2. The bottom of the content is visible (itemBottom <= viewportBottom)
+                    // 3. We're within 200px of the absolute bottom
+                    // This ensures the user has actually scrolled through the HTML content
+                    if (itemBottom <= viewportBottom + 200 && itemBottom > 0) {
                         onMarkAsRead()
-                        onSnackbarMessage("Marked as read")
+                        onShowSnackbarWithUndo()
                         hasTriggeredAutoRead = true
                     }
                 }

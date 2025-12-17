@@ -138,8 +138,27 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                 onMarkAsRead = {
                     screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
                 },
-                onSnackbarMessage = { message ->
-                    pendingSnackbarMessage = message
+                onUnmarkAsRead = {
+                    screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
+                },
+                onShowSnackbarWithUndo = {
+                    scope.launch {
+                        // Wait a moment for the database update to propagate
+                        delay(100)
+                        // Get the current state after the mark-as-read has been applied
+                        val currentState = loadingState as? BookmarkLoadingState.FullyLoaded
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Marked as read",
+                            actionLabel = "Undo",
+                            duration = androidx.compose.material3.SnackbarDuration.Short
+                        )
+                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                            // Undo: toggle back to unread
+                            currentState?.let {
+                                screenModel.toggleBookmarkRead(it.bookmark)
+                            }
+                        }
+                    }
                 }
             )
         } else {
