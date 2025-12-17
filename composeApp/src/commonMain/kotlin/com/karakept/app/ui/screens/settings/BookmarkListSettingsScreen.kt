@@ -19,6 +19,9 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Window
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.Card
 import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -113,6 +116,12 @@ class BookmarkListSettingsScreen : Screen {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.VisibilityOff,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Dim Read Bookmarks",
@@ -134,7 +143,7 @@ class BookmarkListSettingsScreen : Screen {
                 LayoutOption(
                     title = "Card Layout",
                     description = "Display articles with large thumbnails on top and title below",
-                    icon = Icons.AutoMirrored.Filled.ViewList,
+                    icon = Icons.Default.Window,
                     isSelected = currentLayoutType == LayoutType.CARD,
                     onClick = { screenModel.setLayoutType(LayoutType.CARD) }
                 )
@@ -199,7 +208,8 @@ class BookmarkListSettingsScreen : Screen {
                         Icon(
                             imageVector = Icons.Default.FilterList,
                             contentDescription = null,
-                            modifier = Modifier.padding(end = 12.dp)
+                            modifier = Modifier.padding(end = 12.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -239,6 +249,12 @@ class BookmarkListSettingsScreen : Screen {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Icon(
+                            imageVector = Icons.Outlined.MenuBook,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Show Reading Time",

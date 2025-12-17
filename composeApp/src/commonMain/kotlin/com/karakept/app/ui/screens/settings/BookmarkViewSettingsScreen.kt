@@ -19,9 +19,9 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Web
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -93,7 +93,7 @@ class BookmarkViewSettingsScreen : Screen {
                 LayoutOption(
                     title = "Web",
                     description = "Web view with original HTML and stylesheets (JavaScript disabled)",
-                    icon = Icons.Default.Web,
+                    icon = Icons.Default.Public,
                     isSelected = currentViewerMode == ViewerMode.WEB,
                     onClick = { screenModel.setViewerMode(ViewerMode.WEB) }
                 )
@@ -108,7 +108,7 @@ class BookmarkViewSettingsScreen : Screen {
                 )
 
                 val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
-                
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -121,7 +121,7 @@ class BookmarkViewSettingsScreen : Screen {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.CheckCircle,
+                            imageVector = Icons.Default.Visibility,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 16.dp),
                             tint = MaterialTheme.colorScheme.primary
@@ -150,7 +150,6 @@ class BookmarkViewSettingsScreen : Screen {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { screenModel.setHideArticleThumbnails(!hideArticleThumbnails) }
                         .padding(bottom = 12.dp)
                 ) {
                     Row(
@@ -165,14 +164,9 @@ class BookmarkViewSettingsScreen : Screen {
                             modifier = Modifier.padding(end = 16.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
-                        Checkbox(
-                            checked = hideArticleThumbnails,
-                            onCheckedChange = { screenModel.setHideArticleThumbnails(it) }
-                        )
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(start = 12.dp)
                         ) {
                             Text(
                                 text = "Hide Article Thumbnails",
@@ -184,6 +178,10 @@ class BookmarkViewSettingsScreen : Screen {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        Switch(
+                            checked = hideArticleThumbnails,
+                            onCheckedChange = { screenModel.setHideArticleThumbnails(it) }
+                        )
                     }
                 }
 

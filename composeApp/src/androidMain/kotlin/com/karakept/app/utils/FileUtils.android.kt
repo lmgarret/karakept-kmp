@@ -28,7 +28,47 @@ actual object FileUtils {
         val filesDir = context.filesDir
         val totalSpace = filesDir.totalSpace
         val freeSpace = filesDir.freeSpace
-        val usedByApp = getFolderSize(filesDir)
+
+        // Calculate total app storage: app size + user data + cache
+        var usedByApp = 0L
+
+        // 1. App size (APK)
+        try {
+            val packageManager = context.packageManager
+            val applicationInfo = packageManager.getApplicationInfo(context.packageName, 0)
+            usedByApp += File(applicationInfo.sourceDir).length()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // 2. User data: Internal files directory
+        usedByApp += getFolderSize(filesDir)
+
+        // 3. User data: Code cache directory (contains optimized code)
+        context.codeCacheDir?.let {
+            usedByApp += getFolderSize(it)
+        }
+
+        // 4. User data: Databases directory
+        val databasePath = context.getDatabasePath("dummy").parentFile
+        databasePath?.let {
+            usedByApp += getFolderSize(it)
+        }
+
+        // 5. Cache: Cache directory
+        context.cacheDir?.let {
+            usedByApp += getFolderSize(it)
+        }
+
+        // 6. Cache: External cache directory (if exists)
+        context.externalCacheDir?.let {
+            usedByApp += getFolderSize(it)
+        }
+
+        // 7. External files directory (if exists)
+        context.getExternalFilesDir(null)?.let {
+            usedByApp += getFolderSize(it)
+        }
 
         return StorageInfo(
             usedBytes = usedByApp,
