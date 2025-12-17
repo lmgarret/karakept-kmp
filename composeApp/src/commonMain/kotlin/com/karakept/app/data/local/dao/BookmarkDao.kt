@@ -11,7 +11,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BookmarkDao {
-    @Query("SELECT * FROM bookmarks WHERE serverId = :serverId ORDER BY createdAt DESC")
+    @Query("""
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+               description, imageUrl, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId
+        ORDER BY createdAt DESC
+    """)
     fun getBookmarksForServer(serverId: String): Flow<List<BookmarkEntity>>
 
     @Query("SELECT * FROM bookmarks WHERE localId = :id")
