@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.karakept.app.domain.action.BookmarkActionController
+import com.karakept.app.domain.action.BookmarkActionEvent
 
 class BookmarkViewerScreenModel(
     private val bookmarkDao: BookmarkDao,
@@ -30,7 +32,8 @@ class BookmarkViewerScreenModel(
     private val bookmarkActionsRepository: BookmarkActionsRepository,
     private val remoteDataSource: RemoteDataSource,
     private val serverRepository: ServerRepository,
-    private val bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository
+    private val bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository,
+    private val bookmarkActionController: BookmarkActionController
 ) : ScreenModel {
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
     val loadingState: StateFlow<BookmarkLoadingState> = _loadingState.asStateFlow()
@@ -186,46 +189,38 @@ class BookmarkViewerScreenModel(
 
     fun toggleBookmarkArchive(bookmark: BookmarkEntity) {
         screenModelScope.launch {
-            if (bookmark.isArchived) {
-                bookmarkActionsRepository.unarchiveBookmark(bookmark.remoteId, bookmark.serverId)
+            val event = if (bookmark.isArchived) {
+                BookmarkActionEvent.Unarchive(bookmark)
             } else {
-                bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
+                BookmarkActionEvent.Archive(bookmark)
             }
+            bookmarkActionController.executeAction(event)
         }
     }
 
     fun toggleBookmarkFavorite(bookmark: BookmarkEntity) {
         screenModelScope.launch {
-            bookmarkActionsRepository.toggleFavourite(
-                bookmark.remoteId,
-                bookmark.serverId,
-                bookmark.isStarred
+            bookmarkActionController.executeAction(
+                BookmarkActionEvent.ToggleFavorite(bookmark)
             )
         }
     }
 
     fun toggleBookmarkRead(bookmark: BookmarkEntity) {
         screenModelScope.launch {
-            try {
-                if (bookmark.isRead) {
-                    val tags = bookmark.tags.split(",").filter { it.isNotBlank() }
-                    bookmarkActionsRepository.markAsUnread(bookmark.remoteId, bookmark.serverId, tags)
-                } else {
-                    bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                // Ideally show an error, but at least don't crash
+            val event = if (bookmark.isRead) {
+                BookmarkActionEvent.MarkUnread(bookmark)
+            } else {
+                BookmarkActionEvent.MarkRead(bookmark)
             }
+            bookmarkActionController.executeAction(event)
         }
     }
 
     fun deleteBookmark(bookmark: BookmarkEntity, onSuccess: () -> Unit) {
         screenModelScope.launch {
-            bookmarkActionsRepository.deleteBookmark(
-                bookmark.localId,
-                bookmark.remoteId,
-                bookmark.serverId
+            bookmarkActionController.executeAction(
+                BookmarkActionEvent.Delete(bookmark)
             )
             onSuccess()
         }

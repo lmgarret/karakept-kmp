@@ -11,7 +11,9 @@ import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.SavedFilterRepository
 import com.karakept.app.data.repository.ServerRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -22,6 +24,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import com.karakept.app.domain.action.BookmarkActionController
+import com.karakept.app.domain.action.BookmarkActionEvent
 
 class MainScreenModel(
     private val serverRepository: ServerRepository,
@@ -30,7 +34,8 @@ class MainScreenModel(
     private val savedFilterRepository: SavedFilterRepository,
     private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository,
     private val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
-    private val listRepository: com.karakept.app.data.repository.ListRepository
+    private val listRepository: com.karakept.app.data.repository.ListRepository,
+    private val bookmarkActionController: BookmarkActionController
 ) : ScreenModel {
 
     // For simplicity, we just pick the first server for now, or allow switching.
@@ -75,9 +80,9 @@ class MainScreenModel(
     // Reload trigger for sync completion - increment to trigger reload without clearing UI
     private val _reloadTrigger = MutableStateFlow(0)
 
-    // Event flow for scroll-to-top after sync (emit unit to trigger)
-    private val _scrollToTopEvent = MutableStateFlow(0)
-    val scrollToTopEvent: StateFlow<Int> = _scrollToTopEvent
+    // Event flow for scroll-to-top trigger
+    private val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
     // Sync progress from repository
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> =
@@ -201,15 +206,46 @@ class MainScreenModel(
                 val server = _selectedServer.value
                 val filter = _currentFilter.value
                 if (server != null) {
-                    // Load new data in background
-                    val newItems = loadBookmarksPage(server, filter, 0)
+                    // Reload all pages that were previously loaded to preserve scroll position
+                    val currentPage = _currentPage.value
+                    val allItems = mutableListOf<BookmarkEntity>()
 
-                    // Reset pagination state
-                    _currentPage.value = 0
-                    _hasMoreItems.value = true
+                    for (page in 0..currentPage) {
+                        val pageItems = loadBookmarksPage(server, filter, page)
+                        allItems.addAll(pageItems)
+                        if (pageItems.size < pageSize) {
+                            // Reached the end
+                            _hasMoreItems.value = false
+                            break
+                        }
+                    }
 
                     // Swap in the new data atomically (no empty state in between)
-                    _accumulatedBookmarks.value = newItems
+                    _accumulatedBookmarks.value = allItems
+                }
+            }
+        }
+
+        // Listen to undo events to restore bookmarks to the accumulated list
+        screenModelScope.launch {
+            bookmarkActionController.undoCompletedEvents.collect { event ->
+                val current = _accumulatedBookmarks.value.toMutableList()
+                val existingIndex = current.indexOfFirst { it.remoteId == event.restoredBookmark.remoteId }
+
+                if (existingIndex >= 0) {
+                    // Bookmark is still in the list (e.g., mark-as-read undo)
+                    // Update it in place with the restored state
+                    current[existingIndex] = event.restoredBookmark
+                    _accumulatedBookmarks.value = current
+                } else {
+                    // Bookmark was removed from the list (e.g., archive/favorite/delete undo)
+                    // Re-add to original position if known, otherwise prepend
+                    if (event.originalPosition >= 0 && event.originalPosition <= current.size) {
+                        current.add(event.originalPosition, event.restoredBookmark)
+                    } else {
+                        current.add(0, event.restoredBookmark)
+                    }
+                    _accumulatedBookmarks.value = current
                 }
             }
         }
@@ -426,17 +462,18 @@ class MainScreenModel(
                     // This increments the reload trigger which loads new data in background
                     // and swaps it in atomically
                     _reloadTrigger.value += 1
-
-                    // Always trigger scroll to top after sync to show new bookmarks
-                    println("syncBookmarks: currentPage=${_currentPage.value}, triggering scroll event")
-                    _scrollToTopEvent.value += 1
-                    println("syncBookmarks: scrollToTopEvent incremented to ${_scrollToTopEvent.value}")
                 } catch (e: Exception) {
                     // Handle error
                 } finally {
                     _isSyncing.value = false
                 }
             }
+        }
+    }
+
+    fun scrollToTop() {
+        screenModelScope.launch {
+            _scrollToTopTrigger.emit(Unit)
         }
     }
 
@@ -528,17 +565,18 @@ class MainScreenModel(
     }
     
     // Bookmark Actions
-    
-    fun toggleBookmarkArchive(bookmark: BookmarkEntity, onActionComplete: (String) -> Unit = {}) {
+
+    fun toggleBookmarkArchive(bookmark: BookmarkEntity) {
         screenModelScope.launch {
-            val isOnline = !_isSyncing.value // Simple check, could be improved
-            if (bookmark.isArchived) {
-                bookmarkActionsRepository.unarchiveBookmark(bookmark.remoteId, bookmark.serverId)
-                onActionComplete("Bookmark unarchived")
+            // Find the current position for undo restoration
+            val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+
+            val event = if (bookmark.isArchived) {
+                BookmarkActionEvent.Unarchive(bookmark)
             } else {
-                bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
-                onActionComplete("Bookmark archived")
+                BookmarkActionEvent.Archive(bookmark)
             }
+            bookmarkActionController.executeAction(event, originalPosition = position)
 
             // Remove from current view immediately for better UX
             // The item will be filtered out on next load anyway
@@ -547,16 +585,16 @@ class MainScreenModel(
             }
         }
     }
-    
-    fun toggleBookmarkFavorite(bookmark: BookmarkEntity, onActionComplete: (String) -> Unit = {}) {
+
+    fun toggleBookmarkFavorite(bookmark: BookmarkEntity) {
         screenModelScope.launch {
-            val isOnline = !_isSyncing.value
-            bookmarkActionsRepository.toggleFavourite(
-                bookmark.remoteId,
-                bookmark.serverId,
-                bookmark.isStarred
+            // Find the current position for undo restoration
+            val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+
+            bookmarkActionController.executeAction(
+                BookmarkActionEvent.ToggleFavorite(bookmark),
+                originalPosition = position
             )
-            onActionComplete(if (bookmark.isStarred) "Removed from favorites" else "Added to favorites")
 
             // Remove from current view if unfavoriting in Favorites view
             // (When adding to favorites in non-Favorites view, it stays in the list)
@@ -567,30 +605,51 @@ class MainScreenModel(
             }
         }
     }
-    
-    fun toggleBookmarkRead(bookmark: BookmarkEntity, onActionComplete: (String) -> Unit = {}) {
+
+    fun toggleBookmarkRead(bookmark: BookmarkEntity) {
         screenModelScope.launch {
-            val isOnline = !_isSyncing.value
-            if (bookmark.isRead) {
-                val tags = bookmark.tags.split(",").filter { it.isNotBlank() }
-                bookmarkActionsRepository.markAsUnread(bookmark.remoteId, bookmark.serverId, tags)
-                onActionComplete("Marked as unread")
+            val event = if (bookmark.isRead) {
+                BookmarkActionEvent.MarkUnread(bookmark)
             } else {
-                bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
-                onActionComplete("Marked as read")
+                BookmarkActionEvent.MarkRead(bookmark)
+            }
+            bookmarkActionController.executeAction(event)
+
+            // Update the bookmark in the accumulated list immediately for UI feedback
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                if (it.remoteId == bookmark.remoteId) {
+                    // Update the read state and tags immediately
+                    val newIsRead = !bookmark.isRead
+                    val currentTags = it.tags.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() }.toMutableList()
+                    if (newIsRead) {
+                        if (!currentTags.contains("karakept:read")) {
+                            currentTags.add("karakept:read")
+                        }
+                    } else {
+                        currentTags.remove("karakept:read")
+                    }
+                    it.copy(isRead = newIsRead, tags = currentTags.joinToString(","))
+                } else {
+                    it
+                }
             }
         }
     }
-    
-    fun deleteBookmark(bookmark: BookmarkEntity, onActionComplete: (String) -> Unit = {}) {
+
+    fun deleteBookmark(bookmark: BookmarkEntity) {
         screenModelScope.launch {
-            val isOnline = !_isSyncing.value
-            bookmarkActionsRepository.deleteBookmark(
-                bookmark.localId,
-                bookmark.remoteId,
-                bookmark.serverId
+            // Find the current position for undo restoration
+            val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+
+            bookmarkActionController.executeAction(
+                BookmarkActionEvent.Delete(bookmark),
+                originalPosition = position
             )
-            onActionComplete("Bookmark deleted")
+
+            // Remove from current view immediately
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
+                it.remoteId != bookmark.remoteId
+            }
         }
     }
     

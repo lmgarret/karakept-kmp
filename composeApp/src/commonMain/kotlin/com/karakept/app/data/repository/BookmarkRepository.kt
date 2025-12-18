@@ -196,11 +196,16 @@ class BookmarkRepository(
             // Phase 4: Map DTOs to entities & perform differential sync
             _syncProgress.value = com.karakept.app.data.model.SyncProgress.ProcessingMetadata
             val entities = mapToEntities(remoteBookmarks, bookmarkListMap)
-            val entitiesWithLocalIds = performDifferentialSync(entities, processedIds)
+            val (entitiesWithLocalIds, newCount) = performDifferentialSync(entities, processedIds)
 
             // Phase 5: Content sync (uses entities with correct localIds)
             syncContent(entitiesWithLocalIds)
 
+            // Emit completion with count before returning to Idle
+            if (newCount > 0) {
+                _syncProgress.value = com.karakept.app.data.model.SyncProgress.SyncComplete(newCount)
+                kotlinx.coroutines.delay(100)  // Give UI time to process
+            }
             _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
         }
 
@@ -405,7 +410,7 @@ class BookmarkRepository(
         private suspend fun performDifferentialSync(
             entities: List<BookmarkEntity>,
             processedIds: Set<Long>
-        ): List<BookmarkEntity> {
+        ): Pair<List<BookmarkEntity>, Int> {
             val existing = bookmarkDao.getBookmarksForServer(config.server.id).first()
             val pendingIds = bookmarkActionsRepository.getPendingActionBookmarkIds(config.server.id).toSet()
             val ignoredIds = processedIds + pendingIds
@@ -452,6 +457,8 @@ class BookmarkRepository(
                 existing.none { e -> e.remoteId == incoming.remoteId }
             }
 
+            val newBookmarksCount = toInsert.size
+
             if (toInsert.isNotEmpty()) {
                 println("performDifferentialSync: Inserting ${toInsert.size} bookmarks")
                 toInsert.forEach { println("  - INSERT: ${it.originalRemoteId} (${it.title}) listIds='${it.listIds}' archived=${it.isArchived}") }
@@ -478,7 +485,7 @@ class BookmarkRepository(
                 }
 
                 // Return the updated entities list for content sync
-                return updatedEntities
+                return Pair(updatedEntities, newBookmarksCount)
             }
 
             // Delete removed (conditional)
@@ -490,7 +497,7 @@ class BookmarkRepository(
                 }
             }
 
-            return entities
+            return Pair(entities, newBookmarksCount)
         }
 
         // Phase 5: Content Sync

@@ -43,6 +43,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import com.karakept.app.domain.action.ActionSnackbarManager
+import com.karakept.app.domain.action.SnackbarEvent
 
 data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +55,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()
         val uriHandler = LocalUriHandler.current
+        val snackbarManager = koinInject<ActionSnackbarManager>()
 
         val loadingState by screenModel.loadingState.collectAsState()
         val viewerMode by screenModel.viewerMode.collectAsState()
@@ -74,24 +77,10 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         var showListPicker by remember { mutableStateOf(false) }
         var showTagEditor by remember { mutableStateOf(false) }
 
-        val snackbarHostState = remember { SnackbarHostState() }
-        var pendingSnackbarMessage by remember { mutableStateOf<String?>(null) }
-
-        // Show pending snackbar when FAB menu closes (with delay for animation)
-        LaunchedEffect(fabExpanded, pendingSnackbarMessage) {
-            if (!fabExpanded && pendingSnackbarMessage != null) {
-                delay(400) // Wait for FAB close animation (300ms + buffer)
-                snackbarHostState.showSnackbar(pendingSnackbarMessage!!)
-                pendingSnackbarMessage = null
-            }
-        }
-
-        // Dismiss any visible snackbar when FAB menu opens
-        LaunchedEffect(fabExpanded) {
-            if (fabExpanded) {
-                snackbarHostState.currentSnackbarData?.dismiss()
-            }
-        }
+        val snackbarHostState = rememberSnackbarHostStateWithDelay(
+            snackbarManager = snackbarManager,
+            fabExpanded = fabExpanded
+        )
 
         LaunchedEffect(bookmarkId) {
             screenModel.loadBookmark(bookmarkId)
@@ -142,23 +131,8 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                     screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
                 },
                 onShowSnackbarWithUndo = {
-                    scope.launch {
-                        // Wait a moment for the database update to propagate
-                        delay(100)
-                        // Get the current state after the mark-as-read has been applied
-                        val currentState = loadingState as? BookmarkLoadingState.FullyLoaded
-                        val result = snackbarHostState.showSnackbar(
-                            message = "Marked as read",
-                            actionLabel = "Undo",
-                            duration = androidx.compose.material3.SnackbarDuration.Short
-                        )
-                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                            // Undo: toggle back to unread
-                            currentState?.let {
-                                screenModel.toggleBookmarkRead(it.bookmark)
-                            }
-                        }
-                    }
+                    // Undo is now handled automatically by BookmarkActionController
+                    // No need for manual implementation
                 }
             )
         } else {
@@ -194,31 +168,29 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                             onExpandedChange = { fabExpanded = it },
                             bookmark = fullyLoadedState.bookmark,
                             onFavoriteClick = {
-                                val willBeFavorited = !fullyLoadedState.bookmark.isStarred
                                 screenModel.toggleBookmarkFavorite(fullyLoadedState.bookmark)
-                                pendingSnackbarMessage = if (willBeFavorited) "Added to favorites" else "Removed from favorites"
                                 fabExpanded = false
                             },
                             onArchiveClick = {
-                                val willBeArchived = !fullyLoadedState.bookmark.isArchived
                                 screenModel.toggleBookmarkArchive(fullyLoadedState.bookmark)
-                                pendingSnackbarMessage = if (willBeArchived) "Archived" else "Unarchived"
                                 fabExpanded = false
                             },
                             onReadClick = {
-                                val willBeRead = !fullyLoadedState.bookmark.isRead
                                 screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
-                                pendingSnackbarMessage = if (willBeRead) "Marked as read" else "Marked as unread"
                                 fabExpanded = false
                             },
                             onShareClick = {
                                 ShareUtils.shareText(fullyLoadedState.bookmark.url, fullyLoadedState.bookmark.title)
-                                pendingSnackbarMessage = "Shared"
+                                scope.launch {
+                                    snackbarManager.showSnackbar("Shared")
+                                }
                                 fabExpanded = false
                             },
                             onOpenInBrowserClick = {
                                 uriHandler.openUri(fullyLoadedState.bookmark.url)
-                                pendingSnackbarMessage = "Opening in browser"
+                                scope.launch {
+                                    snackbarManager.showSnackbar("Opening in browser")
+                                }
                                 fabExpanded = false
                             }
                         )
@@ -415,6 +387,74 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                 },
                 onDismiss = { showTagEditor = false }
             )
+        }
+    }
+}
+
+@Composable
+fun rememberSnackbarHostStateWithDelay(
+    snackbarManager: ActionSnackbarManager,
+    fabExpanded: Boolean
+): SnackbarHostState {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var pendingEvent by remember { mutableStateOf<SnackbarEvent?>(null) }
+
+    // Collect events from manager
+    LaunchedEffect(Unit) {
+        snackbarManager.snackbarEvents.collect { event ->
+            if (fabExpanded) {
+                // Store for later display
+                pendingEvent = event
+            } else {
+                // Show immediately
+                showSnackbarEvent(snackbarHostState, event, scope)
+            }
+        }
+    }
+
+    // Show pending event when FAB closes
+    LaunchedEffect(fabExpanded, pendingEvent) {
+        if (!fabExpanded && pendingEvent != null) {
+            delay(400) // Wait for FAB animation
+            showSnackbarEvent(snackbarHostState, pendingEvent!!, scope)
+            pendingEvent = null
+        }
+    }
+
+    // Dismiss snackbar when FAB opens
+    LaunchedEffect(fabExpanded) {
+        if (fabExpanded) {
+            snackbarHostState.currentSnackbarData?.dismiss()
+        }
+    }
+
+    return snackbarHostState
+}
+
+private fun showSnackbarEvent(
+    snackbarHostState: SnackbarHostState,
+    event: SnackbarEvent,
+    scope: kotlinx.coroutines.CoroutineScope
+) {
+    scope.launch {
+        when (event) {
+            is SnackbarEvent.Message -> {
+                snackbarHostState.showSnackbar(
+                    message = event.text,
+                    duration = event.duration
+                )
+            }
+            is SnackbarEvent.MessageWithUndo -> {
+                val result = snackbarHostState.showSnackbar(
+                    message = event.text,
+                    actionLabel = "Undo",
+                    duration = event.duration
+                )
+                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                    event.onUndo()
+                }
+            }
         }
     }
 }

@@ -117,7 +117,7 @@ class LoginScreen : Screen {
                     Button(
                         onClick = {
                             screenModel.addServer(url, apiKey) {
-                                navigator.push(MainScreen())
+                                navigator.push(MainScreen)
                             }
                         },
                         modifier = Modifier.weight(1f),

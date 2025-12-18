@@ -6,8 +6,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,13 +48,16 @@ import com.karakept.app.ui.screens.main.MainScreenDrawer
 import com.karakept.app.ui.screens.main.MainScreenTopBar
 import kotlinx.coroutines.launch
 import getPlatform
+import com.karakept.app.domain.action.ActionSnackbarManager
+import com.karakept.app.domain.action.SnackbarEvent
+import org.koin.compose.koinInject
 
-class MainScreen : Screen {
+object MainScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = getScreenModel<MainScreenModel>()
+        val screenModel = koinScreenModel<MainScreenModel>()
         val settingsScreenModel = koinScreenModel<SettingsScreenModel>()
         val lists by screenModel.lists.collectAsState()
         val bookmarks by screenModel.bookmarks.collectAsState()
@@ -74,30 +79,17 @@ class MainScreen : Screen {
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
-        val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+        val snackbarManager = koinInject<ActionSnackbarManager>()
+        val snackbarHostState = rememberSnackbarHostState(snackbarManager)
 
-        val listState = rememberLazyListState()
+        val listState = rememberSaveable(
+            key = "main_screen_list_state",
+            saver = LazyListState.Saver
+        ) {
+            LazyListState()
+        }
         val isDesktop = remember { getPlatform().name.contains("Java") }
         val uriHandler = LocalUriHandler.current
-        val scrollToTopEvent by screenModel.scrollToTopEvent.collectAsState()
-
-        // Auto-scroll to top when sync completes and new bookmarks arrive
-        LaunchedEffect(scrollToTopEvent) {
-            println("MainScreen: scrollToTopEvent changed to $scrollToTopEvent, bookmarks.size=${bookmarks.size}")
-            // Only scroll if the event changed (sync completed) and we have bookmarks
-            if (scrollToTopEvent > 0 && bookmarks.isNotEmpty()) {
-                println("MainScreen: Scrolling to top...")
-                // Small delay to ensure bookmarks are rendered
-                kotlinx.coroutines.delay(100)
-                println("MainScreen: After delay, firstVisibleItemIndex=${listState.firstVisibleItemIndex}")
-                try {
-                    listState.animateScrollToItem(0)
-                    println("MainScreen: Scrolled to top successfully, firstVisibleItemIndex=${listState.firstVisibleItemIndex}")
-                } catch (e: Exception) {
-                    println("MainScreen: Failed to scroll: ${e.message}")
-                }
-            }
-        }
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isSyncing,
@@ -106,6 +98,37 @@ class MainScreen : Screen {
 
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val scope = rememberCoroutineScope()
+
+        // Observe sync completion and show "new bookmarks" snackbar
+        LaunchedEffect(Unit) {
+            screenModel.syncProgress.collect { progress ->
+                if (progress is com.karakept.app.data.model.SyncProgress.SyncComplete &&
+                    progress.newBookmarksCount > 0) {
+
+                    val count = progress.newBookmarksCount
+                    val message = "$count new bookmark${if (count > 1) "s" else ""}"
+
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = message,
+                            actionLabel = "View",
+                            duration = androidx.compose.material3.SnackbarDuration.Short
+                        )
+
+                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                            screenModel.scrollToTop()
+                        }
+                    }
+                }
+            }
+        }
+
+        // Listen for scroll-to-top trigger
+        LaunchedEffect(Unit) {
+            screenModel.scrollToTopTrigger.collect {
+                listState.animateScrollToItem(0)
+            }
+        }
 
         val allBookmarks by screenModel.allBookmarks.collectAsState()
 
@@ -218,43 +241,19 @@ class MainScreen : Screen {
                         onSwipeAction = { bookmark, action ->
                             when (action) {
                                 SwipeAction.ARCHIVE -> {
-                                    screenModel.toggleBookmarkArchive(bookmark, onActionComplete = { message ->
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                message = message,
-                                                duration = androidx.compose.material3.SnackbarDuration.Short
-                                            )
-                                        }
-                                    })
+                                    screenModel.toggleBookmarkArchive(bookmark)
                                 }
                                 SwipeAction.MARK_READ -> {
-                                    screenModel.toggleBookmarkRead(bookmark, onActionComplete = { message ->
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                message = message,
-                                                duration = androidx.compose.material3.SnackbarDuration.Short
-                                            )
-                                        }
-                                    })
+                                    screenModel.toggleBookmarkRead(bookmark)
                                 }
                                 SwipeAction.FAVOURITE -> {
-                                    screenModel.toggleBookmarkFavorite(bookmark, onActionComplete = { message ->
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                message = message,
-                                                duration = androidx.compose.material3.SnackbarDuration.Short
-                                            )
-                                        }
-                                    })
+                                    screenModel.toggleBookmarkFavorite(bookmark)
                                 }
                                 SwipeAction.DELETE -> selectedBookmarkForActions = bookmark
                                 SwipeAction.SHARE -> {
                                     com.karakept.app.utils.ShareUtils.shareText(bookmark.url, bookmark.title)
                                     scope.launch {
-                                        snackbarHostState.showSnackbar(
-                                            message = "Shared",
-                                            duration = androidx.compose.material3.SnackbarDuration.Short
-                                        )
+                                        snackbarManager.showSnackbar("Shared")
                                     }
                                 }
                                 SwipeAction.OPEN_IN_BROWSER -> {
@@ -262,7 +261,7 @@ class MainScreen : Screen {
                                         uriHandler.openUri(bookmark.url)
                                     } catch (e: Exception) {
                                         scope.launch {
-                                            snackbarHostState.showSnackbar("Could not open link")
+                                            snackbarManager.showSnackbar("Could not open link")
                                         }
                                     }
                                 }
@@ -331,25 +330,13 @@ class MainScreen : Screen {
                 onAction = { action ->
                     when (action) {
                         is BookmarkAction.ToggleArchive -> {
-                            screenModel.toggleBookmarkArchive(selectedBookmarkForActions!!) { message ->
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(message)
-                                }
-                            }
+                            screenModel.toggleBookmarkArchive(selectedBookmarkForActions!!)
                         }
                         is BookmarkAction.ToggleFavorite -> {
-                            screenModel.toggleBookmarkFavorite(selectedBookmarkForActions!!) { message ->
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(message)
-                                }
-                            }
+                            screenModel.toggleBookmarkFavorite(selectedBookmarkForActions!!)
                         }
                         is BookmarkAction.ToggleRead -> {
-                            screenModel.toggleBookmarkRead(selectedBookmarkForActions!!) { message ->
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(message)
-                                }
-                            }
+                            screenModel.toggleBookmarkRead(selectedBookmarkForActions!!)
                         }
                         is BookmarkAction.MoveToList -> {
                             screenModel.moveBookmarkToList(selectedBookmarkForActions!!, action.listId)
@@ -358,11 +345,7 @@ class MainScreen : Screen {
                             screenModel.updateBookmarkTags(selectedBookmarkForActions!!, action.tags)
                         }
                         is BookmarkAction.Delete -> {
-                            screenModel.deleteBookmark(selectedBookmarkForActions!!) { message ->
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(message)
-                                }
-                            }
+                            screenModel.deleteBookmark(selectedBookmarkForActions!!)
                         }
                         is BookmarkAction.Share -> {
                             com.karakept.app.utils.ShareUtils.shareText(selectedBookmarkForActions!!.url, selectedBookmarkForActions!!.title)
@@ -376,4 +359,35 @@ class MainScreen : Screen {
             )
         }
     }
+}
+
+@Composable
+fun rememberSnackbarHostState(manager: ActionSnackbarManager): androidx.compose.material3.SnackbarHostState {
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        manager.snackbarEvents.collect { event ->
+            when (event) {
+                is SnackbarEvent.Message -> {
+                    snackbarHostState.showSnackbar(
+                        message = event.text,
+                        duration = event.duration
+                    )
+                }
+                is SnackbarEvent.MessageWithUndo -> {
+                    val result = snackbarHostState.showSnackbar(
+                        message = event.text,
+                        actionLabel = "Undo",
+                        duration = event.duration
+                    )
+                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                        scope.launch { event.onUndo() }
+                    }
+                }
+            }
+        }
+    }
+
+    return snackbarHostState
 }

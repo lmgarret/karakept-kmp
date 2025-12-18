@@ -53,7 +53,7 @@ fun App() {
 
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 if (serverRepository.hasServers()) {
-                    initialScreen = com.karakept.app.ui.screens.MainScreen()
+                    initialScreen = com.karakept.app.ui.screens.MainScreen
                 } else {
                     initialScreen = com.karakept.app.ui.screens.LoginScreen()
                 }
