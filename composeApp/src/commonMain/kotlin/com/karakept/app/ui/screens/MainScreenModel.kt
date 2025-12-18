@@ -61,6 +61,32 @@ class MainScreenModel(
     private val _currentListContext = MutableStateFlow<String?>(null)
     val currentListContext: StateFlow<String?> = _currentListContext
 
+    // Pagination state
+    private val pageSize = 20
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
+
+    private val _hasMoreItems = MutableStateFlow(true)
+    val hasMoreItems: StateFlow<Boolean> = _hasMoreItems
+
+    private val _currentPage = MutableStateFlow(0)
+    private val _accumulatedBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
+
+    // Reload trigger for sync completion - increment to trigger reload without clearing UI
+    private val _reloadTrigger = MutableStateFlow(0)
+
+    // Event flow for scroll-to-top after sync (emit unit to trigger)
+    private val _scrollToTopEvent = MutableStateFlow(0)
+    val scrollToTopEvent: StateFlow<Int> = _scrollToTopEvent
+
+    // Sync progress from repository
+    val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> =
+        bookmarkRepository.syncProgress.stateIn(
+            screenModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            com.karakept.app.data.model.SyncProgress.Idle
+        )
+
     // All bookmarks without filtering - for tag extraction
     val allBookmarks = selectedServer
         .flatMapLatest { server ->
@@ -127,32 +153,68 @@ class MainScreenModel(
                 }
             }
         }
+
+        // Observe filter and server changes to trigger initial load
+        screenModelScope.launch {
+            combine(selectedServer, _currentFilter) { server, filter ->
+                Pair(server, filter)
+            }.collect { (server, filter) ->
+                if (server != null) {
+                    // Reset pagination
+                    _currentPage.value = 0
+                    _accumulatedBookmarks.value = emptyList()
+                    _hasMoreItems.value = true
+
+                    // Load first page
+                    val newItems = loadBookmarksPage(server, filter, 0)
+                    _accumulatedBookmarks.value = newItems
+                }
+            }
+        }
+
+        // Observe reload trigger separately to avoid clearing UI
+        screenModelScope.launch {
+            var first = true
+            _reloadTrigger.collect {
+                if (first) {
+                    first = false // Skip initial value
+                    return@collect
+                }
+
+                val server = _selectedServer.value
+                val filter = _currentFilter.value
+                if (server != null) {
+                    // Load new data in background
+                    val newItems = loadBookmarksPage(server, filter, 0)
+
+                    // Reset pagination state
+                    _currentPage.value = 0
+                    _hasMoreItems.value = true
+
+                    // Swap in the new data atomically (no empty state in between)
+                    _accumulatedBookmarks.value = newItems
+                }
+            }
+        }
     }
 
-    val bookmarks: StateFlow<List<BookmarkEntity>> = combine(
-        selectedServer,
-        _currentFilter
-    ) { server, filter ->
-        Pair(server, filter)
-    }.flatMapLatest { (server, filter) ->
-        if (server != null) {
-            bookmarkRepository.getBookmarks(server).map { bookmarks ->
-                applyFilterToBookmarks(bookmarks, filter)
-            }
-        } else {
-            flowOf(emptyList())
-        }
-    }.stateIn(screenModelScope, SharingStarted.Lazily, emptyList())
+    val bookmarks: StateFlow<List<BookmarkEntity>> = _accumulatedBookmarks.stateIn(
+        screenModelScope,
+        SharingStarted.Lazily,
+        emptyList()
+    )
 
     private fun applyFilterToBookmarks(bookmarks: List<BookmarkEntity>, filter: FilterConfig): List<BookmarkEntity> {
         var result = bookmarks
 
         // 1. Status Filter
+        // Note: Database-level filtering already handles most status filters
+        // This is only used for the non-paginated allBookmarks flow (tag extraction)
         result = when (filter.status) {
             FilterStatus.FAVORITES -> result.filter { it.isStarred }
             FilterStatus.ARCHIVED -> result.filter { it.isArchived }
-            FilterStatus.NOT_ARCHIVED -> result.filter { !it.isArchived }
-            FilterStatus.ALL -> result
+            FilterStatus.ALL -> result.filter { !it.isArchived } // ALL = non-archived
+            FilterStatus.ALL_INCLUDING_ARCHIVED -> result // No filtering, show all
         }
 
         // 2. Tags Filter (OR logic: bookmark must have AT LEAST ONE of the selected tags)
@@ -166,10 +228,17 @@ class MainScreenModel(
         // 3. Lists Filter (OR logic: bookmark must be in AT LEAST ONE of the selected lists)
         // Usually list filtering is "Show me items in List A OR List B".
         if (filter.lists.isNotEmpty()) {
+            println("applyFilterToBookmarks: Filtering by lists: ${filter.lists}")
+            println("applyFilterToBookmarks: Total bookmarks before list filter: ${result.size}")
             result = result.filter { bookmark ->
                 val bookmarkLists = bookmark.listIds.split(",").filter { it.isNotEmpty() }
-                filter.lists.any { listId -> bookmarkLists.contains(listId) }
+                val matches = filter.lists.any { listId -> bookmarkLists.contains(listId) }
+                if (!matches && bookmark.listIds.isNotEmpty()) {
+                    println("applyFilterToBookmarks: Bookmark ${bookmark.title} has listIds '${bookmark.listIds}' but doesn't match filter ${filter.lists}")
+                }
+                matches
             }
+            println("applyFilterToBookmarks: Total bookmarks after list filter: ${result.size}")
         }
 
         // 4. Sort
@@ -183,6 +252,111 @@ class MainScreenModel(
         }
 
         return result
+    }
+
+    // Pagination helper functions
+    private suspend fun loadBookmarksPage(
+        server: Server,
+        filter: FilterConfig,
+        page: Int
+    ): List<BookmarkEntity> {
+        val offset = page * pageSize
+
+        // If filtering by a single list, use DB-level list filtering
+        val singleListId = if (filter.lists.size == 1) filter.lists.first() else null
+
+        // Fetch paginated bookmarks from repository (filtered by status at DB level)
+        val pagedBookmarks = bookmarkRepository.getBookmarksPaged(
+            server = server,
+            status = filter.status,
+            offset = offset,
+            limit = pageSize,
+            listId = singleListId
+        )
+
+        // Apply client-side filters (tags, lists)
+        // Note: if we already filtered by single list at DB level, skip client-side list filter
+        val filtered = applyClientSideFilters(pagedBookmarks, filter, skipListFilter = singleListId != null)
+
+        // Apply sorting
+        val sorted = applySorting(filtered, filter.sort)
+
+        return sorted
+    }
+
+    private fun applyClientSideFilters(
+        bookmarks: List<BookmarkEntity>,
+        filter: FilterConfig,
+        skipListFilter: Boolean = false
+    ): List<BookmarkEntity> {
+        var result = bookmarks
+
+        // Tag filter (OR logic)
+        if (filter.tags.isNotEmpty()) {
+            result = result.filter { bookmark ->
+                val bookmarkTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                bookmarkTags.any { tag -> filter.tags.contains(tag) }
+            }
+        }
+
+        // List filter (OR logic) - skip if already filtered at DB level
+        if (filter.lists.isNotEmpty() && !skipListFilter) {
+            println("applyClientSideFilters: Filtering by lists: ${filter.lists}")
+            println("applyClientSideFilters: Bookmarks before list filter: ${result.size}")
+            result = result.filter { bookmark ->
+                val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                val matches = bookmarkLists.any { listId -> filter.lists.contains(listId) }
+                println("applyClientSideFilters: Bookmark ${bookmark.title} listIds='${bookmark.listIds}' -> parsed=$bookmarkLists -> matches=$matches")
+                matches
+            }
+            println("applyClientSideFilters: Bookmarks after list filter: ${result.size}")
+        } else if (skipListFilter) {
+            println("applyClientSideFilters: Skipping list filter (already filtered at DB level)")
+        }
+
+        return result
+    }
+
+    private fun applySorting(
+        bookmarks: List<BookmarkEntity>,
+        sort: SortOption
+    ): List<BookmarkEntity> {
+        return when (sort) {
+            SortOption.NEWEST -> bookmarks.sortedByDescending { it.createdAt }
+            SortOption.OLDEST -> bookmarks.sortedBy { it.createdAt }
+            SortOption.TITLE_AZ -> bookmarks.sortedBy { it.title.lowercase() }
+            SortOption.TITLE_ZA -> bookmarks.sortedByDescending { it.title.lowercase() }
+            SortOption.READING_TIME_SHORT -> bookmarks.sortedBy { it.readingTimeMinutes }
+            SortOption.READING_TIME_LONG -> bookmarks.sortedByDescending { it.readingTimeMinutes }
+        }
+    }
+
+    fun loadNextPage() {
+        if (_isLoadingMore.value || !_hasMoreItems.value) return
+
+        screenModelScope.launch {
+            try {
+                _isLoadingMore.value = true
+
+                val server = _selectedServer.value ?: return@launch
+                val filter = _currentFilter.value
+                val nextPage = _currentPage.value + 1
+
+                val newItems = loadBookmarksPage(server, filter, nextPage)
+
+                if (newItems.isEmpty()) {
+                    _hasMoreItems.value = false
+                } else {
+                    // Append to accumulated list
+                    _accumulatedBookmarks.value = _accumulatedBookmarks.value + newItems
+                    _currentPage.value = nextPage
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isLoadingMore.value = false
+            }
+        }
     }
 
     fun selectServer(serverId: String) {
@@ -206,17 +380,40 @@ class MainScreenModel(
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         // Context-aware bookmark sync
                         val activeListId = _currentListContext.value
-                        if (activeListId != null) {
-                            // Sync only bookmarks from the current list
-                            bookmarkRepository.syncBookmarksForList(server, activeListId)
-                        } else {
-                            // Sync all bookmarks
-                            bookmarkRepository.syncBookmarks(server)
+                        val currentStatus = _currentFilter.value.status
+
+                        when {
+                            activeListId != null -> {
+                                // Sync only bookmarks from the current list
+                                bookmarkRepository.syncBookmarksForList(server, activeListId)
+                            }
+                            currentStatus == FilterStatus.FAVORITES -> {
+                                // Sync only favorites
+                                bookmarkRepository.syncFavorites(server)
+                            }
+                            currentStatus == FilterStatus.ARCHIVED -> {
+                                // Sync only archived
+                                bookmarkRepository.syncArchived(server)
+                            }
+                            else -> {
+                                // Sync all bookmarks (ALL filter)
+                                bookmarkRepository.syncBookmarks(server)
+                            }
                         }
 
                         // Always refresh lists metadata (lightweight)
                         listRepository.refreshLists(server)
                     }
+
+                    // Trigger reload without clearing the UI (prevents flashing)
+                    // This increments the reload trigger which loads new data in background
+                    // and swaps it in atomically
+                    _reloadTrigger.value += 1
+
+                    // Always trigger scroll to top after sync to show new bookmarks
+                    println("syncBookmarks: currentPage=${_currentPage.value}, triggering scroll event")
+                    _scrollToTopEvent.value += 1
+                    println("syncBookmarks: scrollToTopEvent incremented to ${_scrollToTopEvent.value}")
                 } catch (e: Exception) {
                     // Handle error
                 } finally {
@@ -325,6 +522,12 @@ class MainScreenModel(
                 bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
                 onActionComplete("Bookmark archived")
             }
+
+            // Remove from current view immediately for better UX
+            // The item will be filtered out on next load anyway
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
+                it.remoteId != bookmark.remoteId
+            }
         }
     }
     
@@ -337,6 +540,14 @@ class MainScreenModel(
                 bookmark.isStarred
             )
             onActionComplete(if (bookmark.isStarred) "Removed from favorites" else "Added to favorites")
+
+            // Remove from current view if unfavoriting in Favorites view
+            // (When adding to favorites in non-Favorites view, it stays in the list)
+            if (bookmark.isStarred && _currentFilter.value.status == FilterStatus.FAVORITES) {
+                _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
+                    it.remoteId != bookmark.remoteId
+                }
+            }
         }
     }
     

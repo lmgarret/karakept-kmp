@@ -21,10 +21,12 @@ import io.ktor.http.isSuccess
 class RemoteDataSource(private val client: HttpClient) {
     
     suspend fun fetchBookmarks(
-        server: Server, 
-        cursor: String? = null, 
+        server: Server,
+        cursor: String? = null,
         limit: Int = 50,
-        includeContent: Boolean = false
+        includeContent: Boolean = false,
+        archived: Boolean? = null,
+        favourited: Boolean? = null
     ): PaginatedBookmarksResponse {
         return try {
             val response: HttpResponse = client.get(server.url) {
@@ -33,6 +35,8 @@ class RemoteDataSource(private val client: HttpClient) {
                     if (cursor != null) parameters.append("cursor", cursor)
                     parameters.append("limit", limit.toString())
                     parameters.append("include_content", includeContent.toString())
+                    if (archived != null) parameters.append("archived", archived.toString())
+                    if (favourited != null) parameters.append("favourited", favourited.toString())
                 }
                 header("Authorization", "Bearer ${server.apiKey}")
             }
@@ -101,18 +105,39 @@ class RemoteDataSource(private val client: HttpClient) {
         return try {
             val response: HttpResponse = client.get(server.url) {
                 url {
+                    // Endpoint requires /api/v1 prefix like other endpoints
                     appendPathSegments("api", "v1", "lists", listId, "bookmarks")
                 }
                 header("Authorization", "Bearer ${server.apiKey}")
             }
-            
+
             if (!response.status.isSuccess()) {
+                println("Failed to fetch bookmarks for list $listId: ${response.status}")
                 throw ApiException("Failed to fetch bookmarks for list $listId: ${response.status}")
             }
-            
-            val paginatedResponse: PaginatedBookmarksResponse = response.body()
-             paginatedResponse.bookmarks
+
+            // Try multiple response formats to handle API variations
+            try {
+                val paginatedResponse: PaginatedBookmarksResponse = response.body()
+                println("List $listId: Parsed as PaginatedBookmarksResponse - ${paginatedResponse.bookmarks.size} bookmarks")
+                paginatedResponse.bookmarks
+            } catch (e: Exception) {
+                // If PaginatedBookmarksResponse fails, try parsing as direct list
+                try {
+                    val directList: List<BookmarkDto> = response.body()
+                    println("List $listId: Parsed as List<BookmarkDto> - ${directList.size} bookmarks")
+                    directList
+                } catch (e2: Exception) {
+                    // Log both parsing errors for debugging
+                    println("List $listId: Failed to parse as PaginatedBookmarksResponse: ${e.message}")
+                    println("List $listId: Failed to parse as List<BookmarkDto>: ${e2.message}")
+                    throw e // Throw original error
+                }
+            }
         } catch (e: Exception) {
+            // Log the error instead of silently swallowing it
+            println("Error fetching bookmarks for list $listId: ${e.message}")
+            e.printStackTrace()
             // If a list fetch fails, we return empty list to not break the whole sync
             emptyList()
         }

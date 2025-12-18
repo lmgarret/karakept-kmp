@@ -201,7 +201,6 @@ private fun FilterManagementContent(
             val quickFilters = listOf(
                 Triple("All Bookmarks", "Book", FilterConfig()),
                 Triple("Favorites", "Star", FilterConfig(status = FilterStatus.FAVORITES)),
-                Triple("Not Archived", "Inbox", FilterConfig(status = FilterStatus.NOT_ARCHIVED)),
                 Triple("Archived", "Archive", FilterConfig(status = FilterStatus.ARCHIVED))
             )
             

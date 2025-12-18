@@ -125,12 +125,6 @@ fun FilterBottomPanel(
                         leadingIcon = { Icon(Icons.Default.Star, null, modifier = Modifier.size(18.dp)) }
                     )
                     FilterChip(
-                        selected = filter.status == FilterStatus.NOT_ARCHIVED,
-                        onClick = { filter = filter.copy(status = FilterStatus.NOT_ARCHIVED) },
-                        label = { Text("Inbox") },
-                        leadingIcon = { Icon(Icons.Default.Inbox, null, modifier = Modifier.size(18.dp)) }
-                    )
-                    FilterChip(
                         selected = filter.status == FilterStatus.ARCHIVED,
                         onClick = { filter = filter.copy(status = FilterStatus.ARCHIVED) },
                         label = { Text("Archived") },

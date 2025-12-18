@@ -88,20 +88,6 @@ internal fun MainScreenDrawer(
                 )
 
                 NavigationDrawerItem(
-                    label = { Text("Not Archived") },
-                    selected = currentFilter == FilterConfig(status = FilterStatus.NOT_ARCHIVED),
-                    icon = { Icon(Icons.Default.Inbox, contentDescription = null) },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary
-                    ),
-                    onClick = {
-                        onFilterApply(FilterConfig(status = FilterStatus.NOT_ARCHIVED))
-                    }
-                )
-
-                NavigationDrawerItem(
                     label = { Text("Archived") },
                     selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
                     icon = { Icon(Icons.Default.Archive, contentDescription = null) },
@@ -162,7 +148,10 @@ internal fun MainScreenDrawer(
                                         selectedTextColor = MaterialTheme.colorScheme.primary
                                     ),
                                     onClick = {
-                                        onFilterApply(FilterConfig(lists = listOf(list.id)))
+                                        onFilterApply(FilterConfig(
+                                            status = FilterStatus.ALL_INCLUDING_ARCHIVED,
+                                            lists = listOf(list.id)
+                                        ))
                                     },
                                     modifier = Modifier.weight(1f)
                                 )

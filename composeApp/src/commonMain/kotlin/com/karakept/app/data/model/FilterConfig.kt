@@ -11,10 +11,10 @@ data class FilterConfig(
 )
 
 enum class FilterStatus {
-    ALL,
-    FAVORITES,
-    ARCHIVED,
-    NOT_ARCHIVED
+    ALL,                    // Shows non-archived bookmarks
+    ALL_INCLUDING_ARCHIVED, // Shows all bookmarks (used for list views)
+    FAVORITES,              // Shows starred bookmarks (includes archived)
+    ARCHIVED                // Shows archived bookmarks
 }
 
 enum class SortOption {

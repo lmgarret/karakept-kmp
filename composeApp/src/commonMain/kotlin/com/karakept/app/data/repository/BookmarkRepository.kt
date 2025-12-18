@@ -17,6 +17,46 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+// Sync configuration sealed class hierarchy
+private sealed class SyncConfiguration {
+    abstract val server: Server
+    abstract val shouldFetchLists: Boolean
+    abstract val shouldDeleteRemoved: Boolean
+    abstract val apiFilters: ApiFilters
+
+    data class Full(
+        override val server: Server
+    ) : SyncConfiguration() {
+        override val shouldFetchLists = true
+        override val shouldDeleteRemoved = true
+        override val apiFilters = ApiFilters()
+    }
+
+    data class Filtered(
+        override val server: Server,
+        val archived: Boolean? = null,
+        val favourited: Boolean? = null
+    ) : SyncConfiguration() {
+        override val shouldFetchLists = false // Keep lightweight
+        override val shouldDeleteRemoved = false // Only upsert
+        override val apiFilters = ApiFilters(archived, favourited)
+    }
+
+    data class ForList(
+        override val server: Server,
+        val listId: String
+    ) : SyncConfiguration() {
+        override val shouldFetchLists = true // For validation
+        override val shouldDeleteRemoved = false // Only upsert
+        override val apiFilters = ApiFilters()
+    }
+}
+
+private data class ApiFilters(
+    val archived: Boolean? = null,
+    val favourited: Boolean? = null
+)
+
 class BookmarkRepository(
     private val bookmarkDao: BookmarkDao,
     private val assetDao: AssetDao,
@@ -35,287 +75,21 @@ class BookmarkRepository(
     val syncProgress: kotlinx.coroutines.flow.StateFlow<com.karakept.app.data.model.SyncProgress> = _syncProgress.asStateFlow()
 
     suspend fun syncBookmarks(server: Server) {
-        mutex.withLock {
-            try {
-                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Starting
-                
-                // IMPORTANT: Process pending actions FIRST, before fetching fresh data
-                val processedIds = mutableSetOf<Long>()
-            
-                println("BookmarkRepository: About to process pending actions for server ${server.id}")
-                try {
-                    val ids = bookmarkActionsRepository.processPendingActions(server)
-                    processedIds.addAll(ids)
-                    println("BookmarkRepository: Successfully processed pending actions for ${ids.size} bookmarks")
-                } catch (e: Exception) {
-                    println("BookmarkRepository: Error processing pending actions: ${e.message}")
-                    e.printStackTrace()
-                }
-            
-                // 1. Fetch all bookmarks (Metadata only first)
-                val allRemoteBookmarks = mutableListOf<com.karakept.app.data.remote.model.BookmarkDto>()
-                var cursor: String? = null
-                var pageCount = 0
-                
-                do {
-                    pageCount++
-                    _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingMetadata(pageCount, allRemoteBookmarks.size)
-                    val response = remoteDataSource.fetchBookmarks(
-                        server = server, 
-                        cursor = cursor, 
-                        includeContent = false
-                    )
-                    allRemoteBookmarks.addAll(response.bookmarks)
-                    cursor = response.nextCursor
-                } while (cursor != null)
-                
-                _syncProgress.value = com.karakept.app.data.model.SyncProgress.ProcessingMetadata
-                
-                // 2. Fetch all lists to map bookmark membership
-                val lists = remoteDataSource.fetchLists(server)
-                val bookmarkListMap = mutableMapOf<String, MutableList<String>>() // BookmarkID -> List<ListID>
-            
-                lists.forEach { list ->
-                    try {
-                        val listBookmarks = remoteDataSource.fetchBookmarksForList(server, list.id)
-                        listBookmarks.forEach { bookmark ->
-                            bookmarkListMap.getOrPut(bookmark.id) { mutableListOf() }.add(list.id)
-                        }
-                    } catch (e: Exception) {
-                        // Ignore errors for individual lists
-                    }
-                }
-                
-                // 3. Map DTOs to Entities
-                // NOTE: Since we fetched with includeContent=false, content fields are null/empty.
-                // We must preserve existing content if we have it locally.
-                val existingBookmarksMap = bookmarkDao.getBookmarksForServer(server.id).first()
-                    .associateBy { it.remoteId }
+        executeSyncPipeline(SyncConfiguration.Full(server))
+    }
 
-                // Fetch strategy upfront to decide what to persist
-                val syncStrategy = settingsRepository.contentSyncStrategy.first()
+    /**
+     * Syncs only favorited bookmarks.
+     */
+    suspend fun syncFavorites(server: Server) {
+        executeSyncPipeline(SyncConfiguration.Filtered(server, favourited = true))
+    }
 
-                val entities = allRemoteBookmarks.mapNotNull { dto ->
-                    try {
-                        // Extract URL from content based on type
-                        val url = when (dto.content.type) {
-                            "link" -> dto.content.url ?: ""
-                            "text" -> "" // Text notes don't have URLs
-                            else -> dto.content.url ?: ""
-                        }
-                    
-                        // Parse timestamp - API returns ISO 8601 string
-                        val createdAtMillis = try {
-                            Instant.parse(dto.createdAt).toEpochMilliseconds()
-                        } catch (e: Exception) {
-                            System.currentTimeMillis()
-                        }
-                    
-                        // Use content title if bookmark title is null
-                        val title = dto.title ?: dto.content.title ?: "Untitled"
-
-                        // Determine content. 
-                        // If dto has content (from later sync? or partial?) use it.
-                        // If not, check existing local entity.
-                        // content fields are null/empty.
-                        // We must preserve existing content if we have it locally.
-                        // FIX: Do not use description as content. Only HTML or Text.
-                        // Note is also separate.
-                        // STRICT FIX: If strategy is NEVER or PER_BOOKMARK, IGNORE incoming content during metadata sync.
-                        // For PER_LIST, only allow if bookmark is in target list.
-                        val incomingContent = dto.content.htmlContent ?: dto.content.text
-
-                        // Need sync config for PER_LIST logic (includes effective lists with children)
-                        val syncConfig = settingsRepository.contentSyncConfig.first()
-                        val effectiveSyncLists = syncConfig.getEffectiveSyncLists(lists)
-
-                        val newContent = when (syncStrategy) {
-                            com.karakept.app.data.model.SyncStrategy.NEVER,
-                            com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> null
-                            com.karakept.app.data.model.SyncStrategy.PER_LIST -> {
-                                val bookmarkListIds = bookmarkListMap[dto.id] ?: emptyList()
-                                val isInTargetList = bookmarkListIds.any { effectiveSyncLists.contains(it) }
-                                if (isInTargetList) incomingContent else null
-                            }
-                            com.karakept.app.data.model.SyncStrategy.ALL -> incomingContent
-                        }
-                        
-                        val existingEntity = existingBookmarksMap[dto.id.hashCode().toLong()]
-                        val finalContent = if (!newContent.isNullOrBlank()) {
-                            newContent
-                        } else {
-                            existingEntity?.content // Preserve existing content
-                        }
-                        
-                        // Reading time: calculate if we have content
-                        val readingTimeMinutes = if (finalContent != null) {
-                            ReadingTimeCalculator.calculateReadingTime(finalContent)
-                        } else {
-                            existingEntity?.readingTimeMinutes ?: 0
-                        }
-
-                        // Process tags
-                        val tagsString = dto.tags.joinToString(",") { it.name }
-
-                        // Check if bookmark has "karakept:read" tag to set isRead flag
-                        val isRead = dto.tags.any { it.name == "karakept:read" }
-
-                        // Process lists
-                        val listIdsString = bookmarkListMap[dto.id]?.joinToString(",") ?: ""
-
-                        BookmarkEntity(
-                            remoteId = dto.id.hashCode().toLong(), // Convert string ID to long
-                            originalRemoteId = dto.id, // Store ORIGINAL string ID for API calls
-                            serverId = server.id,
-                            url = url,
-                            title = title,
-                            content = finalContent,
-                            imageUrl = dto.content.imageUrl, // Might be null if no content included? Check API behavior.
-                            description = dto.content.description,
-                            createdAt = createdAtMillis,
-                            isArchived = dto.archived,
-                            isStarred = dto.favourited,
-                            isRead = isRead,
-                            tags = tagsString,
-                            listIds = listIdsString,
-                            readingTimeMinutes = readingTimeMinutes
-                        )
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        null
-                    }
-                }
-
-                // Differential sync: update existing, insert new, delete removed
-                val existingRemoteIds = existingBookmarksMap.keys
-                val incomingRemoteIds = entities.map { it.remoteId }.toSet()
-
-                // Phase 1: Update existing bookmarks
-                val pendingActionBookmarkIds = bookmarkActionsRepository.getPendingActionBookmarkIds(server.id).toSet()
-                val ignoredIds = processedIds + pendingActionBookmarkIds
-            
-                val toUpdate = entities.filter { incoming ->
-                    existingRemoteIds.contains(incoming.remoteId) && !ignoredIds.contains(incoming.remoteId)
-                }.map { incoming ->
-                    // Preserve the existing localId
-                    val existingLocalId = existingBookmarksMap[incoming.remoteId]?.localId ?: 0
-                    incoming.copy(localId = existingLocalId)
-                }
-
-                // Phase 2: Insert new bookmarks
-                val toInsert = entities.filter { incoming ->
-                    !existingRemoteIds.contains(incoming.remoteId)
-                }
-
-                // Phase 3: Delete removed bookmarks
-                val toDeleteRemoteIds = existingRemoteIds - incomingRemoteIds
-                val toDelete = existingBookmarksMap.values.filter {
-                    toDeleteRemoteIds.contains(it.remoteId)
-                }
-
-                // Execute updates
-                if (toUpdate.isNotEmpty()) {
-                    bookmarkDao.updateBookmarks(toUpdate)
-                }
-                if (toInsert.isNotEmpty()) {
-                    bookmarkDao.insertBookmarks(toInsert)
-                }
-                if (toDelete.isNotEmpty()) {
-                    toDelete.forEach { bookmarkDao.deleteBookmark(it) }
-                }
-
-                // 4. Content Sync Strategy
-                // reused syncStrategy from above
-                val targetLists = settingsRepository.contentSyncTargetLists.first()
-                
-                val bookmarksToSyncContent = when (syncStrategy) {
-                    com.karakept.app.data.model.SyncStrategy.NEVER -> emptyList()
-                    com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> emptyList() // Fetch on demand
-                    com.karakept.app.data.model.SyncStrategy.PER_LIST -> {
-                        entities.filter { entity ->
-                            // Check if entity is in any of the target lists
-                            val entityListIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()
-                            entityListIds.intersect(targetLists).isNotEmpty() && entity.content.isNullOrBlank()
-                        }
-                    }
-                    com.karakept.app.data.model.SyncStrategy.ALL -> {
-                        entities.filter { it.content.isNullOrBlank() }
-                    }
-                }
-                
-                if (bookmarksToSyncContent.isNotEmpty()) {
-                     var current = 0
-                     val total = bookmarksToSyncContent.size
-                     _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingContent(current, total)
-                     
-                     // Optimization: If ALL, we might want to refetch pages with content=true?
-                     // But we already did the diffing logic. Creating a mixed approach is complex.
-                     // Simple approach: Fetch individual bookmarks.
-                     // The user warned about limit/cursor. 
-                     // For 1000 bookmarks, 1000 calls is slow but safe.
-                     // Let's implement individual fetch for now.
-                     
-                     bookmarksToSyncContent.forEach { entity ->
-                         try {
-                             val fullBookmark = remoteDataSource.fetchBookmark(server, entity.originalRemoteId)
-                             val content = fullBookmark.content.htmlContent 
-                                 ?: fullBookmark.note 
-                                 ?: fullBookmark.content.description 
-                                 ?: fullBookmark.content.text
-                                 
-                             if (!content.isNullOrBlank()) {
-                                 val readingTime = ReadingTimeCalculator.calculateReadingTime(content)
-                                 bookmarkDao.updateContent(entity.localId, content, readingTime)
-                             }
-                         } catch (e: Exception) {
-                            // Ignore failure for individual content sync
-                            e.printStackTrace()
-                         }
-                         current++
-                         _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingContent(current, total)
-                     }
-                }
-
-                // Sync Assets (Only if we have content implies we might have assets? Or sync assets based on strategy too?)
-                // Existing logic synced assets for ALL remote bookmarks.
-                // Probably better to sync assets only if content is present or if strategy says so?
-                // For now, adhering to strategy for ASSETS too would be consistent.
-                // If NEVER, we probably don't want assets.
-                // Existing logic wipes assets -> `assetDao.deleteAllAssetsForServer(server.id)`
-                // If we don't redownload, we lose them. 
-                // We should only download assets for bookmarks we have content for?
-                // Or just keep existing logic but apply strategy filter?
-                // Let's defer asset optimization to keep scope manageable, but we must protect against wiping if we don't redownload.
-                // Current logic wipes all assets then re-downloads.
-                // If we don't fetch content, we might not have `assets` info in DTO (if `includeContent=false` excludes assets?).
-                // API docs check needed: `include_content=false` usually returns minimal DTO. `assets` field might be empty.
-                // Safe bet: If metadata sync excludes assets, and we wipe assets, we LOSE assets.
-                // We should NOT wipe assets if we are not doing a full refresh.
-                // BUT we need to clean up unused assets.
-                // Logic:
-                // 1. Get all assets from DTOs. (If DTOs have assets).
-                // If DTOs (metadata) don't have assets, we can't sync assets.
-                // Assuming `include_content=false` MIGHT still return asset list?
-                // If not, we risk deleting assets.
-                // Let's NOT delete all assets blindly.
-                // Only delete assets that are no longer associated with valid bookmarks?
-                // `AssetDao` might not have that logic.
-                // For now, I will COMMENT OUT asset wiping to prevent data loss until verified. 
-                // Or better: Only sync assets for `bookmarksToSyncContent`.
-                
-                // ... (Existing asset sync logic commented out or modified) ...
-                
-            } catch (e: Exception) {
-                // Handle error (log, etc.)
-                e.printStackTrace()
-                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
-                throw e
-            } finally {
-                if (_syncProgress.value !is com.karakept.app.data.model.SyncProgress.Error) {
-                    _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
-                }
-            }
-        }
+    /**
+     * Syncs only archived bookmarks.
+     */
+    suspend fun syncArchived(server: Server) {
+        executeSyncPipeline(SyncConfiguration.Filtered(server, archived = true))
     }
 
     /**
@@ -323,113 +97,7 @@ class BookmarkRepository(
      * Respects content sync mode (NEVER/PER_BOOKMARK/PER_LIST/ALL).
      */
     suspend fun syncBookmarksForList(server: Server, listId: String) {
-        mutex.withLock {
-            try {
-                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Starting
-
-                // Process pending actions first
-                try {
-                    bookmarkActionsRepository.processPendingActions(server)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-
-                // Fetch bookmarks for this specific list
-                _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingMetadata(1, 0)
-                val listBookmarks = remoteDataSource.fetchBookmarksForList(server, listId)
-
-                // Determine content sync strategy
-                val syncStrategy = settingsRepository.contentSyncStrategy.first()
-                val syncConfig = settingsRepository.contentSyncConfig.first()
-                val lists = remoteDataSource.fetchLists(server)
-                val effectiveSyncLists = syncConfig.getEffectiveSyncLists(lists)
-
-                // Determine if content should be fetched
-                val shouldFetchContent = when (syncStrategy) {
-                    com.karakept.app.data.model.SyncStrategy.NEVER -> false
-                    com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> false
-                    com.karakept.app.data.model.SyncStrategy.PER_LIST -> effectiveSyncLists.contains(listId)
-                    com.karakept.app.data.model.SyncStrategy.ALL -> true
-                }
-
-                // Convert DTOs to entities
-                val entities = listBookmarks.mapNotNull { dto ->
-                    try {
-                        val url = when (dto.content.type) {
-                            "link" -> dto.content.url ?: ""
-                            "text" -> ""
-                            else -> dto.content.url ?: ""
-                        }
-
-                        val createdAtMillis = try {
-                            Instant.parse(dto.createdAt).toEpochMilliseconds()
-                        } catch (e: Exception) {
-                            System.currentTimeMillis()
-                        }
-
-                        val title = dto.title ?: dto.content.title ?: "Untitled"
-
-                        val content = if (shouldFetchContent) {
-                            dto.content.htmlContent ?: dto.content.text
-                        } else {
-                            null
-                        }
-
-                        val readingTimeMinutes = if (content != null) {
-                            ReadingTimeCalculator.calculateReadingTime(content)
-                        } else {
-                            0
-                        }
-
-                        val tagsString = dto.tags.joinToString(",") { it.name }
-                        val isRead = dto.tags.any { it.name == "karakept:read" }
-
-                        BookmarkEntity(
-                            localId = 0, // Will be set on insert/update
-                            remoteId = dto.id.hashCode().toLong(),
-                            originalRemoteId = dto.id,
-                            serverId = server.id,
-                            url = url,
-                            title = title,
-                            content = content,
-                            imageUrl = dto.content.imageUrl,
-                            description = dto.content.description,
-                            createdAt = createdAtMillis,
-                            isArchived = dto.archived,
-                            isStarred = dto.favourited,
-                            isRead = isRead,
-                            tags = tagsString,
-                            listIds = listId, // This bookmark is in the current list
-                            readingTimeMinutes = readingTimeMinutes
-                        )
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        null
-                    }
-                }
-
-                // Upsert: Update existing, insert new
-                val existingBookmarksMap = bookmarkDao.getBookmarksForServer(server.id).first()
-                    .associateBy { it.originalRemoteId }
-
-                entities.forEach { entity ->
-                    val existing = existingBookmarksMap[entity.originalRemoteId]
-                    if (existing != null) {
-                        // Update existing bookmark
-                        bookmarkDao.updateBookmarks(listOf(entity.copy(localId = existing.localId)))
-                    } else {
-                        // Insert new bookmark
-                        bookmarkDao.insertBookmarks(listOf(entity))
-                    }
-                }
-
-                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
-            } catch (e: Exception) {
-                e.printStackTrace()
-                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
-                throw e
-            }
-        }
+        executeSyncPipeline(SyncConfiguration.ForList(server, listId))
     }
 
     suspend fun fetchBookmarkContent(bookmarkId: Long, serverId: String): String? {
@@ -444,6 +112,470 @@ class BookmarkRepository(
         } catch (e: Exception) {
             e.printStackTrace()
             return null
+        }
+    }
+
+    // Pagination support
+    suspend fun getBookmarksPaged(
+        server: Server,
+        status: com.karakept.app.data.model.FilterStatus,
+        offset: Int,
+        limit: Int,
+        listId: String? = null
+    ): List<BookmarkEntity> {
+        val result = if (listId != null) {
+            // When filtering by list, use the list-specific query
+            println("getBookmarksPaged: Using list-filtered query for listId=$listId")
+            bookmarkDao.getBookmarksForListPaged(server.id, listId, limit, offset)
+        } else {
+            when (status) {
+                // ALL shows non-archived bookmarks
+                com.karakept.app.data.model.FilterStatus.ALL ->
+                    bookmarkDao.getNotArchivedPagedForServer(server.id, limit, offset)
+                // ALL_INCLUDING_ARCHIVED shows all bookmarks (used for list views)
+                com.karakept.app.data.model.FilterStatus.ALL_INCLUDING_ARCHIVED ->
+                    bookmarkDao.getBookmarksPagedForServer(server.id, limit, offset)
+                com.karakept.app.data.model.FilterStatus.FAVORITES ->
+                    bookmarkDao.getFavoritesPagedForServer(server.id, limit, offset)
+                com.karakept.app.data.model.FilterStatus.ARCHIVED ->
+                    bookmarkDao.getArchivedPagedForServer(server.id, limit, offset)
+            }
+        }
+        println("getBookmarksPaged: status=$status, listId=$listId, limit=$limit, offset=$offset -> returned ${result.size} bookmarks")
+        result.forEach { bookmark ->
+            println("  - ${bookmark.originalRemoteId} (${bookmark.title}) listIds='${bookmark.listIds}' createdAt=${bookmark.createdAt}")
+        }
+        return result
+    }
+
+    suspend fun getBookmarkCount(
+        server: Server,
+        status: com.karakept.app.data.model.FilterStatus,
+        listId: String? = null
+    ): Int {
+        return if (listId != null) {
+            // When filtering by list, use the list-specific count query
+            bookmarkDao.getBookmarksForListCount(server.id, listId)
+        } else {
+            when (status) {
+                // ALL shows non-archived bookmarks
+                com.karakept.app.data.model.FilterStatus.ALL ->
+                    bookmarkDao.getNotArchivedCount(server.id)
+                // ALL_INCLUDING_ARCHIVED shows all bookmarks
+                com.karakept.app.data.model.FilterStatus.ALL_INCLUDING_ARCHIVED ->
+                    bookmarkDao.getTotalBookmarkCount(server.id)
+                com.karakept.app.data.model.FilterStatus.FAVORITES ->
+                    bookmarkDao.getFavoritesCount(server.id)
+                com.karakept.app.data.model.FilterStatus.ARCHIVED ->
+                    bookmarkDao.getArchivedCount(server.id)
+            }
+        }
+    }
+
+    // ========== UNIFIED SYNC PIPELINE ==========
+
+    /**
+     * Unified sync pipeline that handles all sync modes (Full, Filtered, ForList)
+     * through configuration, eliminating code duplication and fixing PER_LIST
+     * strategy for filtered syncs.
+     */
+    private inner class BookmarkSyncPipeline(
+        private val config: SyncConfiguration
+    ) {
+        suspend fun execute() {
+            // Phase 1: Process pending actions
+            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Starting
+            val processedIds = processPendingActions()
+
+            // Phase 2: Fetch metadata
+            val remoteBookmarks = fetchBookmarkMetadata()
+
+            // Phase 3: Fetch list membership (conditional)
+            val bookmarkListMap = fetchListMembership(remoteBookmarks)
+
+            // Phase 4: Map DTOs to entities & perform differential sync
+            _syncProgress.value = com.karakept.app.data.model.SyncProgress.ProcessingMetadata
+            val entities = mapToEntities(remoteBookmarks, bookmarkListMap)
+            val entitiesWithLocalIds = performDifferentialSync(entities, processedIds)
+
+            // Phase 5: Content sync (uses entities with correct localIds)
+            syncContent(entitiesWithLocalIds)
+
+            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+        }
+
+        // Phase 1: Process Pending Actions
+        private suspend fun processPendingActions(): Set<Long> {
+            return try {
+                val ids = bookmarkActionsRepository.processPendingActions(config.server)
+                ids.toSet()
+            } catch (e: Exception) {
+                println("Error processing pending actions: ${e.message}")
+                e.printStackTrace()
+                emptySet()
+            }
+        }
+
+        // Phase 2: Fetch Bookmark Metadata
+        private suspend fun fetchBookmarkMetadata(): List<com.karakept.app.data.remote.model.BookmarkDto> {
+            val allBookmarks = mutableListOf<com.karakept.app.data.remote.model.BookmarkDto>()
+            var cursor: String? = null
+            var pageCount = 0
+
+            // Special case for list sync - uses dedicated endpoint
+            if (config is SyncConfiguration.ForList) {
+                val bookmarks = remoteDataSource.fetchBookmarksForList(config.server, config.listId)
+                return bookmarks
+            }
+
+            // Standard paginated fetch for Full and Filtered syncs
+            do {
+                pageCount++
+                _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingMetadata(pageCount, allBookmarks.size)
+
+                val response = remoteDataSource.fetchBookmarks(
+                    server = config.server,
+                    cursor = cursor,
+                    includeContent = false,
+                    archived = config.apiFilters.archived,
+                    favourited = config.apiFilters.favourited
+                )
+
+                allBookmarks.addAll(response.bookmarks)
+                cursor = response.nextCursor
+            } while (cursor != null)
+
+            return allBookmarks
+        }
+
+        // Phase 3: Fetch List Membership
+        private suspend fun fetchListMembership(
+            remoteBookmarks: List<com.karakept.app.data.remote.model.BookmarkDto>
+        ): Map<String, List<String>> {
+            if (!config.shouldFetchLists) {
+                println("fetchListMembership: Skipping list fetch (shouldFetchLists=false)")
+                return emptyMap() // Filtered syncs skip this
+            }
+
+            println("fetchListMembership: Config type = ${config::class.simpleName}, fetching lists for ${remoteBookmarks.size} bookmarks")
+
+            return when (config) {
+                is SyncConfiguration.Full -> fetchAllListMembership()
+                is SyncConfiguration.ForList -> buildSingleListMap(remoteBookmarks, config.listId)
+                else -> emptyMap()
+            }
+        }
+
+        private suspend fun fetchAllListMembership(): Map<String, List<String>> {
+            val bookmarkListMap = mutableMapOf<String, MutableList<String>>()
+            val lists = remoteDataSource.fetchLists(config.server)
+
+            lists.forEach { list ->
+                try {
+                    val listBookmarks = remoteDataSource.fetchBookmarksForList(config.server, list.id)
+                    listBookmarks.forEach { bookmark ->
+                        bookmarkListMap.getOrPut(bookmark.id) { mutableListOf() }.add(list.id)
+                    }
+                } catch (e: Exception) {
+                    // Skip failed lists
+                }
+            }
+
+            return bookmarkListMap
+        }
+
+        private fun buildSingleListMap(
+            remoteBookmarks: List<com.karakept.app.data.remote.model.BookmarkDto>,
+            listId: String
+        ): Map<String, List<String>> {
+            val map = remoteBookmarks.associate { it.id to listOf(listId) }
+            println("buildSingleListMap: Created map for list $listId with ${map.size} entries")
+            return map
+        }
+
+        // Phase 4: Map to Entities & Differential Sync
+        private suspend fun mapToEntities(
+            dtos: List<com.karakept.app.data.remote.model.BookmarkDto>,
+            bookmarkListMap: Map<String, List<String>>
+        ): List<BookmarkEntity> {
+            // Use special query that includes content existence info (reading time + content flag)
+            val existingBookmarks = bookmarkDao.getBookmarksForServerWithContentInfo(config.server.id)
+                .associateBy { it.originalRemoteId }
+            val syncStrategy = settingsRepository.contentSyncStrategy.first()
+
+            return dtos.mapNotNull { dto ->
+                try {
+                    mapDtoToEntity(dto, bookmarkListMap, existingBookmarks, syncStrategy)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
+                }
+            }
+        }
+
+        private suspend fun mapDtoToEntity(
+            dto: com.karakept.app.data.remote.model.BookmarkDto,
+            bookmarkListMap: Map<String, List<String>>,
+            existingBookmarks: Map<String, BookmarkEntity>,
+            syncStrategy: com.karakept.app.data.model.SyncStrategy
+        ): BookmarkEntity {
+            val existing = existingBookmarks[dto.id]
+
+            val url = when (dto.content.type) {
+                "link" -> dto.content.url ?: ""
+                "text" -> ""
+                else -> dto.content.url ?: ""
+            }
+
+            val createdAtMillis = try {
+                Instant.parse(dto.createdAt).toEpochMilliseconds()
+            } catch (e: Exception) {
+                System.currentTimeMillis()
+            }
+
+            val title = dto.title ?: dto.content.title ?: "Untitled"
+            val incomingContent = dto.content.htmlContent ?: dto.content.text
+
+            // CRITICAL FIX: Determine listIds - preserve from DB for filtered syncs
+            val listIds = when {
+                bookmarkListMap.isNotEmpty() -> {
+                    val ids = bookmarkListMap[dto.id]?.joinToString(",") ?: ""
+                    println("mapDtoToEntity: Bookmark ${dto.id} (${dto.title}) -> listIds: '$ids'")
+                    ids
+                }
+                existing != null -> existing.listIds // Preserve for filtered syncs
+                else -> ""
+            }
+
+            // Apply content strategy
+            val newContent = when (syncStrategy) {
+                com.karakept.app.data.model.SyncStrategy.NEVER,
+                com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> null
+                com.karakept.app.data.model.SyncStrategy.PER_LIST -> {
+                    // Use listIds from either API or existing entity
+                    val entityListIds = listIds.split(",").filter { it.isNotEmpty() }.toSet()
+                    val syncConfig = settingsRepository.contentSyncConfig.first()
+                    val targetLists = syncConfig.selectedLists.toSet()
+                    if (entityListIds.intersect(targetLists).isNotEmpty()) incomingContent else null
+                }
+                com.karakept.app.data.model.SyncStrategy.ALL -> incomingContent
+            }
+
+            // Determine if existing bookmark has content (content field will be "HAS_CONTENT" or "")
+            val existingHasContent = existing?.content == "HAS_CONTENT"
+            val existingReadingTime = existing?.readingTimeMinutes ?: 0
+
+            // Decide final content and reading time based on strategy
+            val (finalContent, finalReadingTime) = when {
+                // If we have new content from metadata sync, use it
+                !newContent.isNullOrBlank() -> {
+                    val time = ReadingTimeCalculator.calculateReadingTime(newContent)
+                    Pair(newContent, time)
+                }
+                // If existing has content, preserve it (don't overwrite with empty)
+                existingHasContent -> {
+                    // Keep empty string as placeholder, but preserve reading time
+                    // Content will remain in DB, we just don't load it during metadata sync
+                    Pair("", existingReadingTime)
+                }
+                // No content at all
+                else -> Pair("", 0)
+            }
+
+            return BookmarkEntity(
+                localId = existing?.localId ?: 0L,
+                remoteId = dto.id.hashCode().toLong(),
+                originalRemoteId = dto.id,
+                serverId = config.server.id,
+                title = title,
+                url = url,
+                description = dto.content.description,
+                imageUrl = dto.content.imageUrl,
+                tags = dto.tags.map { it.name }.joinToString(","),
+                listIds = listIds,
+                isStarred = dto.favourited,
+                isArchived = dto.archived,
+                isRead = existing?.isRead ?: false,
+                createdAt = createdAtMillis,
+                readingTimeMinutes = finalReadingTime,
+                content = finalContent
+            )
+        }
+
+        private suspend fun performDifferentialSync(
+            entities: List<BookmarkEntity>,
+            processedIds: Set<Long>
+        ): List<BookmarkEntity> {
+            val existing = bookmarkDao.getBookmarksForServer(config.server.id).first()
+            val pendingIds = bookmarkActionsRepository.getPendingActionBookmarkIds(config.server.id).toSet()
+            val ignoredIds = processedIds + pendingIds
+
+            // Update existing - need to handle metadata vs full update
+            val toUpdate = entities.filter { incoming ->
+                existing.any { e -> e.remoteId == incoming.remoteId } &&
+                !ignoredIds.contains(incoming.remoteId)
+            }.map { incoming ->
+                val localId = existing.first { e -> e.remoteId == incoming.remoteId }.localId
+                incoming.copy(localId = localId)
+            }
+
+            // Update bookmarks - use metadata-only update when content is empty (preserving existing content)
+            // Use full update when we have new content from metadata sync
+            if (toUpdate.isNotEmpty()) {
+                println("performDifferentialSync: Updating ${toUpdate.size} bookmarks")
+            }
+            toUpdate.forEach { bookmark ->
+                println("  - UPDATE: ${bookmark.originalRemoteId} (${bookmark.title}) listIds='${bookmark.listIds}' archived=${bookmark.isArchived}")
+                if (!bookmark.content.isNullOrEmpty()) {
+                    // We have new content, do full update
+                    bookmarkDao.updateBookmarks(listOf(bookmark))
+                } else {
+                    // No content in this update, preserve existing content with metadata-only update
+                    bookmarkDao.updateBookmarkMetadata(
+                        localId = bookmark.localId,
+                        title = bookmark.title,
+                        url = bookmark.url,
+                        description = bookmark.description,
+                        imageUrl = bookmark.imageUrl,
+                        tags = bookmark.tags,
+                        listIds = bookmark.listIds,
+                        isStarred = bookmark.isStarred,
+                        isArchived = bookmark.isArchived,
+                        isRead = bookmark.isRead,
+                        readingTimeMinutes = bookmark.readingTimeMinutes
+                    )
+                }
+            }
+
+            // Insert new
+            val toInsert = entities.filter { incoming ->
+                existing.none { e -> e.remoteId == incoming.remoteId }
+            }
+
+            if (toInsert.isNotEmpty()) {
+                println("performDifferentialSync: Inserting ${toInsert.size} bookmarks")
+                toInsert.forEach { println("  - INSERT: ${it.originalRemoteId} (${it.title}) listIds='${it.listIds}' archived=${it.isArchived}") }
+                bookmarkDao.insertBookmarks(toInsert)
+
+                // IMPORTANT: Re-query to get the generated localIds for newly inserted bookmarks
+                // Room doesn't return IDs when inserting a list, so we need to fetch them
+                // This is needed for content sync to work on new bookmarks
+                val afterInsert = bookmarkDao.getBookmarksForServer(config.server.id).first()
+                val insertedRemoteIds = toInsert.map { it.remoteId }.toSet()
+
+                // Update the entities list with correct localIds for inserted bookmarks
+                val updatedEntities = entities.map { entity ->
+                    if (insertedRemoteIds.contains(entity.remoteId)) {
+                        val dbEntity = afterInsert.find { it.remoteId == entity.remoteId }
+                        if (dbEntity != null) {
+                            entity.copy(localId = dbEntity.localId)
+                        } else {
+                            entity
+                        }
+                    } else {
+                        entity
+                    }
+                }
+
+                // Return the updated entities list for content sync
+                return updatedEntities
+            }
+
+            // Delete removed (conditional)
+            if (config.shouldDeleteRemoved) {
+                val incomingIds = entities.map { it.remoteId }.toSet()
+                val toDelete = existing.filter { it.remoteId !in incomingIds }
+                if (toDelete.isNotEmpty()) {
+                    toDelete.forEach { bookmarkDao.deleteBookmark(it) }
+                }
+            }
+
+            return entities
+        }
+
+        // Phase 5: Content Sync
+        private suspend fun syncContent(entitiesParam: List<BookmarkEntity>) {
+            // Note: entities may have updated localIds after insertion
+            val entities = entitiesParam
+            val syncStrategy = settingsRepository.contentSyncStrategy.first()
+
+            val bookmarksToSync = when (syncStrategy) {
+                com.karakept.app.data.model.SyncStrategy.NEVER,
+                com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> emptyList()
+                com.karakept.app.data.model.SyncStrategy.PER_LIST -> {
+                    val syncConfig = settingsRepository.contentSyncConfig.first()
+                    val targetLists = if (config.shouldFetchLists) {
+                        // Full/List sync: get effective sync lists with hierarchy
+                        val lists = remoteDataSource.fetchLists(config.server)
+                        syncConfig.getEffectiveSyncLists(lists).toSet()
+                    } else {
+                        // Filtered sync: use configured lists directly
+                        syncConfig.selectedLists.toSet()
+                    }
+
+                    entities.filter { entity ->
+                        // Use listIds from entity (either fresh from API or preserved from DB)
+                        val entityListIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()
+                        // Check if bookmark needs content: is in target list AND doesn't have content yet
+                        // We use readingTimeMinutes as indicator (0 = no content)
+                        entityListIds.intersect(targetLists).isNotEmpty() && entity.readingTimeMinutes == 0
+                    }
+                }
+                com.karakept.app.data.model.SyncStrategy.ALL -> entities.filter { entity ->
+                    // Only sync content if bookmark doesn't have it yet (readingTimeMinutes == 0)
+                    entity.readingTimeMinutes == 0
+                }
+            }
+
+            if (bookmarksToSync.isNotEmpty()) {
+                fetchContentForBookmarks(bookmarksToSync)
+            }
+        }
+
+        private suspend fun fetchContentForBookmarks(bookmarks: List<BookmarkEntity>) {
+            var current = 0
+            val total = bookmarks.size
+            _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingContent(current, total)
+
+            bookmarks.forEach { entity ->
+                try {
+                    val fullBookmark = remoteDataSource.fetchBookmark(config.server, entity.originalRemoteId)
+                    val content = fullBookmark.content.htmlContent
+                        ?: fullBookmark.note
+                        ?: fullBookmark.content.description
+                        ?: fullBookmark.content.text
+
+                    if (!content.isNullOrBlank()) {
+                        val readingTime = ReadingTimeCalculator.calculateReadingTime(content)
+                        bookmarkDao.updateContent(entity.localId, content, readingTime)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                current++
+                _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingContent(current, total)
+            }
+        }
+    }
+
+    /**
+     * Executes the sync pipeline with the given configuration.
+     * Provides unified error handling and progress reporting.
+     */
+    private suspend fun executeSyncPipeline(config: SyncConfiguration) {
+        mutex.withLock {
+            try {
+                val pipeline = BookmarkSyncPipeline(config)
+                pipeline.execute()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
+                throw e
+            } finally {
+                if (_syncProgress.value !is com.karakept.app.data.model.SyncProgress.Error) {
+                    _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+                }
+            }
         }
     }
 }

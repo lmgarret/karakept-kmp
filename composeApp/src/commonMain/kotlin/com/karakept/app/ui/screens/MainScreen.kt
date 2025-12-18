@@ -58,6 +58,9 @@ class MainScreen : Screen {
         val bookmarks by screenModel.bookmarks.collectAsState()
         val layoutType by settingsScreenModel.layoutType.collectAsState()
         val isSyncing by screenModel.isSyncing.collectAsState()
+        val syncProgress by screenModel.syncProgress.collectAsState()
+        val isLoadingMore by screenModel.isLoadingMore.collectAsState()
+        val hasMoreItems by screenModel.hasMoreItems.collectAsState()
         val savedFilters by screenModel.savedFilters.collectAsState()
         val currentFilter by screenModel.currentFilter.collectAsState()
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
@@ -75,12 +78,23 @@ class MainScreen : Screen {
         val listState = rememberLazyListState()
         val isDesktop = remember { getPlatform().name.contains("Java") }
         val uriHandler = LocalUriHandler.current
+        val scrollToTopEvent by screenModel.scrollToTopEvent.collectAsState()
 
-        // Auto-scroll to top when new bookmarks are added at the beginning
-        LaunchedEffect(bookmarks.firstOrNull()?.remoteId) {
-            // Only scroll if we're near the top (first 3 items visible)
-            if (listState.firstVisibleItemIndex <= 2 && bookmarks.isNotEmpty()) {
-                listState.animateScrollToItem(0)
+        // Auto-scroll to top when sync completes and new bookmarks arrive
+        LaunchedEffect(scrollToTopEvent) {
+            println("MainScreen: scrollToTopEvent changed to $scrollToTopEvent, bookmarks.size=${bookmarks.size}")
+            // Only scroll if the event changed (sync completed) and we have bookmarks
+            if (scrollToTopEvent > 0 && bookmarks.isNotEmpty()) {
+                println("MainScreen: Scrolling to top...")
+                // Small delay to ensure bookmarks are rendered
+                kotlinx.coroutines.delay(100)
+                println("MainScreen: After delay, firstVisibleItemIndex=${listState.firstVisibleItemIndex}")
+                try {
+                    listState.animateScrollToItem(0)
+                    println("MainScreen: Scrolled to top successfully, firstVisibleItemIndex=${listState.firstVisibleItemIndex}")
+                } catch (e: Exception) {
+                    println("MainScreen: Failed to scroll: ${e.message}")
+                }
             }
         }
 
@@ -182,6 +196,9 @@ class MainScreen : Screen {
                     BookmarkListContent(
                         bookmarks = bookmarks,
                         isSyncing = isSyncing,
+                        syncProgress = syncProgress,
+                        isLoadingMore = isLoadingMore,
+                        hasMoreItems = hasMoreItems,
                         layoutType = layoutType,
                         swipeLeftAction = swipeLeftAction,
                         swipeRightAction = swipeRightAction,
@@ -250,7 +267,8 @@ class MainScreen : Screen {
                                 SwipeAction.NONE -> {}
                             }
                         },
-                        onRefresh = { if (!offlineMode) screenModel.syncBookmarks() }
+                        onRefresh = { if (!offlineMode) screenModel.syncBookmarks() },
+                        onLoadMore = { screenModel.loadNextPage() }
                     )
                 }
             }
