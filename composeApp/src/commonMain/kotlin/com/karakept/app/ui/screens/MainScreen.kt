@@ -70,6 +70,7 @@ class MainScreen : Screen {
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
         val expandedLists by screenModel.expandedLists.collectAsState()
+        val listCounts by screenModel.listCounts.collectAsState()
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
@@ -128,6 +129,7 @@ class MainScreen : Screen {
         MainScreenDrawer(
             drawerState = drawerState,
             lists = lists,
+            listCounts = listCounts,
             savedFilters = savedFilters,
             expandedLists = expandedLists,
             currentFilter = currentFilter,

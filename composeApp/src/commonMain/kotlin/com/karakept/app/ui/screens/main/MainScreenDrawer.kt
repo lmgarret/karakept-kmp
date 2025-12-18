@@ -41,6 +41,7 @@ import com.karakept.app.ui.screens.SavedFilterItem
 internal fun MainScreenDrawer(
     drawerState: DrawerState,
     lists: List<ListDto>,
+    listCounts: Map<String, Int>,
     savedFilters: List<SavedFilterEntity>,
     expandedLists: Set<String>,
     currentFilter: FilterConfig,
@@ -140,7 +141,22 @@ internal fun MainScreenDrawer(
                                 }
 
                                 NavigationDrawerItem(
-                                    label = { Text("${list.icon} ${list.name}") },
+                                    label = {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("${list.icon} ${list.name}")
+                                            listCounts[list.id]?.let { count ->
+                                                Text(
+                                                    text = count.toString(),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                                )
+                                            }
+                                        }
+                                    },
                                     selected = currentFilter.lists.contains(list.id),
                                     colors = NavigationDrawerItemDefaults.colors(
                                         selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),

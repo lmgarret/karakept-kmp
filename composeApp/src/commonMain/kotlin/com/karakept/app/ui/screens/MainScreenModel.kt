@@ -98,6 +98,23 @@ class MainScreenModel(
         }
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Track list counts (map of list ID to bookmark count)
+    val listCounts: StateFlow<Map<String, Int>> = combine(
+        selectedServer,
+        lists,
+        allBookmarks
+    ) { server, listItems, bookmarks ->
+        if (server == null) return@combine emptyMap()
+
+        listItems.associate { list ->
+            val count = bookmarks.count { bookmark ->
+                val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                bookmarkLists.contains(list.id)
+            }
+            list.id to count
+        }
+    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     val swipeLeftAction: StateFlow<com.karakept.app.data.model.SwipeAction> = settingsRepository.swipeLeftAction.stateIn(
         screenModelScope,
         SharingStarted.WhileSubscribed(5000),
