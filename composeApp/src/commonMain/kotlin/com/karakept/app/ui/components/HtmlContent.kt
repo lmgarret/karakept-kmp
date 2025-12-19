@@ -47,7 +47,7 @@ fun HtmlContent(
     viewerMode: ViewerMode,
     modifier: Modifier = Modifier,
     onLinkClick: ((String) -> Unit)? = null,
-    hideArticleThumbnails: Boolean = false,
+    removeFirstImage: Boolean = false,
     onReady: (() -> Unit)? = null,
     customTextColor: Color? = null,
     customBackgroundColor: Color? = null,
@@ -56,10 +56,10 @@ fun HtmlContent(
     localFilePath: String? = null
 ) {
     // Debug output
-    println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode, hideThumb=$hideArticleThumbnails")
+    println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode, removeFirstImage=$removeFirstImage")
 
     // Process HTML based on viewer mode asynchronously
-    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, hideArticleThumbnails, customFontSize, customFontFamily, localFilePath) {
+    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, customFontSize, customFontFamily, localFilePath) {
         if (localFilePath != null) {
             // If we have a local file, we don't need to process HTML string
             // Just return a placeholder to trigger rendering
@@ -72,16 +72,16 @@ fun HtmlContent(
             return@produceState
         }
 
-        val cacheKey = HtmlCache.generateKey(html, "${viewerMode.name}_hideThumb=${hideArticleThumbnails}_font=${customFontSize}-${customFontFamily.name}")
+        val cacheKey = HtmlCache.generateKey(html, "${viewerMode.name}_removeFirstImage=${removeFirstImage}_font=${customFontSize}-${customFontFamily.name}")
         val cached = HtmlCache.get(cacheKey)
-        
+
         if (cached != null) {
             value = cached
         } else {
             value = withContext(Dispatchers.Default) {
                 try {
                     val result = when (viewerMode) {
-                        ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = hideArticleThumbnails)
+                        ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = removeFirstImage)
                         ViewerMode.WEB -> HtmlArchiveProcessor.processForArchive(html)
                     }
                     println("HtmlContent: Processed HTML length=${result.length}, isBlank=${result.isBlank()}")
@@ -144,12 +144,6 @@ fun HtmlContent(
                         customFontSize = customFontSize,
                         customFontFamily = customFontFamily,
                         localFilePath = localFilePath
-                    )
-                } else if (processedHtml != null && processedHtml!!.isBlank()) {
-                     Text(
-                        text = "Content could not be displayed safely",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error
                     )
                 }
 

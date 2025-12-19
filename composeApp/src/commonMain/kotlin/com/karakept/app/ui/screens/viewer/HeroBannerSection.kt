@@ -12,7 +12,6 @@ import com.karakept.app.ui.components.HeroImageBanner
 
 @Composable
 internal fun HeroBannerSection(
-    imageUrl: String?,
     title: String,
     url: String,
     tags: String,
@@ -20,7 +19,9 @@ internal fun HeroBannerSection(
     showTags: Boolean,
     scrollState: LazyListState,
     bannerHeight: Dp,
-    onUrlClick: (() -> Unit)?
+    onUrlClick: (() -> Unit)?,
+    bannerImageUrl: String? = null,
+    screenshotUrl: String? = null
 ) {
     if (scrollState.firstVisibleItemIndex == 0) {
         Box(
@@ -33,14 +34,15 @@ internal fun HeroBannerSection(
                 }
         ) {
             HeroImageBanner(
-                imageUrl = imageUrl,
                 title = title,
                 url = url,
                 tags = tags,
                 readingTimeMinutes = readingTimeMinutes,
                 scrollProgress = (scrollState.firstVisibleItemScrollOffset / 300f).coerceIn(0f, 1f),
                 showTags = showTags,
-                onUrlClick = onUrlClick
+                onUrlClick = onUrlClick,
+                bannerImageUrl = bannerImageUrl,
+                screenshotUrl = screenshotUrl
             )
         }
     }

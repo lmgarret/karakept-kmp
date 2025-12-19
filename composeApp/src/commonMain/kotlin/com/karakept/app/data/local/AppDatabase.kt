@@ -22,7 +22,7 @@ import com.karakept.app.data.local.entity.PendingActionEntity
         AssetEntity::class,
         PendingActionEntity::class
     ],
-    version = 2
+    version = 4
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao

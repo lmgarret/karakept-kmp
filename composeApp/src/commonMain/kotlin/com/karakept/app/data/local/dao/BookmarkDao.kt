@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.Flow
 interface BookmarkDao {
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, tags, listIds, isStarred, isArchived,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, '' as content
         FROM bookmarks
         WHERE serverId = :serverId
@@ -55,6 +55,8 @@ interface BookmarkDao {
             url = :url,
             description = :description,
             imageUrl = :imageUrl,
+            bannerImageAssetId = :bannerImageAssetId,
+            screenshotAssetId = :screenshotAssetId,
             tags = :tags,
             listIds = :listIds,
             isStarred = :isStarred,
@@ -69,6 +71,8 @@ interface BookmarkDao {
         url: String,
         description: String?,
         imageUrl: String?,
+        bannerImageAssetId: String?,
+        screenshotAssetId: String?,
         tags: String,
         listIds: String,
         isStarred: Boolean,
@@ -80,7 +84,7 @@ interface BookmarkDao {
     // Paginated queries
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, tags, listIds, isStarred, isArchived,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, '' as content
         FROM bookmarks
         WHERE serverId = :serverId
@@ -95,7 +99,7 @@ interface BookmarkDao {
 
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, tags, listIds, isStarred, isArchived,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isStarred = 1
@@ -110,7 +114,7 @@ interface BookmarkDao {
 
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, tags, listIds, isStarred, isArchived,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isArchived = 1
@@ -125,7 +129,7 @@ interface BookmarkDao {
 
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, tags, listIds, isStarred, isArchived,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isArchived = 0
@@ -151,7 +155,7 @@ interface BookmarkDao {
     // List-filtered queries
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, tags, listIds, isStarred, isArchived,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, '' as content
         FROM bookmarks
         WHERE serverId = :serverId
@@ -189,7 +193,7 @@ interface BookmarkDao {
     // Query for sync that includes content length and reading time to determine if content exists
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, tags, listIds, isStarred, isArchived,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes,
                CASE WHEN length(content) > 0 THEN 'HAS_CONTENT' ELSE '' END as content
         FROM bookmarks

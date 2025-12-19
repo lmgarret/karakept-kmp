@@ -25,7 +25,7 @@ import com.karakept.app.ui.screens.BookmarkLoadingState
 internal fun ContentBodySection(
     content: String?,
     viewerMode: ViewerMode,
-    hideArticleThumbnails: Boolean,
+    removeFirstImage: Boolean,
     htmlTextColor: Color?,
     htmlBackgroundColor: Color?,
     htmlFontSize: Int,
@@ -56,7 +56,7 @@ internal fun ContentBodySection(
                 HtmlContent(
                     html = content,
                     viewerMode = viewerMode,
-                    hideArticleThumbnails = hideArticleThumbnails,
+                    removeFirstImage = removeFirstImage,
                     onLinkClick = onLinkClick,
                     onReady = { htmlContentReady = true },
                     customTextColor = htmlTextColor,

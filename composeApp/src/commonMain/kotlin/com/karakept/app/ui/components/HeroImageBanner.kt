@@ -59,7 +59,6 @@ private fun extractDomain(url: String): String {
  */
 @Composable
 fun HeroImageBanner(
-    imageUrl: String?,
     title: String,
     url: String? = null,
     tags: String = "",
@@ -67,18 +66,23 @@ fun HeroImageBanner(
     scrollProgress: Float = 0f,
     showTags: Boolean = true,
     onUrlClick: (() -> Unit)? = null,
+    bannerImageUrl: String? = null,
+    screenshotUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
+    // Determine which image to show: bannerImageUrl (server asset) → screenshotUrl → emoji
+    val effectiveImageUrl = bannerImageUrl ?: screenshotUrl
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(320.dp) // Increased height for better parallax effect
     ) {
-        if (imageUrl != null) {
+        if (effectiveImageUrl != null) {
             // Image background
             AsyncImage(
                 model = ImageRequest.Builder(LocalPlatformContext.current)
-                    .data(imageUrl)
+                    .data(effectiveImageUrl)
                     .crossfade(true)
                     .build(),
                 contentDescription = null,

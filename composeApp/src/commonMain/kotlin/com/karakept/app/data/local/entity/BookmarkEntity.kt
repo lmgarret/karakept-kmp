@@ -19,6 +19,8 @@ data class BookmarkEntity(
     val title: String,
     val content: String?,
     val imageUrl: String?,
+    val bannerImageAssetId: String?,
+    val screenshotAssetId: String?,
     val description: String?,
     val createdAt: Long,
     val isArchived: Boolean,

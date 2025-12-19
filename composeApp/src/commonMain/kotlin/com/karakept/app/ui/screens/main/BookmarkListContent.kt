@@ -53,7 +53,8 @@ internal fun BookmarkListContent(
     onBookmarkLongClick: (BookmarkEntity) -> Unit,
     onSwipeAction: (BookmarkEntity, SwipeAction) -> Unit,
     onRefresh: () -> Unit,
-    onLoadMore: () -> Unit
+    onLoadMore: () -> Unit,
+    serverUrl: String? = null
 ) {
     // Detect when scrolled near end
     LaunchedEffect(listState) {
@@ -100,6 +101,26 @@ internal fun BookmarkListContent(
                             onSwipeAction(bookmark, action)
                         }
                     ) {
+                        // Construct banner and screenshot URLs if available
+                        val bannerImageUrl = if (serverUrl != null && bookmark.bannerImageAssetId != null) {
+                            com.karakept.app.utils.AssetUrlUtils.getAssetUrl(serverUrl, bookmark.bannerImageAssetId)
+                        } else null
+
+                        val screenshotUrl = if (serverUrl != null && bookmark.screenshotAssetId != null) {
+                            com.karakept.app.utils.AssetUrlUtils.getAssetUrl(serverUrl, bookmark.screenshotAssetId)
+                        } else null
+
+                        // Log which asset is being used for display (bannerImage preferred over imageUrl)
+                        if (bannerImageUrl != null) {
+                            println("📸 LIST: Using bannerImage for bookmark ${bookmark.remoteId}")
+                        } else if (screenshotUrl != null) {
+                            println("📸 LIST: Using screenshot for bookmark ${bookmark.remoteId}")
+                        } else if (bookmark.imageUrl != null) {
+                            println("📸 LIST: No asset available for bookmark ${bookmark.remoteId}, imageUrl='${bookmark.imageUrl}' exists but not displayed")
+                        } else {
+                            println("📸 LIST: No image available for bookmark ${bookmark.remoteId}, showing emoji")
+                        }
+
                         when (layoutType) {
                             LayoutType.CARD -> BookmarkCardLayout(
                                 bookmark = bookmark,
@@ -109,7 +130,9 @@ internal fun BookmarkListContent(
                                 onLongClick = { onBookmarkLongClick(bookmark) },
                                 showReadingTime = showReadingTimeBadge,
                                 showTags = showTags,
-                                dimRead = dimReadBookmarks
+                                dimRead = dimReadBookmarks,
+                                bannerImageUrl = bannerImageUrl,
+                                screenshotUrl = screenshotUrl
                             )
                             LayoutType.LIST -> BookmarkListLayout(
                                 bookmark = bookmark,
@@ -119,7 +142,9 @@ internal fun BookmarkListContent(
                                 onLongClick = { onBookmarkLongClick(bookmark) },
                                 showReadingTime = showReadingTimeBadge,
                                 showTags = showTags,
-                                dimRead = dimReadBookmarks
+                                dimRead = dimReadBookmarks,
+                                bannerImageUrl = bannerImageUrl,
+                                screenshotUrl = screenshotUrl
                             )
                         }
                     }

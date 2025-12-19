@@ -387,6 +387,24 @@ class BookmarkRepository(
                 else -> Pair("", 0)
             }
 
+            // Extract banner and screenshot asset IDs for fallback image display
+            println("📸 Bookmark ${dto.id} imageUrl='${dto.content.imageUrl}' has ${dto.assets.size} assets: ${dto.assets.map { "${it.assetType}:${it.id}" }}")
+            val bannerImageAssetId = dto.assets
+                .find { it.assetType == "bannerImage" }
+                ?.id
+            val screenshotAssetId = dto.assets
+                .find { it.assetType == "screenshot" }
+                ?.id
+            if (bannerImageAssetId != null) {
+                println("📸 Found bannerImage asset: $bannerImageAssetId for bookmark ${dto.id}")
+            }
+            if (screenshotAssetId != null) {
+                println("📸 Found screenshot asset: $screenshotAssetId for bookmark ${dto.id}")
+            }
+            if (bannerImageAssetId == null && screenshotAssetId == null) {
+                println("📸 No banner or screenshot assets found for bookmark ${dto.id}")
+            }
+
             return BookmarkEntity(
                 localId = existing?.localId ?: 0L,
                 remoteId = dto.id.hashCode().toLong(),
@@ -396,6 +414,8 @@ class BookmarkRepository(
                 url = url,
                 description = dto.content.description,
                 imageUrl = dto.content.imageUrl,
+                bannerImageAssetId = bannerImageAssetId,
+                screenshotAssetId = screenshotAssetId,
                 tags = dto.tags.map { it.name }.joinToString(","),
                 listIds = listIds,
                 isStarred = dto.favourited,
@@ -442,6 +462,8 @@ class BookmarkRepository(
                         url = bookmark.url,
                         description = bookmark.description,
                         imageUrl = bookmark.imageUrl,
+                        bannerImageAssetId = bookmark.bannerImageAssetId,
+                        screenshotAssetId = bookmark.screenshotAssetId,
                         tags = bookmark.tags,
                         listIds = bookmark.listIds,
                         isStarred = bookmark.isStarred,

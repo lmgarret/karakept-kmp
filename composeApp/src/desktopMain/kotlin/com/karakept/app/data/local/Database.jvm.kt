@@ -3,6 +3,8 @@ package com.karakept.app.data.local
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.karakept.app.data.local.migrations.MIGRATION_1_2
+import com.karakept.app.data.local.migrations.MIGRATION_2_3
+import com.karakept.app.data.local.migrations.MIGRATION_3_4
 import java.io.File
 
 actual fun getDatabaseBuilder(): RoomDatabase.Builder<AppDatabase> {
@@ -10,6 +12,6 @@ actual fun getDatabaseBuilder(): RoomDatabase.Builder<AppDatabase> {
     return Room.databaseBuilder<AppDatabase>(
         name = dbFile.absolutePath,
     )
-        .addMigrations(MIGRATION_1_2)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
         .fallbackToDestructiveMigration(true)
 }

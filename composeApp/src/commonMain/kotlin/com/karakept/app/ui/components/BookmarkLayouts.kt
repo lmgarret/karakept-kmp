@@ -41,6 +41,8 @@ fun BookmarkCardLayout(
     showReadingTime: Boolean = true,
     showTags: Boolean = true,
     dimRead: Boolean = false,
+    bannerImageUrl: String? = null,
+    screenshotUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
     val alpha = if (bookmark.isRead && dimRead) 0.5f else 1f
@@ -54,10 +56,13 @@ fun BookmarkCardLayout(
     ) {
         Box(modifier = Modifier.alpha(alpha)) {
             Column {
-                if (bookmark.imageUrl != null) {
+                // Determine which image to show: bannerImageUrl (server asset) → screenshotUrl → emoji
+                val effectiveImageUrl = bannerImageUrl ?: screenshotUrl
+
+                if (effectiveImageUrl != null) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalPlatformContext.current)
-                            .data(bookmark.imageUrl)
+                            .data(effectiveImageUrl)
                             .size(600) // Request a reasonable size for the card
                             .crossfade(true)
                             .build(),
@@ -120,6 +125,8 @@ fun BookmarkListLayout(
     showReadingTime: Boolean = true,
     showTags: Boolean = true,
     dimRead: Boolean = false,
+    bannerImageUrl: String? = null,
+    screenshotUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
     val alpha = if (bookmark.isRead && dimRead) 0.5f else 1f
@@ -146,10 +153,13 @@ fun BookmarkListLayout(
                             .size(80.dp)
                             .clip(RoundedCornerShape(8.dp))
                     ) {
-                        if (bookmark.imageUrl != null) {
+                        // Determine which image to show: bannerImageUrl (server asset) → screenshotUrl → emoji
+                        val effectiveImageUrl = bannerImageUrl ?: screenshotUrl
+
+                        if (effectiveImageUrl != null) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalPlatformContext.current)
-                                    .data(bookmark.imageUrl)
+                                    .data(effectiveImageUrl)
                                     .size(300) // Request a smaller size for the list item
                                     .crossfade(true)
                                     .build(),

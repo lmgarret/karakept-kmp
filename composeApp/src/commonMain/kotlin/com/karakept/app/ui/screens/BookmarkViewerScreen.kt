@@ -213,10 +213,38 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                     val readingTimeMinutes = state.bookmark.readingTimeMinutes
                     val description = state.bookmark.description
 
+                    // Get server info for banner and screenshot URLs
+                    val servers by serverRepository.servers.collectAsState(initial = emptyList())
+                    val server = servers.firstOrNull()
+                    val bannerImageUrl = if (server != null && state.bookmark.bannerImageAssetId != null) {
+                        val url = com.karakept.app.utils.AssetUrlUtils.getAssetUrl(server.url, state.bookmark.bannerImageAssetId)
+                        url
+                    } else null
+
+                    val screenshotUrl = if (server != null && state.bookmark.screenshotAssetId != null) {
+                        val url = com.karakept.app.utils.AssetUrlUtils.getAssetUrl(server.url, state.bookmark.screenshotAssetId)
+                        url
+                    } else null
+
+                    // Log which asset is being used for display (bannerImage preferred over imageUrl)
+                    if (bannerImageUrl != null) {
+                        println("📸 VIEWER: Using bannerImage asset for bookmark ${state.bookmark.remoteId}")
+                    } else if (screenshotUrl != null) {
+                        println("📸 VIEWER: Using screenshot asset for bookmark ${state.bookmark.remoteId}")
+                    } else if (imageUrl != null) {
+                        println("📸 VIEWER: No asset available for bookmark ${state.bookmark.remoteId}, imageUrl='$imageUrl' exists but not displayed")
+                    } else {
+                        println("📸 VIEWER: No image available for bookmark ${state.bookmark.remoteId}, showing emoji")
+                    }
+
+                    // Log HTML sanitization
+                    if (hideArticleThumbnails) {
+                        println("🧹 SANITIZER: Will remove first image element from HTML content")
+                    }
+
                     Box(modifier = Modifier.fillMaxSize()) {
                         // Parallax Header (Behind the list)
                         HeroBannerSection(
-                            imageUrl = imageUrl,
                             title = title,
                             url = url,
                             tags = state.bookmark.tags,
@@ -232,7 +260,9 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                         e.printStackTrace()
                                     }
                                 }
-                            } else null
+                            } else null,
+                            bannerImageUrl = bannerImageUrl,
+                            screenshotUrl = screenshotUrl
                         )
 
                         // Content List
@@ -263,7 +293,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                 ContentBodySection(
                                     content = state.bookmark.content,
                                     viewerMode = viewerMode,
-                                    hideArticleThumbnails = hideArticleThumbnails,
+                                    removeFirstImage = hideArticleThumbnails,
                                     htmlTextColor = htmlTextColor,
                                     htmlBackgroundColor = htmlBackgroundColor,
                                     htmlFontSize = htmlFontSize,

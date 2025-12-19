@@ -59,8 +59,10 @@ object MainScreen : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<MainScreenModel>()
         val settingsScreenModel = koinScreenModel<SettingsScreenModel>()
+        val serverRepository = koinInject<com.karakept.app.data.repository.ServerRepository>()
         val lists by screenModel.lists.collectAsState()
         val bookmarks by screenModel.bookmarks.collectAsState()
+        val servers by serverRepository.servers.collectAsState(initial = emptyList())
         val layoutType by settingsScreenModel.layoutType.collectAsState()
         val isSyncing by screenModel.isSyncing.collectAsState()
         val syncProgress by screenModel.syncProgress.collectAsState()
@@ -238,6 +240,7 @@ object MainScreen : Screen {
                         onBookmarkLongClick = { bookmark ->
                             selectedBookmarkForActions = bookmark
                         },
+                        serverUrl = servers.firstOrNull()?.url,
                         onSwipeAction = { bookmark, action ->
                             when (action) {
                                 SwipeAction.ARCHIVE -> {
