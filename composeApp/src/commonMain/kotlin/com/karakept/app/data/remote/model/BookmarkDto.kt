@@ -1,6 +1,7 @@
 package com.karakept.app.data.remote.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class BookmarkDto(
@@ -36,5 +37,6 @@ data class BookmarkContent(
     val description: String? = null,
     val imageUrl: String? = null,
     val text: String? = null,
-    val htmlContent: String? = null
+    val htmlContent: String? = null,
+    @SerialName("contentAssetId") val contentAssetId: String? = null
 )

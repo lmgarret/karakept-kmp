@@ -508,7 +508,7 @@ class BookmarkActionsRepository(
                         // Fetch the bookmark from server to get tag IDs
                         println("BookmarkActionsRepository: Fetching bookmark to find karakept:read tag ID")
                         try {
-                            val bookmarkDto = remoteDataSource.fetchBookmark(server, bookmarkId)
+                            val bookmarkDto = remoteDataSource.fetchBookmark(server, bookmarkId, includeContent = false)
                             val readTag = bookmarkDto.tags.find { it.name == "karakept:read" }
                             tagId = readTag?.id
                         } catch (e: Exception) {

@@ -51,11 +51,12 @@ class RemoteDataSource(private val client: HttpClient) {
         }
     }
 
-    suspend fun fetchBookmark(server: Server, bookmarkId: String): BookmarkDto {
+    suspend fun fetchBookmark(server: Server, bookmarkId: String, includeContent: Boolean = true): BookmarkDto {
         return try {
             val response: HttpResponse = client.get(server.url) {
                 url {
                     appendPathSegments("api", "v1", "bookmarks", bookmarkId)
+                    parameters.append("include_content", includeContent.toString())
                 }
                 header("Authorization", "Bearer ${server.apiKey}")
             }
@@ -101,12 +102,13 @@ class RemoteDataSource(private val client: HttpClient) {
         }
     }
 
-    suspend fun fetchBookmarksForList(server: Server, listId: String): List<BookmarkDto> {
+    suspend fun fetchBookmarksForList(server: Server, listId: String, includeContent: Boolean = false): List<BookmarkDto> {
         return try {
             val response: HttpResponse = client.get(server.url) {
                 url {
                     // Endpoint requires /api/v1 prefix like other endpoints
                     appendPathSegments("api", "v1", "lists", listId, "bookmarks")
+                    parameters.append("include_content", includeContent.toString())
                 }
                 header("Authorization", "Bearer ${server.apiKey}")
             }
