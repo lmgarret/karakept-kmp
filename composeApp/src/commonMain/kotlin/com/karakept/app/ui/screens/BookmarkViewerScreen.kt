@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -47,7 +51,7 @@ import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
 
 data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -68,6 +72,13 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         val lists by screenModel.lists.collectAsState()
         val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
         val showTags by screenModel.showTags.collectAsState()
+        val isRefreshing by screenModel.isRefreshing.collectAsState()
+        val offlineMode by screenModel.offlineMode.collectAsState()
+
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = isRefreshing,
+            onRefresh = { screenModel.refreshBookmark(bookmarkId) }
+        )
 
         var showModeDialog by remember { mutableStateOf(false) }
         var showAppearancePanel by remember { mutableStateOf(false) }
@@ -242,7 +253,11 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                         println("🧹 SANITIZER: Will remove first image element from HTML content")
                     }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pullRefresh(pullRefreshState, enabled = !offlineMode)
+                    ) {
                         // Parallax Header (Behind the list)
                         HeroBannerSection(
                             title = title,
@@ -321,6 +336,13 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                             onMoveToListClick = { showListPicker = true },
                             onEditTagsClick = { showTagEditor = true },
                             onDeleteClick = { showDeleteConfirmation = true }
+                        )
+
+                        PullRefreshIndicator(
+                            refreshing = isRefreshing,
+                            state = pullRefreshState,
+                            modifier = Modifier.align(Alignment.TopCenter)
+                                .padding(padding) // Adjust for status bar/top bar if needed, though usually align TopCenter is enough
                         )
                     }
                 }

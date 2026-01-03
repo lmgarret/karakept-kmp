@@ -146,6 +146,85 @@ class BookmarkRepository(
         }
     }
 
+    suspend fun syncSingleBookmark(bookmarkId: Long, serverId: String) {
+        val server = serverRepository.servers.first().find { it.id == serverId } ?: return
+        val existing = bookmarkDao.getBookmarkByRemoteId(bookmarkId, serverId) ?: return
+
+        try {
+            _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingMetadata(1, 1)
+            val dto = remoteDataSource.fetchBookmark(server, existing.originalRemoteId)
+            
+            // Map DTO to entity, preserving localId and content if not provided in DTO
+            val syncStrategy = settingsRepository.contentSyncStrategy.first()
+            
+            // We use the existing mapping logic but for a single bookmark
+            // To reuse mapDtoToEntity, we need to wrap it in BookmarkSyncPipeline
+            // Or just implement a simplified version here.
+            
+            val url = when (dto.content.type) {
+                "link" -> dto.content.url ?: ""
+                "text" -> ""
+                else -> dto.content.url ?: ""
+            }
+
+            val title = dto.title ?: dto.content.title ?: "Untitled"
+            val incomingContent = dto.content.htmlContent ?: dto.content.text
+
+            // Extract banner and screenshot asset IDs
+            val bannerImageAssetId = dto.assets.find { it.assetType == "bannerImage" }?.id
+            val screenshotAssetId = dto.assets.find { it.assetType == "screenshot" }?.id
+
+            // Update metadata first
+            bookmarkDao.updateBookmarkMetadata(
+                localId = existing.localId,
+                title = title,
+                url = url,
+                description = dto.content.description,
+                imageUrl = dto.content.imageUrl,
+                bannerImageAssetId = bannerImageAssetId,
+                screenshotAssetId = screenshotAssetId,
+                tags = dto.tags.map { it.name }.joinToString(","),
+                listIds = existing.listIds, // Preserve existing listIds as fetching them is expensive for single sync
+                isStarred = dto.favourited,
+                isArchived = dto.archived,
+                isRead = existing.isRead,
+                readingTimeMinutes = existing.readingTimeMinutes // Will update if content is fetched
+            )
+
+            // Now handle content if needed
+            // For a force refresh, we should probably fetch content if it's available in the DTO
+            // or if we should fetch it on demand.
+            
+            var finalContent = incomingContent
+            
+            if (finalContent.isNullOrBlank()) {
+                val contentAsset = dto.assets.find { it.assetType == "linkHtmlContent" }
+                if (contentAsset != null) {
+                    try {
+                        val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id)
+                        finalContent = assetBytes.decodeToString()
+                    } catch (e: Exception) {
+                        println("Failed to download content asset ${contentAsset.id}: ${e.message}")
+                    }
+                }
+            }
+            
+            if (finalContent.isNullOrBlank()) {
+                finalContent = dto.note ?: dto.content.text
+            }
+
+            if (!finalContent.isNullOrBlank()) {
+                val readingTime = ReadingTimeCalculator.calculateReadingTime(finalContent)
+                bookmarkDao.updateContent(existing.localId, finalContent, readingTime)
+            }
+
+            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+        } catch (e: Exception) {
+            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Sync failed")
+            throw e
+        }
+    }
+
     // Pagination support
     suspend fun getBookmarksPaged(
         server: Server,

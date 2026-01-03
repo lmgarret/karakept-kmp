@@ -68,6 +68,33 @@ class BookmarkViewerScreenModel(
     private val _lists = MutableStateFlow<List<ListDto>>(emptyList())
     val lists: StateFlow<List<ListDto>> = _lists.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    val offlineMode: StateFlow<Boolean> = settingsRepository.offlineMode
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun refreshBookmark(id: Long) {
+        val currentState = _loadingState.value
+        if (currentState !is BookmarkLoadingState.FullyLoaded) return
+
+        screenModelScope.launch {
+            if (offlineMode.value) return@launch
+            
+            _isRefreshing.value = true
+            try {
+                bookmarkRepository.syncSingleBookmark(
+                    currentState.bookmark.remoteId,
+                    currentState.bookmark.serverId
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
     fun loadBookmark(id: Long) {
         screenModelScope.launch {
             try {
