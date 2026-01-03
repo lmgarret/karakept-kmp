@@ -31,7 +31,7 @@ class SettingsScreenModel(
     val layoutType: StateFlow<LayoutType> = settingsRepository.layoutType.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = LayoutType.CARD
+        initialValue = LayoutType.LIST
     )
 
     // Viewer mode flow

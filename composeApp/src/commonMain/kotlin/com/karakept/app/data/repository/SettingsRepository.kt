@@ -44,7 +44,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val CONTENT_SYNC_WITH_CHILDREN_KEY = stringSetPreferencesKey("content_sync_with_children")
 
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
-        val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.CARD.name
+        val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.LIST.name
         LayoutType.fromString(layoutString)
     }
 

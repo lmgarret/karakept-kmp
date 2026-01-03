@@ -9,7 +9,7 @@ enum class LayoutType {
             return when (value.uppercase()) {
                 "CARD" -> CARD
                 "LIST" -> LIST
-                else -> CARD // Default to CARD layout
+                else -> LIST // Default to LIST layout
             }
         }
     }
