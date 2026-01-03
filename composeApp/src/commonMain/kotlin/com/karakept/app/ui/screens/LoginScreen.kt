@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 class LoginScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -47,7 +48,16 @@ class LoginScreen : Screen {
 
         Scaffold(
             topBar = {
-                TopAppBar(title = { Text("Add Server") })
+                TopAppBar(
+                    title = { Text("Add Server") },
+                    navigationIcon = {
+                        if (navigator.canPop) {
+                            IconButton(onClick = { navigator.pop() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        }
+                    }
+                )
             }
         ) { padding ->
             Column(
@@ -117,7 +127,7 @@ class LoginScreen : Screen {
                     Button(
                         onClick = {
                             screenModel.addServer(url, apiKey) {
-                                navigator.push(MainScreen)
+                                navigator.replaceAll(MainScreen)
                             }
                         },
                         modifier = Modifier.weight(1f),
