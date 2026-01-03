@@ -29,6 +29,7 @@ class QuickShareActivity : ComponentActivity() {
                 val match = urlRegex.find(sharedText)
                 val url = match?.value ?: sharedText
 
+                Toast.makeText(this, "Saving bookmark...", Toast.LENGTH_SHORT).show()
                 saveBookmark(url)
             } else {
                 finish()
