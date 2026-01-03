@@ -4,18 +4,26 @@ import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.model.SyncStrategy
+import com.karakept.app.data.model.ListSyncConfig
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.ReadingTimeCalculator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.datetime.Instant
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.Instant
 
 // Sync configuration sealed class hierarchy
 private sealed class SyncConfiguration {
@@ -98,6 +106,79 @@ class BookmarkRepository(
      */
     suspend fun syncBookmarksForList(server: Server, listId: String) {
         executeSyncPipeline(SyncConfiguration.ForList(server, listId))
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<BookmarkEntity> {
+        onStatusChange?.invoke("Waiting for server response...")
+        val serversList = serverRepository.servers.first()
+        val server = serversList.firstOrNull() ?: return Result.failure(Exception("No server configured"))
+        
+        return try {
+            var dto = remoteDataSource.createBookmark(server, url)
+            
+            // Polling for title/content (max 10 seconds)
+            // Karakeep API takes some time to parse the URL
+            var attempts = 0
+            while (attempts < 15) { // Increased to 15 attempts (30 seconds total)
+                val currentTitle = dto.title ?: dto.content.title ?: ""
+                if (currentTitle.isNotBlank() && currentTitle != "Untitled") break
+                
+                onStatusChange?.invoke("Waiting for bookmark to be parsed...")
+                delay(2000) // Increased to 2 seconds
+                try {
+                    dto = remoteDataSource.fetchBookmark(server, dto.id)
+                } catch (e: Exception) {
+                    println("Polling fetch failed: ${e.message}")
+                }
+                attempts++
+                println("Polling for bookmark parsing: attempt $attempts, title='${dto.title}', content.title='${dto.content.title}'")
+            }
+
+            onStatusChange?.invoke("Finalizing bookmark...")
+            
+            // Initial map to entity
+            val entity = BookmarkEntity(
+                localId = 0L,
+                remoteId = dto.id.hashCode().toLong(),
+                originalRemoteId = dto.id,
+                serverId = server.id,
+                title = dto.title ?: dto.content.title ?: "Untitled",
+                url = dto.content.url ?: url,
+                description = dto.content.description,
+                imageUrl = dto.content.imageUrl,
+                bannerImageAssetId = dto.assets.find { it.assetType == "bannerImage" }?.id,
+                screenshotAssetId = dto.assets.find { it.assetType == "screenshot" }?.id,
+                tags = dto.tags.joinToString(",") { it.name },
+                listIds = "",
+                isStarred = dto.favourited,
+                isArchived = dto.archived,
+                isRead = false,
+                createdAt = try { Instant.parse(dto.createdAt).toEpochMilliseconds() } catch (e: Exception) { System.currentTimeMillis() },
+                readingTimeMinutes = 0,
+                content = ""
+            )
+            
+            // Insert into local DB
+            bookmarkDao.insertBookmarks(listOf(entity))
+            
+            // Fetch the inserted entity to get the localId
+            val inserted = bookmarkDao.getBookmarkByRemoteId(entity.remoteId, server.id)
+                ?: entity
+            
+            // Trigger background sync for this single bookmark to get full content
+            GlobalScope.launch(Dispatchers.Default) {
+                try {
+                    syncSingleBookmark(inserted.remoteId, server.id)
+                } catch (e: Exception) {
+                    println("Background sync failed for new bookmark: ${e.message}")
+                }
+            }
+            
+            Result.success(inserted)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun fetchBookmarkContent(bookmarkId: Long, serverId: String): String? {
@@ -660,10 +741,11 @@ class BookmarkRepository(
                         entityListIds.intersect(targetLists).isNotEmpty() && entity.readingTimeMinutes == 0
                     }
                 }
-                com.karakept.app.data.model.SyncStrategy.ALL -> entities.filter { entity ->
+                SyncStrategy.ALL -> entities.filter { entity ->
                     // Only sync content if bookmark doesn't have it yet (readingTimeMinutes == 0)
                     entity.readingTimeMinutes == 0
                 }
+                else -> emptyList()
             }
 
             if (bookmarksToSync.isNotEmpty()) {

@@ -1,6 +1,7 @@
 package com.karakept.app.data.remote
 
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.remote.model.CreateBookmarkDto
 import com.karakept.app.data.remote.model.BookmarkDto
 import com.karakept.app.data.remote.model.ListDto
 import com.karakept.app.data.remote.model.ListsResponse
@@ -295,6 +296,30 @@ class RemoteDataSource(private val client: HttpClient) {
             }
         } catch (e: Exception) {
             throw ApiException("Error adding bookmark to list: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Create a new bookmark
+     * POST /api/v1/bookmarks
+     */
+    suspend fun createBookmark(server: Server, url: String): BookmarkDto {
+        return try {
+            val response: HttpResponse = client.post(server.url) {
+                url {
+                    appendPathSegments("api", "v1", "bookmarks")
+                }
+                header("Authorization", "Bearer ${server.apiKey}")
+                setBody(CreateBookmarkDto(type = "link", url = url))
+            }
+
+            if (!response.status.isSuccess()) {
+                throw ApiException("Failed to create bookmark: ${response.status}")
+            }
+
+            response.body()
+        } catch (e: Exception) {
+            throw ApiException("Error creating bookmark: ${e.message}", e)
         }
     }
 

@@ -24,12 +24,9 @@ import kotlinx.coroutines.flow.first
 
 @Composable
 @Preview
-fun App() {
-    KoinApplication(application = {
-        modules(appModule)
-    }) {
-        // Get ServerRepository to access API keys for authentication (now inside KoinApplication)
-        val serverRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.ServerRepository>()
+fun App(sharedUrl: String? = null) {
+    // Get ServerRepository to access API keys for authentication
+    val serverRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.ServerRepository>()
 
         setSingletonImageLoaderFactory { context ->
             // Create Ktor client with authentication interceptor for asset URLs
@@ -89,7 +86,9 @@ fun App() {
             var initialScreen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<cafe.adriel.voyager.core.screen.Screen?>(null) }
 
             androidx.compose.runtime.LaunchedEffect(Unit) {
-                if (serverRepository.hasServers()) {
+                if (sharedUrl != null) {
+                    initialScreen = com.karakept.app.ui.screens.ShareBookmarkScreen(sharedUrl)
+                } else if (serverRepository.hasServers()) {
                     initialScreen = com.karakept.app.ui.screens.MainScreen
                 } else {
                     initialScreen = com.karakept.app.ui.screens.LoginScreen()
@@ -101,6 +100,5 @@ fun App() {
                     SlideTransition(navigator)
                 }
             }
-        }
     }
 }

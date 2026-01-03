@@ -7,6 +7,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import android.content.Intent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -15,8 +19,6 @@ class MainActivity : ComponentActivity() {
         
         // Enable edge-to-edge display for Android SDK 35+
         enableEdgeToEdge()
-        com.karakept.app.data.local.AndroidContext.context = applicationContext
-        com.karakept.app.data.local.initializeDataStore(applicationContext)
         
         // Initialize platform-specific utilities
         com.karakept.app.utils.HapticUtils.init(this)
@@ -29,8 +31,27 @@ class MainActivity : ComponentActivity() {
             // Ignore if WebView is not available
         }
         
+        var sharedUrl by androidx.compose.runtime.mutableStateOf<String?>(null)
+        
+        // Handle initial intent
+        intent?.getStringExtra("shared_url")?.let {
+            sharedUrl = it
+        }
+
         setContent {
-            App()
+            App(sharedUrl = sharedUrl)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Handle subsequent intents while activity is running
+        intent.getStringExtra("shared_url")?.let {
+            // Need a way to trigger refresh in App
+            // For now, re-set content or use a shared state
+            setContent {
+                App(sharedUrl = it)
+            }
         }
     }
 }
