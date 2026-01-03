@@ -1,6 +1,7 @@
 package com.karakept.app.ui.components
 
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -193,7 +194,7 @@ fun BookmarkListLayout(
                                 .padding(4.dp)
                                 .size(16.dp)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(MaterialTheme.colorScheme.surface),
+                                .background(Color.White.copy(alpha = 0.5f)),
                             contentScale = ContentScale.Fit
                         )
                     }

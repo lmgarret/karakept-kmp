@@ -177,7 +177,7 @@ fun HeroImageBanner(
                             modifier = Modifier
                                 .size(16.dp)
                                 .clip(CircleShape)
-                                .background(Color.White),
+                                .background(Color.White.copy(alpha = 0.5f)),
                             contentScale = ContentScale.Fit
                         )
                         Text(

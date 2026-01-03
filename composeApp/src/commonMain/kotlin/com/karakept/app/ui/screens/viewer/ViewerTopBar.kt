@@ -113,7 +113,7 @@ internal fun ViewerTopBar(
                         modifier = Modifier
                             .size(24.dp)
                             .clip(CircleShape)
-                            .background(Color.White),
+                            .background(Color.White.copy(alpha = 0.5f)),
                         contentScale = ContentScale.Fit
                     )
                 }
