@@ -262,6 +262,9 @@ object MainScreen : Screen {
                                 SwipeAction.OPEN_IN_BROWSER -> {
                                     try {
                                         uriHandler.openUri(bookmark.url)
+                                        scope.launch {
+                                            snackbarManager.showSnackbar("Opening in browser")
+                                        }
                                     } catch (e: Exception) {
                                         scope.launch {
                                             snackbarManager.showSnackbar("Could not open link")
@@ -354,7 +357,16 @@ object MainScreen : Screen {
                             com.karakept.app.utils.ShareUtils.shareText(selectedBookmarkForActions!!.url, selectedBookmarkForActions!!.title)
                         }
                         is BookmarkAction.OpenInBrowser -> {
-                            // Open in browser - would need platform-specific implementation
+                            try {
+                                uriHandler.openUri(selectedBookmarkForActions!!.url)
+                                scope.launch {
+                                    snackbarManager.showSnackbar("Opening in browser")
+                                }
+                            } catch (e: Exception) {
+                                scope.launch {
+                                    snackbarManager.showSnackbar("Could not open link")
+                                }
+                            }
                         }
                     }
                 },
