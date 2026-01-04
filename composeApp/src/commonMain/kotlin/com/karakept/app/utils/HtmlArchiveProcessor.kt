@@ -61,6 +61,11 @@ object HtmlArchiveProcessor {
                 }
             }
 
+            // Wrap body content in karakept-content for highlighting offsets
+            val children = doc.body().childNodes().toList()
+            doc.body().empty()
+            doc.body().appendElement("div").attr("id", "karakept-content").appendChildren(children)
+            
             // Keep <style> and <link rel="stylesheet"> for original styling
             // They are preserved by not removing them
 

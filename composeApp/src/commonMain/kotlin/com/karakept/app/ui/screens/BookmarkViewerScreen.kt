@@ -32,6 +32,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
@@ -74,6 +75,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         val showTags by screenModel.showTags.collectAsState()
         val isRefreshing by screenModel.isRefreshing.collectAsState()
         val offlineMode by screenModel.offlineMode.collectAsState()
+        val highlights by screenModel.highlights.collectAsState()
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isRefreshing,
@@ -85,8 +87,14 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         var showMenu by remember { mutableStateOf(false) }
         var fabExpanded by remember { mutableStateOf(false) }
         var showDeleteConfirmation by remember { mutableStateOf(false) }
-        var showListPicker by remember { mutableStateOf(false) }
         var showTagEditor by remember { mutableStateOf(false) }
+        var showListPicker by remember { mutableStateOf(false) }
+        var selectedHighlightId by remember { mutableStateOf<String?>(null) }
+        var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
+
+        val selectedHighlight = remember(selectedHighlightId, highlights) {
+            highlights.find { it.id == selectedHighlightId }
+        }
 
         val snackbarHostState = rememberSnackbarHostStateWithDelay(
             snackbarManager = snackbarManager,
@@ -283,7 +291,9 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                         // Content List
                         LazyColumn(
                             state = scrollState,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(if (selectedHighlightId != null) Modifier.blur(8.dp) else Modifier)
                         ) {
                             // Transparent spacer for the header
                             item(key = "header_spacer") {
@@ -315,8 +325,23 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                     htmlFontFamily = htmlFontFamily,
                                     precrawledAssetPath = precrawledAssetPath,
                                     loadingState = state,
+                                    highlights = highlights,
                                     onLinkClick = { linkUrl ->
                                         navigator.push(WebViewScreen(linkUrl))
+                                    },
+                                    onCreateHighlight = { text, start, end, note, color ->
+                                        screenModel.createHighlight(state.bookmark, text, start, end, note, color) { highlightId ->
+                                            selectedHighlightId = highlightId
+                                        }
+                                    },
+                                    onDeleteHighlight = { highlightId ->
+                                        screenModel.deleteHighlight(state.bookmark, highlightId)
+                                    },
+                                    onHighlightClick = { id ->
+                                        selectedHighlightId = id
+                                    },
+                                    onHighlightPosition = { id, position ->
+                                        highlightPosition = position
                                     }
                                 )
                             }
@@ -364,9 +389,10 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         }
 
         // Back Handler for panels
-        androidx.activity.compose.BackHandler(enabled = showAppearancePanel || showModeDialog) {
+        androidx.activity.compose.BackHandler(enabled = showAppearancePanel || showModeDialog || selectedHighlightId != null) {
             if (showAppearancePanel) showAppearancePanel = false
             if (showModeDialog) showModeDialog = false
+            if (selectedHighlightId != null) selectedHighlightId = null
         }
 
         // Viewer mode dialog
@@ -440,6 +466,27 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                 onDismiss = { showTagEditor = false }
             )
         }
+
+        // Highlight Details Panel
+        HighlightDetailsPanel(
+            visible = selectedHighlightId != null,
+            highlight = selectedHighlight,
+            fontFamily = htmlFontFamily,
+            onUpdateHighlight = { id, note, color ->
+                if (loadingState is BookmarkLoadingState.FullyLoaded) {
+                    val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+                    screenModel.updateHighlight(fullyLoadedState.bookmark, id, note, color)
+                }
+            },
+            onDeleteHighlight = { id ->
+                if (loadingState is BookmarkLoadingState.FullyLoaded) {
+                    val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+                    screenModel.deleteHighlight(fullyLoadedState.bookmark, id)
+                }
+                selectedHighlightId = null
+            },
+            onDismiss = { selectedHighlightId = null }
+        )
     }
 }
 

@@ -71,7 +71,8 @@ class BookmarkRepository(
     private val remoteDataSource: RemoteDataSource,
     private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository,
     private val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
-    private val serverRepository: com.karakept.app.data.repository.ServerRepository
+    private val serverRepository: com.karakept.app.data.repository.ServerRepository,
+    private val highlightRepository: com.karakept.app.data.repository.HighlightRepository
 ) {
     fun getBookmarks(server: Server): Flow<List<BookmarkEntity>> {
         return bookmarkDao.getBookmarksForServer(server.id)
@@ -355,6 +356,9 @@ class BookmarkRepository(
 
             // Phase 2: Fetch metadata
             val remoteBookmarks = fetchBookmarkMetadata()
+            
+            // Phase 2.5: Sync Highlights
+            highlightRepository.syncHighlights(config.server)
 
             // Phase 3: Fetch list membership (conditional)
             val bookmarkListMap = fetchListMembership(remoteBookmarks)

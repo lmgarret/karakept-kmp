@@ -16,6 +16,7 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.ListRepository
 import com.karakept.api.infrastructure.ApiClient
 import com.karakept.api.client.*
+import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
@@ -24,6 +25,7 @@ import com.karakept.app.ui.screens.SettingsScreenModel
 import com.karakept.app.ui.screens.FilterManagementScreenModel
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
+import com.karakept.app.ui.screens.HighlightsScreenModel
 
 val appModule = module {
     single<AppDatabase> {
@@ -57,6 +59,7 @@ val appModule = module {
     single { get<AppDatabase>().savedFilterDao() }
     single { get<AppDatabase>().assetDao() }
     single { get<AppDatabase>().pendingActionDao() }
+    single { get<AppDatabase>().highlightDao() }
     
     single { createDataStore() }
 
@@ -68,9 +71,12 @@ val appModule = module {
     // BookmarkActionsRepository depends on BookmarkDao, PendingActionDao, RemoteDataSource, ServerRepository, SettingsRepository
     single { BookmarkActionsRepository(get(), get(), get(), get(), get()) }
 
-    // BookmarkRepository depends on BookmarkActionsRepository
+    // HighlightRepository
+    single { HighlightRepository(get(), get(), get()) }
+
+    // BookmarkRepository depends on BookmarkActionsRepository and HighlightRepository
     single {
-        BookmarkRepository(get(), get(), get(), get(), get(), get()).also {
+        BookmarkRepository(get(), get(), get(), get(), get(), get(), get()).also {
             // Wire up circular dependency: BookmarkActionsRepository needs BookmarkRepository
             get<BookmarkActionsRepository>().setBookmarkRepository(it)
         }
@@ -82,8 +88,9 @@ val appModule = module {
 
     factory { LoginScreenModel(get(), get(), get()) }
     single { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
-    factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { SettingsScreenModel(get(), get(), get(), get()) }
+    factory { HighlightsScreenModel(get(), get(), get(), get()) }
     factory { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }
     factory { FilterManagementScreenModel(get(), get(), get(), get()) }

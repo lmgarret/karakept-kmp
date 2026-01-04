@@ -238,6 +238,135 @@ class RemoteDataSource(
             throw ApiException("Error removing bookmark from list: ${e.message}", e)
         }
     }
+
+    /**
+     * Get all highlights
+     * GET /api/v1/highlights
+     */
+    suspend fun fetchAllHighlights(server: Server): List<HighlightDto> {
+        return try {
+            val response: HttpResponse = client.get(server.url) {
+                url {
+                    appendPathSegments("api", "v1", "highlights")
+                }
+                header("Authorization", "Bearer ${server.apiKey}")
+            }
+            
+            if (!response.status.isSuccess()) {
+                throw ApiException("Failed to fetch all highlights: ${response.status}")
+            }
+            
+            val highlightsResponse: HighlightsResponse = response.body()
+            highlightsResponse.highlights
+        } catch (e: Exception) {
+            throw ApiException("Error fetching all highlights: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Get highlights of a bookmark
+     * GET /api/v1/bookmarks/:bookmarkId/highlights
+     */
+    suspend fun fetchHighlightsForBookmark(server: Server, bookmarkId: String): List<HighlightDto> {
+        return try {
+            val response: HttpResponse = client.get(server.url) {
+                url {
+                    appendPathSegments("api", "v1", "bookmarks", bookmarkId, "highlights")
+                }
+                header("Authorization", "Bearer ${server.apiKey}")
+            }
+            
+            if (!response.status.isSuccess()) {
+                throw ApiException("Failed to fetch highlights for bookmark $bookmarkId: ${response.status}")
+            }
+            
+            val highlightsResponse: HighlightsResponse = response.body()
+            highlightsResponse.highlights
+        } catch (e: Exception) {
+            throw ApiException("Error fetching highlights for bookmark $bookmarkId: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Create a new highlight
+     * POST /api/v1/highlights
+     */
+    suspend fun createHighlight(
+        server: Server, 
+        bookmarkId: String, 
+        text: String, 
+        startOffset: Int,
+        endOffset: Int,
+        note: String? = null, 
+        color: String? = null
+    ): HighlightDto {
+        return try {
+            val response: HttpResponse = client.post(server.url) {
+                url {
+                    appendPathSegments("api", "v1", "highlights")
+                }
+                header("Authorization", "Bearer ${server.apiKey}")
+                setBody(CreateHighlightDto(bookmarkId, text, startOffset, endOffset, note, color))
+            }
+            
+            if (!response.status.isSuccess()) {
+                throw ApiException("Failed to create highlight: ${response.status}")
+            }
+            
+            response.body()
+        } catch (e: Exception) {
+            throw ApiException("Error creating highlight: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Update a highlight
+     * PATCH /api/v1/highlights/:highlightId
+     */
+    suspend fun updateHighlight(
+        server: Server,
+        highlightId: String,
+        updates: com.karakept.app.data.remote.model.UpdateHighlightDto
+    ): HighlightDto {
+        return try {
+            val response: HttpResponse = client.patch(server.url) {
+                url {
+                    appendPathSegments("api", "v1", "highlights", highlightId)
+                }
+                header("Authorization", "Bearer ${server.apiKey}")
+                setBody(updates)
+            }
+            
+            if (!response.status.isSuccess()) {
+                throw ApiException("Failed to update highlight: ${response.status}")
+            }
+            
+            response.body()
+        } catch (e: Exception) {
+            throw ApiException("Error updating highlight: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Delete a highlight
+     * DELETE /api/v1/highlights/:highlightId
+     */
+    suspend fun deleteHighlight(server: Server, highlightId: String) {
+        try {
+            val response: HttpResponse = client.delete(server.url) {
+                url {
+                    appendPathSegments("api", "v1", "highlights", highlightId)
+                }
+                header("Authorization", "Bearer ${server.apiKey}")
+            }
+            
+            if (!response.status.isSuccess()) {
+                throw ApiException("Failed to delete highlight $highlightId: ${response.status}")
+            }
+        } catch (e: Exception) {
+            throw ApiException("Error deleting highlight $highlightId: ${e.message}", e)
+        }
+    }
 }
 
 class ApiException(message: String, cause: Throwable? = null) : Exception(message, cause)

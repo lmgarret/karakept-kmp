@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
+import com.karakept.app.ui.components.HighlightDetailsBottomPanel
+import com.karakept.app.data.model.Highlight
 
 /**
  * Viewer mode selection dialog
@@ -224,6 +226,68 @@ private fun ViewerModeOptionCard(
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
+        }
+    }
+}
+
+/**
+ * Highlight details panel with scrim and floating text card
+ */
+@Composable
+internal fun HighlightDetailsPanel(
+    visible: Boolean,
+    highlight: Highlight?,
+    fontFamily: com.karakept.app.data.model.ReaderFontFamily = com.karakept.app.data.model.ReaderFontFamily.SYSTEM,
+    onUpdateHighlight: (String, String?, String?) -> Unit,
+    onDeleteHighlight: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Scrim
+        androidx.compose.animation.AnimatedVisibility(
+            visible = visible,
+            enter = androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        onDismiss()
+                    }
+            )
+        }
+
+        // Floating card showing highlighted text (centered in available space above panel)
+        if (highlight != null) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                com.karakept.app.ui.components.HighlightFloatingCard(
+                    highlight = highlight,
+                    visible = visible,
+                    fontFamily = fontFamily
+                )
+            }
+        }
+
+        // Panel at bottom
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            HighlightDetailsBottomPanel(
+                visible = visible,
+                highlight = highlight,
+                onUpdateHighlight = onUpdateHighlight,
+                onDeleteHighlight = onDeleteHighlight,
+                onDismiss = onDismiss
+            )
         }
     }
 }

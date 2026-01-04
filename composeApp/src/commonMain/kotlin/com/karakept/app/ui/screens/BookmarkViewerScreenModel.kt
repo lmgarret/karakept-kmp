@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import com.karakept.app.domain.action.BookmarkActionController
@@ -33,7 +35,8 @@ class BookmarkViewerScreenModel(
     private val remoteDataSource: RemoteDataSource,
     private val serverRepository: ServerRepository,
     private val bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository,
-    private val bookmarkActionController: BookmarkActionController
+    private val bookmarkActionController: BookmarkActionController,
+    private val highlightRepository: com.karakept.app.data.repository.HighlightRepository
 ) : ScreenModel {
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
     val loadingState: StateFlow<BookmarkLoadingState> = _loadingState.asStateFlow()
@@ -71,6 +74,20 @@ class BookmarkViewerScreenModel(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _bookmarkId = MutableStateFlow<Long?>(null)
+    
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val highlights: StateFlow<List<com.karakept.app.data.model.Highlight>> = _bookmarkId.flatMapLatest { id ->
+        if (id == null) return@flatMapLatest flowOf(emptyList())
+        
+        // We need the string remoteId to fetch highlights
+        // We can get it from the bookmarkDao reactively
+        bookmarkDao.observeBookmarkById(id).flatMapLatest { bookmark ->
+            if (bookmark == null) flowOf(emptyList())
+            else highlightRepository.getHighlightsForBookmark(bookmark.originalRemoteId, bookmark.serverId)
+        }
+    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val offlineMode: StateFlow<Boolean> = settingsRepository.offlineMode
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -96,12 +113,27 @@ class BookmarkViewerScreenModel(
     }
 
     fun loadBookmark(id: Long) {
+        _bookmarkId.value = id
         screenModelScope.launch {
             try {
                 var hasLoadedOnce = false
                 // Observe bookmark changes from DB reactively
                 bookmarkDao.observeBookmarkById(id).collect { bookmark ->
                     if (bookmark != null) {
+                        if (!hasLoadedOnce) {
+                            // Trigger on-demand sync for highlights
+                            screenModelScope.launch {
+                                try {
+                                    val servers = serverRepository.servers.first()
+                                    val server = servers.find { it.id == bookmark.serverId }
+                                    if (server != null) {
+                                        highlightRepository.syncHighlightsForBookmark(server, bookmark.originalRemoteId ?: bookmark.remoteId.toString())
+                                    }
+                                } catch (e: Exception) {
+                                    println("Error during on-demand highlight sync: ${e.message}")
+                                }
+                            }
+                        }
                         hasLoadedOnce = true
                         
                         // Check for content availability
@@ -274,6 +306,32 @@ class BookmarkViewerScreenModel(
                 tags,
                 !isOffline
             )
+        }
+    }
+
+    fun createHighlight(bookmark: BookmarkEntity, text: String, startOffset: Int, endOffset: Int, note: String? = null, color: String? = null, onCreated: (String) -> Unit = {}) {
+        screenModelScope.launch {
+            val servers = serverRepository.servers.first()
+            val server = servers.find { it.id == bookmark.serverId } ?: return@launch
+            val remoteId = bookmark.originalRemoteId ?: bookmark.remoteId.toString()
+            val highlightId = highlightRepository.createHighlight(server, bookmark.localId, remoteId, text, startOffset, endOffset, note, color)
+            onCreated(highlightId)
+        }
+    }
+
+    fun updateHighlight(bookmark: BookmarkEntity, highlightId: String, note: String?, color: String?) {
+        screenModelScope.launch {
+            val servers = serverRepository.servers.first()
+            val server = servers.find { it.id == bookmark.serverId } ?: return@launch
+            highlightRepository.updateHighlight(server, bookmark.localId, highlightId, note, color)
+        }
+    }
+
+    fun deleteHighlight(bookmark: BookmarkEntity, highlightId: String) {
+        screenModelScope.launch {
+            val servers = serverRepository.servers.first()
+            val server = servers.find { it.id == bookmark.serverId } ?: return@launch
+            highlightRepository.deleteHighlight(server, bookmark.localId, highlightId)
         }
     }
 }

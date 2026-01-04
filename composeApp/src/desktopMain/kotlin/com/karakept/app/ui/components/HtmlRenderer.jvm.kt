@@ -41,7 +41,12 @@ actual fun HtmlRenderer(
     customTextColor: Color?,
     customFontSize: Int,
     customFontFamily: ReaderFontFamily,
-    localFilePath: String?
+    localFilePath: String?,
+    highlights: List<com.karakept.app.data.model.Highlight> = emptyList(),
+    onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
+    onDeleteHighlight: (String) -> Unit = {},
+    onHighlightClick: (String) -> Unit = {},
+    onHighlightPosition: ((String, HighlightPosition?) -> Unit)?
 ) {
     // Debug output
     println("HtmlRenderer (Desktop): Rendering HTML, length=${html.length}, first 100 chars=${html.take(100)}")

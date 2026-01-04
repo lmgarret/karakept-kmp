@@ -322,6 +322,85 @@ class BookmarkActionsRepository(
             triggerAutoSync(serverId)
         }
     }
+
+    /**
+     * Queue a highlight creation action.
+     */
+    suspend fun queueCreateHighlight(
+        server: Server,
+        bookmarkLocalId: Long,
+        bookmarkRemoteId: String,
+        text: String,
+        startOffset: Int,
+        endOffset: Int,
+        note: String? = null,
+        color: String? = null
+    ) {
+        withContext(Dispatchers.IO) {
+            queueAction(
+                bookmarkRemoteId = bookmarkLocalId,
+                serverId = server.id,
+                actionType = PendingActionType.CREATE_HIGHLIGHT,
+                actionData = json.encodeToString(mapOf(
+                    "bookmarkRemoteId" to bookmarkRemoteId,
+                    "text" to text,
+                    "startOffset" to startOffset.toString(),
+                    "endOffset" to endOffset.toString(),
+                    "note" to note,
+                    "color" to color
+                ))
+            )
+
+            // Auto-sync if not in offline mode
+            triggerAutoSync(server.id)
+        }
+    }
+
+    /**
+     * Queue a highlight deletion action.
+     */
+    suspend fun queueDeleteHighlight(
+        server: Server,
+        bookmarkLocalId: Long,
+        highlightRemoteId: String
+    ) {
+        withContext(Dispatchers.IO) {
+            queueAction(
+                bookmarkRemoteId = bookmarkLocalId,
+                serverId = server.id,
+                actionType = PendingActionType.DELETE_HIGHLIGHT,
+                actionData = json.encodeToString(mapOf(
+                    "highlightId" to highlightRemoteId
+                ))
+            )
+            triggerAutoSync(server.id)
+        }
+    }
+
+    /**
+     * Queue a highlight update action.
+     */
+    suspend fun queueUpdateHighlight(
+        server: Server,
+        bookmarkLocalId: Long,
+        highlightRemoteId: String,
+        note: String? = null,
+        color: String? = null
+    ) {
+        withContext(Dispatchers.IO) {
+            queueAction(
+                bookmarkRemoteId = bookmarkLocalId,
+                serverId = server.id,
+                actionType = PendingActionType.UPDATE_HIGHLIGHT,
+                actionData = json.encodeToString(mapOf(
+                    "highlightId" to highlightRemoteId,
+                    "note" to note,
+                    "color" to color
+                ))
+            )
+            triggerAutoSync(server.id)
+        }
+    }
     
     /**
      * Helper function to wrap action execution with loading state
@@ -580,6 +659,36 @@ class BookmarkActionsRepository(
                     val listId = data["listId"] ?: return
                     println("BookmarkActionsRepository: Calling removeBookmarkFromList")
                     remoteDataSource.removeBookmarkFromList(server, listId, bookmarkId)
+                }
+                PendingActionType.CREATE_HIGHLIGHT -> {
+                    val data = json.decodeFromString<Map<String, String?>>(action.actionData)
+                    val bId = data["bookmarkRemoteId"] ?: return
+                    val text = data["text"] ?: return
+                    val startOffset = data["startOffset"]?.toInt() ?: 0
+                    val endOffset = data["endOffset"]?.toInt() ?: 0
+                    val note = data["note"]
+                    val color = data["color"]
+                    println("BookmarkActionsRepository: Calling createHighlight for bookmark $bId")
+                    val result = remoteDataSource.createHighlight(server, bId, text, startOffset, endOffset, note, color)
+                    
+                    // Update local DB with the real highlight ID returned by server
+                    // This is handled by syncHighlights later, but we could also do it here 
+                    // if we had a reference to highlightRepository/dao.
+                    // For now, syncHighlights will pick it up.
+                }
+                PendingActionType.DELETE_HIGHLIGHT -> {
+                    val data = json.decodeFromString<Map<String, String>>(action.actionData)
+                    val hId = data["highlightId"] ?: return
+                    println("BookmarkActionsRepository: Calling deleteHighlight $hId")
+                    remoteDataSource.deleteHighlight(server, hId)
+                }
+                PendingActionType.UPDATE_HIGHLIGHT -> {
+                    val data = json.decodeFromString<Map<String, String?>>(action.actionData)
+                    val hId = data["highlightId"] ?: return
+                    val note = data["note"]
+                    val color = data["color"]
+                    println("BookmarkActionsRepository: Calling updateHighlight $hId")
+                    remoteDataSource.updateHighlight(server, hId, com.karakept.app.data.remote.model.UpdateHighlightDto(note, color))
                 }
             }
             
