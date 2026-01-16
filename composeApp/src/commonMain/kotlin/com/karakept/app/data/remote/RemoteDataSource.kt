@@ -35,7 +35,7 @@ class RemoteDataSource(private val client: HttpClient) {
                     appendPathSegments("api", "v1", "bookmarks")
                     if (cursor != null) parameters.append("cursor", cursor)
                     parameters.append("limit", limit.toString())
-                    parameters.append("include_content", includeContent.toString())
+                    parameters.append("includeContent", includeContent.toString())
                     if (archived != null) parameters.append("archived", archived.toString())
                     if (favourited != null) parameters.append("favourited", favourited.toString())
                 }
@@ -57,7 +57,7 @@ class RemoteDataSource(private val client: HttpClient) {
             val response: HttpResponse = client.get(server.url) {
                 url {
                     appendPathSegments("api", "v1", "bookmarks", bookmarkId)
-                    parameters.append("include_content", includeContent.toString())
+                    parameters.append("includeContent", includeContent.toString())
                 }
                 header("Authorization", "Bearer ${server.apiKey}")
             }
@@ -109,7 +109,7 @@ class RemoteDataSource(private val client: HttpClient) {
                 url {
                     // Endpoint requires /api/v1 prefix like other endpoints
                     appendPathSegments("api", "v1", "lists", listId, "bookmarks")
-                    parameters.append("include_content", includeContent.toString())
+                    parameters.append("includeContent", includeContent.toString())
                 }
                 header("Authorization", "Bearer ${server.apiKey}")
             }

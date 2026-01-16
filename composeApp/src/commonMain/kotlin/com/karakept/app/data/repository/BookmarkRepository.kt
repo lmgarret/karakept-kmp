@@ -187,43 +187,12 @@ class BookmarkRepository(
         // Find the ORIGINAL remote ID (string)
         val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkId, serverId) ?: return null
         
-        try {
-            val dto = remoteDataSource.fetchBookmark(server, bookmark.originalRemoteId)
-            
-            println("📖 CONTENT: Fetching content for bookmark ${bookmark.originalRemoteId}")
-            println("📖 CONTENT: htmlContent=${dto.content.htmlContent?.length ?: 0} chars")
-            println("📖 CONTENT: assets=${dto.assets.size}, types=${dto.assets.map { it.assetType }}")
-            
-            // Try inline htmlContent first (full content)
-            val htmlContent = dto.content.htmlContent
-            if (!htmlContent.isNullOrBlank()) {
-                println("📖 CONTENT: Using inline htmlContent (${htmlContent.length} chars)")
-                return htmlContent
-            }
-            
-            // Try asset-based content - prefer this over description/text
-            val contentAsset = dto.assets.find { it.assetType == "linkHtmlContent" }
-            if (contentAsset != null) {
-                println("📖 CONTENT: Downloading content from asset ${contentAsset.id}")
-                val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id)
-                val content = assetBytes.decodeToString()
-                println("📖 CONTENT: Downloaded ${content.length} chars from asset")
-                return content
-            }
-            
-            // Fallback to text for non-link types (text notes, etc.)
-            val textContent = dto.content.text
-            if (!textContent.isNullOrBlank()) {
-                println("📖 CONTENT: Using text content (${textContent.length} chars)")
-                return textContent
-            }
-            
-            println("📖 CONTENT: No content available (neither inline nor asset)")
-            return null
+        return try {
+            fetchRemoteContent(server, bookmark.originalRemoteId)
         } catch (e: Exception) {
             println("📖 CONTENT: ERROR - ${e.message}")
             e.printStackTrace()
-            return null
+            null
         }
     }
 
@@ -760,28 +729,7 @@ class BookmarkRepository(
 
             bookmarks.forEach { entity ->
                 try {
-                    val fullBookmark = remoteDataSource.fetchBookmark(config.server, entity.originalRemoteId)
-                    
-                    // Priority 1: inline htmlContent (full content)
-                    var content = fullBookmark.content.htmlContent
-                    
-                    // Priority 2: asset-based content (prefer over description)
-                    if (content.isNullOrBlank()) {
-                        val contentAsset = fullBookmark.assets.find { it.assetType == "linkHtmlContent" }
-                        if (contentAsset != null) {
-                            try {
-                                val assetBytes = remoteDataSource.downloadAsset(config.server, contentAsset.id)
-                                content = assetBytes.decodeToString()
-                            } catch (e: Exception) {
-                                println("Failed to download content asset ${contentAsset.id}: ${e.message}")
-                            }
-                        }
-                    }
-                    
-                    // Priority 3: fallback to note or text for non-link content
-                    if (content.isNullOrBlank()) {
-                        content = fullBookmark.note ?: fullBookmark.content.text
-                    }
+                    val content = fetchRemoteContent(config.server, entity.originalRemoteId)
 
                     if (!content.isNullOrBlank()) {
                         val readingTime = ReadingTimeCalculator.calculateReadingTime(content)
@@ -793,6 +741,47 @@ class BookmarkRepository(
                 current++
                 _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingContent(current, total)
             }
+        }
+    }
+
+    /**
+     * Shared logic for fetching bookmark content from server.
+     * Tries: 1. Inline HTML -> 2. Asset HTML -> 3. Note/Text
+     */
+    private suspend fun fetchRemoteContent(server: Server, remoteBookmarkId: String): String? {
+        try {
+            val fullBookmark = remoteDataSource.fetchBookmark(server, remoteBookmarkId)
+            
+            // Priority 1: inline htmlContent (full content)
+            var content = fullBookmark.content.htmlContent
+            
+            // Priority 2: asset-based content (prefer over description)
+            if (content.isNullOrBlank()) {
+                val contentAsset = fullBookmark.assets.find { it.assetType == "linkHtmlContent" }
+                if (contentAsset != null) {
+                    try {
+                        println("📖 CONTENT: Downloading content from asset ${contentAsset.id}")
+                        val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id)
+                        content = assetBytes.decodeToString()
+                        println("📖 CONTENT: Downloaded ${content.length} chars from asset")
+                    } catch (e: Exception) {
+                        println("Failed to download content asset ${contentAsset.id}: ${e.message}")
+                    }
+                }
+            }
+            
+            // Priority 3: fallback to note or text for non-link content
+            if (content.isNullOrBlank()) {
+                content = fullBookmark.note ?: fullBookmark.content.text
+                if (!content.isNullOrBlank()) {
+                     println("📖 CONTENT: Using note/text content (${content.length} chars)")
+                }
+            }
+            
+            return content
+        } catch (e: Exception) {
+            println("📖 CONTENT: ERROR fetching remote content - ${e.message}")
+            throw e
         }
     }
 
