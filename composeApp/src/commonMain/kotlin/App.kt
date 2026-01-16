@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.first
 
 @Composable
 @Preview
-fun App(sharedUrl: String? = null) {
+fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
     // Get ServerRepository to access API keys for authentication
     val serverRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.ServerRepository>()
 
@@ -83,20 +83,36 @@ fun App(sharedUrl: String? = null) {
             accentColor = accentColor
         ) {
             val serverRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.ServerRepository>()
-            var initialScreen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<cafe.adriel.voyager.core.screen.Screen?>(null) }
+            var initialScreens by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<cafe.adriel.voyager.core.screen.Screen>?>(null) }
 
-            androidx.compose.runtime.LaunchedEffect(Unit) {
+            androidx.compose.runtime.LaunchedEffect(sharedUrl, openBookmarkId) {
+                println("📱 App LaunchedEffect. sharedUrl=$sharedUrl, openBookmarkId=$openBookmarkId")
                 if (sharedUrl != null) {
-                    initialScreen = com.karakept.app.ui.screens.ShareBookmarkScreen(sharedUrl)
+                    println("   Showing ShareBookmarkScreen")
+                    initialScreens = listOf(com.karakept.app.ui.screens.ShareBookmarkScreen(sharedUrl))
                 } else if (serverRepository.hasServers()) {
-                    initialScreen = com.karakept.app.ui.screens.MainScreen
+                    val screens = mutableListOf<cafe.adriel.voyager.core.screen.Screen>(com.karakept.app.ui.screens.MainScreen)
+                    if (openBookmarkId != null) {
+                        try {
+                           val bookmarkIdLong = openBookmarkId.toLong()
+                           println("   Parsing bookmark ID $bookmarkIdLong. Adding BookmarkViewerScreen.")
+                           // BookmarkViewerScreen only needs bookmarkId (Long). It handles server resolution internally.
+                           screens.add(com.karakept.app.ui.screens.BookmarkViewerScreen(bookmarkIdLong))
+                        } catch (e: Exception) {
+                            println("   Error parsing openBookmarkId: ${e.message}")
+                        }
+                    } else {
+                        println("   No bookmark ID, showing only MainScreen")
+                    }
+                    initialScreens = screens
                 } else {
-                    initialScreen = com.karakept.app.ui.screens.LoginScreen()
+                    println("   No servers, showing LoginScreen")
+                    initialScreens = listOf(com.karakept.app.ui.screens.LoginScreen())
                 }
             }
 
-            if (initialScreen != null) {
-                Navigator(initialScreen!!) { navigator ->
+            if (initialScreens != null) {
+                Navigator(initialScreens!!) { navigator ->
                     SlideTransition(navigator)
                 }
             }

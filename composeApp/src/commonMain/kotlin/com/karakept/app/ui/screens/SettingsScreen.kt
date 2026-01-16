@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -102,6 +103,15 @@ class SettingsScreen : Screen {
                         description = "Reader and viewer mode settings",
                         icon = Icons.Default.Visibility,
                         onClick = { navigator.push(BookmarkViewSettingsScreen()) }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SettingsNavigationItem(
+                        title = "Notifications",
+                        description = "Manage notification preferences",
+                        icon = Icons.Default.Notifications,
+                        onClick = { navigator.push(com.karakept.app.ui.screens.settings.NotificationSettingsScreen()) }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))

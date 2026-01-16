@@ -84,6 +84,8 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.android)
                 implementation(libs.androidx.datastore.preferences.android)
                 implementation(libs.androidx.core.splashscreen)
+                implementation(libs.androidx.work.runtime)
+                implementation(libs.koin.androidx.workmanager)
             }
         }
         val desktopMain by getting {

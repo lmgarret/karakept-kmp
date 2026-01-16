@@ -251,6 +251,18 @@ class SettingsScreenModel(
         }
     }
 
+    val notificationsEnabled: StateFlow<Boolean> = settingsRepository.notificationsEnabled.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setNotificationsEnabled(enabled)
+        }
+    }
+
     val contentSyncStrategy: StateFlow<com.karakept.app.data.model.SyncStrategy> = settingsRepository.contentSyncStrategy.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),

@@ -32,25 +32,60 @@ class MainActivity : ComponentActivity() {
         }
         
         var sharedUrl by androidx.compose.runtime.mutableStateOf<String?>(null)
+        var openBookmarkId by androidx.compose.runtime.mutableStateOf<String?>(null)
+        
+        android.util.Log.d("DebuggingCtx", "🚀 MainActivity.onCreate called. Intent: $intent")
         
         // Handle initial intent
-        intent?.getStringExtra("shared_url")?.let {
-            sharedUrl = it
+        intent?.let {
+            it.getStringExtra("shared_url")?.let { url ->
+                android.util.Log.d("DebuggingCtx", "   Found shared_url: $url")
+                sharedUrl = url
+            }
+            it.getStringExtra("bookmark_id")?.let { id ->
+                android.util.Log.d("DebuggingCtx", "   Found bookmark_id: $id")
+                openBookmarkId = id
+            }
+             // Log all extras
+            it.extras?.keySet()?.forEach { key ->
+                android.util.Log.d("DebuggingCtx", "   Extra: $key = ${it.extras?.get(key)}")
+            }
         }
 
+        checkNotificationPermission()
+
         setContent {
-            App(sharedUrl = sharedUrl)
+            App(sharedUrl = sharedUrl, openBookmarkId = openBookmarkId)
+        }
+    }
+    
+    private fun checkNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val permission = android.Manifest.permission.POST_NOTIFICATIONS
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                // Request permission
+                androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(permission), 101)
+            }
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        android.util.Log.d("DebuggingCtx", "🚀 MainActivity.onNewIntent called. Intent: $intent")
+        
         // Handle subsequent intents while activity is running
-        intent.getStringExtra("shared_url")?.let {
-            // Need a way to trigger refresh in App
-            // For now, re-set content or use a shared state
+        val url = intent.getStringExtra("shared_url")
+        val bookmarkId = intent.getStringExtra("bookmark_id")
+        android.util.Log.d("DebuggingCtx", "   New intent data. url=$url, bookmarkId=$bookmarkId")
+        
+        // Log all extras
+        intent.extras?.keySet()?.forEach { key ->
+            android.util.Log.d("DebuggingCtx", "   Extra: $key = ${intent.extras?.get(key)}")
+        }
+        
+        if (url != null || bookmarkId != null) {
             setContent {
-                App(sharedUrl = it)
+                App(sharedUrl = url, openBookmarkId = bookmarkId)
             }
         }
     }

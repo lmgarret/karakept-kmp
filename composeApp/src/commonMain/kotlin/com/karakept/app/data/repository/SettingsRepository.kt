@@ -43,6 +43,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val CONTENT_SYNC_TARGET_LISTS_KEY = stringSetPreferencesKey("content_sync_target_lists")
     private val CONTENT_SYNC_WITH_CHILDREN_KEY = stringSetPreferencesKey("content_sync_with_children")
 
+    private val NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("notifications_enabled")
+
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
         val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.LIST.name
         LayoutType.fromString(layoutString)
@@ -301,6 +303,16 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { preferences ->
             preferences[CONTENT_SYNC_TARGET_LISTS_KEY] = config.selectedLists
             preferences[CONTENT_SYNC_WITH_CHILDREN_KEY] = config.withChildrenMode
+        }
+    }
+
+    val notificationsEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[NOTIFICATIONS_ENABLED_KEY] ?: true // Default: enabled
+    }
+
+    suspend fun setNotificationsEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[NOTIFICATIONS_ENABLED_KEY] = enabled
         }
     }
 
