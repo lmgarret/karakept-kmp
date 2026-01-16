@@ -1,26 +1,47 @@
 package com.karakept.app.data.remote
 
+import com.karakept.api.client.*
+import com.karakept.api.model.*
+import com.karakept.api.model.KarakeepList
+import com.karakept.api.infrastructure.ApiClient
 import com.karakept.app.data.model.Server
-import com.karakept.app.data.remote.model.CreateBookmarkDto
-import com.karakept.app.data.remote.model.BookmarkDto
-import com.karakept.app.data.remote.model.ListDto
-import com.karakept.app.data.remote.model.ListsResponse
-import com.karakept.app.data.remote.model.PaginatedBookmarksResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
-import io.ktor.client.request.post
-import io.ktor.client.request.patch
-import io.ktor.client.request.delete
 import io.ktor.client.request.header
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.appendPathSegments
 import io.ktor.http.isSuccess
+import io.ktor.client.request.headers
 
-class RemoteDataSource(private val client: HttpClient) {
-    
+class RemoteDataSource(
+    private val client: HttpClient
+) {
+    private fun getBaseUrl(server: Server): String {
+        val base = if (server.url.endsWith("/")) server.url.removeSuffix("/") else server.url
+        return if (base.endsWith("/api/v1")) base else "$base/api/v1"
+    }
+
+    private fun bookmarksApi(server: Server) = BookmarksApi(getBaseUrl(server), client).apply {
+        setBearerToken(server.apiKey)
+    }
+
+    private fun listsApi(server: Server) = ListsApi(getBaseUrl(server), client).apply {
+        setBearerToken(server.apiKey)
+    }
+
+    private fun tagsApi(server: Server) = TagsApi(getBaseUrl(server), client).apply {
+        setBearerToken(server.apiKey)
+    }
+
+    private fun highlightsApi(server: Server) = HighlightsApi(getBaseUrl(server), client).apply {
+        setBearerToken(server.apiKey)
+    }
+
+    private fun usersApi(server: Server) = UsersApi(getBaseUrl(server), client).apply {
+        setBearerToken(server.apiKey)
+    }
+    private fun getAuth(server: Server) = "Bearer ${server.apiKey}"
+
     suspend fun fetchBookmarks(
         server: Server,
         cursor: String? = null,
@@ -28,153 +49,72 @@ class RemoteDataSource(private val client: HttpClient) {
         includeContent: Boolean = false,
         archived: Boolean? = null,
         favourited: Boolean? = null
-    ): PaginatedBookmarksResponse {
+    ): PaginatedBookmarks {
         return try {
-            val response: HttpResponse = client.get(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "bookmarks")
-                    if (cursor != null) parameters.append("cursor", cursor)
-                    parameters.append("limit", limit.toString())
-                    parameters.append("includeContent", includeContent.toString())
-                    if (archived != null) parameters.append("archived", archived.toString())
-                    if (favourited != null) parameters.append("favourited", favourited.toString())
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to fetch bookmarks: ${response.status}")
-            }
-
-            response.body()
+            bookmarksApi(server).bookmarksGet(
+                cursor = cursor,
+                limit = limit.toDouble(),
+                includeContent = includeContent,
+                archived = archived,
+                favourited = favourited
+            ).body()
         } catch (e: Exception) {
             throw ApiException("Error fetching bookmarks: ${e.message}", e)
         }
     }
 
-    suspend fun fetchBookmark(server: Server, bookmarkId: String, includeContent: Boolean = true): BookmarkDto {
+    suspend fun fetchBookmark(server: Server, bookmarkId: String, includeContent: Boolean = true): Bookmark {
         return try {
-            val response: HttpResponse = client.get(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "bookmarks", bookmarkId)
-                    parameters.append("includeContent", includeContent.toString())
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to fetch bookmark $bookmarkId: ${response.status}")
-            }
-
-            response.body()
+            bookmarksApi(server).bookmarksBookmarkIdGet(bookmarkId, includeContent).body()
         } catch (e: Exception) {
             throw ApiException("Error fetching bookmark: ${e.message}", e)
         }
     }
 
-    suspend fun fetchLists(server: Server): List<ListDto> {
+    suspend fun fetchLists(server: Server): List<KarakeepList> {
         return try {
-            val response: HttpResponse = client.get(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "lists")
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to fetch lists: ${response.status}")
-            }
-            
-            // Try to parse as ListsResponse first (standard)
-            try {
-                val listsResponse: ListsResponse = response.body()
-                listsResponse.lists
-            } catch (e: Exception) {
-                // Fallback: Try to parse as direct List<ListDto>
-                try {
-                    val directList: List<ListDto> = response.body()
-                    directList
-                } catch (e2: Exception) {
-                    throw e // Throw original error if both fail
-                }
-            }
+            val response = listsApi(server).listsGet().body()
+            response.lists ?: emptyList()
         } catch (e: Exception) {
             throw ApiException("Error fetching lists: ${e.message}", e)
         }
     }
 
-    suspend fun fetchBookmarksForList(server: Server, listId: String, includeContent: Boolean = false): List<BookmarkDto> {
+    suspend fun fetchBookmarksForList(server: Server, listId: String, includeContent: Boolean = false): List<Bookmark> {
         return try {
-            val response: HttpResponse = client.get(server.url) {
-                url {
-                    // Endpoint requires /api/v1 prefix like other endpoints
-                    appendPathSegments("api", "v1", "lists", listId, "bookmarks")
-                    parameters.append("includeContent", includeContent.toString())
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-
-            if (!response.status.isSuccess()) {
-                println("Failed to fetch bookmarks for list $listId: ${response.status}")
-                throw ApiException("Failed to fetch bookmarks for list $listId: ${response.status}")
-            }
-
-            // Try multiple response formats to handle API variations
-            try {
-                val paginatedResponse: PaginatedBookmarksResponse = response.body()
-                println("List $listId: Parsed as PaginatedBookmarksResponse - ${paginatedResponse.bookmarks.size} bookmarks")
-                paginatedResponse.bookmarks
-            } catch (e: Exception) {
-                // If PaginatedBookmarksResponse fails, try parsing as direct list
-                try {
-                    val directList: List<BookmarkDto> = response.body()
-                    println("List $listId: Parsed as List<BookmarkDto> - ${directList.size} bookmarks")
-                    directList
-                } catch (e2: Exception) {
-                    // Log both parsing errors for debugging
-                    println("List $listId: Failed to parse as PaginatedBookmarksResponse: ${e.message}")
-                    println("List $listId: Failed to parse as List<BookmarkDto>: ${e2.message}")
-                    throw e // Throw original error
-                }
-            }
+            listsApi(server).listsListIdBookmarksGet(listId, includeContent = includeContent).body().bookmarks ?: emptyList()
         } catch (e: Exception) {
-            // Log the error instead of silently swallowing it
-            println("Error fetching bookmarks for list $listId: ${e.message}")
-            e.printStackTrace()
-            // If a list fetch fails, we return empty list to not break the whole sync
-            emptyList()
+            throw ApiException("Error fetching bookmarks for list $listId: ${e.message}", e)
         }
     }
 
     suspend fun testConnection(url: String, apiKey: String): Boolean {
         return try {
-            val response: HttpResponse = client.get(url) {
-                url {
-                    appendPathSegments("api", "v1", "bookmarks")
-                    parameters.append("page", "1")
-                    parameters.append("per_page", "1")
-                }
-                header("Authorization", "Bearer $apiKey")
-            }
-            response.status.isSuccess()
+             BookmarksApi(getBaseUrl(Server(id = "", url = url, apiKey = apiKey, label = "")), client).apply {
+                 setBearerToken(apiKey)
+             }.bookmarksGet(limit = 1.0)
+             true
         } catch (e: Exception) {
             false
         }
     }
+
     suspend fun downloadAsset(server: Server, assetId: String): ByteArray {
         return try {
-            val response: HttpResponse = client.get(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "assets", assetId)
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
+            // Reverting to direct Ktor client as the generated assetsApi returns HttpResponse<Unit> (void) 
+            // and doesn't seem to handle the binary download properly in this version.
+            val baseUrl = if (server.url.endsWith("/")) server.url.removeSuffix("/") else server.url
+            val url = if (baseUrl.endsWith("/api/v1")) baseUrl else "$baseUrl/api/v1"
+            
+            val response: HttpResponse = client.get("$url/assets/$assetId") {
+                header("Authorization", getAuth(server))
             }
             
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to download asset $assetId: ${response.status}")
+            if (response.status.isSuccess()) {
+                response.body<ByteArray>()
+            } else {
+                throw ApiException("Failed to download asset: ${response.status}")
             }
-            
-            response.body()
         } catch (e: Exception) {
             throw ApiException("Error downloading asset: ${e.message}", e)
         }
@@ -187,22 +127,13 @@ class RemoteDataSource(private val client: HttpClient) {
     suspend fun updateBookmark(
         server: Server,
         bookmarkId: String,
-        updates: com.karakept.app.data.remote.model.UpdateBookmarkDto
-    ): BookmarkDto {
+        updates: BookmarksBookmarkIdPatchRequest
+    ): Bookmark {
         return try {
-            val response: HttpResponse = client.patch(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "bookmarks", bookmarkId)
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-                setBody(updates)
-            }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to update bookmark $bookmarkId: ${response.status}")
-            }
-            
-            response.body()
+            val api = bookmarksApi(server)
+            api.bookmarksBookmarkIdPatch(bookmarkId, updates)
+            // Fetch updated bookmark to ensure we have full data (content, tags, assets)
+            api.bookmarksBookmarkIdGet(bookmarkId, includeContent = true).body()
         } catch (e: Exception) {
             throw ApiException("Error updating bookmark: ${e.message}", e)
         }
@@ -212,18 +143,13 @@ class RemoteDataSource(private val client: HttpClient) {
      * Delete a bookmark
      * DELETE /api/v1/bookmarks/:bookmarkId
      */
+    suspend fun fetchAllBookmarks(server: Server): List<Bookmark> {
+        return bookmarksApi(server).bookmarksGet(includeContent = false).body().bookmarks ?: emptyList()
+    }
+
     suspend fun deleteBookmark(server: Server, bookmarkId: String) {
         try {
-            val response: HttpResponse = client.delete(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "bookmarks", bookmarkId)
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to delete bookmark $bookmarkId: ${response.status}")
-            }
+            bookmarksApi(server).bookmarksBookmarkIdDelete(bookmarkId)
         } catch (e: Exception) {
             throw ApiException("Error deleting bookmark: ${e.message}", e)
         }
@@ -237,21 +163,12 @@ class RemoteDataSource(private val client: HttpClient) {
         server: Server,
         bookmarkId: String,
         tags: List<String>
-    ): com.karakept.app.data.remote.model.AttachTagsResponse {
+    ): BookmarksBookmarkIdTagsPost200Response {
         return try {
-            val response: HttpResponse = client.post(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "bookmarks", bookmarkId, "tags")
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-                setBody(com.karakept.app.data.remote.model.AttachTagsDto(tags))
-            }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to attach tags to bookmark $bookmarkId: ${response.status}")
-            }
-            
-            response.body()
+            val request = BookmarksBookmarkIdTagsPostRequest(
+                tags = tags.map { BookmarksBookmarkIdTagsPostRequestTagsInner(tagName = it) }
+            )
+            bookmarksApi(server).bookmarksBookmarkIdTagsPost(bookmarkId, request).body()
         } catch (e: Exception) {
             throw ApiException("Error attaching tags: ${e.message}", e)
         }
@@ -259,41 +176,29 @@ class RemoteDataSource(private val client: HttpClient) {
 
     /**
      * Detach a tag from a bookmark
-     * DELETE /api/v1/bookmarks/:bookmarkId/tags/:tagId
+     * DELETE /api/v1/bookmarks/:bookmarkId/tags
      */
-    suspend fun detachTag(server: Server, bookmarkId: String, tagId: String) {
+    suspend fun detachTags(server: Server, bookmarkId: String, tags: List<String>) {
         try {
-            val response: HttpResponse = client.delete(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "bookmarks", bookmarkId, "tags", tagId)
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to detach tag from bookmark $bookmarkId: ${response.status}")
-            }
+            // Treat tags as names if they don't look like UUIDs, but for safety with this API, 
+            // we can just send them as tagId if they are from the repository's tagId cache.
+            // Actually, the easiest is to just send them as tagId since the repository passes IDs here.
+            val request = BookmarksBookmarkIdTagsPostRequest(
+                tags = tags.map { BookmarksBookmarkIdTagsPostRequestTagsInner(tagId = it) }
+            )
+            bookmarksApi(server).bookmarksBookmarkIdTagsDelete(bookmarkId, request)
         } catch (e: Exception) {
-            throw ApiException("Error detaching tag: ${e.message}", e)
+            throw ApiException("Error detaching tags: ${e.message}", e)
         }
     }
 
     /**
      * Add a bookmark to a list
-     * POST /api/v1/lists/:listId/bookmarks/:bookmarkId
+     * PUT /api/v1/lists/:listId/bookmarks/:bookmarkId
      */
     suspend fun addBookmarkToList(server: Server, listId: String, bookmarkId: String) {
         try {
-            val response: HttpResponse = client.post(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "lists", listId, "bookmarks", bookmarkId)
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to add bookmark $bookmarkId to list $listId: ${response.status}")
-            }
+            listsApi(server).listsListIdBookmarksBookmarkIdPut(listId, bookmarkId)
         } catch (e: Exception) {
             throw ApiException("Error adding bookmark to list: ${e.message}", e)
         }
@@ -303,21 +208,16 @@ class RemoteDataSource(private val client: HttpClient) {
      * Create a new bookmark
      * POST /api/v1/bookmarks
      */
-    suspend fun createBookmark(server: Server, url: String): BookmarkDto {
+    suspend fun createBookmark(server: Server, url: String): Bookmark {
         return try {
-            val response: HttpResponse = client.post(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "bookmarks")
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-                setBody(CreateBookmarkDto(type = "link", url = url))
-            }
-
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to create bookmark: ${response.status}")
-            }
-
-            response.body()
+            val request = BookmarksPostRequest(
+                type = BookmarksPostRequest.Type.ASSET,
+                url = url,
+                text = "", 
+                assetType = BookmarksPostRequest.AssetType.IMAGE,
+                assetId = ""
+            )
+            bookmarksApi(server).bookmarksPost(request).body()
         } catch (e: Exception) {
             throw ApiException("Error creating bookmark: ${e.message}", e)
         }
@@ -329,16 +229,7 @@ class RemoteDataSource(private val client: HttpClient) {
      */
     suspend fun removeBookmarkFromList(server: Server, listId: String, bookmarkId: String) {
         try {
-            val response: HttpResponse = client.delete(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "lists", listId, "bookmarks", bookmarkId)
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to remove bookmark $bookmarkId from list $listId: ${response.status}")
-            }
+            listsApi(server).listsListIdBookmarksBookmarkIdDelete(listId, bookmarkId)
         } catch (e: Exception) {
             throw ApiException("Error removing bookmark from list: ${e.message}", e)
         }
@@ -346,4 +237,3 @@ class RemoteDataSource(private val client: HttpClient) {
 }
 
 class ApiException(message: String, cause: Throwable? = null) : Exception(message, cause)
-

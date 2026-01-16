@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
-import com.karakept.app.data.remote.model.ListDto
+import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -35,7 +35,7 @@ fun FilterBottomPanel(
     currentFilter: FilterConfig,
     availableTags: List<String>, // Top 10 most used tags for quick selection
     allTags: List<String> = availableTags, // All tags for the dialog
-    availableLists: List<ListDto>,
+    availableLists: List<KarakeepList>,
     onDismiss: () -> Unit,
     onFilterChange: (FilterConfig) -> Unit,
     onSaveFilter: (String, String, Long?, Boolean) -> Unit, // name, icon, color, isDefault
@@ -241,19 +241,20 @@ fun FilterBottomPanel(
                         modifier = Modifier.padding(vertical = 8.dp)
                     ) {
                         availableLists.forEach { list ->
-                            val isSelected = filter.lists.contains(list.id)
+                            val listId = list.id ?: ""
+                            val isSelected = filter.lists.contains(listId)
                             FilterChip(
                                 selected = isSelected,
                                 onClick = {
                                     val newLists = if (isSelected) {
-                                        filter.lists - list.id
+                                        filter.lists - listId
                                     } else {
-                                        filter.lists + list.id
+                                        filter.lists + listId
                                     }
                                     filter = filter.copy(lists = newLists)
                                 },
-                                label = { Text(list.name) },
-                                leadingIcon = { Text(list.icon) }
+                                label = { Text(list.name ?: "Untitled") },
+                                leadingIcon = { Text(list.icon ?: "") }
                             )
                         }
                     }

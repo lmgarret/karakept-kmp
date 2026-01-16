@@ -14,6 +14,8 @@ import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.SavedFilterRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.ListRepository
+import com.karakept.api.infrastructure.ApiClient
+import com.karakept.api.client.*
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
@@ -33,6 +35,20 @@ val appModule = module {
     single<HttpClient> {
         createHttpClient()
     }
+    
+    // Generated API Client and Services
+    val defaultBaseUrl = "https://try.karakept.app/api/v1"
+    single<ApiClient> { 
+        ApiClient(
+            baseUrl = defaultBaseUrl,
+            httpClient = get()
+        )
+    }
+    single { BookmarksApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
+    single { ListsApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
+    single { TagsApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
+    single { HighlightsApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
+    single { UsersApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
     
     single { RemoteDataSource(get()) }
     

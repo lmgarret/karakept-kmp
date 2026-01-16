@@ -1,4 +1,5 @@
 [versions]
+openapi-generator = "7.10.0"
 agp = "8.13.0"
 android-compileSdk = "35"
 android-minSdk = "24"
@@ -107,6 +108,7 @@ androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version = "
 koin-androidx-workmanager = { module = "io.insert-koin:koin-androidx-workmanager", version.ref = "koin" }
 
 [plugins]
+openapi-generator = { id = "org.openapi.generator", version.ref = "openapi-generator" }
 androidApplication = { id = "com.android.application", version.ref = "agp" }
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
 jetbrainsCompose = { id = "org.jetbrains.compose", version.ref = "compose-plugin" }

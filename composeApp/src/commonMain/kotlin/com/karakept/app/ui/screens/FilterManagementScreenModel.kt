@@ -4,10 +4,12 @@ import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.entity.SavedFilterEntity
 import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.BookmarkRepository
+import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.SavedFilterRepository
 import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -82,8 +84,8 @@ class FilterManagementScreenModel(
             .sortedBy { it.lowercase() }
     }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _availableLists = MutableStateFlow<List<com.karakept.app.data.remote.model.ListDto>>(emptyList())
-    val availableLists: StateFlow<List<com.karakept.app.data.remote.model.ListDto>> = _availableLists
+    private val _availableLists = MutableStateFlow<List<KarakeepList>>(emptyList())
+    val availableLists: StateFlow<List<KarakeepList>> = _availableLists
 
     init {
         screenModelScope.launch {

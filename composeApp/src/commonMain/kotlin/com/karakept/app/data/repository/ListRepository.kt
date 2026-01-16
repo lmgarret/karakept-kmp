@@ -2,7 +2,7 @@ package com.karakept.app.data.repository
 
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
-import com.karakept.app.data.remote.model.ListDto
+import com.karakept.api.model.KarakeepList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 class ListRepository(
     private val remoteDataSource: RemoteDataSource
 ) {
-    private val _lists = MutableStateFlow<List<ListDto>>(emptyList())
-    val lists: StateFlow<List<ListDto>> = _lists.asStateFlow()
+    private val _lists = MutableStateFlow<List<KarakeepList>>(emptyList())
+    val lists: StateFlow<List<KarakeepList>> = _lists.asStateFlow()
 
     suspend fun refreshLists(server: Server) {
         try {

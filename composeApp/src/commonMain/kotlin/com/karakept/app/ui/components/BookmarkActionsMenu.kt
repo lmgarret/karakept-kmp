@@ -44,7 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.remote.model.ListDto
+import com.karakept.api.model.KarakeepList as KarakeepList
 
 /**
  * Sheet showing all available bookmark actions.
@@ -53,7 +53,7 @@ import com.karakept.app.data.remote.model.ListDto
 @Composable
 fun BookmarkActionsMenu(
     bookmark: BookmarkEntity,
-    availableLists: List<ListDto>,
+    availableLists: List<KarakeepList>,
     onAction: (BookmarkAction) -> Unit,
     onDismiss: () -> Unit
 ) {

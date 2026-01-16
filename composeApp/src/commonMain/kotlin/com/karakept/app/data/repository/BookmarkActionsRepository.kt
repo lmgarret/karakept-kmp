@@ -6,7 +6,8 @@ import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.entity.PendingActionType
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
-import com.karakept.app.data.remote.model.UpdateBookmarkDto
+import com.karakept.api.model.*
+import com.karakept.api.infrastructure.ApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.launch
@@ -464,19 +465,19 @@ class BookmarkActionsRepository(
             when (action.actionType) {
                 PendingActionType.ARCHIVE -> {
                     println("BookmarkActionsRepository: Calling updateBookmark with archived=true")
-                    remoteDataSource.updateBookmark(server, bookmarkId, com.karakept.app.data.remote.model.UpdateBookmarkDto(archived = true))
+                    remoteDataSource.updateBookmark(server, bookmarkId, BookmarksBookmarkIdPatchRequest(archived = true))
                 }
                 PendingActionType.UNARCHIVE -> {
                     println("BookmarkActionsRepository: Calling updateBookmark with archived=false")
-                    remoteDataSource.updateBookmark(server, bookmarkId, com.karakept.app.data.remote.model.UpdateBookmarkDto(archived = false))
+                    remoteDataSource.updateBookmark(server, bookmarkId, BookmarksBookmarkIdPatchRequest(archived = false))
                 }
                 PendingActionType.FAVOURITE -> {
                     println("BookmarkActionsRepository: Calling updateBookmark with favourited=true")
-                    remoteDataSource.updateBookmark(server, bookmarkId, com.karakept.app.data.remote.model.UpdateBookmarkDto(favourited = true))
+                    remoteDataSource.updateBookmark(server, bookmarkId, BookmarksBookmarkIdPatchRequest(favourited = true))
                 }
                 PendingActionType.UNFAVOURITE -> {
                     println("BookmarkActionsRepository: Calling updateBookmark with favourited=false")
-                    remoteDataSource.updateBookmark(server, bookmarkId, com.karakept.app.data.remote.model.UpdateBookmarkDto(favourited = false))
+                    remoteDataSource.updateBookmark(server, bookmarkId, BookmarksBookmarkIdPatchRequest(favourited = false))
                 }
                 PendingActionType.DELETE -> {
                     println("BookmarkActionsRepository: Calling deleteBookmark")
@@ -494,11 +495,10 @@ class BookmarkActionsRepository(
                     println("BookmarkActionsRepository: Calling attachTags for mark_read with tags: $tags")
                     val response = remoteDataSource.attachTags(server, bookmarkId, tags)
                     
-                    // Cache the tag ID if it's the read tag
-                    response.attached.find { it.name == "karakept:read" }?.let { tag ->
-                        println("BookmarkActionsRepository: Caching read tag ID ${tag.id} for bookmark $bookmarkId")
-                        recentlyAddedReadTagIds[bookmarkId] = tag.id
-                    }
+                    // The new API returns List<String> (tag names)
+                    // We can't cache IDs anymore, so we'll have to fetch them when unreading
+                    // if they are not already cached from a previous fetch.
+                    println("BookmarkActionsRepository: Attached tags: ${response.attached}")
                 }
                 PendingActionType.MARK_UNREAD -> {
                     // Try to get tag ID from cache first
@@ -509,7 +509,7 @@ class BookmarkActionsRepository(
                         println("BookmarkActionsRepository: Fetching bookmark to find karakept:read tag ID")
                         try {
                             val bookmarkDto = remoteDataSource.fetchBookmark(server, bookmarkId, includeContent = false)
-                            val readTag = bookmarkDto.tags.find { it.name == "karakept:read" }
+                            val readTag = bookmarkDto.tags?.find { it.name == "karakept:read" }
                             tagId = readTag?.id
                         } catch (e: Exception) {
                             println("BookmarkActionsRepository: Error fetching bookmark: ${e.message}")
@@ -523,7 +523,7 @@ class BookmarkActionsRepository(
 
                     if (tagId != null) {
                         println("BookmarkActionsRepository: Detaching tag $tagId")
-                        remoteDataSource.detachTag(server, bookmarkId, tagId)
+                        remoteDataSource.detachTags(server, bookmarkId, listOf(tagId))
                         // Remove from cache
                         recentlyAddedReadTagIds.remove(bookmarkId)
                     } else {

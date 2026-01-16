@@ -34,13 +34,13 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.SavedFilterEntity
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
-import com.karakept.app.data.remote.model.ListDto
+import com.karakept.api.model.KarakeepList
 import com.karakept.app.ui.screens.SavedFilterItem
 
 @Composable
 internal fun MainScreenDrawer(
     drawerState: DrawerState,
-    lists: List<ListDto>,
+    lists: List<KarakeepList>,
     listCounts: Map<String, Int>,
     savedFilters: List<SavedFilterEntity>,
     expandedLists: Set<String>,
@@ -111,8 +111,9 @@ internal fun MainScreenDrawer(
                     val visibleHierarchy = filterExpandedHierarchy(hierarchy, expandedLists)
 
                     visibleHierarchy.forEach { (list, depth) ->
-                        key(list.id) {
-                            val hasChildLists = hasChildren(list.id, lists)
+                        val listId = list.id ?: ""
+                        key(listId) {
+                            val hasChildLists = hasChildren(listId, lists)
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -123,16 +124,16 @@ internal fun MainScreenDrawer(
                                 // Expand/collapse icon
                                 if (hasChildLists) {
                                     IconButton(
-                                        onClick = { onToggleListExpanded(list.id) },
+                                        onClick = { onToggleListExpanded(listId) },
                                         modifier = Modifier.size(24.dp)
                                     ) {
                                         Icon(
-                                            imageVector = if (expandedLists.contains(list.id)) {
+                                            imageVector = if (expandedLists.contains(listId)) {
                                                 Icons.Default.KeyboardArrowDown
                                             } else {
                                                 Icons.AutoMirrored.Filled.KeyboardArrowRight
                                             },
-                                            contentDescription = if (expandedLists.contains(list.id)) "Collapse" else "Expand",
+                                            contentDescription = if (expandedLists.contains(listId)) "Collapse" else "Expand",
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -148,7 +149,7 @@ internal fun MainScreenDrawer(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text("${list.icon} ${list.name}")
-                                            listCounts[list.id]?.let { count ->
+                                            listCounts[listId]?.let { count ->
                                                 Text(
                                                     text = count.toString(),
                                                     style = MaterialTheme.typography.bodySmall,
@@ -157,7 +158,7 @@ internal fun MainScreenDrawer(
                                             }
                                         }
                                     },
-                                    selected = currentFilter.lists.contains(list.id),
+                                    selected = currentFilter.lists.contains(listId),
                                     colors = NavigationDrawerItemDefaults.colors(
                                         selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                         selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -166,7 +167,7 @@ internal fun MainScreenDrawer(
                                     onClick = {
                                         onFilterApply(FilterConfig(
                                             status = FilterStatus.ALL_INCLUDING_ARCHIVED,
-                                            lists = listOf(list.id)
+                                            lists = listOf(list.id ?: "")
                                         ))
                                     },
                                     modifier = Modifier.weight(1f)
@@ -229,11 +230,11 @@ internal fun MainScreenDrawer(
 
 /**
  * Builds a hierarchical list structure from flat list.
- * Returns list of (ListDto, depth) pairs in display order.
+ * Returns list of (KarakeepList, depth) pairs in display order.
  * Reused from ListManagementScreen.kt
  */
-private fun buildHierarchy(lists: List<ListDto>): List<Pair<ListDto, Int>> {
-    val result = mutableListOf<Pair<ListDto, Int>>()
+private fun buildHierarchy(lists: List<KarakeepList>): List<Pair<KarakeepList, Int>> {
+    val result = mutableListOf<Pair<KarakeepList, Int>>()
     val grouped = lists.groupBy { it.parentId }
     val visited = mutableSetOf<String>() // Prevent circular refs
 
@@ -241,10 +242,11 @@ private fun buildHierarchy(lists: List<ListDto>): List<Pair<ListDto, Int>> {
         if (depth > 10) return // Max depth protection
         val children = grouped[parentId] ?: return
         children.forEach { child ->
-            if (!visited.contains(child.id)) {
-                visited.add(child.id)
+            val childId = child.id ?: ""
+            if (!visited.contains(childId)) {
+                visited.add(childId)
                 result.add(child to depth)
-                recurse(child.id, depth + 1)
+                recurse(childId, depth + 1)
             }
         }
     }
@@ -252,8 +254,8 @@ private fun buildHierarchy(lists: List<ListDto>): List<Pair<ListDto, Int>> {
     recurse(null, 0)
 
     // Handle orphans
-    val processed = result.map { it.first.id }.toSet()
-    lists.filter { it.id !in processed }.forEach { list ->
+    val processed = result.map { it.first.id ?: "" }.toSet()
+    lists.filter { (it.id ?: "") !in processed }.forEach { list ->
         result.add(list to 0)
     }
 
@@ -265,13 +267,13 @@ private fun buildHierarchy(lists: List<ListDto>): List<Pair<ListDto, Int>> {
  * A list is visible only if ALL its ancestors are expanded.
  */
 private fun filterExpandedHierarchy(
-    hierarchy: List<Pair<ListDto, Int>>,
+    hierarchy: List<Pair<KarakeepList, Int>>,
     expandedIds: Set<String>
-): List<Pair<ListDto, Int>> {
-    val result = mutableListOf<Pair<ListDto, Int>>()
+): List<Pair<KarakeepList, Int>> {
+    val result = mutableListOf<Pair<KarakeepList, Int>>()
 
     // Build a map of list ID to its hierarchy entry for quick lookup
-    val listMap = hierarchy.associateBy { it.first.id }
+    val listMap = hierarchy.associateBy { it.first.id ?: "" }
 
     hierarchy.forEach { (list, depth) ->
         val shouldShow = if (depth == 0) {
@@ -303,6 +305,6 @@ private fun filterExpandedHierarchy(
 /**
  * Checks if a list has children
  */
-private fun hasChildren(listId: String, allLists: List<ListDto>): Boolean {
+private fun hasChildren(listId: String, allLists: List<KarakeepList>): Boolean {
     return allLists.any { it.parentId == listId }
 }
