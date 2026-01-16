@@ -259,7 +259,12 @@ class BookmarkActionsRepository(
         withContext(Dispatchers.IO) {
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
             bookmark?.let {
-                bookmarkDao.insertBookmark(it.copy(tags = newTags.joinToString(",")))
+                // Update isRead based on whether karakept:read tag is present
+                val hasReadTag = newTags.contains("karakept:read")
+                bookmarkDao.insertBookmark(it.copy(
+                    tags = newTags.joinToString(","),
+                    isRead = hasReadTag
+                ))
             }
 
             queueAction(
@@ -485,9 +490,42 @@ class BookmarkActionsRepository(
                 }
                 PendingActionType.UPDATE_TAGS -> {
                     val data = json.decodeFromString<Map<String, List<String>>>(action.actionData)
-                    val tags = data["tags"] ?: emptyList()
-                    println("BookmarkActionsRepository: Calling attachTags with ${tags.size} tags")
-                    remoteDataSource.attachTags(server, bookmarkId, tags)
+                    val newTags = data["tags"] ?: emptyList()
+                    println("BookmarkActionsRepository: UPDATE_TAGS - Replacing tags with ${newTags.size} tags: $newTags")
+
+                    // Fetch current bookmark to get existing tags
+                    val bookmarkDto = remoteDataSource.fetchBookmark(server, bookmarkId, includeContent = false)
+                    val currentTags = bookmarkDto.tags?.map { it.name ?: "" }?.filter { it.isNotBlank() } ?: emptyList()
+                    val currentTagIds = bookmarkDto.tags?.associate { (it.name ?: "") to (it.id ?: "") } ?: emptyMap()
+
+                    println("BookmarkActionsRepository: Current tags: $currentTags")
+
+                    // Determine which tags to add and remove
+                    val tagsToAdd = newTags.filter { it !in currentTags }
+                    val tagsToRemove = currentTags.filter { it !in newTags }
+
+                    println("BookmarkActionsRepository: Tags to add: $tagsToAdd")
+                    println("BookmarkActionsRepository: Tags to remove: $tagsToRemove")
+
+                    // Remove tags that are no longer in the list
+                    if (tagsToRemove.isNotEmpty()) {
+                        val tagIdsToRemove = tagsToRemove.mapNotNull { currentTagIds[it] }
+                        println("BookmarkActionsRepository: Tags to remove mapped to IDs: ${tagsToRemove.zip(tagIdsToRemove)}")
+                        if (tagIdsToRemove.isNotEmpty()) {
+                            println("BookmarkActionsRepository: Detaching ${tagIdsToRemove.size} tag IDs: $tagIdsToRemove")
+                            val detachResponse = remoteDataSource.detachTags(server, bookmarkId, tagIdsToRemove)
+                            println("BookmarkActionsRepository: Detach response: ${detachResponse.detached}")
+                        } else {
+                            println("BookmarkActionsRepository: Warning: Could not find tag IDs for tags to remove: $tagsToRemove")
+                        }
+                    }
+
+                    // Add new tags
+                    if (tagsToAdd.isNotEmpty()) {
+                        println("BookmarkActionsRepository: Attaching ${tagsToAdd.size} new tags: $tagsToAdd")
+                        val attachResponse = remoteDataSource.attachTags(server, bookmarkId, tagsToAdd)
+                        println("BookmarkActionsRepository: Attach response: ${attachResponse.attached}")
+                    }
                 }
                 PendingActionType.MARK_READ -> {
                     val data = json.decodeFromString<Map<String, List<String>>>(action.actionData)

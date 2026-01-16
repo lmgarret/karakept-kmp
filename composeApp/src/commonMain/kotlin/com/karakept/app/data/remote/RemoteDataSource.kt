@@ -178,16 +178,20 @@ class RemoteDataSource(
      * Detach a tag from a bookmark
      * DELETE /api/v1/bookmarks/:bookmarkId/tags
      */
-    suspend fun detachTags(server: Server, bookmarkId: String, tags: List<String>) {
-        try {
-            // Treat tags as names if they don't look like UUIDs, but for safety with this API, 
-            // we can just send them as tagId if they are from the repository's tagId cache.
-            // Actually, the easiest is to just send them as tagId since the repository passes IDs here.
+    suspend fun detachTags(server: Server, bookmarkId: String, tags: List<String>): BookmarksBookmarkIdTagsDelete200Response {
+        return try {
+            println("RemoteDataSource.detachTags: Detaching ${tags.size} tags from bookmark $bookmarkId: $tags")
             val request = BookmarksBookmarkIdTagsPostRequest(
                 tags = tags.map { BookmarksBookmarkIdTagsPostRequestTagsInner(tagId = it) }
             )
-            bookmarksApi(server).bookmarksBookmarkIdTagsDelete(bookmarkId, request)
+            println("RemoteDataSource.detachTags: Request object: $request")
+            println("RemoteDataSource.detachTags: Request tags: ${request.tags}")
+            val response = bookmarksApi(server).bookmarksBookmarkIdTagsDelete(bookmarkId, request).body()
+            println("RemoteDataSource.detachTags: Successfully detached tags. Response: ${response.detached}")
+            response
         } catch (e: Exception) {
+            println("RemoteDataSource.detachTags: Error detaching tags: ${e.message}")
+            e.printStackTrace()
             throw ApiException("Error detaching tags: ${e.message}", e)
         }
     }

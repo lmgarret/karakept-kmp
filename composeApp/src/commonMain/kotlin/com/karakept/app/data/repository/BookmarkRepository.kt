@@ -136,7 +136,10 @@ class BookmarkRepository(
             }
 
             onStatusChange?.invoke("Finalizing bookmark...")
-            
+
+            // Check if karakept:read tag is present to determine isRead status
+            val hasReadTag = dto.tags?.any { it.name == "karakept:read" } ?: false
+
             // Initial map to entity
             val entity = BookmarkEntity(
                 localId = 0L,
@@ -153,7 +156,7 @@ class BookmarkRepository(
                 listIds = "",
                 isStarred = dto.favourited ?: false,
                 isArchived = dto.archived ?: false,
-                isRead = false,
+                isRead = hasReadTag,
                 createdAt = try { Instant.parse(dto.createdAt ?: "").toEpochMilliseconds() } catch (e: Exception) { System.currentTimeMillis() },
                 readingTimeMinutes = 0,
                 content = ""
@@ -224,6 +227,9 @@ class BookmarkRepository(
             val bannerImageAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.BANNER_IMAGE }?.id
             val screenshotAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.SCREENSHOT }?.id
 
+            // Check if karakept:read tag is present to determine isRead status
+            val hasReadTag = dto.tags?.any { it.name == "karakept:read" } ?: false
+
             // Update metadata first
             bookmarkDao.updateBookmarkMetadata(
                 localId = existing.localId,
@@ -237,7 +243,7 @@ class BookmarkRepository(
                 listIds = existing.listIds, // Preserve existing listIds as fetching them is expensive for single sync
                 isStarred = dto.favourited ?: false,
                 isArchived = dto.archived ?: false,
-                isRead = existing.isRead,
+                isRead = hasReadTag,
                 readingTimeMinutes = existing.readingTimeMinutes // Will update if content is fetched
             )
 
@@ -565,6 +571,9 @@ class BookmarkRepository(
                 println("📸 No banner or screenshot assets found for bookmark ${dto.id}")
             }
 
+            // Check if karakept:read tag is present to determine isRead status
+            val hasReadTag = dto.tags?.any { it.name == "karakept:read" } ?: false
+
             return BookmarkEntity(
                 localId = existing?.localId ?: 0L,
                 remoteId = (dto.id ?: "").hashCode().toLong(),
@@ -580,7 +589,7 @@ class BookmarkRepository(
                 listIds = listIds,
                 isStarred = dto.favourited ?: false,
                 isArchived = dto.archived ?: false,
-                isRead = existing?.isRead ?: false,
+                isRead = hasReadTag,
                 createdAt = createdAtMillis,
                 readingTimeMinutes = finalReadingTime,
                 content = finalContent
