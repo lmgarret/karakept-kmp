@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
-import com.karakept.app.data.remote.model.ListDto
+import com.karakept.api.model.KarakeepList
 
 @OptIn(ExperimentalLayoutApi::class)
 @ExperimentalMaterial3Api
@@ -23,7 +23,7 @@ import com.karakept.app.data.remote.model.ListDto
 fun FilterDialog(
     currentFilter: FilterConfig,
     availableTags: List<String>,
-    availableLists: List<ListDto>,
+    availableLists: List<KarakeepList>,
     onDismiss: () -> Unit,
     onApply: (FilterConfig) -> Unit,
     onSave: (String, Boolean) -> Unit
@@ -87,14 +87,15 @@ fun FilterDialog(
                     Text("Lists", style = MaterialTheme.typography.titleSmall)
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         availableLists.take(5).forEach { list ->
+                            val listId = list.id ?: ""
                             FilterCheckbox(
-                                label = "${list.icon} ${list.name}",
-                                checked = filter.lists.contains(list.id),
+                                label = "${list.icon ?: ""} ${list.name ?: "Untitled"}",
+                                checked = filter.lists.contains(listId),
                                 onCheckedChange = { checked ->
                                     filter = if (checked) {
-                                        filter.copy(lists = filter.lists + list.id)
+                                        filter.copy(lists = filter.lists + listId)
                                     } else {
-                                        filter.copy(lists = filter.lists - list.id)
+                                        filter.copy(lists = filter.lists - listId)
                                     }
                                 }
                             )

@@ -22,6 +22,9 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
+                // API Client (generated from OpenAPI spec)
+                implementation(project(":api-client"))
+                
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(compose.material3)

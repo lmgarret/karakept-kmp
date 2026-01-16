@@ -10,7 +10,7 @@ import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.remote.RemoteDataSource
-import com.karakept.app.data.remote.model.ListDto
+import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -65,8 +65,8 @@ class BookmarkViewerScreenModel(
     private val _precrawledAssetPath = MutableStateFlow<String?>(null)
     val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()
 
-    private val _lists = MutableStateFlow<List<ListDto>>(emptyList())
-    val lists: StateFlow<List<ListDto>> = _lists.asStateFlow()
+    private val _lists = MutableStateFlow<List<KarakeepList>>(emptyList())
+    val lists: StateFlow<List<KarakeepList>> = _lists.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()

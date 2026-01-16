@@ -49,7 +49,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.CheckboxState
 import com.karakept.app.data.model.ListSyncConfig
 import com.karakept.app.data.model.SyncStrategy
-import com.karakept.app.data.remote.model.ListDto
+import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,7 +61,7 @@ class ListManagementScreenModel(
     private val listRepository: ListRepository,
     private val settingsRepository: SettingsRepository
 ) : ScreenModel {
-    val lists: StateFlow<List<ListDto>> = listRepository.lists
+    val lists: StateFlow<List<KarakeepList>> = listRepository.lists
 
     val syncConfig: StateFlow<ListSyncConfig> = settingsRepository.contentSyncConfig
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ListSyncConfig(emptySet(), emptySet()))
@@ -73,7 +73,7 @@ class ListManagementScreenModel(
         }
     }
 
-    fun hasChildren(listId: String, allLists: List<ListDto>): Boolean {
+    fun hasChildren(listId: String, allLists: List<KarakeepList>): Boolean {
         return allLists.any { it.parentId == listId }
     }
 }
@@ -117,8 +117,8 @@ class ListManagementScreen : Screen {
                      }
                 } else {
                     items(hierarchicalLists) { (list, depth) ->
-                        val hasChildren = remember(lists) { screenModel.hasChildren(list.id, lists) }
-                        val currentState = syncConfig.getCheckboxState(list.id)
+                        val hasChildren = remember(lists) { screenModel.hasChildren(list.id ?: "", lists) }
+                        val currentState = syncConfig.getCheckboxState(list.id ?: "")
 
                         ListItemRow(
                             list = list,
@@ -126,7 +126,7 @@ class ListManagementScreen : Screen {
                             syncConfig = syncConfig,
                             hasChildren = hasChildren,
                             allLists = lists,
-                            onCycleState = { state -> screenModel.cycleListSyncState(list.id, state) }
+                            onCycleState = { state -> screenModel.cycleListSyncState(list.id ?: "", state) }
                         )
                         Divider()
                     }
@@ -187,14 +187,14 @@ class ListManagementScreen : Screen {
 
     @Composable
     private fun ListItemRow(
-        list: ListDto,
+        list: KarakeepList,
         depth: Int,
         syncConfig: ListSyncConfig,
         hasChildren: Boolean,
-        allLists: List<ListDto>,
+        allLists: List<KarakeepList>,
         onCycleState: (CheckboxState) -> Unit
     ) {
-        val checkboxState = syncConfig.getCheckboxState(list.id)
+        val checkboxState = syncConfig.getCheckboxState(list.id ?: "")
         val isDisabled = syncConfig.isParentInWithChildrenMode(list.parentId, allLists)
 
         Row(
@@ -208,7 +208,7 @@ class ListManagementScreen : Screen {
 
             // Show list icon from ListDto.icon field
             Text(
-                text = list.icon,
+                text = list.icon ?: "",
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(end = 12.dp)
             )
@@ -216,7 +216,7 @@ class ListManagementScreen : Screen {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = list.name,
+                        text = list.name ?: "Untitled",
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (isDisabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
                     )
@@ -231,9 +231,10 @@ class ListManagementScreen : Screen {
                         )
                     }
                 }
-                if (!list.description.isNullOrBlank()) {
+                val desc = list.description
+                if (!desc.isNullOrBlank()) {
                     Text(
-                        text = list.description,
+                        text = desc,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isDisabled) 0.6f else 1f)
                     )
@@ -269,8 +270,8 @@ class ListManagementScreen : Screen {
         }
     }
 
-    private fun buildHierarchy(lists: List<ListDto>): List<Pair<ListDto, Int>> {
-        val result = mutableListOf<Pair<ListDto, Int>>()
+    private fun buildHierarchy(lists: List<KarakeepList>): List<Pair<KarakeepList, Int>> {
+        val result = mutableListOf<Pair<KarakeepList, Int>>()
         val grouped = lists.groupBy { it.parentId }
         
         fun recurse(parentId: String?, depth: Int) {

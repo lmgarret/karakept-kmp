@@ -121,40 +121,43 @@ class BookmarkRepository(
             // Karakeep API takes some time to parse the URL
             var attempts = 0
             while (attempts < 15) { // Increased to 15 attempts (30 seconds total)
-                val currentTitle = dto.title ?: dto.content.title ?: ""
+                val currentTitle = dto.title ?: dto.content?.title ?: ""
                 if (currentTitle.isNotBlank() && currentTitle != "Untitled") break
                 
                 onStatusChange?.invoke("Waiting for bookmark to be parsed...")
                 delay(2000) // Increased to 2 seconds
                 try {
-                    dto = remoteDataSource.fetchBookmark(server, dto.id)
+                    dto = remoteDataSource.fetchBookmark(server, dto.id ?: "")
                 } catch (e: Exception) {
                     println("Polling fetch failed: ${e.message}")
                 }
                 attempts++
-                println("Polling for bookmark parsing: attempt $attempts, title='${dto.title}', content.title='${dto.content.title}'")
+                println("Polling for bookmark parsing: attempt $attempts, title='${dto.title}', content.title='${dto.content?.title}'")
             }
 
             onStatusChange?.invoke("Finalizing bookmark...")
-            
+
+            // Check if karakept:read tag is present to determine isRead status
+            val hasReadTag = dto.tags?.any { it.name == "karakept:read" } ?: false
+
             // Initial map to entity
             val entity = BookmarkEntity(
                 localId = 0L,
-                remoteId = dto.id.hashCode().toLong(),
-                originalRemoteId = dto.id,
+                remoteId = (dto.id ?: "").hashCode().toLong(),
+                originalRemoteId = dto.id ?: "",
                 serverId = server.id,
-                title = dto.title ?: dto.content.title ?: "Untitled",
-                url = dto.content.url ?: url,
-                description = dto.content.description,
-                imageUrl = dto.content.imageUrl,
-                bannerImageAssetId = dto.assets.find { it.assetType == "bannerImage" }?.id,
-                screenshotAssetId = dto.assets.find { it.assetType == "screenshot" }?.id,
-                tags = dto.tags.joinToString(",") { it.name },
+                title = dto.title ?: dto.content?.title ?: "Untitled",
+                url = dto.content?.url ?: url,
+                description = dto.content?.description,
+                imageUrl = dto.content?.imageUrl,
+                bannerImageAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.BANNER_IMAGE }?.id,
+                screenshotAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.SCREENSHOT }?.id,
+                tags = dto.tags?.joinToString(",") { it.name ?: "" } ?: "",
                 listIds = "",
-                isStarred = dto.favourited,
-                isArchived = dto.archived,
-                isRead = false,
-                createdAt = try { Instant.parse(dto.createdAt).toEpochMilliseconds() } catch (e: Exception) { System.currentTimeMillis() },
+                isStarred = dto.favourited ?: false,
+                isArchived = dto.archived ?: false,
+                isRead = hasReadTag,
+                createdAt = try { Instant.parse(dto.createdAt ?: "").toEpochMilliseconds() } catch (e: Exception) { System.currentTimeMillis() },
                 readingTimeMinutes = 0,
                 content = ""
             )
@@ -211,33 +214,36 @@ class BookmarkRepository(
             // To reuse mapDtoToEntity, we need to wrap it in BookmarkSyncPipeline
             // Or just implement a simplified version here.
             
-            val url = when (dto.content.type) {
-                "link" -> dto.content.url ?: ""
-                "text" -> ""
-                else -> dto.content.url ?: ""
+            val url = when (dto.content?.type) {
+                com.karakept.api.model.BookmarkContent.Type.LINK -> dto.content?.url ?: ""
+                com.karakept.api.model.BookmarkContent.Type.TEXT -> ""
+                else -> dto.content?.url ?: ""
             }
 
-            val title = dto.title ?: dto.content.title ?: "Untitled"
-            val incomingContent = dto.content.htmlContent ?: dto.content.text
+            val title = dto.title ?: dto.content?.title ?: "Untitled"
+            val incomingContent = dto.content?.htmlContent ?: dto.content?.text
 
             // Extract banner and screenshot asset IDs
-            val bannerImageAssetId = dto.assets.find { it.assetType == "bannerImage" }?.id
-            val screenshotAssetId = dto.assets.find { it.assetType == "screenshot" }?.id
+            val bannerImageAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.BANNER_IMAGE }?.id
+            val screenshotAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.SCREENSHOT }?.id
+
+            // Check if karakept:read tag is present to determine isRead status
+            val hasReadTag = dto.tags?.any { it.name == "karakept:read" } ?: false
 
             // Update metadata first
             bookmarkDao.updateBookmarkMetadata(
                 localId = existing.localId,
                 title = title,
                 url = url,
-                description = dto.content.description,
-                imageUrl = dto.content.imageUrl,
+                description = dto.content?.description,
+                imageUrl = dto.content?.imageUrl,
                 bannerImageAssetId = bannerImageAssetId,
                 screenshotAssetId = screenshotAssetId,
-                tags = dto.tags.map { it.name }.joinToString(","),
+                tags = dto.tags?.joinToString(",") { it.name ?: "" } ?: "",
                 listIds = existing.listIds, // Preserve existing listIds as fetching them is expensive for single sync
-                isStarred = dto.favourited,
-                isArchived = dto.archived,
-                isRead = existing.isRead,
+                isStarred = dto.favourited ?: false,
+                isArchived = dto.archived ?: false,
+                isRead = hasReadTag,
                 readingTimeMinutes = existing.readingTimeMinutes // Will update if content is fetched
             )
 
@@ -248,10 +254,10 @@ class BookmarkRepository(
             var finalContent = incomingContent
             
             if (finalContent.isNullOrBlank()) {
-                val contentAsset = dto.assets.find { it.assetType == "linkHtmlContent" }
+                val contentAsset = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT }
                 if (contentAsset != null) {
                     try {
-                        val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id)
+                        val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id ?: "")
                         finalContent = assetBytes.decodeToString()
                     } catch (e: Exception) {
                         println("Failed to download content asset ${contentAsset.id}: ${e.message}")
@@ -260,7 +266,7 @@ class BookmarkRepository(
             }
             
             if (finalContent.isNullOrBlank()) {
-                finalContent = dto.note ?: dto.content.text
+                finalContent = dto.note ?: dto.content?.text
             }
 
             if (!finalContent.isNullOrBlank()) {
@@ -382,8 +388,8 @@ class BookmarkRepository(
         }
 
         // Phase 2: Fetch Bookmark Metadata
-        private suspend fun fetchBookmarkMetadata(): List<com.karakept.app.data.remote.model.BookmarkDto> {
-            val allBookmarks = mutableListOf<com.karakept.app.data.remote.model.BookmarkDto>()
+        private suspend fun fetchBookmarkMetadata(): List<com.karakept.api.model.Bookmark> {
+            val allBookmarks = mutableListOf<com.karakept.api.model.Bookmark>()
             var cursor: String? = null
             var pageCount = 0
 
@@ -406,7 +412,7 @@ class BookmarkRepository(
                     favourited = config.apiFilters.favourited
                 )
 
-                allBookmarks.addAll(response.bookmarks)
+                allBookmarks.addAll(response.bookmarks ?: emptyList())
                 cursor = response.nextCursor
             } while (cursor != null)
 
@@ -415,7 +421,7 @@ class BookmarkRepository(
 
         // Phase 3: Fetch List Membership
         private suspend fun fetchListMembership(
-            remoteBookmarks: List<com.karakept.app.data.remote.model.BookmarkDto>
+            remoteBookmarks: List<com.karakept.api.model.Bookmark>
         ): Map<String, List<String>> {
             if (!config.shouldFetchLists) {
                 println("fetchListMembership: Skipping list fetch (shouldFetchLists=false)")
@@ -437,9 +443,9 @@ class BookmarkRepository(
 
             lists.forEach { list ->
                 try {
-                    val listBookmarks = remoteDataSource.fetchBookmarksForList(config.server, list.id, includeContent = false)
+                    val listBookmarks = remoteDataSource.fetchBookmarksForList(config.server, list.id ?: "", includeContent = false)
                     listBookmarks.forEach { bookmark ->
-                        bookmarkListMap.getOrPut(bookmark.id) { mutableListOf() }.add(list.id)
+                        bookmarkListMap.getOrPut(bookmark.id ?: "") { mutableListOf() }.add(list.id ?: "")
                     }
                 } catch (e: Exception) {
                     // Skip failed lists
@@ -450,17 +456,17 @@ class BookmarkRepository(
         }
 
         private fun buildSingleListMap(
-            remoteBookmarks: List<com.karakept.app.data.remote.model.BookmarkDto>,
+            remoteBookmarks: List<com.karakept.api.model.Bookmark>,
             listId: String
         ): Map<String, List<String>> {
-            val map = remoteBookmarks.associate { it.id to listOf(listId) }
+            val map = remoteBookmarks.associate { (it.id ?: "") to listOf(listId) }
             println("buildSingleListMap: Created map for list $listId with ${map.size} entries")
             return map
         }
 
         // Phase 4: Map to Entities & Differential Sync
         private suspend fun mapToEntities(
-            dtos: List<com.karakept.app.data.remote.model.BookmarkDto>,
+            dtos: List<com.karakept.api.model.Bookmark>,
             bookmarkListMap: Map<String, List<String>>
         ): List<BookmarkEntity> {
             // Use special query that includes content existence info (reading time + content flag)
@@ -479,32 +485,32 @@ class BookmarkRepository(
         }
 
         private suspend fun mapDtoToEntity(
-            dto: com.karakept.app.data.remote.model.BookmarkDto,
+            dto: com.karakept.api.model.Bookmark,
             bookmarkListMap: Map<String, List<String>>,
             existingBookmarks: Map<String, BookmarkEntity>,
             syncStrategy: com.karakept.app.data.model.SyncStrategy
         ): BookmarkEntity {
-            val existing = existingBookmarks[dto.id]
+            val existing = existingBookmarks[dto.id ?: ""]
 
-            val url = when (dto.content.type) {
-                "link" -> dto.content.url ?: ""
-                "text" -> ""
-                else -> dto.content.url ?: ""
+            val url = when (dto.content?.type) {
+                com.karakept.api.model.BookmarkContent.Type.LINK -> dto.content?.url ?: ""
+                com.karakept.api.model.BookmarkContent.Type.TEXT -> ""
+                else -> dto.content?.url ?: ""
             }
 
             val createdAtMillis = try {
-                Instant.parse(dto.createdAt).toEpochMilliseconds()
+                Instant.parse(dto.createdAt ?: "").toEpochMilliseconds()
             } catch (e: Exception) {
                 System.currentTimeMillis()
             }
 
-            val title = dto.title ?: dto.content.title ?: "Untitled"
-            val incomingContent = dto.content.htmlContent ?: dto.content.text
+            val title = dto.title ?: dto.content?.title ?: "Untitled"
+            val incomingContent = dto.content?.htmlContent ?: dto.content?.text
 
             // CRITICAL FIX: Determine listIds - preserve from DB for filtered syncs
             val listIds = when {
                 bookmarkListMap.isNotEmpty() -> {
-                    val ids = bookmarkListMap[dto.id]?.joinToString(",") ?: ""
+                    val ids = bookmarkListMap[dto.id ?: ""]?.joinToString(",") ?: ""
                     println("mapDtoToEntity: Bookmark ${dto.id} (${dto.title}) -> listIds: '$ids'")
                     ids
                 }
@@ -548,12 +554,12 @@ class BookmarkRepository(
             }
 
             // Extract banner and screenshot asset IDs for fallback image display
-            println("📸 Bookmark ${dto.id} imageUrl='${dto.content.imageUrl}' has ${dto.assets.size} assets: ${dto.assets.map { "${it.assetType}:${it.id}" }}")
+            println("📸 Bookmark ${dto.id} imageUrl='${dto.content?.imageUrl}' has ${dto.assets?.size ?: 0} assets: ${dto.assets?.map { "${it.assetType}:${it.id}" }}")
             val bannerImageAssetId = dto.assets
-                .find { it.assetType == "bannerImage" }
+                ?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.BANNER_IMAGE }
                 ?.id
             val screenshotAssetId = dto.assets
-                .find { it.assetType == "screenshot" }
+                ?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.SCREENSHOT }
                 ?.id
             if (bannerImageAssetId != null) {
                 println("📸 Found bannerImage asset: $bannerImageAssetId for bookmark ${dto.id}")
@@ -565,22 +571,25 @@ class BookmarkRepository(
                 println("📸 No banner or screenshot assets found for bookmark ${dto.id}")
             }
 
+            // Check if karakept:read tag is present to determine isRead status
+            val hasReadTag = dto.tags?.any { it.name == "karakept:read" } ?: false
+
             return BookmarkEntity(
                 localId = existing?.localId ?: 0L,
-                remoteId = dto.id.hashCode().toLong(),
-                originalRemoteId = dto.id,
+                remoteId = (dto.id ?: "").hashCode().toLong(),
+                originalRemoteId = dto.id ?: "",
                 serverId = config.server.id,
                 title = title,
                 url = url,
-                description = dto.content.description,
-                imageUrl = dto.content.imageUrl,
+                description = dto.content?.description,
+                imageUrl = dto.content?.imageUrl,
                 bannerImageAssetId = bannerImageAssetId,
                 screenshotAssetId = screenshotAssetId,
-                tags = dto.tags.map { it.name }.joinToString(","),
+                tags = dto.tags?.joinToString(",") { it.name ?: "" } ?: "",
                 listIds = listIds,
-                isStarred = dto.favourited,
-                isArchived = dto.archived,
-                isRead = existing?.isRead ?: false,
+                isStarred = dto.favourited ?: false,
+                isArchived = dto.archived ?: false,
+                isRead = hasReadTag,
                 createdAt = createdAtMillis,
                 readingTimeMinutes = finalReadingTime,
                 content = finalContent
@@ -751,17 +760,17 @@ class BookmarkRepository(
     private suspend fun fetchRemoteContent(server: Server, remoteBookmarkId: String): String? {
         try {
             val fullBookmark = remoteDataSource.fetchBookmark(server, remoteBookmarkId)
-            
+
             // Priority 1: inline htmlContent (full content)
-            var content = fullBookmark.content.htmlContent
-            
+            var content = fullBookmark.content?.htmlContent
+
             // Priority 2: asset-based content (prefer over description)
             if (content.isNullOrBlank()) {
-                val contentAsset = fullBookmark.assets.find { it.assetType == "linkHtmlContent" }
+                val contentAsset = fullBookmark.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT }
                 if (contentAsset != null) {
                     try {
                         println("📖 CONTENT: Downloading content from asset ${contentAsset.id}")
-                        val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id)
+                        val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id ?: "")
                         content = assetBytes.decodeToString()
                         println("📖 CONTENT: Downloaded ${content.length} chars from asset")
                     } catch (e: Exception) {
@@ -769,10 +778,10 @@ class BookmarkRepository(
                     }
                 }
             }
-            
+
             // Priority 3: fallback to note or text for non-link content
             if (content.isNullOrBlank()) {
-                content = fullBookmark.note ?: fullBookmark.content.text
+                content = fullBookmark.note ?: fullBookmark.content?.text
                 if (!content.isNullOrBlank()) {
                      println("📖 CONTENT: Using note/text content (${content.length} chars)")
                 }

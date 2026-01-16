@@ -24,14 +24,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.karakept.app.data.remote.model.ListDto
+import com.karakept.api.model.KarakeepList
 
 /**
  * Dialog for selecting a list to move a bookmark to.
  */
 @Composable
 fun ListPickerDialog(
-    lists: List<ListDto>,
+    lists: List<KarakeepList>,
     currentListIds: List<String>,
     onListSelected: (String) -> Unit,
     onDismiss: () -> Unit
@@ -59,25 +59,27 @@ fun ListPickerDialog(
                 
                 LazyColumn {
                     items(lists) { list ->
-                        val isInList = currentListIds.contains(list.id)
+                        val listId = list.id ?: ""
+                        val isInList = currentListIds.contains(listId)
                         
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onListSelected(list.id) }
+                                .clickable { onListSelected(listId) }
                                 .padding(vertical = 12.dp, horizontal = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (list.icon.isNotBlank()) {
+                            val icon = list.icon ?: ""
+                            if (icon.isNotBlank()) {
                                 Text(
-                                    text = list.icon,
+                                    text = icon,
                                     style = MaterialTheme.typography.titleMedium
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                             }
                             
                             Text(
-                                text = list.name,
+                                text = list.name ?: "Untitled",
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.weight(1f)
                             )

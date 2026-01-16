@@ -16,10 +16,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-import cafe.adriel.voyager.navigator.Navigator
+import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.remote.model.ListDto
 import kotlinx.coroutines.flow.first
 
 class SettingsScreenModel(
@@ -288,7 +287,7 @@ class SettingsScreenModel(
     )
 
     // Expose lists from repository
-    val availableLists: StateFlow<List<ListDto>> = listRepository.lists
+    val availableLists: StateFlow<List<KarakeepList>> = listRepository.lists
 
 
     fun fetchAvailableLists() {

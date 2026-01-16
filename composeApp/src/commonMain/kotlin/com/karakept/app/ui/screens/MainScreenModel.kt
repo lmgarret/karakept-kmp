@@ -11,6 +11,7 @@ import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.SavedFilterRepository
 import com.karakept.app.data.repository.ServerRepository
+import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -56,7 +57,7 @@ class MainScreenModel(
     val savedFilters = savedFilterRepository.visibleFilters
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val lists: StateFlow<List<com.karakept.app.data.remote.model.ListDto>> = listRepository.lists
+    val lists: StateFlow<List<KarakeepList>> = listRepository.lists
 
     // Track which lists are expanded (by list ID)
     private val _expandedLists = MutableStateFlow<Set<String>>(emptySet())
@@ -112,11 +113,12 @@ class MainScreenModel(
         if (server == null) return@combine emptyMap()
 
         listItems.associate { list ->
+            val listId = list.id ?: ""
             val count = bookmarks.count { bookmark ->
                 val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                bookmarkLists.contains(list.id)
+                bookmarkLists.contains(listId)
             }
-            list.id to count
+            listId to count
         }
     }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
@@ -509,15 +511,16 @@ class MainScreenModel(
     }
 
     // Auto-expand parent chain when a list is selected
-    private fun expandParentChain(listId: String, allLists: List<com.karakept.app.data.remote.model.ListDto>) {
+    private fun expandParentChain(listId: String, allLists: List<KarakeepList>) {
         val toExpand = mutableSetOf<String>()
         var currentId: String? = listId
 
         while (currentId != null) {
             val list = allLists.find { it.id == currentId }
-            if (list?.parentId != null) {
-                toExpand.add(list.parentId)
-                currentId = list.parentId
+            val pid = list?.parentId
+            if (pid != null) {
+                toExpand.add(pid)
+                currentId = pid
             } else {
                 break
             }

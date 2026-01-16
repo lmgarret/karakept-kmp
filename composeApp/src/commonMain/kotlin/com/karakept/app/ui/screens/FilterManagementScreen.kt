@@ -29,6 +29,8 @@ import com.karakept.app.ui.components.IconPickerDialog
 import kotlinx.serialization.json.Json
 import org.burnoutcrew.reorderable.*
 
+import com.karakept.api.model.KarakeepList
+
 /**
  * Screen for managing saved filters.
  * Features:
@@ -83,7 +85,7 @@ private fun FilterManagementContent(
     allSavedFilters: List<SavedFilterEntity>,
     availableTags: List<String>,
     topTagsWithCounts: List<Pair<String, Int>>,
-    availableLists: List<com.karakept.app.data.remote.model.ListDto>,
+    availableLists: List<KarakeepList>,
     onBack: () -> Unit,
     onUpdateAppearance: (SavedFilterEntity, String, Long?) -> Unit,
     onUpdateConfig: (SavedFilterEntity, FilterConfig) -> Unit,
@@ -276,8 +278,8 @@ private fun FilterManagementContent(
                     list = list,
                     isDefault = isDefault,
                     onSetDefault = {
-                        val config = FilterConfig(lists = listOf(list.id))
-                        onSaveNewFilter("Homepage: ${list.name}", list.icon, null, config, true, true)
+                        val config = FilterConfig(lists = listOf(list.id ?: ""))
+                        onSaveNewFilter("Homepage: ${list.name ?: ""}", list.icon ?: "", null, config, true, true)
                     },
                     onUnsetDefault = {
                         val existing = allSavedFilters.find {
@@ -722,7 +724,7 @@ private fun FilterListItem(
 
 @Composable
 private fun ListAsHomepageItem(
-    list: com.karakept.app.data.remote.model.ListDto,
+    list: KarakeepList,
     isDefault: Boolean,
     onSetDefault: () -> Unit,
     onUnsetDefault: () -> Unit
@@ -743,12 +745,12 @@ private fun ListAsHomepageItem(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = list.icon,
+                    text = list.icon ?: "",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(end = 8.dp)
                 )
                 Column {
-                    Text(list.name, style = MaterialTheme.typography.bodyMedium)
+                    Text(list.name ?: "", style = MaterialTheme.typography.bodyMedium)
                     if (isDefault) {
                         Text(
                             text = "Current Homepage",
