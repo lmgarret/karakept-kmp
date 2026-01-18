@@ -34,4 +34,10 @@ interface HighlightDao {
 
     @Query("DELETE FROM highlights WHERE serverId = :serverId")
     suspend fun deleteHighlightsForServer(serverId: String)
+
+    @Query("DELETE FROM highlights WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId AND remoteId NOT IN (:keepIds) AND remoteId NOT LIKE 'temp_%'")
+    suspend fun deleteHighlightsNotIn(bookmarkRemoteId: String, serverId: String, keepIds: List<String>)
+
+    @Query("DELETE FROM highlights WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId AND remoteId NOT LIKE 'temp_%'")
+    suspend fun deleteAllHighlightsForBookmark(bookmarkRemoteId: String, serverId: String)
 }

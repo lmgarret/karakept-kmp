@@ -243,21 +243,10 @@ class RemoteDataSource(
      * Get all highlights
      * GET /api/v1/highlights
      */
-    suspend fun fetchAllHighlights(server: Server): List<HighlightDto> {
+    suspend fun fetchAllHighlights(server: Server): List<Highlight> {
         return try {
-            val response: HttpResponse = client.get(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "highlights")
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to fetch all highlights: ${response.status}")
-            }
-            
-            val highlightsResponse: HighlightsResponse = response.body()
-            highlightsResponse.highlights
+            val response = highlightsApi(server).highlightsGet(limit = 1000.0, cursor = null)
+            response.body().highlights ?: emptyList()
         } catch (e: Exception) {
             throw ApiException("Error fetching all highlights: ${e.message}", e)
         }
@@ -267,21 +256,10 @@ class RemoteDataSource(
      * Get highlights of a bookmark
      * GET /api/v1/bookmarks/:bookmarkId/highlights
      */
-    suspend fun fetchHighlightsForBookmark(server: Server, bookmarkId: String): List<HighlightDto> {
+    suspend fun fetchHighlightsForBookmark(server: Server, bookmarkId: String): List<Highlight> {
         return try {
-            val response: HttpResponse = client.get(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "bookmarks", bookmarkId, "highlights")
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to fetch highlights for bookmark $bookmarkId: ${response.status}")
-            }
-            
-            val highlightsResponse: HighlightsResponse = response.body()
-            highlightsResponse.highlights
+            val response = bookmarksApi(server).bookmarksBookmarkIdHighlightsGet(bookmarkId)
+            response.body().highlights ?: emptyList()
         } catch (e: Exception) {
             throw ApiException("Error fetching highlights for bookmark $bookmarkId: ${e.message}", e)
         }
@@ -292,29 +270,50 @@ class RemoteDataSource(
      * POST /api/v1/highlights
      */
     suspend fun createHighlight(
-        server: Server, 
-        bookmarkId: String, 
-        text: String, 
+        server: Server,
+        bookmarkId: String,
+        text: String,
         startOffset: Int,
         endOffset: Int,
-        note: String? = null, 
+        note: String? = null,
         color: String? = null
-    ): HighlightDto {
+    ): Highlight {
         return try {
-            val response: HttpResponse = client.post(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "highlights")
+            // Normalize color to enum
+            val colorEnum = when (color?.lowercase()) {
+                "red" -> HighlightsPostRequest.Color.RED
+                "green" -> HighlightsPostRequest.Color.GREEN
+                "blue" -> HighlightsPostRequest.Color.BLUE
+                else -> HighlightsPostRequest.Color.YELLOW
+            }
+
+            val request = HighlightsPostRequest(
+                bookmarkId = bookmarkId,
+                text = text,
+                startOffset = startOffset.toDouble(),
+                endOffset = endOffset.toDouble(),
+                note = note ?: "",
+                color = colorEnum
+            )
+
+            println("RemoteDataSource: Creating highlight - bookmarkId=$bookmarkId, text length=${text.length}, startOffset=$startOffset, endOffset=$endOffset, note='${note ?: ""}', color=$colorEnum")
+            println("RemoteDataSource: Request object - bookmarkId=${request.bookmarkId}, text=${request.text}, startOffset=${request.startOffset}, endOffset=${request.endOffset}, note=${request.note}, color=${request.color}")
+
+            // Debug: serialize to JSON to see what will be sent
+            try {
+                val jsonDebug = kotlinx.serialization.json.Json {
+                    prettyPrint = true
+                    encodeDefaults = true
                 }
-                header("Authorization", "Bearer ${server.apiKey}")
-                setBody(CreateHighlightDto(bookmarkId, text, startOffset, endOffset, note, color))
+                val jsonString = jsonDebug.encodeToString(HighlightsPostRequest.serializer(), request)
+                println("RemoteDataSource: JSON body:\n$jsonString")
+            } catch (e: Exception) {
+                println("RemoteDataSource: Could not serialize for debug: ${e.message}")
             }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to create highlight: ${response.status}")
-            }
-            
-            response.body()
+
+            highlightsApi(server).highlightsPost(request).body()
         } catch (e: Exception) {
+            println("RemoteDataSource: Exception creating highlight: ${e.message}")
             throw ApiException("Error creating highlight: ${e.message}", e)
         }
     }
@@ -326,23 +325,44 @@ class RemoteDataSource(
     suspend fun updateHighlight(
         server: Server,
         highlightId: String,
-        updates: com.karakept.app.data.remote.model.UpdateHighlightDto
-    ): HighlightDto {
+        note: String? = null,
+        color: String? = null
+    ): Highlight {
         return try {
-            val response: HttpResponse = client.patch(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "highlights", highlightId)
+            println("RemoteDataSource: Updating highlight - highlightId=$highlightId, note=$note, color=$color")
+
+            // Normalize color to enum if provided
+            val colorEnum = if (color != null) {
+                when (color.lowercase()) {
+                    "red" -> HighlightsHighlightIdPatchRequest.Color.RED
+                    "green" -> HighlightsHighlightIdPatchRequest.Color.GREEN
+                    "blue" -> HighlightsHighlightIdPatchRequest.Color.BLUE
+                    else -> HighlightsHighlightIdPatchRequest.Color.YELLOW
                 }
-                header("Authorization", "Bearer ${server.apiKey}")
-                setBody(updates)
+            } else null
+
+            val request = HighlightsHighlightIdPatchRequest(
+                note = note,
+                color = colorEnum
+            )
+
+            println("RemoteDataSource: Update request - note=${request.note}, color=${request.color}")
+
+            // Debug: serialize to JSON to see what will be sent
+            try {
+                val jsonDebug = kotlinx.serialization.json.Json {
+                    prettyPrint = true
+                    encodeDefaults = true
+                }
+                val jsonString = jsonDebug.encodeToString(HighlightsHighlightIdPatchRequest.serializer(), request)
+                println("RemoteDataSource: Update JSON body:\n$jsonString")
+            } catch (e: Exception) {
+                println("RemoteDataSource: Could not serialize for debug: ${e.message}")
             }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to update highlight: ${response.status}")
-            }
-            
-            response.body()
+
+            highlightsApi(server).highlightsHighlightIdPatch(highlightId, request).body()
         } catch (e: Exception) {
+            println("RemoteDataSource: Exception updating highlight: ${e.message}")
             throw ApiException("Error updating highlight: ${e.message}", e)
         }
     }
@@ -353,17 +373,11 @@ class RemoteDataSource(
      */
     suspend fun deleteHighlight(server: Server, highlightId: String) {
         try {
-            val response: HttpResponse = client.delete(server.url) {
-                url {
-                    appendPathSegments("api", "v1", "highlights", highlightId)
-                }
-                header("Authorization", "Bearer ${server.apiKey}")
-            }
-            
-            if (!response.status.isSuccess()) {
-                throw ApiException("Failed to delete highlight $highlightId: ${response.status}")
-            }
+            println("RemoteDataSource: Deleting highlight - highlightId=$highlightId")
+            val response = highlightsApi(server).highlightsHighlightIdDelete(highlightId)
+            println("RemoteDataSource: Delete highlight response received")
         } catch (e: Exception) {
+            println("RemoteDataSource: Exception deleting highlight: ${e.message}")
             throw ApiException("Error deleting highlight $highlightId: ${e.message}", e)
         }
     }

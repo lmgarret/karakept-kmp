@@ -257,3 +257,276 @@ BookmarkEntity(
 - Use type aliases for conflicting names (e.g., `KarakeepList`)
 - Fully qualify enum types when necessary
 - Import specific types to avoid wildcard conflicts
+
+## Implementing New API Features
+
+This section provides a step-by-step guide for implementing new API features (like highlights, bookmarks, tags, etc.) using the OpenAPI client.
+
+### Architecture Overview
+
+The app uses an **offline-first architecture** with the following layers:
+
+```
+UI Layer (Compose)
+    ↓
+ScreenModel (ViewModel)
+    ↓
+Repository (business logic + offline queue)
+    ↓
+├── Local: Room DAO (SQLite)
+└── Remote: RemoteDataSource → OpenAPI Client
+```
+
+### Step 1: Check Generated API Classes
+
+First, verify the OpenAPI client has generated the necessary API class and models:
+
+```
+api-client/build/generated/openapi/src/main/kotlin/com/karakept/api/
+├── client/
+│   ├── BookmarksApi.kt
+│   ├── HighlightsApi.kt  ← API class with methods
+│   ├── ListsApi.kt
+│   └── TagsApi.kt
+└── model/
+    ├── Highlight.kt       ← Response model
+    ├── HighlightsPostRequest.kt  ← Request body for POST
+    ├── HighlightsHighlightIdPatchRequest.kt  ← Request body for PATCH
+    └── PaginatedHighlights.kt  ← Paginated response
+```
+
+If the API class doesn't exist, regenerate: `./gradlew :api-client:openApiGenerate`
+
+### Step 2: Add Factory Method in RemoteDataSource
+
+Add a private factory method that creates the API instance with server-specific config:
+
+```kotlin
+// In RemoteDataSource.kt
+private fun highlightsApi(server: Server) = HighlightsApi(getBaseUrl(server), client).apply {
+    setBearerToken(server.apiKey)
+}
+```
+
+### Step 3: Implement Remote Methods
+
+Add methods in `RemoteDataSource` that wrap the generated API calls:
+
+```kotlin
+suspend fun fetchAllHighlights(server: Server): List<Highlight> {
+    return try {
+        val response = highlightsApi(server).highlightsGet(limit = 1000.0, cursor = null)
+        response.body().highlights ?: emptyList()
+    } catch (e: Exception) {
+        throw ApiException("Error fetching highlights: ${e.message}", e)
+    }
+}
+
+suspend fun createHighlight(
+    server: Server,
+    bookmarkId: String,
+    text: String,
+    startOffset: Int,
+    endOffset: Int,
+    note: String? = null,
+    color: String? = null
+): Highlight {
+    return try {
+        // Convert string color to enum
+        val colorEnum = when (color?.lowercase()) {
+            "red" -> HighlightsPostRequest.Color.RED
+            "green" -> HighlightsPostRequest.Color.GREEN
+            "blue" -> HighlightsPostRequest.Color.BLUE
+            else -> HighlightsPostRequest.Color.YELLOW
+        }
+
+        val request = HighlightsPostRequest(
+            bookmarkId = bookmarkId,
+            text = text,
+            startOffset = startOffset.toDouble(),  // API uses Double
+            endOffset = endOffset.toDouble(),
+            note = note ?: "",
+            color = colorEnum
+        )
+
+        highlightsApi(server).highlightsPost(request).body()
+    } catch (e: Exception) {
+        throw ApiException("Error creating highlight: ${e.message}", e)
+    }
+}
+```
+
+**Key Points:**
+- All API calls should be wrapped in try-catch
+- Convert types as needed (Int → Double, String → Enum)
+- Handle nullable response fields with `?: emptyList()` or `?: ""`
+
+### Step 4: Configure JSON Serialization
+
+Ensure `KtorClient.kt` has proper JSON configuration:
+
+```kotlin
+json(Json {
+    ignoreUnknownKeys = true    // Ignore unknown fields from server
+    prettyPrint = true
+    isLenient = true            // Allow lenient parsing
+    explicitNulls = true        // Include null fields in output
+    encodeDefaults = true       // CRITICAL: Include fields with default values
+})
+```
+
+**Important:** `encodeDefaults = true` is required when the generated request models have default values (like `color = Color.YELLOW`). Without this, fields with defaults won't be serialized.
+
+### Step 5: Implement Offline-First Queue (Optional)
+
+For write operations (create, update, delete), use the pending actions queue:
+
+```kotlin
+// In PendingActionEntity.kt, add action types
+object PendingActionType {
+    const val CREATE_HIGHLIGHT = "create_highlight"
+    const val UPDATE_HIGHLIGHT = "update_highlight"
+    const val DELETE_HIGHLIGHT = "delete_highlight"
+}
+```
+
+```kotlin
+// In BookmarkActionsRepository.kt
+suspend fun queueCreateHighlight(
+    server: Server,
+    bookmarkLocalId: Long,
+    bookmarkRemoteId: String,
+    text: String,
+    startOffset: Int,
+    endOffset: Int,
+    note: String?,
+    color: String?,
+    tempId: String
+) {
+    withContext(Dispatchers.IO) {
+        queueAction(
+            bookmarkRemoteId = bookmarkLocalId,
+            serverId = server.id,
+            actionType = PendingActionType.CREATE_HIGHLIGHT,
+            actionData = json.encodeToString(mapOf(
+                "bookmarkRemoteId" to bookmarkRemoteId,
+                "text" to text,
+                "startOffset" to startOffset.toString(),
+                "endOffset" to endOffset.toString(),
+                "note" to (note ?: ""),
+                "color" to (color ?: "yellow"),
+                "tempId" to tempId
+            ))
+        )
+        triggerAutoSync(server.id)
+    }
+}
+```
+
+Then handle the action in `processAction()`:
+
+```kotlin
+PendingActionType.CREATE_HIGHLIGHT -> {
+    val data = json.decodeFromString<Map<String, String>>(action.actionData)
+    val result = remoteDataSource.createHighlight(
+        server = server,
+        bookmarkId = data["bookmarkRemoteId"] ?: return,
+        text = data["text"] ?: return,
+        startOffset = data["startOffset"]?.toIntOrNull() ?: return,
+        endOffset = data["endOffset"]?.toIntOrNull() ?: return,
+        note = data["note"]?.takeIf { it.isNotBlank() },
+        color = data["color"]
+    )
+    // Update temp ID with server-assigned ID if needed
+}
+```
+
+**Important for DELETE/UPDATE actions:** Some actions don't need bookmark lookup. Add them to the skip list:
+
+```kotlin
+val highlightActions = listOf(
+    PendingActionType.DELETE_HIGHLIGHT,
+    PendingActionType.UPDATE_HIGHLIGHT
+)
+if (action.actionType in highlightActions) {
+    // Skip bookmark lookup, process directly
+}
+```
+
+### Step 6: Map API Models to Local Entities
+
+In the Repository layer, map between API models and Room entities:
+
+```kotlin
+// In HighlightRepository.kt
+val entities = remoteHighlights.map { highlight ->
+    HighlightEntity(
+        remoteId = highlight.id ?: "",                           // Nullable String
+        serverId = server.id,
+        bookmarkRemoteId = highlight.bookmarkId ?: "",
+        text = highlight.text ?: "",
+        startOffset = highlight.startOffset?.toInt() ?: 0,       // Double → Int
+        endOffset = highlight.endOffset?.toInt() ?: 0,
+        note = highlight.note,
+        color = highlight.color?.value,                          // Enum → String
+        createdAt = try {
+            Instant.parse(highlight.createdAt ?: "").toEpochMilliseconds()
+        } catch (e: Exception) { 0L }
+    )
+}
+```
+
+**Type Conversions:**
+- `Double?` → `Int`: Use `?.toInt() ?: 0`
+- `Enum?` → `String?`: Use `.value` property (e.g., `Color.YELLOW.value` = "yellow")
+- `String?` (date) → `Long`: Parse with `Instant.parse().toEpochMilliseconds()`
+
+### Step 7: Delete Old Custom DTOs
+
+After migrating to OpenAPI client, delete any manual DTO files:
+
+```
+composeApp/src/commonMain/kotlin/.../data/remote/model/
+├── HighlightDto.kt          ← DELETE
+├── CreateHighlightDto.kt    ← DELETE
+└── HighlightsResponse.kt    ← DELETE
+```
+
+### Common Pitfalls
+
+#### 1. Missing Request Body Fields
+**Problem:** Server receives empty or partial request body.
+**Solution:** Add `encodeDefaults = true` to JSON config.
+
+#### 2. Type Mismatches
+**Problem:** API uses `Double` but app uses `Int`.
+**Solution:** Convert explicitly: `startOffset.toDouble()` and `?.toInt()`
+
+#### 3. Enum Handling
+**Problem:** API returns/expects enum values like "yellow", "red".
+**Solution:**
+- Request: Convert string to enum: `HighlightsPostRequest.Color.YELLOW`
+- Response: Extract string value: `highlight.color?.value`
+
+#### 4. Offline Queue Action Not Processing
+**Problem:** Actions silently fail without reaching the API.
+**Solution:** Check if the action type needs to bypass bookmark lookup in `processAction()`.
+
+#### 5. Nullable Fields Causing Crashes
+**Problem:** `NullPointerException` when accessing API response fields.
+**Solution:** All generated fields are nullable. Always use `?.` and `?:`.
+
+### Testing Checklist
+
+When implementing a new API feature, verify:
+
+- [ ] GET endpoint returns data correctly
+- [ ] POST endpoint creates resource on server
+- [ ] PATCH endpoint updates resource on server
+- [ ] DELETE endpoint removes resource from server
+- [ ] Offline queue stores actions when offline
+- [ ] Actions sync successfully when back online
+- [ ] Temp IDs are replaced with server IDs after creation
+- [ ] Local database is updated optimistically
+- [ ] UI reflects changes immediately (optimistic updates)
+- [ ] Error handling shows appropriate messages

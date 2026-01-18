@@ -59,6 +59,9 @@ actual fun HtmlRenderer(
     val lastAppliedHighlights = remember { mutableStateOf<List<com.karakept.app.data.model.Highlight>>(emptyList()) }
     val pageLoaded = remember { mutableStateOf(false) }
 
+    // Track selection bounds for ActionMode positioning
+    val selectionRect = remember { mutableStateOf<android.graphics.Rect?>(null) }
+
     val webViewReference = remember { mutableStateOf<WebView?>(null) }
     // Use custom text color if provided, otherwise default to a fixed color (e.g., Black/White based on theme) 
     // or keep using onSurface but ensure it's what the user wants.
@@ -164,86 +167,207 @@ actual fun HtmlRenderer(
             // Add new highlights that don't exist yet
             highlights.forEach(h => {
                 if (!existingIds.has(h.id)) {
-                    highlightOffsets(h.id, h.startOffset, h.endOffset, h.color);
+                    highlightOffsets(h.id, h.startOffset, h.endOffset, h.color, h.text);
                 }
             });
         }
 
-        function highlightOffsets(id, start, end, color) {
+        function highlightOffsets(id, startOffset, endOffset, color, text) {
             try {
-                log("Highlighting: " + start + "-" + end);
+                log("Highlighting id=" + id + " range: " + startOffset + "-" + endOffset + ", text length: " + (text ? text.length : 'N/A'));
                 const root = document.getElementById('karakept-content') || document.body;
-                const range = getRangeFromOffsets(root, start, end);
-                if (!range) {
-                    log("Range not found for " + start + "-" + end);
+                log("Root element: " + (root.id || root.tagName) + ", total text length: " + root.textContent.length);
+
+                // First try offset-based highlighting
+                const ranges = getRangesFromOffsets(root, startOffset, endOffset);
+
+                // Check if offset-based approach found reasonable results
+                // If text is provided, verify that we're highlighting approximately the right amount
+                const expectedLength = endOffset - startOffset;
+                let actualLength = 0;
+                if (ranges) {
+                    ranges.forEach(r => actualLength += (r.end - r.start));
+                }
+
+                const offsetBasedWorks = ranges && ranges.length > 0 &&
+                    (actualLength >= expectedLength * 0.8); // At least 80% of expected text
+
+                if (offsetBasedWorks) {
+                    log("Using offset-based highlighting: found " + ranges.length + " ranges, " + actualLength + "/" + expectedLength + " chars");
+                    // Apply highlights in reverse order to avoid offset shifts
+                    for (let i = ranges.length - 1; i >= 0; i--) {
+                        const { node, start, end } = ranges[i];
+                        wrapTextNode(node, start, end, id, color);
+                    }
+                } else if (text && text.length > 0) {
+                    // Fall back to text-based search
+                    log("Offset-based failed (found " + actualLength + "/" + expectedLength + " chars), trying text-based search");
+                    highlightByText(id, text, color);
+                } else {
+                    log("No ranges found and no text provided for fallback");
+                }
+            } catch(e) { log("Highlight error: " + e.message + " stack: " + e.stack); }
+        }
+
+        function highlightByText(id, searchText, color) {
+            try {
+                const root = document.getElementById('karakept-content') || document.body;
+
+                // Normalize the search text (collapse whitespace to single spaces)
+                const normalizedSearch = searchText.replace(/\s+/g, ' ').trim();
+                log("Searching for text: '" + normalizedSearch.substring(0, 50) + "...'");
+
+                // Find text in the document using TreeWalker
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+                const textNodes = [];
+                let node;
+                while ((node = walker.nextNode())) {
+                    textNodes.push(node);
+                }
+
+                // Build full text and create a mapping from original positions to normalized positions
+                let fullText = '';
+                textNodes.forEach(textNode => {
+                    fullText += textNode.textContent;
+                });
+
+                // Create mapping: for each original position, what's the normalized position?
+                // Also track: for each normalized position, what's the original position?
+                const originalToNormalized = [];
+                const normalizedToOriginal = [];
+                let normalizedText = '';
+                let lastWasSpace = false;
+
+                for (let i = 0; i < fullText.length; i++) {
+                    const char = fullText[i];
+                    const isSpace = /\s/.test(char);
+
+                    if (isSpace) {
+                        if (!lastWasSpace) {
+                            // First space in a sequence - add single space to normalized
+                            originalToNormalized.push(normalizedText.length);
+                            normalizedToOriginal.push(i);
+                            normalizedText += ' ';
+                            lastWasSpace = true;
+                        } else {
+                            // Additional space - map to same normalized position
+                            originalToNormalized.push(normalizedText.length - 1);
+                        }
+                    } else {
+                        originalToNormalized.push(normalizedText.length);
+                        normalizedToOriginal.push(i);
+                        normalizedText += char;
+                        lastWasSpace = false;
+                    }
+                }
+                // Add end marker
+                normalizedToOriginal.push(fullText.length);
+
+                log("Normalized text length: " + normalizedText.length + ", original: " + fullText.length);
+
+                // Find the search text in normalized content
+                const searchIndex = normalizedText.toLowerCase().indexOf(normalizedSearch.toLowerCase());
+                if (searchIndex === -1) {
+                    log("Text not found in normalized document. First 100 chars: '" + normalizedText.substring(0, 100) + "'");
                     return;
                 }
-                wrapRange(range, id, color);
-            } catch(e) { log("Highlight error: " + e.message); }
-        }
 
-        function getRangeFromOffsets(root, start, end) {
-            let charCount = 0;
-            let startNode, startOffset, endNode, endOffset;
-            
-            function walk(node) {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    const length = node.textContent.length;
-                    if (!startNode && start >= charCount && start < charCount + length) {
-                        startNode = node;
-                        startOffset = start - charCount;
+                log("Found text at normalized index " + searchIndex);
+
+                // Map back to original positions
+                const originalStart = normalizedToOriginal[searchIndex];
+                const searchEndNormalized = searchIndex + normalizedSearch.length;
+                const originalEnd = searchEndNormalized < normalizedToOriginal.length
+                    ? normalizedToOriginal[searchEndNormalized]
+                    : fullText.length;
+
+                log("Mapped to original positions: " + originalStart + "-" + originalEnd);
+
+                // Now find all text nodes in this range and highlight them
+                const rangesToWrap = [];
+                let currentPos = 0;
+                textNodes.forEach(textNode => {
+                    const nodeStart = currentPos;
+                    const nodeEnd = currentPos + textNode.textContent.length;
+
+                    if (nodeStart < originalEnd && nodeEnd > originalStart) {
+                        rangesToWrap.push({
+                            node: textNode,
+                            start: Math.max(0, originalStart - nodeStart),
+                            end: Math.min(textNode.textContent.length, originalEnd - nodeStart)
+                        });
                     }
-                    if (end > charCount && end <= charCount + length) {
-                        endNode = node;
-                        endOffset = end - charCount;
-                        return true;
-                    }
-                    charCount += length;
-                } else {
-                    for (let child of node.childNodes) {
-                        if (walk(child)) return true;
-                    }
+                    currentPos = nodeEnd;
+                });
+
+                log("Found " + rangesToWrap.length + " ranges to wrap via text search");
+
+                // Apply in reverse order
+                for (let i = rangesToWrap.length - 1; i >= 0; i--) {
+                    const { node, start, end } = rangesToWrap[i];
+                    wrapTextNode(node, start, end, id, color);
                 }
-                return false;
-            }
-            walk(root);
-            if (startNode && endNode) {
-                const range = document.createRange();
-                range.setStart(startNode, startOffset);
-                range.setEnd(endNode, endOffset);
-                return range;
-            }
-            return null;
+            } catch(e) { log("highlightByText error: " + e.message); }
         }
 
-        function wrapRange(range, id, color) {
-            const nodes = [];
-            const root = document.getElementById('karakept-content') || document.body;
+        function getRangesFromOffsets(root, highlightStart, highlightEnd) {
+            const ranges = [];
+            let currentOffset = 0;
             const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+
             let node;
-            while(node = walker.nextNode()) {
-                if (range.intersectsNode(node)) nodes.push(node);
+            while ((node = walker.nextNode())) {
+                const nodeLength = node.textContent.length;
+                const nodeStart = currentOffset;
+                const nodeEnd = nodeStart + nodeLength;
+
+                // Check if this node overlaps with highlight range
+                if (nodeStart < highlightEnd && nodeEnd > highlightStart) {
+                    ranges.push({
+                        node: node,
+                        start: Math.max(0, highlightStart - nodeStart),
+                        end: Math.min(nodeLength, highlightEnd - nodeStart)
+                    });
+                }
+
+                currentOffset += nodeLength;
+            }
+            return ranges;
+        }
+
+        function wrapTextNode(textNode, start, end, id, color) {
+            // Skip if nothing to wrap
+            if (start >= end || start >= textNode.textContent.length) {
+                log("wrapTextNode skipping: start=" + start + ", end=" + end + ", nodeLen=" + textNode.textContent.length);
+                return;
             }
 
-            nodes.forEach(textNode => {
-                let start = 0, end = textNode.textContent.length;
-                if (textNode === range.startContainer) start = range.startOffset;
-                if (textNode === range.endContainer) end = range.endOffset;
-                if (start >= end) return;
+            log("wrapTextNode: wrapping '" + textNode.textContent.substring(start, end) + "' (start=" + start + ", end=" + end + ")");
 
-                const span = document.createElement('mark');
-                span.className = 'karakept-highlight ' + (color || 'yellow');
-                span.dataset.id = id;
-                span.onclick = (e) => {
-                    e.stopPropagation();
-                    Android.onHighlightClick(id);
-                };
+            let nodeToWrap = textNode;
 
-                const part = textNode.splitText(start);
-                part.splitText(end - start);
-                part.parentNode.replaceChild(span, part);
-                span.appendChild(part);
-            });
+            // Split at start if needed
+            if (start > 0) {
+                nodeToWrap = textNode.splitText(start);
+                end -= start;  // Adjust end offset for the new node
+            }
+
+            // Split at end if needed
+            if (end < nodeToWrap.textContent.length) {
+                nodeToWrap.splitText(end);
+            }
+
+            // Create and insert the highlight span
+            const span = document.createElement('mark');
+            span.className = 'karakept-highlight ' + (color || 'yellow');
+            span.dataset.id = id;
+            span.onclick = (e) => {
+                e.stopPropagation();
+                Android.onHighlightClick(id);
+            };
+
+            nodeToWrap.parentNode.insertBefore(span, nodeToWrap);
+            span.appendChild(nodeToWrap);
         }
 
         function getSelectionInfo() {
@@ -292,6 +416,18 @@ actual fun HtmlRenderer(
                 });
             } catch(e) { log("Get highlight position error: " + e.message); return null; }
         }
+
+        // Track selection changes for ActionMode positioning
+        document.addEventListener('selectionchange', function() {
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                if (window.Android && window.Android.onSelectionChanged) {
+                    window.Android.onSelectionChanged(rect.left, rect.top, rect.right, rect.bottom);
+                }
+            }
+        });
         """.trimIndent()
     }
 
@@ -414,7 +550,8 @@ actual fun HtmlRenderer(
         private val onDelete: (String) -> Unit,
         private val onClick: (String) -> Unit,
         private val webView: WebView?,
-        private val onPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)?
+        private val onPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)?,
+        private val selectionRect: androidx.compose.runtime.MutableState<android.graphics.Rect?>
     ) {
         @JavascriptInterface
         fun onHighlightClick(id: String) {
@@ -456,13 +593,29 @@ actual fun HtmlRenderer(
         }
 
         @JavascriptInterface
+        fun onSelectionChanged(left: Float, top: Float, right: Float, bottom: Float) {
+            webView?.post {
+                // getBoundingClientRect() returns CSS pixels, need to convert to device pixels
+                val scale = webView?.scale ?: 1f
+                android.util.Log.d("HtmlRenderer", "onSelectionChanged: CSS coords ($left, $top, $right, $bottom), scale=$scale")
+                selectionRect.value = android.graphics.Rect(
+                    (left * scale).toInt(),
+                    (top * scale).toInt(),
+                    (right * scale).toInt(),
+                    (bottom * scale).toInt()
+                )
+                android.util.Log.d("HtmlRenderer", "onSelectionChanged: Device coords ${selectionRect.value}")
+            }
+        }
+
+        @JavascriptInterface
         fun onLog(message: String) {
             println("WebView Log: $message")
         }
     }
 
-    val webInterface = remember(onCreateHighlight, onDeleteHighlight, onHighlightClick, onHighlightPosition, webViewReference.value) {
-        WebAppInterface(onCreateHighlight, onDeleteHighlight, onHighlightClick, webViewReference.value, onHighlightPosition)
+    val webInterface = remember(onCreateHighlight, onDeleteHighlight, onHighlightClick, onHighlightPosition, webViewReference.value, selectionRect) {
+        WebAppInterface(onCreateHighlight, onDeleteHighlight, onHighlightClick, webViewReference.value, onHighlightPosition, selectionRect)
     }
 
     fun applyHighlightsToWebView(view: WebView?, highlights: List<com.karakept.app.data.model.Highlight>) {
@@ -474,6 +627,7 @@ actual fun HtmlRenderer(
                     put("startOffset", h.startOffset)
                     put("endOffset", h.endOffset)
                     put("color", h.color ?: "yellow")
+                    put("text", h.text)  // Include text for fallback search
                 })
             }
         }.toString()
@@ -501,7 +655,7 @@ actual fun HtmlRenderer(
                     return WrappedActionModeCallback(callback)
                 }
 
-                inner class WrappedActionModeCallback(private val originalCallback: ActionMode.Callback) : ActionMode.Callback {
+                inner class WrappedActionModeCallback(private val originalCallback: ActionMode.Callback) : ActionMode.Callback2() {
                     override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
                         val result = originalCallback.onCreateActionMode(mode, menu)
 
@@ -515,6 +669,16 @@ actual fun HtmlRenderer(
 
                     override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
                         return originalCallback.onPrepareActionMode(mode, menu)
+                    }
+
+                    override fun onGetContentRect(mode: ActionMode?, view: android.view.View?, outRect: android.graphics.Rect?) {
+                        // Let the WebView handle selection rectangle positioning natively
+                        // The default implementation properly tracks the selection position
+                        if (originalCallback is ActionMode.Callback2) {
+                            (originalCallback as ActionMode.Callback2).onGetContentRect(mode, view, outRect)
+                        } else {
+                            super.onGetContentRect(mode, view, outRect)
+                        }
                     }
 
                     override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {

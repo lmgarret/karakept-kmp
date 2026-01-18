@@ -92,8 +92,30 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         var selectedHighlightId by remember { mutableStateOf<String?>(null) }
         var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
 
-        val selectedHighlight = remember(selectedHighlightId, highlights) {
-            highlights.find { it.id == selectedHighlightId }
+        // Track the text of the selected highlight for matching after ID changes (temp -> server ID)
+        var selectedHighlightText by remember { mutableStateOf<String?>(null) }
+
+        // Use derivedStateOf for better reactivity when highlights list updates
+        val selectedHighlight by remember {
+            androidx.compose.runtime.derivedStateOf {
+                val id = selectedHighlightId ?: return@derivedStateOf null
+                // First try to find by exact ID
+                highlights.find { it.id == id }
+                    // If not found and we have a temp ID, try to find by text content
+                    ?: if (id.startsWith("temp_") && selectedHighlightText != null) {
+                        highlights.find { it.text == selectedHighlightText }
+                    } else null
+            }
+        }
+
+        // Update selectedHighlightId when the highlight is found by text (temp ID was replaced)
+        LaunchedEffect(selectedHighlight?.id, selectedHighlightId) {
+            val highlight = selectedHighlight
+            val currentId = selectedHighlightId
+            if (highlight != null && currentId != null && highlight.id != currentId) {
+                // The highlight was found by text match but has a different ID (synced from server)
+                selectedHighlightId = highlight.id
+            }
         }
 
         val snackbarHostState = rememberSnackbarHostStateWithDelay(
@@ -289,11 +311,12 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                         )
 
                         // Content List
+                        // Only blur when the highlight is actually found and panel will show
                         LazyColumn(
                             state = scrollState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(if (selectedHighlightId != null) Modifier.blur(8.dp) else Modifier)
+                                .then(if (selectedHighlightId != null && selectedHighlight != null) Modifier.blur(8.dp) else Modifier)
                         ) {
                             // Transparent spacer for the header
                             item(key = "header_spacer") {
@@ -331,6 +354,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                     },
                                     onCreateHighlight = { text, start, end, note, color ->
                                         screenModel.createHighlight(state.bookmark, text, start, end, note, color) { highlightId ->
+                                            selectedHighlightText = text  // Store text for matching after sync
                                             selectedHighlightId = highlightId
                                         }
                                     },
@@ -468,10 +492,12 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         }
 
         // Highlight Details Panel
+        // Only show when both ID is set AND the highlight is found to prevent blinking
         HighlightDetailsPanel(
-            visible = selectedHighlightId != null,
+            visible = selectedHighlightId != null && selectedHighlight != null,
             highlight = selectedHighlight,
             fontFamily = htmlFontFamily,
+            fontSize = htmlFontSize,
             onUpdateHighlight = { id, note, color ->
                 if (loadingState is BookmarkLoadingState.FullyLoaded) {
                     val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
@@ -485,7 +511,10 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                 }
                 selectedHighlightId = null
             },
-            onDismiss = { selectedHighlightId = null }
+            onDismiss = {
+                selectedHighlightId = null
+                selectedHighlightText = null
+            }
         )
     }
 }

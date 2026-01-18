@@ -30,17 +30,19 @@ class HighlightRepository(
         // We might still keep this for periodic background sync or All Highlights screen
         try {
             val remoteHighlights = remoteDataSource.fetchAllHighlights(server)
-            val entities = remoteHighlights.map { dto ->
+            val entities = remoteHighlights.map { highlight ->
                 HighlightEntity(
-                    remoteId = dto.id,
+                    remoteId = highlight.id ?: "",
                     serverId = server.id,
-                    bookmarkRemoteId = dto.bookmarkId,
-                    text = dto.text,
-                    startOffset = dto.startOffset,
-                    endOffset = dto.endOffset,
-                    note = dto.note,
-                    color = dto.color,
-                    createdAt = try { Instant.parse(dto.createdAt).toEpochMilliseconds() } catch (e: Exception) { 0L }
+                    bookmarkRemoteId = highlight.bookmarkId ?: "",
+                    text = highlight.text ?: "",
+                    startOffset = highlight.startOffset?.toInt() ?: 0,
+                    endOffset = highlight.endOffset?.toInt() ?: 0,
+                    note = highlight.note,
+                    color = highlight.color?.value,  // Extract string value from enum
+                    createdAt = try {
+                        Instant.parse(highlight.createdAt ?: "").toEpochMilliseconds()
+                    } catch (e: Exception) { 0L }
                 )
             }
             highlightDao.insertHighlights(entities)
@@ -51,23 +53,45 @@ class HighlightRepository(
 
     suspend fun syncHighlightsForBookmark(server: Server, bookmarkRemoteId: String) {
         try {
+            println("HighlightRepository: Fetching highlights for bookmark $bookmarkRemoteId")
             val remoteHighlights = remoteDataSource.fetchHighlightsForBookmark(server, bookmarkRemoteId)
-            val entities = remoteHighlights.map { dto ->
+            println("HighlightRepository: Received ${remoteHighlights.size} highlights from server")
+
+            // Get remote IDs (excluding empty strings from null IDs)
+            val remoteIds = remoteHighlights.mapNotNull { it.id }.filter { it.isNotEmpty() }
+
+            // Delete local highlights that are no longer on server
+            // Keep temp IDs (starting with "temp_") since they haven't been synced yet
+            if (remoteIds.isEmpty()) {
+                // If server returns empty list, delete all non-temp highlights for this bookmark
+                highlightDao.deleteAllHighlightsForBookmark(bookmarkRemoteId, server.id)
+                println("HighlightRepository: Deleted all non-pending highlights for bookmark (server returned empty)")
+            } else {
+                // Delete highlights not in the remote list (but keep temp IDs)
+                highlightDao.deleteHighlightsNotIn(bookmarkRemoteId, server.id, remoteIds)
+                println("HighlightRepository: Deleted local highlights not in remote list: $remoteIds")
+            }
+
+            val entities = remoteHighlights.map { highlight ->
                 HighlightEntity(
-                    remoteId = dto.id,
+                    remoteId = highlight.id ?: "",
                     serverId = server.id,
-                    bookmarkRemoteId = dto.bookmarkId,
-                    text = dto.text,
-                    startOffset = dto.startOffset,
-                    endOffset = dto.endOffset,
-                    note = dto.note,
-                    color = dto.color,
-                    createdAt = try { Instant.parse(dto.createdAt).toEpochMilliseconds() } catch (e: Exception) { 0L }
+                    bookmarkRemoteId = highlight.bookmarkId ?: "",
+                    text = highlight.text ?: "",
+                    startOffset = highlight.startOffset?.toInt() ?: 0,
+                    endOffset = highlight.endOffset?.toInt() ?: 0,
+                    note = highlight.note,
+                    color = highlight.color?.value,  // Extract string value from enum
+                    createdAt = try {
+                        Instant.parse(highlight.createdAt ?: "").toEpochMilliseconds()
+                    } catch (e: Exception) { 0L }
                 )
             }
             highlightDao.insertHighlights(entities)
+            println("HighlightRepository: Inserted ${entities.size} highlights into local DB")
         } catch (e: Exception) {
             println("Error syncing highlights for bookmark $bookmarkRemoteId: ${e.message}")
+            e.printStackTrace()
         }
     }
 
@@ -81,11 +105,7 @@ class HighlightRepository(
         note: String? = null,
         color: String? = null
     ): String {
-        // Create local action first for offline support
-        bookmarkActionsRepository.queueCreateHighlight(server, bookmarkLocalId, bookmarkRemoteId, text, startOffset, endOffset, note, color)
-
-        // Optimistically add to local DB if we want immediate UI update
-        // We'll create a temporary local ID for it
+        // Optimistically add to local DB first with temp ID
         val tempId = "temp_${System.currentTimeMillis()}"
         highlightDao.insertHighlights(listOf(
             HighlightEntity(
@@ -100,6 +120,10 @@ class HighlightRepository(
                 createdAt = System.currentTimeMillis()
             )
         ))
+
+        // Queue action with tempId so we can update it later
+        bookmarkActionsRepository.queueCreateHighlight(server, bookmarkLocalId, bookmarkRemoteId, text, startOffset, endOffset, note, color, tempId)
+
         return tempId
     }
 
@@ -111,15 +135,18 @@ class HighlightRepository(
     }
 
     suspend fun updateHighlight(server: Server, bookmarkLocalId: Long, highlightRemoteId: String, note: String? = null, color: String? = null) {
+        println("HighlightRepository: updateHighlight called - highlightRemoteId=$highlightRemoteId, note=$note, color=$color")
         bookmarkActionsRepository.queueUpdateHighlight(server, bookmarkLocalId, highlightRemoteId, note, color)
 
         // Optimistically update local DB
         val existing = highlightDao.getHighlightByRemoteId(highlightRemoteId)
+        println("HighlightRepository: updateHighlight - existing highlight found: ${existing != null}")
         existing?.let {
             highlightDao.updateHighlight(it.copy(
                 note = note,  // Allow null to clear the note
                 color = color  // Allow null to reset to default
             ))
+            println("HighlightRepository: updateHighlight - local DB updated")
         }
     }
 

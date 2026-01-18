@@ -77,8 +77,10 @@ val appModule = module {
     // BookmarkRepository depends on BookmarkActionsRepository and HighlightRepository
     single {
         BookmarkRepository(get(), get(), get(), get(), get(), get(), get()).also {
-            // Wire up circular dependency: BookmarkActionsRepository needs BookmarkRepository
-            get<BookmarkActionsRepository>().setBookmarkRepository(it)
+            // Wire up circular dependencies
+            val actionsRepo = get<BookmarkActionsRepository>()
+            actionsRepo.setBookmarkRepository(it)
+            actionsRepo.setHighlightDao(get())
         }
     }
 

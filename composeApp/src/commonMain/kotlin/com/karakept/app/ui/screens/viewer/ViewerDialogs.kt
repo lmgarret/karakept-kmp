@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -23,7 +24,11 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -238,56 +243,93 @@ internal fun HighlightDetailsPanel(
     visible: Boolean,
     highlight: Highlight?,
     fontFamily: com.karakept.app.data.model.ReaderFontFamily = com.karakept.app.data.model.ReaderFontFamily.SYSTEM,
+    fontSize: Int = 16,
     onUpdateHighlight: (String, String?, String?) -> Unit,
     onDeleteHighlight: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Scrim
-        androidx.compose.animation.AnimatedVisibility(
-            visible = visible,
-            enter = androidx.compose.animation.fadeIn(),
-            exit = androidx.compose.animation.fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        onDismiss()
-                    }
-            )
-        }
+    // Hoist color state for real-time updates to floating card
+    var localColor by remember(highlight?.id) { mutableStateOf(highlight?.color ?: "yellow") }
 
-        // Floating card showing highlighted text (centered in available space above panel)
-        if (highlight != null) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
+    // Sync color when highlight changes
+    LaunchedEffect(highlight?.color) {
+        localColor = highlight?.color ?: "yellow"
+    }
+
+    // Track note state at this level too for save-on-scrim-click
+    var localNote by remember(highlight?.id) { mutableStateOf(highlight?.note ?: "") }
+
+    // Sync note when highlight changes
+    LaunchedEffect(highlight?.note) {
+        localNote = highlight?.note ?: ""
+    }
+
+    // Helper function to handle dismiss with save (used by both scrim and panel)
+    val handleDismissWithSave: () -> Unit = {
+        // Save changes before dismissing if anything changed
+        val noteChanged = highlight != null && localNote != (highlight.note ?: "")
+        val colorChanged = highlight != null && localColor != (highlight.color ?: "yellow")
+        if (noteChanged || colorChanged) {
+            onUpdateHighlight(highlight!!.id, localNote.ifBlank { null }, localColor)
+        }
+        onDismiss()
+    }
+
+    // Scrim
+    androidx.compose.animation.AnimatedVisibility(
+        visible = visible,
+        enter = androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.fadeOut()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ) {
+                    handleDismissWithSave()
+                }
+        )
+    }
+
+    // Container for floating card and panel - uses imePadding to adjust for keyboard
+    // Use Column with weights so floating card fills available space above the panel
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding()
+    ) {
+        // Floating card showing highlighted text (fills available space above panel)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            if (highlight != null) {
                 com.karakept.app.ui.components.HighlightFloatingCard(
                     highlight = highlight,
                     visible = visible,
-                    fontFamily = fontFamily
+                    fontFamily = fontFamily,
+                    fontSize = fontSize,
+                    overrideColor = localColor
                 )
             }
         }
 
-        // Panel at bottom
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            HighlightDetailsBottomPanel(
-                visible = visible,
-                highlight = highlight,
-                onUpdateHighlight = onUpdateHighlight,
-                onDeleteHighlight = onDeleteHighlight,
-                onDismiss = onDismiss
-            )
-        }
+        // Panel at bottom (always in composition, visibility controlled by BaseBottomPanel's AnimatedVisibility)
+        HighlightDetailsBottomPanel(
+            visible = visible,
+            highlight = highlight,
+            selectedColor = localColor,
+            selectedNote = localNote,
+            onColorChange = { localColor = it },
+            onNoteChange = { localNote = it },
+            onUpdateHighlight = onUpdateHighlight,
+            onDeleteHighlight = onDeleteHighlight,
+            onDismiss = handleDismissWithSave
+        )
     }
 }

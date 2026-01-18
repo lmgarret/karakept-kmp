@@ -93,21 +93,44 @@ class BookmarkViewerScreenModel(
 
     fun refreshBookmark(id: Long) {
         val currentState = _loadingState.value
-        if (currentState !is BookmarkLoadingState.FullyLoaded) return
+        if (currentState !is BookmarkLoadingState.FullyLoaded) {
+            println("BookmarkViewerScreenModel: refreshBookmark called but state is not FullyLoaded")
+            return
+        }
 
         screenModelScope.launch {
-            if (offlineMode.value) return@launch
-            
+            if (offlineMode.value) {
+                println("BookmarkViewerScreenModel: refreshBookmark skipped - offline mode")
+                return@launch
+            }
+
+            println("BookmarkViewerScreenModel: Starting refresh for bookmark ${currentState.bookmark.remoteId}")
             _isRefreshing.value = true
             try {
+                // Sync bookmark content
                 bookmarkRepository.syncSingleBookmark(
                     currentState.bookmark.remoteId,
                     currentState.bookmark.serverId
                 )
+                println("BookmarkViewerScreenModel: Bookmark content synced")
+
+                // Also sync highlights for this bookmark
+                val servers = serverRepository.servers.first()
+                val server = servers.find { it.id == currentState.bookmark.serverId }
+                if (server != null) {
+                    val remoteId = currentState.bookmark.originalRemoteId ?: currentState.bookmark.remoteId.toString()
+                    println("BookmarkViewerScreenModel: Syncing highlights for remoteId=$remoteId")
+                    highlightRepository.syncHighlightsForBookmark(server, remoteId)
+                    println("BookmarkViewerScreenModel: Highlights synced")
+                } else {
+                    println("BookmarkViewerScreenModel: Server not found for serverId=${currentState.bookmark.serverId}")
+                }
             } catch (e: Exception) {
+                println("BookmarkViewerScreenModel: Error during refresh: ${e.message}")
                 e.printStackTrace()
             } finally {
                 _isRefreshing.value = false
+                println("BookmarkViewerScreenModel: Refresh complete")
             }
         }
     }

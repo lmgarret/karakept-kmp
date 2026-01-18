@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.karakept.app.data.model.Highlight
 
 /**
@@ -40,6 +41,8 @@ fun HighlightFloatingCard(
     highlight: Highlight,
     visible: Boolean,
     fontFamily: com.karakept.app.data.model.ReaderFontFamily = com.karakept.app.data.model.ReaderFontFamily.SYSTEM,
+    fontSize: Int = 16,
+    overrideColor: String? = null,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -62,22 +65,22 @@ fun HighlightFloatingCard(
     ) {
         Box(
             modifier = Modifier
-                .widthIn(max = 320.dp)
-                .padding(horizontal = 8.dp)
+                .widthIn(max = 360.dp)
+                .padding(horizontal = 16.dp)
+                .shadow(4.dp, RoundedCornerShape(4.dp))
                 .background(
-                    color = getColorForHighlight(highlight.color ?: "yellow"),
-                    shape = RoundedCornerShape(2.dp)
+                    color = getColorForHighlight(overrideColor ?: highlight.color ?: "yellow"),
+                    shape = RoundedCornerShape(4.dp)
                 )
-                .shadow(4.dp, RoundedCornerShape(2.dp))
         ) {
             Text(
                 text = highlight.text,
-                style = MaterialTheme.typography.bodyMedium,
+                fontSize = fontSize.sp,
                 fontFamily = fontFamily.composeFontFamily,
                 color = Color.Black,
-                maxLines = 4,
+                maxLines = 8,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(8.dp)
+                modifier = Modifier.padding(12.dp)
             )
         }
     }

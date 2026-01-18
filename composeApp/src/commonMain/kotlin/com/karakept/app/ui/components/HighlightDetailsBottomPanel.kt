@@ -18,18 +18,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,89 +35,66 @@ import com.karakept.app.data.model.Highlight
 fun HighlightDetailsBottomPanel(
     visible: Boolean,
     highlight: Highlight?,
+    selectedColor: String,
+    selectedNote: String,
+    onColorChange: (String) -> Unit,
+    onNoteChange: (String) -> Unit,
     onUpdateHighlight: (String, String?, String?) -> Unit,
     onDeleteHighlight: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    if (highlight == null) return
-
-    var note by remember(highlight.id) { mutableStateOf(highlight.note ?: "") }
-    var selectedColor by remember(highlight.id) { mutableStateOf(highlight.color ?: "yellow") }
-
-    // Sync state if highlight changes (e.g. from server)
-    LaunchedEffect(highlight) {
-        note = highlight.note ?: ""
-        selectedColor = highlight.color ?: "yellow"
-    }
-
+    // Always render BaseBottomPanel to enable animations
+    // The visibility is controlled by the visible parameter
     BaseBottomPanel(
         visible = visible,
-        onDismiss = {
-            // Save on dismiss if changed
-            if (note != (highlight.note ?: "") || selectedColor != (highlight.color ?: "yellow")) {
-                onUpdateHighlight(highlight.id, note.ifBlank { null }, selectedColor)
-            }
-            onDismiss()
-        }
+        onDismiss = onDismiss
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        // Only render content if highlight is available
+        if (highlight != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Save button
-                IconButton(
-                    onClick = {
-                        if (note != (highlight.note ?: "") || selectedColor != (highlight.color ?: "yellow")) {
-                            onUpdateHighlight(highlight.id, note.ifBlank { null }, selectedColor)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Color",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+
+                        // Delete button on the right
+                        IconButton(onClick = { onDeleteHighlight(highlight.id) }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Highlight",
+                                tint = MaterialTheme.colorScheme.error
+                            )
                         }
                     }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Done,
-                        contentDescription = "Save Changes",
-                        tint = MaterialTheme.colorScheme.primary
+
+                    HighlightColorPicker(
+                        selectedColor = selectedColor,
+                        onColorSelected = onColorChange
                     )
                 }
 
-                // Delete button
-                IconButton(onClick = { onDeleteHighlight(highlight.id) }) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete Highlight",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Color",
-                    style = MaterialTheme.typography.labelLarge
+                OutlinedTextField(
+                    value = selectedNote,
+                    onValueChange = onNoteChange,
+                    label = { Text("Note") },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Add a note...") },
+                    minLines = 2
                 )
-                
-                HighlightColorPicker(
-                    selectedColor = selectedColor,
-                    onColorSelected = { selectedColor = it }
-                )
-            }
 
-            OutlinedTextField(
-                value = note,
-                onValueChange = { note = it },
-                label = { Text("Note") },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Add a note...") },
-                minLines = 2
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
     }
 }
