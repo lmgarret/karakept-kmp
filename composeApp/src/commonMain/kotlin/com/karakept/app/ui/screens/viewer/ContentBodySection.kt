@@ -30,9 +30,14 @@ internal fun ContentBodySection(
     htmlBackgroundColor: Color?,
     htmlFontSize: Int,
     htmlFontFamily: ReaderFontFamily,
-    precrawledAssetPath: String?,
+    precrawledAssetPath: String? = null,
     loadingState: BookmarkLoadingState,
-    onLinkClick: (String) -> Unit
+    highlights: List<com.karakept.app.data.model.Highlight> = emptyList(),
+    onLinkClick: (String) -> Unit,
+    onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
+    onDeleteHighlight: (String) -> Unit = {},
+    onHighlightClick: (String) -> Unit = {},
+    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null
 ) {
     // Track when HTML content is truly ready (processed + rendered)
     var htmlContentReady by remember { mutableStateOf(false) }
@@ -63,7 +68,12 @@ internal fun ContentBodySection(
                     customBackgroundColor = htmlBackgroundColor,
                     customFontSize = htmlFontSize,
                     customFontFamily = htmlFontFamily,
-                    localFilePath = if (viewerMode == ViewerMode.WEB) precrawledAssetPath else null
+                    localFilePath = if (viewerMode == ViewerMode.WEB) precrawledAssetPath else null,
+                    highlights = highlights,
+                    onCreateHighlight = onCreateHighlight,
+                    onDeleteHighlight = onDeleteHighlight,
+                    onHighlightClick = onHighlightClick,
+                    onHighlightPosition = onHighlightPosition
                 )
             }
 

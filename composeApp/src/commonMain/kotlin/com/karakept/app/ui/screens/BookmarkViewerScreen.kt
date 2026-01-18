@@ -32,6 +32,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
@@ -74,6 +75,7 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         val showTags by screenModel.showTags.collectAsState()
         val isRefreshing by screenModel.isRefreshing.collectAsState()
         val offlineMode by screenModel.offlineMode.collectAsState()
+        val highlights by screenModel.highlights.collectAsState()
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isRefreshing,
@@ -85,8 +87,36 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         var showMenu by remember { mutableStateOf(false) }
         var fabExpanded by remember { mutableStateOf(false) }
         var showDeleteConfirmation by remember { mutableStateOf(false) }
-        var showListPicker by remember { mutableStateOf(false) }
         var showTagEditor by remember { mutableStateOf(false) }
+        var showListPicker by remember { mutableStateOf(false) }
+        var selectedHighlightId by remember { mutableStateOf<String?>(null) }
+        var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
+
+        // Track the text of the selected highlight for matching after ID changes (temp -> server ID)
+        var selectedHighlightText by remember { mutableStateOf<String?>(null) }
+
+        // Use derivedStateOf for better reactivity when highlights list updates
+        val selectedHighlight by remember {
+            androidx.compose.runtime.derivedStateOf {
+                val id = selectedHighlightId ?: return@derivedStateOf null
+                // First try to find by exact ID
+                highlights.find { it.id == id }
+                    // If not found and we have a temp ID, try to find by text content
+                    ?: if (id.startsWith("temp_") && selectedHighlightText != null) {
+                        highlights.find { it.text == selectedHighlightText }
+                    } else null
+            }
+        }
+
+        // Update selectedHighlightId when the highlight is found by text (temp ID was replaced)
+        LaunchedEffect(selectedHighlight?.id, selectedHighlightId) {
+            val highlight = selectedHighlight
+            val currentId = selectedHighlightId
+            if (highlight != null && currentId != null && highlight.id != currentId) {
+                // The highlight was found by text match but has a different ID (synced from server)
+                selectedHighlightId = highlight.id
+            }
+        }
 
         val snackbarHostState = rememberSnackbarHostStateWithDelay(
             snackbarManager = snackbarManager,
@@ -281,9 +311,12 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                         )
 
                         // Content List
+                        // Only blur when the highlight is actually found and panel will show
                         LazyColumn(
                             state = scrollState,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(if (selectedHighlightId != null && selectedHighlight != null) Modifier.blur(8.dp) else Modifier)
                         ) {
                             // Transparent spacer for the header
                             item(key = "header_spacer") {
@@ -315,8 +348,24 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                     htmlFontFamily = htmlFontFamily,
                                     precrawledAssetPath = precrawledAssetPath,
                                     loadingState = state,
+                                    highlights = highlights,
                                     onLinkClick = { linkUrl ->
                                         navigator.push(WebViewScreen(linkUrl))
+                                    },
+                                    onCreateHighlight = { text, start, end, note, color ->
+                                        screenModel.createHighlight(state.bookmark, text, start, end, note, color) { highlightId ->
+                                            selectedHighlightText = text  // Store text for matching after sync
+                                            selectedHighlightId = highlightId
+                                        }
+                                    },
+                                    onDeleteHighlight = { highlightId ->
+                                        screenModel.deleteHighlight(state.bookmark, highlightId)
+                                    },
+                                    onHighlightClick = { id ->
+                                        selectedHighlightId = id
+                                    },
+                                    onHighlightPosition = { id, position ->
+                                        highlightPosition = position
                                     }
                                 )
                             }
@@ -364,9 +413,10 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
         }
 
         // Back Handler for panels
-        androidx.activity.compose.BackHandler(enabled = showAppearancePanel || showModeDialog) {
+        androidx.activity.compose.BackHandler(enabled = showAppearancePanel || showModeDialog || selectedHighlightId != null) {
             if (showAppearancePanel) showAppearancePanel = false
             if (showModeDialog) showModeDialog = false
+            if (selectedHighlightId != null) selectedHighlightId = null
         }
 
         // Viewer mode dialog
@@ -440,6 +490,32 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                 onDismiss = { showTagEditor = false }
             )
         }
+
+        // Highlight Details Panel
+        // Only show when both ID is set AND the highlight is found to prevent blinking
+        HighlightDetailsPanel(
+            visible = selectedHighlightId != null && selectedHighlight != null,
+            highlight = selectedHighlight,
+            fontFamily = htmlFontFamily,
+            fontSize = htmlFontSize,
+            onUpdateHighlight = { id, note, color ->
+                if (loadingState is BookmarkLoadingState.FullyLoaded) {
+                    val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+                    screenModel.updateHighlight(fullyLoadedState.bookmark, id, note, color)
+                }
+            },
+            onDeleteHighlight = { id ->
+                if (loadingState is BookmarkLoadingState.FullyLoaded) {
+                    val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+                    screenModel.deleteHighlight(fullyLoadedState.bookmark, id)
+                }
+                selectedHighlightId = null
+            },
+            onDismiss = {
+                selectedHighlightId = null
+                selectedHighlightText = null
+            }
+        )
     }
 }
 

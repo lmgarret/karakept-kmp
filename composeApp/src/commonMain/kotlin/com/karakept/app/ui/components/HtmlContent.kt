@@ -46,14 +46,20 @@ fun HtmlContent(
     html: String?,
     viewerMode: ViewerMode,
     modifier: Modifier = Modifier,
-    onLinkClick: ((String) -> Unit)? = null,
+    precrawledAssetPath: String? = null,
+    highlights: List<com.karakept.app.data.model.Highlight> = emptyList(),
+    onLinkClick: (String) -> Unit,
+    onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
+    onDeleteHighlight: (String) -> Unit = {},
     removeFirstImage: Boolean = false,
     onReady: (() -> Unit)? = null,
     customTextColor: Color? = null,
     customBackgroundColor: Color? = null,
     customFontSize: Int = 16,
     customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
-    localFilePath: String? = null
+    localFilePath: String? = null,
+    onHighlightClick: ((String) -> Unit)? = null,
+    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null
 ) {
     // Debug output
     println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode, removeFirstImage=$removeFirstImage")
@@ -72,25 +78,17 @@ fun HtmlContent(
             return@produceState
         }
 
-        val cacheKey = HtmlCache.generateKey(html, "${viewerMode.name}_removeFirstImage=${removeFirstImage}_font=${customFontSize}-${customFontFamily.name}")
-        val cached = HtmlCache.get(cacheKey)
-
-        if (cached != null) {
-            value = cached
-        } else {
-            value = withContext(Dispatchers.Default) {
-                try {
-                    val result = when (viewerMode) {
-                        ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = removeFirstImage)
-                        ViewerMode.WEB -> HtmlArchiveProcessor.processForArchive(html)
-                    }
-                    println("HtmlContent: Processed HTML length=${result.length}, isBlank=${result.isBlank()}")
-                    HtmlCache.put(cacheKey, result)
-                    result
-                } catch (e: Exception) {
-                    println("HtmlContent: Processing failed: ${e.message}")
-                    null // Processing failed
+        value = withContext(Dispatchers.Default) {
+            try {
+                val result = when (viewerMode) {
+                    ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = removeFirstImage)
+                    ViewerMode.WEB -> HtmlArchiveProcessor.processForArchive(html)
                 }
+                println("HtmlContent: Processed HTML length=${result.length}, isBlank=${result.isBlank()}")
+                result
+            } catch (e: Exception) {
+                println("HtmlContent: Processing failed: ${e.message}")
+                null // Processing failed
             }
         }
     }
@@ -143,7 +141,14 @@ fun HtmlContent(
                         customTextColor = customTextColor,
                         customFontSize = customFontSize,
                         customFontFamily = customFontFamily,
-                        localFilePath = localFilePath
+                        localFilePath = localFilePath,
+                        highlights = highlights,
+                        onCreateHighlight = onCreateHighlight,
+                        onDeleteHighlight = onDeleteHighlight,
+                        onHighlightClick = { highlightId ->
+                            onHighlightClick?.invoke(highlightId)
+                        },
+                        onHighlightPosition = onHighlightPosition
                     )
                 }
 

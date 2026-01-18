@@ -30,5 +30,10 @@ expect fun HtmlRenderer(
     customTextColor: Color? = null,
     customFontSize: Int = 16,
     customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
-    localFilePath: String? = null
+    localFilePath: String? = null,
+    highlights: List<com.karakept.app.data.model.Highlight> = emptyList(),
+    onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
+    onDeleteHighlight: (String) -> Unit = {},
+    onHighlightClick: (String) -> Unit = {},
+    onHighlightPosition: ((String, HighlightPosition?) -> Unit)? = null
 )

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -51,6 +52,7 @@ internal fun MainScreenDrawer(
     onToggleListExpanded: (String) -> Unit,
     onNavigateToFilterManagement: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToHighlights: () -> Unit,
     content: @Composable () -> Unit
 ) {
     ModalNavigationDrawer(
@@ -206,6 +208,19 @@ internal fun MainScreenDrawer(
                         )
                     }
                 }
+
+                Spacer(Modifier.height(16.dp))
+                NavigationDrawerItem(
+                    label = { Text("Highlights") },
+                    selected = false,
+                    icon = { Icon(Icons.Default.Create, contentDescription = null) },
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary
+                    ),
+                    onClick = onNavigateToHighlights
+                )
 
                 Spacer(Modifier.weight(1f))
                 NavigationDrawerItem(

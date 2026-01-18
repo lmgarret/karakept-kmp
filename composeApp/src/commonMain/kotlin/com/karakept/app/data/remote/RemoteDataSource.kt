@@ -238,6 +238,149 @@ class RemoteDataSource(
             throw ApiException("Error removing bookmark from list: ${e.message}", e)
         }
     }
+
+    /**
+     * Get all highlights
+     * GET /api/v1/highlights
+     */
+    suspend fun fetchAllHighlights(server: Server): List<Highlight> {
+        return try {
+            val response = highlightsApi(server).highlightsGet(limit = 1000.0, cursor = null)
+            response.body().highlights ?: emptyList()
+        } catch (e: Exception) {
+            throw ApiException("Error fetching all highlights: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Get highlights of a bookmark
+     * GET /api/v1/bookmarks/:bookmarkId/highlights
+     */
+    suspend fun fetchHighlightsForBookmark(server: Server, bookmarkId: String): List<Highlight> {
+        return try {
+            val response = bookmarksApi(server).bookmarksBookmarkIdHighlightsGet(bookmarkId)
+            response.body().highlights ?: emptyList()
+        } catch (e: Exception) {
+            throw ApiException("Error fetching highlights for bookmark $bookmarkId: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Create a new highlight
+     * POST /api/v1/highlights
+     */
+    suspend fun createHighlight(
+        server: Server,
+        bookmarkId: String,
+        text: String,
+        startOffset: Int,
+        endOffset: Int,
+        note: String? = null,
+        color: String? = null
+    ): Highlight {
+        return try {
+            // Normalize color to enum
+            val colorEnum = when (color?.lowercase()) {
+                "red" -> HighlightsPostRequest.Color.RED
+                "green" -> HighlightsPostRequest.Color.GREEN
+                "blue" -> HighlightsPostRequest.Color.BLUE
+                else -> HighlightsPostRequest.Color.YELLOW
+            }
+
+            val request = HighlightsPostRequest(
+                bookmarkId = bookmarkId,
+                text = text,
+                startOffset = startOffset.toDouble(),
+                endOffset = endOffset.toDouble(),
+                note = note ?: "",
+                color = colorEnum
+            )
+
+            println("RemoteDataSource: Creating highlight - bookmarkId=$bookmarkId, text length=${text.length}, startOffset=$startOffset, endOffset=$endOffset, note='${note ?: ""}', color=$colorEnum")
+            println("RemoteDataSource: Request object - bookmarkId=${request.bookmarkId}, text=${request.text}, startOffset=${request.startOffset}, endOffset=${request.endOffset}, note=${request.note}, color=${request.color}")
+
+            // Debug: serialize to JSON to see what will be sent
+            try {
+                val jsonDebug = kotlinx.serialization.json.Json {
+                    prettyPrint = true
+                    encodeDefaults = true
+                }
+                val jsonString = jsonDebug.encodeToString(HighlightsPostRequest.serializer(), request)
+                println("RemoteDataSource: JSON body:\n$jsonString")
+            } catch (e: Exception) {
+                println("RemoteDataSource: Could not serialize for debug: ${e.message}")
+            }
+
+            highlightsApi(server).highlightsPost(request).body()
+        } catch (e: Exception) {
+            println("RemoteDataSource: Exception creating highlight: ${e.message}")
+            throw ApiException("Error creating highlight: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Update a highlight
+     * PATCH /api/v1/highlights/:highlightId
+     */
+    suspend fun updateHighlight(
+        server: Server,
+        highlightId: String,
+        note: String? = null,
+        color: String? = null
+    ): Highlight {
+        return try {
+            println("RemoteDataSource: Updating highlight - highlightId=$highlightId, note=$note, color=$color")
+
+            // Normalize color to enum if provided
+            val colorEnum = if (color != null) {
+                when (color.lowercase()) {
+                    "red" -> HighlightsHighlightIdPatchRequest.Color.RED
+                    "green" -> HighlightsHighlightIdPatchRequest.Color.GREEN
+                    "blue" -> HighlightsHighlightIdPatchRequest.Color.BLUE
+                    else -> HighlightsHighlightIdPatchRequest.Color.YELLOW
+                }
+            } else null
+
+            val request = HighlightsHighlightIdPatchRequest(
+                note = note,
+                color = colorEnum
+            )
+
+            println("RemoteDataSource: Update request - note=${request.note}, color=${request.color}")
+
+            // Debug: serialize to JSON to see what will be sent
+            try {
+                val jsonDebug = kotlinx.serialization.json.Json {
+                    prettyPrint = true
+                    encodeDefaults = true
+                }
+                val jsonString = jsonDebug.encodeToString(HighlightsHighlightIdPatchRequest.serializer(), request)
+                println("RemoteDataSource: Update JSON body:\n$jsonString")
+            } catch (e: Exception) {
+                println("RemoteDataSource: Could not serialize for debug: ${e.message}")
+            }
+
+            highlightsApi(server).highlightsHighlightIdPatch(highlightId, request).body()
+        } catch (e: Exception) {
+            println("RemoteDataSource: Exception updating highlight: ${e.message}")
+            throw ApiException("Error updating highlight: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Delete a highlight
+     * DELETE /api/v1/highlights/:highlightId
+     */
+    suspend fun deleteHighlight(server: Server, highlightId: String) {
+        try {
+            println("RemoteDataSource: Deleting highlight - highlightId=$highlightId")
+            val response = highlightsApi(server).highlightsHighlightIdDelete(highlightId)
+            println("RemoteDataSource: Delete highlight response received")
+        } catch (e: Exception) {
+            println("RemoteDataSource: Exception deleting highlight: ${e.message}")
+            throw ApiException("Error deleting highlight $highlightId: ${e.message}", e)
+        }
+    }
 }
 
 class ApiException(message: String, cause: Throwable? = null) : Exception(message, cause)

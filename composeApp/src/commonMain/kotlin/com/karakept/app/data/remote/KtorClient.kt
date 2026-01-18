@@ -19,14 +19,16 @@ fun createHttpClient(): HttpClient {
                 ignoreUnknownKeys = true
                 prettyPrint = true
                 isLenient = true
+                explicitNulls = true
+                encodeDefaults = true  // Ensure fields with default values are serialized
             })
         }
-        
+
         install(Logging) {
             logger = Logger.SIMPLE
             level = LogLevel.INFO
         }
-        
+
         defaultRequest {
             contentType(ContentType.Application.Json)
         }

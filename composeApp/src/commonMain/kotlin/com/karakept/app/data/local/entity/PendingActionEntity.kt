@@ -47,4 +47,7 @@ object PendingActionType {
     const val UPDATE_TAGS = "update_tags"
     const val MARK_READ = "mark_read"
     const val MARK_UNREAD = "mark_unread"
+    const val CREATE_HIGHLIGHT = "create_highlight"
+    const val UPDATE_HIGHLIGHT = "update_highlight"
+    const val DELETE_HIGHLIGHT = "delete_highlight"
 }

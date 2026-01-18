@@ -17,13 +17,17 @@ object HtmlSanitizer {
     private val safelist: Safelist by lazy {
         Safelist.relaxed()
             // Add additional tags beyond relaxed() defaults
-            .addTags("div", "span", "pre", "code", "figcaption", "figure", "picture", "img")
+            .addTags("div", "span", "pre", "code", "figcaption", "figure", "picture", "img", "mark")
             // Configure link attributes
             .addAttributes("a", "href", "title")
             .addProtocols("a", "href", "http", "https")
             // Configure image attributes - allow data: URLs for embedded base64 images
             .addAttributes("img", "src", "alt", "title", "width", "height")
             .addProtocols("img", "src", "http", "https", "data")
+            // Allow classes and styles for highlights
+            .addAttributes("mark", "class", "style", "data-id")
+            .addAttributes("span", "class", "style")
+            .addAttributes("div", "class", "style")
             // Explicitly remove event handlers (defense in depth)
             .removeAttributes("*", "onclick", "onerror", "onload", "onmouseover",
                 "onfocus", "onblur", "onchange", "onsubmit")

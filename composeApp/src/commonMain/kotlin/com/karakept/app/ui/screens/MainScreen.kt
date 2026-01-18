@@ -180,6 +180,10 @@ object MainScreen : Screen {
             onNavigateToSettings = {
                 navigator.push(SettingsScreen())
                 scope.launch { drawerState.close() }
+            },
+            onNavigateToHighlights = {
+                navigator.push(HighlightsScreen())
+                scope.launch { drawerState.close() }
             }
         ) {
             Scaffold(
