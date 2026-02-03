@@ -51,7 +51,10 @@ import org.koin.compose.koinInject
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
 
-data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
+data class BookmarkViewerScreen(
+    val bookmarkId: Long,
+    val scrollToHighlightId: String? = null
+) : Screen {
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
     @Composable
     override fun Content() {
@@ -128,6 +131,18 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
             // Get the first available server to load lists
             serverRepository.servers.first().firstOrNull()?.let { server ->
                 screenModel.loadLists(server)
+            }
+        }
+
+        // Auto-select highlight when navigating from Highlights screen
+        LaunchedEffect(scrollToHighlightId, highlights) {
+            if (scrollToHighlightId != null && highlights.isNotEmpty()) {
+                // Find and select the highlight
+                val targetHighlight = highlights.find { it.id == scrollToHighlightId }
+                if (targetHighlight != null) {
+                    selectedHighlightText = targetHighlight.text
+                    selectedHighlightId = scrollToHighlightId
+                }
             }
         }
 

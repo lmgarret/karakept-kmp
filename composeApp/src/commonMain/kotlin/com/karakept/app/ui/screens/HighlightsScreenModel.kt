@@ -25,6 +25,9 @@ class HighlightsScreenModel(
     private val settingsRepository: SettingsRepository
 ) : ScreenModel {
 
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val highlights: StateFlow<List<Highlight>> = settingsRepository.activeServerId
         .flatMapLatest { serverId ->
@@ -39,14 +42,30 @@ class HighlightsScreenModel(
         servers.find { it.id == id }
     }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    fun syncHighlights() {
+        screenModelScope.launch {
+            val server = selectedServer.value ?: return@launch
+            _isSyncing.value = true
+            try {
+                highlightRepository.syncHighlights(server)
+            } finally {
+                _isSyncing.value = false
+            }
+        }
+    }
+
     fun deleteHighlight(highlight: Highlight) {
         screenModelScope.launch {
             val server = selectedServer.value ?: return@launch
-            // Look up the bookmark to get its local ID
-            // Convert string bookmark ID to Long using hashCode
-            val bookmarkRemoteId = highlight.bookmarkId.hashCode().toLong()
-            val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, server.id) ?: return@launch
+            // Look up the bookmark by its original remote ID (string)
+            val bookmark = bookmarkDao.getBookmarkByOriginalRemoteId(highlight.bookmarkId, server.id) ?: return@launch
             highlightRepository.deleteHighlight(server, bookmark.localId, highlight.id)
         }
+    }
+
+    suspend fun getBookmarkLocalIdForHighlight(highlight: Highlight): Long? {
+        val server = selectedServer.value ?: return null
+        val bookmark = bookmarkDao.getBookmarkByOriginalRemoteId(highlight.bookmarkId, server.id)
+        return bookmark?.localId
     }
 }

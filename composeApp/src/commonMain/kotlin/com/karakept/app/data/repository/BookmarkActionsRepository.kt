@@ -739,7 +739,19 @@ class BookmarkActionsRepository(
                         return
                     }
 
-                    remoteDataSource.deleteHighlight(server, hId)
+                    try {
+                        remoteDataSource.deleteHighlight(server, hId)
+                    } catch (e: Exception) {
+                        // If highlight doesn't exist on server (404), treat as success
+                        // The desired end state (highlight deleted) is already achieved
+                        val errorMsg = e.message?.lowercase() ?: ""
+                        if (errorMsg.contains("404") || errorMsg.contains("not found")) {
+                            println("BookmarkActionsRepository: Highlight $hId not found on server, treating as already deleted")
+                            // Don't rethrow - let it proceed to delete the action from queue
+                        } else {
+                            throw e
+                        }
+                    }
                 }
                 PendingActionType.UPDATE_HIGHLIGHT -> {
                     val data = json.decodeFromString<Map<String, String?>>(action.actionData)

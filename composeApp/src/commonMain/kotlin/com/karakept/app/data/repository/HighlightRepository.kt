@@ -27,9 +27,26 @@ class HighlightRepository(
     }
 
     suspend fun syncHighlights(server: Server) {
-        // We might still keep this for periodic background sync or All Highlights screen
+        // Full sync of all highlights - used for periodic background sync or All Highlights screen
         try {
             val remoteHighlights = remoteDataSource.fetchAllHighlights(server)
+            println("HighlightRepository: syncHighlights received ${remoteHighlights.size} highlights from server")
+
+            // Get remote IDs (excluding empty strings from null IDs)
+            val remoteIds = remoteHighlights.mapNotNull { it.id }.filter { it.isNotEmpty() }
+
+            // Delete local highlights that are no longer on server
+            // Keep temp IDs (starting with "temp_") since they haven't been synced yet
+            if (remoteIds.isEmpty()) {
+                // If server returns empty list, delete all non-temp highlights for this server
+                highlightDao.deleteAllNonTempHighlightsForServer(server.id)
+                println("HighlightRepository: Deleted all non-pending highlights for server (server returned empty)")
+            } else {
+                // Delete highlights not in the remote list (but keep temp IDs)
+                highlightDao.deleteHighlightsNotInList(server.id, remoteIds)
+                println("HighlightRepository: Deleted local highlights not in remote list")
+            }
+
             val entities = remoteHighlights.map { highlight ->
                 HighlightEntity(
                     remoteId = highlight.id ?: "",
@@ -46,6 +63,7 @@ class HighlightRepository(
                 )
             }
             highlightDao.insertHighlights(entities)
+            println("HighlightRepository: Inserted ${entities.size} highlights into local DB")
         } catch (e: Exception) {
             println("Error syncing highlights: ${e.message}")
         }
