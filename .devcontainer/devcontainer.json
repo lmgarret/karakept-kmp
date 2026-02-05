@@ -1,13 +1,15 @@
 {
     "name": "Karakept Development",
-    "image": "mcr.microsoft.com/devcontainers/java:1-17-bookworm",
+    "image": "mcr.microsoft.com/devcontainers/java:dev-17-bookworm",
     "features": {
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
         "ghcr.io/CASL0/devcontainer-features/android-sdk:1": {
             "installNdk": "true",
             "installCmake": "true"
         },
         "ghcr.io/devcontainers/features/node:1": {
-            "version": "lts"
+            "version": "lts",
+            "installYarnUsingApt": "false"
         },
         "ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
             "packages": "curl,nano,vim,ninja-build,python3,libgtk-3-dev,libwebkit2gtk-4.1-dev,xvfb,mesa-utils,libxcursor1,libxrandr2,libxi6,libxxf86vm1"
@@ -31,16 +33,21 @@
     },
     "postCreateCommand": "bash .devcontainer/setup.sh",
     "runArgs": [
-        "--privileged"
+        "--privileged",
+        "--name=karakept-devcontainer"
     ],
     "mounts": [
         "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind",
-        "source=${localEnv:XDG_RUNTIME_DIR}/${localEnv:WAYLAND_DISPLAY},target=/tmp/wayland-0,type=bind"
+        "source=${localEnv:XDG_RUNTIME_DIR}/${localEnv:WAYLAND_DISPLAY},target=/tmp/wayland-0,type=bind",
+        "source=karakept-android-home,target=/home/vscode/.android,type=volume",
+        "source=karakept-gemini-home,target=/home/vscode/.gemini,type=volume",
+        "source=${localEnv:HOME}/.var/app/com.bitwarden.desktop/data/.bitwarden-ssh-agent.sock,target=/tmp/ssh-agent.sock,type=bind"
     ],
     "containerEnv": {
         "DISPLAY": "${localEnv:DISPLAY}",
         "WAYLAND_DISPLAY": "wayland-0",
         "XDG_RUNTIME_DIR": "/tmp",
-        "QT_QPA_PLATFORM": "wayland"
+        "QT_QPA_PLATFORM": "wayland",
+        "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock"
     }
 }
