@@ -117,6 +117,21 @@ kotlin {
                 implementation("org.openjfx:javafx-media:21.0.1:$targetOs")
             }
         }
+        val desktopTest by getting {
+            dependencies {
+                implementation(libs.testcontainers.core)
+                implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.junit)
+                implementation(libs.mockk)
+            }
+        }
+        val commonTest by getting {
+            dependencies {
+                implementation(libs.kotlin.test)
+                implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.mockk)
+            }
+        }
     }
 }
 
@@ -197,5 +212,14 @@ configurations.all {
         force("org.jetbrains.compose.runtime:runtime:1.7.1")
         force("org.jetbrains.compose.animation:animation:1.7.1")
         force("org.jetbrains.compose.animation:animation-core:1.7.1")
+    }
+}
+
+
+tasks.withType<Test> {
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = true
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }

@@ -19,7 +19,7 @@ fun createHttpClient(): HttpClient {
                 ignoreUnknownKeys = true
                 prettyPrint = true
                 isLenient = true
-                explicitNulls = true
+                explicitNulls = false  // Don't send explicit null values (server rejects them)
                 encodeDefaults = true  // Ensure fields with default values are serialized
             })
         }

@@ -79,8 +79,42 @@ openApiGenerate {
     skipValidateSpec.set(true)
 }
 
+// Patch generated code to fix OpenAPI Generator bug with oneOf discriminated unions
+// The generator only extracts ASSET from the Type enum, missing LINK and TEXT
+val patchOpenApiClient by tasks.registering {
+    dependsOn("openApiGenerate")
+    
+    doLast {
+        val targetFile = file("${generatedSourcesDir.get().asFile}/src/main/kotlin/com/karakept/api/model/BookmarksPostRequest.kt")
+        
+        if (targetFile.exists()) {
+            var content = targetFile.readText()
+            
+            // Replace the incomplete Type enum with the complete version
+            val incompleteEnum = """    enum class Type\(val value: kotlin\.String\) \{
+        @SerialName\(value = "asset"\) ASSET\("asset"\);
+    \}""".toRegex()
+            
+            val completeEnum = """    enum class Type(val value: kotlin.String) {
+        @SerialName(value = "link") LINK("link"),
+        @SerialName(value = "text") TEXT("text"),
+        @SerialName(value = "asset") ASSET("asset");
+    }"""
+            
+            if (incompleteEnum.containsMatchIn(content)) {
+                content = incompleteEnum.replace(content, completeEnum)
+                targetFile.writeText(content)
+                println("✅ Patched BookmarksPostRequest.Type enum with LINK and TEXT values")
+            } else {
+                println("⚠️ Type enum pattern not found - may already be patched or format changed")
+            }
+        } else {
+            println("❌ BookmarksPostRequest.kt not found at expected location")
+        }
+    }
+}
 
 // Make compilation depend on code generation and patching
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    dependsOn("openApiGenerate")
+    dependsOn("patchOpenApiClient")
 }

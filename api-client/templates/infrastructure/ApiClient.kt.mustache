@@ -60,6 +60,8 @@ open class ApiClient(
           ignoreUnknownKeys = true
           prettyPrint = true
           isLenient = true
+          encodeDefaults = true
+          explicitNulls = false
         }
         protected val UNSAFE_HEADERS: List<String> = listOf(HttpHeaders.ContentType)
     }

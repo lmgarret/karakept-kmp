@@ -8,8 +8,11 @@ import com.karakept.app.data.model.Server
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.post
 import io.ktor.client.request.header
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.client.request.headers
 
@@ -203,14 +206,8 @@ class RemoteDataSource(
             val request = BookmarksBookmarkIdTagsPostRequest(
                 tags = tags.map { BookmarksBookmarkIdTagsPostRequestTagsInner(tagId = it) }
             )
-            println("RemoteDataSource.detachTags: Request object: $request")
-            println("RemoteDataSource.detachTags: Request tags: ${request.tags}")
-            val response = bookmarksApi(server).bookmarksBookmarkIdTagsDelete(bookmarkId, request).body()
-            println("RemoteDataSource.detachTags: Successfully detached tags. Response: ${response.detached}")
-            response
+            bookmarksApi(server).bookmarksBookmarkIdTagsDelete(bookmarkId, request).body()
         } catch (e: Exception) {
-            println("RemoteDataSource.detachTags: Error detaching tags: ${e.message}")
-            e.printStackTrace()
             throw ApiException("Error detaching tags: ${e.message}", e)
         }
     }
@@ -240,7 +237,21 @@ class RemoteDataSource(
                 assetType = BookmarksPostRequest.AssetType.IMAGE,
                 assetId = ""
             )
-            bookmarksApi(server).bookmarksPost(request).body()
+            // Debug serialization
+            try {
+                val json = ApiClient.JSON_DEFAULT.encodeToString(BookmarksPostRequest.serializer(), request)
+                println("RemoteDataSource: Request JSON: $json")
+            } catch (e: Exception) {
+                println("RemoteDataSource: Failed to serialize request: ${e.message}")
+            }
+            val response = bookmarksApi(server).bookmarksPost(request)
+            if (!response.success) {
+                val errorBody = response.response.bodyAsText()
+                throw ApiException("Bookmark creation failed with status ${response.status}: $errorBody")
+            }
+            val dto = response.body() ?: throw ApiException("Empty success response from server")
+            println("RemoteDataSource: Created bookmark DTO: id=${dto.id}, title=${dto.title}")
+            dto
         } catch (e: Exception) {
             throw ApiException("Error creating bookmark: ${e.message}", e)
         }

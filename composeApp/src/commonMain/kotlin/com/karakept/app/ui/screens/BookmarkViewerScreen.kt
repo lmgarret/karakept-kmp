@@ -434,7 +434,7 @@ data class BookmarkViewerScreen(
         }
 
         // Back Handler for panels
-        androidx.activity.compose.BackHandler(enabled = showAppearancePanel || showModeDialog || selectedHighlightId != null) {
+        com.karakept.app.ui.components.BackHandler(enabled = showAppearancePanel || showModeDialog || selectedHighlightId != null) {
             if (showAppearancePanel) showAppearancePanel = false
             if (showModeDialog) showModeDialog = false
             if (selectedHighlightId != null) selectedHighlightId = null

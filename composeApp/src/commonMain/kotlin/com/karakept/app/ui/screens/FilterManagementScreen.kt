@@ -413,7 +413,7 @@ private fun FilterManagementContent(
     // Edit Filter Panel
     // Back Handler for drawer
     if (editingFilter != null && editingConfig != null) {
-        androidx.activity.compose.BackHandler(enabled = true) {
+        com.karakept.app.ui.components.BackHandler(enabled = true) {
             editingFilter = null
             editingConfig = null
         }
