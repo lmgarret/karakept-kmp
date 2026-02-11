@@ -22,9 +22,11 @@ import com.karakept.app.ui.components.OfflineModeBadge
 @Composable
 internal fun MainScreenTopBar(
     offlineMode: Boolean,
+    isAutoOffline: Boolean = false,
     onMenuClick: () -> Unit,
     onFilterClick: () -> Unit,
     onRefreshClick: () -> Unit,
+    onOfflineBadgeClick: () -> Unit = {},
     isDesktop: Boolean
 ) {
     TopAppBar(
@@ -33,7 +35,10 @@ internal fun MainScreenTopBar(
                 Text("Karakept")
                 if (offlineMode) {
                     Spacer(Modifier.width(8.dp))
-                    OfflineModeBadge()
+                    OfflineModeBadge(
+                        isAutoOffline = isAutoOffline,
+                        onClick = onOfflineBadgeClick
+                    )
                 }
             }
         },

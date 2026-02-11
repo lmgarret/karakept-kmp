@@ -42,6 +42,7 @@ fun BookmarkCardLayout(
     showReadingTime: Boolean = true,
     showTags: Boolean = true,
     dimRead: Boolean = false,
+    offlineMode: Boolean = false,
     bannerImageUrl: String? = null,
     screenshotUrl: String? = null,
     modifier: Modifier = Modifier
@@ -103,14 +104,23 @@ fun BookmarkCardLayout(
                 }
             }
 
-            // Reading time badge overlay - bottom right
-            if (showReadingTime && bookmark.readingTimeMinutes > 0) {
-                ReadingTimeBadge(
-                    readingTimeMinutes = bookmark.readingTimeMinutes,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                )
+            // Reading time badge - or not-synced badge when offline and content not synced
+            if (showReadingTime) {
+                if (bookmark.readingTimeMinutes > 0) {
+                    ReadingTimeBadge(
+                        readingTimeMinutes = bookmark.readingTimeMinutes,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                    )
+                } else if (offlineMode) {
+                    // Only show not-synced badge when in offline mode
+                    NotSyncedBadge(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                    )
+                }
             }
         }
     }
@@ -126,6 +136,7 @@ fun BookmarkListLayout(
     showReadingTime: Boolean = true,
     showTags: Boolean = true,
     dimRead: Boolean = false,
+    offlineMode: Boolean = false,
     bannerImageUrl: String? = null,
     screenshotUrl: String? = null,
     modifier: Modifier = Modifier
@@ -223,14 +234,23 @@ fun BookmarkListLayout(
                 }
             }
 
-            // Reading time badge overlay - bottom right
-            if (showReadingTime && bookmark.readingTimeMinutes > 0) {
-                ReadingTimeBadge(
-                    readingTimeMinutes = bookmark.readingTimeMinutes,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                )
+            // Reading time badge - or not-synced badge when offline and content not synced
+            if (showReadingTime) {
+                if (bookmark.readingTimeMinutes > 0) {
+                    ReadingTimeBadge(
+                        readingTimeMinutes = bookmark.readingTimeMinutes,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                    )
+                } else if (offlineMode) {
+                    // Only show not-synced badge when in offline mode
+                    NotSyncedBadge(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                    )
+                }
             }
         }
     }

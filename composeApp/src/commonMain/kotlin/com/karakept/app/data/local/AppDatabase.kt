@@ -15,6 +15,8 @@ import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.dao.HighlightDao
 import com.karakept.app.data.local.entity.HighlightEntity
 import com.karakept.app.data.local.dao.PendingActionDao
+import com.karakept.app.data.local.dao.ListDao
+import com.karakept.app.data.local.entity.ListEntity
 
 @Database(
     entities = [
@@ -23,9 +25,10 @@ import com.karakept.app.data.local.dao.PendingActionDao
         SavedFilterEntity::class,
         AssetEntity::class,
         PendingActionEntity::class,
-        HighlightEntity::class
+        HighlightEntity::class,
+        ListEntity::class
     ],
-    version = 5
+    version = 6
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
@@ -34,4 +37,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun assetDao(): AssetDao
     abstract fun pendingActionDao(): PendingActionDao
     abstract fun highlightDao(): HighlightDao
+    abstract fun listDao(): ListDao
 }

@@ -1,5 +1,8 @@
 package com.karakept.app.ui.screens.settings
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,6 +26,7 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +39,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -42,7 +47,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -51,7 +58,7 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.ui.screens.LoginScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
 
-class ServerSettingsScreen : Screen {
+class ServerSettingsScreen(val highlightOfflineMode: Boolean = false) : Screen {
     @Composable
     fun SyncStrategyOption(
         strategy: com.karakept.app.data.model.SyncStrategy,
@@ -138,8 +145,31 @@ class ServerSettingsScreen : Screen {
                 
                 // Offline Mode Toggle
                 val offlineMode by screenModel.offlineMode.collectAsState()
+
+                // Blink highlight when arriving from the offline badge
+                val defaultCardColor = CardDefaults.cardColors().containerColor
+                var highlightAlpha by remember { mutableStateOf(0f) }
+                val animatedAlpha by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = highlightAlpha,
+                    animationSpec = tween(250, easing = LinearEasing),
+                    label = "offline_blink"
+                )
+                LaunchedEffect(Unit) {
+                    if (highlightOfflineMode) {
+                        repeat(2) {
+                            highlightAlpha = 1f
+                            delay(250)
+                            highlightAlpha = 0f
+                            delay(250)
+                        }
+                    }
+                }
+                val highlightColor = MaterialTheme.colorScheme.primaryContainer
+                val cardColor = lerp(defaultCardColor, highlightColor, animatedAlpha)
+
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = cardColor)
                 ) {
                     Row(
                         modifier = Modifier

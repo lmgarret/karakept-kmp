@@ -18,6 +18,7 @@ import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.data.model.ViewerMode
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import com.karakept.app.data.model.SwipeAction
 
@@ -33,6 +34,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val HTML_FONT_SIZE_KEY = intPreferencesKey("html_font_size") // Default: 16px
     private val HTML_FONT_FAMILY_KEY = stringPreferencesKey("html_font_family") // Enum name
     private val OFFLINE_MODE_KEY = booleanPreferencesKey("offline_mode")
+    private val AUTO_OFFLINE_DETECTED_KEY = booleanPreferencesKey("auto_offline_detected")
     private val SHOW_READING_TIME_BADGE_KEY = booleanPreferencesKey("show_reading_time_badge")
     private val SHOW_TAGS_KEY = booleanPreferencesKey("show_tags")
     private val READING_SPEED_WPM_KEY = intPreferencesKey("reading_speed_wpm")
@@ -90,8 +92,26 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         ReaderFontFamily.fromString(familyString)
     }
     
+    /**
+     * Manual offline mode setting - user-controlled via settings toggle.
+     */
     val offlineMode: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[OFFLINE_MODE_KEY] ?: false
+    }
+
+    /**
+     * Auto-detected offline state - set when network requests fail.
+     */
+    val autoOfflineDetected: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[AUTO_OFFLINE_DETECTED_KEY] ?: false
+    }
+
+    /**
+     * Effective offline mode - true if either manual offline mode OR auto-detected offline.
+     * Use this for blocking network requests.
+     */
+    val effectiveOfflineMode: Flow<Boolean> = combine(offlineMode, autoOfflineDetected) { manual, auto ->
+        manual || auto
     }
 
     val showReadingTimeBadge: Flow<Boolean> = dataStore.data.map { preferences ->
@@ -196,6 +216,26 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setOfflineMode(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[OFFLINE_MODE_KEY] = enabled
+        }
+    }
+
+    /**
+     * Set the auto-detected offline state.
+     * Call this when network requests fail to automatically switch to offline mode.
+     */
+    suspend fun setAutoOfflineDetected(detected: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[AUTO_OFFLINE_DETECTED_KEY] = detected
+        }
+    }
+
+    /**
+     * Clear the auto-detected offline state.
+     * Call this when the user manually goes online or when network is restored.
+     */
+    suspend fun clearAutoOfflineDetected() {
+        dataStore.edit { preferences ->
+            preferences[AUTO_OFFLINE_DETECTED_KEY] = false
         }
     }
 

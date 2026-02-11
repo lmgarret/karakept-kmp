@@ -71,6 +71,7 @@ object MainScreen : Screen {
         val savedFilters by screenModel.savedFilters.collectAsState()
         val currentFilter by screenModel.currentFilter.collectAsState()
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
+        val isAutoOffline by settingsScreenModel.isAutoOffline.collectAsState()
         val showReadingTimeBadge by settingsScreenModel.showReadingTimeBadge.collectAsState()
         val showTags by settingsScreenModel.showTags.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
@@ -200,9 +201,14 @@ object MainScreen : Screen {
                 topBar = {
                     MainScreenTopBar(
                         offlineMode = offlineMode,
+                        isAutoOffline = isAutoOffline,
                         onMenuClick = { scope.launch { drawerState.open() } },
                         onFilterClick = { showFilterDialog = true },
                         onRefreshClick = { screenModel.syncBookmarks() },
+                        onOfflineBadgeClick = {
+                            // Navigate to server settings and highlight the offline mode row
+                            navigator.push(com.karakept.app.ui.screens.settings.ServerSettingsScreen(highlightOfflineMode = true))
+                        },
                         isDesktop = isDesktop
                     )
                 },
@@ -236,6 +242,7 @@ object MainScreen : Screen {
                         dimReadBookmarks = dimReadBookmarks,
                         showReadingTimeBadge = showReadingTimeBadge,
                         showTags = showTags,
+                        offlineMode = offlineMode || isAutoOffline,
                         listState = listState,
                         pullRefreshState = pullRefreshState,
                         onBookmarkClick = { bookmark ->

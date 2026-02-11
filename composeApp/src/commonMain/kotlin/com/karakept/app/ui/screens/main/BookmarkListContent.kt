@@ -51,6 +51,7 @@ internal fun BookmarkListContent(
     dimReadBookmarks: Boolean,
     showReadingTimeBadge: Boolean,
     showTags: Boolean,
+    offlineMode: Boolean = false,
     listState: LazyListState,
     pullRefreshState: PullRefreshState,
     onBookmarkClick: (BookmarkEntity) -> Unit,
@@ -151,6 +152,7 @@ internal fun BookmarkListContent(
                                 showReadingTime = showReadingTimeBadge,
                                 showTags = showTags,
                                 dimRead = dimReadBookmarks,
+                                offlineMode = offlineMode,
                                 bannerImageUrl = bannerImageUrl,
                                 screenshotUrl = screenshotUrl
                             )
@@ -163,6 +165,7 @@ internal fun BookmarkListContent(
                                 showReadingTime = showReadingTimeBadge,
                                 showTags = showTags,
                                 dimRead = dimReadBookmarks,
+                                offlineMode = offlineMode,
                                 bannerImageUrl = bannerImageUrl,
                                 screenshotUrl = screenshotUrl
                             )

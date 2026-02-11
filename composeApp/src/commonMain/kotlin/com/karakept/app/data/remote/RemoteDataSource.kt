@@ -13,9 +13,25 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
 import io.ktor.client.request.headers
 
+/**
+ * Exception thrown when a network request is blocked due to offline mode being enabled.
+ */
+class OfflineModeException(message: String = "Offline mode is enabled - network request blocked") : Exception(message)
+
 class RemoteDataSource(
-    private val client: HttpClient
+    private val client: HttpClient,
+    private val offlineModeProvider: (suspend () -> Boolean)? = null
 ) {
+    /**
+     * Guard function that blocks execution if offline mode is enabled.
+     * Throws OfflineModeException when offline.
+     */
+    private suspend fun <T> guardedCall(block: suspend () -> T): T {
+        if (offlineModeProvider?.invoke() == true) {
+            throw OfflineModeException()
+        }
+        return block()
+    }
     private fun getBaseUrl(server: Server): String {
         val base = if (server.url.endsWith("/")) server.url.removeSuffix("/") else server.url
         return if (base.endsWith("/api/v1")) base else "$base/api/v1"
@@ -49,8 +65,8 @@ class RemoteDataSource(
         includeContent: Boolean = false,
         archived: Boolean? = null,
         favourited: Boolean? = null
-    ): PaginatedBookmarks {
-        return try {
+    ): PaginatedBookmarks = guardedCall {
+        try {
             bookmarksApi(server).bookmarksGet(
                 cursor = cursor,
                 limit = limit.toDouble(),
@@ -63,16 +79,16 @@ class RemoteDataSource(
         }
     }
 
-    suspend fun fetchBookmark(server: Server, bookmarkId: String, includeContent: Boolean = true): Bookmark {
-        return try {
+    suspend fun fetchBookmark(server: Server, bookmarkId: String, includeContent: Boolean = true): Bookmark = guardedCall {
+        try {
             bookmarksApi(server).bookmarksBookmarkIdGet(bookmarkId, includeContent).body()
         } catch (e: Exception) {
             throw ApiException("Error fetching bookmark: ${e.message}", e)
         }
     }
 
-    suspend fun fetchLists(server: Server): List<KarakeepList> {
-        return try {
+    suspend fun fetchLists(server: Server): List<KarakeepList> = guardedCall {
+        try {
             val response = listsApi(server).listsGet().body()
             response.lists ?: emptyList()
         } catch (e: Exception) {
@@ -80,16 +96,16 @@ class RemoteDataSource(
         }
     }
 
-    suspend fun fetchBookmarksForList(server: Server, listId: String, includeContent: Boolean = false): List<Bookmark> {
-        return try {
+    suspend fun fetchBookmarksForList(server: Server, listId: String, includeContent: Boolean = false): List<Bookmark> = guardedCall {
+        try {
             listsApi(server).listsListIdBookmarksGet(listId, includeContent = includeContent).body().bookmarks ?: emptyList()
         } catch (e: Exception) {
             throw ApiException("Error fetching bookmarks for list $listId: ${e.message}", e)
         }
     }
 
-    suspend fun testConnection(url: String, apiKey: String): Boolean {
-        return try {
+    suspend fun testConnection(url: String, apiKey: String): Boolean = guardedCall {
+        try {
              BookmarksApi(getBaseUrl(Server(id = "", url = url, apiKey = apiKey, label = "")), client).apply {
                  setBearerToken(apiKey)
              }.bookmarksGet(limit = 1.0)
@@ -99,17 +115,17 @@ class RemoteDataSource(
         }
     }
 
-    suspend fun downloadAsset(server: Server, assetId: String): ByteArray {
-        return try {
-            // Reverting to direct Ktor client as the generated assetsApi returns HttpResponse<Unit> (void) 
+    suspend fun downloadAsset(server: Server, assetId: String): ByteArray = guardedCall {
+        try {
+            // Reverting to direct Ktor client as the generated assetsApi returns HttpResponse<Unit> (void)
             // and doesn't seem to handle the binary download properly in this version.
             val baseUrl = if (server.url.endsWith("/")) server.url.removeSuffix("/") else server.url
             val url = if (baseUrl.endsWith("/api/v1")) baseUrl else "$baseUrl/api/v1"
-            
+
             val response: HttpResponse = client.get("$url/assets/$assetId") {
                 header("Authorization", getAuth(server))
             }
-            
+
             if (response.status.isSuccess()) {
                 response.body<ByteArray>()
             } else {
@@ -128,8 +144,8 @@ class RemoteDataSource(
         server: Server,
         bookmarkId: String,
         updates: BookmarksBookmarkIdPatchRequest
-    ): Bookmark {
-        return try {
+    ): Bookmark = guardedCall {
+        try {
             val api = bookmarksApi(server)
             api.bookmarksBookmarkIdPatch(bookmarkId, updates)
             // Fetch updated bookmark to ensure we have full data (content, tags, assets)
@@ -140,14 +156,17 @@ class RemoteDataSource(
     }
 
     /**
+     * Fetch all bookmarks (without content)
+     */
+    suspend fun fetchAllBookmarks(server: Server): List<Bookmark> = guardedCall {
+        bookmarksApi(server).bookmarksGet(includeContent = false).body().bookmarks ?: emptyList()
+    }
+
+    /**
      * Delete a bookmark
      * DELETE /api/v1/bookmarks/:bookmarkId
      */
-    suspend fun fetchAllBookmarks(server: Server): List<Bookmark> {
-        return bookmarksApi(server).bookmarksGet(includeContent = false).body().bookmarks ?: emptyList()
-    }
-
-    suspend fun deleteBookmark(server: Server, bookmarkId: String) {
+    suspend fun deleteBookmark(server: Server, bookmarkId: String) = guardedCall {
         try {
             bookmarksApi(server).bookmarksBookmarkIdDelete(bookmarkId)
         } catch (e: Exception) {
@@ -163,8 +182,8 @@ class RemoteDataSource(
         server: Server,
         bookmarkId: String,
         tags: List<String>
-    ): BookmarksBookmarkIdTagsPost200Response {
-        return try {
+    ): BookmarksBookmarkIdTagsPost200Response = guardedCall {
+        try {
             val request = BookmarksBookmarkIdTagsPostRequest(
                 tags = tags.map { BookmarksBookmarkIdTagsPostRequestTagsInner(tagName = it) }
             )
@@ -178,8 +197,8 @@ class RemoteDataSource(
      * Detach a tag from a bookmark
      * DELETE /api/v1/bookmarks/:bookmarkId/tags
      */
-    suspend fun detachTags(server: Server, bookmarkId: String, tags: List<String>): BookmarksBookmarkIdTagsDelete200Response {
-        return try {
+    suspend fun detachTags(server: Server, bookmarkId: String, tags: List<String>): BookmarksBookmarkIdTagsDelete200Response = guardedCall {
+        try {
             println("RemoteDataSource.detachTags: Detaching ${tags.size} tags from bookmark $bookmarkId: $tags")
             val request = BookmarksBookmarkIdTagsPostRequest(
                 tags = tags.map { BookmarksBookmarkIdTagsPostRequestTagsInner(tagId = it) }
@@ -200,7 +219,7 @@ class RemoteDataSource(
      * Add a bookmark to a list
      * PUT /api/v1/lists/:listId/bookmarks/:bookmarkId
      */
-    suspend fun addBookmarkToList(server: Server, listId: String, bookmarkId: String) {
+    suspend fun addBookmarkToList(server: Server, listId: String, bookmarkId: String) = guardedCall {
         try {
             listsApi(server).listsListIdBookmarksBookmarkIdPut(listId, bookmarkId)
         } catch (e: Exception) {
@@ -212,12 +231,12 @@ class RemoteDataSource(
      * Create a new bookmark
      * POST /api/v1/bookmarks
      */
-    suspend fun createBookmark(server: Server, url: String): Bookmark {
-        return try {
+    suspend fun createBookmark(server: Server, url: String): Bookmark = guardedCall {
+        try {
             val request = BookmarksPostRequest(
                 type = BookmarksPostRequest.Type.ASSET,
                 url = url,
-                text = "", 
+                text = "",
                 assetType = BookmarksPostRequest.AssetType.IMAGE,
                 assetId = ""
             )
@@ -231,7 +250,7 @@ class RemoteDataSource(
      * Remove a bookmark from a list
      * DELETE /api/v1/lists/:listId/bookmarks/:bookmarkId
      */
-    suspend fun removeBookmarkFromList(server: Server, listId: String, bookmarkId: String) {
+    suspend fun removeBookmarkFromList(server: Server, listId: String, bookmarkId: String) = guardedCall {
         try {
             listsApi(server).listsListIdBookmarksBookmarkIdDelete(listId, bookmarkId)
         } catch (e: Exception) {
@@ -243,8 +262,8 @@ class RemoteDataSource(
      * Get all highlights
      * GET /api/v1/highlights
      */
-    suspend fun fetchAllHighlights(server: Server): List<Highlight> {
-        return try {
+    suspend fun fetchAllHighlights(server: Server): List<Highlight> = guardedCall {
+        try {
             val response = highlightsApi(server).highlightsGet(limit = 1000.0, cursor = null)
             response.body().highlights ?: emptyList()
         } catch (e: Exception) {
@@ -256,8 +275,8 @@ class RemoteDataSource(
      * Get highlights of a bookmark
      * GET /api/v1/bookmarks/:bookmarkId/highlights
      */
-    suspend fun fetchHighlightsForBookmark(server: Server, bookmarkId: String): List<Highlight> {
-        return try {
+    suspend fun fetchHighlightsForBookmark(server: Server, bookmarkId: String): List<Highlight> = guardedCall {
+        try {
             val response = bookmarksApi(server).bookmarksBookmarkIdHighlightsGet(bookmarkId)
             response.body().highlights ?: emptyList()
         } catch (e: Exception) {
@@ -277,8 +296,8 @@ class RemoteDataSource(
         endOffset: Int,
         note: String? = null,
         color: String? = null
-    ): Highlight {
-        return try {
+    ): Highlight = guardedCall {
+        try {
             // Normalize color to enum
             val colorEnum = when (color?.lowercase()) {
                 "red" -> HighlightsPostRequest.Color.RED
@@ -327,8 +346,8 @@ class RemoteDataSource(
         highlightId: String,
         note: String? = null,
         color: String? = null
-    ): Highlight {
-        return try {
+    ): Highlight = guardedCall {
+        try {
             println("RemoteDataSource: Updating highlight - highlightId=$highlightId, note=$note, color=$color")
 
             // Normalize color to enum if provided
@@ -371,7 +390,7 @@ class RemoteDataSource(
      * Delete a highlight
      * DELETE /api/v1/highlights/:highlightId
      */
-    suspend fun deleteHighlight(server: Server, highlightId: String) {
+    suspend fun deleteHighlight(server: Server, highlightId: String) = guardedCall {
         try {
             println("RemoteDataSource: Deleting highlight - highlightId=$highlightId")
             val response = highlightsApi(server).highlightsHighlightIdDelete(highlightId)

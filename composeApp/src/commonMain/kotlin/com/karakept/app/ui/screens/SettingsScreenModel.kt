@@ -100,6 +100,18 @@ class SettingsScreenModel(
         initialValue = false
     )
 
+    val isAutoOffline: StateFlow<Boolean> = settingsRepository.autoOfflineDetected.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    val effectiveOfflineMode: StateFlow<Boolean> = settingsRepository.effectiveOfflineMode.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
     val showReadingTimeBadge: StateFlow<Boolean> = settingsRepository.showReadingTimeBadge.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -193,6 +205,28 @@ class SettingsScreenModel(
     fun setOfflineMode(enabled: Boolean) {
         screenModelScope.launch {
             settingsRepository.setOfflineMode(enabled)
+            // Clear auto-detected offline state when manually going online
+            if (!enabled) {
+                settingsRepository.clearAutoOfflineDetected()
+            }
+        }
+    }
+
+    /**
+     * Toggle offline mode. If currently offline (manual or auto), go online.
+     * If online, go offline (manual).
+     */
+    fun toggleOfflineMode() {
+        screenModelScope.launch {
+            val currentEffectiveOffline = settingsRepository.effectiveOfflineMode.first()
+            if (currentEffectiveOffline) {
+                // Going online - clear both manual and auto offline
+                settingsRepository.setOfflineMode(false)
+                settingsRepository.clearAutoOfflineDetected()
+            } else {
+                // Going offline - set manual offline mode
+                settingsRepository.setOfflineMode(true)
+            }
         }
     }
 

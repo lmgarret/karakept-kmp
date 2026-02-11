@@ -26,6 +26,7 @@ import com.karakept.app.ui.screens.FilterManagementScreenModel
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.ui.screens.HighlightsScreenModel
+import kotlinx.coroutines.flow.first
 
 val appModule = module {
     single<AppDatabase> {
@@ -52,14 +53,22 @@ val appModule = module {
     single { HighlightsApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
     single { UsersApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
     
-    single { RemoteDataSource(get()) }
-    
+    // RemoteDataSource with offline mode guard
+    single {
+        val settingsRepo = get<SettingsRepository>()
+        RemoteDataSource(
+            client = get(),
+            offlineModeProvider = { settingsRepo.effectiveOfflineMode.first() }
+        )
+    }
+
     single { get<AppDatabase>().serverDao() }
     single { get<AppDatabase>().bookmarkDao() }
     single { get<AppDatabase>().savedFilterDao() }
     single { get<AppDatabase>().assetDao() }
     single { get<AppDatabase>().pendingActionDao() }
     single { get<AppDatabase>().highlightDao() }
+    single { get<AppDatabase>().listDao() }
 
     single { com.karakept.app.utils.ImageCacheManager(get()) }
     
@@ -68,7 +77,7 @@ val appModule = module {
     single { ServerRepository(get()) }
     single { SettingsRepository(get()) }
     single { SavedFilterRepository(get()) }
-    single { ListRepository(get()) }
+    single { ListRepository(get(), get(), get()) }  // RemoteDataSource, ListDao, SettingsRepository
 
     // BookmarkActionsRepository depends on BookmarkDao, PendingActionDao, RemoteDataSource, ServerRepository, SettingsRepository
     single { BookmarkActionsRepository(get(), get(), get(), get(), get()) }
