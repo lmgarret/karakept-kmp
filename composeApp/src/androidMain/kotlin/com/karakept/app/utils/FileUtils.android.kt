@@ -13,6 +13,15 @@ actual object FileUtils {
         return dir.absolutePath
     }
 
+    actual fun getImageCacheDirectory(): String {
+        val context = AndroidContext.context
+        val dir = File(context.filesDir, "image_cache")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        return dir.absolutePath
+    }
+
     actual fun saveFile(path: String, fileName: String, content: ByteArray): String {
         val dir = File(path)
         if (!dir.exists()) {

@@ -8,6 +8,8 @@ import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.model.ListSyncConfig
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.ReadingTimeCalculator
+import com.karakept.app.utils.ImageCacheManager
+import com.karakept.app.data.local.entity.AssetEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -72,7 +74,8 @@ class BookmarkRepository(
     private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository,
     private val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
     private val serverRepository: com.karakept.app.data.repository.ServerRepository,
-    private val highlightRepository: com.karakept.app.data.repository.HighlightRepository
+    private val highlightRepository: com.karakept.app.data.repository.HighlightRepository,
+    private val imageCacheManager: ImageCacheManager
 ) {
     fun getBookmarks(server: Server): Flow<List<BookmarkEntity>> {
         return bookmarkDao.getBookmarksForServer(server.id)
@@ -271,9 +274,19 @@ class BookmarkRepository(
             }
 
             if (!finalContent.isNullOrBlank()) {
-                val readingTime = ReadingTimeCalculator.calculateReadingTime(finalContent)
-                bookmarkDao.updateContent(existing.localId, finalContent, readingTime)
+                // Cache images in HTML for offline reading
+                val cachedContent = try {
+                    imageCacheManager.cacheImagesInHtml(finalContent)
+                } catch (e: Exception) {
+                    println("Failed to cache images in HTML: ${e.message}")
+                    finalContent
+                }
+                val readingTime = ReadingTimeCalculator.calculateReadingTime(cachedContent)
+                bookmarkDao.updateContent(existing.localId, cachedContent, readingTime)
             }
+
+            // Cache hero images (banner/screenshot)
+            cacheHeroAssetsForBookmark(server, existing.remoteId, existing.serverId, bannerImageAssetId, screenshotAssetId)
 
             _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
         } catch (e: Exception) {
@@ -745,9 +758,22 @@ class BookmarkRepository(
                     val content = fetchRemoteContent(config.server, entity.originalRemoteId)
 
                     if (!content.isNullOrBlank()) {
-                        val readingTime = ReadingTimeCalculator.calculateReadingTime(content)
-                        bookmarkDao.updateContent(entity.localId, content, readingTime)
+                        // Cache images in HTML for offline reading
+                        val cachedContent = try {
+                            imageCacheManager.cacheImagesInHtml(content)
+                        } catch (e: Exception) {
+                            println("Failed to cache images in HTML: ${e.message}")
+                            content
+                        }
+                        val readingTime = ReadingTimeCalculator.calculateReadingTime(cachedContent)
+                        bookmarkDao.updateContent(entity.localId, cachedContent, readingTime)
                     }
+
+                    // Cache hero images (banner/screenshot)
+                    cacheHeroAssetsForBookmark(
+                        config.server, entity.remoteId, entity.serverId,
+                        entity.bannerImageAssetId, entity.screenshotAssetId
+                    )
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -815,6 +841,80 @@ class BookmarkRepository(
                 if (_syncProgress.value !is com.karakept.app.data.model.SyncProgress.Error) {
                     _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
                 }
+            }
+        }
+    }
+
+    /**
+     * Downloads and caches hero images (banner and screenshot) for a bookmark.
+     * Stores the local file paths in the AssetEntity for offline access.
+     */
+    private suspend fun cacheHeroAssetsForBookmark(
+        server: Server,
+        bookmarkRemoteId: Long,
+        serverId: String,
+        bannerImageAssetId: String?,
+        screenshotAssetId: String?
+    ) {
+        val authHeader = "Bearer ${server.apiKey}"
+
+        // Cache banner image
+        if (bannerImageAssetId != null) {
+            try {
+                val existingAsset = assetDao.getAssetsForBookmark(bookmarkRemoteId, serverId)
+                    .find { it.id == bannerImageAssetId }
+                
+                if (existingAsset?.localPath == null) {
+                    val bytes = remoteDataSource.downloadAsset(server, bannerImageAssetId)
+                    val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
+                    val localPath = com.karakept.app.utils.FileUtils.saveFile(
+                        cacheDir, "hero_banner_${bannerImageAssetId}", bytes
+                    )
+                    assetDao.insertAssets(
+                        listOf(AssetEntity(
+                            id = bannerImageAssetId,
+                            bookmarkRemoteId = bookmarkRemoteId,
+                            serverId = serverId,
+                            assetType = "bannerImage",
+                            fileName = "hero_banner_${bannerImageAssetId}",
+                            contentType = null,
+                            localPath = localPath
+                        ))
+                    )
+                    println("📸 Cached banner image for bookmark $bookmarkRemoteId: $localPath")
+                }
+            } catch (e: Exception) {
+                println("📸 Failed to cache banner image: ${e.message}")
+            }
+        }
+
+        // Cache screenshot
+        if (screenshotAssetId != null) {
+            try {
+                val existingAsset = assetDao.getAssetsForBookmark(bookmarkRemoteId, serverId)
+                    .find { it.id == screenshotAssetId }
+                
+                if (existingAsset?.localPath == null) {
+                    val bytes = remoteDataSource.downloadAsset(server, screenshotAssetId)
+                    val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
+                    val localPath = com.karakept.app.utils.FileUtils.saveFile(
+                        cacheDir, "hero_screenshot_${screenshotAssetId}", bytes
+                    )
+                    assetDao.insertAssets(
+                        listOf(AssetEntity(
+                            id = screenshotAssetId,
+                            bookmarkRemoteId = bookmarkRemoteId,
+                            serverId = serverId,
+                            assetType = "screenshot",
+                            fileName = "hero_screenshot_${screenshotAssetId}",
+                            contentType = null,
+                            localPath = localPath
+                        ))
+                    )
+                    println("📸 Cached screenshot for bookmark $bookmarkRemoteId: $localPath")
+                }
+            } catch (e: Exception) {
+                println("📸 Failed to cache screenshot: ${e.message}")
             }
         }
     }

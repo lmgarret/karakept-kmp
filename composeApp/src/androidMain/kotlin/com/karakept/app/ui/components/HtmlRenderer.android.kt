@@ -6,6 +6,11 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceResponse
+import android.util.Log
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -440,7 +445,7 @@ actual fun HtmlRenderer(
                 <html>
                 <head>
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+                    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data: file:; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
                     <style>
                         * {
                             margin: 0;
@@ -531,7 +536,7 @@ actual fun HtmlRenderer(
                 html
                     .replace("</head>", """
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data:; style-src 'unsafe-inline' http: https:; script-src 'unsafe-inline';">
+                        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data: file:; style-src 'unsafe-inline' http: https:; script-src 'unsafe-inline';">
                         <style>
                             $highlightStyles
                         </style>
@@ -738,16 +743,15 @@ actual fun HtmlRenderer(
                 settings.javaScriptEnabled = true
                 addJavascriptInterface(webInterface, "Android")
                 
-                // Allow file access only when we need to load local files
-                settings.allowFileAccess = localFilePath != null
+                // Allow file access for local images (cached content)
+                settings.allowFileAccess = true
                 settings.allowContentAccess = false
                 settings.setSupportZoom(true)
                 settings.builtInZoomControls = true
                 settings.displayZoomControls = false
 
-                // Disable mixed content (enforce HTTPS)
-                @Suppress("DEPRECATION")
-                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                // Enable mixed content to allow loading HTTP images from file:/// context
+                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
 
                 // Set up WebViewClient to intercept link clicks
                 webViewClient = object : WebViewClient() {
@@ -773,6 +777,7 @@ actual fun HtmlRenderer(
                     }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
                         pageLoaded.value = true
                         // Apply highlights on page load
                         if (highlights.isNotEmpty()) {
@@ -781,13 +786,38 @@ actual fun HtmlRenderer(
                         }
                         onLoaded?.invoke()
                     }
+
+                    override fun onReceivedError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        error: WebResourceError?
+                    ) {
+                        super.onReceivedError(view, request, error)
+                        Log.d("KarakeptWebView", "WebView Error: ${error?.description} for ${request?.url}")
+                    }
+
+                    override fun onReceivedHttpError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        errorResponse: WebResourceResponse?
+                    ) {
+                        super.onReceivedHttpError(view, request, errorResponse)
+                        Log.d("KarakeptWebView", "WebView HTTP Error: ${errorResponse?.statusCode} for ${request?.url}")
+                    }
+                }
+
+                webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                        Log.d("KarakeptWebView", "WebView Console: ${consoleMessage?.message()} -- From line ${consoleMessage?.lineNumber()} of ${consoleMessage?.sourceId()}")
+                        return true
+                    }
                 }
 
                 // Load the HTML content or local file
                 if (localFilePath != null) {
                     loadUrl("file://$localFilePath")
                 } else {
-                    loadDataWithBaseURL(null, themedHtml, "text/html", "UTF-8", null)
+                    loadDataWithBaseURL("file:///", themedHtml, "text/html", "UTF-8", null)
                 }
             }
         },
@@ -802,7 +832,7 @@ actual fun HtmlRenderer(
                         lastLoadedHtml.value = themedHtml
                     }
                 } else {
-                    webView.loadDataWithBaseURL(null, themedHtml, "text/html", "UTF-8", null)
+                    webView.loadDataWithBaseURL("file:///", themedHtml, "text/html", "UTF-8", null)
                     lastLoadedHtml.value = themedHtml
                 }
                 return@AndroidView

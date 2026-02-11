@@ -12,6 +12,15 @@ actual object FileUtils {
         return dir.absolutePath
     }
 
+    actual fun getImageCacheDirectory(): String {
+        val userHome = System.getProperty("user.home")
+        val dir = File(userHome, ".karakept/image_cache")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        return dir.absolutePath
+    }
+
     actual fun saveFile(path: String, fileName: String, content: ByteArray): String {
         val dir = File(path)
         if (!dir.exists()) {

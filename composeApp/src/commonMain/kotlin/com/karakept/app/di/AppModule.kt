@@ -60,6 +60,8 @@ val appModule = module {
     single { get<AppDatabase>().assetDao() }
     single { get<AppDatabase>().pendingActionDao() }
     single { get<AppDatabase>().highlightDao() }
+
+    single { com.karakept.app.utils.ImageCacheManager(get()) }
     
     single { createDataStore() }
 
@@ -76,7 +78,7 @@ val appModule = module {
 
     // BookmarkRepository depends on BookmarkActionsRepository and HighlightRepository
     single {
-        BookmarkRepository(get(), get(), get(), get(), get(), get(), get()).also {
+        BookmarkRepository(get(), get(), get(), get(), get(), get(), get(), get()).also {
             // Wire up circular dependencies
             val actionsRepo = get<BookmarkActionsRepository>()
             actionsRepo.setBookmarkRepository(it)

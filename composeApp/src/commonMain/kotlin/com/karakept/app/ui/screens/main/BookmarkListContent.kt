@@ -32,6 +32,10 @@ import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.SwipeableBookmarkItem
+import com.karakept.app.utils.FileUtils
+import com.karakept.app.utils.ImageCacheManager
+import com.karakept.app.utils.AssetUrlUtils
+import com.karakept.app.utils.fileExists
 
 @OptIn(ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -103,11 +107,27 @@ internal fun BookmarkListContent(
                     ) {
                         // Construct banner and screenshot URLs if available
                         val bannerImageUrl = if (serverUrl != null && bookmark.bannerImageAssetId != null) {
-                            com.karakept.app.utils.AssetUrlUtils.getAssetUrl(serverUrl, bookmark.bannerImageAssetId)
+                            val remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bookmark.bannerImageAssetId)
+                            // Try to resolve local path for offline support
+                            val fileName = ImageCacheManager.generateCacheFileName(remoteUrl)
+                            val localPath = FileUtils.getImageCacheDirectory() + "/" + fileName
+                            if (fileExists(localPath)) {
+                                "file://$localPath"
+                            } else {
+                                remoteUrl
+                            }
                         } else null
 
                         val screenshotUrl = if (serverUrl != null && bookmark.screenshotAssetId != null) {
-                            com.karakept.app.utils.AssetUrlUtils.getAssetUrl(serverUrl, bookmark.screenshotAssetId)
+                            val remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bookmark.screenshotAssetId)
+                            // Try to resolve local path for offline support
+                            val fileName = ImageCacheManager.generateCacheFileName(remoteUrl)
+                            val localPath = FileUtils.getImageCacheDirectory() + "/" + fileName
+                            if (fileExists(localPath)) {
+                                "file://$localPath"
+                            } else {
+                                remoteUrl
+                            }
                         } else null
 
                         // Log which asset is being used for display (bannerImage preferred over imageUrl)

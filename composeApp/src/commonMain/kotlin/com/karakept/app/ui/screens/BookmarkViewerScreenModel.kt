@@ -68,6 +68,12 @@ class BookmarkViewerScreenModel(
     private val _precrawledAssetPath = MutableStateFlow<String?>(null)
     val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()
 
+    private val _bannerImageLocalPath = MutableStateFlow<String?>(null)
+    val bannerImageLocalPath: StateFlow<String?> = _bannerImageLocalPath.asStateFlow()
+
+    private val _screenshotLocalPath = MutableStateFlow<String?>(null)
+    val screenshotLocalPath: StateFlow<String?> = _screenshotLocalPath.asStateFlow()
+
     private val _lists = MutableStateFlow<List<KarakeepList>>(emptyList())
     val lists: StateFlow<List<KarakeepList>> = _lists.asStateFlow()
 
@@ -207,6 +213,13 @@ class BookmarkViewerScreenModel(
                         val assets = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
                         val archive = assets.find { it.assetType == "precrawledArchive" }
                         _precrawledAssetPath.value = archive?.localPath
+
+                        // Load hero assets if exist
+                        val bannerAsset = assets.find { it.assetType == "bannerImage" }
+                        _bannerImageLocalPath.value = bannerAsset?.localPath
+                        
+                        val screenshotAsset = assets.find { it.assetType == "screenshot" }
+                        _screenshotLocalPath.value = screenshotAsset?.localPath
                     } else if (!hasLoadedOnce) {
                         // Only show error if we never loaded the bookmark
                         // Don't show error during disposal/navigation

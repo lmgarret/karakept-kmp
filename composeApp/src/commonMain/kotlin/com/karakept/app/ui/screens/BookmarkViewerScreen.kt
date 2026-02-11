@@ -267,6 +267,10 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                         url
                     } else null
 
+                    // Local asset paths for offline support
+                    val bannerImageLocalPath by screenModel.bannerImageLocalPath.collectAsState()
+                    val screenshotLocalPath by screenModel.screenshotLocalPath.collectAsState()
+
                     // Log which asset is being used for display (bannerImage preferred over imageUrl)
                     if (bannerImageUrl != null) {
                         println("📸 VIEWER: Using bannerImage asset for bookmark ${state.bookmark.remoteId}")
@@ -307,7 +311,9 @@ data class BookmarkViewerScreen(val bookmarkId: Long) : Screen {
                                 }
                             } else null,
                             bannerImageUrl = bannerImageUrl,
-                            screenshotUrl = screenshotUrl
+                            screenshotUrl = screenshotUrl,
+                            bannerImageLocalPath = bannerImageLocalPath,
+                            screenshotLocalPath = screenshotLocalPath
                         )
 
                         // Content List

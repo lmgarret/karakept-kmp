@@ -23,7 +23,7 @@ object HtmlSanitizer {
             .addProtocols("a", "href", "http", "https")
             // Configure image attributes - allow data: URLs for embedded base64 images
             .addAttributes("img", "src", "alt", "title", "width", "height")
-            .addProtocols("img", "src", "http", "https", "data")
+            .addProtocols("img", "src", "http", "https", "data", "file")
             // Allow classes and styles for highlights
             .addAttributes("mark", "class", "style", "data-id")
             .addAttributes("span", "class", "style")
@@ -76,6 +76,7 @@ object HtmlSanitizer {
         val trimmed = url.trim()
         return trimmed.startsWith("http://", ignoreCase = true) ||
                trimmed.startsWith("https://", ignoreCase = true) ||
-               trimmed.startsWith("data:", ignoreCase = true)
+               trimmed.startsWith("data:", ignoreCase = true) ||
+               trimmed.startsWith("file://", ignoreCase = true)
     }
 }

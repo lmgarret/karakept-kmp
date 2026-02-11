@@ -21,7 +21,9 @@ internal fun HeroBannerSection(
     bannerHeight: Dp,
     onUrlClick: (() -> Unit)?,
     bannerImageUrl: String? = null,
-    screenshotUrl: String? = null
+    screenshotUrl: String? = null,
+    bannerImageLocalPath: String? = null,
+    screenshotLocalPath: String? = null
 ) {
     if (scrollState.firstVisibleItemIndex == 0) {
         Box(
@@ -42,7 +44,9 @@ internal fun HeroBannerSection(
                 showTags = showTags,
                 onUrlClick = onUrlClick,
                 bannerImageUrl = bannerImageUrl,
-                screenshotUrl = screenshotUrl
+                screenshotUrl = screenshotUrl,
+                bannerImageLocalPath = bannerImageLocalPath,
+                screenshotLocalPath = screenshotLocalPath
             )
         }
     }

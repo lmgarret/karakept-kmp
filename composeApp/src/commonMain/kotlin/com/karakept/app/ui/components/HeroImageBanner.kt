@@ -23,6 +23,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import java.io.File
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
@@ -68,21 +69,29 @@ fun HeroImageBanner(
     onUrlClick: (() -> Unit)? = null,
     bannerImageUrl: String? = null,
     screenshotUrl: String? = null,
+    bannerImageLocalPath: String? = null,
+    screenshotLocalPath: String? = null,
     modifier: Modifier = Modifier
 ) {
-    // Determine which image to show: bannerImageUrl (server asset) → screenshotUrl → emoji
-    val effectiveImageUrl = bannerImageUrl ?: screenshotUrl
+    // Determine which image to show: local paths first, then remote URLs, then emoji fallback
+    val effectiveImageData: Any? = when {
+        bannerImageLocalPath != null -> File(bannerImageLocalPath)
+        bannerImageUrl != null -> bannerImageUrl
+        screenshotLocalPath != null -> File(screenshotLocalPath)
+        screenshotUrl != null -> screenshotUrl
+        else -> null
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(320.dp) // Increased height for better parallax effect
     ) {
-        if (effectiveImageUrl != null) {
+        if (effectiveImageData != null) {
             // Image background
             AsyncImage(
                 model = ImageRequest.Builder(LocalPlatformContext.current)
-                    .data(effectiveImageUrl)
+                    .data(effectiveImageData)
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
