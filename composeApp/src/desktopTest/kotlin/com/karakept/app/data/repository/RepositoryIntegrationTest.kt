@@ -7,6 +7,7 @@ import com.karakept.app.data.local.entity.ServerEntity
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.utils.ImageCacheManager
 import io.ktor.client.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.serialization.kotlinx.json.*
@@ -365,6 +366,7 @@ class RepositoryIntegrationTest {
     // Mocks
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val serverRepository = mockk<ServerRepository>(relaxed = true)
+    private val imageCacheManager = mockk<ImageCacheManager>(relaxed = true)
 
     private val testDispatcher = StandardTestDispatcher()
     private val testScope = TestScope(testDispatcher)
@@ -414,7 +416,8 @@ class RepositoryIntegrationTest {
             bookmarkActionsRepository = bookmarkActionsRepository,
             settingsRepository = settingsRepository,
             serverRepository = serverRepository,
-            highlightRepository = highlightRepository
+            highlightRepository = highlightRepository,
+            imageCacheManager = imageCacheManager
         )
     }
 

@@ -4,6 +4,7 @@ import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.utils.ImageCacheManager
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -22,6 +23,7 @@ class BookmarkRepositoryUnitTest : BaseRepositoryTest() {
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val serverRepository = mockk<ServerRepository>(relaxed = true)
     private val highlightRepository = mockk<HighlightRepository>(relaxed = true)
+    private val imageCacheManager = mockk<ImageCacheManager>(relaxed = true)
 
     private val repository = BookmarkRepository(
         bookmarkDao,
@@ -30,7 +32,8 @@ class BookmarkRepositoryUnitTest : BaseRepositoryTest() {
         bookmarkActionsRepository,
         settingsRepository,
         serverRepository,
-        highlightRepository
+        highlightRepository,
+        imageCacheManager
     )
 
     @Test
