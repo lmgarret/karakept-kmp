@@ -228,6 +228,20 @@ class MainScreenModel(
             }
         }
 
+        // React to bookmark changes triggered by actions in other screens (e.g. BookmarkViewerScreen).
+        // This keeps the main list in sync without requiring a full sync.
+        screenModelScope.launch {
+            bookmarkActionsRepository.bookmarkChangedEvents.collect { remoteId ->
+                val serverId = _selectedServer.value?.id ?: return@collect
+                val updated = bookmarkRepository.getBookmarkByRemoteId(remoteId, serverId)
+                _accumulatedBookmarks.value = if (updated != null) {
+                    _accumulatedBookmarks.value.map { if (it.remoteId == remoteId) updated else it }
+                } else {
+                    _accumulatedBookmarks.value.filter { it.remoteId != remoteId }
+                }
+            }
+        }
+
         // Listen to undo events to restore bookmarks to the accumulated list
         screenModelScope.launch {
             bookmarkActionController.undoCompletedEvents.collect { event ->

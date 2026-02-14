@@ -81,6 +81,10 @@ class BookmarkRepository(
         return bookmarkDao.getBookmarksForServer(server.id)
     }
 
+    suspend fun getBookmarkByRemoteId(remoteId: Long, serverId: String): BookmarkEntity? {
+        return bookmarkDao.getBookmarkByRemoteId(remoteId, serverId)
+    }
+
     private val mutex = kotlinx.coroutines.sync.Mutex()
     
     private val _syncProgress = kotlinx.coroutines.flow.MutableStateFlow<com.karakept.app.data.model.SyncProgress>(com.karakept.app.data.model.SyncProgress.Idle)

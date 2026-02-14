@@ -19,6 +19,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 
 /**
  * Repository for handling bookmark actions with offline-first approach.
@@ -36,10 +38,15 @@ class BookmarkActionsRepository(
     // Lazy injection to break circular dependency
     private var _bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository? = null
     private var _highlightDao: com.karakept.app.data.local.dao.HighlightDao? = null
-    
+
     // Track when actions are being performed
     private val _isPerformingAction = kotlinx.coroutines.flow.MutableStateFlow(false)
     val isPerformingAction: kotlinx.coroutines.flow.StateFlow<Boolean> = _isPerformingAction
+
+    // Emits the remoteId of a bookmark whenever it has been locally modified by an action.
+    // Observers (e.g. MainScreenModel) can react to keep their lists up-to-date without a full sync.
+    private val _bookmarkChangedEvents = MutableSharedFlow<Long>(extraBufferCapacity = 16)
+    val bookmarkChangedEvents: SharedFlow<Long> = _bookmarkChangedEvents
     
     // Cache for tag IDs to handle read/unread toggling race conditions
     private val recentlyAddedReadTagIds = mutableMapOf<String, String>() // BookmarkID -> TagID
@@ -75,6 +82,8 @@ class BookmarkActionsRepository(
                     actionData = "{}"
                 )
 
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
+
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
             }
@@ -98,6 +107,8 @@ class BookmarkActionsRepository(
                     actionType = PendingActionType.UNARCHIVE,
                     actionData = "{}"
                 )
+
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
 
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
@@ -126,6 +137,8 @@ class BookmarkActionsRepository(
                     actionType = if (currentlyFavourited) PendingActionType.UNFAVOURITE else PendingActionType.FAVOURITE,
                     actionData = "{}"
                 )
+
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
 
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
@@ -172,6 +185,8 @@ class BookmarkActionsRepository(
                     )
                 }
 
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
+
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
             }
@@ -199,9 +214,9 @@ class BookmarkActionsRepository(
                 // If so, delete it instead of queuing a new MARK_UNREAD action.
                 // This effectively cancels the previous action locally, preventing the race condition.
                 val pendingStats = pendingActionDao.getPendingActionsList(serverId)
-                val pendingRead = pendingStats.find { 
-                    it.bookmarkRemoteId == bookmarkRemoteId && 
-                    it.actionType == PendingActionType.MARK_READ 
+                val pendingRead = pendingStats.find {
+                    it.bookmarkRemoteId == bookmarkRemoteId &&
+                    it.actionType == PendingActionType.MARK_READ
                 }
 
                 if (pendingRead != null) {
@@ -216,6 +231,8 @@ class BookmarkActionsRepository(
                         actionData = json.encodeToString(mapOf("tagName" to "karakept:read"))
                     )
                 }
+
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
 
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
@@ -245,6 +262,8 @@ class BookmarkActionsRepository(
                     actionType = PendingActionType.DELETE,
                     actionData = json.encodeToString(mapOf("originalRemoteId" to originalRemoteId))
                 )
+
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
 
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
