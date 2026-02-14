@@ -42,10 +42,10 @@ actual fun HtmlRenderer(
     customFontSize: Int,
     customFontFamily: ReaderFontFamily,
     localFilePath: String?,
-    highlights: List<com.karakept.app.data.model.Highlight> = emptyList(),
-    onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
-    onDeleteHighlight: (String) -> Unit = {},
-    onHighlightClick: (String) -> Unit = {},
+    highlights: List<com.karakept.app.data.model.Highlight>,
+    onCreateHighlight: (String, Int, Int, String?, String?) -> Unit,
+    onDeleteHighlight: (String) -> Unit,
+    onHighlightClick: (String) -> Unit,
     onHighlightPosition: ((String, HighlightPosition?) -> Unit)?
 ) {
     // Debug output

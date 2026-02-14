@@ -422,6 +422,24 @@ actual fun HtmlRenderer(
             } catch(e) { log("Get highlight position error: " + e.message); return null; }
         }
 
+        function scrollToHighlight(highlightId) {
+            try {
+                const marks = document.querySelectorAll('mark.karakept-highlight[data-id="' + highlightId + '"]');
+                if (marks.length === 0) {
+                    log("scrollToHighlight: no marks found for id=" + highlightId);
+                    return false;
+                }
+
+                // Scroll the first mark element into view with some offset from the top
+                marks[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                log("scrollToHighlight: scrolled to highlight id=" + highlightId);
+                return true;
+            } catch(e) {
+                log("scrollToHighlight error: " + e.message);
+                return false;
+            }
+        }
+
         // Track selection changes for ActionMode positioning
         document.addEventListener('selectionchange', function() {
             const selection = window.getSelection();

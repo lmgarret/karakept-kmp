@@ -30,6 +30,9 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmarks WHERE remoteId = :remoteId AND serverId = :serverId LIMIT 1")
     suspend fun getBookmarkByRemoteId(remoteId: Long, serverId: String): BookmarkEntity?
 
+    @Query("SELECT * FROM bookmarks WHERE originalRemoteId = :originalRemoteId AND serverId = :serverId LIMIT 1")
+    suspend fun getBookmarkByOriginalRemoteId(originalRemoteId: String, serverId: String): BookmarkEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBookmark(bookmark: BookmarkEntity)
 

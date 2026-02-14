@@ -93,6 +93,38 @@ Note: This requires `fakeroot` and other packaging tools. On the host machine:
 sudo apt install fakeroot
 ```
 
+## 🧪 Testing
+
+Karakept uses a multi-layered testing strategy to ensure reliability across platforms.
+
+### 1. Fast Unit Tests (`commonTest`)
+These tests run without any external dependencies (mocked) and provide sub-second feedback for core business logic.
+```bash
+./gradlew :composeApp:test
+```
+
+### 2. Integration Tests (`desktopTest`)
+These tests orchestrate a local Karakeep environment using Docker Compose to verify full end-to-end flows.
+*   **Requirements**: Docker and `docker-compose` must be installed.
+*   **Authentication**: The test automatically registers a unique test user and provisions an API key via tRPC.
+
+Run integration tests:
+```bash
+./gradlew :composeApp:desktopTest
+```
+
+### 3. Tips for Testing
+*   **Incremental Builds**: Gradle marks tests as `UP-TO-DATE` if nothing changed. To force a fresh run, use:
+    ```bash
+    ./gradlew desktopTest --rerun-tasks
+    ```
+*   **Detailed Output**: To see registration steps and Docker logs in the terminal:
+    ```bash
+    ./gradlew desktopTest --info
+    ```
+*   **HTML Reports**: View detailed reports in your browser:
+    `composeApp/build/reports/tests/desktopTest/index.html`
+
 ## 📋 Other Useful Commands
 
 ```bash
@@ -105,7 +137,7 @@ sudo apt install fakeroot
 # Clean build
 ./gradlew clean
 
-# Run tests
+# Run tests (alias for all targets)
 ./gradlew test
 
 # Stop Gradle daemon

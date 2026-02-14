@@ -293,7 +293,7 @@ object MainScreen : Screen {
         }
 
         // Back Handler for filter panel
-        androidx.activity.compose.BackHandler(enabled = showFilterDialog) {
+        com.karakept.app.ui.components.BackHandler(enabled = showFilterDialog) {
             showFilterDialog = false
         }
 
