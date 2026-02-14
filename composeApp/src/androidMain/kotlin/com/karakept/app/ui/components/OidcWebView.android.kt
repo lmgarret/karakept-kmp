@@ -68,9 +68,11 @@ actual fun OidcWebView(
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
 
-                        // After OIDC callback, Karakeep redirects to its main app
+                        // After OIDC callback, Karakeep redirects to its main app.
                         // We detect a successful login when we land back on the server
-                        // and the URL no longer contains auth-specific paths
+                        // and the URL no longer contains auth-specific paths.
+                        // Return true to intercept the navigation so the WebView does
+                        // not load Karakeep's web UI.
                         if (url.startsWith(baseUrl) &&
                             !url.contains("/api/auth/") &&
                             !url.contains("/signin") &&
@@ -85,29 +87,9 @@ actual fun OidcWebView(
                                     onError = onError
                                 )
                             }
+                            return true // intercept – do not let WebView load the page
                         }
                         return false
-                    }
-
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        super.onPageFinished(view, url)
-                        if (url == null || callbackCalled) return
-
-                        // Also check after page load in case we navigated to the main app
-                        if (url.startsWith(baseUrl) &&
-                            !url.contains("/api/auth/") &&
-                            !url.contains("/signin")
-                        ) {
-                            callbackCalled = true
-                            scope.launch {
-                                fetchApiKey(
-                                    apiKeyUrl = apiKeyUrl,
-                                    cookieHeader = CookieManager.getInstance().getCookie(baseUrl) ?: "",
-                                    onApiKeyObtained = onApiKeyObtained,
-                                    onError = onError
-                                )
-                            }
-                        }
                     }
                 }
 

@@ -78,12 +78,15 @@ actual fun OidcWebView(
             val locationListener = ChangeListener<String> { _, _, newLocation ->
                 if (newLocation == null || callbackCalled.get()) return@ChangeListener
 
-                // Detect navigation back to the main Karakeep app after login
+                // Detect navigation back to the main Karakeep app after login.
+                // Load a blank page immediately to prevent the Karakeep web UI
+                // from rendering while we fetch the API key in the background.
                 if (newLocation.startsWith(baseUrl) &&
                     !newLocation.contains("/api/auth/") &&
                     !newLocation.contains("/signin")
                 ) {
                     if (callbackCalled.compareAndSet(false, true)) {
+                        webEngine.load("about:blank") // stop loading the Karakeep web UI
                         scope.launch {
                             fetchApiKeyDesktop(
                                 apiKeyUrl = apiKeyUrl,
