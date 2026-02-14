@@ -2,7 +2,6 @@ package com.karakept.app.ui.components
 
 import android.annotation.SuppressLint
 import android.webkit.CookieManager
-import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -21,15 +20,23 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
+ * The custom URL scheme used as the OIDC callback.
+ *
+ * After a successful OIDC login, Karakeep's NextAuth redirects to this URL.
+ * Since it's not a real URL, the WebView cannot load it and
+ * [WebViewClient.shouldOverrideUrlLoading] intercepts it reliably —
+ * at which point all session cookies have already been set by the auth flow.
+ */
+private const val MOBILE_CALLBACK_URL = "karakept://auth-callback"
+
+/**
  * Android implementation of [OidcWebView].
  *
- * Uses an Android WebView with cookies enabled to load the Karakeep
- * sign-in page. After the user authenticates, it calls the Karakeep
- * `/api/user/apiKey` endpoint (with the session cookie) to retrieve
- * the user's API key.
- *
- * The API key endpoint returns a JSON object like:
- * `{"apiKey": "ak_..."}`
+ * Loads the Karakeep sign-in page with [MOBILE_CALLBACK_URL] as the OAuth
+ * callbackUrl. After the user authenticates through OIDC, NextAuth redirects
+ * to [MOBILE_CALLBACK_URL], which is intercepted by the WebView client.
+ * At this point the session cookie is fully set, so we call the Karakeep
+ * `/api/user/apiKey` endpoint to retrieve the user's API key.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -41,10 +48,10 @@ actual fun OidcWebView(
 ) {
     val scope = rememberCoroutineScope()
     val baseUrl = serverUrl.trimEnd('/')
-    val signInUrl = "$baseUrl/api/auth/signin"
+    val encodedCallback = java.net.URLEncoder.encode(MOBILE_CALLBACK_URL, "UTF-8")
+    val signInUrl = "$baseUrl/api/auth/signin?callbackUrl=$encodedCallback"
     val apiKeyUrl = "$baseUrl/api/user/apiKey"
 
-    // Track whether we already called the callback to avoid duplicate calls
     var callbackCalled by remember { mutableStateOf(false) }
 
     AndroidView(
@@ -57,7 +64,6 @@ actual fun OidcWebView(
                     databaseEnabled = true
                 }
 
-                // Enable cookies (required for session-based auth)
                 CookieManager.getInstance().setAcceptCookie(true)
                 CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
@@ -68,27 +74,24 @@ actual fun OidcWebView(
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
 
-                        // After OIDC callback, Karakeep redirects to its main app.
-                        // We detect a successful login when we land back on the server
-                        // and the URL no longer contains auth-specific paths.
-                        // Return true to intercept the navigation so the WebView does
-                        // not load Karakeep's web UI.
-                        if (url.startsWith(baseUrl) &&
-                            !url.contains("/api/auth/") &&
-                            !url.contains("/signin") &&
-                            !callbackCalled
-                        ) {
+                        // Intercept the custom mobile callback URL.
+                        // At this point all session cookies from the OIDC flow are set.
+                        if (url.startsWith(MOBILE_CALLBACK_URL) && !callbackCalled) {
                             callbackCalled = true
+                            // Flush cookies to make sure CookieManager has them all
+                            CookieManager.getInstance().flush()
+                            val cookieHeader = CookieManager.getInstance().getCookie(baseUrl) ?: ""
                             scope.launch {
                                 fetchApiKey(
                                     apiKeyUrl = apiKeyUrl,
-                                    cookieHeader = CookieManager.getInstance().getCookie(baseUrl) ?: "",
+                                    cookieHeader = cookieHeader,
                                     onApiKeyObtained = onApiKeyObtained,
-                                    onError = onError
+                                    onError = onError,
                                 )
                             }
-                            return true // intercept – do not let WebView load the page
+                            return true // do not navigate to karakept://
                         }
+
                         return false
                     }
                 }
@@ -100,11 +103,7 @@ actual fun OidcWebView(
 }
 
 /**
- * Fetches the API key from the Karakeep server using the active web session cookie.
- *
- * Karakeep exposes a `/api/user/apiKey` endpoint (part of the Next.js web app)
- * that returns the user's API key when called with a valid session cookie.
- * This is not part of the public REST API but is used by the official web client.
+ * Fetches the API key from Karakeep using the active web session cookie.
  */
 private suspend fun fetchApiKey(
     apiKeyUrl: String,
@@ -125,7 +124,6 @@ private suspend fun fetchApiKey(
         val responseCode = connection.responseCode
         if (responseCode == 200) {
             val body = connection.inputStream.bufferedReader().readText()
-            // Expected response: {"apiKey":"ak_..."}
             val apiKey = extractApiKeyFromJson(body)
             if (apiKey != null) {
                 withContext(Dispatchers.Main) { onApiKeyObtained(apiKey) }
@@ -149,10 +147,8 @@ private suspend fun fetchApiKey(
 
 /**
  * Parses the API key from a JSON response like `{"apiKey":"ak_..."}`.
- * Uses a simple string search to avoid requiring a JSON library dependency.
  */
 private fun extractApiKeyFromJson(json: String): String? {
-    // Simple JSON field extraction: find "apiKey":"value"
     val pattern = Regex(""""apiKey"\s*:\s*"([^"]+)"""")
     return pattern.find(json)?.groupValues?.get(1)
 }

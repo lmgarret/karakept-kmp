@@ -24,15 +24,22 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.JPanel
 
 /**
+ * The custom URL scheme used as the OIDC callback.
+ *
+ * After a successful OIDC login, Karakeep's NextAuth redirects to this URL.
+ * JavaFX's WebEngine fires a location change to this scheme which we intercept,
+ * at which point all session cookies from the auth flow are already set.
+ */
+private const val MOBILE_CALLBACK_URL = "karakept://auth-callback"
+
+/**
  * Desktop (JVM) implementation of [OidcWebView] using JavaFX WebView.
  *
- * Loads the Karakeep sign-in page in a JavaFX WebView. After the user
- * authenticates, it detects the redirect back to the main app and then
- * calls `/api/user/apiKey` with the session cookies to retrieve the API key.
- *
- * Note: A [java.net.CookieManager] is installed as the default [CookieHandler]
- * so that JavaFX WebEngine's HTTP requests (which route through the JDK HTTP
- * stack) store their cookies in a location we can read.
+ * Loads the Karakeep sign-in page with [MOBILE_CALLBACK_URL] as the OAuth
+ * callbackUrl. After OIDC login, NextAuth redirects to [MOBILE_CALLBACK_URL],
+ * which is detected via a [javafx.beans.value.ChangeListener] on the
+ * WebEngine's location property. At that point all session cookies are set,
+ * so we call `/api/user/apiKey` to retrieve the API key.
  */
 @Composable
 actual fun OidcWebView(
@@ -43,16 +50,14 @@ actual fun OidcWebView(
 ) {
     val scope = rememberCoroutineScope()
     val baseUrl = serverUrl.trimEnd('/')
-    val signInUrl = "$baseUrl/api/auth/signin"
+    val encodedCallback = java.net.URLEncoder.encode(MOBILE_CALLBACK_URL, "UTF-8")
+    val signInUrl = "$baseUrl/api/auth/signin?callbackUrl=$encodedCallback"
     val apiKeyUrl = "$baseUrl/api/user/apiKey"
 
-    // Prevent duplicate callbacks
     val callbackCalled = remember { AtomicBoolean(false) }
 
-    // Force software rendering for JavaFX (required in headless/CI environments)
     System.setProperty("prism.order", "sw")
 
-    // Install a CookieManager so cookies from the WebView session are accessible
     val cookieManager = remember {
         val manager = CookieManager()
         if (CookieHandler.getDefault() == null) {
@@ -78,15 +83,11 @@ actual fun OidcWebView(
             val locationListener = ChangeListener<String> { _, _, newLocation ->
                 if (newLocation == null || callbackCalled.get()) return@ChangeListener
 
-                // Detect navigation back to the main Karakeep app after login.
-                // Load a blank page immediately to prevent the Karakeep web UI
-                // from rendering while we fetch the API key in the background.
-                if (newLocation.startsWith(baseUrl) &&
-                    !newLocation.contains("/api/auth/") &&
-                    !newLocation.contains("/signin")
-                ) {
+                // Detect the custom mobile callback URL.
+                // At this point all session cookies from the OIDC flow are set.
+                if (newLocation.startsWith(MOBILE_CALLBACK_URL)) {
                     if (callbackCalled.compareAndSet(false, true)) {
-                        webEngine.load("about:blank") // stop loading the Karakeep web UI
+                        webEngine.load("about:blank")
                         scope.launch {
                             fetchApiKeyDesktop(
                                 apiKeyUrl = apiKeyUrl,
