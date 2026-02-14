@@ -106,7 +106,7 @@ class ListRepositoryIntegrationTest : BaseDockerIntegrationTest() {
         assertTrue(before.any { it.id == listId }, "List should exist locally after first refresh")
 
         // Delete the list via tRPC
-        val deleteUrl = "$baseUrl/api/trpc/lists.deleteList?batch=1"
+        val deleteUrl = "$baseUrl/api/trpc/lists.delete?batch=1"
         val deleteBody = """{"0": {"json": {"listId": "$listId"}}}"""
         postJson(deleteUrl, deleteBody, apiKey)
 

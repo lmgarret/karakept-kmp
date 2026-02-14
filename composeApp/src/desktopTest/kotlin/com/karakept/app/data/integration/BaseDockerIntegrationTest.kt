@@ -127,7 +127,7 @@ abstract class BaseDockerIntegrationTest {
         }
 
         fun seedListViaTrpc(apiBaseUrl: String, token: String, name: String): String {
-            val trpcUrl = "$apiBaseUrl/api/trpc/lists.createList?batch=1"
+            val trpcUrl = "$apiBaseUrl/api/trpc/lists.create?batch=1"
             val body = """{"0": {"json": {"name": "$name", "icon": "📋", "type": "manual"}}}"""
 
             println("Seeding list via tRPC: $name")

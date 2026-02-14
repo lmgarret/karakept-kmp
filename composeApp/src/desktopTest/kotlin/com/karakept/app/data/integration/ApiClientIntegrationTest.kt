@@ -116,7 +116,7 @@ class ApiClientIntegrationTest : BaseDockerIntegrationTest() {
 
         assertNotNull(bookmark)
         assertEquals(remoteId, bookmark.id)
-        assertEquals(url, bookmark.url)
+        assertEquals(url, bookmark.content?.url)
     }
 
     // -------------------------------------------------------------------------
@@ -133,8 +133,8 @@ class ApiClientIntegrationTest : BaseDockerIntegrationTest() {
 
         assertNotNull(bookmark)
         assertNotNull(bookmark.id)
-        assertEquals(url, bookmark.url)
-        println("Created bookmark: id=${bookmark.id}, url=${bookmark.url}")
+        assertEquals(url, bookmark.content?.url)
+        println("Created bookmark: id=${bookmark.id}, url=${bookmark.content?.url}")
     }
 
     @Test
@@ -205,9 +205,9 @@ class ApiClientIntegrationTest : BaseDockerIntegrationTest() {
 
         val response = remoteDataSource.attachTags(testServer, remoteId, tagsToAdd)
 
+        // response.attached contains tag IDs (not names); verify the count matches
         assertNotNull(response.attached)
-        val attachedNames = response.attached!!.mapNotNull { it.name }
-        assertTrue(tagsToAdd.all { it in attachedNames }, "All tags should be attached: expected $tagsToAdd, got $attachedNames")
+        assertEquals(tagsToAdd.size, response.attached!!.size, "Should have attached ${tagsToAdd.size} tags")
 
         // Verify on server
         val bookmark = remoteDataSource.fetchBookmark(testServer, remoteId)

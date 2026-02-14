@@ -321,6 +321,6 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
 
         // Verify it's on the server
         val remote = remoteDataSource.fetchBookmark(testServer, bookmark!!.originalRemoteId)
-        assertEquals(url, remote.url)
+        assertEquals(url, remote.content?.url)
     }
 }
