@@ -35,6 +35,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 
 class LoginScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -144,6 +149,39 @@ class LoginScreen : Screen {
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "or",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = { if (url.isNotBlank()) navigator.push(OidcLoginScreen(serverUrl = url)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = url.isNotBlank()
+                ) {
+                    Text("Sign in with SSO / OIDC")
+                }
+
+                Text(
+                    text = "Requires Karakeep v0.22+ with native OIDC configured",
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

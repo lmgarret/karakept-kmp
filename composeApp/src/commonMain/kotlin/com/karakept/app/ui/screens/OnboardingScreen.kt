@@ -51,6 +51,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.compose.material3.HorizontalDivider
 
 private const val STEP_WELCOME = 0
 private const val STEP_PERMISSIONS = 1
@@ -108,7 +109,10 @@ class OnboardingScreen : Screen {
                         )
                         STEP_SERVER -> ServerConnectionStep(
                             screenModel = screenModel,
-                            onConnected = { onFinish() }
+                            onConnected = { onFinish() },
+                            onSsoLogin = { serverUrl ->
+                                navigator.push(OidcLoginScreen(serverUrl = serverUrl, isOnboarding = true))
+                            }
                         )
                     }
                 }
@@ -324,7 +328,8 @@ private fun PermissionsStep(
 @Composable
 private fun ServerConnectionStep(
     screenModel: OnboardingScreenModel,
-    onConnected: () -> Unit
+    onConnected: () -> Unit,
+    onSsoLogin: (serverUrl: String) -> Unit,
 ) {
     var url by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
@@ -460,6 +465,41 @@ private fun ServerConnectionStep(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            HorizontalDivider(modifier = Modifier.weight(1f))
+            Text(
+                text = "or",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            HorizontalDivider(modifier = Modifier.weight(1f))
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedButton(
+            onClick = { if (url.isNotBlank()) onSsoLogin(url) },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = url.isNotBlank()
+        ) {
+            Text("Sign in with SSO / OIDC")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Requires Karakeep v0.22+ with native OIDC configured",
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

@@ -18,6 +18,7 @@ import com.karakept.api.infrastructure.ApiClient
 import com.karakept.api.client.*
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.ui.screens.LoginScreenModel
+import com.karakept.app.ui.screens.OidcLoginScreenModel
 import com.karakept.app.ui.screens.OnboardingScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
@@ -101,6 +102,7 @@ val appModule = module {
     single { BookmarkActionController(get(), get(), get(), get()) }
 
     factory { LoginScreenModel(get(), get(), get()) }
+    factory { OidcLoginScreenModel(get(), get()) }
     factory { OnboardingScreenModel(get(), get(), get()) }
     single { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
