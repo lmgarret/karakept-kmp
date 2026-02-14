@@ -106,8 +106,14 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
                     }
                     initialScreens = screens
                 } else {
-                    println("   No servers, showing LoginScreen")
-                    initialScreens = listOf(com.karakept.app.ui.screens.LoginScreen())
+                    val onboardingCompleted = settingsRepository.onboardingCompleted.first()
+                    if (!onboardingCompleted) {
+                        println("   First launch, showing OnboardingScreen")
+                        initialScreens = listOf(com.karakept.app.ui.screens.OnboardingScreen())
+                    } else {
+                        println("   No servers, showing LoginScreen")
+                        initialScreens = listOf(com.karakept.app.ui.screens.LoginScreen())
+                    }
                 }
             }
 
