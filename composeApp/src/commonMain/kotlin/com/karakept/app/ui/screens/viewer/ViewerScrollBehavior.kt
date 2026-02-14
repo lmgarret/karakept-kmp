@@ -10,11 +10,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.utils.HapticUtils
+import kotlinx.coroutines.launch
 
 /**
  * Tracks state for the pull-past-end action indicator.
@@ -31,6 +37,11 @@ data class ScrollEndActionState(
 
 /**
  * Remembers FAB visibility state based on scroll direction and scroll-end action functionality.
+ *
+ * Returns a [Pair] of:
+ * - [Boolean]: whether the FAB should be visible
+ * - [NestedScrollConnection]: must be applied to the LazyColumn via `Modifier.nestedScroll()`
+ *   to enable pull-past-end detection.
  *
  * @param scrollEndAction The action to perform when the user pulls past the end of the article.
  *   Use [SwipeAction.NONE] to disable this feature.
@@ -50,7 +61,7 @@ internal fun rememberFabVisibilityState(
     scrollEndAction: SwipeAction = SwipeAction.NONE,
     onScrollEndAction: ((SwipeAction) -> Unit)? = null,
     onScrollEndActionStateChanged: ((ScrollEndActionState) -> Unit)? = null
-): Boolean {
+): Pair<Boolean, NestedScrollConnection> {
     var previousScrollOffset by remember { mutableStateOf(0) }
     var fabVisible by remember { mutableStateOf(true) }
     var hasTriggeredAutoRead by remember { mutableStateOf(false) }
@@ -58,8 +69,92 @@ internal fun rememberFabVisibilityState(
     var hasTriggeredScrollEndAction by remember { mutableStateOf(false) }
     var overscrollAccumulator by remember { mutableFloatStateOf(0f) }
 
-    // Threshold in virtual scroll units to trigger the action
-    val triggerThreshold = 300
+    // Threshold in pixels to trigger the action
+    val triggerThreshold = 300f
+
+    val scope = rememberCoroutineScope()
+
+    // NestedScrollConnection captures unconsumed scroll at the bottom boundary (overscroll)
+    val nestedScrollConnection = remember(scrollEndAction, onScrollEndAction, onScrollEndActionStateChanged) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // Reset accumulator when scrolling up while at the bottom
+                if (available.y > 0 && overscrollAccumulator > 0 && !hasTriggeredScrollEndAction) {
+                    overscrollAccumulator = 0f
+                    onScrollEndActionStateChanged?.invoke(
+                        ScrollEndActionState(
+                            overscrollPx = 0f,
+                            triggered = false,
+                            action = scrollEndAction
+                        )
+                    )
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                // available.y < 0 means downward scroll that was not consumed (we're at the bottom)
+                if (scrollEndAction == SwipeAction.NONE || hasTriggeredScrollEndAction) return Offset.Zero
+                if (available.y >= 0) return Offset.Zero
+
+                // Only trigger after user has scrolled meaningfully into the content
+                if (maxScrollReached < 500) return Offset.Zero
+
+                val delta = -available.y // positive value = how much extra downward scroll
+                overscrollAccumulator = (overscrollAccumulator + delta).coerceIn(0f, triggerThreshold)
+
+                onScrollEndActionStateChanged?.invoke(
+                    ScrollEndActionState(
+                        overscrollPx = overscrollAccumulator,
+                        triggered = false,
+                        action = scrollEndAction
+                    )
+                )
+
+                // Haptic at 50%
+                val progress = overscrollAccumulator / triggerThreshold
+                if (progress >= 0.5f && (overscrollAccumulator - delta) / triggerThreshold < 0.5f) {
+                    HapticUtils.performMedium()
+                }
+
+                if (overscrollAccumulator >= triggerThreshold) {
+                    HapticUtils.performMedium()
+                    hasTriggeredScrollEndAction = true
+                    onScrollEndActionStateChanged?.invoke(
+                        ScrollEndActionState(
+                            overscrollPx = triggerThreshold,
+                            triggered = true,
+                            action = scrollEndAction
+                        )
+                    )
+                    scope.launch {
+                        onScrollEndAction?.invoke(scrollEndAction)
+                    }
+                }
+
+                return Offset.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                // Reset accumulator after fling settles
+                if (overscrollAccumulator > 0 && !hasTriggeredScrollEndAction) {
+                    overscrollAccumulator = 0f
+                    onScrollEndActionStateChanged?.invoke(
+                        ScrollEndActionState(
+                            overscrollPx = 0f,
+                            triggered = false,
+                            action = scrollEndAction
+                        )
+                    )
+                }
+                return Velocity.Zero
+            }
+        }
+    }
 
     LaunchedEffect(scrollState.firstVisibleItemScrollOffset, scrollState.firstVisibleItemIndex) {
         val currentOffset = scrollState.firstVisibleItemIndex * 1000 + scrollState.firstVisibleItemScrollOffset
@@ -106,74 +201,9 @@ internal fun rememberFabVisibilityState(
                 }
             }
         }
-
-        // Pull-past-end action: detect when user is at the bottom and accumulate overscroll
-        if (scrollEndAction != SwipeAction.NONE && !hasTriggeredScrollEndAction && maxScrollReached >= 500) {
-            val layoutInfo = scrollState.layoutInfo
-            val totalItems = layoutInfo.totalItemsCount
-            val visibleItemsInfo = layoutInfo.visibleItemsInfo
-
-            if (visibleItemsInfo.isNotEmpty() && totalItems > 0) {
-                val lastVisibleItem = visibleItemsInfo.last()
-                val isLastItem = lastVisibleItem.index == totalItems - 1
-
-                if (isLastItem) {
-                    val itemBottom = lastVisibleItem.offset + lastVisibleItem.size
-                    val viewportBottom = layoutInfo.viewportEndOffset
-                    val distancePastEnd = viewportBottom - itemBottom
-
-                    if (distancePastEnd > 0 && scrollingDown) {
-                        // User is at the bottom and trying to scroll further down
-                        overscrollAccumulator = (overscrollAccumulator + distancePastEnd.toFloat())
-                            .coerceIn(0f, triggerThreshold.toFloat())
-
-                        val progress = overscrollAccumulator / triggerThreshold
-                        onScrollEndActionStateChanged?.invoke(
-                            ScrollEndActionState(
-                                overscrollPx = overscrollAccumulator,
-                                triggered = false,
-                                action = scrollEndAction
-                            )
-                        )
-
-                        // Haptic feedback at 50% threshold
-                        if (progress >= 0.5f && overscrollAccumulator - distancePastEnd < triggerThreshold * 0.5f) {
-                            HapticUtils.performMedium()
-                        }
-
-                        if (overscrollAccumulator >= triggerThreshold) {
-                            // Trigger the action
-                            HapticUtils.performMedium()
-                            onScrollEndAction?.invoke(scrollEndAction)
-                            hasTriggeredScrollEndAction = true
-                            onScrollEndActionStateChanged?.invoke(
-                                ScrollEndActionState(
-                                    overscrollPx = triggerThreshold.toFloat(),
-                                    triggered = true,
-                                    action = scrollEndAction
-                                )
-                            )
-                        }
-                    } else if (!scrollingDown) {
-                        // Reset accumulator when scrolling back up
-                        overscrollAccumulator = 0f
-                        onScrollEndActionStateChanged?.invoke(
-                            ScrollEndActionState(
-                                overscrollPx = 0f,
-                                triggered = false,
-                                action = scrollEndAction
-                            )
-                        )
-                    }
-                } else {
-                    // Not at last item, reset
-                    overscrollAccumulator = 0f
-                }
-            }
-        }
     }
 
-    return fabVisible
+    return Pair(fabVisible, nestedScrollConnection)
 }
 
 /**

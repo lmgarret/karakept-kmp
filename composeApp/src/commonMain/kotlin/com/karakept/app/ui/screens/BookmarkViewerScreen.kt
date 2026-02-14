@@ -45,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.SwipeAction
@@ -191,7 +193,7 @@ data class BookmarkViewerScreen(
         }
 
         // Custom hooks for scroll behavior
-        val fabVisible = if (loadingState is BookmarkLoadingState.FullyLoaded) {
+        val (fabVisible, scrollEndNestedScrollConnection) = if (loadingState is BookmarkLoadingState.FullyLoaded) {
             val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
             rememberFabVisibilityState(
                 scrollState = scrollState,
@@ -231,7 +233,7 @@ data class BookmarkViewerScreen(
                 }
             )
         } else {
-            true
+            Pair(true, object : NestedScrollConnection {})
         }
 
         val showStickyTitle = rememberStickyTitleVisibility(
@@ -376,6 +378,7 @@ data class BookmarkViewerScreen(
                             state = scrollState,
                             modifier = Modifier
                                 .fillMaxSize()
+                                .nestedScroll(scrollEndNestedScrollConnection)
                                 .then(if (selectedHighlightId != null && selectedHighlight != null) Modifier.blur(8.dp) else Modifier)
                         ) {
                             // Transparent spacer for the header
