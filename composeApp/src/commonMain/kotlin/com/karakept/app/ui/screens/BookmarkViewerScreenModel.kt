@@ -62,6 +62,9 @@ class BookmarkViewerScreenModel(
     val autoMarkReadOnScroll: StateFlow<Boolean> = settingsRepository.autoMarkReadOnScroll
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val scrollEndAction: StateFlow<com.karakept.app.data.model.SwipeAction> = settingsRepository.scrollEndAction
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), com.karakept.app.data.model.SwipeAction.NONE)
+
     val showTags: StateFlow<Boolean> = settingsRepository.showTags
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
 

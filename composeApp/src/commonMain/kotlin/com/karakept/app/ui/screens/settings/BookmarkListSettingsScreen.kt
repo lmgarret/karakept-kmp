@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Speed
@@ -47,10 +46,10 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.ui.components.ReadingSpeedDialog
+import com.karakept.app.ui.components.SwipeActionSettingItem
 import com.karakept.app.ui.screens.FilterManagementScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
-import com.karakept.app.ui.components.getIcon
-import androidx.compose.foundation.layout.width
+
 
 class BookmarkListSettingsScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -372,114 +371,3 @@ private fun LayoutOption(
     }
 }
 
-@Composable
-private fun SwipeActionSettingItem(
-    title: String,
-    description: String,
-    selectedAction: com.karakept.app.data.model.SwipeAction,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onActionSelected: (com.karakept.app.data.model.SwipeAction) -> Unit
-) {
-    var showDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-
-    if (showDialog) {
-        androidx.compose.ui.window.Dialog(onDismissRequest = { showDialog = false }) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(vertical = 16.dp)
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-                    )
-                    
-                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        com.karakept.app.data.model.SwipeAction.entries.forEach { action ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onActionSelected(action)
-                                        showDialog = false
-                                    }
-                                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = action == selectedAction,
-                                    onClick = {
-                                        onActionSelected(action)
-                                        showDialog = false
-                                    }
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = action.getIcon(),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = action.displayName,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
-                        }
-                    }
-                    
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(end = 24.dp, top = 8.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        androidx.compose.material3.TextButton(onClick = { showDialog = false }) {
-                            Text("Cancel")
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { showDialog = true }
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(end = 16.dp)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = selectedAction.displayName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "Select"
-            )
-        }
-    }
-}

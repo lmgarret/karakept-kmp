@@ -7,14 +7,36 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import com.karakept.app.data.model.SwipeAction
+import com.karakept.app.utils.HapticUtils
 
 /**
- * Remembers FAB visibility state based on scroll direction and auto-mark-as-read functionality
+ * Tracks state for the pull-past-end action indicator.
+ *
+ * @property overscrollPx How far the user has pulled past the end (0..triggerThresholdPx).
+ * @property triggered Whether the threshold has been reached and the action was fired.
+ * @property action The configured action.
+ */
+data class ScrollEndActionState(
+    val overscrollPx: Float,
+    val triggered: Boolean,
+    val action: SwipeAction
+)
+
+/**
+ * Remembers FAB visibility state based on scroll direction and scroll-end action functionality.
+ *
+ * @param scrollEndAction The action to perform when the user pulls past the end of the article.
+ *   Use [SwipeAction.NONE] to disable this feature.
+ * @param onScrollEndAction Called when the scroll-end threshold is reached with the configured action.
+ * @param onScrollEndActionStateChanged Called with updated [ScrollEndActionState] so the UI can
+ *   render the pull indicator.
  */
 @Composable
 internal fun rememberFabVisibilityState(
@@ -24,12 +46,20 @@ internal fun rememberFabVisibilityState(
     isBookmarkRead: Boolean,
     onMarkAsRead: () -> Unit,
     onUnmarkAsRead: () -> Unit,
-    onShowSnackbarWithUndo: () -> Unit
+    onShowSnackbarWithUndo: () -> Unit,
+    scrollEndAction: SwipeAction = SwipeAction.NONE,
+    onScrollEndAction: ((SwipeAction) -> Unit)? = null,
+    onScrollEndActionStateChanged: ((ScrollEndActionState) -> Unit)? = null
 ): Boolean {
     var previousScrollOffset by remember { mutableStateOf(0) }
     var fabVisible by remember { mutableStateOf(true) }
     var hasTriggeredAutoRead by remember { mutableStateOf(false) }
     var maxScrollReached by remember { mutableStateOf(0) }
+    var hasTriggeredScrollEndAction by remember { mutableStateOf(false) }
+    var overscrollAccumulator by remember { mutableFloatStateOf(0f) }
+
+    // Threshold in virtual scroll units to trigger the action
+    val triggerThreshold = 300
 
     LaunchedEffect(scrollState.firstVisibleItemScrollOffset, scrollState.firstVisibleItemIndex) {
         val currentOffset = scrollState.firstVisibleItemIndex * 1000 + scrollState.firstVisibleItemScrollOffset
@@ -49,43 +79,95 @@ internal fun rememberFabVisibilityState(
 
         previousScrollOffset = currentOffset
 
-        // Check for auto-mark read
+        // Check for auto-mark read (legacy boolean path)
         // Only trigger when user has scrolled significantly AND is at the bottom
-        if (!hasTriggeredAutoRead && autoMarkReadOnScroll && !isBookmarkRead) {
+        if (!hasTriggeredAutoRead && autoMarkReadOnScroll && !isBookmarkRead && scrollEndAction == SwipeAction.NONE) {
             val layoutInfo = scrollState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
             val visibleItemsInfo = layoutInfo.visibleItemsInfo
 
-            // CRITICAL: Only consider marking as read if user has scrolled at least 1000px
-            // This prevents marking as read immediately when opening short articles
-            // or when content is still loading
             if (maxScrollReached < 1000) {
                 return@LaunchedEffect
             }
 
             if (visibleItemsInfo.isNotEmpty() && totalItems > 0) {
-                // The last item is the content body which contains the HTML
-                // We want to detect when the user has scrolled to near the bottom of this item
                 val lastVisibleItem = visibleItemsInfo.last()
                 val isLastItem = lastVisibleItem.index == totalItems - 1
 
                 if (isLastItem) {
-                    // Calculate how much of the last item has been scrolled through
-                    // lastVisibleItem.offset is negative when the item is scrolled up past the top of viewport
-                    // lastVisibleItem.size is the total height of the item
                     val itemBottom = lastVisibleItem.offset + lastVisibleItem.size
                     val viewportBottom = layoutInfo.viewportEndOffset
 
-                    // Only trigger if:
-                    // 1. User has scrolled at least 1000px (checked above)
-                    // 2. The bottom of the content is visible (itemBottom <= viewportBottom)
-                    // 3. We're within 200px of the absolute bottom
-                    // This ensures the user has actually scrolled through the HTML content
                     if (itemBottom <= viewportBottom + 200 && itemBottom > 0) {
                         onMarkAsRead()
                         onShowSnackbarWithUndo()
                         hasTriggeredAutoRead = true
                     }
+                }
+            }
+        }
+
+        // Pull-past-end action: detect when user is at the bottom and accumulate overscroll
+        if (scrollEndAction != SwipeAction.NONE && !hasTriggeredScrollEndAction && maxScrollReached >= 500) {
+            val layoutInfo = scrollState.layoutInfo
+            val totalItems = layoutInfo.totalItemsCount
+            val visibleItemsInfo = layoutInfo.visibleItemsInfo
+
+            if (visibleItemsInfo.isNotEmpty() && totalItems > 0) {
+                val lastVisibleItem = visibleItemsInfo.last()
+                val isLastItem = lastVisibleItem.index == totalItems - 1
+
+                if (isLastItem) {
+                    val itemBottom = lastVisibleItem.offset + lastVisibleItem.size
+                    val viewportBottom = layoutInfo.viewportEndOffset
+                    val distancePastEnd = viewportBottom - itemBottom
+
+                    if (distancePastEnd > 0 && scrollingDown) {
+                        // User is at the bottom and trying to scroll further down
+                        overscrollAccumulator = (overscrollAccumulator + distancePastEnd.toFloat())
+                            .coerceIn(0f, triggerThreshold.toFloat())
+
+                        val progress = overscrollAccumulator / triggerThreshold
+                        onScrollEndActionStateChanged?.invoke(
+                            ScrollEndActionState(
+                                overscrollPx = overscrollAccumulator,
+                                triggered = false,
+                                action = scrollEndAction
+                            )
+                        )
+
+                        // Haptic feedback at 50% threshold
+                        if (progress >= 0.5f && overscrollAccumulator - distancePastEnd < triggerThreshold * 0.5f) {
+                            HapticUtils.performMedium()
+                        }
+
+                        if (overscrollAccumulator >= triggerThreshold) {
+                            // Trigger the action
+                            HapticUtils.performMedium()
+                            onScrollEndAction?.invoke(scrollEndAction)
+                            hasTriggeredScrollEndAction = true
+                            onScrollEndActionStateChanged?.invoke(
+                                ScrollEndActionState(
+                                    overscrollPx = triggerThreshold.toFloat(),
+                                    triggered = true,
+                                    action = scrollEndAction
+                                )
+                            )
+                        }
+                    } else if (!scrollingDown) {
+                        // Reset accumulator when scrolling back up
+                        overscrollAccumulator = 0f
+                        onScrollEndActionStateChanged?.invoke(
+                            ScrollEndActionState(
+                                overscrollPx = 0f,
+                                triggered = false,
+                                action = scrollEndAction
+                            )
+                        )
+                    }
+                } else {
+                    // Not at last item, reset
+                    overscrollAccumulator = 0f
                 }
             }
         }

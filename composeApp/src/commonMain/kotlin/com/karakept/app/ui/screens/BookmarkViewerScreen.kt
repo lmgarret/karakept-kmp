@@ -1,27 +1,37 @@
 package com.karakept.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,8 +43,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
+import com.karakept.app.data.model.SwipeAction
+import com.karakept.app.ui.components.getColor
+import com.karakept.app.ui.components.getIcon
+import com.karakept.app.ui.screens.viewer.ScrollEndActionState
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -75,6 +91,7 @@ data class BookmarkViewerScreen(
         val precrawledAssetPath by screenModel.precrawledAssetPath.collectAsState()
         val lists by screenModel.lists.collectAsState()
         val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
+        val scrollEndAction by screenModel.scrollEndAction.collectAsState()
         val showTags by screenModel.showTags.collectAsState()
         val isRefreshing by screenModel.isRefreshing.collectAsState()
         val offlineMode by screenModel.offlineMode.collectAsState()
@@ -94,6 +111,7 @@ data class BookmarkViewerScreen(
         var showListPicker by remember { mutableStateOf(false) }
         var selectedHighlightId by remember { mutableStateOf<String?>(null) }
         var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
+        var scrollEndActionState by remember { mutableStateOf<ScrollEndActionState?>(null) }
 
         // Track the text of the selected highlight for matching after ID changes (temp -> server ID)
         var selectedHighlightText by remember { mutableStateOf<String?>(null) }
@@ -189,6 +207,27 @@ data class BookmarkViewerScreen(
                 onShowSnackbarWithUndo = {
                     // Undo is now handled automatically by BookmarkActionController
                     // No need for manual implementation
+                },
+                scrollEndAction = scrollEndAction,
+                onScrollEndAction = { action ->
+                    when (action) {
+                        SwipeAction.ARCHIVE -> screenModel.toggleBookmarkArchive(fullyLoadedState.bookmark)
+                        SwipeAction.MARK_READ -> screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
+                        SwipeAction.FAVOURITE -> screenModel.toggleBookmarkFavorite(fullyLoadedState.bookmark)
+                        SwipeAction.DELETE -> showDeleteConfirmation = true
+                        SwipeAction.SHARE -> {
+                            ShareUtils.shareText(fullyLoadedState.bookmark.url, fullyLoadedState.bookmark.title)
+                            scope.launch { snackbarManager.showSnackbar("Shared") }
+                        }
+                        SwipeAction.OPEN_IN_BROWSER -> {
+                            uriHandler.openUri(fullyLoadedState.bookmark.url)
+                            scope.launch { snackbarManager.showSnackbar("Opening in browser") }
+                        }
+                        SwipeAction.NONE -> {}
+                    }
+                },
+                onScrollEndActionStateChanged = { state ->
+                    scrollEndActionState = state
                 }
             )
         } else {
@@ -390,6 +429,19 @@ data class BookmarkViewerScreen(
                                     }
                                 )
                             }
+                        }
+
+                        // Scroll-end action pull indicator
+                        val endActionState = scrollEndActionState
+                        if (endActionState != null && endActionState.action != SwipeAction.NONE) {
+                            val progress = (endActionState.overscrollPx / 300f).coerceIn(0f, 1f)
+                            ScrollEndActionIndicator(
+                                state = endActionState,
+                                progress = progress,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 16.dp)
+                            )
                         }
 
                         // Top Bar
@@ -605,5 +657,58 @@ private fun showSnackbarEvent(
                 }
             }
         }
+    }
+}
+
+/**
+ * A pill-shaped indicator shown at the bottom of the article when the user pulls past the end.
+ * Uses the same icon and color as the configured swipe action for visual consistency.
+ */
+@Composable
+private fun ScrollEndActionIndicator(
+    state: ScrollEndActionState,
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    val alpha by animateFloatAsState(
+        targetValue = (progress * 2f).coerceIn(0f, 1f),
+        animationSpec = tween(150),
+        label = "indicator_alpha"
+    )
+    val scale by animateFloatAsState(
+        targetValue = 0.8f + progress * 0.2f,
+        animationSpec = tween(150),
+        label = "indicator_scale"
+    )
+
+    val actionColor = state.action.getColor()
+    val actionIcon = state.action.getIcon()
+    val label = if (state.triggered) state.action.displayName else "Pull to ${state.action.displayName}"
+
+    Row(
+        modifier = modifier
+            .graphicsLayer {
+                this.alpha = alpha
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(24.dp))
+            .background(actionColor.copy(alpha = 0.9f))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = actionIcon,
+            contentDescription = null,
+            tint = androidx.compose.ui.graphics.Color.White,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = androidx.compose.ui.graphics.Color.White
+        )
     }
 }

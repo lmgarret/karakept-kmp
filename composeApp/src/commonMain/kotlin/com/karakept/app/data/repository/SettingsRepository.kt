@@ -360,14 +360,33 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     private val DIM_READ_BOOKMARKS_KEY = booleanPreferencesKey("dim_read_bookmarks")
     private val AUTO_MARK_READ_ON_SCROLL_KEY = booleanPreferencesKey("auto_mark_read_on_scroll")
+    private val SCROLL_END_ACTION_KEY = stringPreferencesKey("scroll_end_action")
 
     val dimReadBookmarks: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[DIM_READ_BOOKMARKS_KEY] ?: true
     }
 
-    val autoMarkReadOnScroll: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[AUTO_MARK_READ_ON_SCROLL_KEY] ?: false
+    /**
+     * The action to perform when the user pulls past the end of an article.
+     * Migrates from the old boolean `auto_mark_read_on_scroll`:
+     *   - old true  → MARK_READ
+     *   - old false → NONE (disabled)
+     */
+    val scrollEndAction: Flow<SwipeAction> = dataStore.data.map { preferences ->
+        val stored = preferences[SCROLL_END_ACTION_KEY]
+        if (stored != null) {
+            SwipeAction.fromString(stored)
+        } else {
+            // Migrate legacy boolean setting
+            val legacyEnabled = preferences[AUTO_MARK_READ_ON_SCROLL_KEY] ?: false
+            if (legacyEnabled) SwipeAction.MARK_READ else SwipeAction.NONE
+        }
     }
+
+    /**
+     * @deprecated Use scrollEndAction instead.
+     */
+    val autoMarkReadOnScroll: Flow<Boolean> = scrollEndAction.map { it != SwipeAction.NONE }
 
     suspend fun setDimReadBookmarks(dim: Boolean) {
         dataStore.edit { preferences ->
@@ -375,10 +394,17 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    suspend fun setAutoMarkReadOnScroll(autoMark: Boolean) {
+    suspend fun setScrollEndAction(action: SwipeAction) {
         dataStore.edit { preferences ->
-            preferences[AUTO_MARK_READ_ON_SCROLL_KEY] = autoMark
+            preferences[SCROLL_END_ACTION_KEY] = action.name
         }
+    }
+
+    /**
+     * @deprecated Use setScrollEndAction instead.
+     */
+    suspend fun setAutoMarkReadOnScroll(autoMark: Boolean) {
+        setScrollEndAction(if (autoMark) SwipeAction.MARK_READ else SwipeAction.NONE)
     }
 
     val onboardingCompleted: Flow<Boolean> = dataStore.data.map { preferences ->

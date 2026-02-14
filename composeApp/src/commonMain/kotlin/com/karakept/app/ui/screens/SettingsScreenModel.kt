@@ -272,9 +272,21 @@ class SettingsScreenModel(
         initialValue = false
     )
 
+    val scrollEndAction: StateFlow<com.karakept.app.data.model.SwipeAction> = settingsRepository.scrollEndAction.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.karakept.app.data.model.SwipeAction.NONE
+    )
+
     fun setDimReadBookmarks(dim: Boolean) {
         screenModelScope.launch {
             settingsRepository.setDimReadBookmarks(dim)
+        }
+    }
+
+    fun setScrollEndAction(action: com.karakept.app.data.model.SwipeAction) {
+        screenModelScope.launch {
+            settingsRepository.setScrollEndAction(action)
         }
     }
 

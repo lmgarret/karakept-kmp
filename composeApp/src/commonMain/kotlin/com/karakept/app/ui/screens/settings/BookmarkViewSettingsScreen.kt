@@ -17,10 +17,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ImageNotSupported
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +42,7 @@ import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.ViewerMode
+import com.karakept.app.ui.components.SwipeActionSettingItem
 import com.karakept.app.ui.screens.ReaderAppearanceScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
 
@@ -107,45 +108,17 @@ class BookmarkViewSettingsScreen : Screen {
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
+                val scrollEndAction by screenModel.scrollEndAction.collectAsState()
 
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Text(
-                                text = "Auto-mark as Read",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Mark article as read when reaching the end of the page",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = autoMarkReadOnScroll,
-                            onCheckedChange = { screenModel.setAutoMarkReadOnScroll(it) }
-                        )
-                    }
-                }
+                SwipeActionSettingItem(
+                    title = "Scroll to End Action",
+                    description = "Action when pulling past the end of an article",
+                    selectedAction = scrollEndAction,
+                    icon = Icons.Default.KeyboardArrowDown,
+                    onActionSelected = { screenModel.setScrollEndAction(it) }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Card(
                     modifier = Modifier
