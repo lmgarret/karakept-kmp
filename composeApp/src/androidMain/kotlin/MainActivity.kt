@@ -52,23 +52,11 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        checkNotificationPermission()
-
         setContent {
             App(sharedUrl = sharedUrl, openBookmarkId = openBookmarkId)
         }
     }
     
-    private fun checkNotificationPermission() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            val permission = android.Manifest.permission.POST_NOTIFICATIONS
-            if (androidx.core.content.ContextCompat.checkSelfPermission(this, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                // Request permission
-                androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(permission), 101)
-            }
-        }
-    }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         android.util.Log.d("DebuggingCtx", "🚀 MainActivity.onNewIntent called. Intent: $intent")

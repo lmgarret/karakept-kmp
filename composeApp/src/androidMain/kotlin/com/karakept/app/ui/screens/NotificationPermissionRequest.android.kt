@@ -23,8 +23,7 @@ actual fun NotificationPermissionButton(
             Text("Grant Notification Permission")
         }
     } else {
-        // On Android < 13, notifications are on by default
-        onPermissionResult(true)
+        // On Android < 13, notifications are on by default — grant on button click
         Button(onClick = { onPermissionResult(true) }) {
             Text("Continue")
         }
