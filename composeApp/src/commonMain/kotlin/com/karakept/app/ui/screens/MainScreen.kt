@@ -379,6 +379,9 @@ object MainScreen : Screen {
                                 }
                             }
                         }
+                        is BookmarkAction.Refresh -> {
+                            screenModel.refreshBookmark(selectedBookmarkForActions!!)
+                        }
                     }
                 },
                 onDismiss = { selectedBookmarkForActions = null }

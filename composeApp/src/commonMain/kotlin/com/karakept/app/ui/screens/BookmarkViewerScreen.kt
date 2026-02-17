@@ -405,7 +405,8 @@ data class BookmarkViewerScreen(
                             onViewerModeClick = { showModeDialog = true },
                             onMoveToListClick = { showListPicker = true },
                             onEditTagsClick = { showTagEditor = true },
-                            onDeleteClick = { showDeleteConfirmation = true }
+                            onDeleteClick = { showDeleteConfirmation = true },
+                            onRefreshClick = { screenModel.refreshBookmark(bookmarkId) }
                         )
 
                         PullRefreshIndicator(

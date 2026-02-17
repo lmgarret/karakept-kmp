@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -133,6 +134,17 @@ fun BookmarkActionsMenu(
 
                 item {
                     Divider(modifier = Modifier.padding(vertical = 4.dp))
+                    BookmarkActionItem(
+                        icon = Icons.Default.Refresh,
+                        label = "Refresh",
+                        onClick = {
+                            onAction(BookmarkAction.Refresh)
+                            onDismiss()
+                        }
+                    )
+                }
+
+                item {
                     BookmarkActionItem(
                         icon = Icons.Default.Share,
                         label = "Share",
@@ -260,4 +272,5 @@ sealed class BookmarkAction {
     data object Share : BookmarkAction()
     data object OpenInBrowser : BookmarkAction()
     data object Delete : BookmarkAction()
+    data object Refresh : BookmarkAction()
 }

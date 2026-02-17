@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,7 +58,8 @@ internal fun ViewerTopBar(
     onViewerModeClick: () -> Unit,
     onMoveToListClick: () -> Unit,
     onEditTagsClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onRefreshClick: () -> Unit = {}
 ) {
     // Status bar background - fades in with top bar for parallax effect
     Box(
@@ -141,6 +143,23 @@ internal fun ViewerTopBar(
                 expanded = showMenu,
                 onDismissRequest = { onMenuToggle(false) }
             ) {
+                DropdownMenuItem(
+                    text = { Text("Refresh") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        onRefreshClick()
+                        onMenuToggle(false)
+                    }
+                )
+
+                // Divider to separate refresh from reader settings
+                HorizontalDivider()
+
                 DropdownMenuItem(
                     text = { Text("Reader Appearance") },
                     leadingIcon = {

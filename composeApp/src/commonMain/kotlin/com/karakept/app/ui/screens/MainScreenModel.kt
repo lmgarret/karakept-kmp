@@ -693,4 +693,14 @@ class MainScreenModel(
             )
         }
     }
+
+    fun refreshBookmark(bookmark: BookmarkEntity) {
+        screenModelScope.launch {
+            try {
+                bookmarkRepository.syncSingleBookmark(bookmark.remoteId, bookmark.serverId)
+            } catch (e: Exception) {
+                println("MainScreenModel: Error refreshing bookmark: ${e.message}")
+            }
+        }
+    }
 }
