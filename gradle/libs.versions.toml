@@ -5,13 +5,7 @@ android-compileSdk = "35"
 android-minSdk = "24"
 android-targetSdk = "35"
 androidx-activityCompose = "1.9.3"
-androidx-appcompat = "1.7.0"
-androidx-constraintlayout = "2.2.0"
-androidx-core-ktx = "1.15.0"
-androidx-espresso-core = "3.6.1"
 androidx-lifecycle = "2.8.4"
-androidx-material = "1.12.0"
-androidx-test-junit = "1.2.1"
 androidx-core-splashscreen = "1.0.1"
 compose-plugin = "1.7.1"
 junit = "4.13.2"
@@ -30,20 +24,11 @@ jsoup = "1.17.2"
 javafx = "21.0.1"
 reorderable = "0.9.6"
 testcontainers = "1.20.1"
-pdfbox = "2.0.27" # Used for parsing PDF content if needed
 mockk = "1.13.12"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
-kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
-kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
-androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidx-core-ktx" }
-androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidx-test-junit" }
-androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "androidx-espresso-core" }
-androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "androidx-appcompat" }
-androidx-material = { group = "com.google.android.material", name = "material", version.ref = "androidx-material" }
-androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "androidx-constraintlayout" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activityCompose" }
 androidx-lifecycle-viewmodel = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
 androidx-lifecycle-runtime-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
@@ -58,7 +43,6 @@ voyager-koin = { module = "cafe.adriel.voyager:voyager-koin", version.ref = "voy
 # Ktor
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
-ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
 ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor" }
@@ -100,22 +84,12 @@ jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 # Drag and Drop Reordering
 reorderable = { module = "org.burnoutcrew.composereorderable:reorderable", version.ref = "reorderable" }
 
-# JavaFX
-javafx-base = { module = "org.openjfx:javafx-base", version.ref = "javafx" }
-javafx-graphics = { module = "org.openjfx:javafx-graphics", version.ref = "javafx" }
-javafx-controls = { module = "org.openjfx:javafx-controls", version.ref = "javafx" }
-javafx-swing = { module = "org.openjfx:javafx-swing", version.ref = "javafx" }
-javafx-web = { module = "org.openjfx:javafx-web", version.ref = "javafx" }
-javafx-media = { module = "org.openjfx:javafx-media", version.ref = "javafx" }
-
 # WorkManager
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version = "2.9.0" }
 koin-androidx-workmanager = { module = "io.insert-koin:koin-androidx-workmanager", version.ref = "koin" }
 
 # Testcontainers
-testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 testcontainers-core = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
-testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
 
 # Mocking
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }

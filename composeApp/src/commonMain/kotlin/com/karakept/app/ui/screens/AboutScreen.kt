@@ -149,12 +149,16 @@ class AboutScreen : Screen {
                     FossLibrary("Coil", "Apache 2.0", "https://github.com/coil-kt/coil"),
                     FossLibrary("Koin", "Apache 2.0", "https://github.com/InsertKoinIO/koin"),
                     FossLibrary("Room", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/room"),
+                    FossLibrary("SQLite Bundled", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/sqlite"),
                     FossLibrary("Kotlinx Coroutines", "Apache 2.0", "https://github.com/Kotlin/kotlinx.coroutines"),
                     FossLibrary("Kotlinx Serialization", "Apache 2.0", "https://github.com/Kotlin/kotlinx.serialization"),
                     FossLibrary("Kotlinx DateTime", "Apache 2.0", "https://github.com/Kotlin/kotlinx-datetime"),
                     FossLibrary("DataStore", "Apache 2.0", "https://developer.android.com/topic/libraries/architecture/datastore"),
                     FossLibrary("Jsoup", "MIT", "https://github.com/jhy/jsoup"),
-                    FossLibrary("Reorderable", "Apache 2.0", "https://github.com/aclassen/ComposeReorderable")
+                    FossLibrary("Reorderable", "Apache 2.0", "https://github.com/aclassen/ComposeReorderable"),
+                    FossLibrary("JavaFX", "GPL 2.0 with Classpath Exception", "https://github.com/openjdk/jfx"),
+                    FossLibrary("OkHttp", "Apache 2.0", "https://github.com/square/okhttp"),
+                    FossLibrary("WorkManager", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/work"),
                 )
 
                 items(libraries) { lib ->
