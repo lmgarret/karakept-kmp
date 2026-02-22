@@ -36,20 +36,20 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
-class LoginScreen : Screen {
+class LoginScreen(val serverUrl: String? = null) : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = getScreenModel<LoginScreenModel>()
-        
-        var url by remember { mutableStateOf("") }
+
+        var url by remember { mutableStateOf(serverUrl ?: "") }
         var apiKey by remember { mutableStateOf("") }
 
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Add Server") },
+                    title = { Text(if (serverUrl != null) "Re-authenticate" else "Authenticate") },
                     navigationIcon = {
                         if (navigator.canPop) {
                             IconButton(onClick = { navigator.pop() }) {
