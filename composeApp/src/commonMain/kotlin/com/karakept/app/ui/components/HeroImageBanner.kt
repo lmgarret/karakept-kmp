@@ -67,6 +67,7 @@ fun HeroImageBanner(
     scrollProgress: Float = 0f,
     showTags: Boolean = true,
     onUrlClick: (() -> Unit)? = null,
+    onTagClick: ((String) -> Unit)? = null,
     bannerImageUrl: String? = null,
     screenshotUrl: String? = null,
     bannerImageLocalPath: String? = null,
@@ -155,6 +156,7 @@ fun HeroImageBanner(
                 BookmarkTagsDisplay(
                     tags = tags,
                     style = TagsDisplayStyle.READER,
+                    onTagClick = onTagClick,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }

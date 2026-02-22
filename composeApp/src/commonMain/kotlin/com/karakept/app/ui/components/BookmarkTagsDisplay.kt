@@ -1,5 +1,6 @@
 package com.karakept.app.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -29,6 +30,7 @@ enum class TagsDisplayStyle {
 fun BookmarkTagsDisplay(
     tags: String,
     style: TagsDisplayStyle = TagsDisplayStyle.COMPACT,
+    onTagClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Parse tags and filter empty strings
@@ -50,7 +52,8 @@ fun BookmarkTagsDisplay(
             Surface(
                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
                 shape = MaterialTheme.shapes.small,
-                shadowElevation = 2.dp
+                shadowElevation = 2.dp,
+                modifier = if (onTagClick != null) Modifier.clickable { onTagClick(tag) } else Modifier
             ) {
                 Text(
                     text = tag,
