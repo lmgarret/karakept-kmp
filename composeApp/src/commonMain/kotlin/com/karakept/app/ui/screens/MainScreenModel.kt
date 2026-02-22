@@ -134,6 +134,25 @@ class MainScreenModel(
         com.karakept.app.data.model.SwipeAction.ARCHIVE
     )
 
+    val customSwipeActionConfigs: StateFlow<List<com.karakept.app.data.model.CustomSwipeActionConfig>> =
+        settingsRepository.customSwipeActionConfigs.stateIn(
+            screenModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList()
+        )
+
+    val swipeLeftConfigId: StateFlow<String?> = settingsRepository.swipeLeftConfigId.stateIn(
+        screenModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        null
+    )
+
+    val swipeRightConfigId: StateFlow<String?> = settingsRepository.swipeRightConfigId.stateIn(
+        screenModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        null
+    )
+
     val dimReadBookmarks: StateFlow<Boolean> = settingsRepository.dimReadBookmarks.stateIn(
         screenModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -691,6 +710,30 @@ class MainScreenModel(
                 listId,
                 isOnline
             )
+        }
+    }
+
+    fun addBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
+        screenModelScope.launch {
+            val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            if (!currentTags.contains(tagName)) {
+                val newTags = currentTags + tagName
+                val isOnline = !_isSyncing.value
+                bookmarkActionsRepository.updateTags(
+                    bookmark.remoteId,
+                    bookmark.serverId,
+                    newTags,
+                    isOnline
+                )
+                // Update local state immediately for UI feedback
+                _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                    if (it.remoteId == bookmark.remoteId) {
+                        it.copy(tags = newTags.joinToString(","))
+                    } else {
+                        it
+                    }
+                }
+            }
         }
     }
 }

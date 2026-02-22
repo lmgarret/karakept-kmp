@@ -48,6 +48,9 @@ import kotlin.math.roundToInt
 /**
  * Wraps a bookmark item with swipe-to-act functionality.
  * Displays action icons in the background when swiping.
+ *
+ * @param onActionTriggered Callback with (action, isRightSwipe). isRightSwipe=true means the
+ *   right action was triggered (swiped left-to-right).
  */
 @Composable
 fun SwipeableBookmarkItem(
@@ -55,7 +58,9 @@ fun SwipeableBookmarkItem(
     rightSwipeAction: SwipeAction = SwipeAction.NONE, // Swipe right reveals this (Leading)
     leftIcon: ImageVector? = null, // Optional override for left action icon
     rightIcon: ImageVector? = null, // Optional override for right action icon
-    onActionTriggered: (SwipeAction) -> Unit,
+    leftColor: Color? = null, // Optional override for left action background color
+    rightColor: Color? = null, // Optional override for right action background color
+    onActionTriggered: (SwipeAction, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -86,8 +91,8 @@ fun SwipeableBookmarkItem(
                 .matchParentSize()  // Match the size of the parent Box (which is sized by content)
                 .background(
                     when {
-                        offsetX > swipeThreshold -> rightSwipeAction.getColor()
-                        offsetX < -swipeThreshold -> leftSwipeAction.getColor()
+                        offsetX > swipeThreshold -> rightColor ?: rightSwipeAction.getColor()
+                        offsetX < -swipeThreshold -> leftColor ?: leftSwipeAction.getColor()
                         else -> Color.Transparent
                     }
                 ),
@@ -139,18 +144,19 @@ fun SwipeableBookmarkItem(
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             scope.launch {
-                                // Check if threshold was met
+                                // Check if threshold was met; capture direction before resetting
+                                val isRightSwipe = offsetX > swipeThreshold
                                 val actionToTrigger = when {
-                                    offsetX > swipeThreshold && currentRightAction != SwipeAction.NONE -> currentRightAction
+                                    isRightSwipe && currentRightAction != SwipeAction.NONE -> currentRightAction
                                     offsetX < -swipeThreshold && currentLeftAction != SwipeAction.NONE -> currentLeftAction
                                     else -> null
                                 }
-                                
+
                                 // Trigger action if threshold met
                                 actionToTrigger?.let {
-                                    currentOnActionTriggered(it)
+                                    currentOnActionTriggered(it, isRightSwipe)
                                 }
-                                
+
                                 // Reset position
                                 offsetX = 0f
                                 hasTriggeredHaptic = false

@@ -10,8 +10,10 @@ enum class SwipeAction(val displayName: String) {
     MARK_READ("Mark as Read"),
     DELETE("Delete"),
     SHARE("Share"),
-    OPEN_IN_BROWSER("Open in Browser");
-    
+    OPEN_IN_BROWSER("Open in Browser"),
+    ADD_TAG("Add Tag"),
+    ADD_TO_LIST("Add to List");
+
     companion object {
         fun fromString(value: String): SwipeAction {
             return entries.firstOrNull { it.name == value } ?: NONE

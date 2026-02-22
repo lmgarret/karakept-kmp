@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Window
@@ -45,11 +46,14 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.data.model.CustomSwipeActionConfig
+import com.karakept.app.data.model.CustomSwipeActionType
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.ReadingSpeedDialog
+import com.karakept.app.ui.components.getIcon
 import com.karakept.app.ui.screens.FilterManagementScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
-import com.karakept.app.ui.components.getIcon
 import androidx.compose.foundation.layout.width
 
 class BookmarkListSettingsScreen : Screen {
@@ -63,6 +67,9 @@ class BookmarkListSettingsScreen : Screen {
         val readingSpeedWpm by screenModel.readingSpeedWpm.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
+        val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
+        val swipeLeftConfigId by screenModel.swipeLeftConfigId.collectAsState()
+        val swipeRightConfigId by screenModel.swipeRightConfigId.collectAsState()
         var showReadingSpeedDialog by remember { mutableStateOf(false) }
 
         // Show reading speed dialog
@@ -171,8 +178,11 @@ class BookmarkListSettingsScreen : Screen {
                     title = "Swipe Right (Left to Right)",
                     description = "Action when swiping from left to right",
                     selectedAction = swipeRightAction,
+                    selectedConfigId = swipeRightConfigId,
+                    customConfigs = customConfigs,
                     icon = Icons.AutoMirrored.Filled.ArrowForward,
-                    onActionSelected = { screenModel.setSwipeRightAction(it) }
+                    onActionSelected = { screenModel.setSwipeRightAction(it) },
+                    onConfigSelected = { screenModel.setSwipeRightConfigId(it) }
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -181,9 +191,50 @@ class BookmarkListSettingsScreen : Screen {
                     title = "Swipe Left (Right to Left)",
                     description = "Action when swiping from right to left",
                     selectedAction = swipeLeftAction,
+                    selectedConfigId = swipeLeftConfigId,
+                    customConfigs = customConfigs,
                     icon = Icons.AutoMirrored.Filled.ArrowBack,
-                    onActionSelected = { screenModel.setSwipeLeftAction(it) }
+                    onActionSelected = { screenModel.setSwipeLeftAction(it) },
+                    onConfigSelected = { screenModel.setSwipeLeftConfigId(it) }
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Manage Custom Actions
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { navigator.push(CustomSwipeActionsScreen()) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Label,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 12.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Manage Custom Actions",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Create Add Tag and Add to List actions",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Open"
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -376,12 +427,97 @@ private fun LayoutOption(
 private fun SwipeActionSettingItem(
     title: String,
     description: String,
-    selectedAction: com.karakept.app.data.model.SwipeAction,
+    selectedAction: SwipeAction,
+    selectedConfigId: String?,
+    customConfigs: List<CustomSwipeActionConfig>,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onActionSelected: (com.karakept.app.data.model.SwipeAction) -> Unit
+    onActionSelected: (SwipeAction) -> Unit,
+    onConfigSelected: (String?) -> Unit
 ) {
     var showDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    // Step 2: when ADD_TAG/ADD_TO_LIST is picked from step 1, show config picker
+    var pendingAction by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<SwipeAction?>(null) }
 
+    val selectedConfig = customConfigs.find { it.id == selectedConfigId }
+
+    // Step 2 dialog: pick a custom config for the pending action type
+    if (pendingAction != null) {
+        val filteredConfigs = customConfigs.filter { config ->
+            when (pendingAction) {
+                SwipeAction.ADD_TAG -> config.type == CustomSwipeActionType.ADD_TAG
+                SwipeAction.ADD_TO_LIST -> config.type == CustomSwipeActionType.ADD_TO_LIST
+                else -> false
+            }
+        }
+        androidx.compose.ui.window.Dialog(onDismissRequest = { pendingAction = null }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(vertical = 16.dp)) {
+                    Text(
+                        text = "Select Custom Action",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                    )
+                    if (filteredConfigs.isEmpty()) {
+                        Text(
+                            text = "No custom actions of this type yet.\nGo to Manage Custom Actions to create one.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                        )
+                    } else {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            filteredConfigs.forEach { config ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onActionSelected(pendingAction!!)
+                                            onConfigSelected(config.id)
+                                            pendingAction = null
+                                            showDialog = false
+                                        }
+                                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = config.id == selectedConfigId,
+                                        onClick = {
+                                            onActionSelected(pendingAction!!)
+                                            onConfigSelected(config.id)
+                                            pendingAction = null
+                                            showDialog = false
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = config.getDisplayName(),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = 24.dp, top = 8.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        androidx.compose.material3.TextButton(onClick = { pendingAction = null }) {
+                            Text("Cancel")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Step 1 dialog: pick the action type
     if (showDialog) {
         androidx.compose.ui.window.Dialog(onDismissRequest = { showDialog = false }) {
             Card(
@@ -398,24 +534,36 @@ private fun SwipeActionSettingItem(
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                     )
-                    
+
                     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        com.karakept.app.data.model.SwipeAction.entries.forEach { action ->
+                        SwipeAction.entries.forEach { action ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
-                                        onActionSelected(action)
-                                        showDialog = false
+                                        if (action == SwipeAction.ADD_TAG || action == SwipeAction.ADD_TO_LIST) {
+                                            pendingAction = action
+                                        } else {
+                                            onActionSelected(action)
+                                            onConfigSelected(null)
+                                            showDialog = false
+                                        }
                                     }
                                     .padding(horizontal = 24.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RadioButton(
-                                    selected = action == selectedAction,
+                                    selected = action == selectedAction &&
+                                        (action != SwipeAction.ADD_TAG && action != SwipeAction.ADD_TO_LIST ||
+                                            selectedConfig == null),
                                     onClick = {
-                                        onActionSelected(action)
-                                        showDialog = false
+                                        if (action == SwipeAction.ADD_TAG || action == SwipeAction.ADD_TO_LIST) {
+                                            pendingAction = action
+                                        } else {
+                                            onActionSelected(action)
+                                            onConfigSelected(null)
+                                            showDialog = false
+                                        }
                                     }
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -432,7 +580,7 @@ private fun SwipeActionSettingItem(
                             }
                         }
                     }
-                    
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -471,7 +619,11 @@ private fun SwipeActionSettingItem(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
-                    text = selectedAction.displayName,
+                    text = when {
+                        (selectedAction == SwipeAction.ADD_TAG || selectedAction == SwipeAction.ADD_TO_LIST) &&
+                            selectedConfig != null -> selectedConfig.getDisplayName()
+                        else -> selectedAction.displayName
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )

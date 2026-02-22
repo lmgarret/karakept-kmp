@@ -27,11 +27,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.SwipeableBookmarkItem
+import com.karakept.app.ui.components.getEffectiveColor
 import com.karakept.app.utils.FileUtils
 import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.utils.AssetUrlUtils
@@ -48,6 +50,8 @@ internal fun BookmarkListContent(
     layoutType: LayoutType,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
+    swipeLeftConfig: CustomSwipeActionConfig? = null,
+    swipeRightConfig: CustomSwipeActionConfig? = null,
     dimReadBookmarks: Boolean,
     showReadingTimeBadge: Boolean,
     showTags: Boolean,
@@ -56,7 +60,7 @@ internal fun BookmarkListContent(
     pullRefreshState: PullRefreshState,
     onBookmarkClick: (BookmarkEntity) -> Unit,
     onBookmarkLongClick: (BookmarkEntity) -> Unit,
-    onSwipeAction: (BookmarkEntity, SwipeAction) -> Unit,
+    onSwipeAction: (BookmarkEntity, SwipeAction, CustomSwipeActionConfig?) -> Unit,
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
     serverUrl: String? = null
@@ -102,8 +106,15 @@ internal fun BookmarkListContent(
                         rightSwipeAction = swipeRightAction,
                         leftIcon = leftIcon,
                         rightIcon = rightIcon,
-                        onActionTriggered = { action ->
-                            onSwipeAction(bookmark, action)
+                        leftColor = swipeLeftConfig.getEffectiveColor(swipeLeftAction).takeIf {
+                            swipeLeftConfig?.colorHex != null
+                        },
+                        rightColor = swipeRightConfig.getEffectiveColor(swipeRightAction).takeIf {
+                            swipeRightConfig?.colorHex != null
+                        },
+                        onActionTriggered = { action, isRightSwipe ->
+                            val config = if (isRightSwipe) swipeRightConfig else swipeLeftConfig
+                            onSwipeAction(bookmark, action, config)
                         }
                     ) {
                         // Construct banner and screenshot URLs if available

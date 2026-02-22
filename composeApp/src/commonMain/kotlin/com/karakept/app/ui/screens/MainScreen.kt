@@ -76,6 +76,9 @@ object MainScreen : Screen {
         val showTags by settingsScreenModel.showTags.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
+        val customSwipeActionConfigs by screenModel.customSwipeActionConfigs.collectAsState()
+        val swipeLeftConfigId by screenModel.swipeLeftConfigId.collectAsState()
+        val swipeRightConfigId by screenModel.swipeRightConfigId.collectAsState()
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
@@ -239,6 +242,8 @@ object MainScreen : Screen {
                         layoutType = layoutType,
                         swipeLeftAction = swipeLeftAction,
                         swipeRightAction = swipeRightAction,
+                        swipeLeftConfig = customSwipeActionConfigs.find { it.id == swipeLeftConfigId },
+                        swipeRightConfig = customSwipeActionConfigs.find { it.id == swipeRightConfigId },
                         dimReadBookmarks = dimReadBookmarks,
                         showReadingTimeBadge = showReadingTimeBadge,
                         showTags = showTags,
@@ -252,7 +257,7 @@ object MainScreen : Screen {
                             selectedBookmarkForActions = bookmark
                         },
                         serverUrl = servers.firstOrNull()?.url,
-                        onSwipeAction = { bookmark, action ->
+                        onSwipeAction = { bookmark, action, config ->
                             when (action) {
                                 SwipeAction.ARCHIVE -> {
                                     screenModel.toggleBookmarkArchive(bookmark)
@@ -279,6 +284,25 @@ object MainScreen : Screen {
                                     } catch (e: Exception) {
                                         scope.launch {
                                             snackbarManager.showSnackbar("Could not open link")
+                                        }
+                                    }
+                                }
+                                SwipeAction.ADD_TAG -> {
+                                    val tagName = config?.tagName
+                                    if (tagName != null) {
+                                        screenModel.addBookmarkTag(bookmark, tagName)
+                                        scope.launch {
+                                            snackbarManager.showSnackbar("Added tag '$tagName'")
+                                        }
+                                    }
+                                }
+                                SwipeAction.ADD_TO_LIST -> {
+                                    val listId = config?.listId
+                                    val listName = config?.listName ?: "list"
+                                    if (listId != null) {
+                                        screenModel.moveBookmarkToList(bookmark, listId)
+                                        scope.launch {
+                                            snackbarManager.showSnackbar("Added to $listName")
                                         }
                                     }
                                 }
