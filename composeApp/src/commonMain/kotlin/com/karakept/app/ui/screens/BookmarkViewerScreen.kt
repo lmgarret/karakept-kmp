@@ -37,6 +37,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
@@ -78,6 +79,7 @@ data class BookmarkViewerScreen(
         val isRefreshing by screenModel.isRefreshing.collectAsState()
         val offlineMode by screenModel.offlineMode.collectAsState()
         val highlights by screenModel.highlights.collectAsState()
+        val linkOpenMode by screenModel.linkOpenMode.collectAsState()
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isRefreshing,
@@ -327,7 +329,10 @@ data class BookmarkViewerScreen(
                                     onUrlClick = if (url.isNotEmpty()) {
                                         {
                                             try {
-                                                uriHandler.openUri(url)
+                                                when (linkOpenMode) {
+                                                    LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(url)
+                                                    LinkOpenMode.IN_APP_WEBVIEW -> navigator.push(WebViewScreen(url))
+                                                }
                                             } catch (e: Exception) {
                                                 e.printStackTrace()
                                             }
@@ -372,7 +377,14 @@ data class BookmarkViewerScreen(
                                     loadingState = state,
                                     highlights = highlights,
                                     onLinkClick = { linkUrl ->
-                                        navigator.push(WebViewScreen(linkUrl))
+                                        try {
+                                            when (linkOpenMode) {
+                                                LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(linkUrl)
+                                                LinkOpenMode.IN_APP_WEBVIEW -> navigator.push(WebViewScreen(linkUrl))
+                                            }
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
                                     },
                                     onCreateHighlight = { text, start, end, note, color ->
                                         screenModel.createHighlight(state.bookmark, text, start, end, note, color) { highlightId ->

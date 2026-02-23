@@ -18,6 +18,8 @@ import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Visibility
@@ -41,6 +43,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.screens.ReaderAppearanceScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
@@ -53,6 +56,7 @@ class BookmarkViewSettingsScreen : Screen {
         val screenModel = koinScreenModel<SettingsScreenModel>()
         val currentViewerMode by screenModel.viewerMode.collectAsState()
         val hideArticleThumbnails by screenModel.hideArticleThumbnails.collectAsState()
+        val currentLinkOpenMode by screenModel.linkOpenMode.collectAsState()
 
         Scaffold(
             topBar = {
@@ -223,6 +227,33 @@ class BookmarkViewSettingsScreen : Screen {
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Link Opening Settings
+                Text(
+                    text = "Link Handling",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                LayoutOption(
+                    title = "External Browser",
+                    description = "Open links in the system default browser",
+                    icon = Icons.Default.OpenInBrowser,
+                    isSelected = currentLinkOpenMode == LinkOpenMode.EXTERNAL_BROWSER,
+                    onClick = { screenModel.setLinkOpenMode(LinkOpenMode.EXTERNAL_BROWSER) }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LayoutOption(
+                    title = "In-App Web View",
+                    description = "Open links in a web view inside the app",
+                    icon = Icons.Default.OpenInNew,
+                    isSelected = currentLinkOpenMode == LinkOpenMode.IN_APP_WEBVIEW,
+                    onClick = { screenModel.setLinkOpenMode(LinkOpenMode.IN_APP_WEBVIEW) }
+                )
 
                 Spacer(modifier = Modifier.height(24.dp))
 

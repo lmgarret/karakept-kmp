@@ -1,6 +1,5 @@
 package com.karakept.app.ui.screens
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -12,66 +11,36 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import com.karakept.app.ui.components.HtmlContent
-import io.ktor.client.HttpClient
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
+import com.karakept.app.ui.components.UrlRenderer
 
 /**
- * Screen for displaying web content from links clicked in bookmark HTML.
- *
- * Note: This is a simplified implementation that attempts to fetch and display
- * the HTML content from the URL. For production use, consider:
- * - Loading indicators
- * - Error handling
- * - Progress feedback
- * - Network timeouts
+ * In-app browser screen that loads a URL in a native web view.
+ * Used when the user has configured links to open in-app rather than in an external browser.
  */
 data class WebViewScreen(val url: String) : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        var htmlContent by remember { mutableStateOf<String?>(null) }
-        var isLoading by remember { mutableStateOf(true) }
-        var error by remember { mutableStateOf<String?>(null) }
-
-        // Fetch the HTML content from the URL
-        LaunchedEffect(url) {
-            try {
-                // For now, just display a message indicating the URL
-                // In a full implementation, you might fetch the content
-                htmlContent = """
-                    <h2>Link Navigation</h2>
-                    <p>You clicked on:</p>
-                    <p><a href="$url">$url</a></p>
-                    <p><em>Note: For security reasons, external content fetching is not yet implemented.
-                    This would require additional security measures and user permissions.</em></p>
-                """.trimIndent()
-                isLoading = false
-            } catch (e: Exception) {
-                error = "Failed to load content: ${e.message}"
-                isLoading = false
-            }
-        }
+        var pageTitle by remember { mutableStateOf(url) }
 
         Scaffold(
             topBar = {
                 TopAppBar(
                     title = {
                         Text(
-                            text = "Web View",
-                            maxLines = 1
+                            text = pageTitle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     },
                     navigationIcon = {
@@ -82,31 +51,16 @@ data class WebViewScreen(val url: String) : Screen {
                 )
             }
         ) { padding ->
-            Column(
+            UrlRenderer(
+                url = url,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
-            ) {
-                when {
-                    isLoading -> {
-                        Text("Loading...")
-                    }
-                    error != null -> {
-                        Text("Error: $error")
-                    }
-                    else -> {
-                        HtmlContent(
-                            html = htmlContent,
-                            viewerMode = com.karakept.app.data.model.ViewerMode.READER,
-                            modifier = Modifier.fillMaxSize(),
-                            onLinkClick = { clickedUrl ->
-                                // Navigate to another WebViewScreen for the clicked link
-                                navigator.push(WebViewScreen(clickedUrl))
-                            }
-                        )
-                    }
+                    .padding(padding),
+                onPageTitleChanged = { title -> pageTitle = title },
+                onLinkClick = { clickedUrl ->
+                    navigator.push(WebViewScreen(clickedUrl))
                 }
-            }
+            )
         }
     }
 }

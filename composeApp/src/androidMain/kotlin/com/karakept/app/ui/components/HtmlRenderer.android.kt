@@ -778,18 +778,31 @@ actual fun HtmlRenderer(
                         request: WebResourceRequest?
                     ): Boolean {
                         val url = request?.url?.toString()
-                        if (url != null && onLinkClick != null) {
-                            onLinkClick(url)
-                            return true // Prevent WebView from loading the URL
+                        if (url != null) {
+                            // Let the WebView handle local anchor links internally (US4)
+                            // Anchor links within the same document have a file:// scheme and a non-null fragment
+                            if (request.url.scheme == "file" && request.url.fragment != null) {
+                                return false
+                            }
+                            if (onLinkClick != null) {
+                                onLinkClick(url)
+                                return true // Prevent WebView from loading the URL
+                            }
                         }
                         return false
                     }
 
                     @Deprecated("Deprecated in Java")
                     override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                        if (url != null && onLinkClick != null) {
-                            onLinkClick(url)
-                            return true
+                        if (url != null) {
+                            // Let the WebView handle local anchor links internally (US4)
+                            if (url.startsWith("file://") && url.contains("#")) {
+                                return false
+                            }
+                            if (onLinkClick != null) {
+                                onLinkClick(url)
+                                return true
+                            }
                         }
                         return false
                     }
