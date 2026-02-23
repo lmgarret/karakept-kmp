@@ -156,12 +156,22 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    signingConfigs {
+        val keystorePath = System.getenv("KEYSTORE_PATH")
+        if (keystorePath != null) {
+            create("ciSigning") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
+        val ciSigning = signingConfigs.findByName("ciSigning")
         getByName("release") {
             isMinifyEnabled = false
-            // Use debug signing for testing release builds
-            // For production, replace with proper release signing configuration
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = ciSigning ?: signingConfigs.getByName("debug")
         }
         create("devRelease") {
             initWith(getByName("release"))
