@@ -359,7 +359,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     }
 
     val linkOpenMode: Flow<LinkOpenMode> = dataStore.data.map { preferences ->
-        val modeString = preferences[LINK_OPEN_MODE_KEY] ?: LinkOpenMode.EXTERNAL_BROWSER.name
+        val modeString = preferences[LINK_OPEN_MODE_KEY] ?: LinkOpenMode.CUSTOM_TAB.name
         LinkOpenMode.fromString(modeString)
     }
 

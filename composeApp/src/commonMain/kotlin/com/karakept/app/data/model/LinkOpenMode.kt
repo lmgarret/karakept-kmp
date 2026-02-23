@@ -1,15 +1,16 @@
 package com.karakept.app.data.model
 
 enum class LinkOpenMode {
-    EXTERNAL_BROWSER, // Open links in the system default browser
-    IN_APP_WEBVIEW;   // Open links in an in-app web view
+    CUSTOM_TAB,        // Open links in a Custom Tab (uses the default browser session)
+    EXTERNAL_BROWSER;  // Open links in the system default browser (new process)
 
     companion object {
         fun fromString(value: String): LinkOpenMode {
             return when (value.uppercase()) {
+                "CUSTOM_TAB" -> CUSTOM_TAB
+                "IN_APP_WEBVIEW" -> CUSTOM_TAB // migrate legacy value
                 "EXTERNAL_BROWSER" -> EXTERNAL_BROWSER
-                "IN_APP_WEBVIEW" -> IN_APP_WEBVIEW
-                else -> EXTERNAL_BROWSER // Default to external browser
+                else -> CUSTOM_TAB // Default to custom tab
             }
         }
     }

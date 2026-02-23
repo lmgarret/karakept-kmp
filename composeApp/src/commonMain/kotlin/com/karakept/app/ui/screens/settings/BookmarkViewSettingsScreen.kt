@@ -238,21 +238,21 @@ class BookmarkViewSettingsScreen : Screen {
                 )
 
                 LayoutOption(
-                    title = "External Browser",
-                    description = "Open links in the system default browser",
-                    icon = Icons.Default.OpenInBrowser,
-                    isSelected = currentLinkOpenMode == LinkOpenMode.EXTERNAL_BROWSER,
-                    onClick = { screenModel.setLinkOpenMode(LinkOpenMode.EXTERNAL_BROWSER) }
+                    title = "Custom Tab",
+                    description = "Open links in a custom tab using the default browser session",
+                    icon = Icons.Default.OpenInNew,
+                    isSelected = currentLinkOpenMode == LinkOpenMode.CUSTOM_TAB,
+                    onClick = { screenModel.setLinkOpenMode(LinkOpenMode.CUSTOM_TAB) }
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 LayoutOption(
-                    title = "In-App Web View",
-                    description = "Open links in a web view inside the app",
-                    icon = Icons.Default.OpenInNew,
-                    isSelected = currentLinkOpenMode == LinkOpenMode.IN_APP_WEBVIEW,
-                    onClick = { screenModel.setLinkOpenMode(LinkOpenMode.IN_APP_WEBVIEW) }
+                    title = "External Browser",
+                    description = "Open links in the system default browser",
+                    icon = Icons.Default.OpenInBrowser,
+                    isSelected = currentLinkOpenMode == LinkOpenMode.EXTERNAL_BROWSER,
+                    onClick = { screenModel.setLinkOpenMode(LinkOpenMode.EXTERNAL_BROWSER) }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))

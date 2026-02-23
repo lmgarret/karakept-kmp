@@ -67,7 +67,7 @@ class BookmarkViewerScreenModel(
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val linkOpenMode: StateFlow<LinkOpenMode> = settingsRepository.linkOpenMode
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), LinkOpenMode.EXTERNAL_BROWSER)
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), LinkOpenMode.CUSTOM_TAB)
 
     private val _precrawledAssetPath = MutableStateFlow<String?>(null)
     val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()

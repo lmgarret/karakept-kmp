@@ -13,6 +13,7 @@ androidx-lifecycle = "2.8.4"
 androidx-material = "1.12.0"
 androidx-test-junit = "1.2.1"
 androidx-core-splashscreen = "1.0.1"
+androidx-browser = "1.8.0"
 compose-plugin = "1.7.1"
 junit = "4.13.2"
 kotlin = "2.1.0"
@@ -48,6 +49,7 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 androidx-lifecycle-viewmodel = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
 androidx-lifecycle-runtime-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidx-core-splashscreen" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "androidx-browser" }
 
 # Voyager
 voyager-navigator = { module = "cafe.adriel.voyager:voyager-navigator", version.ref = "voyager" }

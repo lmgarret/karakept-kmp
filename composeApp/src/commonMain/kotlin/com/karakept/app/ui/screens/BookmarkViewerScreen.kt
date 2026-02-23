@@ -41,6 +41,7 @@ import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.ui.components.rememberCustomTabOpener
 import com.karakept.app.ui.screens.viewer.*
 import com.karakept.app.utils.ShareUtils
 import kotlinx.coroutines.delay
@@ -63,6 +64,7 @@ data class BookmarkViewerScreen(
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()
         val uriHandler = LocalUriHandler.current
+        val openInCustomTab = rememberCustomTabOpener()
         val snackbarManager = koinInject<ActionSnackbarManager>()
 
         val loadingState by screenModel.loadingState.collectAsState()
@@ -330,8 +332,8 @@ data class BookmarkViewerScreen(
                                         {
                                             try {
                                                 when (linkOpenMode) {
+                                                    LinkOpenMode.CUSTOM_TAB -> openInCustomTab(url)
                                                     LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(url)
-                                                    LinkOpenMode.IN_APP_WEBVIEW -> navigator.push(WebViewScreen(url))
                                                 }
                                             } catch (e: Exception) {
                                                 e.printStackTrace()
@@ -379,8 +381,8 @@ data class BookmarkViewerScreen(
                                     onLinkClick = { linkUrl ->
                                         try {
                                             when (linkOpenMode) {
+                                                LinkOpenMode.CUSTOM_TAB -> openInCustomTab(linkUrl)
                                                 LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(linkUrl)
-                                                LinkOpenMode.IN_APP_WEBVIEW -> navigator.push(WebViewScreen(linkUrl))
                                             }
                                         } catch (e: Exception) {
                                             e.printStackTrace()

@@ -300,7 +300,7 @@ class SettingsScreenModel(
     val linkOpenMode: StateFlow<LinkOpenMode> = settingsRepository.linkOpenMode.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = LinkOpenMode.EXTERNAL_BROWSER
+        initialValue = LinkOpenMode.CUSTOM_TAB
     )
 
     fun setLinkOpenMode(mode: LinkOpenMode) {
