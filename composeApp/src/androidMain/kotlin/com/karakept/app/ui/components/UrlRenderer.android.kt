@@ -82,11 +82,18 @@ actual fun UrlRenderer(
                     }
                 }
 
+                // Store the URL we explicitly asked to load so the update block can
+                // distinguish "url parameter changed" from "user navigated inside browser".
+                tag = url
                 loadUrl(url)
             }
         },
         update = { webView ->
-            if (webView.url != url) {
+            // Only reload when the *parameter* url changes, not when the WebView has
+            // navigated to a different page (which would reset in-browser navigation).
+            val lastExplicitUrl = webView.tag as? String
+            if (lastExplicitUrl != url) {
+                webView.tag = url
                 webView.loadUrl(url)
             }
         }

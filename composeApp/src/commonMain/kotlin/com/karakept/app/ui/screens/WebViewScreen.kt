@@ -56,10 +56,11 @@ data class WebViewScreen(val url: String) : Screen {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                onPageTitleChanged = { title -> pageTitle = title },
-                onLinkClick = { clickedUrl ->
-                    navigator.push(WebViewScreen(clickedUrl))
-                }
+                onPageTitleChanged = { title -> pageTitle = title }
+                // onLinkClick is intentionally not passed: the WebView acts as a real in-app
+                // browser and handles navigation internally.  Overriding it to push new
+                // Voyager screens would also intercept HTTP redirects, leaving the WebView
+                // blank whenever the loaded URL issues a server-side redirect.
             )
         }
     }
