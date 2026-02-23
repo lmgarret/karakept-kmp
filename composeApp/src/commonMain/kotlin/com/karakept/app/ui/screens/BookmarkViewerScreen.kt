@@ -86,6 +86,7 @@ data class BookmarkViewerScreen(
 
         var showModeDialog by remember { mutableStateOf(false) }
         var showAppearancePanel by remember { mutableStateOf(false) }
+        var showDetailsPanel by remember { mutableStateOf(false) }
         var showMenu by remember { mutableStateOf(false) }
         var fabExpanded by remember { mutableStateOf(false) }
         var showDeleteConfirmation by remember { mutableStateOf(false) }
@@ -336,6 +337,7 @@ data class BookmarkViewerScreen(
                                         mainScreenModel.applyTagFilter(tag, bookmarkId)
                                         navigator.pop()
                                     },
+                                    onInfoClick = { showDetailsPanel = true },
                                     bannerImageUrl = bannerImageUrl,
                                     screenshotUrl = screenshotUrl,
                                     bannerImageLocalPath = bannerImageLocalPath,
@@ -433,10 +435,11 @@ data class BookmarkViewerScreen(
         }
 
         // Back Handler for panels
-        com.karakept.app.ui.components.BackHandler(enabled = showAppearancePanel || showModeDialog || selectedHighlightId != null) {
-            if (showAppearancePanel) showAppearancePanel = false
-            if (showModeDialog) showModeDialog = false
-            if (selectedHighlightId != null) selectedHighlightId = null
+        com.karakept.app.ui.components.BackHandler(enabled = showAppearancePanel || showModeDialog || selectedHighlightId != null || showDetailsPanel) {
+            if (showDetailsPanel) showDetailsPanel = false
+            else if (showAppearancePanel) showAppearancePanel = false
+            else if (showModeDialog) showModeDialog = false
+            else if (selectedHighlightId != null) selectedHighlightId = null
         }
 
         // Viewer mode dialog
@@ -535,6 +538,14 @@ data class BookmarkViewerScreen(
                 selectedHighlightId = null
                 selectedHighlightText = null
             }
+        )
+
+        // Bookmark Details Panel (slides from the right)
+        val detailsBookmark = (loadingState as? BookmarkLoadingState.FullyLoaded)?.bookmark
+        BookmarkDetailsPanel(
+            visible = showDetailsPanel,
+            bookmark = detailsBookmark,
+            onDismiss = { showDetailsPanel = false }
         )
     }
 }
