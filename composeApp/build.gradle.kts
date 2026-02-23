@@ -149,6 +149,7 @@ android {
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
+        manifestPlaceholders["appName"] = "Karakept"
     }
     packaging {
         resources {
@@ -161,6 +162,12 @@ android {
             // Use debug signing for testing release builds
             // For production, replace with proper release signing configuration
             signingConfig = signingConfigs.getByName("debug")
+        }
+        create("devRelease") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            manifestPlaceholders["appName"] = "Karakept Dev"
         }
     }
     compileOptions {
