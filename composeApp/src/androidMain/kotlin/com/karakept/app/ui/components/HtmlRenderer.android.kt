@@ -64,6 +64,10 @@ actual fun HtmlRenderer(
     val lastAppliedHighlights = remember { mutableStateOf<List<com.karakept.app.data.model.Highlight>>(emptyList()) }
     val pageLoaded = remember { mutableStateOf(false) }
 
+    // Wrap onLinkClick in a MutableState so the WebViewClient always invokes the latest
+    // lambda even when linkOpenMode changes after the AndroidView factory has run.
+    val onLinkClickState = remember { mutableStateOf(onLinkClick) }
+
     // Track selection bounds for ActionMode positioning
     val selectionRect = remember { mutableStateOf<android.graphics.Rect?>(null) }
 
@@ -784,8 +788,9 @@ actual fun HtmlRenderer(
                             if (request.url.scheme == "file" && request.url.fragment != null) {
                                 return false
                             }
-                            if (onLinkClick != null) {
-                                onLinkClick(url)
+                            val handler = onLinkClickState.value
+                            if (handler != null) {
+                                handler(url)
                                 return true // Prevent WebView from loading the URL
                             }
                         }
@@ -799,8 +804,9 @@ actual fun HtmlRenderer(
                             if (url.startsWith("file://") && url.contains("#")) {
                                 return false
                             }
-                            if (onLinkClick != null) {
-                                onLinkClick(url)
+                            val handler = onLinkClickState.value
+                            if (handler != null) {
+                                handler(url)
                                 return true
                             }
                         }
@@ -853,6 +859,10 @@ actual fun HtmlRenderer(
             }
         },
         update = { webView ->
+            // Keep the link-click handler current so that a linkOpenMode change that
+            // triggers recomposition takes effect on the very next tap.
+            onLinkClickState.value = onLinkClick
+
             // Handle HTML content reload - only reload if content actually changed
             if (lastLoadedHtml.value != themedHtml) {
                 pageLoaded.value = false
