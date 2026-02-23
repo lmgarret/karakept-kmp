@@ -72,6 +72,9 @@
           "favourited": {
             "type": "boolean"
           },
+          "read": {
+            "type": "boolean"
+          },
           "taggingStatus": {
             "type": "string",
             "nullable": true,
@@ -361,6 +364,7 @@
           "modifiedAt",
           "archived",
           "favourited",
+          "read",
           "taggingStatus",
           "summarizationStatus",
           "userId",
@@ -741,6 +745,9 @@
                       "favourited": {
                         "type": "boolean"
                       },
+                      "read": {
+                        "type": "boolean"
+                      },
                       "note": {
                         "type": "string"
                       },
@@ -1119,6 +1126,9 @@
                   "favourited": {
                     "type": "boolean"
                   },
+                  "read": {
+                    "type": "boolean"
+                  },
                   "summary": {
                     "type": "string",
                     "nullable": true
@@ -1200,6 +1210,9 @@
                     "favourited": {
                       "type": "boolean"
                     },
+                    "read": {
+                      "type": "boolean"
+                    },
                     "taggingStatus": {
                       "type": "string",
                       "nullable": true,
@@ -1250,6 +1263,7 @@
                     "modifiedAt",
                     "archived",
                     "favourited",
+                    "read",
                     "taggingStatus",
                     "summarizationStatus",
                     "userId"
@@ -1328,6 +1342,9 @@
                     "favourited": {
                       "type": "boolean"
                     },
+                    "read": {
+                      "type": "boolean"
+                    },
                     "taggingStatus": {
                       "type": "string",
                       "nullable": true,
@@ -1378,6 +1395,7 @@
                     "modifiedAt",
                     "archived",
                     "favourited",
+                    "read",
                     "taggingStatus",
                     "summarizationStatus",
                     "userId"

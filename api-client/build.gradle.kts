@@ -53,7 +53,11 @@ android {
 openApiGenerate {
     generatorName.set("kotlin")
     templateDir.set("${projectDir}/templates")
-    inputSpec.set("${rootDir}/karakeep-upstream/packages/open-api/karakeep-openapi-spec.json")
+    val submoduleSpec = file("${rootDir}/karakeep-upstream/packages/open-api/karakeep-openapi-spec.json")
+    inputSpec.set(
+        if (submoduleSpec.exists() && submoduleSpec.length() > 0L) submoduleSpec.absolutePath
+        else "${rootDir}/.devcontainer/docs/karakeep-openapi-spec.json"
+    )
     outputDir.set(generatedSourcesDir.get().asFile.absolutePath)
     packageName.set("com.karakept.api")
     apiPackage.set("com.karakept.api.client")

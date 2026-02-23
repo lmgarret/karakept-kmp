@@ -48,9 +48,6 @@ class BookmarkActionsRepository(
     private val _bookmarkChangedEvents = MutableSharedFlow<Long>(extraBufferCapacity = 16)
     val bookmarkChangedEvents: SharedFlow<Long> = _bookmarkChangedEvents
     
-    // Cache for tag IDs to handle read/unread toggling race conditions
-    private val recentlyAddedReadTagIds = mutableMapOf<String, String>() // BookmarkID -> TagID
-    
     fun setBookmarkRepository(repository: com.karakept.app.data.repository.BookmarkRepository) {
         _bookmarkRepository = repository
     }
@@ -147,30 +144,22 @@ class BookmarkActionsRepository(
     }
 
     /**
-     * Mark bookmark as read using the "karakept:read" tag.
+     * Mark bookmark as read using Karakeep's native read-tracking API.
      */
     suspend fun markAsRead(bookmarkRemoteId: Long, serverId: String) {
         performAction {
             withContext(Dispatchers.IO) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
-                    // Update isRead AND add the tag to the string if not present
-                    val currentTags = it.tags.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() }.toMutableList()
-                    if (!currentTags.contains("karakept:read")) {
-                        currentTags.add("karakept:read")
-                    }
-                    bookmarkDao.insertBookmark(it.copy(
-                        isRead = true,
-                        tags = currentTags.joinToString(",")
-                    ))
+                    bookmarkDao.insertBookmark(it.copy(isRead = true))
                 }
 
                 // Check if there is a pending MARK_UNREAD action for this bookmark.
                 // If so, delete it instead of queuing a new MARK_READ action.
                 val pendingStats = pendingActionDao.getPendingActionsList(serverId)
-                val pendingUnread = pendingStats.find { 
-                    it.bookmarkRemoteId == bookmarkRemoteId && 
-                    it.actionType == PendingActionType.MARK_UNREAD 
+                val pendingUnread = pendingStats.find {
+                    it.bookmarkRemoteId == bookmarkRemoteId &&
+                    it.actionType == PendingActionType.MARK_UNREAD
                 }
 
                 if (pendingUnread != null) {
@@ -181,7 +170,7 @@ class BookmarkActionsRepository(
                         bookmarkRemoteId = bookmarkRemoteId,
                         serverId = serverId,
                         actionType = PendingActionType.MARK_READ,
-                        actionData = json.encodeToString(mapOf("tags" to listOf("karakept:read")))
+                        actionData = "{}"
                     )
                 }
 
@@ -194,25 +183,18 @@ class BookmarkActionsRepository(
     }
 
     /**
-     * Mark bookmark as unread by removing the "karakept:read" tag.
+     * Mark bookmark as unread using Karakeep's native read-tracking API.
      */
-    suspend fun markAsUnread(bookmarkRemoteId: Long, serverId: String, existingTags: List<String>) {
+    suspend fun markAsUnread(bookmarkRemoteId: Long, serverId: String) {
         performAction {
             withContext(Dispatchers.IO) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
-                    // Update isRead AND remove the tag
-                    val currentTags = it.tags.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() }.toMutableList()
-                    currentTags.remove("karakept:read")
-                    bookmarkDao.insertBookmark(it.copy(
-                        isRead = false,
-                        tags = currentTags.joinToString(",")
-                    ))
+                    bookmarkDao.insertBookmark(it.copy(isRead = false))
                 }
 
                 // Check if there is a pending MARK_READ action for this bookmark.
                 // If so, delete it instead of queuing a new MARK_UNREAD action.
-                // This effectively cancels the previous action locally, preventing the race condition.
                 val pendingStats = pendingActionDao.getPendingActionsList(serverId)
                 val pendingRead = pendingStats.find {
                     it.bookmarkRemoteId == bookmarkRemoteId &&
@@ -223,12 +205,11 @@ class BookmarkActionsRepository(
                     println("BookmarkActionsRepository: Found pending MARK_READ for bookmark $bookmarkRemoteId. Deleting it instead of queuing MARK_UNREAD.")
                     pendingActionDao.deleteAction(pendingRead)
                 } else {
-                    // Find the tag ID for "karakept:read" from existing tags
                     queueAction(
                         bookmarkRemoteId = bookmarkRemoteId,
                         serverId = serverId,
                         actionType = PendingActionType.MARK_UNREAD,
-                        actionData = json.encodeToString(mapOf("tagName" to "karakept:read"))
+                        actionData = "{}"
                     )
                 }
 
@@ -283,12 +264,7 @@ class BookmarkActionsRepository(
         withContext(Dispatchers.IO) {
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
             bookmark?.let {
-                // Update isRead based on whether karakept:read tag is present
-                val hasReadTag = newTags.contains("karakept:read")
-                bookmarkDao.insertBookmark(it.copy(
-                    tags = newTags.joinToString(","),
-                    isRead = hasReadTag
-                ))
+                bookmarkDao.insertBookmark(it.copy(tags = newTags.joinToString(",")))
             }
 
             queueAction(
@@ -644,46 +620,12 @@ class BookmarkActionsRepository(
                     }
                 }
                 PendingActionType.MARK_READ -> {
-                    val data = json.decodeFromString<Map<String, List<String>>>(action.actionData)
-                    val tags = data["tags"] ?: emptyList()
-                    println("BookmarkActionsRepository: Calling attachTags for mark_read with tags: $tags")
-                    val response = remoteDataSource.attachTags(server, bookmarkId, tags)
-                    
-                    // The new API returns List<String> (tag names)
-                    // We can't cache IDs anymore, so we'll have to fetch them when unreading
-                    // if they are not already cached from a previous fetch.
-                    println("BookmarkActionsRepository: Attached tags: ${response.attached}")
+                    println("BookmarkActionsRepository: Calling updateBookmark with read=true")
+                    remoteDataSource.updateBookmark(server, bookmarkId, BookmarksBookmarkIdPatchRequest(read = true))
                 }
                 PendingActionType.MARK_UNREAD -> {
-                    // Try to get tag ID from cache first
-                    var tagId = recentlyAddedReadTagIds[bookmarkId]
-                    
-                    if (tagId == null) {
-                        // Fetch the bookmark from server to get tag IDs
-                        println("BookmarkActionsRepository: Fetching bookmark to find karakept:read tag ID")
-                        try {
-                            val bookmarkDto = remoteDataSource.fetchBookmark(server, bookmarkId, includeContent = false)
-                            val readTag = bookmarkDto.tags?.find { it.name == "karakept:read" }
-                            tagId = readTag?.id
-                        } catch (e: Exception) {
-                            println("BookmarkActionsRepository: Error fetching bookmark: ${e.message}")
-                            // Start throwing so we retry? Or just log? 
-                            // If fetch fails, we probably want to retry.
-                            throw e
-                        }
-                    } else {
-                        println("BookmarkActionsRepository: Using cached read tag ID $tagId")
-                    }
-
-                    if (tagId != null) {
-                        println("BookmarkActionsRepository: Detaching tag $tagId")
-                        remoteDataSource.detachTags(server, bookmarkId, listOf(tagId))
-                        // Remove from cache
-                        recentlyAddedReadTagIds.remove(bookmarkId)
-                    } else {
-                        println("BookmarkActionsRepository: karakept:read tag not found on bookmark, throwing to retry")
-                        throw Exception("Read tag not found on bookmark yet, retrying")
-                    }
+                    println("BookmarkActionsRepository: Calling updateBookmark with read=false")
+                    remoteDataSource.updateBookmark(server, bookmarkId, BookmarksBookmarkIdPatchRequest(read = false))
                 }
                 PendingActionType.MOVE_TO_LIST -> {
                     val data = json.decodeFromString<Map<String, String>>(action.actionData)

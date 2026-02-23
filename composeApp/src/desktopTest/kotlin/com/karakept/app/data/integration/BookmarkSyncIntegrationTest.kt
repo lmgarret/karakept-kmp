@@ -204,7 +204,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
     }
 
     @Test
-    fun testMarkAsReadAction_addsReadTagOnServer() = runTest(testDispatcher) {
+    fun testMarkAsReadAction_setsReadOnServer() = runTest(testDispatcher) {
         assertTrue(isDockerRunning, "Docker should be running")
 
         val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, "https://read-action.example.com/${System.currentTimeMillis()}")
@@ -220,8 +220,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
 
         val remote = remoteDataSource.fetchBookmark(testServer, remoteId)
-        val hasReadTag = remote.tags?.any { it.name == "karakept:read" } ?: false
-        assertTrue(hasReadTag, "Server should have 'karakept:read' tag after mark-as-read")
+        assertTrue(remote.read == true, "Server should have read=true after mark-as-read")
     }
 
     @Test

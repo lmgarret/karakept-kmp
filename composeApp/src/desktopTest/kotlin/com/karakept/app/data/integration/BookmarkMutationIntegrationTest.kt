@@ -59,12 +59,10 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
 
         val remoteAfterRead = remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
-        val hasReadTag = remoteAfterRead.tags?.any { it.name == "karakept:read" } == true
-        assertTrue(hasReadTag, "Server should have karakept:read tag")
+        assertTrue(remoteAfterRead.read == true, "Server should have read=true after marking as read")
 
         // Mark as unread
-        val tags = afterRead?.tags?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
-        bookmarkActionsRepository.markAsUnread(bookmark.remoteId, testServer.id, tags)
+        bookmarkActionsRepository.markAsUnread(bookmark.remoteId, testServer.id)
 
         val afterUnread = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertTrue(afterUnread?.isRead == false, "Bookmark should be marked as unread locally")
@@ -72,8 +70,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
 
         val remoteAfterUnread = remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
-        val stillHasReadTag = remoteAfterUnread.tags?.any { it.name == "karakept:read" } == true
-        assertTrue(!stillHasReadTag, "Server should not have karakept:read tag after unread")
+        assertTrue(remoteAfterUnread.read != true, "Server should have read=false after marking as unread")
     }
 
     @Test
@@ -94,11 +91,11 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
 
         val remoteRead = remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
-        assertTrue(remoteRead.tags?.any { it.name == "karakept:read" } == true, "Should have read tag on server")
+        assertTrue(remoteRead.read == true, "Should have read=true on server")
 
         // 2. Add custom tags
         val customTags = listOf("important", "work", "to-review")
-        bookmarkActionsRepository.updateTags(bookmark.remoteId, bookmark.serverId, customTags + "karakept:read", isOnline = true)
+        bookmarkActionsRepository.updateTags(bookmark.remoteId, bookmark.serverId, customTags, isOnline = true)
 
         val afterTags = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
         val localTags = afterTags?.tags?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
