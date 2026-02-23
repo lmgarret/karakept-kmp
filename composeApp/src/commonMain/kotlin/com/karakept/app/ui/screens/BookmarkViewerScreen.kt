@@ -7,10 +7,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -60,6 +58,7 @@ data class BookmarkViewerScreen(
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = getScreenModel<BookmarkViewerScreenModel>()
+        val mainScreenModel = koinInject<MainScreenModel>()
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()
         val uriHandler = LocalUriHandler.current
@@ -307,30 +306,6 @@ data class BookmarkViewerScreen(
                             .fillMaxSize()
                             .pullRefresh(pullRefreshState, enabled = !offlineMode)
                     ) {
-                        // Parallax Header (Behind the list)
-                        HeroBannerSection(
-                            title = title,
-                            url = url,
-                            tags = state.bookmark.tags,
-                            readingTimeMinutes = readingTimeMinutes,
-                            showTags = showTags,
-                            scrollState = scrollState,
-                            bannerHeight = bannerHeight,
-                            onUrlClick = if (url.isNotEmpty()) {
-                                {
-                                    try {
-                                        uriHandler.openUri(url)
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                }
-                            } else null,
-                            bannerImageUrl = bannerImageUrl,
-                            screenshotUrl = screenshotUrl,
-                            bannerImageLocalPath = bannerImageLocalPath,
-                            screenshotLocalPath = screenshotLocalPath
-                        )
-
                         // Content List
                         // Only blur when the highlight is actually found and panel will show
                         LazyColumn(
@@ -339,9 +314,33 @@ data class BookmarkViewerScreen(
                                 .fillMaxSize()
                                 .then(if (selectedHighlightId != null && selectedHighlight != null) Modifier.blur(8.dp) else Modifier)
                         ) {
-                            // Transparent spacer for the header
-                            item(key = "header_spacer") {
-                                Spacer(modifier = Modifier.height(bannerHeight))
+                            // Hero banner as first item so tag/URL clicks are not blocked by the list
+                            item(key = "hero_banner") {
+                                HeroBannerSection(
+                                    title = title,
+                                    url = url,
+                                    tags = state.bookmark.tags,
+                                    readingTimeMinutes = readingTimeMinutes,
+                                    showTags = showTags,
+                                    scrollState = scrollState,
+                                    onUrlClick = if (url.isNotEmpty()) {
+                                        {
+                                            try {
+                                                uriHandler.openUri(url)
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                            }
+                                        }
+                                    } else null,
+                                    onTagClick = { tag ->
+                                        mainScreenModel.applyTagFilter(tag, bookmarkId)
+                                        navigator.pop()
+                                    },
+                                    bannerImageUrl = bannerImageUrl,
+                                    screenshotUrl = screenshotUrl,
+                                    bannerImageLocalPath = bannerImageLocalPath,
+                                    screenshotLocalPath = screenshotLocalPath
+                                )
                             }
 
                             // Description Card
