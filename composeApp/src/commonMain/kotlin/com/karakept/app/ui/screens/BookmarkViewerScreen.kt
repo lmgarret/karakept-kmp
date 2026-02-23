@@ -37,7 +37,6 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
@@ -334,7 +333,7 @@ data class BookmarkViewerScreen(
                                         }
                                     } else null,
                                     onTagClick = { tag ->
-                                        mainScreenModel.applyFilter(FilterConfig(tags = listOf(tag)))
+                                        mainScreenModel.applyTagFilter(tag, bookmarkId)
                                         navigator.pop()
                                     },
                                     bannerImageUrl = bannerImageUrl,

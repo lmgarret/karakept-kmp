@@ -7,6 +7,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,7 +29,8 @@ internal fun MainScreenTopBar(
     onFilterClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onOfflineBadgeClick: () -> Unit = {},
-    isDesktop: Boolean
+    isDesktop: Boolean,
+    hasActiveFilter: Boolean = false
 ) {
     TopAppBar(
         title = {
@@ -49,7 +52,9 @@ internal fun MainScreenTopBar(
         },
         actions = {
             IconButton(onClick = onFilterClick) {
-                Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                BadgedBox(badge = { if (hasActiveFilter) Badge() }) {
+                    Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                }
             }
             if (isDesktop) {
                 IconButton(
