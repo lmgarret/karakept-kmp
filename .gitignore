@@ -35,3 +35,7 @@ composeApp/build
 
 kcef-bundle
 build/
+
+# Signing keystores
+*.keystore
+*.jks
