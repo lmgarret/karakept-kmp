@@ -103,7 +103,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         var emittedId: Long? = null
-        val job = kotlinx.coroutines.launch {
+        val job = launch {
             repository.bookmarkChangedEvents.collect { emittedId = it }
         }
         // Advance scheduler so the collector coroutine starts and subscribes to the SharedFlow
@@ -172,7 +172,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         var emittedId: Long? = null
-        val job = kotlinx.coroutines.launch {
+        val job = launch {
             repository.bookmarkChangedEvents.collect { emittedId = it }
         }
         // Advance scheduler so the collector coroutine starts and subscribes to the SharedFlow
