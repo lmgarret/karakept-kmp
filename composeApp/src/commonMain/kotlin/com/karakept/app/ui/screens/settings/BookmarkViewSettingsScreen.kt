@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.Switch
@@ -112,6 +113,45 @@ class BookmarkViewSettingsScreen : Screen {
                 )
 
                 val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
+                val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timeline,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                        ) {
+                            Text(
+                                text = "Track Reading Progress",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Save scroll position to resume reading and show progress in bookmark list",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = trackReadingProgress,
+                            onCheckedChange = { screenModel.setTrackReadingProgress(it) }
+                        )
+                    }
+                }
 
                 Card(
                     modifier = Modifier

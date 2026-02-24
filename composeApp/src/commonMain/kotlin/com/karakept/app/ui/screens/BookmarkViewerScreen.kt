@@ -82,6 +82,7 @@ data class BookmarkViewerScreen(
         val offlineMode by screenModel.offlineMode.collectAsState()
         val highlights by screenModel.highlights.collectAsState()
         val linkOpenMode by screenModel.linkOpenMode.collectAsState()
+        val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isRefreshing,
@@ -155,6 +156,18 @@ data class BookmarkViewerScreen(
         val bannerHeight = 320.dp
         val toolbarHeight = 56.dp
 
+        // Restore scroll position when the bookmark finishes loading (only once)
+        var hasRestoredScroll by remember { mutableStateOf(false) }
+        LaunchedEffect(loadingState, trackReadingProgress) {
+            if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
+                val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
+                if (bookmark.readingProgress > 0f) {
+                    scrollState.scrollToItem(bookmark.readingScrollIndex, bookmark.readingScrollOffset)
+                }
+                hasRestoredScroll = true
+            }
+        }
+
         // Keep the last valid FullyLoaded state to prevent error flash during navigation
         var lastValidState by remember { mutableStateOf<BookmarkLoadingState>(loadingState) }
 
@@ -206,6 +219,25 @@ data class BookmarkViewerScreen(
         )
 
         val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
+
+        // Debounced save of reading progress while the user scrolls
+        LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
+            if (trackReadingProgress && hasRestoredScroll && loadingState is BookmarkLoadingState.FullyLoaded) {
+                // Only save when the user has actually scrolled into the content
+                if (readingProgress > 0f || scrollState.firstVisibleItemIndex > 0) {
+                    delay(1500) // Debounce: wait 1.5s without scroll changes before saving
+                    val currentState = loadingState
+                    if (currentState is BookmarkLoadingState.FullyLoaded) {
+                        screenModel.saveReadingProgress(
+                            localId = currentState.bookmark.localId,
+                            progress = readingProgress,
+                            scrollIndex = scrollState.firstVisibleItemIndex,
+                            scrollOffset = scrollState.firstVisibleItemScrollOffset
+                        )
+                    }
+                }
+            }
+        }
 
         Scaffold(
             snackbarHost = {

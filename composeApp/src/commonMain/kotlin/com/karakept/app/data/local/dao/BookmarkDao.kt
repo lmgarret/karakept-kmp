@@ -51,6 +51,20 @@ interface BookmarkDao {
     @Query("UPDATE bookmarks SET content = :content, readingTimeMinutes = :readingTime WHERE localId = :localId")
     suspend fun updateContent(localId: Long, content: String, readingTime: Int)
 
+    @Query("""
+        UPDATE bookmarks SET
+            readingProgress = :progress,
+            readingScrollIndex = :scrollIndex,
+            readingScrollOffset = :scrollOffset
+        WHERE localId = :localId
+    """)
+    suspend fun updateReadingProgress(
+        localId: Long,
+        progress: Float,
+        scrollIndex: Int,
+        scrollOffset: Int
+    )
+
     // Update only metadata fields, preserving content
     @Query("""
         UPDATE bookmarks SET

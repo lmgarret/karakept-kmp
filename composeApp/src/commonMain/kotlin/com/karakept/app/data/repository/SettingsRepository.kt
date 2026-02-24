@@ -423,6 +423,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     private val DIM_READ_BOOKMARKS_KEY = booleanPreferencesKey("dim_read_bookmarks")
     private val AUTO_MARK_READ_ON_SCROLL_KEY = booleanPreferencesKey("auto_mark_read_on_scroll")
+    private val TRACK_READING_PROGRESS_KEY = booleanPreferencesKey("track_reading_progress")
 
     val dimReadBookmarks: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[DIM_READ_BOOKMARKS_KEY] ?: true
@@ -430,6 +431,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     val autoMarkReadOnScroll: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[AUTO_MARK_READ_ON_SCROLL_KEY] ?: false
+    }
+
+    val trackReadingProgress: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[TRACK_READING_PROGRESS_KEY] ?: true // Default: enabled
     }
 
     suspend fun setDimReadBookmarks(dim: Boolean) {
@@ -441,6 +446,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setAutoMarkReadOnScroll(autoMark: Boolean) {
         dataStore.edit { preferences ->
             preferences[AUTO_MARK_READ_ON_SCROLL_KEY] = autoMark
+        }
+    }
+
+    suspend fun setTrackReadingProgress(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[TRACK_READING_PROGRESS_KEY] = enabled
         }
     }
 

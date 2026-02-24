@@ -101,6 +101,15 @@ class BookmarkViewerScreenModel(
     val offlineMode: StateFlow<Boolean> = settingsRepository.offlineMode
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val trackReadingProgress: StateFlow<Boolean> = settingsRepository.trackReadingProgress
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun saveReadingProgress(localId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
+        screenModelScope.launch {
+            bookmarkDao.updateReadingProgress(localId, progress, scrollIndex, scrollOffset)
+        }
+    }
+
     fun refreshBookmark(id: Long) {
         val currentState = _loadingState.value
         if (currentState !is BookmarkLoadingState.FullyLoaded) {

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -121,6 +122,19 @@ fun BookmarkCardLayout(
                             .padding(8.dp)
                     )
                 }
+            }
+
+            // Reading progress bar - shown at the bottom of the card when partially read
+            if (bookmark.readingProgress > 0f && bookmark.readingProgress < 1f) {
+                LinearProgressIndicator(
+                    progress = { bookmark.readingProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .align(Alignment.BottomCenter),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             }
         }
     }
@@ -251,6 +265,19 @@ fun BookmarkListLayout(
                             .padding(8.dp)
                     )
                 }
+            }
+
+            // Reading progress bar - shown at the bottom of the card when partially read
+            if (bookmark.readingProgress > 0f && bookmark.readingProgress < 1f) {
+                LinearProgressIndicator(
+                    progress = { bookmark.readingProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .align(Alignment.BottomCenter),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             }
         }
     }

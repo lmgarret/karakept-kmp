@@ -336,6 +336,12 @@ class SettingsScreenModel(
         initialValue = false
     )
 
+    val trackReadingProgress: StateFlow<Boolean> = settingsRepository.trackReadingProgress.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
     fun setDimReadBookmarks(dim: Boolean) {
         screenModelScope.launch {
             settingsRepository.setDimReadBookmarks(dim)
@@ -345,6 +351,12 @@ class SettingsScreenModel(
     fun setAutoMarkReadOnScroll(autoMark: Boolean) {
         screenModelScope.launch {
             settingsRepository.setAutoMarkReadOnScroll(autoMark)
+        }
+    }
+
+    fun setTrackReadingProgress(enabled: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setTrackReadingProgress(enabled)
         }
     }
 
