@@ -5,6 +5,7 @@ import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ThemeMode
@@ -260,6 +261,69 @@ class SettingsScreenModel(
         }
     }
 
+    val customSwipeActionConfigs: StateFlow<List<com.karakept.app.data.model.CustomSwipeActionConfig>> =
+        settingsRepository.customSwipeActionConfigs.stateIn(
+            scope = screenModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val swipeLeftConfigId: StateFlow<String?> = settingsRepository.swipeLeftConfigId.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    val swipeRightConfigId: StateFlow<String?> = settingsRepository.swipeRightConfigId.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    fun addCustomSwipeActionConfig(config: com.karakept.app.data.model.CustomSwipeActionConfig) {
+        screenModelScope.launch {
+            val updated = customSwipeActionConfigs.value + config
+            settingsRepository.setCustomSwipeActionConfigs(updated)
+        }
+    }
+
+    fun updateCustomSwipeActionConfig(config: com.karakept.app.data.model.CustomSwipeActionConfig) {
+        screenModelScope.launch {
+            val updated = customSwipeActionConfigs.value.map {
+                if (it.id == config.id) config else it
+            }
+            settingsRepository.setCustomSwipeActionConfigs(updated)
+        }
+    }
+
+    fun removeCustomSwipeActionConfig(id: String) {
+        screenModelScope.launch {
+            val updated = customSwipeActionConfigs.value.filter { it.id != id }
+            settingsRepository.setCustomSwipeActionConfigs(updated)
+            // Clear config ID if it was assigned to a swipe direction
+            if (swipeLeftConfigId.value == id) {
+                settingsRepository.setSwipeLeftConfigId(null)
+                settingsRepository.setSwipeLeftAction(com.karakept.app.data.model.SwipeAction.NONE)
+            }
+            if (swipeRightConfigId.value == id) {
+                settingsRepository.setSwipeRightConfigId(null)
+                settingsRepository.setSwipeRightAction(com.karakept.app.data.model.SwipeAction.NONE)
+            }
+        }
+    }
+
+    fun setSwipeLeftConfigId(id: String?) {
+        screenModelScope.launch {
+            settingsRepository.setSwipeLeftConfigId(id)
+        }
+    }
+
+    fun setSwipeRightConfigId(id: String?) {
+        screenModelScope.launch {
+            settingsRepository.setSwipeRightConfigId(id)
+        }
+    }
+
     val dimReadBookmarks: StateFlow<Boolean> = settingsRepository.dimReadBookmarks.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -293,6 +357,18 @@ class SettingsScreenModel(
     fun setNotificationsEnabled(enabled: Boolean) {
         screenModelScope.launch {
             settingsRepository.setNotificationsEnabled(enabled)
+        }
+    }
+
+    val linkOpenMode: StateFlow<LinkOpenMode> = settingsRepository.linkOpenMode.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = LinkOpenMode.CUSTOM_TAB
+    )
+
+    fun setLinkOpenMode(mode: LinkOpenMode) {
+        screenModelScope.launch {
+            settingsRepository.setLinkOpenMode(mode)
         }
     }
 

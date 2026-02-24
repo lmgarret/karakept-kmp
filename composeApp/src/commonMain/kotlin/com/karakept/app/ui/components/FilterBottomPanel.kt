@@ -1,5 +1,6 @@
 package com.karakept.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -236,15 +237,24 @@ fun FilterBottomPanel(
                 // Lists
                 if (availableLists.isNotEmpty()) {
                     Text("Lists", style = MaterialTheme.typography.titleMedium)
+                    val sortedLists = remember(availableLists, filter.lists) {
+                        val sel = availableLists.filter { filter.lists.contains(it.id ?: "") }
+                        val unsel = availableLists.filter { !filter.lists.contains(it.id ?: "") }
+                        sel + unsel
+                    }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(vertical = 8.dp)
                     ) {
-                        availableLists.forEach { list ->
+                        sortedLists.forEach { list ->
                             val listId = list.id ?: ""
                             val isSelected = filter.lists.contains(listId)
                             FilterChip(
                                 selected = isSelected,
+                                border = if (isSelected)
+                                    BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                                else
+                                    FilterChipDefaults.filterChipBorder(enabled = true, selected = false),
                                 onClick = {
                                     val newLists = if (isSelected) {
                                         filter.lists - listId
@@ -264,20 +274,28 @@ fun FilterBottomPanel(
                 // Tags
                 if (availableTags.isNotEmpty()) {
                     Text("Tags", style = MaterialTheme.typography.titleMedium)
-
-                    // Searchable tags would be better here if list is long
-                    // For now, simple FlowRow
+                    val sortedTags = remember(availableTags, filter.tags) {
+                        val sel = availableTags.filter { tag ->
+                            filter.tags.contains(tag.substringBefore(" (").trim())
+                        }
+                        val unsel = availableTags.filter { tag ->
+                            !filter.tags.contains(tag.substringBefore(" (").trim())
+                        }
+                        sel + unsel
+                    }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(vertical = 8.dp)
                     ) {
-                        // Show all available tags (which should be top 10 passed from parent)
-                        availableTags.forEach { tagWithCount ->
-                            // Strip count from display (e.g., "tag (5)" -> "tag")
+                        sortedTags.forEach { tagWithCount ->
                             val tagName = tagWithCount.substringBefore(" (").trim()
                             val isSelected = filter.tags.contains(tagName)
                             FilterChip(
                                 selected = isSelected,
+                                border = if (isSelected)
+                                    BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                                else
+                                    FilterChipDefaults.filterChipBorder(enabled = true, selected = false),
                                 onClick = {
                                     val newTags = if (isSelected) {
                                         filter.tags - tagName
@@ -289,8 +307,7 @@ fun FilterBottomPanel(
                                 label = { Text(tagWithCount) }
                             )
                         }
-                        // Always show option to see more if we have a lot (handled by parent logic mostly, but UI here)
-                         TextButton(onClick = { showTagsDialog = true }) {
+                        TextButton(onClick = { showTagsDialog = true }) {
                             Text("More tags...")
                         }
                     }

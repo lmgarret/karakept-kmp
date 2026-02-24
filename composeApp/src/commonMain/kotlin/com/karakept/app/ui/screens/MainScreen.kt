@@ -70,15 +70,23 @@ object MainScreen : Screen {
         val hasMoreItems by screenModel.hasMoreItems.collectAsState()
         val savedFilters by screenModel.savedFilters.collectAsState()
         val currentFilter by screenModel.currentFilter.collectAsState()
+        val tagFilterSourceBookmarkId by screenModel.tagFilterSourceBookmarkId.collectAsState()
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
         val isAutoOffline by settingsScreenModel.isAutoOffline.collectAsState()
         val showReadingTimeBadge by settingsScreenModel.showReadingTimeBadge.collectAsState()
         val showTags by settingsScreenModel.showTags.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
+        val customSwipeActionConfigs by screenModel.customSwipeActionConfigs.collectAsState()
+        val swipeLeftConfigId by screenModel.swipeLeftConfigId.collectAsState()
+        val swipeRightConfigId by screenModel.swipeRightConfigId.collectAsState()
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
+
+        val hasActiveFilter = currentFilter.tags.isNotEmpty() ||
+            currentFilter.lists.isNotEmpty() ||
+            currentFilter.status != com.karakept.app.data.model.FilterStatus.ALL
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
@@ -140,16 +148,20 @@ object MainScreen : Screen {
             allBookmarks.flatMap { it.tags.split(",").filter { tag -> tag.isNotBlank() } }.distinct().sortedBy { it.lowercase() }
         }
 
-        // Get top 10 most used tags with counts
-        val topTagsWithCounts = remember(allBookmarks) {
-            allBookmarks
+        // Get top 10 most used tags with counts, always including any currently active filter tags
+        val topTagsWithCounts = remember(allBookmarks, currentFilter) {
+            val countMap = allBookmarks
                 .flatMap { it.tags.split(",").filter { tag -> tag.isNotBlank() } }
                 .groupingBy { it }
                 .eachCount()
-                .entries
+            val topTagNames = countMap.entries
                 .sortedByDescending { it.value }
                 .take(10)
-                .map { "${it.key} (${it.value})" }
+                .map { it.key }
+            val topTagsFormatted = topTagNames.map { tag -> "$tag (${countMap[tag]})" }
+            val missingActiveTags = currentFilter.tags.filter { it !in topTagNames }
+                .map { tag -> countMap[tag]?.let { "$tag ($it)" } ?: tag }
+            topTagsFormatted + missingActiveTags
         }
 
         MainScreenDrawer(
@@ -209,7 +221,8 @@ object MainScreen : Screen {
                             // Navigate to server settings and highlight the offline mode row
                             navigator.push(com.karakept.app.ui.screens.settings.ServerSettingsScreen(highlightOfflineMode = true))
                         },
-                        isDesktop = isDesktop
+                        isDesktop = isDesktop,
+                        hasActiveFilter = hasActiveFilter
                     )
                 },
                 snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) }
@@ -239,6 +252,8 @@ object MainScreen : Screen {
                         layoutType = layoutType,
                         swipeLeftAction = swipeLeftAction,
                         swipeRightAction = swipeRightAction,
+                        swipeLeftConfig = customSwipeActionConfigs.find { it.id == swipeLeftConfigId },
+                        swipeRightConfig = customSwipeActionConfigs.find { it.id == swipeRightConfigId },
                         dimReadBookmarks = dimReadBookmarks,
                         showReadingTimeBadge = showReadingTimeBadge,
                         showTags = showTags,
@@ -252,7 +267,7 @@ object MainScreen : Screen {
                             selectedBookmarkForActions = bookmark
                         },
                         serverUrl = servers.firstOrNull()?.url,
-                        onSwipeAction = { bookmark, action ->
+                        onSwipeAction = { bookmark, action, config ->
                             when (action) {
                                 SwipeAction.ARCHIVE -> {
                                     screenModel.toggleBookmarkArchive(bookmark)
@@ -282,6 +297,41 @@ object MainScreen : Screen {
                                         }
                                     }
                                 }
+                                SwipeAction.ADD_TAG -> {
+                                    val tagName = config?.tagName
+                                    if (tagName != null) {
+                                        val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                                        if (currentTags.contains(tagName)) {
+                                            screenModel.removeBookmarkTag(bookmark, tagName)
+                                            scope.launch {
+                                                snackbarManager.showSnackbar("Removed tag '$tagName'")
+                                            }
+                                        } else {
+                                            screenModel.addBookmarkTag(bookmark, tagName)
+                                            scope.launch {
+                                                snackbarManager.showSnackbar("Added tag '$tagName'")
+                                            }
+                                        }
+                                    }
+                                }
+                                SwipeAction.ADD_TO_LIST -> {
+                                    val listId = config?.listId
+                                    val listName = config?.listName ?: "list"
+                                    if (listId != null) {
+                                        val bookmarkListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                                        if (bookmarkListIds.contains(listId)) {
+                                            screenModel.removeBookmarkFromList(bookmark, listId)
+                                            scope.launch {
+                                                snackbarManager.showSnackbar("Removed from '$listName'")
+                                            }
+                                        } else {
+                                            screenModel.moveBookmarkToList(bookmark, listId)
+                                            scope.launch {
+                                                snackbarManager.showSnackbar("Added to '$listName'")
+                                            }
+                                        }
+                                    }
+                                }
                                 SwipeAction.NONE -> {}
                             }
                         },
@@ -295,6 +345,18 @@ object MainScreen : Screen {
         // Back Handler for filter panel
         com.karakept.app.ui.components.BackHandler(enabled = showFilterDialog) {
             showFilterDialog = false
+        }
+
+        // Back Handler: when we arrived here from a tag click in a BookmarkViewerScreen,
+        // pressing back returns to that viewer (and clears the tag filter).
+        com.karakept.app.ui.components.BackHandler(
+            enabled = tagFilterSourceBookmarkId != null && !showFilterDialog
+        ) {
+            val sourceId = screenModel.consumeTagFilterSource()
+            screenModel.clearFilter()
+            if (sourceId != null) {
+                navigator.push(BookmarkViewerScreen(sourceId))
+            }
         }
 
         // Scrim for Filter Panel

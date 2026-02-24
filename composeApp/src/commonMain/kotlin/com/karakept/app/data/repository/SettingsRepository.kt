@@ -21,6 +21,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import com.karakept.app.data.model.SwipeAction
+import com.karakept.app.data.model.CustomSwipeActionConfig
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import com.karakept.app.data.model.LinkOpenMode
 
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val LAYOUT_TYPE_KEY = stringPreferencesKey("layout_type")
@@ -40,12 +45,16 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val READING_SPEED_WPM_KEY = intPreferencesKey("reading_speed_wpm")
     private val SWIPE_LEFT_ACTION_KEY = stringPreferencesKey("swipe_left_action")
     private val SWIPE_RIGHT_ACTION_KEY = stringPreferencesKey("swipe_right_action")
+    private val CUSTOM_SWIPE_CONFIGS_KEY = stringPreferencesKey("custom_swipe_configs")
+    private val SWIPE_LEFT_CONFIG_ID_KEY = stringPreferencesKey("swipe_left_config_id")
+    private val SWIPE_RIGHT_CONFIG_ID_KEY = stringPreferencesKey("swipe_right_config_id")
     
     private val CONTENT_SYNC_STRATEGY_KEY = stringPreferencesKey("content_sync_strategy")
     private val CONTENT_SYNC_TARGET_LISTS_KEY = stringSetPreferencesKey("content_sync_target_lists")
     private val CONTENT_SYNC_WITH_CHILDREN_KEY = stringSetPreferencesKey("content_sync_with_children")
 
     private val NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("notifications_enabled")
+    private val LINK_OPEN_MODE_KEY = stringPreferencesKey("link_open_mode")
 
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
         val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.LIST.name
@@ -134,6 +143,23 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val swipeRightAction: Flow<com.karakept.app.data.model.SwipeAction> = dataStore.data.map { preferences ->
         val actionString = preferences[SWIPE_RIGHT_ACTION_KEY] ?: com.karakept.app.data.model.SwipeAction.ARCHIVE.name
         com.karakept.app.data.model.SwipeAction.fromString(actionString)
+    }
+
+    val customSwipeActionConfigs: Flow<List<CustomSwipeActionConfig>> = dataStore.data.map { preferences ->
+        val json = preferences[CUSTOM_SWIPE_CONFIGS_KEY] ?: "[]"
+        try {
+            Json.decodeFromString(json)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    val swipeLeftConfigId: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[SWIPE_LEFT_CONFIG_ID_KEY]
+    }
+
+    val swipeRightConfigId: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[SWIPE_RIGHT_CONFIG_ID_KEY]
     }
 
     suspend fun setLayoutType(layoutType: LayoutType) {
@@ -271,6 +297,32 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    suspend fun setCustomSwipeActionConfigs(configs: List<CustomSwipeActionConfig>) {
+        dataStore.edit { preferences ->
+            preferences[CUSTOM_SWIPE_CONFIGS_KEY] = Json.encodeToString(configs)
+        }
+    }
+
+    suspend fun setSwipeLeftConfigId(id: String?) {
+        dataStore.edit { preferences ->
+            if (id != null) {
+                preferences[SWIPE_LEFT_CONFIG_ID_KEY] = id
+            } else {
+                preferences.remove(SWIPE_LEFT_CONFIG_ID_KEY)
+            }
+        }
+    }
+
+    suspend fun setSwipeRightConfigId(id: String?) {
+        dataStore.edit { preferences ->
+            if (id != null) {
+                preferences[SWIPE_RIGHT_CONFIG_ID_KEY] = id
+            } else {
+                preferences.remove(SWIPE_RIGHT_CONFIG_ID_KEY)
+            }
+        }
+    }
+
     val contentSyncStrategy: Flow<SyncStrategy> = dataStore.data.map { preferences ->
         val strategyString = preferences[CONTENT_SYNC_STRATEGY_KEY] ?: SyncStrategy.PER_BOOKMARK.name
         try {
@@ -353,6 +405,17 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[NOTIFICATIONS_ENABLED_KEY] = enabled
+        }
+    }
+
+    val linkOpenMode: Flow<LinkOpenMode> = dataStore.data.map { preferences ->
+        val modeString = preferences[LINK_OPEN_MODE_KEY] ?: LinkOpenMode.CUSTOM_TAB.name
+        LinkOpenMode.fromString(modeString)
+    }
+
+    suspend fun setLinkOpenMode(mode: LinkOpenMode) {
+        dataStore.edit { preferences ->
+            preferences[LINK_OPEN_MODE_KEY] = mode.name
         }
     }
 

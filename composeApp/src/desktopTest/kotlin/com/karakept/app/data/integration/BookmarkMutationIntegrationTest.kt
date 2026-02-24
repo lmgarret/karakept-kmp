@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -74,6 +76,112 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         val remoteAfterUnread = remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
         val stillHasReadTag = remoteAfterUnread.tags?.any { it.name == "karakept:read" } == true
         assertTrue(!stillHasReadTag, "Server should not have karakept:read tag after unread")
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // List membership mutations
+    // ──────────────────────────────────────────────────────────
+
+    @Test
+    fun testMoveToList_updatesLocalDbImmediately() = runTest(testDispatcher) {
+        assertTrue(isDockerRunning, "Docker should be running")
+
+        val bookmarkUrl = "https://example.com/move-to-list-${System.currentTimeMillis()}"
+        val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, bookmarkUrl)
+        val bookmark = insertLocalBookmark(remoteId, url = bookmarkUrl)
+
+        val listName = "Target List ${System.currentTimeMillis()}"
+        val listId = seedListViaTrpc(baseUrl, apiKey, listName)
+        listRepository.refreshLists(testServer)
+
+        // Before: bookmark has no list membership
+        val before = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
+        assertTrue(before?.listIds.isNullOrBlank(), "Bookmark should not be in any list before moveToList")
+
+        bookmarkActionsRepository.moveToList(bookmark.remoteId, testServer.id, listId, isOnline = true)
+
+        // After: local DB should be updated immediately (optimistic)
+        val afterLocal = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
+        val localListIds = afterLocal?.listIds?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+        assertTrue(localListIds.contains(listId), "Local DB should contain listId immediately after moveToList")
+
+        // Wait for auto-sync to push to server
+        withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
+
+        // Verify server state
+        val serverBookmarks = remoteDataSource.fetchBookmarksForList(testServer, listId, includeContent = false)
+        assertTrue(
+            serverBookmarks.any { it.id == remoteId },
+            "Bookmark should be in list on server after sync"
+        )
+    }
+
+    @Test
+    fun testRemoveFromList_updatesLocalDbImmediately() = runTest(testDispatcher) {
+        assertTrue(isDockerRunning, "Docker should be running")
+
+        val bookmarkUrl = "https://example.com/remove-from-list-${System.currentTimeMillis()}"
+        val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, bookmarkUrl)
+
+        val listName = "Remove Test List ${System.currentTimeMillis()}"
+        val listId = seedListViaTrpc(baseUrl, apiKey, listName)
+        listRepository.refreshLists(testServer)
+
+        // Seed the bookmark into the list on the server
+        val addUrl = "$baseUrl/api/trpc/lists.addBookmark?batch=1"
+        val addBody = """{"0": {"json": {"listId": "$listId", "bookmarkId": "$remoteId"}}}"""
+        postJson(addUrl, addBody, apiKey)
+
+        // Insert locally with the list membership already set
+        val bookmark = insertLocalBookmark(remoteId, url = bookmarkUrl, listIds = listId)
+
+        // Verify starting state
+        val before = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
+        val beforeListIds = before?.listIds?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+        assertTrue(beforeListIds.contains(listId), "Bookmark should be in list before removeFromList")
+
+        bookmarkActionsRepository.removeFromList(bookmark.remoteId, testServer.id, listId, isOnline = true)
+
+        // After: local DB should be updated immediately (optimistic)
+        val afterLocal = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
+        val localListIds = afterLocal?.listIds?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+        assertFalse(localListIds.contains(listId), "Local DB should not contain listId immediately after removeFromList")
+
+        // Wait for auto-sync to push to server
+        withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
+
+        // Verify server state
+        val serverBookmarks = remoteDataSource.fetchBookmarksForList(testServer, listId, includeContent = false)
+        assertFalse(
+            serverBookmarks.any { it.id == remoteId },
+            "Bookmark should not be in list on server after sync"
+        )
+    }
+
+    @Test
+    fun testUpdateTags_updatesLocalDbImmediately() = runTest(testDispatcher) {
+        assertTrue(isDockerRunning, "Docker should be running")
+
+        val bookmarkUrl = "https://example.com/update-tags-${System.currentTimeMillis()}"
+        val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, bookmarkUrl)
+        val bookmark = insertLocalBookmark(remoteId, url = bookmarkUrl, tags = "old-tag")
+
+        val newTags = listOf("new-tag-1", "new-tag-2")
+        bookmarkActionsRepository.updateTags(bookmark.remoteId, testServer.id, newTags, isOnline = true)
+
+        // Local DB should be updated immediately
+        val afterLocal = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
+        val localTags = afterLocal?.tags?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
+        assertTrue(newTags.all { it in localTags }, "New tags should be in local DB immediately")
+        assertFalse(localTags.contains("old-tag"), "Old tag should be removed from local DB")
+
+        // Wait for auto-sync
+        withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
+
+        // Verify server has new tags
+        val remote = remoteDataSource.fetchBookmark(testServer, remoteId)
+        val remoteTags = remote.tags?.mapNotNull { it.name }?.filter { it.isNotBlank() } ?: emptyList()
+        assertTrue(newTags.all { it in remoteTags }, "New tags should be on server after sync: $remoteTags")
     }
 
     @Test
