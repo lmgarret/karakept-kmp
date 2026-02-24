@@ -15,6 +15,9 @@ import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -104,9 +107,48 @@ class BookmarkViewerScreenModel(
     val trackReadingProgress: StateFlow<Boolean> = settingsRepository.trackReadingProgress
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    // Track the latest reading state so it can be saved on disposal even if the
+    // debounced periodic save hasn't fired yet (e.g. user navigates back quickly).
+    @Volatile
+    private var pendingReadingState: PendingReadingState? = null
+
+    private data class PendingReadingState(
+        val localId: Long,
+        val progress: Float,
+        val scrollIndex: Int,
+        val scrollOffset: Int
+    )
+
+    /**
+     * Immediately records the current reading position in memory (no DB write).
+     * Called on every meaningful scroll change so that [onDispose] always has
+     * the latest state to persist.
+     */
+    fun updateReadingState(localId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
+        pendingReadingState = PendingReadingState(localId, progress, scrollIndex, scrollOffset)
+    }
+
+    /**
+     * Persists reading progress to the database and clears the pending state.
+     * Used by the debounced periodic save during active reading.
+     */
     fun saveReadingProgress(localId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
+        pendingReadingState = PendingReadingState(localId, progress, scrollIndex, scrollOffset)
         screenModelScope.launch {
             bookmarkDao.updateReadingProgress(localId, progress, scrollIndex, scrollOffset)
+            pendingReadingState = null
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    override fun onDispose() {
+        val state = pendingReadingState ?: return
+        // screenModelScope is being cancelled, so use GlobalScope for this
+        // fire-and-forget DB write that must complete.
+        GlobalScope.launch(Dispatchers.IO) {
+            bookmarkDao.updateReadingProgress(
+                state.localId, state.progress, state.scrollIndex, state.scrollOffset
+            )
         }
     }
 

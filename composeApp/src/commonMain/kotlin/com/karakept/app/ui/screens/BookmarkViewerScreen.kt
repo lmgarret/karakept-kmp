@@ -220,21 +220,29 @@ data class BookmarkViewerScreen(
 
         val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
 
-        // Debounced save of reading progress while the user scrolls
+        // Track reading progress on every scroll change. The in-memory state is
+        // updated immediately so it can be persisted in onDispose if the user
+        // navigates back before the debounced save fires.
         LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
             if (trackReadingProgress && hasRestoredScroll && loadingState is BookmarkLoadingState.FullyLoaded) {
-                // Only save when the user has actually scrolled into the content
+                val currentState = loadingState as BookmarkLoadingState.FullyLoaded
+                // Only track when the user has actually scrolled into the content
                 if (readingProgress > 0f || scrollState.firstVisibleItemIndex > 0) {
-                    delay(1500) // Debounce: wait 1.5s without scroll changes before saving
-                    val currentState = loadingState
-                    if (currentState is BookmarkLoadingState.FullyLoaded) {
-                        screenModel.saveReadingProgress(
-                            localId = currentState.bookmark.localId,
-                            progress = readingProgress,
-                            scrollIndex = scrollState.firstVisibleItemIndex,
-                            scrollOffset = scrollState.firstVisibleItemScrollOffset
-                        )
-                    }
+                    // Immediately record the position in memory (no DB write)
+                    screenModel.updateReadingState(
+                        localId = currentState.bookmark.localId,
+                        progress = readingProgress,
+                        scrollIndex = scrollState.firstVisibleItemIndex,
+                        scrollOffset = scrollState.firstVisibleItemScrollOffset
+                    )
+                    // Debounced periodic save to DB while reading
+                    delay(1500)
+                    screenModel.saveReadingProgress(
+                        localId = currentState.bookmark.localId,
+                        progress = readingProgress,
+                        scrollIndex = scrollState.firstVisibleItemIndex,
+                        scrollOffset = scrollState.firstVisibleItemScrollOffset
+                    )
                 }
             }
         }
