@@ -70,6 +70,7 @@ object MainScreen : Screen {
         val hasMoreItems by screenModel.hasMoreItems.collectAsState()
         val savedFilters by screenModel.savedFilters.collectAsState()
         val currentFilter by screenModel.currentFilter.collectAsState()
+        val tagFilterSourceBookmarkId by screenModel.tagFilterSourceBookmarkId.collectAsState()
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
         val isAutoOffline by settingsScreenModel.isAutoOffline.collectAsState()
         val showReadingTimeBadge by settingsScreenModel.showReadingTimeBadge.collectAsState()
@@ -79,6 +80,10 @@ object MainScreen : Screen {
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
+
+        val hasActiveFilter = currentFilter.tags.isNotEmpty() ||
+            currentFilter.lists.isNotEmpty() ||
+            currentFilter.status != com.karakept.app.data.model.FilterStatus.ALL
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
@@ -140,16 +145,20 @@ object MainScreen : Screen {
             allBookmarks.flatMap { it.tags.split(",").filter { tag -> tag.isNotBlank() } }.distinct().sortedBy { it.lowercase() }
         }
 
-        // Get top 10 most used tags with counts
-        val topTagsWithCounts = remember(allBookmarks) {
-            allBookmarks
+        // Get top 10 most used tags with counts, always including any currently active filter tags
+        val topTagsWithCounts = remember(allBookmarks, currentFilter) {
+            val countMap = allBookmarks
                 .flatMap { it.tags.split(",").filter { tag -> tag.isNotBlank() } }
                 .groupingBy { it }
                 .eachCount()
-                .entries
+            val topTagNames = countMap.entries
                 .sortedByDescending { it.value }
                 .take(10)
-                .map { "${it.key} (${it.value})" }
+                .map { it.key }
+            val topTagsFormatted = topTagNames.map { tag -> "$tag (${countMap[tag]})" }
+            val missingActiveTags = currentFilter.tags.filter { it !in topTagNames }
+                .map { tag -> countMap[tag]?.let { "$tag ($it)" } ?: tag }
+            topTagsFormatted + missingActiveTags
         }
 
         MainScreenDrawer(
@@ -209,7 +218,8 @@ object MainScreen : Screen {
                             // Navigate to server settings and highlight the offline mode row
                             navigator.push(com.karakept.app.ui.screens.settings.ServerSettingsScreen(highlightOfflineMode = true))
                         },
-                        isDesktop = isDesktop
+                        isDesktop = isDesktop,
+                        hasActiveFilter = hasActiveFilter
                     )
                 },
                 snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) }
@@ -295,6 +305,18 @@ object MainScreen : Screen {
         // Back Handler for filter panel
         com.karakept.app.ui.components.BackHandler(enabled = showFilterDialog) {
             showFilterDialog = false
+        }
+
+        // Back Handler: when we arrived here from a tag click in a BookmarkViewerScreen,
+        // pressing back returns to that viewer (and clears the tag filter).
+        com.karakept.app.ui.components.BackHandler(
+            enabled = tagFilterSourceBookmarkId != null && !showFilterDialog
+        ) {
+            val sourceId = screenModel.consumeTagFilterSource()
+            screenModel.clearFilter()
+            if (sourceId != null) {
+                navigator.push(BookmarkViewerScreen(sourceId))
+            }
         }
 
         // Scrim for Filter Panel

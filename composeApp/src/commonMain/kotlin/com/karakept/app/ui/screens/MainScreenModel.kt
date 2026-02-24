@@ -54,6 +54,10 @@ class MainScreenModel(
     private val _currentFilter = MutableStateFlow(FilterConfig())
     val currentFilter: StateFlow<FilterConfig> = _currentFilter
 
+    // Tracks the bookmark that triggered a tag filter, so back navigation can return to it
+    private val _tagFilterSourceBookmarkId = MutableStateFlow<Long?>(null)
+    val tagFilterSourceBookmarkId: StateFlow<Long?> = _tagFilterSourceBookmarkId
+
     val savedFilters = savedFilterRepository.visibleFilters
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -511,9 +515,24 @@ class MainScreenModel(
         }
     }
 
+    /** Apply a tag filter that originated from a BookmarkViewerScreen, recording the source
+     * bookmark ID so that pressing back on the list can return to that viewer. */
+    fun applyTagFilter(tag: String, sourceBookmarkId: Long) {
+        _tagFilterSourceBookmarkId.value = sourceBookmarkId
+        applyFilter(FilterConfig(tags = listOf(tag)))
+    }
+
+    /** Consume the pending "return to viewer" bookmark ID (clears it). */
+    fun consumeTagFilterSource(): Long? {
+        val id = _tagFilterSourceBookmarkId.value
+        _tagFilterSourceBookmarkId.value = null
+        return id
+    }
+
     fun clearFilter() {
         _currentFilter.value = FilterConfig()
         _currentListContext.value = null
+        _tagFilterSourceBookmarkId.value = null
     }
 
     fun toggleListExpanded(listId: String) {

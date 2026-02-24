@@ -6,6 +6,7 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ViewerMode
@@ -64,6 +65,9 @@ class BookmarkViewerScreenModel(
 
     val showTags: StateFlow<Boolean> = settingsRepository.showTags
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val linkOpenMode: StateFlow<LinkOpenMode> = settingsRepository.linkOpenMode
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), LinkOpenMode.CUSTOM_TAB)
 
     private val _precrawledAssetPath = MutableStateFlow<String?>(null)
     val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()
