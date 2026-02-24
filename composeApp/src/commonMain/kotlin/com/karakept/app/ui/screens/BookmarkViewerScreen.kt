@@ -205,6 +205,8 @@ data class BookmarkViewerScreen(
             toolbarHeight = toolbarHeight
         )
 
+        val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
+
         Scaffold(
             snackbarHost = {
                 SnackbarHost(hostState = snackbarHostState)
@@ -414,6 +416,7 @@ data class BookmarkViewerScreen(
                             showStickyTitle = showStickyTitle,
                             showMenu = showMenu,
                             toolbarHeight = toolbarHeight,
+                            readingProgress = readingProgress,
                             onBackClick = { navigator.pop() },
                             onMenuToggle = { showMenu = it },
                             onAppearanceClick = { showAppearancePanel = true },
