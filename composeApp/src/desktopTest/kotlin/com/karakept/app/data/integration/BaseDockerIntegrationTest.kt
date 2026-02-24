@@ -438,7 +438,8 @@ abstract class BaseDockerIntegrationTest {
         isArchived: Boolean = false,
         isStarred: Boolean = false,
         isRead: Boolean = false,
-        tags: String = ""
+        tags: String = "",
+        listIds: String = ""
     ): com.karakept.app.data.local.entity.BookmarkEntity {
         val entity = com.karakept.app.data.local.entity.BookmarkEntity(
             localId = 0L,
@@ -457,7 +458,7 @@ abstract class BaseDockerIntegrationTest {
             isStarred = isStarred,
             isRead = isRead,
             tags = tags,
-            listIds = ""
+            listIds = listIds
         )
         db.bookmarkDao().insertBookmark(entity)
         return db.bookmarkDao().getBookmarkByOriginalRemoteId(remoteId, testServer.id)
