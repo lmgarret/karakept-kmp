@@ -138,6 +138,25 @@ class MainScreenModel(
         com.karakept.app.data.model.SwipeAction.ARCHIVE
     )
 
+    val customSwipeActionConfigs: StateFlow<List<com.karakept.app.data.model.CustomSwipeActionConfig>> =
+        settingsRepository.customSwipeActionConfigs.stateIn(
+            screenModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyList()
+        )
+
+    val swipeLeftConfigId: StateFlow<String?> = settingsRepository.swipeLeftConfigId.stateIn(
+        screenModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        null
+    )
+
+    val swipeRightConfigId: StateFlow<String?> = settingsRepository.swipeRightConfigId.stateIn(
+        screenModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        null
+    )
+
     val dimReadBookmarks: StateFlow<Boolean> = settingsRepository.dimReadBookmarks.stateIn(
         screenModelScope,
         SharingStarted.WhileSubscribed(5000),
@@ -710,6 +729,87 @@ class MainScreenModel(
                 listId,
                 isOnline
             )
+            // Update local state immediately for UI feedback
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                if (it.remoteId == bookmark.remoteId) {
+                    val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
+                    if (!currentListIds.contains(listId)) {
+                        it.copy(listIds = (currentListIds + listId).joinToString(","))
+                    } else {
+                        it
+                    }
+                } else {
+                    it
+                }
+            }
+        }
+    }
+
+    fun addBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
+        screenModelScope.launch {
+            val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            if (!currentTags.contains(tagName)) {
+                val newTags = currentTags + tagName
+                val isOnline = !_isSyncing.value
+                bookmarkActionsRepository.updateTags(
+                    bookmark.remoteId,
+                    bookmark.serverId,
+                    newTags,
+                    isOnline
+                )
+                // Update local state immediately for UI feedback
+                _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                    if (it.remoteId == bookmark.remoteId) {
+                        it.copy(tags = newTags.joinToString(","))
+                    } else {
+                        it
+                    }
+                }
+            }
+        }
+    }
+
+    fun removeBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
+        screenModelScope.launch {
+            val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            if (currentTags.contains(tagName)) {
+                val newTags = currentTags.filter { it != tagName }
+                val isOnline = !_isSyncing.value
+                bookmarkActionsRepository.updateTags(
+                    bookmark.remoteId,
+                    bookmark.serverId,
+                    newTags,
+                    isOnline
+                )
+                _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                    if (it.remoteId == bookmark.remoteId) {
+                        it.copy(tags = newTags.joinToString(","))
+                    } else {
+                        it
+                    }
+                }
+            }
+        }
+    }
+
+    fun removeBookmarkFromList(bookmark: BookmarkEntity, listId: String) {
+        screenModelScope.launch {
+            val isOnline = !_isSyncing.value
+            bookmarkActionsRepository.removeFromList(
+                bookmark.remoteId,
+                bookmark.serverId,
+                listId,
+                isOnline
+            )
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                if (it.remoteId == bookmark.remoteId) {
+                    val newListIds = it.listIds.split(",").map { id -> id.trim() }
+                        .filter { id -> id.isNotBlank() && id != listId }
+                    it.copy(listIds = newListIds.joinToString(","))
+                } else {
+                    it
+                }
+            }
         }
     }
 }

@@ -261,6 +261,69 @@ class SettingsScreenModel(
         }
     }
 
+    val customSwipeActionConfigs: StateFlow<List<com.karakept.app.data.model.CustomSwipeActionConfig>> =
+        settingsRepository.customSwipeActionConfigs.stateIn(
+            scope = screenModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val swipeLeftConfigId: StateFlow<String?> = settingsRepository.swipeLeftConfigId.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    val swipeRightConfigId: StateFlow<String?> = settingsRepository.swipeRightConfigId.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    fun addCustomSwipeActionConfig(config: com.karakept.app.data.model.CustomSwipeActionConfig) {
+        screenModelScope.launch {
+            val updated = customSwipeActionConfigs.value + config
+            settingsRepository.setCustomSwipeActionConfigs(updated)
+        }
+    }
+
+    fun updateCustomSwipeActionConfig(config: com.karakept.app.data.model.CustomSwipeActionConfig) {
+        screenModelScope.launch {
+            val updated = customSwipeActionConfigs.value.map {
+                if (it.id == config.id) config else it
+            }
+            settingsRepository.setCustomSwipeActionConfigs(updated)
+        }
+    }
+
+    fun removeCustomSwipeActionConfig(id: String) {
+        screenModelScope.launch {
+            val updated = customSwipeActionConfigs.value.filter { it.id != id }
+            settingsRepository.setCustomSwipeActionConfigs(updated)
+            // Clear config ID if it was assigned to a swipe direction
+            if (swipeLeftConfigId.value == id) {
+                settingsRepository.setSwipeLeftConfigId(null)
+                settingsRepository.setSwipeLeftAction(com.karakept.app.data.model.SwipeAction.NONE)
+            }
+            if (swipeRightConfigId.value == id) {
+                settingsRepository.setSwipeRightConfigId(null)
+                settingsRepository.setSwipeRightAction(com.karakept.app.data.model.SwipeAction.NONE)
+            }
+        }
+    }
+
+    fun setSwipeLeftConfigId(id: String?) {
+        screenModelScope.launch {
+            settingsRepository.setSwipeLeftConfigId(id)
+        }
+    }
+
+    fun setSwipeRightConfigId(id: String?) {
+        screenModelScope.launch {
+            settingsRepository.setSwipeRightConfigId(id)
+        }
+    }
+
     val dimReadBookmarks: StateFlow<Boolean> = settingsRepository.dimReadBookmarks.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),
