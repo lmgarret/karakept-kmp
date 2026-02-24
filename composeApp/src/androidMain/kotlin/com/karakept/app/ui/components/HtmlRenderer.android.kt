@@ -386,23 +386,35 @@ actual fun HtmlRenderer(
                 const range = selection.getRangeAt(0);
                 const text = selection.toString();
 
-                // Measure offset using a walker to be consistent with getRangeFromOffsets
-                let start = 0;
+                // Measure both start and end offsets using a walker to be consistent with getRangesFromOffsets.
+                // Walking to each container independently is more accurate than using start + text.length,
+                // which can drift when the selection spans nodes with different whitespace handling.
                 const root = document.getElementById('karakept-content') || document.body;
                 const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+                let start = -1;
+                let end = -1;
+                let currentOffset = 0;
                 let node;
-                while (node = walker.nextNode()) {
-                    if (node === range.startContainer) {
-                        start += range.startOffset;
+                while ((node = walker.nextNode())) {
+                    const nodeLength = node.textContent.length;
+                    if (start === -1 && node === range.startContainer) {
+                        start = currentOffset + range.startOffset;
+                    }
+                    if (end === -1 && node === range.endContainer) {
+                        end = currentOffset + range.endOffset;
                         break;
                     }
-                    start += node.textContent.length;
+                    currentOffset += nodeLength;
                 }
+
+                // Fallback: if containers were not found (e.g. selection spans outside root), use text length
+                if (start === -1) start = 0;
+                if (end === -1) end = start + text.length;
 
                 return JSON.stringify({
                     text: text,
                     start: start,
-                    end: start + text.length
+                    end: end
                 });
             } catch(e) { log("Selection info error: " + e.message); return null; }
         }
