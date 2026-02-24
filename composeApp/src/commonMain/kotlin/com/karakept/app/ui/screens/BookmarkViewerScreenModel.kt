@@ -114,6 +114,7 @@ class BookmarkViewerScreenModel(
 
     private data class PendingReadingState(
         val localId: Long,
+        val remoteId: Long,
         val progress: Float,
         val scrollIndex: Int,
         val scrollOffset: Int
@@ -136,6 +137,7 @@ class BookmarkViewerScreenModel(
                     bookmarkDao.updateReadingProgress(
                         state.localId, state.progress, state.scrollIndex, state.scrollOffset
                     )
+                    bookmarkActionsRepository.notifyBookmarkChanged(state.remoteId)
                     pendingReadingState = null
                 }
         }
@@ -147,8 +149,8 @@ class BookmarkViewerScreenModel(
      * The latest state is also kept in memory so [onDispose] can persist
      * it if the user navigates away before the debounce window closes.
      */
-    fun onReadingStateChanged(localId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
-        val state = PendingReadingState(localId, progress, scrollIndex, scrollOffset)
+    fun onReadingStateChanged(localId: Long, remoteId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
+        val state = PendingReadingState(localId, remoteId, progress, scrollIndex, scrollOffset)
         pendingReadingState = state
         readingStateUpdates.tryEmit(state)
     }
@@ -162,6 +164,7 @@ class BookmarkViewerScreenModel(
             bookmarkDao.updateReadingProgress(
                 state.localId, state.progress, state.scrollIndex, state.scrollOffset
             )
+            bookmarkActionsRepository.notifyBookmarkChanged(state.remoteId)
         }
     }
 

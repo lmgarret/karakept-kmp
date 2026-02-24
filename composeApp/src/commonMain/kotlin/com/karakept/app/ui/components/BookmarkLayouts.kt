@@ -48,7 +48,8 @@ fun BookmarkCardLayout(
     screenshotUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val alpha = if (bookmark.isRead && dimRead) 0.5f else 1f
+    val isFullyRead = bookmark.isRead || bookmark.readingProgress >= 1f
+    val alpha = if (isFullyRead && dimRead) 0.5f else 1f
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -124,8 +125,8 @@ fun BookmarkCardLayout(
                 }
             }
 
-            // Reading progress bar - shown at the bottom of the card when partially read
-            if (bookmark.readingProgress > 0f && bookmark.readingProgress < 1f) {
+            // Reading progress bar
+            if (bookmark.readingProgress > 0f) {
                 LinearProgressIndicator(
                     progress = { bookmark.readingProgress },
                     modifier = Modifier
@@ -155,7 +156,8 @@ fun BookmarkListLayout(
     screenshotUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val alpha = if (bookmark.isRead && dimRead) 0.5f else 1f
+    val isFullyRead = bookmark.isRead || bookmark.readingProgress >= 1f
+    val alpha = if (isFullyRead && dimRead) 0.5f else 1f
     Card(
         modifier = modifier
            .fillMaxWidth()
@@ -267,8 +269,8 @@ fun BookmarkListLayout(
                 }
             }
 
-            // Reading progress bar - shown at the bottom of the card when partially read
-            if (bookmark.readingProgress > 0f && bookmark.readingProgress < 1f) {
+            // Reading progress bar
+            if (bookmark.readingProgress > 0f) {
                 LinearProgressIndicator(
                     progress = { bookmark.readingProgress },
                     modifier = Modifier

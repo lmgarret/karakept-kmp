@@ -156,15 +156,22 @@ data class BookmarkViewerScreen(
         val bannerHeight = 320.dp
         val toolbarHeight = 56.dp
 
-        // Restore scroll position when the bookmark finishes loading (only once)
+        // Restore scroll position once content is fully available.
+        // We must wait for content to load before scrolling, otherwise the
+        // LazyColumn item may not be tall enough and scrollToItem silently fails.
         var hasRestoredScroll by remember { mutableStateOf(false) }
         LaunchedEffect(loadingState, trackReadingProgress) {
             if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
-                if (bookmark.readingProgress > 0f) {
+                if (bookmark.readingProgress > 0f && !bookmark.content.isNullOrBlank()) {
                     scrollState.scrollToItem(bookmark.readingScrollIndex, bookmark.readingScrollOffset)
+                    hasRestoredScroll = true
+                } else if (bookmark.readingProgress == 0f) {
+                    // Nothing to restore
+                    hasRestoredScroll = true
                 }
-                hasRestoredScroll = true
+                // If readingProgress > 0 but content is still blank, don't mark as
+                // restored — the LaunchedEffect will re-fire when content loads.
             }
         }
 
@@ -228,6 +235,7 @@ data class BookmarkViewerScreen(
                 if (readingProgress > 0f || scrollState.firstVisibleItemIndex > 0) {
                     screenModel.onReadingStateChanged(
                         localId = currentState.bookmark.localId,
+                        remoteId = currentState.bookmark.remoteId,
                         progress = readingProgress,
                         scrollIndex = scrollState.firstVisibleItemIndex,
                         scrollOffset = scrollState.firstVisibleItemScrollOffset

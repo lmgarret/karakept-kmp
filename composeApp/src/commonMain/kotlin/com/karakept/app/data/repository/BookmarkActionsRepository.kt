@@ -47,6 +47,10 @@ class BookmarkActionsRepository(
     // Observers (e.g. MainScreenModel) can react to keep their lists up-to-date without a full sync.
     private val _bookmarkChangedEvents = MutableSharedFlow<Long>(extraBufferCapacity = 16)
     val bookmarkChangedEvents: SharedFlow<Long> = _bookmarkChangedEvents
+
+    fun notifyBookmarkChanged(remoteId: Long) {
+        _bookmarkChangedEvents.tryEmit(remoteId)
+    }
     
     // Cache for tag IDs to handle read/unread toggling race conditions
     private val recentlyAddedReadTagIds = mutableMapOf<String, String>() // BookmarkID -> TagID
