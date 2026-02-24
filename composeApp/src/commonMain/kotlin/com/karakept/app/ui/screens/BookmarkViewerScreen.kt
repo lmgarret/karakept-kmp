@@ -7,10 +7,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -39,9 +37,11 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.ui.components.rememberCustomTabOpener
 import com.karakept.app.ui.screens.viewer.*
 import com.karakept.app.utils.ShareUtils
 import kotlinx.coroutines.delay
@@ -60,9 +60,11 @@ data class BookmarkViewerScreen(
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = getScreenModel<BookmarkViewerScreenModel>()
+        val mainScreenModel = koinInject<MainScreenModel>()
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()
         val uriHandler = LocalUriHandler.current
+        val openInCustomTab = rememberCustomTabOpener()
         val snackbarManager = koinInject<ActionSnackbarManager>()
 
         val loadingState by screenModel.loadingState.collectAsState()
@@ -79,6 +81,7 @@ data class BookmarkViewerScreen(
         val isRefreshing by screenModel.isRefreshing.collectAsState()
         val offlineMode by screenModel.offlineMode.collectAsState()
         val highlights by screenModel.highlights.collectAsState()
+        val linkOpenMode by screenModel.linkOpenMode.collectAsState()
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isRefreshing,
@@ -87,6 +90,7 @@ data class BookmarkViewerScreen(
 
         var showModeDialog by remember { mutableStateOf(false) }
         var showAppearancePanel by remember { mutableStateOf(false) }
+        var showDetailsPanel by remember { mutableStateOf(false) }
         var showMenu by remember { mutableStateOf(false) }
         var fabExpanded by remember { mutableStateOf(false) }
         var showDeleteConfirmation by remember { mutableStateOf(false) }
@@ -307,30 +311,6 @@ data class BookmarkViewerScreen(
                             .fillMaxSize()
                             .pullRefresh(pullRefreshState, enabled = !offlineMode)
                     ) {
-                        // Parallax Header (Behind the list)
-                        HeroBannerSection(
-                            title = title,
-                            url = url,
-                            tags = state.bookmark.tags,
-                            readingTimeMinutes = readingTimeMinutes,
-                            showTags = showTags,
-                            scrollState = scrollState,
-                            bannerHeight = bannerHeight,
-                            onUrlClick = if (url.isNotEmpty()) {
-                                {
-                                    try {
-                                        uriHandler.openUri(url)
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                }
-                            } else null,
-                            bannerImageUrl = bannerImageUrl,
-                            screenshotUrl = screenshotUrl,
-                            bannerImageLocalPath = bannerImageLocalPath,
-                            screenshotLocalPath = screenshotLocalPath
-                        )
-
                         // Content List
                         // Only blur when the highlight is actually found and panel will show
                         LazyColumn(
@@ -339,9 +319,37 @@ data class BookmarkViewerScreen(
                                 .fillMaxSize()
                                 .then(if (selectedHighlightId != null && selectedHighlight != null) Modifier.blur(8.dp) else Modifier)
                         ) {
-                            // Transparent spacer for the header
-                            item(key = "header_spacer") {
-                                Spacer(modifier = Modifier.height(bannerHeight))
+                            // Hero banner as first item so tag/URL clicks are not blocked by the list
+                            item(key = "hero_banner") {
+                                HeroBannerSection(
+                                    title = title,
+                                    url = url,
+                                    tags = state.bookmark.tags,
+                                    readingTimeMinutes = readingTimeMinutes,
+                                    showTags = showTags,
+                                    scrollState = scrollState,
+                                    onUrlClick = if (url.isNotEmpty()) {
+                                        {
+                                            try {
+                                                when (linkOpenMode) {
+                                                    LinkOpenMode.CUSTOM_TAB -> openInCustomTab(url)
+                                                    LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(url)
+                                                }
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                            }
+                                        }
+                                    } else null,
+                                    onTagClick = { tag ->
+                                        mainScreenModel.applyTagFilter(tag, bookmarkId)
+                                        navigator.pop()
+                                    },
+                                    onInfoClick = { showDetailsPanel = true },
+                                    bannerImageUrl = bannerImageUrl,
+                                    screenshotUrl = screenshotUrl,
+                                    bannerImageLocalPath = bannerImageLocalPath,
+                                    screenshotLocalPath = screenshotLocalPath
+                                )
                             }
 
                             // Description Card
@@ -371,7 +379,14 @@ data class BookmarkViewerScreen(
                                     loadingState = state,
                                     highlights = highlights,
                                     onLinkClick = { linkUrl ->
-                                        navigator.push(WebViewScreen(linkUrl))
+                                        try {
+                                            when (linkOpenMode) {
+                                                LinkOpenMode.CUSTOM_TAB -> openInCustomTab(linkUrl)
+                                                LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(linkUrl)
+                                            }
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
                                     },
                                     onCreateHighlight = { text, start, end, note, color ->
                                         screenModel.createHighlight(state.bookmark, text, start, end, note, color) { highlightId ->
@@ -434,10 +449,11 @@ data class BookmarkViewerScreen(
         }
 
         // Back Handler for panels
-        com.karakept.app.ui.components.BackHandler(enabled = showAppearancePanel || showModeDialog || selectedHighlightId != null) {
-            if (showAppearancePanel) showAppearancePanel = false
-            if (showModeDialog) showModeDialog = false
-            if (selectedHighlightId != null) selectedHighlightId = null
+        com.karakept.app.ui.components.BackHandler(enabled = showAppearancePanel || showModeDialog || selectedHighlightId != null || showDetailsPanel) {
+            if (showDetailsPanel) showDetailsPanel = false
+            else if (showAppearancePanel) showAppearancePanel = false
+            else if (showModeDialog) showModeDialog = false
+            else if (selectedHighlightId != null) selectedHighlightId = null
         }
 
         // Viewer mode dialog
@@ -536,6 +552,14 @@ data class BookmarkViewerScreen(
                 selectedHighlightId = null
                 selectedHighlightText = null
             }
+        )
+
+        // Bookmark Details Panel (slides from the right)
+        val detailsBookmark = (loadingState as? BookmarkLoadingState.FullyLoaded)?.bookmark
+        BookmarkDetailsPanel(
+            visible = showDetailsPanel,
+            bookmark = detailsBookmark,
+            onDismiss = { showDetailsPanel = false }
         )
     }
 }

@@ -9,7 +9,7 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:label="Karakept"
+        android:label="${appName}"
         android:theme="@style/Theme.App.Starting">
         <activity
             android:name=".MainActivity"
@@ -24,7 +24,7 @@
         <activity
             android:name=".ShareActivity"
             android:exported="true"
-            android:label="Karakept"
+            android:label="${appName}"
             android:theme="@style/Theme.App.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -36,7 +36,7 @@
         <activity
             android:name=".QuickShareActivity"
             android:exported="true"
-            android:label="Karakept (Quick Save)"
+            android:label="${appName} (Quick Save)"
             android:theme="@style/Theme.App.Translucent">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />

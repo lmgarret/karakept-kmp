@@ -5,6 +5,7 @@ import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ThemeMode
@@ -356,6 +357,18 @@ class SettingsScreenModel(
     fun setNotificationsEnabled(enabled: Boolean) {
         screenModelScope.launch {
             settingsRepository.setNotificationsEnabled(enabled)
+        }
+    }
+
+    val linkOpenMode: StateFlow<LinkOpenMode> = settingsRepository.linkOpenMode.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = LinkOpenMode.CUSTOM_TAB
+    )
+
+    fun setLinkOpenMode(mode: LinkOpenMode) {
+        screenModelScope.launch {
+            settingsRepository.setLinkOpenMode(mode)
         }
     }
 

@@ -25,6 +25,7 @@ import com.karakept.app.data.model.CustomSwipeActionConfig
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import com.karakept.app.data.model.LinkOpenMode
 
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val LAYOUT_TYPE_KEY = stringPreferencesKey("layout_type")
@@ -53,6 +54,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val CONTENT_SYNC_WITH_CHILDREN_KEY = stringSetPreferencesKey("content_sync_with_children")
 
     private val NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("notifications_enabled")
+    private val LINK_OPEN_MODE_KEY = stringPreferencesKey("link_open_mode")
 
     val layoutType: Flow<LayoutType> = dataStore.data.map { preferences ->
         val layoutString = preferences[LAYOUT_TYPE_KEY] ?: LayoutType.LIST.name
@@ -403,6 +405,17 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[NOTIFICATIONS_ENABLED_KEY] = enabled
+        }
+    }
+
+    val linkOpenMode: Flow<LinkOpenMode> = dataStore.data.map { preferences ->
+        val modeString = preferences[LINK_OPEN_MODE_KEY] ?: LinkOpenMode.CUSTOM_TAB.name
+        LinkOpenMode.fromString(modeString)
+    }
+
+    suspend fun setLinkOpenMode(mode: LinkOpenMode) {
+        dataStore.edit { preferences ->
+            preferences[LINK_OPEN_MODE_KEY] = mode.name
         }
     }
 

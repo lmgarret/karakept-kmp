@@ -28,6 +28,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.draw.clip
 
 /**
@@ -67,6 +71,8 @@ fun HeroImageBanner(
     scrollProgress: Float = 0f,
     showTags: Boolean = true,
     onUrlClick: (() -> Unit)? = null,
+    onTagClick: ((String) -> Unit)? = null,
+    onInfoClick: (() -> Unit)? = null,
     bannerImageUrl: String? = null,
     screenshotUrl: String? = null,
     bannerImageLocalPath: String? = null,
@@ -155,6 +161,7 @@ fun HeroImageBanner(
                 BookmarkTagsDisplay(
                     tags = tags,
                     style = TagsDisplayStyle.READER,
+                    onTagClick = onTagClick,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
@@ -196,11 +203,29 @@ fun HeroImageBanner(
                         )
                     }
 
-                    // Reading time badge - right side aligned with domain
-                    if (readingTimeMinutes > 0) {
-                        ReadingTimeBadge(
-                            readingTimeMinutes = readingTimeMinutes
-                        )
+                    // Right side: reading time badge + info button
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (readingTimeMinutes > 0) {
+                            ReadingTimeBadge(
+                                readingTimeMinutes = readingTimeMinutes
+                            )
+                        }
+                        if (onInfoClick != null) {
+                            IconButton(
+                                onClick = onInfoClick,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Bookmark details",
+                                    tint = Color.White.copy(alpha = 0.9f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
