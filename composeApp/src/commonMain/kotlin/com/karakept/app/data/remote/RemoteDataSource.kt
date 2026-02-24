@@ -8,6 +8,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -336,6 +337,29 @@ class RemoteDataSource(
             highlightsApi(server).highlightsHighlightIdPatch(highlightId, request).body()
         } catch (e: Exception) {
             throw ApiException("Error updating highlight: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Trigger a server-side recrawl of a bookmark.
+     * POST /api/v1/bookmarks/:bookmarkId/recrawl
+     *
+     * Note: this endpoint is not in the generated OpenAPI client, so it uses a direct HTTP call.
+     */
+    suspend fun recrawlBookmark(server: Server, bookmarkId: String) = guardedCall {
+        try {
+            val baseUrl = getBaseUrl(server)
+            val response: HttpResponse = client.post("$baseUrl/bookmarks/$bookmarkId/recrawl") {
+                header("Authorization", getAuth(server))
+            }
+            if (!response.status.isSuccess()) {
+                val errorBody = response.bodyAsText()
+                throw ApiException("Failed to trigger recrawl: ${response.status} - $errorBody")
+            }
+        } catch (e: ApiException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException("Error triggering recrawl: ${e.message}", e)
         }
     }
 

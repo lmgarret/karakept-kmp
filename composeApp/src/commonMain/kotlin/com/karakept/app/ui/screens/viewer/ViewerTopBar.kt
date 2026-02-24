@@ -62,7 +62,8 @@ internal fun ViewerTopBar(
     onMoveToListClick: () -> Unit,
     onEditTagsClick: () -> Unit,
     onDeleteClick: () -> Unit,
-    onRefreshClick: () -> Unit = {}
+    onRefreshClick: () -> Unit = {},
+    isRecrawling: Boolean = false
 ) {
     // Status bar background - fades in with top bar for parallax effect
     Box(
@@ -250,15 +251,25 @@ internal fun ViewerTopBar(
         }
     }
 
-    // Reading progress bar - thin accent-colored line below the toolbar
-    LinearProgressIndicator(
-        progress = { readingProgress },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(3.dp),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = Color.Transparent,
-        drawStopIndicator = {}
-    )
+    // Reading progress bar - shows recrawl indicator (indeterminate) or reading progress
+    if (isRecrawling) {
+        LinearProgressIndicator(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = Color.Transparent,
+        )
+    } else {
+        LinearProgressIndicator(
+            progress = { readingProgress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = Color.Transparent,
+            drawStopIndicator = {}
+        )
+    }
     } // end Column
 }

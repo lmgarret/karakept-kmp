@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
@@ -816,7 +817,33 @@ class MainScreenModel(
     fun refreshBookmark(bookmark: BookmarkEntity) {
         screenModelScope.launch {
             try {
+                val servers = serverRepository.servers.first()
+                val server = servers.find { it.id == bookmark.serverId } ?: return@launch
+
+                // Trigger server-side recrawl
+                remoteDataSource.recrawlBookmark(server, bookmark.originalRemoteId)
+                println("MainScreenModel: Recrawl triggered for bookmark ${bookmark.remoteId}")
+
+                // Poll until crawlStatus is no longer "pending" (max 30 attempts × 2s = 60s)
+                var attempts = 0
+                val maxAttempts = 30
+                while (attempts < maxAttempts) {
+                    delay(2000)
+                    attempts++
+                    try {
+                        val updated = remoteDataSource.fetchBookmark(server, bookmark.originalRemoteId, includeContent = false)
+                        val crawlStatus = updated.content?.crawlStatus?.toString()?.lowercase()
+                        println("MainScreenModel: Poll attempt $attempts, crawlStatus=$crawlStatus")
+                        if (crawlStatus != "pending") break
+                    } catch (e: Exception) {
+                        println("MainScreenModel: Poll fetch failed: ${e.message}")
+                        break
+                    }
+                }
+
+                // Sync locally to pick up updated content
                 bookmarkRepository.syncSingleBookmark(bookmark.remoteId, bookmark.serverId)
+                println("MainScreenModel: Bookmark synced after recrawl")
             } catch (e: Exception) {
                 println("MainScreenModel: Error refreshing bookmark: ${e.message}")
             }

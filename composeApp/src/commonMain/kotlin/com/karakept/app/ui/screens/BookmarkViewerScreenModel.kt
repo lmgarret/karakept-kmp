@@ -114,33 +114,53 @@ class BookmarkViewerScreenModel(
                 return@launch
             }
 
-            println("BookmarkViewerScreenModel: Starting refresh for bookmark ${currentState.bookmark.remoteId}")
+            val bookmark = currentState.bookmark
+            val originalRemoteId = bookmark.originalRemoteId
+
+            println("BookmarkViewerScreenModel: Triggering server-side recrawl for bookmark ${bookmark.remoteId}")
             _isRefreshing.value = true
             try {
-                // Sync bookmark content
-                bookmarkRepository.syncSingleBookmark(
-                    currentState.bookmark.remoteId,
-                    currentState.bookmark.serverId
-                )
-                println("BookmarkViewerScreenModel: Bookmark content synced")
-
-                // Also sync highlights for this bookmark
                 val servers = serverRepository.servers.first()
-                val server = servers.find { it.id == currentState.bookmark.serverId }
-                if (server != null) {
-                    val remoteId = currentState.bookmark.originalRemoteId ?: currentState.bookmark.remoteId.toString()
-                    println("BookmarkViewerScreenModel: Syncing highlights for remoteId=$remoteId")
-                    highlightRepository.syncHighlightsForBookmark(server, remoteId)
-                    println("BookmarkViewerScreenModel: Highlights synced")
-                } else {
-                    println("BookmarkViewerScreenModel: Server not found for serverId=${currentState.bookmark.serverId}")
+                val server = servers.find { it.id == bookmark.serverId }
+                if (server == null) {
+                    println("BookmarkViewerScreenModel: Server not found for serverId=${bookmark.serverId}")
+                    return@launch
                 }
+
+                // Trigger server-side recrawl
+                remoteDataSource.recrawlBookmark(server, originalRemoteId)
+                println("BookmarkViewerScreenModel: Recrawl triggered, polling for completion")
+
+                // Poll until crawlStatus is no longer "pending" (max 30 attempts × 2s = 60s)
+                var attempts = 0
+                val maxAttempts = 30
+                while (attempts < maxAttempts) {
+                    delay(2000)
+                    attempts++
+                    try {
+                        val updated = remoteDataSource.fetchBookmark(server, originalRemoteId, includeContent = false)
+                        val crawlStatus = updated.content?.crawlStatus?.toString()?.lowercase()
+                        println("BookmarkViewerScreenModel: Poll attempt $attempts, crawlStatus=$crawlStatus")
+                        if (crawlStatus != "pending") break
+                    } catch (e: Exception) {
+                        println("BookmarkViewerScreenModel: Poll fetch failed: ${e.message}")
+                        break
+                    }
+                }
+
+                // Sync bookmark content locally to pick up the new crawled content
+                bookmarkRepository.syncSingleBookmark(bookmark.remoteId, bookmark.serverId)
+                println("BookmarkViewerScreenModel: Bookmark content synced after recrawl")
+
+                // Sync highlights too
+                highlightRepository.syncHighlightsForBookmark(server, originalRemoteId)
+                println("BookmarkViewerScreenModel: Highlights synced after recrawl")
             } catch (e: Exception) {
-                println("BookmarkViewerScreenModel: Error during refresh: ${e.message}")
+                println("BookmarkViewerScreenModel: Error during recrawl: ${e.message}")
                 e.printStackTrace()
             } finally {
                 _isRefreshing.value = false
-                println("BookmarkViewerScreenModel: Refresh complete")
+                println("BookmarkViewerScreenModel: Recrawl complete")
             }
         }
     }
