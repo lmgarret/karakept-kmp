@@ -300,9 +300,17 @@ object MainScreen : Screen {
                                 SwipeAction.ADD_TAG -> {
                                     val tagName = config?.tagName
                                     if (tagName != null) {
-                                        screenModel.addBookmarkTag(bookmark, tagName)
-                                        scope.launch {
-                                            snackbarManager.showSnackbar("Added tag '$tagName'")
+                                        val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                                        if (currentTags.contains(tagName)) {
+                                            screenModel.removeBookmarkTag(bookmark, tagName)
+                                            scope.launch {
+                                                snackbarManager.showSnackbar("Removed tag '$tagName'")
+                                            }
+                                        } else {
+                                            screenModel.addBookmarkTag(bookmark, tagName)
+                                            scope.launch {
+                                                snackbarManager.showSnackbar("Added tag '$tagName'")
+                                            }
                                         }
                                     }
                                 }
@@ -310,9 +318,17 @@ object MainScreen : Screen {
                                     val listId = config?.listId
                                     val listName = config?.listName ?: "list"
                                     if (listId != null) {
-                                        screenModel.moveBookmarkToList(bookmark, listId)
-                                        scope.launch {
-                                            snackbarManager.showSnackbar("Added to $listName")
+                                        val bookmarkListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                                        if (bookmarkListIds.contains(listId)) {
+                                            screenModel.removeBookmarkFromList(bookmark, listId)
+                                            scope.launch {
+                                                snackbarManager.showSnackbar("Removed from '$listName'")
+                                            }
+                                        } else {
+                                            screenModel.moveBookmarkToList(bookmark, listId)
+                                            scope.launch {
+                                                snackbarManager.showSnackbar("Added to '$listName'")
+                                            }
                                         }
                                     }
                                 }

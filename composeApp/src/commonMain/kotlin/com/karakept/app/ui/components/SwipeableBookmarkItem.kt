@@ -4,9 +4,12 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -14,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
@@ -23,6 +27,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,10 +38,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.SwipeAction
@@ -60,6 +68,10 @@ fun SwipeableBookmarkItem(
     rightIcon: ImageVector? = null, // Optional override for right action icon
     leftColor: Color? = null, // Optional override for left action background color
     rightColor: Color? = null, // Optional override for right action background color
+    leftLabel: String? = null, // Optional label shown under the left action icon
+    rightLabel: String? = null, // Optional label shown under the right action icon
+    leftIsApplied: Boolean = false, // When true, shows crossed icon + faded color (action already applied)
+    rightIsApplied: Boolean = false, // When true, shows crossed icon + faded color (action already applied)
     onActionTriggered: (SwipeAction, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
@@ -91,8 +103,14 @@ fun SwipeableBookmarkItem(
                 .matchParentSize()  // Match the size of the parent Box (which is sized by content)
                 .background(
                     when {
-                        offsetX > swipeThreshold -> rightColor ?: rightSwipeAction.getColor()
-                        offsetX < -swipeThreshold -> leftColor ?: leftSwipeAction.getColor()
+                        offsetX > swipeThreshold -> {
+                            val base = rightColor ?: rightSwipeAction.getColor()
+                            if (rightIsApplied) base.copy(alpha = 0.55f) else base
+                        }
+                        offsetX < -swipeThreshold -> {
+                            val base = leftColor ?: leftSwipeAction.getColor()
+                            if (leftIsApplied) base.copy(alpha = 0.55f) else base
+                        }
                         else -> Color.Transparent
                     }
                 ),
@@ -104,33 +122,89 @@ fun SwipeableBookmarkItem(
                     modifier = Modifier
                         .width(100.dp)
                         .fillMaxHeight()
-                        .padding(24.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = rightIcon ?: rightSwipeAction.getIcon(),
-                        contentDescription = rightSwipeAction.displayName,
-                        tint = Color.White
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = rightIcon ?: rightSwipeAction.getIcon(),
+                                contentDescription = rightSwipeAction.displayName,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            if (rightIsApplied) {
+                                Canvas(modifier = Modifier.size(24.dp)) {
+                                    drawLine(
+                                        color = Color.White,
+                                        start = Offset(0f, size.height),
+                                        end = Offset(size.width, 0f),
+                                        strokeWidth = 5f,
+                                        cap = StrokeCap.Round
+                                    )
+                                }
+                            }
+                        }
+                        if (rightLabel != null) {
+                            Text(
+                                text = rightLabel,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
-            
+
             Spacer(modifier = Modifier.weight(1f))
-            
+
             // Right action (visible when swiping left)
             if (offsetX < 0 && leftSwipeAction != SwipeAction.NONE) {
                 Box(
                     modifier = Modifier
                         .width(100.dp)
                         .fillMaxHeight()
-                        .padding(24.dp),
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = leftIcon ?: leftSwipeAction.getIcon(),
-                        contentDescription = leftSwipeAction.displayName,
-                        tint = Color.White
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = leftIcon ?: leftSwipeAction.getIcon(),
+                                contentDescription = leftSwipeAction.displayName,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            if (leftIsApplied) {
+                                Canvas(modifier = Modifier.size(24.dp)) {
+                                    drawLine(
+                                        color = Color.White,
+                                        start = Offset(0f, size.height),
+                                        end = Offset(size.width, 0f),
+                                        strokeWidth = 5f,
+                                        cap = StrokeCap.Round
+                                    )
+                                }
+                            }
+                        }
+                        if (leftLabel != null) {
+                            Text(
+                                text = leftLabel,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
         }

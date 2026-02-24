@@ -755,4 +755,48 @@ class MainScreenModel(
             }
         }
     }
+
+    fun removeBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
+        screenModelScope.launch {
+            val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            if (currentTags.contains(tagName)) {
+                val newTags = currentTags.filter { it != tagName }
+                val isOnline = !_isSyncing.value
+                bookmarkActionsRepository.updateTags(
+                    bookmark.remoteId,
+                    bookmark.serverId,
+                    newTags,
+                    isOnline
+                )
+                _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                    if (it.remoteId == bookmark.remoteId) {
+                        it.copy(tags = newTags.joinToString(","))
+                    } else {
+                        it
+                    }
+                }
+            }
+        }
+    }
+
+    fun removeBookmarkFromList(bookmark: BookmarkEntity, listId: String) {
+        screenModelScope.launch {
+            val isOnline = !_isSyncing.value
+            bookmarkActionsRepository.removeFromList(
+                bookmark.remoteId,
+                bookmark.serverId,
+                listId,
+                isOnline
+            )
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                if (it.remoteId == bookmark.remoteId) {
+                    val newListIds = it.listIds.split(",").map { id -> id.trim() }
+                        .filter { id -> id.isNotBlank() && id != listId }
+                    it.copy(listIds = newListIds.joinToString(","))
+                } else {
+                    it
+                }
+            }
+        }
+    }
 }

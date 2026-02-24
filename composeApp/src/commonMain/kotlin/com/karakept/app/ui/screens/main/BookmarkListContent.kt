@@ -101,6 +101,42 @@ internal fun BookmarkListContent(
                         if (bookmark.isRead) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
                     } else null
 
+                    // Compute whether each custom action is already applied to this bookmark
+                    val leftIsApplied = when (swipeLeftAction) {
+                        SwipeAction.ADD_TAG -> {
+                            val tagName = swipeLeftConfig?.tagName
+                            tagName != null && bookmark.tags.split(",").map { it.trim() }.contains(tagName)
+                        }
+                        SwipeAction.ADD_TO_LIST -> {
+                            val listId = swipeLeftConfig?.listId
+                            listId != null && bookmark.listIds.split(",").map { it.trim() }.contains(listId)
+                        }
+                        else -> false
+                    }
+                    val rightIsApplied = when (swipeRightAction) {
+                        SwipeAction.ADD_TAG -> {
+                            val tagName = swipeRightConfig?.tagName
+                            tagName != null && bookmark.tags.split(",").map { it.trim() }.contains(tagName)
+                        }
+                        SwipeAction.ADD_TO_LIST -> {
+                            val listId = swipeRightConfig?.listId
+                            listId != null && bookmark.listIds.split(",").map { it.trim() }.contains(listId)
+                        }
+                        else -> false
+                    }
+
+                    // Compute short label text for custom swipe actions
+                    val leftLabel = when (swipeLeftAction) {
+                        SwipeAction.ADD_TAG -> swipeLeftConfig?.tagName
+                        SwipeAction.ADD_TO_LIST -> swipeLeftConfig?.listName
+                        else -> null
+                    }
+                    val rightLabel = when (swipeRightAction) {
+                        SwipeAction.ADD_TAG -> swipeRightConfig?.tagName
+                        SwipeAction.ADD_TO_LIST -> swipeRightConfig?.listName
+                        else -> null
+                    }
+
                     SwipeableBookmarkItem(
                         leftSwipeAction = swipeLeftAction,
                         rightSwipeAction = swipeRightAction,
@@ -112,6 +148,10 @@ internal fun BookmarkListContent(
                         rightColor = swipeRightConfig.getEffectiveColor(swipeRightAction).takeIf {
                             swipeRightConfig?.colorHex != null
                         },
+                        leftLabel = leftLabel,
+                        rightLabel = rightLabel,
+                        leftIsApplied = leftIsApplied,
+                        rightIsApplied = rightIsApplied,
                         onActionTriggered = { action, isRightSwipe ->
                             val config = if (isRightSwipe) swipeRightConfig else swipeLeftConfig
                             onSwipeAction(bookmark, action, config)
