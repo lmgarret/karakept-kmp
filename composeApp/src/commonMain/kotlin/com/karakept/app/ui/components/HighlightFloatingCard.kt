@@ -8,28 +8,31 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.karakept.app.data.model.Highlight
 
 /**
  * Floating card that displays highlighted text above the bottom panel.
+ * Styled as a blockquote/direct quotation with a colored left border.
  * Appears with scale + fade animation when a highlight is clicked.
  *
  * @param highlight The highlight to display
@@ -45,6 +48,10 @@ fun HighlightFloatingCard(
     overrideColor: String? = null,
     modifier: Modifier = Modifier
 ) {
+    val highlightColor = getColorForHighlight(overrideColor ?: highlight.color ?: "yellow")
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+
     AnimatedVisibility(
         visible = visible,
         enter = scaleIn(
@@ -68,20 +75,29 @@ fun HighlightFloatingCard(
                 .widthIn(max = 360.dp)
                 .padding(horizontal = 16.dp)
                 .shadow(4.dp, RoundedCornerShape(4.dp))
-                .background(
-                    color = getColorForHighlight(overrideColor ?: highlight.color ?: "yellow"),
-                    shape = RoundedCornerShape(4.dp)
-                )
+                .clip(RoundedCornerShape(4.dp))
+                .background(surfaceColor)
         ) {
-            Text(
-                text = highlight.text,
-                fontSize = fontSize.sp,
-                fontFamily = fontFamily.composeFontFamily,
-                color = Color.Black,
-                maxLines = 8,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(12.dp)
-            )
+            Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                // Left border bar — the highlight color accent
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .fillMaxHeight()
+                        .background(highlightColor)
+                )
+                // Quote text
+                Text(
+                    text = "\u201C${highlight.text}\u201D",
+                    fontSize = fontSize.sp,
+                    fontFamily = fontFamily.composeFontFamily,
+                    fontStyle = FontStyle.Italic,
+                    color = onSurfaceColor,
+                    maxLines = 8,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 12.dp)
+                )
+            }
         }
     }
 }
