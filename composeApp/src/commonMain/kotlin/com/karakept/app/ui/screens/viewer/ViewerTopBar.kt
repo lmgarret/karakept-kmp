@@ -238,7 +238,8 @@ internal fun ViewerTopBar(
             .fillMaxWidth()
             .height(3.dp),
         color = MaterialTheme.colorScheme.primary,
-        trackColor = Color.Transparent
+        trackColor = Color.Transparent,
+        drawStopIndicator = {}
     )
     } // end Column
 }

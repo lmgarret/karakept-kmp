@@ -77,8 +77,19 @@ internal fun rememberReadingProgress(scrollState: LazyListState): Float {
             // Calculate how far into the reading content (past the hero) the user has scrolled.
             val scrolledDistance: Float = when {
                 firstVisible.index == 0 -> {
-                    // Still scrolling through the hero banner — no reading progress yet.
-                    0f
+                    // Hero is still the first visible item. Start showing progress as soon as item 1
+                    // (summary / content) appears at the bottom of the viewport, so that the bar
+                    // begins moving the moment the user starts seeing readable content.
+                    val item1Visible = visibleItemsInfo.any { it.index == 1 }
+                    if (item1Visible) {
+                        val heroHeight = itemHeights[0] ?: 0
+                        // Item 1 first becomes visible when scrollOffset crosses (heroHeight - viewportSize).
+                        // Use that threshold as the zero point so progress starts smoothly from 0.
+                        val startOffset = (heroHeight - viewportSize).coerceAtLeast(0)
+                        (scrollState.firstVisibleItemScrollOffset - startOffset).toFloat().coerceAtLeast(0f)
+                    } else {
+                        0f
+                    }
                 }
                 else -> {
                     // Sum heights of content items (index 1..firstVisible.index-1) already scrolled past,
