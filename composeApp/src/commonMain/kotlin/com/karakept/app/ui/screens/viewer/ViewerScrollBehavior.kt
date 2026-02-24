@@ -15,10 +15,22 @@ import androidx.compose.ui.unit.Dp
 
 /**
  * Calculates reading progress (0.0 to 1.0) based on scroll position in the content list.
- * Uses visible item heights to estimate total content height and current scroll position.
+ *
+ * Progress represents how far through the reading content (items after the hero banner) the
+ * user has scrolled. Item heights are cached as items become visible so that scrolled distance
+ * is computed from actual measured heights rather than a per-frame average, which avoids the
+ * large non-linear jump that occurs when the tall hero banner scrolls off screen and the average
+ * height estimate suddenly skews to match only the content body height.
+ *
+ * Item 0 is always the hero banner; reading progress is 0% until the user scrolls past it.
  */
 @Composable
 internal fun rememberReadingProgress(scrollState: LazyListState): Float {
+    // Cache item heights as they become visible. Updated as a side-effect inside derivedStateOf;
+    // this is safe because the cache is only written and then read within the same execution, and
+    // the derivedStateOf re-executes on every scrollState.layoutInfo change (i.e. every scroll).
+    val itemHeights = remember { mutableMapOf<Int, Int>() }
+
     val progress by remember(scrollState) {
         derivedStateOf {
             val layoutInfo = scrollState.layoutInfo
@@ -29,9 +41,14 @@ internal fun rememberReadingProgress(scrollState: LazyListState): Float {
                 return@derivedStateOf 0f
             }
 
+            // Update the height cache for every currently visible item.
+            for (item in visibleItemsInfo) {
+                itemHeights[item.index] = item.size
+            }
+
             val viewportSize = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
 
-            // If the last item's bottom is fully within the viewport, progress is 100%
+            // If the last item's bottom is fully within the viewport, progress is 100%.
             val lastVisibleItem = visibleItemsInfo.last()
             if (lastVisibleItem.index == totalItemsCount - 1) {
                 val lastItemBottom = lastVisibleItem.offset + lastVisibleItem.size
@@ -40,21 +57,39 @@ internal fun rememberReadingProgress(scrollState: LazyListState): Float {
                 }
             }
 
-            // Estimate total content height using average visible item height
             val firstVisible = visibleItemsInfo.first()
-            val lastVisible = visibleItemsInfo.last()
-            val visibleItemsSpan = lastVisible.offset + lastVisible.size - firstVisible.offset
-            val avgItemHeight = visibleItemsSpan / visibleItemsInfo.size
 
-            if (avgItemHeight <= 0) return@derivedStateOf 0f
+            // Item 0 is the hero banner. Reading progress is defined over items 1..n only.
+            // While the hero is still (partially) on screen, report 0% progress.
+            val knownContentHeight = itemHeights.entries.filter { it.key > 0 }.sumOf { it.value }
+            val knownContentCount = itemHeights.count { it.key > 0 }
+            val avgContentHeight = if (knownContentCount > 0) knownContentHeight / knownContentCount else 0
 
-            val estimatedTotalHeight = avgItemHeight * totalItemsCount
-            val scrollableRange = (estimatedTotalHeight - viewportSize).toFloat()
+            if (avgContentHeight <= 0) return@derivedStateOf 0f
+
+            val contentItemsCount = totalItemsCount - 1 // hero excluded
+            val estimatedContentTotalHeight =
+                knownContentHeight + (contentItemsCount - knownContentCount) * avgContentHeight
+            val scrollableRange = (estimatedContentTotalHeight - viewportSize).toFloat()
 
             if (scrollableRange <= 0f) return@derivedStateOf 1f
 
-            // Current scroll position: first visible item's estimated absolute position + its scroll offset
-            val scrolledDistance = firstVisible.index * avgItemHeight.toFloat() + scrollState.firstVisibleItemScrollOffset
+            // Calculate how far into the reading content (past the hero) the user has scrolled.
+            val scrolledDistance: Float = when {
+                firstVisible.index == 0 -> {
+                    // Still scrolling through the hero banner — no reading progress yet.
+                    0f
+                }
+                else -> {
+                    // Sum heights of content items (index 1..firstVisible.index-1) already scrolled past,
+                    // then add the current partial scroll offset into the first visible content item.
+                    var dist = scrollState.firstVisibleItemScrollOffset.toFloat()
+                    for (i in 1 until firstVisible.index) {
+                        dist += (itemHeights[i] ?: avgContentHeight).toFloat()
+                    }
+                    dist
+                }
+            }
 
             (scrolledDistance / scrollableRange).coerceIn(0f, 1f)
         }
