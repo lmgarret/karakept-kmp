@@ -613,6 +613,9 @@ class BookmarkRepository(
                 isRead = hasReadTag,
                 createdAt = createdAtMillis,
                 readingTimeMinutes = finalReadingTime,
+                readingProgress = existing?.readingProgress ?: 0f,
+                readingScrollIndex = existing?.readingScrollIndex ?: 0,
+                readingScrollOffset = existing?.readingScrollOffset ?: 0,
                 content = finalContent
             )
         }
