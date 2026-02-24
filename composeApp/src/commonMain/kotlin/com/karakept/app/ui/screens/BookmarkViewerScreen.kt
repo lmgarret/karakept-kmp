@@ -220,24 +220,13 @@ data class BookmarkViewerScreen(
 
         val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
 
-        // Track reading progress on every scroll change. The in-memory state is
-        // updated immediately so it can be persisted in onDispose if the user
-        // navigates back before the debounced save fires.
+        // Push reading state to the screen model on every scroll change.
+        // The screen model debounces DB writes internally (500 ms).
         LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
             if (trackReadingProgress && hasRestoredScroll && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val currentState = loadingState as BookmarkLoadingState.FullyLoaded
-                // Only track when the user has actually scrolled into the content
                 if (readingProgress > 0f || scrollState.firstVisibleItemIndex > 0) {
-                    // Immediately record the position in memory (no DB write)
-                    screenModel.updateReadingState(
-                        localId = currentState.bookmark.localId,
-                        progress = readingProgress,
-                        scrollIndex = scrollState.firstVisibleItemIndex,
-                        scrollOffset = scrollState.firstVisibleItemScrollOffset
-                    )
-                    // Debounced periodic save to DB while reading
-                    delay(1500)
-                    screenModel.saveReadingProgress(
+                    screenModel.onReadingStateChanged(
                         localId = currentState.bookmark.localId,
                         progress = readingProgress,
                         scrollIndex = scrollState.firstVisibleItemIndex,

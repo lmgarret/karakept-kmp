@@ -17,12 +17,15 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -107,10 +110,7 @@ class BookmarkViewerScreenModel(
     val trackReadingProgress: StateFlow<Boolean> = settingsRepository.trackReadingProgress
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
 
-    // Track the latest reading state so it can be saved on disposal even if the
-    // debounced periodic save hasn't fired yet (e.g. user navigates back quickly).
-    @Volatile
-    private var pendingReadingState: PendingReadingState? = null
+    // --- Reading progress persistence (flow-based debounce) ---
 
     private data class PendingReadingState(
         val localId: Long,
@@ -119,25 +119,38 @@ class BookmarkViewerScreenModel(
         val scrollOffset: Int
     )
 
-    /**
-     * Immediately records the current reading position in memory (no DB write).
-     * Called on every meaningful scroll change so that [onDispose] always has
-     * the latest state to persist.
-     */
-    fun updateReadingState(localId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
-        pendingReadingState = PendingReadingState(localId, progress, scrollIndex, scrollOffset)
+    @Volatile
+    private var pendingReadingState: PendingReadingState? = null
+
+    private val readingStateUpdates = MutableSharedFlow<PendingReadingState>(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    init {
+        @OptIn(FlowPreview::class)
+        screenModelScope.launch {
+            readingStateUpdates
+                .debounce(500)
+                .collect { state ->
+                    bookmarkDao.updateReadingProgress(
+                        state.localId, state.progress, state.scrollIndex, state.scrollOffset
+                    )
+                    pendingReadingState = null
+                }
+        }
     }
 
     /**
-     * Persists reading progress to the database and clears the pending state.
-     * Used by the debounced periodic save during active reading.
+     * Called by the composable on every meaningful scroll change.
+     * Updates are debounced (500 ms) before writing to the database.
+     * The latest state is also kept in memory so [onDispose] can persist
+     * it if the user navigates away before the debounce window closes.
      */
-    fun saveReadingProgress(localId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
-        pendingReadingState = PendingReadingState(localId, progress, scrollIndex, scrollOffset)
-        screenModelScope.launch {
-            bookmarkDao.updateReadingProgress(localId, progress, scrollIndex, scrollOffset)
-            pendingReadingState = null
-        }
+    fun onReadingStateChanged(localId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
+        val state = PendingReadingState(localId, progress, scrollIndex, scrollOffset)
+        pendingReadingState = state
+        readingStateUpdates.tryEmit(state)
     }
 
     @OptIn(DelicateCoroutinesApi::class)
