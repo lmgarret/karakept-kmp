@@ -3,6 +3,7 @@ package com.karakept.app.ui.screens.viewer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -51,6 +53,7 @@ internal fun ViewerTopBar(
     showStickyTitle: Boolean,
     showMenu: Boolean,
     toolbarHeight: Dp,
+    readingProgress: Float,
     onBackClick: () -> Unit,
     onMenuToggle: (Boolean) -> Unit,
     onAppearanceClick: () -> Unit,
@@ -71,11 +74,16 @@ internal fun ViewerTopBar(
             )
     )
 
-    // Custom Top Bar (Overlay)
-    Box(
+    // Custom Top Bar (Overlay) + Reading Progress Bar
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
+    ) {
+    // Custom Top Bar
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
             .height(toolbarHeight)
             .background(
                 color = MaterialTheme.colorScheme.surface.copy(
@@ -222,4 +230,15 @@ internal fun ViewerTopBar(
             }
         }
     }
+
+    // Reading progress bar - thin accent-colored line below the toolbar
+    LinearProgressIndicator(
+        progress = { readingProgress },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(3.dp),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = Color.Transparent
+    )
+    } // end Column
 }

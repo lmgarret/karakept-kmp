@@ -14,6 +14,55 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 
 /**
+ * Calculates reading progress (0.0 to 1.0) based on scroll position in the content list.
+ * Uses visible item heights to estimate total content height and current scroll position.
+ */
+@Composable
+internal fun rememberReadingProgress(scrollState: LazyListState): Float {
+    val progress by remember(scrollState) {
+        derivedStateOf {
+            val layoutInfo = scrollState.layoutInfo
+            val totalItemsCount = layoutInfo.totalItemsCount
+            val visibleItemsInfo = layoutInfo.visibleItemsInfo
+
+            if (totalItemsCount == 0 || visibleItemsInfo.isEmpty()) {
+                return@derivedStateOf 0f
+            }
+
+            val viewportSize = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+
+            // If the last item's bottom is fully within the viewport, progress is 100%
+            val lastVisibleItem = visibleItemsInfo.last()
+            if (lastVisibleItem.index == totalItemsCount - 1) {
+                val lastItemBottom = lastVisibleItem.offset + lastVisibleItem.size
+                if (lastItemBottom <= layoutInfo.viewportEndOffset) {
+                    return@derivedStateOf 1f
+                }
+            }
+
+            // Estimate total content height using average visible item height
+            val firstVisible = visibleItemsInfo.first()
+            val lastVisible = visibleItemsInfo.last()
+            val visibleItemsSpan = lastVisible.offset + lastVisible.size - firstVisible.offset
+            val avgItemHeight = visibleItemsSpan / visibleItemsInfo.size
+
+            if (avgItemHeight <= 0) return@derivedStateOf 0f
+
+            val estimatedTotalHeight = avgItemHeight * totalItemsCount
+            val scrollableRange = (estimatedTotalHeight - viewportSize).toFloat()
+
+            if (scrollableRange <= 0f) return@derivedStateOf 1f
+
+            // Current scroll position: first visible item's estimated absolute position + its scroll offset
+            val scrolledDistance = firstVisible.index * avgItemHeight.toFloat() + scrollState.firstVisibleItemScrollOffset
+
+            (scrolledDistance / scrollableRange).coerceIn(0f, 1f)
+        }
+    }
+    return progress
+}
+
+/**
  * Remembers FAB visibility state based on scroll direction and auto-mark-as-read functionality
  */
 @Composable
