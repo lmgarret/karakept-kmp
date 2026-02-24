@@ -205,7 +205,7 @@ data class BookmarkViewerScreen(
             toolbarHeight = toolbarHeight
         )
 
-        val readingProgress = rememberReadingProgress(scrollState)
+        val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
 
         Scaffold(
             snackbarHost = {
