@@ -106,6 +106,10 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         val job = kotlinx.coroutines.launch {
             repository.bookmarkChangedEvents.collect { emittedId = it }
         }
+        // Advance scheduler so the collector coroutine starts and subscribes to the SharedFlow
+        // before moveToList emits. Without this, the emission races ahead of the subscription
+        // and the value is lost (SharedFlow has replay=0).
+        testDispatcher.scheduler.advanceUntilIdle()
 
         repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-99", isOnline = false)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -171,6 +175,10 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         val job = kotlinx.coroutines.launch {
             repository.bookmarkChangedEvents.collect { emittedId = it }
         }
+        // Advance scheduler so the collector coroutine starts and subscribes to the SharedFlow
+        // before removeFromList emits. Without this, the emission races ahead of the subscription
+        // and the value is lost (SharedFlow has replay=0).
+        testDispatcher.scheduler.advanceUntilIdle()
 
         repository.removeFromList(bookmark.remoteId, bookmark.serverId, "list-1", isOnline = false)
         testDispatcher.scheduler.advanceUntilIdle()
