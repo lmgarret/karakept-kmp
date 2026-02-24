@@ -729,6 +729,19 @@ class MainScreenModel(
                 listId,
                 isOnline
             )
+            // Update local state immediately for UI feedback
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                if (it.remoteId == bookmark.remoteId) {
+                    val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
+                    if (!currentListIds.contains(listId)) {
+                        it.copy(listIds = (currentListIds + listId).joinToString(","))
+                    } else {
+                        it
+                    }
+                } else {
+                    it
+                }
+            }
         }
     }
 

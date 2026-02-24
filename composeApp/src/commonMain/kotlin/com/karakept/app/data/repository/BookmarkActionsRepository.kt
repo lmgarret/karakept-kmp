@@ -313,12 +313,24 @@ class BookmarkActionsRepository(
         isOnline: Boolean
     ) {
         withContext(Dispatchers.IO) {
+            // Update local DB immediately (optimistic update)
+            val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+            bookmark?.let {
+                val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
+                if (!currentListIds.contains(listId)) {
+                    val newListIds = currentListIds + listId
+                    bookmarkDao.insertBookmark(it.copy(listIds = newListIds.joinToString(",")))
+                }
+            }
+
             queueAction(
                 bookmarkRemoteId = bookmarkRemoteId,
                 serverId = serverId,
                 actionType = PendingActionType.MOVE_TO_LIST,
                 actionData = json.encodeToString(mapOf("listId" to listId))
             )
+
+            _bookmarkChangedEvents.emit(bookmarkRemoteId)
 
             // Auto-sync if not in offline mode
             triggerAutoSync(serverId)
@@ -335,12 +347,22 @@ class BookmarkActionsRepository(
         isOnline: Boolean
     ) {
         withContext(Dispatchers.IO) {
+            // Update local DB immediately (optimistic update)
+            val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+            bookmark?.let {
+                val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
+                val newListIds = currentListIds.filter { id -> id != listId }
+                bookmarkDao.insertBookmark(it.copy(listIds = newListIds.joinToString(",")))
+            }
+
             queueAction(
                 bookmarkRemoteId = bookmarkRemoteId,
                 serverId = serverId,
                 actionType = PendingActionType.REMOVE_FROM_LIST,
                 actionData = json.encodeToString(mapOf("listId" to listId))
             )
+
+            _bookmarkChangedEvents.emit(bookmarkRemoteId)
 
             // Auto-sync if not in offline mode
             triggerAutoSync(serverId)
