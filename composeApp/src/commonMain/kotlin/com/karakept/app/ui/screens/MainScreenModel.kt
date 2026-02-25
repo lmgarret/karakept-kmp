@@ -673,17 +673,7 @@ class MainScreenModel(
             // Update the bookmark in the accumulated list immediately for UI feedback
             _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
                 if (it.remoteId == bookmark.remoteId) {
-                    // Update the read state and tags immediately
-                    val newIsRead = !bookmark.isRead
-                    val currentTags = it.tags.split(",").map { t -> t.trim() }.filter { t -> t.isNotBlank() }.toMutableList()
-                    if (newIsRead) {
-                        if (!currentTags.contains("karakept:read")) {
-                            currentTags.add("karakept:read")
-                        }
-                    } else {
-                        currentTags.remove("karakept:read")
-                    }
-                    it.copy(isRead = newIsRead, tags = currentTags.joinToString(","))
+                    it.copy(isRead = !bookmark.isRead)
                 } else {
                     it
                 }

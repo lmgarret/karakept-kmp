@@ -77,7 +77,6 @@ data class BookmarkViewerScreen(
         val htmlFontFamily by screenModel.htmlFontFamily.collectAsState()
         val precrawledAssetPath by screenModel.precrawledAssetPath.collectAsState()
         val lists by screenModel.lists.collectAsState()
-        val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
         val showTags by screenModel.showTags.collectAsState()
         val isRefreshing by screenModel.isRefreshing.collectAsState()
         val offlineMode by screenModel.offlineMode.collectAsState()
@@ -215,27 +214,10 @@ data class BookmarkViewerScreen(
         }
 
         // Custom hooks for scroll behavior
-        val fabVisible = if (loadingState is BookmarkLoadingState.FullyLoaded) {
-            val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
-            rememberFabVisibilityState(
-                scrollState = scrollState,
-                fabExpanded = fabExpanded,
-                autoMarkReadOnScroll = autoMarkReadOnScroll,
-                isBookmarkRead = fullyLoadedState.bookmark.isRead,
-                onMarkAsRead = {
-                    screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
-                },
-                onUnmarkAsRead = {
-                    screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
-                },
-                onShowSnackbarWithUndo = {
-                    // Undo is now handled automatically by BookmarkActionController
-                    // No need for manual implementation
-                }
-            )
-        } else {
-            true
-        }
+        val fabVisible = rememberFabVisibilityState(
+            scrollState = scrollState,
+            fabExpanded = fabExpanded
+        )
 
         val showStickyTitle = rememberStickyTitleVisibility(
             scrollState = scrollState,

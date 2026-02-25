@@ -112,7 +112,6 @@ class BookmarkViewSettingsScreen : Screen {
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
                 val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
 
                 Card(
@@ -149,44 +148,6 @@ class BookmarkViewSettingsScreen : Screen {
                         Switch(
                             checked = trackReadingProgress,
                             onCheckedChange = { screenModel.setTrackReadingProgress(it) }
-                        )
-                    }
-                }
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Text(
-                                text = "Auto-mark as Read",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Mark article as read when reaching the end of the page",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = autoMarkReadOnScroll,
-                            onCheckedChange = { screenModel.setAutoMarkReadOnScroll(it) }
                         )
                     }
                 }

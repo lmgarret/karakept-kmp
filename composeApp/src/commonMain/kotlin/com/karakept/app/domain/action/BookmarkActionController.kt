@@ -82,11 +82,9 @@ class BookmarkActionController(
                     }
 
                     is BookmarkActionEvent.MarkUnread -> {
-                        val tags = event.bookmark.tags.split(",").filter { it.isNotBlank() }
                         bookmarkActionsRepository.markAsUnread(
                             event.bookmark.remoteId,
-                            event.bookmark.serverId,
-                            tags
+                            event.bookmark.serverId
                         )
                         BookmarkActionResult.Success("Marked as unread")
                     }
@@ -267,8 +265,7 @@ class BookmarkActionController(
                 bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
             }
             is BookmarkActionEvent.MarkRead -> {
-                val tags = bookmark.tags.split(",").filter { it.isNotBlank() }
-                bookmarkActionsRepository.markAsUnread(bookmark.remoteId, bookmark.serverId, tags)
+                bookmarkActionsRepository.markAsUnread(bookmark.remoteId, bookmark.serverId)
             }
             is BookmarkActionEvent.MarkUnread -> {
                 bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)

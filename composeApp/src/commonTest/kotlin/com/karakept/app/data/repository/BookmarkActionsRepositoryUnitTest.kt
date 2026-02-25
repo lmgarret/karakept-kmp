@@ -209,32 +209,6 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun updateTags_setsIsReadTrueWhenKarakeptReadTagPresent() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(tags = "", isRead = false)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
-        coEvery { settingsRepository.offlineMode } returns flowOf(true)
-
-        repository.updateTags(bookmark.remoteId, bookmark.serverId, listOf("karakept:read"), isOnline = false)
-
-        val savedSlot = slot<BookmarkEntity>()
-        coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
-        assertTrue(savedSlot.captured.isRead, "isRead should be true when karakept:read tag is added")
-    }
-
-    @Test
-    fun updateTags_setsIsReadFalseWhenKarakeptReadTagAbsent() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(tags = "karakept:read", isRead = true)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
-        coEvery { settingsRepository.offlineMode } returns flowOf(true)
-
-        repository.updateTags(bookmark.remoteId, bookmark.serverId, listOf("some-other-tag"), isOnline = false)
-
-        val savedSlot = slot<BookmarkEntity>()
-        coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
-        assertFalse(savedSlot.captured.isRead, "isRead should be false when karakept:read tag is removed")
-    }
-
-    @Test
     fun updateTags_queuesPendingAction() = runTest(testDispatcher) {
         val bookmark = makeBookmark(tags = "")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
