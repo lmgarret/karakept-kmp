@@ -4,6 +4,7 @@ import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.repository.BookmarkActionsRepository
+import com.karakept.app.data.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -13,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.first
 
 /**
  * Event emitted when an undo operation completes
@@ -30,7 +32,8 @@ class BookmarkActionController(
     private val bookmarkActionsRepository: BookmarkActionsRepository,
     private val bookmarkDao: BookmarkDao,
     private val pendingActionDao: PendingActionDao,
-    private val snackbarManager: ActionSnackbarManager
+    private val snackbarManager: ActionSnackbarManager,
+    private val settingsRepository: SettingsRepository
 ) {
     private val controllerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -82,11 +85,11 @@ class BookmarkActionController(
                     }
 
                     is BookmarkActionEvent.MarkUnread -> {
-                        val tags = event.bookmark.tags.split(",").filter { it.isNotBlank() }
+                        val resetProgress = settingsRepository.resetProgressOnMarkUnread.first()
                         bookmarkActionsRepository.markAsUnread(
                             event.bookmark.remoteId,
                             event.bookmark.serverId,
-                            tags
+                            resetProgress = resetProgress
                         )
                         BookmarkActionResult.Success("Marked as unread")
                     }
@@ -267,8 +270,8 @@ class BookmarkActionController(
                 bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
             }
             is BookmarkActionEvent.MarkRead -> {
-                val tags = bookmark.tags.split(",").filter { it.isNotBlank() }
-                bookmarkActionsRepository.markAsUnread(bookmark.remoteId, bookmark.serverId, tags)
+                val resetProgress = settingsRepository.resetProgressOnMarkUnread.first()
+                bookmarkActionsRepository.markAsUnread(bookmark.remoteId, bookmark.serverId, resetProgress)
             }
             is BookmarkActionEvent.MarkUnread -> {
                 bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)

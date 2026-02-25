@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +41,7 @@ fun BookmarkCardLayout(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     showReadingTime: Boolean = true,
+    showReadingProgress: Boolean = true,
     showTags: Boolean = true,
     dimRead: Boolean = false,
     offlineMode: Boolean = false,
@@ -47,7 +49,8 @@ fun BookmarkCardLayout(
     screenshotUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val alpha = if (bookmark.isRead && dimRead) 0.5f else 1f
+    val isFullyRead = bookmark.isRead
+    val alpha = if (isFullyRead && dimRead) 0.5f else 1f
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -122,6 +125,19 @@ fun BookmarkCardLayout(
                     )
                 }
             }
+
+            // Reading progress bar
+            if (showReadingProgress && bookmark.readingProgress > 0f) {
+                LinearProgressIndicator(
+                    progress = { bookmark.readingProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .align(Alignment.BottomCenter),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            }
         }
     }
 }
@@ -134,6 +150,7 @@ fun BookmarkListLayout(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     showReadingTime: Boolean = true,
+    showReadingProgress: Boolean = true,
     showTags: Boolean = true,
     dimRead: Boolean = false,
     offlineMode: Boolean = false,
@@ -141,7 +158,8 @@ fun BookmarkListLayout(
     screenshotUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val alpha = if (bookmark.isRead && dimRead) 0.5f else 1f
+    val isFullyRead = bookmark.isRead
+    val alpha = if (isFullyRead && dimRead) 0.5f else 1f
     Card(
         modifier = modifier
            .fillMaxWidth()
@@ -251,6 +269,19 @@ fun BookmarkListLayout(
                             .padding(8.dp)
                     )
                 }
+            }
+
+            // Reading progress bar
+            if (showReadingProgress && bookmark.readingProgress > 0f) {
+                LinearProgressIndicator(
+                    progress = { bookmark.readingProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .align(Alignment.BottomCenter),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             }
         }
     }

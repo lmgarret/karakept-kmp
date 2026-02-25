@@ -28,5 +28,8 @@ data class BookmarkEntity(
     val isRead: Boolean = false,
     val tags: String = "", // Comma-separated tags
     val listIds: String = "", // Comma-separated list IDs
-    val readingTimeMinutes: Int = 0 // Estimated reading time in minutes
+    val readingTimeMinutes: Int = 0, // Estimated reading time in minutes
+    val readingProgress: Float = 0f, // Reading progress (0.0–1.0) for visual indicator
+    val readingScrollIndex: Int = 0, // LazyList firstVisibleItemIndex for scroll restoration
+    val readingScrollOffset: Int = 0 // LazyList firstVisibleItemScrollOffset for scroll restoration
 )

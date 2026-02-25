@@ -148,9 +148,6 @@ fun HtmlContent(
                 }
             }
         } else {
-            // State to track if WebView has finished rendering
-            var isContentLoaded by remember { mutableStateOf(false) }
-
             // Reset state when content changes
             androidx.compose.runtime.LaunchedEffect(processedHtml) {
                 if (processedHtml == null) {
