@@ -49,7 +49,7 @@ fun BookmarkCardLayout(
     screenshotUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val isFullyRead = bookmark.isRead || bookmark.readingProgress >= 1f
+    val isFullyRead = bookmark.isRead
     val alpha = if (isFullyRead && dimRead) 0.5f else 1f
     Card(
         modifier = modifier
@@ -158,7 +158,7 @@ fun BookmarkListLayout(
     screenshotUrl: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val isFullyRead = bookmark.isRead || bookmark.readingProgress >= 1f
+    val isFullyRead = bookmark.isRead
     val alpha = if (isFullyRead && dimRead) 0.5f else 1f
     Card(
         modifier = modifier

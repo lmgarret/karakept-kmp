@@ -98,7 +98,7 @@ val appModule = module {
 
     // Action system - centralized action handling with undo support
     single { ActionSnackbarManager() }
-    single { BookmarkActionController(get(), get(), get(), get()) }
+    single { BookmarkActionController(get(), get(), get(), get(), get()) }
 
     factory { LoginScreenModel(get(), get(), get()) }
     factory { OnboardingScreenModel(get(), get(), get()) }

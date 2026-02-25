@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
@@ -148,6 +149,46 @@ class BookmarkViewSettingsScreen : Screen {
                         Switch(
                             checked = trackReadingProgress,
                             onCheckedChange = { screenModel.setTrackReadingProgress(it) }
+                        )
+                    }
+                }
+
+                val resetProgressOnMarkUnread by screenModel.resetProgressOnMarkUnread.collectAsState()
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Replay,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                        ) {
+                            Text(
+                                text = "Reset Progress on Mark Unread",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Reset reading progress to 0% when marking a bookmark as unread",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = resetProgressOnMarkUnread,
+                            onCheckedChange = { screenModel.setResetProgressOnMarkUnread(it) }
                         )
                     }
                 }

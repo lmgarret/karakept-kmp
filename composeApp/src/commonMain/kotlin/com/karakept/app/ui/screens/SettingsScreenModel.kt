@@ -348,6 +348,18 @@ class SettingsScreenModel(
         }
     }
 
+    val resetProgressOnMarkUnread: StateFlow<Boolean> = settingsRepository.resetProgressOnMarkUnread.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setResetProgressOnMarkUnread(enabled: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setResetProgressOnMarkUnread(enabled)
+        }
+    }
+
     val notificationsEnabled: StateFlow<Boolean> = settingsRepository.notificationsEnabled.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),

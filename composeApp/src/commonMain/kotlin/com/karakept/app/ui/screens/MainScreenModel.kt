@@ -663,7 +663,8 @@ class MainScreenModel(
 
     fun toggleBookmarkRead(bookmark: BookmarkEntity) {
         screenModelScope.launch {
-            val event = if (bookmark.isRead) {
+            val markingUnread = bookmark.isRead
+            val event = if (markingUnread) {
                 BookmarkActionEvent.MarkUnread(bookmark)
             } else {
                 BookmarkActionEvent.MarkRead(bookmark)
@@ -671,9 +672,14 @@ class MainScreenModel(
             bookmarkActionController.executeAction(event)
 
             // Update the bookmark in the accumulated list immediately for UI feedback
+            val resetProgress = markingUnread && settingsRepository.resetProgressOnMarkUnread.first()
             _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
                 if (it.remoteId == bookmark.remoteId) {
-                    it.copy(isRead = !bookmark.isRead)
+                    if (resetProgress) {
+                        it.copy(isRead = false, readingProgress = 0f, readingScrollIndex = 0, readingScrollOffset = 0)
+                    } else {
+                        it.copy(isRead = !bookmark.isRead)
+                    }
                 } else {
                     it
                 }

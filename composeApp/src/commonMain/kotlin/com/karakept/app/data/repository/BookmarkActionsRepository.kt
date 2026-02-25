@@ -168,13 +168,19 @@ class BookmarkActionsRepository(
 
     /**
      * Mark bookmark as unread (local-only, no server sync).
+     * @param resetProgress If true, also resets reading progress and scroll position to zero.
      */
-    suspend fun markAsUnread(bookmarkRemoteId: Long, serverId: String) {
+    suspend fun markAsUnread(bookmarkRemoteId: Long, serverId: String, resetProgress: Boolean = false) {
         performAction {
             withContext(Dispatchers.IO) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
-                    bookmarkDao.insertBookmark(it.copy(isRead = false))
+                    val updated = if (resetProgress) {
+                        it.copy(isRead = false, readingProgress = 0f, readingScrollIndex = 0, readingScrollOffset = 0)
+                    } else {
+                        it.copy(isRead = false)
+                    }
+                    bookmarkDao.insertBookmark(updated)
                 }
                 _bookmarkChangedEvents.emit(bookmarkRemoteId)
             }
