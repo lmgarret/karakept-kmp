@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,10 +38,18 @@ internal fun ContentBodySection(
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
     onDeleteHighlight: (String) -> Unit = {},
     onHighlightClick: (String) -> Unit = {},
-    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null
+    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null,
+    onContentReady: (() -> Unit)? = null
 ) {
     // Track when HTML content is truly ready (processed + rendered)
     var htmlContentReady by remember { mutableStateOf(false) }
+
+    // Notify parent when content is fully rendered
+    LaunchedEffect(htmlContentReady) {
+        if (htmlContentReady) {
+            onContentReady?.invoke()
+        }
+    }
 
     Column(
         modifier = Modifier

@@ -156,16 +156,33 @@ data class BookmarkViewerScreen(
         val bannerHeight = 320.dp
         val toolbarHeight = 56.dp
 
-        // Restore scroll position once content is fully available.
-        // We must wait for content to load before scrolling, otherwise the
-        // LazyColumn item may not be tall enough and scrollToItem silently fails.
+        // Track when the WebView has fully rendered its HTML content.
+        // This is essential for scroll restoration: the LazyColumn item containing the
+        // WebView has near-zero height until the WebView finishes loading and measuring,
+        // so scrollToItem(index, offset) silently fails if called too early.
+        var contentRendered by remember { mutableStateOf(false) }
+
+        // Reset contentRendered when loading state changes away from FullyLoaded
+        LaunchedEffect(loadingState) {
+            if (loadingState !is BookmarkLoadingState.FullyLoaded) {
+                contentRendered = false
+            }
+        }
+
+        // Restore scroll position once content is fully rendered in the WebView.
         var hasRestoredScroll by remember { mutableStateOf(false) }
-        LaunchedEffect(loadingState, trackReadingProgress) {
+        LaunchedEffect(loadingState, trackReadingProgress, contentRendered) {
             if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
                 if (bookmark.readingProgress > 0f && !bookmark.content.isNullOrBlank()) {
-                    scrollState.scrollToItem(bookmark.readingScrollIndex, bookmark.readingScrollOffset)
-                    hasRestoredScroll = true
+                    if (contentRendered) {
+                        // Allow the WebView's measured height to propagate through
+                        // the Compose layout system before scrolling.
+                        delay(300)
+                        scrollState.scrollToItem(bookmark.readingScrollIndex, bookmark.readingScrollOffset)
+                        hasRestoredScroll = true
+                    }
+                    // If !contentRendered, this effect will re-fire when contentRendered changes.
                 } else if (bookmark.readingProgress == 0f) {
                     // Nothing to restore
                     hasRestoredScroll = true
@@ -441,7 +458,8 @@ data class BookmarkViewerScreen(
                                     },
                                     onHighlightPosition = { id, position ->
                                         highlightPosition = position
-                                    }
+                                    },
+                                    onContentReady = { contentRendered = true }
                                 )
                             }
                         }
