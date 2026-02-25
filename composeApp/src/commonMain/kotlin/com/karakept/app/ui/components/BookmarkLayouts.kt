@@ -41,6 +41,7 @@ fun BookmarkCardLayout(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     showReadingTime: Boolean = true,
+    showReadingProgress: Boolean = true,
     showTags: Boolean = true,
     dimRead: Boolean = false,
     offlineMode: Boolean = false,
@@ -126,7 +127,7 @@ fun BookmarkCardLayout(
             }
 
             // Reading progress bar
-            if (bookmark.readingProgress > 0f) {
+            if (showReadingProgress && bookmark.readingProgress > 0f) {
                 LinearProgressIndicator(
                     progress = { bookmark.readingProgress },
                     modifier = Modifier
@@ -149,6 +150,7 @@ fun BookmarkListLayout(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     showReadingTime: Boolean = true,
+    showReadingProgress: Boolean = true,
     showTags: Boolean = true,
     dimRead: Boolean = false,
     offlineMode: Boolean = false,
@@ -270,7 +272,7 @@ fun BookmarkListLayout(
             }
 
             // Reading progress bar
-            if (bookmark.readingProgress > 0f) {
+            if (showReadingProgress && bookmark.readingProgress > 0f) {
                 LinearProgressIndicator(
                     progress = { bookmark.readingProgress },
                     modifier = Modifier

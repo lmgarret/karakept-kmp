@@ -30,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
@@ -369,10 +370,18 @@ data class BookmarkViewerScreen(
                     ) {
                         // Content List
                         // Only blur when the highlight is actually found and panel will show
+                        // Hide content until scroll position is restored to prevent a flash
+                        // where the top of the article shows before jumping to the saved position.
+                        val needsScrollRestore = trackReadingProgress &&
+                            !hasRestoredScroll &&
+                            loadingState is BookmarkLoadingState.FullyLoaded &&
+                            (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0f &&
+                            !(loadingState as BookmarkLoadingState.FullyLoaded).bookmark.content.isNullOrBlank()
                         LazyColumn(
                             state = scrollState,
                             modifier = Modifier
                                 .fillMaxSize()
+                                .then(if (needsScrollRestore) Modifier.alpha(0f) else Modifier)
                                 .then(if (selectedHighlightId != null && selectedHighlight != null) Modifier.blur(8.dp) else Modifier)
                         ) {
                             // Hero banner as first item so tag/URL clicks are not blocked by the list
@@ -471,7 +480,7 @@ data class BookmarkViewerScreen(
                             showStickyTitle = showStickyTitle,
                             showMenu = showMenu,
                             toolbarHeight = toolbarHeight,
-                            readingProgress = readingProgress,
+                            readingProgress = if (trackReadingProgress) readingProgress else 0f,
                             onBackClick = { navigator.pop() },
                             onMenuToggle = { showMenu = it },
                             onAppearanceClick = { showAppearancePanel = true },
