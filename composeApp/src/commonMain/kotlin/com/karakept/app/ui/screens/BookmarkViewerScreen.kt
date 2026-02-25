@@ -98,6 +98,7 @@ data class BookmarkViewerScreen(
         val highlights by screenModel.highlights.collectAsState()
         val linkOpenMode by screenModel.linkOpenMode.collectAsState()
         val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
+        val serverProgressChecked by screenModel.serverProgressChecked.collectAsState()
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isRefreshing,
@@ -244,9 +245,11 @@ data class BookmarkViewerScreen(
         // Restore scroll position once content is fully rendered.
         // For READER mode (native renderer), content renders immediately — no delays needed.
         // For WEB mode (WebView), we must wait for the WebView to measure its height.
+        // serverProgressChecked is included as a key so that when an async server pull completes
+        // and raises a 0→N% transition, this effect re-runs and can do the restoration.
         var hasRestoredScroll by remember { mutableStateOf(false) }
         val isNativeRenderer = viewerMode == ViewerMode.READER
-        LaunchedEffect(loadingState, trackReadingProgress, contentRendered) {
+        LaunchedEffect(loadingState, trackReadingProgress, contentRendered, serverProgressChecked) {
             if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
                 // Treat tiny progress values (< 2%) as "at the top" — the progress
@@ -285,8 +288,12 @@ data class BookmarkViewerScreen(
                     }
                     // If !contentRendered, this effect will re-fire when contentRendered changes.
                 } else if (!hasMeaningfulProgress) {
-                    // At or near the top — nothing to restore
-                    hasRestoredScroll = true
+                    // At or near the top — nothing to restore, but only finalise once the
+                    // server pull has completed.  If the pull returns > 0%, loadingState will
+                    // update and the readingProgress > 0 branch above will handle restoration.
+                    if (serverProgressChecked) {
+                        hasRestoredScroll = true
+                    }
                 }
                 // If hasMeaningfulProgress but content is still blank, don't mark as
                 // restored — the LaunchedEffect will re-fire when content loads.
@@ -339,6 +346,10 @@ data class BookmarkViewerScreen(
 
         // Push reading state to the screen model on every scroll change.
         // The screen model debounces DB writes internally (500 ms).
+        // Guard: only record progress when rememberReadingProgress has a real measurement (> 0).
+        // Immediately after scroll restoration the item-height cache is empty so the function
+        // returns 0f even though firstVisibleItemIndex > 0.  Accepting 0f here would queue a
+        // "0%" update and reset the server's stored progress.
         LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
             if (trackReadingProgress && hasRestoredScroll && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val currentState = loadingState as BookmarkLoadingState.FullyLoaded
