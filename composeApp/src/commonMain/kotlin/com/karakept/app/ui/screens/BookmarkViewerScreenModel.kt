@@ -146,6 +146,20 @@ class BookmarkViewerScreenModel(
                     )
                     bookmarkActionsRepository.notifyBookmarkChanged(state.remoteId)
                     pendingReadingState = null
+
+                    // Queue reading progress sync to server (offline-first).
+                    // The pending action will be pushed during the next sync cycle.
+                    if (trackReadingProgress.value) {
+                        val currentBookmark =
+                            (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark
+                        if (currentBookmark != null) {
+                            bookmarkActionsRepository.queueReadingProgressUpdate(
+                                bookmarkRemoteId = state.remoteId,
+                                serverId = currentBookmark.serverId,
+                                progressPercent = (state.progress * 100).toInt()
+                            )
+                        }
+                    }
                 }
         }
     }
@@ -165,6 +179,7 @@ class BookmarkViewerScreenModel(
     @OptIn(DelicateCoroutinesApi::class)
     override fun onDispose() {
         val state = pendingReadingState ?: return
+        val serverId = (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark?.serverId
         // screenModelScope is being cancelled, so use GlobalScope for this
         // fire-and-forget DB write that must complete.
         GlobalScope.launch(Dispatchers.IO) {
@@ -172,6 +187,14 @@ class BookmarkViewerScreenModel(
                 state.localId, state.progress, state.scrollIndex, state.scrollOffset
             )
             bookmarkActionsRepository.notifyBookmarkChanged(state.remoteId)
+            // Queue the final reading progress sync so it is pushed on the next sync cycle.
+            if (serverId != null) {
+                bookmarkActionsRepository.queueReadingProgressUpdate(
+                    bookmarkRemoteId = state.remoteId,
+                    serverId = serverId,
+                    progressPercent = (state.progress * 100).toInt()
+                )
+            }
         }
     }
 
@@ -243,6 +266,15 @@ class BookmarkViewerScreenModel(
                                     }
                                 } catch (e: Exception) {
                                     println("Error during on-demand highlight sync: ${e.message}")
+                                }
+                            }
+                            // Pull reading progress from server if local progress is 0
+                            // (cross-device sync: restore progress from another device)
+                            if (bookmark.readingProgress == 0f && !offlineMode.value) {
+                                screenModelScope.launch {
+                                    bookmarkActionsRepository.pullReadingProgressFromServer(
+                                        bookmark.remoteId, bookmark.serverId
+                                    )
                                 }
                             }
                         }

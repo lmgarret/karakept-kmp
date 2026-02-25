@@ -8,9 +8,19 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.parameter
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Exception thrown when a network request is blocked due to offline mode being enabled.
@@ -31,9 +41,16 @@ class RemoteDataSource(
         }
         return block()
     }
+    private val trpcJson = Json { ignoreUnknownKeys = true }
+
     private fun getBaseUrl(server: Server): String {
         val base = if (server.url.endsWith("/")) server.url.removeSuffix("/") else server.url
         return if (base.endsWith("/api/v1")) base else "$base/api/v1"
+    }
+
+    private fun getTrpcBaseUrl(server: Server): String {
+        val base = if (server.url.endsWith("/")) server.url.removeSuffix("/") else server.url
+        return if (base.endsWith("/api/v1")) base.removeSuffix("/api/v1") else base
     }
 
     private fun bookmarksApi(server: Server) = BookmarksApi(getBaseUrl(server), client).apply {
@@ -366,6 +383,81 @@ class RemoteDataSource(
             highlightsApi(server).highlightsHighlightIdDelete(highlightId)
         } catch (e: Exception) {
             throw ApiException("Error deleting highlight $highlightId: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Push reading progress to server via tRPC.
+     * Only works for LINK-type bookmarks; silently ignores BAD_REQUEST for other types.
+     * Returns true on success, false if the endpoint is unsupported or the bookmark type is wrong.
+     *
+     * tRPC mutation: bookmarks.updateReadingProgress
+     * POST /api/trpc/bookmarks.updateReadingProgress?batch=1
+     */
+    suspend fun updateReadingProgress(
+        server: Server,
+        bookmarkId: String,
+        progressPercent: Int
+    ): Boolean = guardedCall {
+        try {
+            val trpcBase = getTrpcBaseUrl(server)
+            val url = "$trpcBase/api/trpc/bookmarks.updateReadingProgress?batch=1"
+            val body = """{"0":{"json":{"bookmarkId":"$bookmarkId","readingProgressOffset":0,"readingProgressAnchor":null,"readingProgressPercent":$progressPercent}}}"""
+
+            val response: HttpResponse = client.post(url) {
+                header("Authorization", getAuth(server))
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+
+            // 200 = success, 400 = non-link bookmark (expected, not an error for us)
+            response.status.value == 200
+        } catch (e: Exception) {
+            val msg = e.message?.lowercase() ?: ""
+            if (msg.contains("400") || msg.contains("bad_request") ||
+                msg.contains("reading progress can only be saved")) {
+                // Non-link bookmark – not an error from our perspective
+                false
+            } else {
+                throw ApiException("Error updating reading progress: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Fetch reading progress from server via tRPC.
+     * Returns the progress percent (0-100) or null if not available.
+     *
+     * tRPC query: bookmarks.getReadingProgress
+     * GET /api/trpc/bookmarks.getReadingProgress?batch=1&input=...
+     */
+    suspend fun getReadingProgress(
+        server: Server,
+        bookmarkId: String
+    ): Int? = guardedCall {
+        try {
+            val trpcBase = getTrpcBaseUrl(server)
+            val response: HttpResponse = client.get("$trpcBase/api/trpc/bookmarks.getReadingProgress") {
+                header("Authorization", getAuth(server))
+                parameter("batch", "1")
+                parameter("input", """{"0":{"json":{"bookmarkId":"$bookmarkId"}}}""")
+            }
+
+            if (!response.status.isSuccess()) return@guardedCall null
+
+            val responseText = response.bodyAsText()
+            // tRPC batch response: [{"result":{"data":{"json":{...}}}}]
+            val element = trpcJson.parseToJsonElement(responseText)
+            val data = element.jsonArray
+                .firstOrNull()
+                ?.jsonObject?.get("result")
+                ?.jsonObject?.get("data")
+                ?.jsonObject?.get("json")
+                ?.jsonObject
+            data?.get("readingProgressPercent")?.jsonPrimitive?.intOrNull
+        } catch (e: Exception) {
+            // Non-critical – return null if fetch fails
+            null
         }
     }
 }
