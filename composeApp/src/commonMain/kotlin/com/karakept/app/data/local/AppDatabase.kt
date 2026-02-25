@@ -28,7 +28,7 @@ import com.karakept.app.data.local.entity.ListEntity
         HighlightEntity::class,
         ListEntity::class
     ],
-    version = 6
+    version = 7
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao

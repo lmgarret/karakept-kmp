@@ -74,6 +74,7 @@ object MainScreen : Screen {
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
         val isAutoOffline by settingsScreenModel.isAutoOffline.collectAsState()
         val showReadingTimeBadge by settingsScreenModel.showReadingTimeBadge.collectAsState()
+        val trackReadingProgress by settingsScreenModel.trackReadingProgress.collectAsState()
         val showTags by settingsScreenModel.showTags.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
@@ -256,6 +257,7 @@ object MainScreen : Screen {
                         swipeRightConfig = customSwipeActionConfigs.find { it.id == swipeRightConfigId },
                         dimReadBookmarks = dimReadBookmarks,
                         showReadingTimeBadge = showReadingTimeBadge,
+                        showReadingProgress = trackReadingProgress,
                         showTags = showTags,
                         offlineMode = offlineMode || isAutoOffline,
                         listState = listState,
