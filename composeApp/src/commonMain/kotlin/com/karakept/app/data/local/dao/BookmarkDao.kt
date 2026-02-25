@@ -56,7 +56,8 @@ interface BookmarkDao {
         UPDATE bookmarks SET
             readingProgress = :progress,
             readingScrollIndex = :scrollIndex,
-            readingScrollOffset = :scrollOffset
+            readingScrollOffset = :scrollOffset,
+            isRead = CASE WHEN :progress >= 1.0 THEN 1 ELSE isRead END
         WHERE localId = :localId
     """)
     suspend fun updateReadingProgress(
