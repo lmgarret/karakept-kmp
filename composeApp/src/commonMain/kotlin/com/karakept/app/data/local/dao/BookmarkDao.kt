@@ -14,7 +14,8 @@ interface BookmarkDao {
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, '' as content
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
         FROM bookmarks
         WHERE serverId = :serverId
         ORDER BY createdAt DESC
@@ -50,6 +51,21 @@ interface BookmarkDao {
 
     @Query("UPDATE bookmarks SET content = :content, readingTimeMinutes = :readingTime WHERE localId = :localId")
     suspend fun updateContent(localId: Long, content: String, readingTime: Int)
+
+    @Query("""
+        UPDATE bookmarks SET
+            readingProgress = :progress,
+            readingScrollIndex = :scrollIndex,
+            readingScrollOffset = :scrollOffset,
+            isRead = CASE WHEN :progress >= 1.0 THEN 1 ELSE isRead END
+        WHERE localId = :localId
+    """)
+    suspend fun updateReadingProgress(
+        localId: Long,
+        progress: Float,
+        scrollIndex: Int,
+        scrollOffset: Int
+    )
 
     // Update only metadata fields, preserving content
     @Query("""
@@ -88,7 +104,8 @@ interface BookmarkDao {
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, '' as content
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
         FROM bookmarks
         WHERE serverId = :serverId
         ORDER BY createdAt DESC
@@ -103,7 +120,8 @@ interface BookmarkDao {
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, '' as content
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isStarred = 1
         ORDER BY createdAt DESC
@@ -118,7 +136,8 @@ interface BookmarkDao {
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, '' as content
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isArchived = 1
         ORDER BY createdAt DESC
@@ -133,7 +152,8 @@ interface BookmarkDao {
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, '' as content
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isArchived = 0
         ORDER BY createdAt DESC
@@ -159,7 +179,8 @@ interface BookmarkDao {
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, '' as content
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
         FROM bookmarks
         WHERE serverId = :serverId
         AND (listIds = :listId
@@ -197,7 +218,7 @@ interface BookmarkDao {
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                CASE WHEN length(content) > 0 THEN 'HAS_CONTENT' ELSE '' END as content
         FROM bookmarks
         WHERE serverId = :serverId

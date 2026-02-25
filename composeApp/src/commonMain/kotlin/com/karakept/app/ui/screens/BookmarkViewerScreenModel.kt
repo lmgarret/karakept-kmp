@@ -15,11 +15,17 @@ import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -60,9 +66,6 @@ class BookmarkViewerScreenModel(
     val htmlFontFamily: StateFlow<ReaderFontFamily> = settingsRepository.htmlFontFamily
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ReaderFontFamily.SYSTEM)
 
-    val autoMarkReadOnScroll: StateFlow<Boolean> = settingsRepository.autoMarkReadOnScroll
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
-
     val showTags: StateFlow<Boolean> = settingsRepository.showTags
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
 
@@ -100,6 +103,67 @@ class BookmarkViewerScreenModel(
 
     val offlineMode: StateFlow<Boolean> = settingsRepository.offlineMode
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val trackReadingProgress: StateFlow<Boolean> = settingsRepository.trackReadingProgress
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    // --- Reading progress persistence (flow-based debounce) ---
+
+    private data class PendingReadingState(
+        val localId: Long,
+        val remoteId: Long,
+        val progress: Float,
+        val scrollIndex: Int,
+        val scrollOffset: Int
+    )
+
+    @Volatile
+    private var pendingReadingState: PendingReadingState? = null
+
+    private val readingStateUpdates = MutableSharedFlow<PendingReadingState>(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    init {
+        @OptIn(FlowPreview::class)
+        screenModelScope.launch {
+            readingStateUpdates
+                .debounce(500)
+                .collect { state ->
+                    bookmarkDao.updateReadingProgress(
+                        state.localId, state.progress, state.scrollIndex, state.scrollOffset
+                    )
+                    bookmarkActionsRepository.notifyBookmarkChanged(state.remoteId)
+                    pendingReadingState = null
+                }
+        }
+    }
+
+    /**
+     * Called by the composable on every meaningful scroll change.
+     * Updates are debounced (500 ms) before writing to the database.
+     * The latest state is also kept in memory so [onDispose] can persist
+     * it if the user navigates away before the debounce window closes.
+     */
+    fun onReadingStateChanged(localId: Long, remoteId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
+        val state = PendingReadingState(localId, remoteId, progress, scrollIndex, scrollOffset)
+        pendingReadingState = state
+        readingStateUpdates.tryEmit(state)
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    override fun onDispose() {
+        val state = pendingReadingState ?: return
+        // screenModelScope is being cancelled, so use GlobalScope for this
+        // fire-and-forget DB write that must complete.
+        GlobalScope.launch(Dispatchers.IO) {
+            bookmarkDao.updateReadingProgress(
+                state.localId, state.progress, state.scrollIndex, state.scrollOffset
+            )
+            bookmarkActionsRepository.notifyBookmarkChanged(state.remoteId)
+        }
+    }
 
     fun refreshBookmark(id: Long) {
         val currentState = _loadingState.value

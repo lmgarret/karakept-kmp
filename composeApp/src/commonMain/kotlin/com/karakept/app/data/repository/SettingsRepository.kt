@@ -422,14 +422,15 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val ONBOARDING_COMPLETED_KEY = booleanPreferencesKey("onboarding_completed")
 
     private val DIM_READ_BOOKMARKS_KEY = booleanPreferencesKey("dim_read_bookmarks")
-    private val AUTO_MARK_READ_ON_SCROLL_KEY = booleanPreferencesKey("auto_mark_read_on_scroll")
+    private val TRACK_READING_PROGRESS_KEY = booleanPreferencesKey("track_reading_progress")
+    private val RESET_PROGRESS_ON_MARK_UNREAD_KEY = booleanPreferencesKey("reset_progress_on_mark_unread")
 
     val dimReadBookmarks: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[DIM_READ_BOOKMARKS_KEY] ?: true
     }
 
-    val autoMarkReadOnScroll: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[AUTO_MARK_READ_ON_SCROLL_KEY] ?: false
+    val trackReadingProgress: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[TRACK_READING_PROGRESS_KEY] ?: true // Default: enabled
     }
 
     suspend fun setDimReadBookmarks(dim: Boolean) {
@@ -438,9 +439,19 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    suspend fun setAutoMarkReadOnScroll(autoMark: Boolean) {
+    suspend fun setTrackReadingProgress(enabled: Boolean) {
         dataStore.edit { preferences ->
-            preferences[AUTO_MARK_READ_ON_SCROLL_KEY] = autoMark
+            preferences[TRACK_READING_PROGRESS_KEY] = enabled
+        }
+    }
+
+    val resetProgressOnMarkUnread: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[RESET_PROGRESS_ON_MARK_UNREAD_KEY] ?: true // Default: reset progress
+    }
+
+    suspend fun setResetProgressOnMarkUnread(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[RESET_PROGRESS_ON_MARK_UNREAD_KEY] = enabled
         }
     }
 

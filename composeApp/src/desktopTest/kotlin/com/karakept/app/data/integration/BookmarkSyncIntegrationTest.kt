@@ -204,7 +204,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
     }
 
     @Test
-    fun testMarkAsReadAction_addsReadTagOnServer() = runTest(testDispatcher) {
+    fun testMarkAsReadAction_updatesLocalOnly() = runTest(testDispatcher) {
         assertTrue(isDockerRunning, "Docker should be running")
 
         val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, "https://read-action.example.com/${System.currentTimeMillis()}")
@@ -212,16 +212,9 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
 
         bookmarkActionsRepository.markAsRead(bookmark.remoteId, testServer.id)
 
-        // Local optimistic update
+        // Local update only – no pending actions or server sync
         val local = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertTrue(local?.isRead == true, "Bookmark should be marked read locally")
-
-        bookmarkActionsRepository.processPendingActions(testServer)
-        withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
-
-        val remote = remoteDataSource.fetchBookmark(testServer, remoteId)
-        val hasReadTag = remote.tags?.any { it.name == "karakept:read" } ?: false
-        assertTrue(hasReadTag, "Server should have 'karakept:read' tag after mark-as-read")
     }
 
     @Test
