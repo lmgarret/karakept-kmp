@@ -177,9 +177,25 @@ data class BookmarkViewerScreen(
                 if (bookmark.readingProgress > 0f && !bookmark.content.isNullOrBlank()) {
                     if (contentRendered) {
                         // Allow the WebView's measured height to propagate through
-                        // the Compose layout system before scrolling.
+                        // the Compose layout system before scrolling. On the first
+                        // WebView render in a session (cold engine), this takes
+                        // longer than usual — retry if the scroll was clamped.
                         delay(300)
-                        scrollState.scrollToItem(bookmark.readingScrollIndex, bookmark.readingScrollOffset)
+                        for (attempt in 1..3) {
+                            scrollState.scrollToItem(
+                                bookmark.readingScrollIndex,
+                                bookmark.readingScrollOffset
+                            )
+                            // Check if the scroll reached approximately the right
+                            // position. A small expected offset (< 200px) always
+                            // passes; otherwise verify we got at least a third of
+                            // the way there, which filters out clamped scrolls
+                            // caused by WebView height not yet being reported.
+                            val offsetOk = bookmark.readingScrollOffset < 200 ||
+                                scrollState.firstVisibleItemScrollOffset >= bookmark.readingScrollOffset / 3
+                            if (scrollState.firstVisibleItemIndex == bookmark.readingScrollIndex && offsetOk) break
+                            delay(250)
+                        }
                         hasRestoredScroll = true
                     }
                     // If !contentRendered, this effect will re-fire when contentRendered changes.
