@@ -117,8 +117,8 @@ class SettingsScreen : Screen {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     SettingsNavigationItem(
-                        title = "Servers",
-                        description = "Manage connected servers",
+                        title = "Server",
+                        description = "Manage connected server",
                         icon = Icons.Default.Dns,
                         onClick = { navigator.push(ServerSettingsScreen()) }
                     )
