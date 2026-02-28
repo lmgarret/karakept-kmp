@@ -148,12 +148,10 @@ object MainScreen : Screen {
             }
         }
 
-        // Listen for create bookmark result (dialog already closed; only handle snackbar feedback)
+        // Listen for create bookmark result (only handle failure snackbar; success is shown upfront)
         LaunchedEffect(Unit) {
             screenModel.createBookmarkResult.collect { result ->
-                if (result.isSuccess) {
-                    scope.launch { snackbarManager.showSnackbar("Bookmark added") }
-                } else {
+                if (result.isFailure) {
                     scope.launch {
                         snackbarManager.showSnackbar(
                             "Failed to add bookmark: ${result.exceptionOrNull()?.message ?: "Unknown error"}"
@@ -431,6 +429,7 @@ object MainScreen : Screen {
                 onConfirm = { url ->
                     showAddBookmarkDialog = false
                     screenModel.createBookmark(url)
+                    scope.launch { snackbarManager.showSnackbar("Adding bookmark…") }
                 },
                 onDismiss = { showAddBookmarkDialog = false }
             )

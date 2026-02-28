@@ -785,6 +785,7 @@ class MainScreenModel(
             )
 
             _pendingBookmarks.value = listOf(placeholder) + _pendingBookmarks.value
+            _scrollToTopTrigger.emit(Unit)
 
             val result = bookmarkRepository.createBookmark(url)
 

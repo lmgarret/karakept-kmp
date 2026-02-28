@@ -96,7 +96,7 @@ internal fun BookmarkListContent(
             items(bookmarks, key = { it.remoteId }) { bookmark ->
                 Box(modifier = Modifier.animateItemPlacement()) {
                     if (bookmark.remoteId in pendingBookmarkRemoteIds) {
-                        BookmarkPlaceholderItem(url = bookmark.url)
+                        BookmarkPlaceholderItem(url = bookmark.url, layoutType = layoutType)
                         return@Box
                     }
 
