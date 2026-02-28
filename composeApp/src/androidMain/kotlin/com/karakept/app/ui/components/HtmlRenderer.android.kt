@@ -130,11 +130,10 @@ actual fun HtmlRenderer(
         mark.karakept-highlight.red { background-color: #f44336 !important; }
         @keyframes karakept-blink {
             0%, 100% { opacity: 1; }
-            25%, 75% { opacity: 0.15; }
-            50% { opacity: 1; }
+            50% { opacity: 0.15; }
         }
         mark.karakept-highlight.karakept-highlight-blink {
-            animation: karakept-blink 1.6s ease-in-out;
+            animation: karakept-blink 0.5s ease-in-out 2;
         }
         """.trimIndent()
     }
@@ -474,7 +473,7 @@ actual fun HtmlRenderer(
                 }
                 marks.forEach(mark => {
                     mark.classList.add('karakept-highlight-blink');
-                    setTimeout(() => mark.classList.remove('karakept-highlight-blink'), 1700);
+                    setTimeout(() => mark.classList.remove('karakept-highlight-blink'), 1100);
                 });
                 log("blinkHighlight: blink triggered for id=" + highlightId);
             } catch(e) { log("blinkHighlight error: " + e.message); }
