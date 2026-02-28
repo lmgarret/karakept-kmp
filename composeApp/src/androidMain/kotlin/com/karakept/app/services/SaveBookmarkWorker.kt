@@ -112,7 +112,7 @@ class SaveBookmarkWorker(
         )
 
         val builder = NotificationCompat.Builder(applicationContext, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher) // Fallback to launcher icon if no specific small icon
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Bookmark Saved")
             .setContentText(title)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -145,7 +145,7 @@ class SaveBookmarkWorker(
         }
 
         val builder = NotificationCompat.Builder(applicationContext, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Save Failed")
             .setContentText(error)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
