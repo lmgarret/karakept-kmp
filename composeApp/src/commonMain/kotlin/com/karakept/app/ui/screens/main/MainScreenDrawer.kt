@@ -13,7 +13,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Settings
@@ -32,25 +31,20 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.karakept.app.data.local.entity.SavedFilterEntity
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.api.model.KarakeepList
-import com.karakept.app.ui.screens.SavedFilterItem
 
 @Composable
 internal fun MainScreenDrawer(
     drawerState: DrawerState,
     lists: List<KarakeepList>,
     listCounts: Map<String, Int>,
-    savedFilters: List<SavedFilterEntity>,
     expandedLists: Set<String>,
     currentFilter: FilterConfig,
     onFilterApply: (FilterConfig) -> Unit,
-    onSavedFilterApply: (SavedFilterEntity) -> Unit,
     onClearFilter: () -> Unit,
     onToggleListExpanded: (String) -> Unit,
-    onNavigateToFilterManagement: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToHighlights: () -> Unit,
     content: @Composable () -> Unit
@@ -179,35 +173,6 @@ internal fun MainScreenDrawer(
                     }
                 }
 
-                // Saved Filters Section (Shortcuts)
-                if (savedFilters.isNotEmpty()) {
-                    Spacer(Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Saved Filters", style = MaterialTheme.typography.titleMedium)
-                        IconButton(onClick = onNavigateToFilterManagement) {
-                            Icon(Icons.Default.FilterList, contentDescription = "Manage Filters")
-                        }
-                    }
-                    savedFilters.forEach { savedFilter ->
-                        val isSelected = try {
-                            kotlinx.serialization.json.Json.decodeFromString<FilterConfig>(savedFilter.configJson) == currentFilter
-                        } catch (e: Exception) {
-                            false
-                        }
-
-                        SavedFilterItem(
-                            savedFilter = savedFilter,
-                            selected = isSelected,
-                            onApply = {
-                                onSavedFilterApply(savedFilter)
-                            }
-                        )
-                    }
-                }
 
                 Spacer(Modifier.height(16.dp))
                 NavigationDrawerItem(
