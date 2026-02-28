@@ -110,7 +110,7 @@ class ServerSettingsScreen(val highlightOfflineMode: Boolean = false) : Screen {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Servers & Sync") },
+                    title = { Text("Server & Sync") },
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -128,7 +128,7 @@ class ServerSettingsScreen(val highlightOfflineMode: Boolean = false) : Screen {
                 verticalArrangement = Arrangement.Top
             ) {
                 Text(
-                    text = "Servers & Sync",
+                    text = "Server & Sync",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
