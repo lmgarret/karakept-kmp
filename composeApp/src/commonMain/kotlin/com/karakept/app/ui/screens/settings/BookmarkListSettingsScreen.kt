@@ -17,7 +17,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -52,7 +51,6 @@ import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.components.getIcon
-import com.karakept.app.ui.screens.FilterManagementScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
 import androidx.compose.foundation.layout.width
 
@@ -225,50 +223,6 @@ class BookmarkListSettingsScreen : Screen {
                             )
                             Text(
                                 text = "Create Add Tag and Add to List actions",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Open"
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Filter Management
-                Text(
-                    text = "Filters",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { navigator.push(FilterManagementScreen()) }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FilterList,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 12.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Manage Filters",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Add, edit, reorder, and organize saved filters",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
