@@ -85,11 +85,14 @@ object MainScreen : Screen {
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
 
+        val searchQuery by screenModel.searchQuery.collectAsState()
+
         val hasActiveFilter = currentFilter.tags.isNotEmpty() ||
             currentFilter.lists.isNotEmpty() ||
             currentFilter.status != com.karakept.app.data.model.FilterStatus.ALL
 
         var showFilterDialog by remember { mutableStateOf(false) }
+        var isSearchActive by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
         val snackbarManager = koinInject<ActionSnackbarManager>()
         val snackbarHostState = rememberSnackbarHostState(snackbarManager)
@@ -202,7 +205,11 @@ object MainScreen : Screen {
         ) {
             Scaffold(
                 modifier = Modifier.fillMaxSize().onKeyEvent { keyEvent ->
-                    if ((keyEvent.isCtrlPressed || keyEvent.isMetaPressed) &&
+                    if (keyEvent.type == KeyEventType.KeyDown && keyEvent.keyboardKey == Key.Escape && isSearchActive) {
+                        isSearchActive = false
+                        screenModel.clearSearch()
+                        true
+                    } else if ((keyEvent.isCtrlPressed || keyEvent.isMetaPressed) &&
                         keyEvent.keyboardKey == Key.R &&
                         keyEvent.type == KeyEventType.KeyDown) {
                         screenModel.syncBookmarks()
@@ -223,7 +230,15 @@ object MainScreen : Screen {
                             navigator.push(com.karakept.app.ui.screens.settings.ServerSettingsScreen(highlightOfflineMode = true))
                         },
                         isDesktop = isDesktop,
-                        hasActiveFilter = hasActiveFilter
+                        hasActiveFilter = hasActiveFilter,
+                        isSearchActive = isSearchActive,
+                        searchQuery = searchQuery,
+                        onSearchClick = { isSearchActive = true },
+                        onSearchQueryChange = { screenModel.updateSearchQuery(it) },
+                        onSearchClose = {
+                            isSearchActive = false
+                            screenModel.clearSearch()
+                        }
                     )
                 },
                 snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) }
@@ -248,8 +263,8 @@ object MainScreen : Screen {
                         bookmarks = bookmarks,
                         isSyncing = isSyncing,
                         syncProgress = syncProgress,
-                        isLoadingMore = isLoadingMore,
-                        hasMoreItems = hasMoreItems,
+                        isLoadingMore = if (isSearchActive) false else isLoadingMore,
+                        hasMoreItems = if (isSearchActive) true else hasMoreItems,
                         layoutType = layoutType,
                         swipeLeftAction = swipeLeftAction,
                         swipeRightAction = swipeRightAction,
@@ -342,6 +357,12 @@ object MainScreen : Screen {
                     )
                 }
             }
+        }
+
+        // Back Handler for search
+        com.karakept.app.ui.components.BackHandler(enabled = isSearchActive) {
+            isSearchActive = false
+            screenModel.clearSearch()
         }
 
         // Back Handler for filter panel
