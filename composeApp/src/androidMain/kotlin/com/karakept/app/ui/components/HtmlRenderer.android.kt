@@ -58,7 +58,8 @@ actual fun HtmlRenderer(
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit,
     onDeleteHighlight: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)?
+    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)?,
+    scrollToHighlightId: String?
 ) {
     val lastLoadedHtml = remember { mutableStateOf<String?>(null) }
     val lastAppliedHighlights = remember { mutableStateOf<List<com.karakept.app.data.model.Highlight>>(emptyList()) }
@@ -127,6 +128,13 @@ actual fun HtmlRenderer(
         mark.karakept-highlight.blue { background-color: #2196f3 !important; }
         mark.karakept-highlight.green { background-color: #4caf50 !important; }
         mark.karakept-highlight.red { background-color: #f44336 !important; }
+        @keyframes karakept-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.15; }
+        }
+        mark.karakept-highlight.karakept-highlight-blink {
+            animation: karakept-blink 0.25s ease-in-out 2;
+        }
         """.trimIndent()
     }
 
@@ -454,6 +462,21 @@ actual fun HtmlRenderer(
                 log("scrollToHighlight error: " + e.message);
                 return false;
             }
+        }
+
+        function blinkHighlight(highlightId) {
+            try {
+                const marks = document.querySelectorAll('mark.karakept-highlight[data-id="' + highlightId + '"]');
+                if (marks.length === 0) {
+                    log("blinkHighlight: no marks found for id=" + highlightId);
+                    return;
+                }
+                marks.forEach(mark => {
+                    mark.classList.add('karakept-highlight-blink');
+                    setTimeout(() => mark.classList.remove('karakept-highlight-blink'), 600);
+                });
+                log("blinkHighlight: blink triggered for id=" + highlightId);
+            } catch(e) { log("blinkHighlight error: " + e.message); }
         }
 
         // Track selection changes for ActionMode positioning
@@ -916,6 +939,53 @@ actual fun HtmlRenderer(
     )
 
     // Highlights are now handled in the 'update' block AND onPageFinished
+
+    // Scroll to and blink a specific highlight when navigating from the Highlights screen.
+    // Fires once when scrollToHighlightId is set and the page (with highlights) is fully loaded.
+    var hasScrolledToHighlight by remember(scrollToHighlightId) { mutableStateOf(false) }
+    LaunchedEffect(scrollToHighlightId, pageLoaded.value) {
+        val id = scrollToHighlightId ?: return@LaunchedEffect
+        if (!pageLoaded.value) return@LaunchedEffect
+        if (hasScrolledToHighlight) return@LaunchedEffect
+        hasScrolledToHighlight = true
+
+        // Allow highlights to be applied to the DOM before querying position
+        delay(300)
+
+        val webView = webViewReference.value ?: return@LaunchedEffect
+
+        // Query highlight position and propagate via callback so BookmarkViewerScreen
+        // can scroll the outer LazyColumn to the right offset.
+        webView.evaluateJavascript("getHighlightPosition('$id')") { positionJson ->
+            if (positionJson != null && positionJson != "null" && positionJson.isNotBlank()) {
+                try {
+                    val cleaned = if (positionJson.startsWith("\"") && positionJson.endsWith("\"")) {
+                        positionJson.substring(1, positionJson.length - 1)
+                            .replace("\\\"", "\"")
+                            .replace("\\\\", "\\")
+                    } else positionJson
+                    val json = org.json.JSONObject(cleaned)
+                    val position = com.karakept.app.ui.components.HighlightPosition(
+                        x = json.getDouble("x").toFloat(),
+                        y = json.getDouble("y").toFloat(),
+                        width = json.getDouble("width").toFloat(),
+                        height = json.getDouble("height").toFloat(),
+                        scrollX = json.getDouble("scrollX").toFloat(),
+                        scrollY = json.getDouble("scrollY").toFloat()
+                    )
+                    onHighlightPosition?.invoke(id, position)
+                } catch (e: Exception) {
+                    onHighlightPosition?.invoke(id, null)
+                }
+            } else {
+                onHighlightPosition?.invoke(id, null)
+            }
+        }
+
+        // Blink after enough time for the LazyColumn scroll animation to complete
+        delay(500)
+        webView.evaluateJavascript("blinkHighlight('$id')", null)
+    }
 
     DisposableEffect(Unit) {
         onDispose {

@@ -35,5 +35,6 @@ expect fun HtmlRenderer(
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
     onDeleteHighlight: (String) -> Unit = {},
     onHighlightClick: (String) -> Unit = {},
-    onHighlightPosition: ((String, HighlightPosition?) -> Unit)? = null
+    onHighlightPosition: ((String, HighlightPosition?) -> Unit)? = null,
+    scrollToHighlightId: String? = null
 )

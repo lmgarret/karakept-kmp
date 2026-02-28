@@ -39,7 +39,8 @@ internal fun ContentBodySection(
     onDeleteHighlight: (String) -> Unit = {},
     onHighlightClick: (String) -> Unit = {},
     onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null,
-    onContentReady: (() -> Unit)? = null
+    onContentReady: (() -> Unit)? = null,
+    scrollToHighlightId: String? = null
 ) {
     // Track when HTML content is truly ready (processed + rendered)
     var htmlContentReady by remember { mutableStateOf(false) }
@@ -82,7 +83,8 @@ internal fun ContentBodySection(
                     onCreateHighlight = onCreateHighlight,
                     onDeleteHighlight = onDeleteHighlight,
                     onHighlightClick = onHighlightClick,
-                    onHighlightPosition = onHighlightPosition
+                    onHighlightPosition = onHighlightPosition,
+                    scrollToHighlightId = scrollToHighlightId
                 )
             }
 
