@@ -9,7 +9,6 @@ import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.SavedFilterRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -33,7 +32,6 @@ class MainScreenModel(
     private val serverRepository: ServerRepository,
     private val bookmarkRepository: BookmarkRepository,
     private val remoteDataSource: RemoteDataSource,
-    private val savedFilterRepository: SavedFilterRepository,
     private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository,
     private val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
     private val listRepository: com.karakept.app.data.repository.ListRepository,
@@ -58,9 +56,6 @@ class MainScreenModel(
     // Tracks the bookmark that triggered a tag filter, so back navigation can return to it
     private val _tagFilterSourceBookmarkId = MutableStateFlow<Long?>(null)
     val tagFilterSourceBookmarkId: StateFlow<Long?> = _tagFilterSourceBookmarkId
-
-    val savedFilters = savedFilterRepository.visibleFilters
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val lists: StateFlow<List<KarakeepList>> = listRepository.lists
 
@@ -89,6 +84,10 @@ class MainScreenModel(
     // Event flow for scroll-to-top trigger
     private val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
+
+    // Search query - applied client-side across all cached bookmarks
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery
 
     // Sync progress from repository
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> =
@@ -173,18 +172,6 @@ class MainScreenModel(
                     loadLists()
                 } else if (serverList.isEmpty()) {
                     _selectedServer.value = null
-                }
-            }
-        }
-
-        // Load default filter on startup
-        screenModelScope.launch {
-            savedFilterRepository.getDefaultFilter()?.let { saved ->
-                try {
-                    val config = kotlinx.serialization.json.Json.decodeFromString<FilterConfig>(saved.configJson)
-                    _currentFilter.value = config
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
             }
         }
@@ -291,11 +278,53 @@ class MainScreenModel(
         }
     }
 
-    val bookmarks: StateFlow<List<BookmarkEntity>> = _accumulatedBookmarks.stateIn(
+    val bookmarks: StateFlow<List<BookmarkEntity>> = combine(
+        _accumulatedBookmarks,
+        allBookmarks,
+        _currentFilter,
+        _searchQuery
+    ) { accumulated, all, filter, query ->
+        if (query.isBlank()) {
+            accumulated
+        } else {
+            applySearchFilter(all, filter, query)
+        }
+    }.stateIn(
         screenModelScope,
         SharingStarted.Lazily,
         emptyList()
     )
+
+    private fun applySearchFilter(
+        all: List<BookmarkEntity>,
+        filter: FilterConfig,
+        query: String
+    ): List<BookmarkEntity> {
+        val q = query.lowercase()
+        var result = when (filter.status) {
+            FilterStatus.FAVORITES -> all.filter { it.isStarred }
+            FilterStatus.ARCHIVED -> all.filter { it.isArchived }
+            FilterStatus.ALL -> all.filter { !it.isArchived }
+            FilterStatus.ALL_INCLUDING_ARCHIVED -> all
+        }
+        if (filter.tags.isNotEmpty()) {
+            result = result.filter { bookmark ->
+                val tags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                filter.tags.any { tag -> tags.contains(tag) }
+            }
+        }
+        if (filter.lists.isNotEmpty()) {
+            result = result.filter { bookmark ->
+                val lists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                filter.lists.any { listId -> lists.contains(listId) }
+            }
+        }
+        return result.filter { bookmark ->
+            bookmark.title.lowercase().contains(q) ||
+                bookmark.url.lowercase().contains(q) ||
+                bookmark.description?.lowercase()?.contains(q) == true
+        }
+    }
 
     private fun applyFilterToBookmarks(bookmarks: List<BookmarkEntity>, filter: FilterConfig): List<BookmarkEntity> {
         var result = bookmarks
@@ -424,8 +453,16 @@ class MainScreenModel(
         }
     }
 
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun clearSearch() {
+        _searchQuery.value = ""
+    }
+
     fun loadNextPage() {
-        if (_isLoadingMore.value || !_hasMoreItems.value) return
+        if (_isLoadingMore.value || !_hasMoreItems.value || _searchQuery.value.isNotBlank()) return
 
         screenModelScope.launch {
             try {
@@ -580,44 +617,6 @@ class MainScreenModel(
         }
 
         _expandedLists.value = _expandedLists.value + toExpand
-    }
-    
-    fun saveFilter(name: String, icon: String = "📋", color: Long? = null, isDefault: Boolean = false) {
-        screenModelScope.launch {
-            val configJson = kotlinx.serialization.json.Json.encodeToString(FilterConfig.serializer(), _currentFilter.value)
-            savedFilterRepository.saveFilter(
-                name = name,
-                icon = icon,
-                color = color,
-                configJson = configJson,
-                isDefault = isDefault,
-                isVisibleInDrawer = true
-            )
-        }
-    }
-    
-    fun deleteSavedFilter(filter: com.karakept.app.data.local.entity.SavedFilterEntity) {
-        screenModelScope.launch {
-            savedFilterRepository.deleteFilter(filter)
-        }
-    }
-    
-    fun updateSavedFilterName(filter: com.karakept.app.data.local.entity.SavedFilterEntity, newName: String) {
-        screenModelScope.launch {
-            val updated = filter.copy(name = newName)
-            savedFilterRepository.updateFilter(updated)
-        }
-    }
-    
-    fun applySavedFilter(filter: com.karakept.app.data.local.entity.SavedFilterEntity) {
-        screenModelScope.launch {
-            try {
-                val config = kotlinx.serialization.json.Json.decodeFromString(FilterConfig.serializer(), filter.configJson)
-                _currentFilter.value = config
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
     }
     
     // Bookmark Actions
