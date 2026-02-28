@@ -1,3 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@mipmap/ic_launcher_monochrome" />
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:drawable="@mipmap/ic_launcher_monochrome"
+        android:bottom="-25%p"
+        android:left="-25%p"
+        android:right="-25%p"
+        android:top="-25%p" />
+</layer-list>
