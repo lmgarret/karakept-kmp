@@ -89,6 +89,13 @@ class MainScreenModel(
     private val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
+    // State for creating a new bookmark
+    private val _isCreatingBookmark = MutableStateFlow(false)
+    val isCreatingBookmark: StateFlow<Boolean> = _isCreatingBookmark
+
+    private val _createBookmarkResult = MutableSharedFlow<Result<Unit>>(extraBufferCapacity = 1)
+    val createBookmarkResult: SharedFlow<Result<Unit>> = _createBookmarkResult
+
     // Sync progress from repository
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> =
         bookmarkRepository.syncProgress.stateIn(
@@ -806,6 +813,20 @@ class MainScreenModel(
                     it
                 }
             }
+        }
+    }
+
+    fun createBookmark(url: String) {
+        screenModelScope.launch {
+            _isCreatingBookmark.value = true
+            val result = bookmarkRepository.createBookmark(url)
+            result.onSuccess { bookmark ->
+                _accumulatedBookmarks.value = listOf(bookmark) + _accumulatedBookmarks.value
+                _createBookmarkResult.emit(Result.success(Unit))
+            }.onFailure { e ->
+                _createBookmarkResult.emit(Result.failure(e))
+            }
+            _isCreatingBookmark.value = false
         }
     }
 }
