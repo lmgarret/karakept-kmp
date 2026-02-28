@@ -73,7 +73,6 @@ object MainScreen : Screen {
         val syncProgress by screenModel.syncProgress.collectAsState()
         val isLoadingMore by screenModel.isLoadingMore.collectAsState()
         val hasMoreItems by screenModel.hasMoreItems.collectAsState()
-        val savedFilters by screenModel.savedFilters.collectAsState()
         val currentFilter by screenModel.currentFilter.collectAsState()
         val tagFilterSourceBookmarkId by screenModel.tagFilterSourceBookmarkId.collectAsState()
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
@@ -192,15 +191,10 @@ object MainScreen : Screen {
             drawerState = drawerState,
             lists = lists,
             listCounts = listCounts,
-            savedFilters = savedFilters,
             expandedLists = expandedLists,
             currentFilter = currentFilter,
             onFilterApply = { filter ->
                 screenModel.applyFilter(filter)
-                scope.launch { drawerState.close() }
-            },
-            onSavedFilterApply = { savedFilter ->
-                screenModel.applySavedFilter(savedFilter)
                 scope.launch { drawerState.close() }
             },
             onClearFilter = {
@@ -209,10 +203,6 @@ object MainScreen : Screen {
             },
             onToggleListExpanded = { listId ->
                 screenModel.toggleListExpanded(listId)
-            },
-            onNavigateToFilterManagement = {
-                navigator.push(FilterManagementScreen())
-                scope.launch { drawerState.close() }
             },
             onNavigateToSettings = {
                 navigator.push(SettingsScreen())
@@ -428,9 +418,6 @@ object MainScreen : Screen {
                 onDismiss = { showFilterDialog = false },
                 onFilterChange = { filter ->
                     screenModel.applyFilter(filter)
-                },
-                onSaveFilter = { name, icon, color, isDefault ->
-                    screenModel.saveFilter(name, icon = icon, color = color, isDefault = isDefault)
                 },
                 onReset = {
                     screenModel.applyFilter(FilterConfig())
