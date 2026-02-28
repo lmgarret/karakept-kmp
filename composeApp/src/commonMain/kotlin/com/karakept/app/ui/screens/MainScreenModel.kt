@@ -84,6 +84,10 @@ class MainScreenModel(
     private val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
+    // Search query - applied client-side across all cached bookmarks
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery
+
     // Sync progress from repository
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> =
         bookmarkRepository.syncProgress.stateIn(
@@ -273,11 +277,53 @@ class MainScreenModel(
         }
     }
 
-    val bookmarks: StateFlow<List<BookmarkEntity>> = _accumulatedBookmarks.stateIn(
+    val bookmarks: StateFlow<List<BookmarkEntity>> = combine(
+        _accumulatedBookmarks,
+        allBookmarks,
+        _currentFilter,
+        _searchQuery
+    ) { accumulated, all, filter, query ->
+        if (query.isBlank()) {
+            accumulated
+        } else {
+            applySearchFilter(all, filter, query)
+        }
+    }.stateIn(
         screenModelScope,
         SharingStarted.Lazily,
         emptyList()
     )
+
+    private fun applySearchFilter(
+        all: List<BookmarkEntity>,
+        filter: FilterConfig,
+        query: String
+    ): List<BookmarkEntity> {
+        val q = query.lowercase()
+        var result = when (filter.status) {
+            FilterStatus.FAVORITES -> all.filter { it.isStarred }
+            FilterStatus.ARCHIVED -> all.filter { it.isArchived }
+            FilterStatus.ALL -> all.filter { !it.isArchived }
+            FilterStatus.ALL_INCLUDING_ARCHIVED -> all
+        }
+        if (filter.tags.isNotEmpty()) {
+            result = result.filter { bookmark ->
+                val tags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                filter.tags.any { tag -> tags.contains(tag) }
+            }
+        }
+        if (filter.lists.isNotEmpty()) {
+            result = result.filter { bookmark ->
+                val lists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                filter.lists.any { listId -> lists.contains(listId) }
+            }
+        }
+        return result.filter { bookmark ->
+            bookmark.title.lowercase().contains(q) ||
+                bookmark.url.lowercase().contains(q) ||
+                bookmark.description?.lowercase()?.contains(q) == true
+        }
+    }
 
     private fun applyFilterToBookmarks(bookmarks: List<BookmarkEntity>, filter: FilterConfig): List<BookmarkEntity> {
         var result = bookmarks
@@ -406,8 +452,16 @@ class MainScreenModel(
         }
     }
 
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun clearSearch() {
+        _searchQuery.value = ""
+    }
+
     fun loadNextPage() {
-        if (_isLoadingMore.value || !_hasMoreItems.value) return
+        if (_isLoadingMore.value || !_hasMoreItems.value || _searchQuery.value.isNotBlank()) return
 
         screenModelScope.launch {
             try {
