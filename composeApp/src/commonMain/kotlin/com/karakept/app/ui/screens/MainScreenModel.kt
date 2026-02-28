@@ -331,6 +331,37 @@ class MainScreenModel(
         }
     }
 
+    private fun applySearchFilter(
+        all: List<BookmarkEntity>,
+        filter: FilterConfig,
+        query: String
+    ): List<BookmarkEntity> {
+        val q = query.lowercase()
+        var result = when (filter.status) {
+            FilterStatus.FAVORITES -> all.filter { it.isStarred }
+            FilterStatus.ARCHIVED -> all.filter { it.isArchived }
+            FilterStatus.ALL -> all.filter { !it.isArchived }
+            FilterStatus.ALL_INCLUDING_ARCHIVED -> all
+        }
+        if (filter.tags.isNotEmpty()) {
+            result = result.filter { bookmark ->
+                val tags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                filter.tags.any { tag -> tags.contains(tag) }
+            }
+        }
+        if (filter.lists.isNotEmpty()) {
+            result = result.filter { bookmark ->
+                val lists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                filter.lists.any { listId -> lists.contains(listId) }
+            }
+        }
+        return result.filter { bookmark ->
+            bookmark.title.lowercase().contains(q) ||
+                bookmark.url.lowercase().contains(q) ||
+                bookmark.description?.lowercase()?.contains(q) == true
+        }
+    }
+
     private fun applyFilterToBookmarks(bookmarks: List<BookmarkEntity>, filter: FilterConfig): List<BookmarkEntity> {
         var result = bookmarks
 
