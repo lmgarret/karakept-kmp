@@ -95,7 +95,7 @@ object MainScreen : Screen {
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var showAddBookmarkDialog by remember { mutableStateOf(false) }
-        val isCreatingBookmark by screenModel.isCreatingBookmark.collectAsState()
+        val pendingBookmarkRemoteIds by screenModel.pendingBookmarkRemoteIds.collectAsState()
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
         val snackbarManager = koinInject<ActionSnackbarManager>()
         val snackbarHostState = rememberSnackbarHostState(snackbarManager)
@@ -148,11 +148,10 @@ object MainScreen : Screen {
             }
         }
 
-        // Listen for create bookmark result
+        // Listen for create bookmark result (dialog already closed; only handle snackbar feedback)
         LaunchedEffect(Unit) {
             screenModel.createBookmarkResult.collect { result ->
                 if (result.isSuccess) {
-                    showAddBookmarkDialog = false
                     scope.launch { snackbarManager.showSnackbar("Bookmark added") }
                 } else {
                     scope.launch {
@@ -285,6 +284,7 @@ object MainScreen : Screen {
                         showReadingProgress = trackReadingProgress,
                         showTags = showTags,
                         offlineMode = offlineMode || isAutoOffline,
+                        pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                         listState = listState,
                         pullRefreshState = pullRefreshState,
                         onBookmarkClick = { bookmark ->
@@ -428,9 +428,11 @@ object MainScreen : Screen {
         // Add Bookmark Dialog
         if (showAddBookmarkDialog) {
             AddBookmarkDialog(
-                isCreating = isCreatingBookmark,
-                onConfirm = { url -> screenModel.createBookmark(url) },
-                onDismiss = { if (!isCreatingBookmark) showAddBookmarkDialog = false }
+                onConfirm = { url ->
+                    showAddBookmarkDialog = false
+                    screenModel.createBookmark(url)
+                },
+                onDismiss = { showAddBookmarkDialog = false }
             )
         }
 

@@ -84,12 +84,14 @@ class MainScreenModel(
     private val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
-    // State for creating a new bookmark
-    private val _isCreatingBookmark = MutableStateFlow(false)
-    val isCreatingBookmark: StateFlow<Boolean> = _isCreatingBookmark
-
     private val _createBookmarkResult = MutableSharedFlow<Result<Unit>>(extraBufferCapacity = 1)
     val createBookmarkResult: SharedFlow<Result<Unit>> = _createBookmarkResult
+
+    // Placeholder bookmarks shown while creation is in-flight
+    private val _pendingBookmarks = MutableStateFlow<List<com.karakept.app.data.local.entity.BookmarkEntity>>(emptyList())
+    val pendingBookmarkRemoteIds: StateFlow<Set<Long>> = _pendingBookmarks
+        .map { list -> list.map { it.remoteId }.toSet() }
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     // Sync progress from repository
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> =
@@ -280,11 +282,12 @@ class MainScreenModel(
         }
     }
 
-    val bookmarks: StateFlow<List<BookmarkEntity>> = _accumulatedBookmarks.stateIn(
-        screenModelScope,
-        SharingStarted.Lazily,
-        emptyList()
-    )
+    val bookmarks: StateFlow<List<BookmarkEntity>> = combine(
+        _pendingBookmarks,
+        _accumulatedBookmarks
+    ) { pending, accumulated ->
+        pending + accumulated
+    }.stateIn(screenModelScope, SharingStarted.Lazily, emptyList())
 
     private fun applyFilterToBookmarks(bookmarks: List<BookmarkEntity>, filter: FilterConfig): List<BookmarkEntity> {
         var result = bookmarks
@@ -763,15 +766,37 @@ class MainScreenModel(
 
     fun createBookmark(url: String) {
         screenModelScope.launch {
-            _isCreatingBookmark.value = true
+            val server = _selectedServer.value ?: return@launch
+            val tempRemoteId = kotlin.random.Random.nextLong(Long.MIN_VALUE, -1L)
+            val placeholder = BookmarkEntity(
+                remoteId = tempRemoteId,
+                originalRemoteId = "pending-$tempRemoteId",
+                serverId = server.id,
+                url = url,
+                title = url,
+                content = null,
+                imageUrl = null,
+                bannerImageAssetId = null,
+                screenshotAssetId = null,
+                description = null,
+                createdAt = 0L,
+                isArchived = false,
+                isStarred = false,
+            )
+
+            _pendingBookmarks.value = listOf(placeholder) + _pendingBookmarks.value
+
             val result = bookmarkRepository.createBookmark(url)
+
             result.onSuccess { bookmark ->
+                // Prepend real bookmark before removing placeholder to avoid an empty frame
                 _accumulatedBookmarks.value = listOf(bookmark) + _accumulatedBookmarks.value
+                _pendingBookmarks.value = _pendingBookmarks.value.filter { it.remoteId != tempRemoteId }
                 _createBookmarkResult.emit(Result.success(Unit))
             }.onFailure { e ->
+                _pendingBookmarks.value = _pendingBookmarks.value.filter { it.remoteId != tempRemoteId }
                 _createBookmarkResult.emit(Result.failure(e))
             }
-            _isCreatingBookmark.value = false
         }
     }
 }

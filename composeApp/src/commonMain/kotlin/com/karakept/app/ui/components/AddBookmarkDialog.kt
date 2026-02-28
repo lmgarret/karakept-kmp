@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -31,13 +30,12 @@ import androidx.compose.ui.window.Dialog
 
 @Composable
 fun AddBookmarkDialog(
-    isCreating: Boolean,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var url by remember { mutableStateOf("") }
 
-    Dialog(onDismissRequest = { if (!isCreating) onDismiss() }) {
+    Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -58,36 +56,23 @@ fun AddBookmarkDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                if (isCreating) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Creating bookmark...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                } else {
-                    OutlinedTextField(
-                        value = url,
-                        onValueChange = { url = it },
-                        label = { Text("URL") },
-                        placeholder = { Text("https://...") },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                if (url.isNotBlank()) onConfirm(url.trim())
-                            }
-                        ),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("URL") },
+                    placeholder = { Text("https://...") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (url.isNotBlank()) onConfirm(url.trim())
+                        }
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -95,15 +80,12 @@ fun AddBookmarkDialog(
                     modifier = Modifier.align(Alignment.End),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    TextButton(
-                        onClick = onDismiss,
-                        enabled = !isCreating
-                    ) {
+                    TextButton(onClick = onDismiss) {
                         Text("Cancel")
                     }
                     TextButton(
                         onClick = { if (url.isNotBlank()) onConfirm(url.trim()) },
-                        enabled = !isCreating && url.isNotBlank()
+                        enabled = url.isNotBlank()
                     ) {
                         Text("Add")
                     }
