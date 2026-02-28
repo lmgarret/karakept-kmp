@@ -133,7 +133,7 @@ actual fun HtmlRenderer(
             50% { opacity: 0.15; }
         }
         mark.karakept-highlight.karakept-highlight-blink {
-            animation: karakept-blink 0.5s ease-in-out 2;
+            animation: karakept-blink 0.25s ease-in-out 2;
         }
         """.trimIndent()
     }
@@ -473,7 +473,7 @@ actual fun HtmlRenderer(
                 }
                 marks.forEach(mark => {
                     mark.classList.add('karakept-highlight-blink');
-                    setTimeout(() => mark.classList.remove('karakept-highlight-blink'), 1100);
+                    setTimeout(() => mark.classList.remove('karakept-highlight-blink'), 600);
                 });
                 log("blinkHighlight: blink triggered for id=" + highlightId);
             } catch(e) { log("blinkHighlight error: " + e.message); }
@@ -983,7 +983,7 @@ actual fun HtmlRenderer(
         }
 
         // Blink after enough time for the LazyColumn scroll animation to complete
-        delay(800)
+        delay(500)
         webView.evaluateJavascript("blinkHighlight('$id')", null)
     }
 
