@@ -75,8 +75,18 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
                 .build()
         }
         val settingsRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.SettingsRepository>()
+        val backupRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.BackupRepository>()
         val themeMode by settingsRepository.themeMode.collectAsState(initial = com.karakept.app.data.model.ThemeMode.SYSTEM)
         val accentColor by settingsRepository.accentColor.collectAsState(initial = com.karakept.app.data.model.AccentColor.PURPLE)
+
+        // Run scheduled auto-export check on startup (best-effort)
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            try {
+                backupRepository.checkAndRunScheduledExport()
+            } catch (e: Exception) {
+                // Ignore – backup is best-effort
+            }
+        }
 
         com.karakept.app.ui.theme.AppTheme(
             themeMode = themeMode,

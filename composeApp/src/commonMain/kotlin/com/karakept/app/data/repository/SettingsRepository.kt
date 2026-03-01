@@ -25,6 +25,7 @@ import com.karakept.app.data.model.CustomSwipeActionConfig
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import com.karakept.app.data.model.AutoExportInterval
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.DefaultListType
 
@@ -527,6 +528,31 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setOnboardingCompleted(completed: Boolean) {
         dataStore.edit { preferences ->
             preferences[ONBOARDING_COMPLETED_KEY] = completed
+        }
+    }
+
+    // ── Scheduled Auto-Export ──────────────────────────────────────────────────
+
+    private val AUTO_EXPORT_INTERVAL_KEY = stringPreferencesKey("auto_export_interval")
+    private val LAST_AUTO_EXPORT_TIME_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_auto_export_time")
+
+    val autoExportInterval: Flow<AutoExportInterval> = dataStore.data.map { preferences ->
+        AutoExportInterval.fromString(preferences[AUTO_EXPORT_INTERVAL_KEY] ?: AutoExportInterval.NEVER.name)
+    }
+
+    val lastAutoExportTime: Flow<Long> = dataStore.data.map { preferences ->
+        preferences[LAST_AUTO_EXPORT_TIME_KEY] ?: 0L
+    }
+
+    suspend fun setAutoExportInterval(interval: AutoExportInterval) {
+        dataStore.edit { preferences ->
+            preferences[AUTO_EXPORT_INTERVAL_KEY] = interval.name
+        }
+    }
+
+    suspend fun setLastAutoExportTime(timestamp: Long) {
+        dataStore.edit { preferences ->
+            preferences[LAST_AUTO_EXPORT_TIME_KEY] = timestamp
         }
     }
 }

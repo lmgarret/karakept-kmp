@@ -1,5 +1,8 @@
 package com.karakept.app.utils
 
+import android.content.Intent
+import android.net.Uri
+import androidx.core.content.FileProvider
 import com.karakept.app.data.local.AndroidContext
 import java.io.File
 
@@ -84,6 +87,61 @@ actual object FileUtils {
             freeBytes = freeSpace,
             totalBytes = totalSpace
         )
+    }
+
+    actual fun getBackupDirectory(): String {
+        val context = AndroidContext.context
+        val dir = File(context.getExternalFilesDir(null), "backups")
+            ?: File(context.filesDir, "backups")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        return dir.absolutePath
+    }
+
+    actual fun readFileAsText(path: String): String? {
+        return try {
+            File(path).readText()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    actual fun shareBackupFile(filePath: String) {
+        val context = AndroidContext.context
+        val file = File(filePath)
+        if (!file.exists()) return
+
+        val uri: Uri = try {
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+        } catch (e: Exception) {
+            // Fallback: share JSON text content
+            val content = file.readText()
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, content)
+                putExtra(Intent.EXTRA_TITLE, file.name)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(Intent.createChooser(sendIntent, "Share Backup").also {
+                it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+            return
+        }
+
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/json"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Export Backup").also {
+            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
     }
 
     private fun getFolderSize(file: File): Long {

@@ -15,6 +15,7 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.ListRepository
 import com.karakept.api.infrastructure.ApiClient
 import com.karakept.api.client.*
+import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.OnboardingScreenModel
@@ -96,6 +97,9 @@ val appModule = module {
     single { ActionSnackbarManager() }
     single { BookmarkActionController(get(), get(), get(), get(), get()) }
 
+    // Backup & Restore
+    single { BackupRepository(get(), get()) }
+
     factory { LoginScreenModel(get(), get(), get()) }
     factory { OnboardingScreenModel(get(), get(), get()) }
     single { MainScreenModel(get(), get(), get(), get(), get(), get()) }
@@ -105,4 +109,5 @@ val appModule = module {
     factory { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }
     factory { params -> com.karakept.app.ui.screens.settings.PerListSettingsScreenModel(params.get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }
+    factory { com.karakept.app.ui.screens.settings.BackupRestoreScreenModel(get(), get()) }
 }

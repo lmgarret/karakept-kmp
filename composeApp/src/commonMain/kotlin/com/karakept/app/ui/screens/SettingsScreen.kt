@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Info
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.ui.screens.settings.BackupRestoreScreen
 import com.karakept.app.ui.screens.settings.BookmarkListSettingsScreen
 import com.karakept.app.ui.screens.settings.BookmarkViewSettingsScreen
 import com.karakept.app.ui.screens.settings.ServerSettingsScreen
@@ -121,6 +123,15 @@ class SettingsScreen : Screen {
                         description = "Manage connected server",
                         icon = Icons.Default.Dns,
                         onClick = { navigator.push(ServerSettingsScreen()) }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SettingsNavigationItem(
+                        title = "Backup & Restore",
+                        description = "Export settings to JSON or restore from a backup",
+                        icon = Icons.Default.SaveAlt,
+                        onClick = { navigator.push(BackupRestoreScreen()) }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
