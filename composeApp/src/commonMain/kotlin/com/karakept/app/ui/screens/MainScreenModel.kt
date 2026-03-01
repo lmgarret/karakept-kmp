@@ -117,18 +117,21 @@ class MainScreenModel(
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Track list counts (map of list ID to bookmark count)
+    // Respects per-list "countOnlyUnread" setting
     val listCounts: StateFlow<Map<String, Int>> = combine(
         selectedServer,
         lists,
-        allBookmarks
-    ) { server, listItems, bookmarks ->
+        allBookmarks,
+        settingsRepository.allListSettings
+    ) { server, listItems, bookmarks, allSettings ->
         if (server == null) return@combine emptyMap()
 
         listItems.associate { list ->
             val listId = list.id ?: ""
+            val settings = allSettings[listId] ?: com.karakept.app.data.model.ListSettings()
             val count = bookmarks.count { bookmark ->
                 val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                bookmarkLists.contains(listId)
+                bookmarkLists.contains(listId) && (!settings.countOnlyUnread || !bookmark.isRead)
             }
             listId to count
         }
@@ -182,6 +185,19 @@ class MainScreenModel(
                 }
             }
             .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), com.karakept.app.data.model.SwipeAction.NONE)
+
+    // The custom action config for the scroll action (if a custom action is configured)
+    val currentListScrollActionConfig: StateFlow<com.karakept.app.data.model.CustomSwipeActionConfig?> =
+        combine(
+            _currentListContext,
+            settingsRepository.allListSettings,
+            customSwipeActionConfigs
+        ) { listId, allSettings, configs ->
+            if (listId == null) return@combine null
+            val settings = allSettings[listId] ?: return@combine null
+            val configId = settings.scrollActionConfigId ?: return@combine null
+            configs.find { it.id == configId }
+        }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
         // Initialize selected server
@@ -855,6 +871,37 @@ class MainScreenModel(
                     it
                 }
             }
+        }
+    }
+
+    /**
+     * Mark all bookmarks in a list as read. No snackbar shown.
+     */
+    fun markAllBookmarksInListAsRead(listId: String) {
+        screenModelScope.launch {
+            val serverId = _selectedServer.value?.id ?: return@launch
+            val unreadInList = allBookmarks.value.filter { bookmark ->
+                val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                bookmarkLists.contains(listId) && !bookmark.isRead
+            }
+            unreadInList.forEach { bookmark ->
+                bookmarkActionsRepository.markAsRead(bookmark.remoteId, serverId)
+            }
+            // Update accumulated list immediately for UI feedback
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                val bookmarkLists = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotEmpty() }
+                if (bookmarkLists.contains(listId)) it.copy(isRead = true) else it
+            }
+        }
+    }
+
+    /**
+     * Rename a list and optionally change its icon.
+     */
+    fun renameList(listId: String, newName: String, newIcon: String?) {
+        screenModelScope.launch {
+            val server = _selectedServer.value ?: return@launch
+            listRepository.renameList(server, listId, newName, newIcon)
         }
     }
 

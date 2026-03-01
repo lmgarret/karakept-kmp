@@ -7,5 +7,7 @@ data class ListSettings(
     val syncOffline: Boolean = false,
     val notifyOnNewBookmarks: Boolean = false,
     val scrollAction: SwipeAction = SwipeAction.NONE,
-    val includeChildListBookmarks: Boolean = false
+    val scrollActionConfigId: String? = null,
+    val includeChildListBookmarks: Boolean = false,
+    val countOnlyUnread: Boolean = false
 )

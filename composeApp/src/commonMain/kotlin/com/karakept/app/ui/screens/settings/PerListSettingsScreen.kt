@@ -18,9 +18,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +46,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.repository.SettingsRepository
@@ -62,6 +65,10 @@ class PerListSettingsScreenModel(
     val listSettings: StateFlow<ListSettings> = settingsRepository.getListSettings(listId)
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ListSettings())
 
+    val customSwipeActionConfigs: StateFlow<List<CustomSwipeActionConfig>> =
+        settingsRepository.customSwipeActionConfigs
+            .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun setSyncOffline(enabled: Boolean) {
         screenModelScope.launch {
             settingsRepository.setListSettings(listId, listSettings.value.copy(syncOffline = enabled))
@@ -74,15 +81,24 @@ class PerListSettingsScreenModel(
         }
     }
 
-    fun setScrollAction(action: SwipeAction) {
+    fun setScrollAction(action: SwipeAction, configId: String? = null) {
         screenModelScope.launch {
-            settingsRepository.setListSettings(listId, listSettings.value.copy(scrollAction = action))
+            settingsRepository.setListSettings(
+                listId,
+                listSettings.value.copy(scrollAction = action, scrollActionConfigId = configId)
+            )
         }
     }
 
     fun setIncludeChildListBookmarks(enabled: Boolean) {
         screenModelScope.launch {
             settingsRepository.setListSettings(listId, listSettings.value.copy(includeChildListBookmarks = enabled))
+        }
+    }
+
+    fun setCountOnlyUnread(enabled: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setListSettings(listId, listSettings.value.copy(countOnlyUnread = enabled))
         }
     }
 }
@@ -97,14 +113,17 @@ data class PerListSettingsScreen(
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<PerListSettingsScreenModel> { parametersOf(listId) }
         val listSettings by screenModel.listSettings.collectAsState()
+        val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
         var showScrollActionDialog by remember { mutableStateOf(false) }
 
         if (showScrollActionDialog) {
             ScrollActionPickerDialog(
                 selectedAction = listSettings.scrollAction,
+                selectedConfigId = listSettings.scrollActionConfigId,
+                customConfigs = customConfigs,
                 onDismiss = { showScrollActionDialog = false },
-                onActionSelected = { action ->
-                    screenModel.setScrollAction(action)
+                onActionSelected = { action, configId ->
+                    screenModel.setScrollAction(action, configId)
                     showScrollActionDialog = false
                 }
             )
@@ -211,6 +230,46 @@ data class PerListSettingsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
+                    text = "Display",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Count only unread",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Show only the count of unread bookmarks in the sidebar badge",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = listSettings.countOnlyUnread,
+                            onCheckedChange = { screenModel.setCountOnlyUnread(it) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
                     text = "Scroll Behavior",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
@@ -238,8 +297,20 @@ data class PerListSettingsScreen(
                                 text = "On scroll action",
                                 style = MaterialTheme.typography.titleMedium
                             )
+                            val scrollActionLabel = if (listSettings.scrollAction == SwipeAction.NONE) {
+                                SwipeAction.NONE.displayName
+                            } else {
+                                val configId = listSettings.scrollActionConfigId
+                                if (configId != null) {
+                                    // Custom action label is shown in the dialog,
+                                    // display the action type for now
+                                    listSettings.scrollAction.displayName
+                                } else {
+                                    listSettings.scrollAction.displayName
+                                }
+                            }
                             Text(
-                                text = listSettings.scrollAction.displayName,
+                                text = scrollActionLabel,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -298,11 +369,12 @@ data class PerListSettingsScreen(
 @Composable
 private fun ScrollActionPickerDialog(
     selectedAction: SwipeAction,
+    selectedConfigId: String?,
+    customConfigs: List<CustomSwipeActionConfig>,
     onDismiss: () -> Unit,
-    onActionSelected: (SwipeAction) -> Unit
+    onActionSelected: (SwipeAction, String?) -> Unit
 ) {
-    // Only offer actions that make sense as scroll triggers (exclude custom config actions)
-    val eligibleActions = listOf(
+    val standardActions = listOf(
         SwipeAction.NONE,
         SwipeAction.MARK_READ,
         SwipeAction.ARCHIVE,
@@ -330,17 +402,19 @@ private fun ScrollActionPickerDialog(
                 )
 
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    eligibleActions.forEach { action ->
+                    // Standard actions
+                    standardActions.forEach { action ->
+                        val isSelected = selectedConfigId == null && action == selectedAction
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onActionSelected(action) }
+                                .clickable { onActionSelected(action, null) }
                                 .padding(horizontal = 24.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = action == selectedAction,
-                                onClick = { onActionSelected(action) }
+                                selected = isSelected,
+                                onClick = { onActionSelected(action, null) }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Icon(
@@ -353,6 +427,47 @@ private fun ScrollActionPickerDialog(
                                 text = action.displayName,
                                 style = MaterialTheme.typography.bodyLarge
                             )
+                        }
+                    }
+
+                    // Custom actions (if any)
+                    if (customConfigs.isNotEmpty()) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Text(
+                            text = "Custom actions",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                        )
+                        customConfigs.forEach { config ->
+                            val swipeAction = when (config.type) {
+                                com.karakept.app.data.model.CustomSwipeActionType.ADD_TAG -> SwipeAction.ADD_TAG
+                                com.karakept.app.data.model.CustomSwipeActionType.ADD_TO_LIST -> SwipeAction.ADD_TO_LIST
+                            }
+                            val isSelected = selectedConfigId == config.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onActionSelected(swipeAction, config.id) }
+                                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = { onActionSelected(swipeAction, config.id) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = swipeAction.getIcon(),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = config.getDisplayName(),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
                         }
                     }
                 }

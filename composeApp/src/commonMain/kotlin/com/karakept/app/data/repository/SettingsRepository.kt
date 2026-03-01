@@ -421,6 +421,16 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     private val PER_LIST_SETTINGS_KEY = stringPreferencesKey("per_list_settings")
 
+    val allListSettings: Flow<Map<String, com.karakept.app.data.model.ListSettings>> =
+        dataStore.data.map { preferences ->
+            val json = preferences[PER_LIST_SETTINGS_KEY] ?: "{}"
+            try {
+                Json.decodeFromString(json)
+            } catch (e: Exception) {
+                emptyMap()
+            }
+        }
+
     fun getListSettings(listId: String): Flow<com.karakept.app.data.model.ListSettings> =
         dataStore.data.map { preferences ->
             val json = preferences[PER_LIST_SETTINGS_KEY] ?: "{}"

@@ -1,6 +1,10 @@
 package com.karakept.app.ui.screens.main
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,18 +15,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DrawerState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,14 +40,21 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.api.model.KarakeepList
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun MainScreenDrawer(
     drawerState: DrawerState,
@@ -50,6 +65,8 @@ internal fun MainScreenDrawer(
     onFilterApply: (FilterConfig) -> Unit,
     onClearFilter: () -> Unit,
     onToggleListExpanded: (String) -> Unit,
+    onMarkAllAsRead: (listId: String) -> Unit,
+    onRenameList: (listId: String, listName: String) -> Unit,
     onNavigateToListSettings: (listId: String, listName: String) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToHighlights: () -> Unit,
@@ -122,79 +139,26 @@ internal fun MainScreenDrawer(
                                 val listId = list.id ?: ""
                                 key(listId) {
                                     val hasChildLists = hasChildren(listId, lists)
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Spacer(Modifier.width((depth * 16).dp)) // Indentation
-
-                                        // Expand/collapse icon
-                                        if (hasChildLists) {
-                                            IconButton(
-                                                onClick = { onToggleListExpanded(listId) },
-                                                modifier = Modifier.size(24.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (expandedLists.contains(listId)) {
-                                                        Icons.Default.KeyboardArrowDown
-                                                    } else {
-                                                        Icons.AutoMirrored.Filled.KeyboardArrowRight
-                                                    },
-                                                    contentDescription = if (expandedLists.contains(listId)) "Collapse" else "Expand",
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
-                                        } else {
-                                            Spacer(Modifier.width(24.dp))
-                                        }
-
-                                        NavigationDrawerItem(
-                                            label = {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text("${list.icon} ${list.name}")
-                                                    listCounts[listId]?.let { count ->
-                                                        Text(
-                                                            text = count.toString(),
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                                        )
-                                                    }
-                                                }
-                                            },
-                                            selected = currentFilter.lists.contains(listId),
-                                            colors = NavigationDrawerItemDefaults.colors(
-                                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                                selectedTextColor = MaterialTheme.colorScheme.primary
-                                            ),
-                                            onClick = {
-                                                onFilterApply(FilterConfig(
+                                    ListDrawerItem(
+                                        list = list,
+                                        depth = depth,
+                                        count = listCounts[listId],
+                                        isSelected = currentFilter.lists.contains(listId),
+                                        expandedLists = expandedLists,
+                                        hasChildLists = hasChildLists,
+                                        onToggleExpanded = { onToggleListExpanded(listId) },
+                                        onSelected = {
+                                            onFilterApply(
+                                                FilterConfig(
                                                     status = FilterStatus.ALL_INCLUDING_ARCHIVED,
-                                                    lists = listOf(list.id ?: "")
-                                                ))
-                                            },
-                                            modifier = Modifier.weight(1f)
-                                        )
-
-                                        IconButton(
-                                            onClick = {
-                                                onNavigateToListSettings(listId, list.name ?: "")
-                                            },
-                                            modifier = Modifier.size(32.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.MoreVert,
-                                                contentDescription = "List settings",
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    lists = listOf(listId)
+                                                )
                                             )
-                                        }
-                                    }
+                                        },
+                                        onMarkAllAsRead = { onMarkAllAsRead(listId) },
+                                        onRenameList = { onRenameList(listId, list.name ?: "") },
+                                        onListSettings = { onNavigateToListSettings(listId, list.name ?: "") }
+                                    )
                                 }
                             }
                         }
@@ -230,6 +194,117 @@ internal fun MainScreenDrawer(
         }
     ) {
         content()
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ListDrawerItem(
+    list: KarakeepList,
+    depth: Int,
+    count: Int?,
+    isSelected: Boolean,
+    expandedLists: Set<String>,
+    hasChildLists: Boolean,
+    onToggleExpanded: () -> Unit,
+    onSelected: () -> Unit,
+    onMarkAllAsRead: () -> Unit,
+    onRenameList: () -> Unit,
+    onListSettings: () -> Unit
+) {
+    val listId = list.id ?: ""
+    var showMenu by remember { mutableStateOf(false) }
+
+    val selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    val selectedTextColor = MaterialTheme.colorScheme.primary
+    val normalTextColor = MaterialTheme.colorScheme.onSurface
+
+    Box {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Spacer(Modifier.width((depth * 16).dp))
+
+            // Expand/collapse icon
+            if (hasChildLists) {
+                IconButton(
+                    onClick = onToggleExpanded,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (expandedLists.contains(listId)) {
+                            Icons.Default.KeyboardArrowDown
+                        } else {
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight
+                        },
+                        contentDescription = if (expandedLists.contains(listId)) "Collapse" else "Expand",
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            } else {
+                Spacer(Modifier.width(24.dp))
+            }
+
+            // List item with long press for context menu
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (isSelected) selectedContainerColor else Color.Transparent)
+                    .combinedClickable(
+                        onClick = onSelected,
+                        onLongClick = { showMenu = true }
+                    )
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${list.icon ?: ""} ${list.name ?: ""}".trim(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (isSelected) selectedTextColor else normalTextColor
+                )
+                count?.let {
+                    Text(
+                        text = it.toString(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = (if (isSelected) selectedTextColor else MaterialTheme.colorScheme.onSurfaceVariant)
+                            .copy(alpha = 0.6f)
+                    )
+                }
+            }
+        }
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Mark all as read") },
+                leadingIcon = { Icon(Icons.Default.DoneAll, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    onMarkAllAsRead()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Rename / Change icon") },
+                leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    onRenameList()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("List settings") },
+                leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    onListSettings()
+                }
+            )
+        }
     }
 }
 
