@@ -52,7 +52,7 @@ fun BookmarkPlaceholderItem(url: String, layoutType: LayoutType = LayoutType.LIS
 @Composable
 private fun ListPlaceholder(url: String, shimmerColor: Color) {
     // Matches SwipeableBookmarkItem outer padding + BookmarkListLayout inner structure
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -93,7 +93,7 @@ private fun ListPlaceholder(url: String, shimmerColor: Color) {
 @Composable
 private fun CardPlaceholder(url: String, shimmerColor: Color) {
     // Matches BookmarkCardLayout structure
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Column {
             Box(
                 modifier = Modifier
