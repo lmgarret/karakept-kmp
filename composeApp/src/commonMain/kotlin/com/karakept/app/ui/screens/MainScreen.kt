@@ -52,9 +52,11 @@ import com.karakept.app.ui.screens.main.BookmarkListContent
 import com.karakept.app.ui.screens.main.MainScreenDrawer
 import com.karakept.app.ui.screens.main.MainScreenTopBar
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.snapshotFlow
 import getPlatform
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
+import com.karakept.app.ui.screens.settings.PerListSettingsScreen
 import org.koin.compose.koinInject
 
 object MainScreen : Screen {
@@ -88,6 +90,7 @@ object MainScreen : Screen {
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
+        val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
 
         val searchQuery by screenModel.searchQuery.collectAsState()
 
@@ -151,6 +154,38 @@ object MainScreen : Screen {
             }
         }
 
+        // Scroll-triggered action: when a bookmark scrolls off screen, apply the active list's scroll action
+        LaunchedEffect(currentListScrollAction) {
+            if (currentListScrollAction != SwipeAction.NONE) {
+                var lastFirstVisibleIndex = listState.firstVisibleItemIndex
+                snapshotFlow { listState.firstVisibleItemIndex }.collect { newIndex ->
+                    if (newIndex > lastFirstVisibleIndex) {
+                        // Items from lastFirstVisibleIndex to newIndex - 1 have scrolled off screen
+                        for (i in lastFirstVisibleIndex until newIndex) {
+                            val scrolledBookmark = bookmarks.getOrNull(i) ?: continue
+                            when (currentListScrollAction) {
+                                SwipeAction.MARK_READ -> {
+                                    if (!scrolledBookmark.isRead) {
+                                        screenModel.toggleBookmarkRead(scrolledBookmark)
+                                    }
+                                }
+                                SwipeAction.ARCHIVE -> {
+                                    if (!scrolledBookmark.isArchived) {
+                                        screenModel.toggleBookmarkArchive(scrolledBookmark)
+                                    }
+                                }
+                                SwipeAction.FAVOURITE -> {
+                                    screenModel.toggleBookmarkFavorite(scrolledBookmark)
+                                }
+                                else -> {}
+                            }
+                        }
+                    }
+                    lastFirstVisibleIndex = newIndex
+                }
+            }
+        }
+
         // Listen for create bookmark result (only handle failure snackbar; success is shown upfront)
         LaunchedEffect(Unit) {
             screenModel.createBookmarkResult.collect { result ->
@@ -203,6 +238,10 @@ object MainScreen : Screen {
             },
             onToggleListExpanded = { listId ->
                 screenModel.toggleListExpanded(listId)
+            },
+            onNavigateToListSettings = { listId, listName ->
+                navigator.push(PerListSettingsScreen(listId, listName))
+                scope.launch { drawerState.close() }
             },
             onNavigateToSettings = {
                 navigator.push(SettingsScreen())

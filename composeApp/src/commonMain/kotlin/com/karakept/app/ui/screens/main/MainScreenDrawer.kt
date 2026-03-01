@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.DrawerState
@@ -49,6 +50,7 @@ internal fun MainScreenDrawer(
     onFilterApply: (FilterConfig) -> Unit,
     onClearFilter: () -> Unit,
     onToggleListExpanded: (String) -> Unit,
+    onNavigateToListSettings: (listId: String, listName: String) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToHighlights: () -> Unit,
     content: @Composable () -> Unit
@@ -178,6 +180,20 @@ internal fun MainScreenDrawer(
                                             },
                                             modifier = Modifier.weight(1f)
                                         )
+
+                                        IconButton(
+                                            onClick = {
+                                                onNavigateToListSettings(listId, list.name ?: "")
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.MoreVert,
+                                                contentDescription = "List settings",
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                 }
                             }

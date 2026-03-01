@@ -171,6 +171,18 @@ class MainScreenModel(
         initialValue = true
     )
 
+    // Per-list scroll action: the action configured for the currently filtered list (if any single list is active)
+    val currentListScrollAction: StateFlow<com.karakept.app.data.model.SwipeAction> =
+        _currentListContext
+            .flatMapLatest { listId ->
+                if (listId != null) {
+                    settingsRepository.getListSettings(listId).map { it.scrollAction }
+                } else {
+                    flowOf(com.karakept.app.data.model.SwipeAction.NONE)
+                }
+            }
+            .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), com.karakept.app.data.model.SwipeAction.NONE)
+
     init {
         // Initialize selected server
         screenModelScope.launch {
@@ -389,13 +401,21 @@ class MainScreenModel(
     ): List<BookmarkEntity> {
         val offset = page * pageSize
 
+        // Expand filter lists to include child lists for those with includeChildListBookmarks enabled
+        val expandedFilter = if (filter.lists.isNotEmpty()) {
+            val expandedLists = expandListsWithChildren(filter.lists)
+            if (expandedLists != filter.lists) filter.copy(lists = expandedLists) else filter
+        } else {
+            filter
+        }
+
         // If filtering by a single list, use DB-level list filtering
-        val singleListId = if (filter.lists.size == 1) filter.lists.first() else null
+        val singleListId = if (expandedFilter.lists.size == 1) expandedFilter.lists.first() else null
 
         // Fetch paginated bookmarks from repository (filtered by status at DB level)
         val pagedBookmarks = bookmarkRepository.getBookmarksPaged(
             server = server,
-            status = filter.status,
+            status = expandedFilter.status,
             offset = offset,
             limit = pageSize,
             listId = singleListId
@@ -403,12 +423,36 @@ class MainScreenModel(
 
         // Apply client-side filters (tags, lists)
         // Note: if we already filtered by single list at DB level, skip client-side list filter
-        val filtered = applyClientSideFilters(pagedBookmarks, filter, skipListFilter = singleListId != null)
+        val filtered = applyClientSideFilters(pagedBookmarks, expandedFilter, skipListFilter = singleListId != null)
 
         // Apply sorting
-        val sorted = applySorting(filtered, filter.sort)
+        val sorted = applySorting(filtered, expandedFilter.sort)
 
         return sorted
+    }
+
+    private suspend fun expandListsWithChildren(listIds: List<String>): List<String> {
+        val result = listIds.toMutableList()
+        val allLists = lists.value
+
+        for (listId in listIds) {
+            val settings = settingsRepository.getListSettings(listId).first()
+            if (settings.includeChildListBookmarks) {
+                val childIds = getAllDescendantIds(listId, allLists)
+                childIds.forEach { if (!result.contains(it)) result.add(it) }
+            }
+        }
+
+        return result
+    }
+
+    private fun getAllDescendantIds(parentId: String, allLists: List<KarakeepList>): List<String> {
+        val directChildren = allLists.filter { it.parentId == parentId }.mapNotNull { it.id }
+        val allDescendants = directChildren.toMutableList()
+        for (childId in directChildren) {
+            allDescendants.addAll(getAllDescendantIds(childId, allLists))
+        }
+        return allDescendants
     }
 
     private fun applyClientSideFilters(
