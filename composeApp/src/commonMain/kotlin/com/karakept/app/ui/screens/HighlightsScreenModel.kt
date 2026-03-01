@@ -40,7 +40,7 @@ class HighlightsScreenModel(
         settingsRepository.activeServerId
     ) { servers, id ->
         servers.find { it.id == id }
-    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.stateIn(screenModelScope, SharingStarted.Eagerly, null)
 
     fun syncHighlights() {
         screenModelScope.launch {

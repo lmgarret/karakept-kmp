@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
@@ -139,20 +140,32 @@ data class BookmarkViewerScreen(
             }
         }
 
-        // Auto-select highlight when navigating from Highlights screen
-        LaunchedEffect(scrollToHighlightId, highlights) {
-            if (scrollToHighlightId != null && highlights.isNotEmpty()) {
-                // Find and select the highlight
-                val targetHighlight = highlights.find { it.id == scrollToHighlightId }
-                if (targetHighlight != null) {
-                    selectedHighlightText = targetHighlight.text
-                    selectedHighlightId = scrollToHighlightId
-                }
-            }
-        }
-
         // Hoist state management OUTSIDE the when to prevent recomposition flash
         val scrollState = rememberLazyListState()
+        val density = LocalDensity.current
+
+        // Scroll the LazyColumn to the highlight when navigating from the Highlights screen.
+        // highlightPositionReceived flips to true once the WebView responds with a position
+        // (via onHighlightPosition), which triggers the scroll LaunchedEffect below.
+        var highlightPositionReceived by remember { mutableStateOf(false) }
+        LaunchedEffect(highlightPositionReceived) {
+            if (!highlightPositionReceived) return@LaunchedEffect
+            val state = loadingState as? BookmarkLoadingState.FullyLoaded ?: return@LaunchedEffect
+            val contentBodyIndex = if (!state.bookmark.description.isNullOrBlank()) 2 else 1
+            val position = highlightPosition
+            if (position != null) {
+                // Convert CSS pixels (from getBoundingClientRect) to screen pixels for LazyList offset.
+                // Subtract 120dp so the highlight is not pinned flush to the top of the screen.
+                val highlightCssPx = position.y + position.scrollY
+                val offsetPx = with(density) {
+                    maxOf(0, highlightCssPx.dp.roundToPx() - 120.dp.roundToPx())
+                }
+                scrollState.animateScrollToItem(contentBodyIndex, offsetPx)
+            } else {
+                // Highlight position unavailable – scroll to content body at least
+                scrollState.animateScrollToItem(contentBodyIndex, 0)
+            }
+        }
         val bannerHeight = 320.dp
         val toolbarHeight = 56.dp
 
@@ -465,8 +478,12 @@ data class BookmarkViewerScreen(
                                     },
                                     onHighlightPosition = { id, position ->
                                         highlightPosition = position
+                                        if (id == scrollToHighlightId && !highlightPositionReceived) {
+                                            highlightPositionReceived = true
+                                        }
                                     },
-                                    onContentReady = { contentRendered = true }
+                                    onContentReady = { contentRendered = true },
+                                    scrollToHighlightId = scrollToHighlightId
                                 )
                             }
                         }
