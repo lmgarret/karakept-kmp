@@ -326,7 +326,7 @@ private fun ScrollActionPickerDialog(
                     text = "Triggered automatically when a bookmark scrolls off screen",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 24.dp, bottom = 8.dp)
+                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
                 )
 
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
