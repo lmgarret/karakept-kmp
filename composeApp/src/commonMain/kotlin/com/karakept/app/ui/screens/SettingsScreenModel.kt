@@ -384,6 +384,42 @@ class SettingsScreenModel(
         }
     }
 
+    val backgroundSyncEnabled: StateFlow<Boolean> = settingsRepository.backgroundSyncEnabled.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    val backgroundSyncFrequencyMinutes: StateFlow<Int> = settingsRepository.backgroundSyncFrequencyMinutes.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 60
+    )
+
+    val backgroundSyncDigestNotification: StateFlow<Boolean> = settingsRepository.backgroundSyncDigestNotification.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setBackgroundSyncEnabled(enabled: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setBackgroundSyncEnabled(enabled)
+        }
+    }
+
+    fun setBackgroundSyncFrequencyMinutes(minutes: Int) {
+        screenModelScope.launch {
+            settingsRepository.setBackgroundSyncFrequencyMinutes(minutes)
+        }
+    }
+
+    fun setBackgroundSyncDigestNotification(enabled: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setBackgroundSyncDigestNotification(enabled)
+        }
+    }
+
     val contentSyncStrategy: StateFlow<com.karakept.app.data.model.SyncStrategy> = settingsRepository.contentSyncStrategy.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),

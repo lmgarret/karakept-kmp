@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.ui.screens.settings.BackgroundSyncSettingsScreen
 import com.karakept.app.ui.screens.settings.BookmarkListSettingsScreen
 import com.karakept.app.ui.screens.settings.BookmarkViewSettingsScreen
 import com.karakept.app.ui.screens.settings.ServerSettingsScreen
@@ -112,6 +114,15 @@ class SettingsScreen : Screen {
                         description = "Manage notification preferences",
                         icon = Icons.Default.Notifications,
                         onClick = { navigator.push(com.karakept.app.ui.screens.settings.NotificationSettingsScreen()) }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SettingsNavigationItem(
+                        title = "Background Sync",
+                        description = "Automatically sync bookmarks in the background",
+                        icon = Icons.Default.Sync,
+                        onClick = { navigator.push(BackgroundSyncSettingsScreen()) }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))

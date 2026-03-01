@@ -14,9 +14,17 @@ class OnboardingScreenModel(
     private val remoteDataSource: RemoteDataSource
 ) : ScreenModel {
 
-    fun completeOnboarding(onDone: () -> Unit) {
+    fun completeOnboarding(
+        backgroundSyncEnabled: Boolean = false,
+        backgroundSyncFrequencyMinutes: Int = 60,
+        onDone: () -> Unit
+    ) {
         screenModelScope.launch {
             settingsRepository.setOnboardingCompleted(true)
+            settingsRepository.setBackgroundSyncEnabled(backgroundSyncEnabled)
+            if (backgroundSyncEnabled) {
+                settingsRepository.setBackgroundSyncFrequencyMinutes(backgroundSyncFrequencyMinutes)
+            }
             onDone()
         }
     }

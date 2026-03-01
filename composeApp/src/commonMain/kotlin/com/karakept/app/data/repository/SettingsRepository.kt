@@ -419,6 +419,40 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    private val BACKGROUND_SYNC_ENABLED_KEY = booleanPreferencesKey("background_sync_enabled")
+    private val BACKGROUND_SYNC_FREQUENCY_KEY = intPreferencesKey("background_sync_frequency_minutes")
+    private val BACKGROUND_SYNC_DIGEST_KEY = booleanPreferencesKey("background_sync_digest_notification")
+
+    val backgroundSyncEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[BACKGROUND_SYNC_ENABLED_KEY] ?: false
+    }
+
+    val backgroundSyncFrequencyMinutes: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[BACKGROUND_SYNC_FREQUENCY_KEY] ?: 60
+    }
+
+    val backgroundSyncDigestNotification: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[BACKGROUND_SYNC_DIGEST_KEY] ?: false
+    }
+
+    suspend fun setBackgroundSyncEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[BACKGROUND_SYNC_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun setBackgroundSyncFrequencyMinutes(minutes: Int) {
+        dataStore.edit { preferences ->
+            preferences[BACKGROUND_SYNC_FREQUENCY_KEY] = minutes
+        }
+    }
+
+    suspend fun setBackgroundSyncDigestNotification(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[BACKGROUND_SYNC_DIGEST_KEY] = enabled
+        }
+    }
+
     private val ONBOARDING_COMPLETED_KEY = booleanPreferencesKey("onboarding_completed")
 
     private val DIM_READ_BOOKMARKS_KEY = booleanPreferencesKey("dim_read_bookmarks")
