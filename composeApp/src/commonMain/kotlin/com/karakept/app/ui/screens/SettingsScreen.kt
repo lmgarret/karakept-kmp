@@ -50,6 +50,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.ui.screens.settings.AppearanceSettingsContent
 import com.karakept.app.ui.screens.settings.AppearanceSettingsScreen
+import com.karakept.app.ui.screens.settings.BackgroundSyncSettingsScreen
 import com.karakept.app.ui.screens.settings.BackupRestoreContent
 import com.karakept.app.ui.screens.settings.BackupRestoreScreen
 import com.karakept.app.ui.screens.settings.BookmarkListSettingsContent

@@ -488,4 +488,31 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     val defaultLayoutId: Flow<String?> = dataStore.data.map { prefs ->
         prefs[DEFAULT_LAYOUT_ID_KEY]
     }.distinctUntilChanged()
+
+    // ── Background sync (non-backed-up individual keys) ────────────────────────
+
+    private val BACKGROUND_SYNC_ENABLED_KEY = booleanPreferencesKey("background_sync_enabled")
+    private val BACKGROUND_SYNC_FREQUENCY_KEY = intPreferencesKey("background_sync_frequency_minutes")
+    private val BACKGROUND_SYNC_DIGEST_KEY = booleanPreferencesKey("background_sync_digest_notification")
+
+    val backgroundSyncEnabled: Flow<Boolean> =
+        dataStore.data.map { it[BACKGROUND_SYNC_ENABLED_KEY] ?: false }
+
+    val backgroundSyncFrequencyMinutes: Flow<Int> =
+        dataStore.data.map { it[BACKGROUND_SYNC_FREQUENCY_KEY] ?: 60 }
+
+    val backgroundSyncDigestNotification: Flow<Boolean> =
+        dataStore.data.map { it[BACKGROUND_SYNC_DIGEST_KEY] ?: false }
+
+    suspend fun setBackgroundSyncEnabled(enabled: Boolean) {
+        dataStore.edit { it[BACKGROUND_SYNC_ENABLED_KEY] = enabled }
+    }
+
+    suspend fun setBackgroundSyncFrequencyMinutes(minutes: Int) {
+        dataStore.edit { it[BACKGROUND_SYNC_FREQUENCY_KEY] = minutes }
+    }
+
+    suspend fun setBackgroundSyncDigestNotification(enabled: Boolean) {
+        dataStore.edit { it[BACKGROUND_SYNC_DIGEST_KEY] = enabled }
+    }
 }
