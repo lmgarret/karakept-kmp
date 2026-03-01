@@ -13,8 +13,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -40,6 +44,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.SwipeAction
+import com.karakept.app.ui.components.AddBookmarkDialog
 import com.karakept.app.ui.components.FilterBottomPanel
 import com.karakept.app.ui.components.BookmarkActionsMenu
 import com.karakept.app.ui.components.BookmarkAction
@@ -91,6 +96,8 @@ object MainScreen : Screen {
             currentFilter.status != com.karakept.app.data.model.FilterStatus.ALL
 
         var showFilterDialog by remember { mutableStateOf(false) }
+        var showAddBookmarkDialog by remember { mutableStateOf(false) }
+        val pendingBookmarkRemoteIds by screenModel.pendingBookmarkRemoteIds.collectAsState()
         var isSearchActive by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
         val snackbarManager = koinInject<ActionSnackbarManager>()
@@ -141,6 +148,19 @@ object MainScreen : Screen {
         LaunchedEffect(Unit) {
             screenModel.scrollToTopTrigger.collect {
                 listState.animateScrollToItem(0)
+            }
+        }
+
+        // Listen for create bookmark result (only handle failure snackbar; success is shown upfront)
+        LaunchedEffect(Unit) {
+            screenModel.createBookmarkResult.collect { result ->
+                if (result.isFailure) {
+                    scope.launch {
+                        snackbarManager.showSnackbar(
+                            "Failed to add bookmark: ${result.exceptionOrNull()?.message ?: "Unknown error"}"
+                        )
+                    }
+                }
             }
         }
 
@@ -231,6 +251,18 @@ object MainScreen : Screen {
                         }
                     )
                 },
+                floatingActionButton = {
+                    if (!offlineMode && !isAutoOffline) {
+                        FloatingActionButton(
+                            onClick = { showAddBookmarkDialog = true }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Add bookmark"
+                            )
+                        }
+                    }
+                },
                 snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) }
             ) { padding ->
                 Box(
@@ -265,6 +297,7 @@ object MainScreen : Screen {
                         showReadingProgress = trackReadingProgress,
                         showTags = showTags,
                         offlineMode = offlineMode || isAutoOffline,
+                        pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                         listState = listState,
                         pullRefreshState = pullRefreshState,
                         onBookmarkClick = { bookmark ->
@@ -408,6 +441,18 @@ object MainScreen : Screen {
                 onReset = {
                     screenModel.applyFilter(FilterConfig())
                 }
+            )
+        }
+
+        // Add Bookmark Dialog
+        if (showAddBookmarkDialog) {
+            AddBookmarkDialog(
+                onConfirm = { url ->
+                    showAddBookmarkDialog = false
+                    screenModel.createBookmark(url)
+                    scope.launch { snackbarManager.showSnackbar("Adding bookmark…") }
+                },
+                onDismiss = { showAddBookmarkDialog = false }
             )
         }
 

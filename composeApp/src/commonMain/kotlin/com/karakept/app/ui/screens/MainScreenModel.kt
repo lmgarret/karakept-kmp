@@ -84,6 +84,15 @@ class MainScreenModel(
     private val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
+    private val _createBookmarkResult = MutableSharedFlow<Result<Unit>>(extraBufferCapacity = 1)
+    val createBookmarkResult: SharedFlow<Result<Unit>> = _createBookmarkResult
+
+    // Placeholder bookmarks shown while creation is in-flight
+    private val _pendingBookmarks = MutableStateFlow<List<com.karakept.app.data.local.entity.BookmarkEntity>>(emptyList())
+    val pendingBookmarkRemoteIds: StateFlow<Set<Long>> = _pendingBookmarks
+        .map { list -> list.map { it.remoteId }.toSet() }
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     // Search query - applied client-side across all cached bookmarks
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
@@ -278,21 +287,18 @@ class MainScreenModel(
     }
 
     val bookmarks: StateFlow<List<BookmarkEntity>> = combine(
+        _pendingBookmarks,
         _accumulatedBookmarks,
         allBookmarks,
         _currentFilter,
         _searchQuery
-    ) { accumulated, all, filter, query ->
+    ) { pending, accumulated, all, filter, query ->
         if (query.isBlank()) {
-            accumulated
+            pending + accumulated
         } else {
             applySearchFilter(all, filter, query)
         }
-    }.stateIn(
-        screenModelScope,
-        SharingStarted.Lazily,
-        emptyList()
-    )
+    }.stateIn(screenModelScope, SharingStarted.Lazily, emptyList())
 
     private fun applySearchFilter(
         all: List<BookmarkEntity>,
@@ -804,6 +810,43 @@ class MainScreenModel(
                 } else {
                     it
                 }
+            }
+        }
+    }
+
+    fun createBookmark(url: String) {
+        screenModelScope.launch {
+            val server = _selectedServer.value ?: return@launch
+            val tempRemoteId = kotlin.random.Random.nextLong(Long.MIN_VALUE, -1L)
+            val placeholder = BookmarkEntity(
+                remoteId = tempRemoteId,
+                originalRemoteId = "pending-$tempRemoteId",
+                serverId = server.id,
+                url = url,
+                title = url,
+                content = null,
+                imageUrl = null,
+                bannerImageAssetId = null,
+                screenshotAssetId = null,
+                description = null,
+                createdAt = 0L,
+                isArchived = false,
+                isStarred = false,
+            )
+
+            _pendingBookmarks.value = listOf(placeholder) + _pendingBookmarks.value
+            _scrollToTopTrigger.emit(Unit)
+
+            val result = bookmarkRepository.createBookmark(url)
+
+            result.onSuccess { bookmark ->
+                // Prepend real bookmark before removing placeholder to avoid an empty frame
+                _accumulatedBookmarks.value = listOf(bookmark) + _accumulatedBookmarks.value
+                _pendingBookmarks.value = _pendingBookmarks.value.filter { it.remoteId != tempRemoteId }
+                _createBookmarkResult.emit(Result.success(Unit))
+            }.onFailure { e ->
+                _pendingBookmarks.value = _pendingBookmarks.value.filter { it.remoteId != tempRemoteId }
+                _createBookmarkResult.emit(Result.failure(e))
             }
         }
     }
