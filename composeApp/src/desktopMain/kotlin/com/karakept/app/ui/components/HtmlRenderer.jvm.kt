@@ -46,7 +46,8 @@ actual fun HtmlRenderer(
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit,
     onDeleteHighlight: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    onHighlightPosition: ((String, HighlightPosition?) -> Unit)?
+    onHighlightPosition: ((String, HighlightPosition?) -> Unit)?,
+    scrollToHighlightId: String?
 ) {
     // Debug output
     println("HtmlRenderer (Desktop): Rendering HTML, length=${html.length}, first 100 chars=${html.take(100)}")

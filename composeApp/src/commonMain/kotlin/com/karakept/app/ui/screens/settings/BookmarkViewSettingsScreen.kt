@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.Switch
@@ -111,7 +113,7 @@ class BookmarkViewSettingsScreen : Screen {
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
+                val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
 
                 Card(
                     modifier = Modifier
@@ -125,7 +127,7 @@ class BookmarkViewSettingsScreen : Screen {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Visibility,
+                            imageVector = Icons.Default.Timeline,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 16.dp),
                             tint = MaterialTheme.colorScheme.primary
@@ -135,18 +137,58 @@ class BookmarkViewSettingsScreen : Screen {
                                 .weight(1f)
                         ) {
                             Text(
-                                text = "Auto-mark as Read",
+                                text = "Track Reading Progress",
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                text = "Mark article as read when reaching the end of the page",
+                                text = "Save scroll position to resume reading and show progress in bookmark list",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
-                            checked = autoMarkReadOnScroll,
-                            onCheckedChange = { screenModel.setAutoMarkReadOnScroll(it) }
+                            checked = trackReadingProgress,
+                            onCheckedChange = { screenModel.setTrackReadingProgress(it) }
+                        )
+                    }
+                }
+
+                val resetProgressOnMarkUnread by screenModel.resetProgressOnMarkUnread.collectAsState()
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Replay,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                        ) {
+                            Text(
+                                text = "Reset Progress on Mark Unread",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Reset reading progress to 0% when marking a bookmark as unread",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = resetProgressOnMarkUnread,
+                            onCheckedChange = { screenModel.setResetProgressOnMarkUnread(it) }
                         )
                     }
                 }

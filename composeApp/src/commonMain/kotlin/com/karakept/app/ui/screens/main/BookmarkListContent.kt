@@ -32,6 +32,7 @@ import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkListLayout
+import com.karakept.app.ui.components.BookmarkPlaceholderItem
 import com.karakept.app.ui.components.SwipeableBookmarkItem
 import com.karakept.app.ui.components.getEffectiveColor
 import com.karakept.app.utils.FileUtils
@@ -54,8 +55,10 @@ internal fun BookmarkListContent(
     swipeRightConfig: CustomSwipeActionConfig? = null,
     dimReadBookmarks: Boolean,
     showReadingTimeBadge: Boolean,
+    showReadingProgress: Boolean = true,
     showTags: Boolean,
     offlineMode: Boolean = false,
+    pendingBookmarkRemoteIds: Set<Long> = emptySet(),
     listState: LazyListState,
     pullRefreshState: PullRefreshState,
     onBookmarkClick: (BookmarkEntity) -> Unit,
@@ -92,6 +95,11 @@ internal fun BookmarkListContent(
         ) {
             items(bookmarks, key = { it.remoteId }) { bookmark ->
                 Box(modifier = Modifier.animateItemPlacement()) {
+                    if (bookmark.remoteId in pendingBookmarkRemoteIds) {
+                        BookmarkPlaceholderItem(url = bookmark.url, layoutType = layoutType)
+                        return@Box
+                    }
+
                     // Dynamic icon logic for Mark Read/Unread
                     val leftIcon = if (swipeLeftAction == SwipeAction.MARK_READ) {
                         if (bookmark.isRead) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
@@ -201,6 +209,7 @@ internal fun BookmarkListContent(
                                 },
                                 onLongClick = { onBookmarkLongClick(bookmark) },
                                 showReadingTime = showReadingTimeBadge,
+                                showReadingProgress = showReadingProgress,
                                 showTags = showTags,
                                 dimRead = dimReadBookmarks,
                                 offlineMode = offlineMode,
@@ -214,6 +223,7 @@ internal fun BookmarkListContent(
                                 },
                                 onLongClick = { onBookmarkLongClick(bookmark) },
                                 showReadingTime = showReadingTimeBadge,
+                                showReadingProgress = showReadingProgress,
                                 showTags = showTags,
                                 dimRead = dimReadBookmarks,
                                 offlineMode = offlineMode,

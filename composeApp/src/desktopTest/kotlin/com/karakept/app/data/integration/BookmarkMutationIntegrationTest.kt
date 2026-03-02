@@ -52,30 +52,17 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, targetUrl)
         val bookmark = insertLocalBookmark(remoteId, url = targetUrl)
 
-        // Mark as read
+        // Mark as read (local-only)
         bookmarkActionsRepository.markAsRead(bookmark.remoteId, testServer.id)
 
         val afterRead = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertTrue(afterRead?.isRead == true, "Bookmark should be marked as read locally")
 
-        withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
-
-        val remoteAfterRead = remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
-        val hasReadTag = remoteAfterRead.tags?.any { it.name == "karakept:read" } == true
-        assertTrue(hasReadTag, "Server should have karakept:read tag")
-
-        // Mark as unread
-        val tags = afterRead?.tags?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
-        bookmarkActionsRepository.markAsUnread(bookmark.remoteId, testServer.id, tags)
+        // Mark as unread (local-only)
+        bookmarkActionsRepository.markAsUnread(bookmark.remoteId, testServer.id)
 
         val afterUnread = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertTrue(afterUnread?.isRead == false, "Bookmark should be marked as unread locally")
-
-        withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
-
-        val remoteAfterUnread = remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
-        val stillHasReadTag = remoteAfterUnread.tags?.any { it.name == "karakept:read" } == true
-        assertTrue(!stillHasReadTag, "Server should not have karakept:read tag after unread")
     }
 
     // ──────────────────────────────────────────────────────────
@@ -194,19 +181,14 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
 
         println("Testing full mutation lifecycle for bookmark $remoteId")
 
-        // 1. Mark as read
+        // 1. Mark as read (local-only, no server sync)
         bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
         val afterRead = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
         assertTrue(afterRead?.isRead == true, "Should be read locally")
 
-        withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
-
-        val remoteRead = remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
-        assertTrue(remoteRead.tags?.any { it.name == "karakept:read" } == true, "Should have read tag on server")
-
         // 2. Add custom tags
         val customTags = listOf("important", "work", "to-review")
-        bookmarkActionsRepository.updateTags(bookmark.remoteId, bookmark.serverId, customTags + "karakept:read", isOnline = true)
+        bookmarkActionsRepository.updateTags(bookmark.remoteId, bookmark.serverId, customTags, isOnline = true)
 
         val afterTags = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
         val localTags = afterTags?.tags?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()

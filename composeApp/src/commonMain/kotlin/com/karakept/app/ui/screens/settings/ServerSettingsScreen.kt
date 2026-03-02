@@ -2,7 +2,6 @@ package com.karakept.app.ui.screens.settings
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,12 +16,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -35,9 +30,6 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -54,7 +46,6 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import com.karakept.app.data.model.Server
 import com.karakept.app.ui.screens.LoginScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
 
@@ -115,12 +106,11 @@ class ServerSettingsScreen(val highlightOfflineMode: Boolean = false) : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
         val servers by screenModel.servers.collectAsState()
-        val activeServerId by screenModel.activeServerId.collectAsState()
 
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Servers & Sync") },
+                    title = { Text("Server & Sync") },
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -138,7 +128,7 @@ class ServerSettingsScreen(val highlightOfflineMode: Boolean = false) : Screen {
                 verticalArrangement = Arrangement.Top
             ) {
                 Text(
-                    text = "Servers & Sync",
+                    text = "Server & Sync",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
@@ -260,89 +250,55 @@ class ServerSettingsScreen(val highlightOfflineMode: Boolean = false) : Screen {
                 }
                 
                 Text(
-                    text = "Connected Servers",
+                    text = "Connected Server",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                servers.forEach { server ->
-                    ServerOption(
-                        server = server,
-                        icon = Icons.Default.Dns,
-                        isActive = server.id == activeServerId,
-                        onClick = { screenModel.setActiveServer(server.id) }
-                    )
+                val server = servers.firstOrNull()
+                if (server != null) {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Dns,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = server.label,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = server.url,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 Button(
-                    onClick = { navigator.push(LoginScreen()) },
+                    onClick = { navigator.push(LoginScreen(serverUrl = server?.url)) },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Add,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text("Add Server")
+                    Text("Re-authenticate")
                 }
             }
         }
     }
 }
 
-@Composable
-private fun ServerOption(
-    server: Server,
-    icon: androidx.compose.ui.graphics.vector.ImageVector?,
-    isActive: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            RadioButton(
-                selected = isActive,
-                onClick = onClick
-            )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 12.dp)
-            ) {
-                Text(
-                    text = server.label,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = server.url,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (isActive) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Active",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-    }
-}

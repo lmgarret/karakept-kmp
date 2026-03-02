@@ -30,7 +30,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
@@ -76,12 +78,12 @@ data class BookmarkViewerScreen(
         val htmlFontFamily by screenModel.htmlFontFamily.collectAsState()
         val precrawledAssetPath by screenModel.precrawledAssetPath.collectAsState()
         val lists by screenModel.lists.collectAsState()
-        val autoMarkReadOnScroll by screenModel.autoMarkReadOnScroll.collectAsState()
         val showTags by screenModel.showTags.collectAsState()
         val isRefreshing by screenModel.isRefreshing.collectAsState()
         val offlineMode by screenModel.offlineMode.collectAsState()
         val highlights by screenModel.highlights.collectAsState()
         val linkOpenMode by screenModel.linkOpenMode.collectAsState()
+        val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isRefreshing,
@@ -138,22 +140,86 @@ data class BookmarkViewerScreen(
             }
         }
 
-        // Auto-select highlight when navigating from Highlights screen
-        LaunchedEffect(scrollToHighlightId, highlights) {
-            if (scrollToHighlightId != null && highlights.isNotEmpty()) {
-                // Find and select the highlight
-                val targetHighlight = highlights.find { it.id == scrollToHighlightId }
-                if (targetHighlight != null) {
-                    selectedHighlightText = targetHighlight.text
-                    selectedHighlightId = scrollToHighlightId
+        // Hoist state management OUTSIDE the when to prevent recomposition flash
+        val scrollState = rememberLazyListState()
+        val density = LocalDensity.current
+
+        // Scroll the LazyColumn to the highlight when navigating from the Highlights screen.
+        // highlightPositionReceived flips to true once the WebView responds with a position
+        // (via onHighlightPosition), which triggers the scroll LaunchedEffect below.
+        var highlightPositionReceived by remember { mutableStateOf(false) }
+        LaunchedEffect(highlightPositionReceived) {
+            if (!highlightPositionReceived) return@LaunchedEffect
+            val state = loadingState as? BookmarkLoadingState.FullyLoaded ?: return@LaunchedEffect
+            val contentBodyIndex = if (!state.bookmark.description.isNullOrBlank()) 2 else 1
+            val position = highlightPosition
+            if (position != null) {
+                // Convert CSS pixels (from getBoundingClientRect) to screen pixels for LazyList offset.
+                // Subtract 120dp so the highlight is not pinned flush to the top of the screen.
+                val highlightCssPx = position.y + position.scrollY
+                val offsetPx = with(density) {
+                    maxOf(0, highlightCssPx.dp.roundToPx() - 120.dp.roundToPx())
                 }
+                scrollState.animateScrollToItem(contentBodyIndex, offsetPx)
+            } else {
+                // Highlight position unavailable – scroll to content body at least
+                scrollState.animateScrollToItem(contentBodyIndex, 0)
+            }
+        }
+        val bannerHeight = 320.dp
+        val toolbarHeight = 56.dp
+
+        // Track when the WebView has fully rendered its HTML content.
+        // This is essential for scroll restoration: the LazyColumn item containing the
+        // WebView has near-zero height until the WebView finishes loading and measuring,
+        // so scrollToItem(index, offset) silently fails if called too early.
+        var contentRendered by remember { mutableStateOf(false) }
+
+        // Reset contentRendered when loading state changes away from FullyLoaded
+        LaunchedEffect(loadingState) {
+            if (loadingState !is BookmarkLoadingState.FullyLoaded) {
+                contentRendered = false
             }
         }
 
-        // Hoist state management OUTSIDE the when to prevent recomposition flash
-        val scrollState = rememberLazyListState()
-        val bannerHeight = 320.dp
-        val toolbarHeight = 56.dp
+        // Restore scroll position once content is fully rendered in the WebView.
+        var hasRestoredScroll by remember { mutableStateOf(false) }
+        LaunchedEffect(loadingState, trackReadingProgress, contentRendered) {
+            if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
+                val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
+                if (bookmark.readingProgress > 0f && !bookmark.content.isNullOrBlank()) {
+                    if (contentRendered) {
+                        // Allow the WebView's measured height to propagate through
+                        // the Compose layout system before scrolling. On the first
+                        // WebView render in a session (cold engine), this takes
+                        // longer than usual — retry if the scroll was clamped.
+                        delay(300)
+                        for (attempt in 1..3) {
+                            scrollState.scrollToItem(
+                                bookmark.readingScrollIndex,
+                                bookmark.readingScrollOffset
+                            )
+                            // Check if the scroll reached approximately the right
+                            // position. A small expected offset (< 200px) always
+                            // passes; otherwise verify we got at least a third of
+                            // the way there, which filters out clamped scrolls
+                            // caused by WebView height not yet being reported.
+                            val offsetOk = bookmark.readingScrollOffset < 200 ||
+                                scrollState.firstVisibleItemScrollOffset >= bookmark.readingScrollOffset / 3
+                            if (scrollState.firstVisibleItemIndex == bookmark.readingScrollIndex && offsetOk) break
+                            delay(250)
+                        }
+                        hasRestoredScroll = true
+                    }
+                    // If !contentRendered, this effect will re-fire when contentRendered changes.
+                } else if (bookmark.readingProgress == 0f) {
+                    // Nothing to restore
+                    hasRestoredScroll = true
+                }
+                // If readingProgress > 0 but content is still blank, don't mark as
+                // restored — the LaunchedEffect will re-fire when content loads.
+            }
+        }
 
         // Keep the last valid FullyLoaded state to prevent error flash during navigation
         var lastValidState by remember { mutableStateOf<BookmarkLoadingState>(loadingState) }
@@ -177,27 +243,10 @@ data class BookmarkViewerScreen(
         }
 
         // Custom hooks for scroll behavior
-        val fabVisible = if (loadingState is BookmarkLoadingState.FullyLoaded) {
-            val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
-            rememberFabVisibilityState(
-                scrollState = scrollState,
-                fabExpanded = fabExpanded,
-                autoMarkReadOnScroll = autoMarkReadOnScroll,
-                isBookmarkRead = fullyLoadedState.bookmark.isRead,
-                onMarkAsRead = {
-                    screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
-                },
-                onUnmarkAsRead = {
-                    screenModel.toggleBookmarkRead(fullyLoadedState.bookmark)
-                },
-                onShowSnackbarWithUndo = {
-                    // Undo is now handled automatically by BookmarkActionController
-                    // No need for manual implementation
-                }
-            )
-        } else {
-            true
-        }
+        val fabVisible = rememberFabVisibilityState(
+            scrollState = scrollState,
+            fabExpanded = fabExpanded
+        )
 
         val showStickyTitle = rememberStickyTitleVisibility(
             scrollState = scrollState,
@@ -206,6 +255,23 @@ data class BookmarkViewerScreen(
         )
 
         val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
+
+        // Push reading state to the screen model on every scroll change.
+        // The screen model debounces DB writes internally (500 ms).
+        LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
+            if (trackReadingProgress && hasRestoredScroll && loadingState is BookmarkLoadingState.FullyLoaded) {
+                val currentState = loadingState as BookmarkLoadingState.FullyLoaded
+                if (readingProgress > 0f || scrollState.firstVisibleItemIndex > 0) {
+                    screenModel.onReadingStateChanged(
+                        localId = currentState.bookmark.localId,
+                        remoteId = currentState.bookmark.remoteId,
+                        progress = readingProgress,
+                        scrollIndex = scrollState.firstVisibleItemIndex,
+                        scrollOffset = scrollState.firstVisibleItemScrollOffset
+                    )
+                }
+            }
+        }
 
         Scaffold(
             snackbarHost = {
@@ -315,10 +381,18 @@ data class BookmarkViewerScreen(
                     ) {
                         // Content List
                         // Only blur when the highlight is actually found and panel will show
+                        // Hide content until scroll position is restored to prevent a flash
+                        // where the top of the article shows before jumping to the saved position.
+                        val needsScrollRestore = trackReadingProgress &&
+                            !hasRestoredScroll &&
+                            loadingState is BookmarkLoadingState.FullyLoaded &&
+                            (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0f &&
+                            !(loadingState as BookmarkLoadingState.FullyLoaded).bookmark.content.isNullOrBlank()
                         LazyColumn(
                             state = scrollState,
                             modifier = Modifier
                                 .fillMaxSize()
+                                .then(if (needsScrollRestore) Modifier.alpha(0f) else Modifier)
                                 .then(if (selectedHighlightId != null && selectedHighlight != null) Modifier.blur(8.dp) else Modifier)
                         ) {
                             // Hero banner as first item so tag/URL clicks are not blocked by the list
@@ -404,7 +478,12 @@ data class BookmarkViewerScreen(
                                     },
                                     onHighlightPosition = { id, position ->
                                         highlightPosition = position
-                                    }
+                                        if (id == scrollToHighlightId && !highlightPositionReceived) {
+                                            highlightPositionReceived = true
+                                        }
+                                    },
+                                    onContentReady = { contentRendered = true },
+                                    scrollToHighlightId = scrollToHighlightId
                                 )
                             }
                         }
@@ -416,7 +495,7 @@ data class BookmarkViewerScreen(
                             showStickyTitle = showStickyTitle,
                             showMenu = showMenu,
                             toolbarHeight = toolbarHeight,
-                            readingProgress = readingProgress,
+                            readingProgress = if (trackReadingProgress) readingProgress else 0f,
                             onBackClick = { navigator.pop() },
                             onMenuToggle = { showMenu = it },
                             onAppearanceClick = { showAppearancePanel = true },

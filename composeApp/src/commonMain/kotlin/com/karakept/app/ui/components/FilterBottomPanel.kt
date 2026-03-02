@@ -39,12 +39,9 @@ fun FilterBottomPanel(
     availableLists: List<KarakeepList>,
     onDismiss: () -> Unit,
     onFilterChange: (FilterConfig) -> Unit,
-    onSaveFilter: (String, String, Long?, Boolean) -> Unit, // name, icon, color, isDefault
-    onUpdateFilter: ((FilterConfig) -> Unit)? = null, // New callback for updating existing filter
     onReset: () -> Unit
 ) {
     var filter by remember(currentFilter) { mutableStateOf(currentFilter) }
-    var showSaveDialog by remember { mutableStateOf(false) }
     var showTagsDialog by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
@@ -75,28 +72,14 @@ fun FilterBottomPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (onUpdateFilter != null) "Edit Filter" else "Filter",
+                    text = "Filter",
                     style = MaterialTheme.typography.titleLarge
                 )
-                Row {
-                    TextButton(onClick = {
-                        filter = FilterConfig() // Reset local state
-                        onReset()
-                    }) {
-                        Text("Reset")
-                    }
-                    if (onUpdateFilter != null) {
-                        Button(onClick = {
-                            onUpdateFilter(filter) // Use the local 'filter' state
-                            onDismiss()
-                        }) {
-                            Text("Save")
-                        }
-                    } else {
-                        Button(onClick = { showSaveDialog = true }) {
-                            Text("Save As")
-                        }
-                    }
+                TextButton(onClick = {
+                    filter = FilterConfig() // Reset local state
+                    onReset()
+                }) {
+                    Text("Reset")
                 }
             }
 
@@ -329,17 +312,6 @@ fun FilterBottomPanel(
         )
     }
 
-    // Save filter dialog with icon picker (only if NOT updating existing)
-    if (onUpdateFilter == null && showSaveDialog) {
-        SaveFilterDialogWithIcon(
-            onDismiss = { showSaveDialog = false },
-            onSave = { name, icon, color, isDefault ->
-                onSaveFilter(name, icon, color, isDefault)
-                showSaveDialog = false
-                onDismiss() // Close the drawer after saving
-            }
-        )
-    }
 }
 
 @Composable
@@ -427,92 +399,5 @@ private fun FilterCheckbox(
     ) {
         Text(label, modifier = Modifier.weight(1f))
         Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
-
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SaveFilterDialogWithIcon(
-    onDismiss: () -> Unit,
-    onSave: (String, String, Long?, Boolean) -> Unit // name, icon, color, isDefault
-) {
-    var name by remember { mutableStateOf("") }
-    var icon by remember { mutableStateOf("Bookmark") }
-    var color by remember { mutableStateOf<Long?>(null) }
-    var isDefault by remember { mutableStateOf(false) }
-    var showIconPicker by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Save Filter") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Name field with Icon picker trigger
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Filter Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    leadingIcon = {
-                        Box(
-                            modifier = Modifier
-                                .clickable { showIconPicker = true }
-                                .padding(8.dp)
-                        ) {
-                            FilterIcon(
-                                iconName = icon,
-                                modifier = Modifier.size(24.dp),
-                                tint = if (color != null) androidx.compose.ui.graphics.Color(color!!) else LocalContentColor.current
-                            )
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit Icon",
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .align(Alignment.BottomEnd)
-                                    .background(MaterialTheme.colorScheme.surface, androidx.compose.foundation.shape.CircleShape)
-                            )
-                        }
-                    }
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Set as default")
-                    Checkbox(checked = isDefault, onCheckedChange = { isDefault = it })
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onSave(name, icon, color, isDefault) },
-                enabled = name.isNotBlank()
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-
-    if (showIconPicker) {
-        IconPickerDialog(
-            currentIcon = icon,
-            currentColor = color,
-            onDismiss = { showIconPicker = false },
-            onIconSelected = { selectedIcon, selectedColor ->
-                icon = selectedIcon
-                color = selectedColor
-                showIconPicker = false
-            }
-        )
     }
 }

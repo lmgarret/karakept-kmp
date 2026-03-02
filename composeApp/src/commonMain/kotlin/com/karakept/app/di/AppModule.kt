@@ -11,7 +11,6 @@ import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.SavedFilterRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.ListRepository
 import com.karakept.api.infrastructure.ApiClient
@@ -23,7 +22,6 @@ import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
 import com.karakept.app.ui.screens.ReaderAppearanceScreenModel
 import com.karakept.app.ui.screens.SettingsScreenModel
-import com.karakept.app.ui.screens.FilterManagementScreenModel
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.ui.screens.HighlightsScreenModel
@@ -35,14 +33,14 @@ val appModule = module {
             .setDriver(BundledSQLiteDriver())
             .build()
     }
-    
+
     single<HttpClient> {
         createHttpClient()
     }
-    
+
     // Generated API Client and Services
     val defaultBaseUrl = "https://try.karakept.app/api/v1"
-    single<ApiClient> { 
+    single<ApiClient> {
         ApiClient(
             baseUrl = defaultBaseUrl,
             httpClient = get()
@@ -53,7 +51,7 @@ val appModule = module {
     single { TagsApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
     single { HighlightsApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
     single { UsersApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
-    
+
     // RemoteDataSource with offline mode guard
     single {
         val settingsRepo = get<SettingsRepository>()
@@ -65,19 +63,17 @@ val appModule = module {
 
     single { get<AppDatabase>().serverDao() }
     single { get<AppDatabase>().bookmarkDao() }
-    single { get<AppDatabase>().savedFilterDao() }
     single { get<AppDatabase>().assetDao() }
     single { get<AppDatabase>().pendingActionDao() }
     single { get<AppDatabase>().highlightDao() }
     single { get<AppDatabase>().listDao() }
 
     single { com.karakept.app.utils.ImageCacheManager(get()) }
-    
+
     single { createDataStore() }
 
     single { ServerRepository(get()) }
     single { SettingsRepository(get()) }
-    single { SavedFilterRepository(get()) }
     single { ListRepository(get(), get(), get()) }  // RemoteDataSource, ListDao, SettingsRepository
 
     // BookmarkActionsRepository depends on BookmarkDao, PendingActionDao, RemoteDataSource, ServerRepository, SettingsRepository
@@ -98,15 +94,14 @@ val appModule = module {
 
     // Action system - centralized action handling with undo support
     single { ActionSnackbarManager() }
-    single { BookmarkActionController(get(), get(), get(), get()) }
+    single { BookmarkActionController(get(), get(), get(), get(), get()) }
 
     factory { LoginScreenModel(get(), get(), get()) }
     factory { OnboardingScreenModel(get(), get(), get()) }
-    single { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { MainScreenModel(get(), get(), get(), get(), get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { SettingsScreenModel(get(), get(), get(), get()) }
     factory { HighlightsScreenModel(get(), get(), get(), get()) }
     factory { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }
-    factory { FilterManagementScreenModel(get(), get(), get(), get()) }
 }

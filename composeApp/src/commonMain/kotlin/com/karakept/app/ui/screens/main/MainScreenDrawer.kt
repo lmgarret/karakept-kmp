@@ -1,19 +1,22 @@
 package com.karakept.app.ui.screens.main
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Settings
@@ -32,25 +35,20 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.karakept.app.data.local.entity.SavedFilterEntity
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.api.model.KarakeepList
-import com.karakept.app.ui.screens.SavedFilterItem
 
 @Composable
 internal fun MainScreenDrawer(
     drawerState: DrawerState,
     lists: List<KarakeepList>,
     listCounts: Map<String, Int>,
-    savedFilters: List<SavedFilterEntity>,
     expandedLists: Set<String>,
     currentFilter: FilterConfig,
     onFilterApply: (FilterConfig) -> Unit,
-    onSavedFilterApply: (SavedFilterEntity) -> Unit,
     onClearFilter: () -> Unit,
     onToggleListExpanded: (String) -> Unit,
-    onNavigateToFilterManagement: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToHighlights: () -> Unit,
     content: @Composable () -> Unit
@@ -59,181 +57,159 @@ internal fun MainScreenDrawer(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet {
-                Spacer(Modifier.height(12.dp))
-
-                // Quick Filters Section
-                Text("Quick Filters", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
-
-                NavigationDrawerItem(
-                    label = { Text("All Bookmarks") },
-                    selected = currentFilter == FilterConfig(),
-                    icon = { Icon(Icons.Default.Book, contentDescription = null) },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary
-                    ),
-                    onClick = onClearFilter
-                )
-
-                NavigationDrawerItem(
-                    label = { Text("Favorites") },
-                    selected = currentFilter == FilterConfig(status = FilterStatus.FAVORITES),
-                    icon = { Icon(Icons.Default.Star, contentDescription = null) },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary
-                    ),
-                    onClick = {
-                        onFilterApply(FilterConfig(status = FilterStatus.FAVORITES))
-                    }
-                )
-
-                NavigationDrawerItem(
-                    label = { Text("Archived") },
-                    selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
-                    icon = { Icon(Icons.Default.Archive, contentDescription = null) },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary
-                    ),
-                    onClick = {
-                        onFilterApply(FilterConfig(status = FilterStatus.ARCHIVED))
-                    }
-                )
-
-                // Lists Section (Hierarchical)
-                if (lists.isNotEmpty()) {
-                    Spacer(Modifier.height(16.dp))
-                    Text("Lists", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
-
-                    val hierarchy = buildHierarchy(lists)
-                    val visibleHierarchy = filterExpandedHierarchy(hierarchy, expandedLists)
-
-                    visibleHierarchy.forEach { (list, depth) ->
-                        val listId = list.id ?: ""
-                        key(listId) {
-                            val hasChildLists = hasChildren(listId, lists)
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Spacer(Modifier.width((depth * 16).dp)) // Indentation
-
-                                // Expand/collapse icon
-                                if (hasChildLists) {
-                                    IconButton(
-                                        onClick = { onToggleListExpanded(listId) },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (expandedLists.contains(listId)) {
-                                                Icons.Default.KeyboardArrowDown
-                                            } else {
-                                                Icons.AutoMirrored.Filled.KeyboardArrowRight
-                                            },
-                                            contentDescription = if (expandedLists.contains(listId)) "Collapse" else "Expand",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                } else {
-                                    Spacer(Modifier.width(24.dp))
-                                }
-
-                                NavigationDrawerItem(
-                                    label = {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text("${list.icon} ${list.name}")
-                                            listCounts[listId]?.let { count ->
-                                                Text(
-                                                    text = count.toString(),
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                                )
-                                            }
-                                        }
-                                    },
-                                    selected = currentFilter.lists.contains(listId),
-                                    colors = NavigationDrawerItemDefaults.colors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                                        selectedTextColor = MaterialTheme.colorScheme.primary
-                                    ),
-                                    onClick = {
-                                        onFilterApply(FilterConfig(
-                                            status = FilterStatus.ALL_INCLUDING_ARCHIVED,
-                                            lists = listOf(list.id ?: "")
-                                        ))
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Saved Filters Section (Shortcuts)
-                if (savedFilters.isNotEmpty()) {
-                    Spacer(Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        Text("Saved Filters", style = MaterialTheme.typography.titleMedium)
-                        IconButton(onClick = onNavigateToFilterManagement) {
-                            Icon(Icons.Default.FilterList, contentDescription = "Manage Filters")
-                        }
-                    }
-                    savedFilters.forEach { savedFilter ->
-                        val isSelected = try {
-                            kotlinx.serialization.json.Json.decodeFromString<FilterConfig>(savedFilter.configJson) == currentFilter
-                        } catch (e: Exception) {
-                            false
-                        }
+                        Spacer(Modifier.height(12.dp))
 
-                        SavedFilterItem(
-                            savedFilter = savedFilter,
-                            selected = isSelected,
-                            onApply = {
-                                onSavedFilterApply(savedFilter)
+                        // Quick Filters Section
+                        Text("Quick Filters", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+
+                        NavigationDrawerItem(
+                            label = { Text("All Bookmarks") },
+                            selected = currentFilter == FilterConfig(),
+                            icon = { Icon(Icons.Default.Book, contentDescription = null) },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary
+                            ),
+                            onClick = onClearFilter
+                        )
+
+                        NavigationDrawerItem(
+                            label = { Text("Favorites") },
+                            selected = currentFilter == FilterConfig(status = FilterStatus.FAVORITES),
+                            icon = { Icon(Icons.Default.Star, contentDescription = null) },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary
+                            ),
+                            onClick = {
+                                onFilterApply(FilterConfig(status = FilterStatus.FAVORITES))
                             }
                         )
+
+                        NavigationDrawerItem(
+                            label = { Text("Archived") },
+                            selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
+                            icon = { Icon(Icons.Default.Archive, contentDescription = null) },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary
+                            ),
+                            onClick = {
+                                onFilterApply(FilterConfig(status = FilterStatus.ARCHIVED))
+                            }
+                        )
+
+                        // Lists Section (Hierarchical)
+                        if (lists.isNotEmpty()) {
+                            Spacer(Modifier.height(16.dp))
+                            Text("Lists", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+
+                            val hierarchy = buildHierarchy(lists)
+                            val visibleHierarchy = filterExpandedHierarchy(hierarchy, expandedLists)
+
+                            visibleHierarchy.forEach { (list, depth) ->
+                                val listId = list.id ?: ""
+                                key(listId) {
+                                    val hasChildLists = hasChildren(listId, lists)
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Spacer(Modifier.width((depth * 16).dp)) // Indentation
+
+                                        // Expand/collapse icon
+                                        if (hasChildLists) {
+                                            IconButton(
+                                                onClick = { onToggleListExpanded(listId) },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (expandedLists.contains(listId)) {
+                                                        Icons.Default.KeyboardArrowDown
+                                                    } else {
+                                                        Icons.AutoMirrored.Filled.KeyboardArrowRight
+                                                    },
+                                                    contentDescription = if (expandedLists.contains(listId)) "Collapse" else "Expand",
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        } else {
+                                            Spacer(Modifier.width(24.dp))
+                                        }
+
+                                        NavigationDrawerItem(
+                                            label = {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("${list.icon} ${list.name}")
+                                                    listCounts[listId]?.let { count ->
+                                                        Text(
+                                                            text = count.toString(),
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            selected = currentFilter.lists.contains(listId),
+                                            colors = NavigationDrawerItemDefaults.colors(
+                                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                                selectedTextColor = MaterialTheme.colorScheme.primary
+                                            ),
+                                            onClick = {
+                                                onFilterApply(FilterConfig(
+                                                    status = FilterStatus.ALL_INCLUDING_ARCHIVED,
+                                                    lists = listOf(list.id ?: "")
+                                                ))
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+                        NavigationDrawerItem(
+                            label = { Text("Highlights") },
+                            selected = false,
+                            icon = { Icon(Icons.Default.Create, contentDescription = null) },
+                            colors = NavigationDrawerItemDefaults.colors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary
+                            ),
+                            onClick = onNavigateToHighlights
+                        )
+                        Spacer(Modifier.height(16.dp))
                     }
+
+                    NavigationDrawerItem(
+                        label = { Text("Settings") },
+                        selected = false,
+                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                            selectedTextColor = MaterialTheme.colorScheme.primary
+                        ),
+                        onClick = onNavigateToSettings
+                    )
                 }
-
-                Spacer(Modifier.height(16.dp))
-                NavigationDrawerItem(
-                    label = { Text("Highlights") },
-                    selected = false,
-                    icon = { Icon(Icons.Default.Create, contentDescription = null) },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary
-                    ),
-                    onClick = onNavigateToHighlights
-                )
-
-                Spacer(Modifier.weight(1f))
-                NavigationDrawerItem(
-                    label = { Text("Settings") },
-                    selected = false,
-                    icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary
-                    ),
-                    onClick = onNavigateToSettings
-                )
             }
         }
     ) {

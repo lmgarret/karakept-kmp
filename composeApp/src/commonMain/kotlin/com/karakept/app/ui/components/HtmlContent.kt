@@ -69,7 +69,8 @@ fun HtmlContent(
     customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
     localFilePath: String? = null,
     onHighlightClick: ((String) -> Unit)? = null,
-    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null
+    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null,
+    scrollToHighlightId: String? = null
 ) {
     // Debug output
     println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode, removeFirstImage=$removeFirstImage")
@@ -148,9 +149,6 @@ fun HtmlContent(
                 }
             }
         } else {
-            // State to track if WebView has finished rendering
-            var isContentLoaded by remember { mutableStateOf(false) }
-
             // Reset state when content changes
             androidx.compose.runtime.LaunchedEffect(processedHtml) {
                 if (processedHtml == null) {
@@ -186,7 +184,8 @@ fun HtmlContent(
                         onHighlightClick = { highlightId ->
                             onHighlightClick?.invoke(highlightId)
                         },
-                        onHighlightPosition = onHighlightPosition
+                        onHighlightPosition = onHighlightPosition,
+                        scrollToHighlightId = scrollToHighlightId
                     )
                 }
 
