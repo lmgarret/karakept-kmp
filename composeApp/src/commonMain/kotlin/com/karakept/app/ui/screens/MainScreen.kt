@@ -172,22 +172,31 @@ object MainScreen : Screen {
             if (currentListScrollAction != SwipeAction.NONE) {
                 var lastFirstVisibleIndex = listState.firstVisibleItemIndex
                 var bottomReached = false
-                // Set to true only once the user has actively scrolled (items scrolled off top).
-                // This prevents the bottom-of-list action from firing immediately when the list
-                // loads and all items fit on one screen — the action should require intentional
-                // scrolling to the bottom.
+                // Set to true once the user has actively scrolled (items scrolled off top).
+                // For short lists where no item ever leaves the top, we use scrollJustStopped instead.
                 var userHasScrolled = false
+                var wasScrolling = false
                 snapshotFlow {
-                    Triple(
-                        listState.firstVisibleItemIndex,
-                        listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
-                        // Including bookmarks.size ensures the flow re-emits when pagination loads
-                        // more items, so the bottom-of-list check is re-evaluated.
-                        bookmarks.size
+                    Pair(
+                        Triple(
+                            listState.firstVisibleItemIndex,
+                            listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
+                            // Including bookmarks.size ensures the flow re-emits when pagination loads
+                            // more items, so the bottom-of-list check is re-evaluated.
+                            bookmarks.size
+                        ),
+                        listState.isScrollInProgress
                     )
-                }.collect { (newFirstIndex, lastVisibleIndex, _) ->
+                }.collect { (scrollState, isScrolling) ->
+                    val (newFirstIndex, lastVisibleIndex, _) = scrollState
                     val currentBookmarks = bookmarks
                     val totalBookmarks = currentBookmarks.size
+
+                    // Detect when the user finishes a scroll gesture (finger lifted).
+                    // Used to trigger the bottom action for short lists where items never
+                    // scroll past the title bar.
+                    val scrollJustStopped = wasScrolling && !isScrolling
+                    wasScrolling = isScrolling
 
                     if (newFirstIndex > lastFirstVisibleIndex) {
                         // Items from lastFirstVisibleIndex to newFirstIndex - 1 have scrolled off screen
@@ -202,9 +211,11 @@ object MainScreen : Screen {
 
                     // When the last visible item is the last bookmark in the list, apply the action
                     // to all remaining visible items that haven't been processed yet.
-                    // Require userHasScrolled to avoid firing immediately when the list opens.
-                    if (userHasScrolled && !bottomReached && totalBookmarks > 0 &&
-                        lastVisibleIndex >= totalBookmarks - 1) {
+                    // For long lists: fires when items have scrolled off the top (userHasScrolled).
+                    // For short lists where no item ever leaves the top: fires when the user
+                    // pulls/scrolls to the bottom and releases (scrollJustStopped).
+                    val atBottom = totalBookmarks > 0 && lastVisibleIndex >= totalBookmarks - 1
+                    if (!bottomReached && atBottom && (userHasScrolled || scrollJustStopped)) {
                         for (i in lastFirstVisibleIndex until totalBookmarks) {
                             val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
                             screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)

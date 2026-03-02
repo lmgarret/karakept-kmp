@@ -22,9 +22,13 @@ class PaginationUtilsTest {
     /** Simulates a DB page that always returns [rawCount] raw rows, 0 filtered. */
     private fun emptyPage(rawCount: Int): Pair<List<String>, Int> = Pair(emptyList(), rawCount)
 
-    /** Simulates a DB page that returns [items] after filtering (same as raw for these tests). */
-    private fun itemPage(vararg items: String): Pair<List<String>, Int> =
-        Pair(items.toList(), items.size)
+    /**
+     * Simulates a DB page that returns [items] after client-side filtering.
+     * rawCount defaults to pageSize (20) to represent a full DB page that still has more data —
+     * only [items] passed the filter. Use an explicit rawCount < pageSize to simulate the last page.
+     */
+    private fun itemPage(vararg items: String, rawCount: Int = 20): Pair<List<String>, Int> =
+        Pair(items.toList(), rawCount)
 
     // -------------------------------------------------------------------------
     // Tests
