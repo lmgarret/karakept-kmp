@@ -1,6 +1,8 @@
 name: Release
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       version:
@@ -29,7 +31,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Decode keystore
-        if: ${{ env.RELEASE_KEYSTORE != '' }}
+        if: ${{ secrets.RELEASE_KEYSTORE != '' }}
         env:
           RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
         run: echo "$RELEASE_KEYSTORE" | base64 -d > release.jks
@@ -42,13 +44,25 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: >
           ./gradlew :composeApp:assembleRelease
-          -PversionName=${{ inputs.version }}
+          -PversionName=${{ inputs.version || 'nightly' }}
           -PversionCode=${{ github.run_number }}
 
-      - name: Create GitHub Release
+      - name: Create versioned release
+        if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version }}
           name: "v${{ inputs.version }}"
           files: composeApp/build/outputs/apk/release/*.apk
           generate_release_notes: true
+
+      - name: Update nightly pre-release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: "Nightly (#${{ github.run_number }})"
+          files: composeApp/build/outputs/apk/release/*.apk
+          prerelease: true
+          generate_release_notes: true
+          make_latest: false
