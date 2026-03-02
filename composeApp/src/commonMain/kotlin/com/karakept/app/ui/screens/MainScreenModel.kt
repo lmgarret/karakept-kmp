@@ -243,16 +243,18 @@ class MainScreenModel(
             }
         }
 
-        // Auto-sync on startup if offline mode is disabled
+        // Auto-sync on startup if offline mode is disabled.
+        // Wait for BOTH the server to be available AND the default filter to be initialized so
+        // that _currentListContext is set before syncBookmarks() decides what to sync.
+        // Without this wait, syncBookmarks() sees _currentListContext=null and syncs ALL
+        // bookmarks, causing the reload trigger to briefly show all bookmarks before the
+        // combine observer overrides with the user's default list — resulting in a blink.
         screenModelScope.launch {
-            selectedServer.collect { server ->
-                if (server != null) {
-                    val isOffline: Boolean = settingsRepository.offlineMode.first()
-                    if (!isOffline && !_isSyncing.value) {
-                        syncBookmarks()
-                    }
-                    cancel()
-                }
+            _defaultFilterInitialized.first { it }
+            val server = selectedServer.first { it != null } ?: return@launch
+            val isOffline: Boolean = settingsRepository.offlineMode.first()
+            if (!isOffline && !_isSyncing.value) {
+                syncBookmarks()
             }
         }
 
@@ -735,6 +737,15 @@ class MainScreenModel(
         screenModelScope.launch {
             settingsRepository.setDefaultListType(DefaultListType.SPECIFIC_LIST)
             settingsRepository.setDefaultListId(listId)
+        }
+    }
+
+    fun setDefaultListType(type: DefaultListType) {
+        screenModelScope.launch {
+            settingsRepository.setDefaultListType(type)
+            if (type != DefaultListType.SPECIFIC_LIST) {
+                settingsRepository.setDefaultListId(null)
+            }
         }
     }
 
