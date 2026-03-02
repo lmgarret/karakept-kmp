@@ -148,8 +148,8 @@ android {
         applicationId = "com.karakept.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0"
         manifestPlaceholders["appName"] = "Karakept"
     }
     packaging {
