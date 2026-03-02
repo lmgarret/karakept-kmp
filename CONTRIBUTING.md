@@ -27,7 +27,7 @@ When you add a user-configurable setting to the app, you **must** also make it p
 
 Every setting that should survive a fresh install or device transfer needs to be captured in the backup. Failing to do this means users lose that setting when they restore a backup.
 
-#### 1. Add a field to `BackupSettings`
+#### 1. Add a field to `BackupSettings` (backup file format)
 
 Open:
 
@@ -35,7 +35,7 @@ Open:
 composeApp/src/commonMain/kotlin/com/karakept/app/data/model/AppBackup.kt
 ```
 
-Add a field to `BackupSettings` with the **same sensible default** used in `SettingsRepository`, so that older backup files (which won't have this field) still deserialize correctly.
+Add a field to `BackupSettings` with a **sensible default**, so that older backup files (which won't have this field) still deserialize correctly.
 
 ```kotlin
 @Serializable
@@ -45,7 +45,34 @@ data class BackupSettings(
 )
 ```
 
-#### 2. Add the setting to `SettingsRepository`
+#### 2. Add a field to the appropriate `Stored*Settings` class (DataStore storage format)
+
+Open:
+
+```
+composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/StoredSettings.kt
+```
+
+Pick the category that best fits the setting and add the field with the **same default**:
+
+| Category class | Settings it covers |
+|---|---|
+| `StoredThemeSettings` | Theme mode, accent color |
+| `StoredDisplaySettings` | Layout, badges, list visual toggles |
+| `StoredReaderSettings` | Viewer mode, fonts, colors, reading speed, progress |
+| `StoredSwipeSettings` | Swipe actions and custom swipe configs |
+| `StoredSyncSettings` | Content sync strategy and target lists |
+| `StoredAppSettings` | Notifications, offline mode, onboarding, auto-export |
+
+```kotlin
+@Serializable
+internal data class StoredAppSettings(
+    // ... existing fields ...
+    val myNewSetting: Boolean = false   // <-- add here with the default value
+)
+```
+
+#### 3. Wire the setting in `SettingsRepository`
 
 Open:
 
@@ -53,24 +80,38 @@ Open:
 composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/SettingsRepository.kt
 ```
 
-Add a derived `Flow<T>` property from the `settings` blob and a setter that uses `updateSettings { copy(…) }`:
+Three places to update:
+
+**a) Add a derived `Flow<T>` from the appropriate category flow:**
 
 ```kotlin
-// Derived flow
 val myNewSetting: Flow<Boolean> =
-    settings.map { it.myNewSetting }.distinctUntilChanged()
-
-// Setter
-suspend fun setMyNewSetting(enabled: Boolean) =
-    updateSettings { copy(myNewSetting = enabled) }
+    appSettingsFlow.map { it.myNewSetting }.distinctUntilChanged()
 ```
 
-Also add the migration fallback in `buildBackupSettingsFromLegacy()` if the setting was ever stored as an individual DataStore key before the single-blob refactor:
+**b) Add a setter using the matching `update*Settings` helper:**
 
 ```kotlin
-internal fun buildBackupSettingsFromLegacy(prefs: Preferences): BackupSettings = BackupSettings(
+suspend fun setMyNewSetting(enabled: Boolean) =
+    updateAppSettings { copy(myNewSetting = enabled) }
+```
+
+**c) Map the field in `currentSettings()` and `restoreSettings()`:**
+
+```kotlin
+// In currentSettings() — read from the category object:
+val app = prefs.readAppSettings()
+return BackupSettings(
     // ... existing fields ...
-    myNewSetting = prefs[LEGACY_MY_NEW_SETTING_KEY] ?: false
+    myNewSetting = app.myNewSetting
+)
+
+// In restoreSettings() — write to the category blob:
+prefs[APP_SETTINGS_KEY] = settingsJson.encodeToString(
+    StoredAppSettings(
+        // ... existing fields ...
+        myNewSetting = s.myNewSetting
+    )
 )
 ```
 
@@ -82,22 +123,31 @@ That's it. **`BackupRepository` never needs to be touched.**
 
 | File | What to do |
 |---|---|
-| `AppBackup.kt` (`BackupSettings`) | Add the field with a default |
-| `SettingsRepository.kt` | Add the derived `Flow<T>` and `set…()` using `updateSettings { copy(…) }` |
+| `AppBackup.kt` (`BackupSettings`) | Add the field with a default (backup file format) |
+| `StoredSettings.kt` (correct category) | Add the field with a default (DataStore storage format) |
+| `SettingsRepository.kt` | Add the derived `Flow<T>`, setter, and map the field in `currentSettings()` / `restoreSettings()` |
 
 `BackupRepository` is now static — it never needs updating when new settings are added.
-The `buildBackupSettingsFromLegacy()` migration in `SettingsRepository` only needs updating if you are migrating an *existing* individual DataStore key into the blob.
 
 ---
 
 ### Design notes
 
-Settings are stored as a single JSON blob (`settings_json`) in DataStore. The `BackupSettings` data class is the canonical schema:
+Settings are stored as **six per-category JSON blobs** in DataStore (e.g. `settings_theme_json`, `settings_reader_json`). This hybrid approach provides:
 
-- **Adding a setting**: add a field with a default → blob format is forward/backward compatible via `ignoreUnknownKeys = true` and `encodeDefaults = true`.
-- **Backup export**: `BackupRepository.buildBackup()` calls `settingsRepository.currentSettings()` — one line, always complete.
-- **Backup restore**: `BackupRepository.importFromJson()` calls `settingsRepository.restoreSettings(backup.settings)` — one line, always complete.
-- **Non-backed-up settings** (session state such as `activeServerId`, `autoOfflineDetected`): stored as individual DataStore keys and excluded from `BackupSettings`.
+- **Smaller writes**: only the changed category blob (~100–300 bytes) is re-serialized and written, not the full settings (~1–2 KB).
+- **Finer-grained observers**: changing the theme does not wake up observers on reader or sync settings, because each category has its own `Flow` with `distinctUntilChanged()`.
+
+The **backup file format** (`BackupSettings` in `AppBackup.kt`) remains flat. `SettingsRepository.currentSettings()` assembles all categories into a flat `BackupSettings`; `restoreSettings()` splits a flat `BackupSettings` back into the six category blobs in a single atomic DataStore transaction.
+
+**Migration chain** (transparent, handled automatically):
+1. New per-category blobs (`settings_theme_json`, etc.) — primary format
+2. Single blob (`settings_json`) — written by the previous refactor
+3. Original individual DataStore keys (`theme_mode`, `layout_type`, etc.) — written before the single-blob refactor
+
+On first read after an upgrade, the category read helpers walk this chain automatically. Once a per-category key is written, the legacy fallbacks are never consulted again.
+
+**Non-backed-up settings** (session state such as `activeServerId`, `autoOfflineDetected`): stored as individual DataStore keys and excluded from `BackupSettings`.
 
 For a deeper dive into the backup system architecture, see [docs/backup-restore.md](docs/backup-restore.md).
 

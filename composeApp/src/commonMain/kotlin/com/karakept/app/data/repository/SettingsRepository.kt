@@ -41,21 +41,36 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         encodeDefaults = true
     }
 
-    // ── Single-blob key (primary storage for all backed-up settings) ──────────
+    // ── Per-category keys (primary storage) ───────────────────────────────────
 
-    private val SETTINGS_JSON_KEY = stringPreferencesKey("settings_json")
+    private val THEME_SETTINGS_KEY = stringPreferencesKey("settings_theme_json")
+    private val DISPLAY_SETTINGS_KEY = stringPreferencesKey("settings_display_json")
+    private val READER_SETTINGS_KEY = stringPreferencesKey("settings_reader_json")
+    private val SWIPE_SETTINGS_KEY = stringPreferencesKey("settings_swipe_json")
+    private val SYNC_SETTINGS_KEY = stringPreferencesKey("settings_sync_json")
+    private val APP_SETTINGS_KEY = stringPreferencesKey("settings_app_json")
 
-    // ── Non-backed-up individual keys (permanent, never move to the blob) ─────
+    // ── Non-backed-up individual keys (permanent, never move to a category blob) ──
 
     private val ACTIVE_SERVER_ID_KEY = stringPreferencesKey("active_server_id")
     private val AUTO_OFFLINE_DETECTED_KEY = booleanPreferencesKey("auto_offline_detected")
     private val LAST_AUTO_EXPORT_TIME_KEY = longPreferencesKey("last_auto_export_time")
     private val PER_LIST_SETTINGS_KEY = stringPreferencesKey("per_list_settings")
 
-    // ── Legacy individual keys (read-only, used only for one-time migration) ──
-    // These keys were written by versions of the app that stored each setting
-    // individually. They are read once to populate the JSON blob, then ignored.
+    // ── Legacy keys (read-only, migration only) ───────────────────────────────
+    // Two generations of legacy storage are supported:
+    //
+    //   Generation 2 (single blob): all settings in one "settings_json" key.
+    //   Generation 1 (individual keys): each setting had its own DataStore key.
+    //
+    // On first read after upgrade, the category read helpers fall through these
+    // generations automatically. Once a per-category key is written, the fallbacks
+    // are never consulted again for that category.
 
+    /** Generation-2 single-blob key written by the previous refactor. */
+    private val LEGACY_BLOB_KEY = stringPreferencesKey("settings_json")
+
+    /** Generation-1 individual DataStore keys (pre-single-blob). */
     private val LEGACY_LAYOUT_TYPE_KEY = stringPreferencesKey("layout_type")
     private val LEGACY_VIEWER_MODE_KEY = stringPreferencesKey("viewer_mode")
     private val LEGACY_HIDE_ARTICLE_THUMBNAILS_KEY = booleanPreferencesKey("hide_article_thumbnails")
@@ -85,125 +100,384 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val LEGACY_AUTO_EXPORT_INTERVAL_KEY = stringPreferencesKey("auto_export_interval")
     private val LEGACY_ONBOARDING_COMPLETED_KEY = booleanPreferencesKey("onboarding_completed")
 
-    // ── Single source of truth ────────────────────────────────────────────────
+    // ── Category read helpers (migration-aware) ───────────────────────────────
+    //
+    // Each helper tries, in order:
+    //   1. The new per-category key (primary)
+    //   2. The generation-2 single blob (previous refactor)
+    //   3. The generation-1 individual keys (original individual-key storage)
 
-    /**
-     * All backed-up settings as a single deserialized object.
-     *
-     * On the first read after upgrading from legacy individual-key storage,
-     * [buildBackupSettingsFromLegacy] transparently reconstructs the settings
-     * from the old keys so no user data is lost.
-     */
-    internal val settings: Flow<BackupSettings> = dataStore.data.map { prefs ->
-        prefs[SETTINGS_JSON_KEY]
-            ?.let { runCatching { settingsJson.decodeFromString<BackupSettings>(it) }.getOrNull() }
-            ?: buildBackupSettingsFromLegacy(prefs)
+    private fun Preferences.readThemeSettings(): StoredThemeSettings {
+        this[THEME_SETTINGS_KEY]?.let { json ->
+            runCatching { settingsJson.decodeFromString<StoredThemeSettings>(json) }.getOrNull()?.let { return it }
+        }
+        this[LEGACY_BLOB_KEY]?.let { blob ->
+            runCatching { settingsJson.decodeFromString<BackupSettings>(blob) }.getOrNull()?.let { all ->
+                return StoredThemeSettings(themeMode = all.themeMode, accentColor = all.accentColor)
+            }
+        }
+        return StoredThemeSettings(
+            themeMode = this[LEGACY_THEME_MODE_KEY] ?: ThemeMode.SYSTEM.name,
+            accentColor = this[LEGACY_ACCENT_COLOR_KEY] ?: AccentColor.PURPLE.name
+        )
     }
 
-    /** Returns a one-shot snapshot of all backed-up settings. Used by [BackupRepository]. */
-    suspend fun currentSettings(): BackupSettings = settings.first()
+    private fun Preferences.readDisplaySettings(): StoredDisplaySettings {
+        this[DISPLAY_SETTINGS_KEY]?.let { json ->
+            runCatching { settingsJson.decodeFromString<StoredDisplaySettings>(json) }.getOrNull()?.let { return it }
+        }
+        this[LEGACY_BLOB_KEY]?.let { blob ->
+            runCatching { settingsJson.decodeFromString<BackupSettings>(blob) }.getOrNull()?.let { all ->
+                return StoredDisplaySettings(
+                    layoutType = all.layoutType,
+                    hideArticleThumbnails = all.hideArticleThumbnails,
+                    showReadingTimeBadge = all.showReadingTimeBadge,
+                    showTags = all.showTags,
+                    dimReadBookmarks = all.dimReadBookmarks
+                )
+            }
+        }
+        return StoredDisplaySettings(
+            layoutType = this[LEGACY_LAYOUT_TYPE_KEY] ?: LayoutType.LIST.name,
+            hideArticleThumbnails = this[LEGACY_HIDE_ARTICLE_THUMBNAILS_KEY] ?: true,
+            showReadingTimeBadge = this[LEGACY_SHOW_READING_TIME_BADGE_KEY] ?: true,
+            showTags = this[LEGACY_SHOW_TAGS_KEY] ?: true,
+            dimReadBookmarks = this[LEGACY_DIM_READ_BOOKMARKS_KEY] ?: true
+        )
+    }
+
+    private fun Preferences.readReaderSettings(): StoredReaderSettings {
+        this[READER_SETTINGS_KEY]?.let { json ->
+            runCatching { settingsJson.decodeFromString<StoredReaderSettings>(json) }.getOrNull()?.let { return it }
+        }
+        this[LEGACY_BLOB_KEY]?.let { blob ->
+            runCatching { settingsJson.decodeFromString<BackupSettings>(blob) }.getOrNull()?.let { all ->
+                return StoredReaderSettings(
+                    viewerMode = all.viewerMode,
+                    htmlTextColor = all.htmlTextColor,
+                    htmlBackgroundColor = all.htmlBackgroundColor,
+                    htmlFontSize = all.htmlFontSize,
+                    htmlFontFamily = all.htmlFontFamily,
+                    readingSpeedWpm = all.readingSpeedWpm,
+                    trackReadingProgress = all.trackReadingProgress,
+                    resetProgressOnMarkUnread = all.resetProgressOnMarkUnread,
+                    linkOpenMode = all.linkOpenMode
+                )
+            }
+        }
+        return StoredReaderSettings(
+            viewerMode = this[LEGACY_VIEWER_MODE_KEY] ?: ViewerMode.READER.name,
+            htmlTextColor = this[LEGACY_HTML_TEXT_COLOR_KEY],
+            htmlBackgroundColor = this[LEGACY_HTML_BACKGROUND_COLOR_KEY],
+            htmlFontSize = this[LEGACY_HTML_FONT_SIZE_KEY] ?: 16,
+            htmlFontFamily = this[LEGACY_HTML_FONT_FAMILY_KEY] ?: ReaderFontFamily.SYSTEM.name,
+            readingSpeedWpm = this[LEGACY_READING_SPEED_WPM_KEY] ?: 238,
+            trackReadingProgress = this[LEGACY_TRACK_READING_PROGRESS_KEY] ?: true,
+            resetProgressOnMarkUnread = this[LEGACY_RESET_PROGRESS_ON_MARK_UNREAD_KEY] ?: true,
+            linkOpenMode = this[LEGACY_LINK_OPEN_MODE_KEY] ?: LinkOpenMode.CUSTOM_TAB.name
+        )
+    }
+
+    private fun Preferences.readSwipeSettings(): StoredSwipeSettings {
+        this[SWIPE_SETTINGS_KEY]?.let { json ->
+            runCatching { settingsJson.decodeFromString<StoredSwipeSettings>(json) }.getOrNull()?.let { return it }
+        }
+        this[LEGACY_BLOB_KEY]?.let { blob ->
+            runCatching { settingsJson.decodeFromString<BackupSettings>(blob) }.getOrNull()?.let { all ->
+                return StoredSwipeSettings(
+                    swipeLeftAction = all.swipeLeftAction,
+                    swipeRightAction = all.swipeRightAction,
+                    customSwipeConfigsJson = all.customSwipeConfigsJson,
+                    swipeLeftConfigId = all.swipeLeftConfigId,
+                    swipeRightConfigId = all.swipeRightConfigId
+                )
+            }
+        }
+        return StoredSwipeSettings(
+            swipeLeftAction = this[LEGACY_SWIPE_LEFT_ACTION_KEY] ?: SwipeAction.MARK_READ.name,
+            swipeRightAction = this[LEGACY_SWIPE_RIGHT_ACTION_KEY] ?: SwipeAction.ARCHIVE.name,
+            customSwipeConfigsJson = this[LEGACY_CUSTOM_SWIPE_CONFIGS_KEY] ?: "[]",
+            swipeLeftConfigId = this[LEGACY_SWIPE_LEFT_CONFIG_ID_KEY],
+            swipeRightConfigId = this[LEGACY_SWIPE_RIGHT_CONFIG_ID_KEY]
+        )
+    }
+
+    private fun Preferences.readSyncSettings(): StoredSyncSettings {
+        this[SYNC_SETTINGS_KEY]?.let { json ->
+            runCatching { settingsJson.decodeFromString<StoredSyncSettings>(json) }.getOrNull()?.let { return it }
+        }
+        this[LEGACY_BLOB_KEY]?.let { blob ->
+            runCatching { settingsJson.decodeFromString<BackupSettings>(blob) }.getOrNull()?.let { all ->
+                return StoredSyncSettings(
+                    contentSyncStrategy = all.contentSyncStrategy,
+                    contentSyncTargetLists = all.contentSyncTargetLists,
+                    contentSyncWithChildren = all.contentSyncWithChildren
+                )
+            }
+        }
+        return StoredSyncSettings(
+            contentSyncStrategy = this[LEGACY_CONTENT_SYNC_STRATEGY_KEY] ?: SyncStrategy.PER_BOOKMARK.name,
+            contentSyncTargetLists = this[LEGACY_CONTENT_SYNC_TARGET_LISTS_KEY] ?: emptySet(),
+            contentSyncWithChildren = this[LEGACY_CONTENT_SYNC_WITH_CHILDREN_KEY] ?: emptySet()
+        )
+    }
+
+    private fun Preferences.readAppSettings(): StoredAppSettings {
+        this[APP_SETTINGS_KEY]?.let { json ->
+            runCatching { settingsJson.decodeFromString<StoredAppSettings>(json) }.getOrNull()?.let { return it }
+        }
+        this[LEGACY_BLOB_KEY]?.let { blob ->
+            runCatching { settingsJson.decodeFromString<BackupSettings>(blob) }.getOrNull()?.let { all ->
+                return StoredAppSettings(
+                    notificationsEnabled = all.notificationsEnabled,
+                    offlineMode = all.offlineMode,
+                    onboardingCompleted = all.onboardingCompleted,
+                    autoExportInterval = all.autoExportInterval
+                )
+            }
+        }
+        return StoredAppSettings(
+            notificationsEnabled = this[LEGACY_NOTIFICATIONS_ENABLED_KEY] ?: true,
+            offlineMode = this[LEGACY_OFFLINE_MODE_KEY] ?: false,
+            onboardingCompleted = this[LEGACY_ONBOARDING_COMPLETED_KEY] ?: false,
+            autoExportInterval = this[LEGACY_AUTO_EXPORT_INTERVAL_KEY] ?: AutoExportInterval.NEVER.name
+        )
+    }
+
+    // ── Per-category flows ────────────────────────────────────────────────────
+    //
+    // Each category flow uses `distinctUntilChanged()` so that a write to an
+    // *unrelated* category does not propagate to this category's downstream observers.
+
+    private val themeSettingsFlow: Flow<StoredThemeSettings> = dataStore.data
+        .map { it.readThemeSettings() }
+        .distinctUntilChanged()
+
+    private val displaySettingsFlow: Flow<StoredDisplaySettings> = dataStore.data
+        .map { it.readDisplaySettings() }
+        .distinctUntilChanged()
+
+    private val readerSettingsFlow: Flow<StoredReaderSettings> = dataStore.data
+        .map { it.readReaderSettings() }
+        .distinctUntilChanged()
+
+    private val swipeSettingsFlow: Flow<StoredSwipeSettings> = dataStore.data
+        .map { it.readSwipeSettings() }
+        .distinctUntilChanged()
+
+    private val syncSettingsFlow: Flow<StoredSyncSettings> = dataStore.data
+        .map { it.readSyncSettings() }
+        .distinctUntilChanged()
+
+    private val appSettingsFlow: Flow<StoredAppSettings> = dataStore.data
+        .map { it.readAppSettings() }
+        .distinctUntilChanged()
+
+    // ── Backup API ────────────────────────────────────────────────────────────
+
+    /**
+     * Returns a one-shot snapshot of all backed-up settings as a flat [BackupSettings].
+     * Reads all six category blobs in a single DataStore snapshot. Used by [BackupRepository].
+     */
+    suspend fun currentSettings(): BackupSettings {
+        val prefs = dataStore.data.first()
+        val theme = prefs.readThemeSettings()
+        val display = prefs.readDisplaySettings()
+        val reader = prefs.readReaderSettings()
+        val swipe = prefs.readSwipeSettings()
+        val sync = prefs.readSyncSettings()
+        val app = prefs.readAppSettings()
+        return BackupSettings(
+            themeMode = theme.themeMode,
+            accentColor = theme.accentColor,
+            layoutType = display.layoutType,
+            hideArticleThumbnails = display.hideArticleThumbnails,
+            showReadingTimeBadge = display.showReadingTimeBadge,
+            showTags = display.showTags,
+            dimReadBookmarks = display.dimReadBookmarks,
+            viewerMode = reader.viewerMode,
+            htmlTextColor = reader.htmlTextColor,
+            htmlBackgroundColor = reader.htmlBackgroundColor,
+            htmlFontSize = reader.htmlFontSize,
+            htmlFontFamily = reader.htmlFontFamily,
+            readingSpeedWpm = reader.readingSpeedWpm,
+            trackReadingProgress = reader.trackReadingProgress,
+            resetProgressOnMarkUnread = reader.resetProgressOnMarkUnread,
+            linkOpenMode = reader.linkOpenMode,
+            swipeLeftAction = swipe.swipeLeftAction,
+            swipeRightAction = swipe.swipeRightAction,
+            customSwipeConfigsJson = swipe.customSwipeConfigsJson,
+            swipeLeftConfigId = swipe.swipeLeftConfigId,
+            swipeRightConfigId = swipe.swipeRightConfigId,
+            contentSyncStrategy = sync.contentSyncStrategy,
+            contentSyncTargetLists = sync.contentSyncTargetLists,
+            contentSyncWithChildren = sync.contentSyncWithChildren,
+            notificationsEnabled = app.notificationsEnabled,
+            offlineMode = app.offlineMode,
+            onboardingCompleted = app.onboardingCompleted,
+            autoExportInterval = app.autoExportInterval
+        )
+    }
 
     /**
      * Atomically replaces all backed-up settings with [s].
-     * Also writes [SETTINGS_JSON_KEY] so future reads skip legacy migration.
+     * All six category blobs are written in a single DataStore transaction.
      * Used by [BackupRepository].
      */
     suspend fun restoreSettings(s: BackupSettings) {
         dataStore.edit { prefs ->
-            prefs[SETTINGS_JSON_KEY] = settingsJson.encodeToString(s)
+            prefs[THEME_SETTINGS_KEY] = settingsJson.encodeToString(
+                StoredThemeSettings(themeMode = s.themeMode, accentColor = s.accentColor)
+            )
+            prefs[DISPLAY_SETTINGS_KEY] = settingsJson.encodeToString(
+                StoredDisplaySettings(
+                    layoutType = s.layoutType,
+                    hideArticleThumbnails = s.hideArticleThumbnails,
+                    showReadingTimeBadge = s.showReadingTimeBadge,
+                    showTags = s.showTags,
+                    dimReadBookmarks = s.dimReadBookmarks
+                )
+            )
+            prefs[READER_SETTINGS_KEY] = settingsJson.encodeToString(
+                StoredReaderSettings(
+                    viewerMode = s.viewerMode,
+                    htmlTextColor = s.htmlTextColor,
+                    htmlBackgroundColor = s.htmlBackgroundColor,
+                    htmlFontSize = s.htmlFontSize,
+                    htmlFontFamily = s.htmlFontFamily,
+                    readingSpeedWpm = s.readingSpeedWpm,
+                    trackReadingProgress = s.trackReadingProgress,
+                    resetProgressOnMarkUnread = s.resetProgressOnMarkUnread,
+                    linkOpenMode = s.linkOpenMode
+                )
+            )
+            prefs[SWIPE_SETTINGS_KEY] = settingsJson.encodeToString(
+                StoredSwipeSettings(
+                    swipeLeftAction = s.swipeLeftAction,
+                    swipeRightAction = s.swipeRightAction,
+                    customSwipeConfigsJson = s.customSwipeConfigsJson,
+                    swipeLeftConfigId = s.swipeLeftConfigId,
+                    swipeRightConfigId = s.swipeRightConfigId
+                )
+            )
+            prefs[SYNC_SETTINGS_KEY] = settingsJson.encodeToString(
+                StoredSyncSettings(
+                    contentSyncStrategy = s.contentSyncStrategy,
+                    contentSyncTargetLists = s.contentSyncTargetLists,
+                    contentSyncWithChildren = s.contentSyncWithChildren
+                )
+            )
+            prefs[APP_SETTINGS_KEY] = settingsJson.encodeToString(
+                StoredAppSettings(
+                    notificationsEnabled = s.notificationsEnabled,
+                    offlineMode = s.offlineMode,
+                    onboardingCompleted = s.onboardingCompleted,
+                    autoExportInterval = s.autoExportInterval
+                )
+            )
         }
     }
 
-    // ── Derived flows (backed-up settings) ───────────────────────────────────
-
-    val layoutType: Flow<LayoutType> =
-        settings.map { LayoutType.fromString(it.layoutType) }.distinctUntilChanged()
-
-    val viewerMode: Flow<ViewerMode> =
-        settings.map { ViewerMode.fromString(it.viewerMode) }.distinctUntilChanged()
-
-    val hideArticleThumbnails: Flow<Boolean> =
-        settings.map { it.hideArticleThumbnails }.distinctUntilChanged()
+    // ── Derived flows (theme) ─────────────────────────────────────────────────
 
     val themeMode: Flow<ThemeMode> =
-        settings.map { ThemeMode.fromString(it.themeMode) }.distinctUntilChanged()
+        themeSettingsFlow.map { ThemeMode.fromString(it.themeMode) }.distinctUntilChanged()
 
     val accentColor: Flow<AccentColor> =
-        settings.map { AccentColor.fromString(it.accentColor) }.distinctUntilChanged()
+        themeSettingsFlow.map { AccentColor.fromString(it.accentColor) }.distinctUntilChanged()
 
-    val htmlTextColor: Flow<Color?> =
-        settings.map { it.htmlTextColor?.let { c -> Color(c) } }.distinctUntilChanged()
+    // ── Derived flows (display) ───────────────────────────────────────────────
 
-    val htmlBackgroundColor: Flow<Color?> =
-        settings.map { it.htmlBackgroundColor?.let { c -> Color(c) } }.distinctUntilChanged()
+    val layoutType: Flow<LayoutType> =
+        displaySettingsFlow.map { LayoutType.fromString(it.layoutType) }.distinctUntilChanged()
 
-    val htmlFontSize: Flow<Int> =
-        settings.map { it.htmlFontSize }.distinctUntilChanged()
-
-    val htmlFontFamily: Flow<ReaderFontFamily> =
-        settings.map { ReaderFontFamily.fromString(it.htmlFontFamily) }.distinctUntilChanged()
-
-    val offlineMode: Flow<Boolean> =
-        settings.map { it.offlineMode }.distinctUntilChanged()
+    val hideArticleThumbnails: Flow<Boolean> =
+        displaySettingsFlow.map { it.hideArticleThumbnails }.distinctUntilChanged()
 
     val showReadingTimeBadge: Flow<Boolean> =
-        settings.map { it.showReadingTimeBadge }.distinctUntilChanged()
+        displaySettingsFlow.map { it.showReadingTimeBadge }.distinctUntilChanged()
 
     val showTags: Flow<Boolean> =
-        settings.map { it.showTags }.distinctUntilChanged()
+        displaySettingsFlow.map { it.showTags }.distinctUntilChanged()
+
+    val dimReadBookmarks: Flow<Boolean> =
+        displaySettingsFlow.map { it.dimReadBookmarks }.distinctUntilChanged()
+
+    // ── Derived flows (reader) ────────────────────────────────────────────────
+
+    val viewerMode: Flow<ViewerMode> =
+        readerSettingsFlow.map { ViewerMode.fromString(it.viewerMode) }.distinctUntilChanged()
+
+    val htmlTextColor: Flow<Color?> =
+        readerSettingsFlow.map { it.htmlTextColor?.let { c -> Color(c) } }.distinctUntilChanged()
+
+    val htmlBackgroundColor: Flow<Color?> =
+        readerSettingsFlow.map { it.htmlBackgroundColor?.let { c -> Color(c) } }.distinctUntilChanged()
+
+    val htmlFontSize: Flow<Int> =
+        readerSettingsFlow.map { it.htmlFontSize }.distinctUntilChanged()
+
+    val htmlFontFamily: Flow<ReaderFontFamily> =
+        readerSettingsFlow.map { ReaderFontFamily.fromString(it.htmlFontFamily) }.distinctUntilChanged()
 
     val readingSpeedWpm: Flow<Int> =
-        settings.map { it.readingSpeedWpm }.distinctUntilChanged()
+        readerSettingsFlow.map { it.readingSpeedWpm }.distinctUntilChanged()
+
+    val trackReadingProgress: Flow<Boolean> =
+        readerSettingsFlow.map { it.trackReadingProgress }.distinctUntilChanged()
+
+    val resetProgressOnMarkUnread: Flow<Boolean> =
+        readerSettingsFlow.map { it.resetProgressOnMarkUnread }.distinctUntilChanged()
+
+    val linkOpenMode: Flow<LinkOpenMode> =
+        readerSettingsFlow.map { LinkOpenMode.fromString(it.linkOpenMode) }.distinctUntilChanged()
+
+    // ── Derived flows (swipe) ─────────────────────────────────────────────────
 
     val swipeLeftAction: Flow<SwipeAction> =
-        settings.map { SwipeAction.fromString(it.swipeLeftAction) }.distinctUntilChanged()
+        swipeSettingsFlow.map { SwipeAction.fromString(it.swipeLeftAction) }.distinctUntilChanged()
 
     val swipeRightAction: Flow<SwipeAction> =
-        settings.map { SwipeAction.fromString(it.swipeRightAction) }.distinctUntilChanged()
+        swipeSettingsFlow.map { SwipeAction.fromString(it.swipeRightAction) }.distinctUntilChanged()
 
-    val customSwipeActionConfigs: Flow<List<CustomSwipeActionConfig>> = settings.map { s ->
+    val customSwipeActionConfigs: Flow<List<CustomSwipeActionConfig>> = swipeSettingsFlow.map { s ->
         runCatching { settingsJson.decodeFromString<List<CustomSwipeActionConfig>>(s.customSwipeConfigsJson) }
             .getOrDefault(emptyList())
     }.distinctUntilChanged()
 
     val swipeLeftConfigId: Flow<String?> =
-        settings.map { it.swipeLeftConfigId }.distinctUntilChanged()
+        swipeSettingsFlow.map { it.swipeLeftConfigId }.distinctUntilChanged()
 
     val swipeRightConfigId: Flow<String?> =
-        settings.map { it.swipeRightConfigId }.distinctUntilChanged()
+        swipeSettingsFlow.map { it.swipeRightConfigId }.distinctUntilChanged()
 
-    val contentSyncStrategy: Flow<SyncStrategy> = settings.map { s ->
+    // ── Derived flows (sync) ──────────────────────────────────────────────────
+
+    val contentSyncStrategy: Flow<SyncStrategy> = syncSettingsFlow.map { s ->
         runCatching { SyncStrategy.valueOf(s.contentSyncStrategy) }.getOrDefault(SyncStrategy.PER_BOOKMARK)
     }.distinctUntilChanged()
 
     val contentSyncTargetLists: Flow<Set<String>> =
-        settings.map { it.contentSyncTargetLists }.distinctUntilChanged()
+        syncSettingsFlow.map { it.contentSyncTargetLists }.distinctUntilChanged()
 
-    val contentSyncConfig: Flow<ListSyncConfig> = settings.map { s ->
+    val contentSyncConfig: Flow<ListSyncConfig> = syncSettingsFlow.map { s ->
         ListSyncConfig(s.contentSyncTargetLists, s.contentSyncWithChildren)
     }.distinctUntilChanged()
 
+    // ── Derived flows (app) ───────────────────────────────────────────────────
+
     val notificationsEnabled: Flow<Boolean> =
-        settings.map { it.notificationsEnabled }.distinctUntilChanged()
+        appSettingsFlow.map { it.notificationsEnabled }.distinctUntilChanged()
 
-    val linkOpenMode: Flow<LinkOpenMode> =
-        settings.map { LinkOpenMode.fromString(it.linkOpenMode) }.distinctUntilChanged()
+    val offlineMode: Flow<Boolean> =
+        appSettingsFlow.map { it.offlineMode }.distinctUntilChanged()
 
-    val dimReadBookmarks: Flow<Boolean> =
-        settings.map { it.dimReadBookmarks }.distinctUntilChanged()
-
-    val trackReadingProgress: Flow<Boolean> =
-        settings.map { it.trackReadingProgress }.distinctUntilChanged()
-
-    val resetProgressOnMarkUnread: Flow<Boolean> =
-        settings.map { it.resetProgressOnMarkUnread }.distinctUntilChanged()
-
-    val autoExportInterval: Flow<AutoExportInterval> = settings.map { s ->
+    val autoExportInterval: Flow<AutoExportInterval> = appSettingsFlow.map { s ->
         AutoExportInterval.fromString(s.autoExportInterval)
     }.distinctUntilChanged()
 
     val onboardingCompleted: Flow<Boolean> =
-        settings.map { it.onboardingCompleted }.distinctUntilChanged()
+        appSettingsFlow.map { it.onboardingCompleted }.distinctUntilChanged()
 
     // ── Non-backed-up flows (individual keys, unchanged) ─────────────────────
 
@@ -225,36 +499,61 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val lastAutoExportTime: Flow<Long> =
         dataStore.data.map { it[LAST_AUTO_EXPORT_TIME_KEY] ?: 0L }
 
-    // ── Setters (backed-up settings) ─────────────────────────────────────────
-
-    suspend fun setLayoutType(layoutType: LayoutType) =
-        updateSettings { copy(layoutType = layoutType.name) }
-
-    suspend fun setViewerMode(mode: ViewerMode) =
-        updateSettings { copy(viewerMode = mode.name) }
-
-    suspend fun setHideArticleThumbnails(hide: Boolean) =
-        updateSettings { copy(hideArticleThumbnails = hide) }
+    // ── Setters (theme) ───────────────────────────────────────────────────────
 
     suspend fun setThemeMode(mode: ThemeMode) =
-        updateSettings { copy(themeMode = mode.name) }
+        updateThemeSettings { copy(themeMode = mode.name) }
 
     suspend fun setAccentColor(color: AccentColor) =
-        updateSettings { copy(accentColor = color.name) }
+        updateThemeSettings { copy(accentColor = color.name) }
+
+    // ── Setters (display) ─────────────────────────────────────────────────────
+
+    suspend fun setLayoutType(layoutType: LayoutType) =
+        updateDisplaySettings { copy(layoutType = layoutType.name) }
+
+    suspend fun setHideArticleThumbnails(hide: Boolean) =
+        updateDisplaySettings { copy(hideArticleThumbnails = hide) }
+
+    suspend fun setShowReadingTimeBadge(show: Boolean) =
+        updateDisplaySettings { copy(showReadingTimeBadge = show) }
+
+    suspend fun setShowTags(show: Boolean) =
+        updateDisplaySettings { copy(showTags = show) }
+
+    suspend fun setDimReadBookmarks(dim: Boolean) =
+        updateDisplaySettings { copy(dimReadBookmarks = dim) }
+
+    // ── Setters (reader) ──────────────────────────────────────────────────────
+
+    suspend fun setViewerMode(mode: ViewerMode) =
+        updateReaderSettings { copy(viewerMode = mode.name) }
 
     suspend fun setHtmlTextColor(color: Color?) =
-        updateSettings { copy(htmlTextColor = color?.toArgb()) }
+        updateReaderSettings { copy(htmlTextColor = color?.toArgb()) }
 
     suspend fun setHtmlBackgroundColor(color: Color?) =
-        updateSettings { copy(htmlBackgroundColor = color?.toArgb()) }
+        updateReaderSettings { copy(htmlBackgroundColor = color?.toArgb()) }
 
     suspend fun setHtmlFontSize(size: Int) =
-        updateSettings { copy(htmlFontSize = size) }
+        updateReaderSettings { copy(htmlFontSize = size) }
 
     suspend fun setHtmlFontFamily(family: ReaderFontFamily) =
-        updateSettings { copy(htmlFontFamily = family.name) }
+        updateReaderSettings { copy(htmlFontFamily = family.name) }
 
-    suspend fun resetReaderAppearance() = updateSettings {
+    suspend fun setReadingSpeedWpm(wpm: Int) =
+        updateReaderSettings { copy(readingSpeedWpm = wpm.coerceIn(100, 500)) }
+
+    suspend fun setTrackReadingProgress(enabled: Boolean) =
+        updateReaderSettings { copy(trackReadingProgress = enabled) }
+
+    suspend fun setResetProgressOnMarkUnread(enabled: Boolean) =
+        updateReaderSettings { copy(resetProgressOnMarkUnread = enabled) }
+
+    suspend fun setLinkOpenMode(mode: LinkOpenMode) =
+        updateReaderSettings { copy(linkOpenMode = mode.name) }
+
+    suspend fun resetReaderAppearance() = updateReaderSettings {
         copy(
             htmlTextColor = null,
             htmlBackgroundColor = null,
@@ -263,46 +562,38 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         )
     }
 
-    suspend fun setOfflineMode(enabled: Boolean) =
-        updateSettings { copy(offlineMode = enabled) }
-
-    suspend fun setShowReadingTimeBadge(show: Boolean) =
-        updateSettings { copy(showReadingTimeBadge = show) }
-
-    suspend fun setShowTags(show: Boolean) =
-        updateSettings { copy(showTags = show) }
-
-    suspend fun setReadingSpeedWpm(wpm: Int) =
-        updateSettings { copy(readingSpeedWpm = wpm.coerceIn(100, 500)) }
+    // ── Setters (swipe) ───────────────────────────────────────────────────────
 
     suspend fun setSwipeLeftAction(action: SwipeAction) =
-        updateSettings { copy(swipeLeftAction = action.name) }
+        updateSwipeSettings { copy(swipeLeftAction = action.name) }
 
     suspend fun setSwipeRightAction(action: SwipeAction) =
-        updateSettings { copy(swipeRightAction = action.name) }
+        updateSwipeSettings { copy(swipeRightAction = action.name) }
 
     suspend fun setCustomSwipeActionConfigs(configs: List<CustomSwipeActionConfig>) =
-        updateSettings { copy(customSwipeConfigsJson = settingsJson.encodeToString(configs)) }
+        updateSwipeSettings { copy(customSwipeConfigsJson = settingsJson.encodeToString(configs)) }
 
     suspend fun setSwipeLeftConfigId(id: String?) =
-        updateSettings { copy(swipeLeftConfigId = id) }
+        updateSwipeSettings { copy(swipeLeftConfigId = id) }
 
     suspend fun setSwipeRightConfigId(id: String?) =
-        updateSettings { copy(swipeRightConfigId = id) }
+        updateSwipeSettings { copy(swipeRightConfigId = id) }
+
+    // ── Setters (sync) ────────────────────────────────────────────────────────
 
     suspend fun setContentSyncStrategy(strategy: SyncStrategy) =
-        updateSettings { copy(contentSyncStrategy = strategy.name) }
+        updateSyncSettings { copy(contentSyncStrategy = strategy.name) }
 
     suspend fun setContentSyncTargetLists(listIds: Set<String>) =
-        updateSettings { copy(contentSyncTargetLists = listIds) }
+        updateSyncSettings { copy(contentSyncTargetLists = listIds) }
 
-    suspend fun toggleContentSyncTargetList(listId: String) = updateSettings {
+    suspend fun toggleContentSyncTargetList(listId: String) = updateSyncSettings {
         val current = contentSyncTargetLists.toMutableSet()
         if (current.contains(listId)) current.remove(listId) else current.add(listId)
         copy(contentSyncTargetLists = current)
     }
 
-    suspend fun updateListSyncState(listId: String, newState: CheckboxState) = updateSettings {
+    suspend fun updateListSyncState(listId: String, newState: CheckboxState) = updateSyncSettings {
         val currentSelected = contentSyncTargetLists.toMutableSet()
         val currentWithChildren = contentSyncWithChildren.toMutableSet()
         when (newState) {
@@ -322,33 +613,26 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         copy(contentSyncTargetLists = currentSelected, contentSyncWithChildren = currentWithChildren)
     }
 
-    suspend fun setContentSyncConfig(config: ListSyncConfig) = updateSettings {
+    suspend fun setContentSyncConfig(config: ListSyncConfig) = updateSyncSettings {
         copy(
             contentSyncTargetLists = config.selectedLists,
             contentSyncWithChildren = config.withChildrenMode
         )
     }
 
+    // ── Setters (app) ─────────────────────────────────────────────────────────
+
     suspend fun setNotificationsEnabled(enabled: Boolean) =
-        updateSettings { copy(notificationsEnabled = enabled) }
+        updateAppSettings { copy(notificationsEnabled = enabled) }
 
-    suspend fun setLinkOpenMode(mode: LinkOpenMode) =
-        updateSettings { copy(linkOpenMode = mode.name) }
-
-    suspend fun setDimReadBookmarks(dim: Boolean) =
-        updateSettings { copy(dimReadBookmarks = dim) }
-
-    suspend fun setTrackReadingProgress(enabled: Boolean) =
-        updateSettings { copy(trackReadingProgress = enabled) }
-
-    suspend fun setResetProgressOnMarkUnread(enabled: Boolean) =
-        updateSettings { copy(resetProgressOnMarkUnread = enabled) }
-
-    suspend fun setAutoExportInterval(interval: AutoExportInterval) =
-        updateSettings { copy(autoExportInterval = interval.name) }
+    suspend fun setOfflineMode(enabled: Boolean) =
+        updateAppSettings { copy(offlineMode = enabled) }
 
     suspend fun setOnboardingCompleted(completed: Boolean) =
-        updateSettings { copy(onboardingCompleted = completed) }
+        updateAppSettings { copy(onboardingCompleted = completed) }
+
+    suspend fun setAutoExportInterval(interval: AutoExportInterval) =
+        updateAppSettings { copy(autoExportInterval = interval.name) }
 
     // ── Setters (non-backed-up individual keys) ───────────────────────────────
 
@@ -432,56 +716,41 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    // ── Internal helpers ──────────────────────────────────────────────────────
+    // ── Per-category update helpers ───────────────────────────────────────────
 
-    /**
-     * Reads the current blob (or migrates from legacy keys), applies [transform],
-     * and atomically writes the result back.
-     */
-    private suspend fun updateSettings(transform: BackupSettings.() -> BackupSettings) {
+    private suspend fun updateThemeSettings(transform: StoredThemeSettings.() -> StoredThemeSettings) {
         dataStore.edit { prefs ->
-            val current = prefs[SETTINGS_JSON_KEY]
-                ?.let { runCatching { settingsJson.decodeFromString<BackupSettings>(it) }.getOrNull() }
-                ?: buildBackupSettingsFromLegacy(prefs)
-            prefs[SETTINGS_JSON_KEY] = settingsJson.encodeToString(current.transform())
+            prefs[THEME_SETTINGS_KEY] = settingsJson.encodeToString(prefs.readThemeSettings().transform())
         }
     }
 
-    /**
-     * Reconstructs [BackupSettings] from the legacy individual DataStore keys written by
-     * versions of the app that predated the single-blob storage format.
-     *
-     * This is called at most once per installation: on the first read or write after
-     * an upgrade. Once [SETTINGS_JSON_KEY] is written, this function is never called again.
-     */
-    internal fun buildBackupSettingsFromLegacy(prefs: Preferences): BackupSettings = BackupSettings(
-        layoutType = prefs[LEGACY_LAYOUT_TYPE_KEY] ?: LayoutType.LIST.name,
-        hideArticleThumbnails = prefs[LEGACY_HIDE_ARTICLE_THUMBNAILS_KEY] ?: true,
-        showReadingTimeBadge = prefs[LEGACY_SHOW_READING_TIME_BADGE_KEY] ?: true,
-        showTags = prefs[LEGACY_SHOW_TAGS_KEY] ?: true,
-        dimReadBookmarks = prefs[LEGACY_DIM_READ_BOOKMARKS_KEY] ?: true,
-        viewerMode = prefs[LEGACY_VIEWER_MODE_KEY] ?: ViewerMode.READER.name,
-        htmlTextColor = prefs[LEGACY_HTML_TEXT_COLOR_KEY],
-        htmlBackgroundColor = prefs[LEGACY_HTML_BACKGROUND_COLOR_KEY],
-        htmlFontSize = prefs[LEGACY_HTML_FONT_SIZE_KEY] ?: 16,
-        htmlFontFamily = prefs[LEGACY_HTML_FONT_FAMILY_KEY] ?: ReaderFontFamily.SYSTEM.name,
-        readingSpeedWpm = prefs[LEGACY_READING_SPEED_WPM_KEY] ?: 238,
-        trackReadingProgress = prefs[LEGACY_TRACK_READING_PROGRESS_KEY] ?: true,
-        resetProgressOnMarkUnread = prefs[LEGACY_RESET_PROGRESS_ON_MARK_UNREAD_KEY] ?: true,
-        linkOpenMode = prefs[LEGACY_LINK_OPEN_MODE_KEY] ?: LinkOpenMode.CUSTOM_TAB.name,
-        themeMode = prefs[LEGACY_THEME_MODE_KEY] ?: ThemeMode.SYSTEM.name,
-        accentColor = prefs[LEGACY_ACCENT_COLOR_KEY] ?: AccentColor.PURPLE.name,
-        swipeLeftAction = prefs[LEGACY_SWIPE_LEFT_ACTION_KEY] ?: SwipeAction.MARK_READ.name,
-        swipeRightAction = prefs[LEGACY_SWIPE_RIGHT_ACTION_KEY] ?: SwipeAction.ARCHIVE.name,
-        customSwipeConfigsJson = prefs[LEGACY_CUSTOM_SWIPE_CONFIGS_KEY] ?: "[]",
-        swipeLeftConfigId = prefs[LEGACY_SWIPE_LEFT_CONFIG_ID_KEY],
-        swipeRightConfigId = prefs[LEGACY_SWIPE_RIGHT_CONFIG_ID_KEY],
-        contentSyncStrategy = prefs[LEGACY_CONTENT_SYNC_STRATEGY_KEY] ?: SyncStrategy.PER_BOOKMARK.name,
-        contentSyncTargetLists = prefs[LEGACY_CONTENT_SYNC_TARGET_LISTS_KEY] ?: emptySet(),
-        contentSyncWithChildren = prefs[LEGACY_CONTENT_SYNC_WITH_CHILDREN_KEY] ?: emptySet(),
-        notificationsEnabled = prefs[LEGACY_NOTIFICATIONS_ENABLED_KEY] ?: true,
-        offlineMode = prefs[LEGACY_OFFLINE_MODE_KEY] ?: false,
-        onboardingCompleted = prefs[LEGACY_ONBOARDING_COMPLETED_KEY] ?: false,
-        autoExportInterval = prefs[LEGACY_AUTO_EXPORT_INTERVAL_KEY] ?: AutoExportInterval.NEVER.name
-    )
+    private suspend fun updateDisplaySettings(transform: StoredDisplaySettings.() -> StoredDisplaySettings) {
+        dataStore.edit { prefs ->
+            prefs[DISPLAY_SETTINGS_KEY] = settingsJson.encodeToString(prefs.readDisplaySettings().transform())
+        }
+    }
+
+    private suspend fun updateReaderSettings(transform: StoredReaderSettings.() -> StoredReaderSettings) {
+        dataStore.edit { prefs ->
+            prefs[READER_SETTINGS_KEY] = settingsJson.encodeToString(prefs.readReaderSettings().transform())
+        }
+    }
+
+    private suspend fun updateSwipeSettings(transform: StoredSwipeSettings.() -> StoredSwipeSettings) {
+        dataStore.edit { prefs ->
+            prefs[SWIPE_SETTINGS_KEY] = settingsJson.encodeToString(prefs.readSwipeSettings().transform())
+        }
+    }
+
+    private suspend fun updateSyncSettings(transform: StoredSyncSettings.() -> StoredSyncSettings) {
+        dataStore.edit { prefs ->
+            prefs[SYNC_SETTINGS_KEY] = settingsJson.encodeToString(prefs.readSyncSettings().transform())
+        }
+    }
+
+    private suspend fun updateAppSettings(transform: StoredAppSettings.() -> StoredAppSettings) {
+        dataStore.edit { prefs ->
+            prefs[APP_SETTINGS_KEY] = settingsJson.encodeToString(prefs.readAppSettings().transform())
+        }
+    }
 }

@@ -150,34 +150,55 @@ All fields have defaults — missing fields (from older backups) fall back to th
 
 ## Storage Architecture
 
-Settings are stored in a single JSON blob under the DataStore key `settings_json`. The `BackupSettings` data class is the canonical schema for both runtime use and backup.
+Settings are stored as **six per-category JSON blobs** in DataStore. Each category has its own key and corresponding internal data class in `StoredSettings.kt`. This is distinct from the backup file format (`BackupSettings`), which remains a flat data class for backward compatibility with existing backup files.
 
 ```
 DataStore<Preferences>
-├── settings_json        ← Single JSON blob of BackupSettings (backed-up)
-├── active_server_id     ← Individual key (not backed up)
-├── auto_offline_detected
-├── last_auto_export_time
-└── per_list_settings    ← Separate JSON blob (not backed up)
+├── settings_theme_json    ← StoredThemeSettings  (themeMode, accentColor)
+├── settings_display_json  ← StoredDisplaySettings (layoutType, badges, toggles)
+├── settings_reader_json   ← StoredReaderSettings  (viewerMode, fonts, colors, speed)
+├── settings_swipe_json    ← StoredSwipeSettings   (swipe actions, custom configs)
+├── settings_sync_json     ← StoredSyncSettings    (sync strategy, target lists)
+├── settings_app_json      ← StoredAppSettings     (notifications, offline, onboarding, auto-export)
+├── active_server_id       ← Individual key (not backed up)
+├── auto_offline_detected  ← Individual key (not backed up)
+├── last_auto_export_time  ← Individual key (not backed up)
+└── per_list_settings      ← Separate JSON blob (not backed up)
 ```
 
+### Why per-category blobs?
+
+| Benefit | Detail |
+|---|---|
+| **Smaller writes** | Changing `themeMode` only re-serializes the ~50-byte `settings_theme_json` blob, not the full ~1–2 KB `BackupSettings` |
+| **Finer-grained observers** | `themeSettingsFlow` only emits when theme settings change; reader/sync/display observers are completely unaffected by a theme write |
+
+### How `SettingsRepository` bridges storage and backup
+
 `SettingsRepository` exposes:
-- `val settings: Flow<BackupSettings>` — the single source of truth, deserialized on each read.
-- Per-setting derived flows (e.g. `val themeMode: Flow<ThemeMode>`) using `.distinctUntilChanged()` to prevent spurious recompositions.
-- `suspend fun currentSettings(): BackupSettings` — one-shot snapshot used by `BackupRepository`.
-- `suspend fun restoreSettings(s: BackupSettings)` — atomic full replacement used by `BackupRepository`.
+- Six private category flows (e.g. `themeSettingsFlow: Flow<StoredThemeSettings>`), each with `.distinctUntilChanged()` to block propagation of unrelated writes.
+- Per-setting derived public flows (e.g. `val themeMode: Flow<ThemeMode>`) derived from their category flow.
+- `suspend fun currentSettings(): BackupSettings` — reads all six category blobs in one DataStore snapshot and assembles them into a flat `BackupSettings`. Used by `BackupRepository`.
+- `suspend fun restoreSettings(s: BackupSettings)` — splits a flat `BackupSettings` into all six category blobs and writes them atomically in a single `dataStore.edit { }` transaction. Used by `BackupRepository`.
 
 `BackupRepository` is intentionally kept static — it never enumerates individual settings and therefore never needs to change when new settings are added.
 
-### Migration from legacy individual keys
+### Migration chain
 
-Before the single-blob architecture, each setting was stored under its own DataStore key (e.g. `layout_type`, `theme_mode`). On first startup after the migration:
+Three generations of storage are supported, handled transparently by the per-category read helpers:
 
-1. `settings_json` is absent.
-2. `SettingsRepository.buildBackupSettingsFromLegacy(prefs)` reads all legacy keys and reconstructs a `BackupSettings` object.
-3. The next `updateSettings { … }` call writes `settings_json`, sealing the migration.
+| Generation | Keys | Written by |
+|---|---|---|
+| Current (gen 3) | `settings_theme_json`, `settings_display_json`, … | This refactor |
+| Previous (gen 2) | `settings_json` (single blob) | Previous single-blob refactor |
+| Original (gen 1) | `layout_type`, `theme_mode`, … (individual keys) | Original individual-key storage |
 
-After the first write, legacy keys are never read again. They are not explicitly deleted — they remain as inert orphan entries in DataStore.
+On first read after an upgrade, each category read helper tries:
+1. Its own per-category key (primary).
+2. The `settings_json` single-blob (gen 2 fallback).
+3. The original individual DataStore keys (gen 1 fallback).
+
+On the first write, the per-category key is written. Subsequent reads go directly to step 1. Legacy keys are not deleted — they remain as inert orphan entries in DataStore.
 
 ---
 
@@ -312,10 +333,11 @@ Not yet implemented. `FilePicker` and `FileUtils.shareBackupFile` use `expect`/`
 
 | Trade-off | Details |
 |---|---|
-| Write amplification | Every setter call re-serializes and writes the entire `BackupSettings` blob (~1–2 KB). With individual keys only the changed key was written. For settings (changed rarely), this is negligible. |
-| All observers wake on any change | All derived `Flow<T>` subscribe to the same blob. When `themeMode` changes, the `layoutType` flow also emits. Mitigated by `.distinctUntilChanged()` — no extra recompositions. |
-| Blob corruption = all settings reset | If the JSON becomes malformed, `runCatching` falls back to `BackupSettings()` — all settings reset to defaults. With individual keys, only one key would be affected. |
-| JSON-in-JSON | `customSwipeConfigsJson` is a JSON string embedded inside the blob. Functional but slightly awkward; could be inlined as `List<CustomSwipeActionConfig>` in a future change. |
+| Write amplification (reduced) | Changing one setting re-serializes only the category blob (~50–300 bytes) rather than the full ~1–2 KB `BackupSettings`. Still slightly more than a single individual key write, but far better than the previous single-blob approach. |
+| Cross-category observer isolation | Writes to one category do not propagate to observers of other categories (achieved via `distinctUntilChanged()` on each category flow). Observers within the same category still wake on any field change in that category. |
+| Blob corruption = category reset | If a category JSON becomes malformed, `runCatching` falls back to the category's defaults — only that category's settings reset, not all settings. |
+| JSON-in-JSON | `customSwipeConfigsJson` is a JSON string embedded inside `StoredSwipeSettings`. Functional but slightly awkward; could be inlined as `List<CustomSwipeActionConfig>` in a future change. |
+| 3 files to touch per new setting | Adding a setting requires updating `BackupSettings` (backup format), the appropriate `Stored*Settings` class (storage format), and wiring in `SettingsRepository`. `BackupRepository` is never touched. |
 
 ---
 
@@ -323,7 +345,8 @@ Not yet implemented. `FilePicker` and `FileUtils.shareBackupFile` use `expect`/`
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-new-setting) for the full step-by-step checklist. In short:
 
-1. Add a field with a default to `BackupSettings` in `AppBackup.kt`.
-2. Add a derived `Flow<T>` and `set…()` setter to `SettingsRepository.kt`.
+1. Add a field with a default to `BackupSettings` in `AppBackup.kt` (backup file format).
+2. Add a field with the same default to the appropriate `Stored*Settings` class in `StoredSettings.kt` (DataStore storage format).
+3. In `SettingsRepository.kt`: add a derived `Flow<T>`, a `set…()` setter, and map the field in `currentSettings()` and `restoreSettings()`.
 
 `BackupRepository` never needs to change.
