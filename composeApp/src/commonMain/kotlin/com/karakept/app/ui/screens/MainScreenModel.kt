@@ -264,15 +264,18 @@ class MainScreenModel(
                     for (page in 0..currentPage) {
                         val pageItems = loadBookmarksPage(server, filter, page)
                         allItems.addAll(pageItems)
-                        if (pageItems.size < pageSize) {
-                            // Reached the end
-                            _hasMoreItems.value = false
-                            break
-                        }
+                        // Do NOT break when pageItems.size < pageSize. When multi-list
+                        // client-side filtering is active (includeChildListBookmarks = true),
+                        // a DB page of 20 items may yield only a few matches. Breaking early
+                        // here causes bookmarks to disappear after pull-to-refresh.
+                        // The true end-of-data is detected by loadNextPage on the next scroll.
                     }
 
                     // Swap in the new data atomically (no empty state in between)
                     _accumulatedBookmarks.value = allItems
+                    // Reset so the user can scroll to discover whether more data exists;
+                    // loadNextPage will set this to false when the DB is truly exhausted.
+                    _hasMoreItems.value = true
                 }
             }
         }
