@@ -1,19 +1,8 @@
 package com.karakept.app.data.repository
 
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.AppBackup
 import com.karakept.app.data.model.AutoExportInterval
-import com.karakept.app.data.model.BackupSettings
-import com.karakept.app.data.model.LayoutType
-import com.karakept.app.data.model.LinkOpenMode
-import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ServerBackup
-import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.data.model.SyncStrategy
-import com.karakept.app.data.model.ThemeMode
-import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.utils.FileUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.Clock
@@ -36,59 +25,20 @@ class BackupRepository(
     // ── Export ─────────────────────────────────────────────────────────────────
 
     /**
-     * Collects all current settings and serialises them to a JSON [AppBackup].
+     * Builds a complete [AppBackup] from the current settings and server list.
+     *
+     * Because [SettingsRepository] now owns the canonical [BackupSettings] snapshot,
+     * this function never needs to be updated when new settings are added.
      */
     suspend fun buildBackup(): AppBackup {
-        val prefs = settingsRepository
         val servers = serverRepository.servers.first().map {
             ServerBackup(it.id, it.url, it.apiKey, it.label)
         }
-
-        val settings = BackupSettings(
-            layoutType = prefs.layoutType.first().name,
-            hideArticleThumbnails = prefs.hideArticleThumbnails.first(),
-            showReadingTimeBadge = prefs.showReadingTimeBadge.first(),
-            showTags = prefs.showTags.first(),
-            dimReadBookmarks = prefs.dimReadBookmarks.first(),
-
-            viewerMode = prefs.viewerMode.first().name,
-            htmlTextColor = prefs.htmlTextColor.first()?.toArgb(),
-            htmlBackgroundColor = prefs.htmlBackgroundColor.first()?.toArgb(),
-            htmlFontSize = prefs.htmlFontSize.first(),
-            htmlFontFamily = prefs.htmlFontFamily.first().name,
-            readingSpeedWpm = prefs.readingSpeedWpm.first(),
-            trackReadingProgress = prefs.trackReadingProgress.first(),
-            resetProgressOnMarkUnread = prefs.resetProgressOnMarkUnread.first(),
-            linkOpenMode = prefs.linkOpenMode.first().name,
-
-            themeMode = prefs.themeMode.first().name,
-            accentColor = prefs.accentColor.first().name,
-
-            swipeLeftAction = prefs.swipeLeftAction.first().name,
-            swipeRightAction = prefs.swipeRightAction.first().name,
-            customSwipeConfigsJson = run {
-                val configs = prefs.customSwipeActionConfigs.first()
-                Json.encodeToString(configs)
-            },
-            swipeLeftConfigId = prefs.swipeLeftConfigId.first(),
-            swipeRightConfigId = prefs.swipeRightConfigId.first(),
-
-            contentSyncStrategy = prefs.contentSyncStrategy.first().name,
-            contentSyncTargetLists = prefs.contentSyncConfig.first().selectedLists,
-            contentSyncWithChildren = prefs.contentSyncConfig.first().withChildrenMode,
-
-            notificationsEnabled = prefs.notificationsEnabled.first(),
-            offlineMode = prefs.offlineMode.first(),
-            onboardingCompleted = prefs.onboardingCompleted.first(),
-            autoExportInterval = prefs.autoExportInterval.first().name
-        )
-
         val now = Clock.System.now().toLocalDateTime(TimeZone.UTC)
         val timestamp = "$now".replace("T", " ").take(19) + " UTC"
-
         return AppBackup(
             exportedAt = timestamp,
-            settings = settings,
+            settings = settingsRepository.currentSettings(),
             servers = servers
         )
     }
@@ -101,7 +51,7 @@ class BackupRepository(
         val backup = buildBackup()
         val jsonString = json.encodeToString(backup)
         val now = Clock.System.now().toLocalDateTime(TimeZone.UTC)
-        val datePart = "${now.year}-${now.monthNumber.toString().padStart(2,'0')}-${now.dayOfMonth.toString().padStart(2,'0')}"
+        val datePart = "${now.year}-${now.monthNumber.toString().padStart(2, '0')}-${now.dayOfMonth.toString().padStart(2, '0')}"
         val fileName = "karakept_backup_$datePart.json"
         val backupDir = FileUtils.getBackupDirectory()
         val filePath = FileUtils.saveFile(backupDir, fileName, jsonString.encodeToByteArray())
@@ -112,9 +62,12 @@ class BackupRepository(
     // ── Import ─────────────────────────────────────────────────────────────────
 
     /**
-     * Parses [jsonContent] and applies every setting it contains.
+     * Parses [jsonContent] and atomically restores all settings it contains.
      * Unknown fields are silently ignored so that future versions remain compatible.
      * Returns a human-readable summary of what was restored.
+     *
+     * Because [SettingsRepository.restoreSettings] handles the full write,
+     * this function never needs to be updated when new settings are added.
      *
      * @throws Exception if the JSON is invalid or the backup version is unsupported.
      */
@@ -125,58 +78,9 @@ class BackupRepository(
             error("Backup was created with a newer version of the app (version ${backup.version}). Please update the app to restore this backup.")
         }
 
-        val s = backup.settings
-        val prefs = settingsRepository
+        settingsRepository.restoreSettings(backup.settings)
 
-        // Layout / list
-        prefs.setLayoutType(LayoutType.fromString(s.layoutType))
-        prefs.setHideArticleThumbnails(s.hideArticleThumbnails)
-        prefs.setShowReadingTimeBadge(s.showReadingTimeBadge)
-        prefs.setShowTags(s.showTags)
-        prefs.setDimReadBookmarks(s.dimReadBookmarks)
-
-        // Viewer / reader
-        prefs.setViewerMode(ViewerMode.fromString(s.viewerMode))
-        prefs.setHtmlTextColor(s.htmlTextColor?.let { Color(it) })
-        prefs.setHtmlBackgroundColor(s.htmlBackgroundColor?.let { Color(it) })
-        prefs.setHtmlFontSize(s.htmlFontSize)
-        prefs.setHtmlFontFamily(ReaderFontFamily.fromString(s.htmlFontFamily))
-        prefs.setReadingSpeedWpm(s.readingSpeedWpm)
-        prefs.setTrackReadingProgress(s.trackReadingProgress)
-        prefs.setResetProgressOnMarkUnread(s.resetProgressOnMarkUnread)
-        prefs.setLinkOpenMode(LinkOpenMode.fromString(s.linkOpenMode))
-
-        // Theme
-        prefs.setThemeMode(ThemeMode.fromString(s.themeMode))
-        prefs.setAccentColor(AccentColor.fromString(s.accentColor))
-
-        // Swipe actions
-        prefs.setSwipeLeftAction(SwipeAction.fromString(s.swipeLeftAction))
-        prefs.setSwipeRightAction(SwipeAction.fromString(s.swipeRightAction))
-        val configs = try {
-            json.decodeFromString<List<com.karakept.app.data.model.CustomSwipeActionConfig>>(s.customSwipeConfigsJson)
-        } catch (e: Exception) {
-            emptyList()
-        }
-        prefs.setCustomSwipeActionConfigs(configs)
-        prefs.setSwipeLeftConfigId(s.swipeLeftConfigId)
-        prefs.setSwipeRightConfigId(s.swipeRightConfigId)
-
-        // Content sync
-        prefs.setContentSyncStrategy(runCatching { SyncStrategy.valueOf(s.contentSyncStrategy) }.getOrDefault(SyncStrategy.PER_BOOKMARK))
-        prefs.setContentSyncConfig(com.karakept.app.data.model.ListSyncConfig(s.contentSyncTargetLists, s.contentSyncWithChildren))
-
-        // Notifications / offline / onboarding
-        prefs.setNotificationsEnabled(s.notificationsEnabled)
-        prefs.setOfflineMode(s.offlineMode)
-        prefs.setOnboardingCompleted(s.onboardingCompleted)
-
-        // Scheduled export
-        prefs.setAutoExportInterval(AutoExportInterval.fromString(s.autoExportInterval))
-
-        // Server configurations (restore if any present in backup)
         val restoredServerCount = backup.servers.size
-
         return buildString {
             appendLine("Settings restored from backup (exported ${backup.exportedAt}).")
             if (restoredServerCount > 0) {

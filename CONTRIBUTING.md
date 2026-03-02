@@ -26,15 +26,7 @@ When you add a user-configurable setting to the app, you **must** also make it p
 
 Every setting that should survive a fresh install or device transfer needs to be captured in the backup. Failing to do this means users lose that setting when they restore a backup.
 
-#### 1. Add the setting to `SettingsRepository`
-
-Add a preferences key, a `Flow<T>` property, and a `suspend fun set…()` function in:
-
-```
-composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/SettingsRepository.kt
-```
-
-#### 2. Add a field to `BackupSettings`
+#### 1. Add a field to `BackupSettings`
 
 Open:
 
@@ -52,34 +44,36 @@ data class BackupSettings(
 )
 ```
 
-#### 3. Export the setting in `BackupRepository.buildBackup()`
+#### 2. Add the setting to `SettingsRepository`
 
 Open:
 
 ```
-composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BackupRepository.kt
+composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/SettingsRepository.kt
 ```
 
-In `buildBackup()`, read the value from `settingsRepository` and assign it to the `BackupSettings` object:
+Add a derived `Flow<T>` property from the `settings` blob and a setter that uses `updateSettings { copy(…) }`:
 
 ```kotlin
-val settings = BackupSettings(
+// Derived flow
+val myNewSetting: Flow<Boolean> =
+    settings.map { it.myNewSetting }.distinctUntilChanged()
+
+// Setter
+suspend fun setMyNewSetting(enabled: Boolean) =
+    updateSettings { copy(myNewSetting = enabled) }
+```
+
+Also add the migration fallback in `buildBackupSettingsFromLegacy()` if the setting was ever stored as an individual DataStore key before this PR:
+
+```kotlin
+internal fun buildBackupSettingsFromLegacy(prefs: Preferences): BackupSettings = BackupSettings(
     // ... existing fields ...
-    myNewSetting = prefs.myNewSetting.first()
+    myNewSetting = prefs[LEGACY_MY_NEW_SETTING_KEY] ?: false
 )
 ```
 
-#### 4. Restore the setting in `BackupRepository.importFromJson()`
-
-In the same file, inside `importFromJson()`, call the appropriate setter:
-
-```kotlin
-prefs.setMyNewSetting(s.myNewSetting)
-```
-
-#### 5. (Optional) If the setting is sensitive, note it in the UI
-
-If the setting contains a secret (like an API key), add a note in `BackupRestoreScreen.kt` to remind users that the backup file is sensitive.
+That's it. **`BackupRepository` never needs to be touched.**
 
 ---
 
@@ -87,9 +81,19 @@ If the setting contains a secret (like an API key), add a note in `BackupRestore
 
 | File | What to do |
 |---|---|
-| `SettingsRepository.kt` | Add the key, Flow property, and setter |
 | `AppBackup.kt` (`BackupSettings`) | Add the field with a default |
-| `BackupRepository.kt` (`buildBackup`) | Export the value |
-| `BackupRepository.kt` (`importFromJson`) | Restore the value |
+| `SettingsRepository.kt` | Add the derived `Flow<T>` and `set…()` using `updateSettings { copy(…) }` |
 
-If you skip any of these steps, the CI build will still pass but users will silently lose that setting when they restore a backup. Please follow all four steps.
+`BackupRepository` is now static — it never needs updating when new settings are added.
+The `buildBackupSettingsFromLegacy()` migration in `SettingsRepository` only needs updating if you are migrating an *existing* individual DataStore key into the blob.
+
+---
+
+### Design notes
+
+Settings are stored as a single JSON blob (`settings_json`) in DataStore. The `BackupSettings` data class is the canonical schema:
+
+- **Adding a setting**: add a field with a default → blob format is forward/backward compatible via `ignoreUnknownKeys = true` and `encodeDefaults = true`.
+- **Backup export**: `BackupRepository.buildBackup()` calls `settingsRepository.currentSettings()` — one line, always complete.
+- **Backup restore**: `BackupRepository.importFromJson()` calls `settingsRepository.restoreSettings(backup.settings)` — one line, always complete.
+- **Non-backed-up settings** (session state such as `activeServerId`, `autoOfflineDetected`): stored as individual DataStore keys and excluded from `BackupSettings`.

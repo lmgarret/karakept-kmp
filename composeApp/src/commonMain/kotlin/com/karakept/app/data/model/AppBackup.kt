@@ -31,9 +31,11 @@ data class ServerBackup(
  *
  * **Adding a new setting?**
  * See CONTRIBUTING.md for the full checklist.  In short:
- * 1. Add a field here (with a sensible default so old backups still load).
- * 2. Export it in `BackupRepository.exportSettings()`.
- * 3. Restore it in `BackupRepository.importSettings()`.
+ * 1. Add a field here with a sensible default (so old backups still deserialize).
+ * 2. Add a derived `Flow<T>` and setter in `SettingsRepository` using `updateSettings { copy(…) }`.
+ *
+ * `BackupRepository` never needs to be touched — it calls `settingsRepository.currentSettings()`
+ * and `settingsRepository.restoreSettings(…)` which always capture the full schema.
  */
 @Serializable
 data class BackupSettings(
