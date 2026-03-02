@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 import com.karakept.api.model.KarakeepList
+import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.ListRepository
 import kotlinx.coroutines.flow.first
@@ -401,6 +402,30 @@ class SettingsScreenModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptySet()
     )
+
+    val defaultListType: StateFlow<DefaultListType> = settingsRepository.defaultListType.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = DefaultListType.ALL_BOOKMARKS
+    )
+
+    val defaultListId: StateFlow<String?> = settingsRepository.defaultListId.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    fun setDefaultListType(type: DefaultListType) {
+        screenModelScope.launch {
+            settingsRepository.setDefaultListType(type)
+        }
+    }
+
+    fun setDefaultListId(id: String?) {
+        screenModelScope.launch {
+            settingsRepository.setDefaultListId(id)
+        }
+    }
 
     val contentSyncConfig: StateFlow<com.karakept.app.data.model.ListSyncConfig> = settingsRepository.contentSyncConfig.stateIn(
         scope = screenModelScope,

@@ -3,6 +3,7 @@ package com.karakept.app.ui.screens
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
@@ -51,6 +52,11 @@ class MainScreenModel(
 
     private val _currentFilter = MutableStateFlow(FilterConfig())
     val currentFilter: StateFlow<FilterConfig> = _currentFilter
+
+    // Signals that the default list setting has been loaded and applied to _currentFilter.
+    // The pagination observer waits for this to be true before triggering the first load,
+    // ensuring the user's default list is used instead of the generic ALL_BOOKMARKS.
+    private val _defaultFilterInitialized = MutableStateFlow(false)
 
     // Tracks the bookmark that triggered a tag filter, so back navigation can return to it
     private val _tagFilterSourceBookmarkId = MutableStateFlow<Long?>(null)
@@ -202,6 +208,29 @@ class MainScreenModel(
         }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
+        // Load the user's default list setting and apply it as the initial filter.
+        // This must complete before the pagination observer fires its first load so that
+        // the app opens directly on the user's preferred list.
+        screenModelScope.launch {
+            val defaultType = settingsRepository.defaultListType.first()
+            val defaultListId = settingsRepository.defaultListId.first()
+            val defaultFilter = when (defaultType) {
+                DefaultListType.ALL_BOOKMARKS -> FilterConfig()
+                DefaultListType.FAVORITES -> FilterConfig(status = FilterStatus.FAVORITES)
+                DefaultListType.ARCHIVED -> FilterConfig(status = FilterStatus.ARCHIVED)
+                DefaultListType.SPECIFIC_LIST -> if (defaultListId != null) {
+                    FilterConfig(lists = listOf(defaultListId))
+                } else {
+                    FilterConfig()
+                }
+            }
+            _currentFilter.value = defaultFilter
+            if (defaultFilter.lists.size == 1) {
+                _currentListContext.value = defaultFilter.lists.first()
+            }
+            _defaultFilterInitialized.value = true
+        }
+
         // Initialize selected server
         screenModelScope.launch {
             servers.collect { serverList ->
@@ -229,10 +258,10 @@ class MainScreenModel(
 
         // Observe filter and server changes to trigger initial load
         screenModelScope.launch {
-            combine(selectedServer, _currentFilter) { server, filter ->
-                Pair(server, filter)
-            }.collect { (server, filter) ->
-                if (server != null) {
+            combine(selectedServer, _currentFilter, _defaultFilterInitialized) { server, filter, initialized ->
+                Triple(server, filter, initialized)
+            }.collect { (server, filter, initialized) ->
+                if (server != null && initialized) {
                     // Reset pagination
                     _currentPage.value = 0
                     _accumulatedBookmarks.value = emptyList()
