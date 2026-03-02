@@ -166,52 +166,42 @@ object MainScreen : Screen {
             }
         }
 
-        // Scroll-triggered action: when a bookmark scrolls off screen, apply the active list's scroll action
+        // Scroll-triggered action: apply the active list's scroll action silently (no snackbar)
+        // when bookmarks scroll off the top, or when reaching the bottom of the list.
         LaunchedEffect(currentListScrollAction, currentListScrollActionConfig) {
             if (currentListScrollAction != SwipeAction.NONE) {
                 var lastFirstVisibleIndex = listState.firstVisibleItemIndex
-                snapshotFlow { listState.firstVisibleItemIndex }.collect { newIndex ->
-                    if (newIndex > lastFirstVisibleIndex) {
-                        // Items from lastFirstVisibleIndex to newIndex - 1 have scrolled off screen
-                        for (i in lastFirstVisibleIndex until newIndex) {
-                            val scrolledBookmark = bookmarks.getOrNull(i) ?: continue
-                            when (currentListScrollAction) {
-                                SwipeAction.MARK_READ -> {
-                                    if (!scrolledBookmark.isRead) {
-                                        screenModel.toggleBookmarkRead(scrolledBookmark)
-                                    }
-                                }
-                                SwipeAction.ARCHIVE -> {
-                                    if (!scrolledBookmark.isArchived) {
-                                        screenModel.toggleBookmarkArchive(scrolledBookmark)
-                                    }
-                                }
-                                SwipeAction.FAVOURITE -> {
-                                    screenModel.toggleBookmarkFavorite(scrolledBookmark)
-                                }
-                                SwipeAction.ADD_TAG -> {
-                                    val tagName = currentListScrollActionConfig?.tagName
-                                    if (tagName != null) {
-                                        val currentTags = scrolledBookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                                        if (!currentTags.contains(tagName)) {
-                                            screenModel.addBookmarkTag(scrolledBookmark, tagName)
-                                        }
-                                    }
-                                }
-                                SwipeAction.ADD_TO_LIST -> {
-                                    val listId = currentListScrollActionConfig?.listId
-                                    if (listId != null) {
-                                        val bookmarkListIds = scrolledBookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                                        if (!bookmarkListIds.contains(listId)) {
-                                            screenModel.moveBookmarkToList(scrolledBookmark, listId)
-                                        }
-                                    }
-                                }
-                                else -> {}
-                            }
+                var bottomReached = false
+                snapshotFlow {
+                    Pair(
+                        listState.firstVisibleItemIndex,
+                        listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                    )
+                }.collect { (newFirstIndex, lastVisibleIndex) ->
+                    val currentBookmarks = bookmarks
+                    val totalBookmarks = currentBookmarks.size
+
+                    if (newFirstIndex > lastFirstVisibleIndex) {
+                        // Items from lastFirstVisibleIndex to newFirstIndex - 1 have scrolled off screen
+                        for (i in lastFirstVisibleIndex until newFirstIndex) {
+                            val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
+                            screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
                         }
+                        lastFirstVisibleIndex = newFirstIndex
+                        bottomReached = false
                     }
-                    lastFirstVisibleIndex = newIndex
+
+                    // When the last visible item is the last bookmark in the list, apply the action
+                    // to all remaining visible items that haven't been processed yet.
+                    if (!bottomReached && totalBookmarks > 0 && lastFirstVisibleIndex > 0 &&
+                        lastVisibleIndex >= totalBookmarks - 1) {
+                        for (i in lastFirstVisibleIndex until totalBookmarks) {
+                            val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
+                            screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
+                        }
+                        lastFirstVisibleIndex = totalBookmarks
+                        bottomReached = true
+                    }
                 }
             }
         }

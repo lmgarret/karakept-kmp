@@ -117,7 +117,7 @@ class MainScreenModel(
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Track list counts (map of list ID to bookmark count)
-    // Respects per-list "countOnlyUnread" setting
+    // Respects per-list "countOnlyUnread" setting and includes bookmarks from descendant lists
     val listCounts: StateFlow<Map<String, Int>> = combine(
         selectedServer,
         lists,
@@ -129,9 +129,11 @@ class MainScreenModel(
         listItems.associate { list ->
             val listId = list.id ?: ""
             val settings = allSettings[listId] ?: com.karakept.app.data.model.ListSettings()
+            val descendantIds = getAllDescendantIds(listId, listItems)
+            val relevantIds = setOf(listId) + descendantIds
             val count = bookmarks.count { bookmark ->
                 val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                bookmarkLists.contains(listId) && (!settings.countOnlyUnread || !bookmark.isRead)
+                bookmarkLists.any { it in relevantIds } && (!settings.countOnlyUnread || !bookmark.isRead)
             }
             listId to count
         }
@@ -902,6 +904,53 @@ class MainScreenModel(
         screenModelScope.launch {
             val server = _selectedServer.value ?: return@launch
             listRepository.renameList(server, listId, newName, newIcon)
+        }
+    }
+
+    /**
+     * Execute a scroll-triggered action on a bookmark silently (no snackbar).
+     * Called when a bookmark scrolls off screen or when the bottom of the list is reached.
+     */
+    fun executeScrollAction(
+        bookmark: BookmarkEntity,
+        action: com.karakept.app.data.model.SwipeAction,
+        config: com.karakept.app.data.model.CustomSwipeActionConfig?
+    ) {
+        screenModelScope.launch {
+            when (action) {
+                com.karakept.app.data.model.SwipeAction.MARK_READ -> {
+                    if (!bookmark.isRead) {
+                        bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
+                        _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                            if (it.remoteId == bookmark.remoteId) it.copy(isRead = true) else it
+                        }
+                    }
+                }
+                com.karakept.app.data.model.SwipeAction.ARCHIVE -> {
+                    if (!bookmark.isArchived) {
+                        bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
+                        _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
+                            it.remoteId != bookmark.remoteId
+                        }
+                    }
+                }
+                com.karakept.app.data.model.SwipeAction.FAVOURITE -> {
+                    bookmarkActionsRepository.toggleFavourite(bookmark.remoteId, bookmark.serverId, bookmark.isStarred)
+                }
+                com.karakept.app.data.model.SwipeAction.ADD_TAG -> {
+                    val tagName = config?.tagName
+                    if (tagName != null) {
+                        addBookmarkTag(bookmark, tagName)
+                    }
+                }
+                com.karakept.app.data.model.SwipeAction.ADD_TO_LIST -> {
+                    val listId = config?.listId
+                    if (listId != null) {
+                        moveBookmarkToList(bookmark, listId)
+                    }
+                }
+                else -> {}
+            }
         }
     }
 
