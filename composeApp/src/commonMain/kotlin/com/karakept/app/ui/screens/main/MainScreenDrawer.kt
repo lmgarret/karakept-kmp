@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -68,6 +69,7 @@ internal fun MainScreenDrawer(
     onMarkAllAsRead: (listId: String) -> Unit,
     onRenameList: (listId: String, listName: String) -> Unit,
     onNavigateToListSettings: (listId: String, listName: String) -> Unit,
+    onSetAsDefault: (listId: String) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToHighlights: () -> Unit,
     content: @Composable () -> Unit
@@ -157,7 +159,8 @@ internal fun MainScreenDrawer(
                                         },
                                         onMarkAllAsRead = { onMarkAllAsRead(listId) },
                                         onRenameList = { onRenameList(listId, list.name ?: "") },
-                                        onListSettings = { onNavigateToListSettings(listId, list.name ?: "") }
+                                        onListSettings = { onNavigateToListSettings(listId, list.name ?: "") },
+                                        onSetAsDefault = { onSetAsDefault(listId) }
                                     )
                                 }
                             }
@@ -210,7 +213,8 @@ private fun ListDrawerItem(
     onSelected: () -> Unit,
     onMarkAllAsRead: () -> Unit,
     onRenameList: () -> Unit,
-    onListSettings: () -> Unit
+    onListSettings: () -> Unit,
+    onSetAsDefault: () -> Unit
 ) {
     val listId = list.id ?: ""
     var showMenu by remember { mutableStateOf(false) }
@@ -280,6 +284,14 @@ private fun ListDrawerItem(
             expanded = showMenu,
             onDismissRequest = { showMenu = false }
         ) {
+            DropdownMenuItem(
+                text = { Text("Set as home") },
+                leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    onSetAsDefault()
+                }
+            )
             DropdownMenuItem(
                 text = { Text("Mark all as read") },
                 leadingIcon = { Icon(Icons.Default.DoneAll, contentDescription = null) },

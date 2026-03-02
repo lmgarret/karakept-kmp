@@ -47,6 +47,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
+import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.CustomSwipeActionType
 import com.karakept.app.data.model.DefaultListType
@@ -102,8 +103,9 @@ class BookmarkListSettingsScreen : Screen {
                                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                             )
                         } else {
+                            val hierarchy = buildListHierarchy(availableLists)
                             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                                availableLists.forEach { list ->
+                                hierarchy.forEach { (list, depth) ->
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -112,7 +114,12 @@ class BookmarkListSettingsScreen : Screen {
                                                 screenModel.setDefaultListId(list.id)
                                                 showListPickerDialog = false
                                             }
-                                            .padding(horizontal = 24.dp, vertical = 12.dp),
+                                            .padding(
+                                                start = (24 + depth * 16).dp,
+                                                end = 24.dp,
+                                                top = 8.dp,
+                                                bottom = 8.dp
+                                            ),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         RadioButton(
@@ -125,7 +132,7 @@ class BookmarkListSettingsScreen : Screen {
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = list.name ?: list.id ?: "",
+                                            text = "${list.icon ?: ""} ${list.name ?: list.id ?: ""}".trim(),
                                             style = MaterialTheme.typography.bodyLarge
                                         )
                                     }
@@ -769,4 +776,37 @@ private fun SwipeActionSettingItem(
             )
         }
     }
+}
+
+/**
+ * Builds a hierarchical display order from a flat list of KarakeepLists.
+ * Returns pairs of (list, depth) in DFS order so parent lists appear before their children.
+ */
+private fun buildListHierarchy(lists: List<KarakeepList>): List<Pair<KarakeepList, Int>> {
+    val result = mutableListOf<Pair<KarakeepList, Int>>()
+    val grouped = lists.groupBy { it.parentId }
+    val visited = mutableSetOf<String>()
+
+    fun recurse(parentId: String?, depth: Int) {
+        if (depth > 10) return
+        val children = grouped[parentId] ?: return
+        children.forEach { child ->
+            val childId = child.id ?: ""
+            if (!visited.contains(childId)) {
+                visited.add(childId)
+                result.add(child to depth)
+                recurse(childId, depth + 1)
+            }
+        }
+    }
+
+    recurse(null, 0)
+
+    // Append orphans (lists whose parent was not found)
+    val processed = result.map { it.first.id ?: "" }.toSet()
+    lists.filter { (it.id ?: "") !in processed }.forEach { list ->
+        result.add(list to 0)
+    }
+
+    return result
 }

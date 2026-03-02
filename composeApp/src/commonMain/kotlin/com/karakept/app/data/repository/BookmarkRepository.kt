@@ -527,7 +527,16 @@ class BookmarkRepository(
                 bookmarkListMap.isNotEmpty() -> {
                     val ids = bookmarkListMap[dto.id ?: ""]?.joinToString(",") ?: ""
                     println("mapDtoToEntity: Bookmark ${dto.id} (${dto.title}) -> listIds: '$ids'")
-                    ids
+                    if (config is SyncConfiguration.ForList && existing != null && existing.listIds.isNotEmpty()) {
+                        // For ForList sync, MERGE new list membership with existing ones.
+                        // Simply overwriting would strip the bookmark from any other lists it belongs to,
+                        // causing those list counts to drop and the UI to blink on next reload.
+                        val existingIds = existing.listIds.split(",").filter { it.isNotEmpty() }.toMutableSet()
+                        existingIds.addAll(ids.split(",").filter { it.isNotEmpty() })
+                        existingIds.joinToString(",")
+                    } else {
+                        ids
+                    }
                 }
                 existing != null -> existing.listIds // Preserve for filtered syncs
                 else -> ""

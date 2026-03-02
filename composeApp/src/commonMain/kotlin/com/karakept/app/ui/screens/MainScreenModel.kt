@@ -731,6 +731,13 @@ class MainScreenModel(
         _tagFilterSourceBookmarkId.value = null
     }
 
+    fun setDefaultList(listId: String) {
+        screenModelScope.launch {
+            settingsRepository.setDefaultListType(DefaultListType.SPECIFIC_LIST)
+            settingsRepository.setDefaultListId(listId)
+        }
+    }
+
     fun toggleListExpanded(listId: String) {
         _expandedLists.value = if (_expandedLists.value.contains(listId)) {
             _expandedLists.value - listId

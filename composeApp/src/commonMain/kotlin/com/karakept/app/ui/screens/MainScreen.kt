@@ -293,6 +293,10 @@ object MainScreen : Screen {
                 navigator.push(PerListSettingsScreen(listId, listName))
                 scope.launch { drawerState.close() }
             },
+            onSetAsDefault = { listId ->
+                screenModel.setDefaultList(listId)
+                scope.launch { drawerState.close() }
+            },
             onNavigateToSettings = {
                 navigator.push(SettingsScreen())
                 scope.launch { drawerState.close() }
