@@ -103,5 +103,6 @@ val appModule = module {
     factory { SettingsScreenModel(get(), get(), get(), get()) }
     factory { HighlightsScreenModel(get(), get(), get(), get()) }
     factory { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }
+    factory { params -> com.karakept.app.ui.screens.settings.PerListSettingsScreenModel(params.get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }
 }

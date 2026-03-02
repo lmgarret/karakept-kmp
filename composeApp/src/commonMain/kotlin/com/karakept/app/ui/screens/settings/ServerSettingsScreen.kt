@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -195,7 +194,9 @@ class ServerSettingsScreen(val highlightOfflineMode: Boolean = false) : Screen {
 
                 // Content Sync Mode (RadioButton Group)
                 val syncStrategy by screenModel.contentSyncStrategy.collectAsState()
+                // Exclude PER_LIST – per-list sync is now configured per list in the sidebar
                 val strategies = com.karakept.app.data.model.SyncStrategy.values()
+                    .filter { it != com.karakept.app.data.model.SyncStrategy.PER_LIST }
 
                 Text(
                     text = "Content sync mode",
@@ -216,38 +217,16 @@ class ServerSettingsScreen(val highlightOfflineMode: Boolean = false) : Screen {
                     }
                 }
                 
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "You can also toggle offline sync per list. Long-press any list in the sidebar and open its settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
-
-                // Configure List Sync Button (only shown when PER_LIST mode is selected)
-                if (syncStrategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { navigator.push(com.karakept.app.ui.screens.settings.ListManagementScreen()) }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.List,
-                                contentDescription = null,
-                                modifier = Modifier.padding(end = 16.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = "Configure List Sync",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
                 
                 Text(
                     text = "Connected Server",

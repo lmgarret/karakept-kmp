@@ -4,18 +4,26 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -29,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
@@ -52,9 +61,11 @@ import com.karakept.app.ui.screens.main.BookmarkListContent
 import com.karakept.app.ui.screens.main.MainScreenDrawer
 import com.karakept.app.ui.screens.main.MainScreenTopBar
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.snapshotFlow
 import getPlatform
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
+import com.karakept.app.ui.screens.settings.PerListSettingsScreen
 import org.koin.compose.koinInject
 
 object MainScreen : Screen {
@@ -88,6 +99,8 @@ object MainScreen : Screen {
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
+        val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
+        val currentListScrollActionConfig by screenModel.currentListScrollActionConfig.collectAsState()
 
         val searchQuery by screenModel.searchQuery.collectAsState()
 
@@ -97,6 +110,8 @@ object MainScreen : Screen {
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var showAddBookmarkDialog by remember { mutableStateOf(false) }
+        // Rename list dialog state: Triple(listId, listName, currentIcon)
+        var renameListTarget by remember { mutableStateOf<Triple<String, String, String?>?>(null) }
         val pendingBookmarkRemoteIds by screenModel.pendingBookmarkRemoteIds.collectAsState()
         var isSearchActive by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
@@ -148,6 +163,67 @@ object MainScreen : Screen {
         LaunchedEffect(Unit) {
             screenModel.scrollToTopTrigger.collect {
                 listState.animateScrollToItem(0)
+            }
+        }
+
+        // Scroll-triggered action: apply the active list's scroll action silently (no snackbar)
+        // when bookmarks scroll off the top, or when reaching the bottom of the list.
+        LaunchedEffect(currentListScrollAction, currentListScrollActionConfig) {
+            if (currentListScrollAction != SwipeAction.NONE) {
+                var lastFirstVisibleIndex = listState.firstVisibleItemIndex
+                var bottomReached = false
+                // Set to true once the user has actively scrolled (items scrolled off top).
+                // For short lists where no item ever leaves the top, we use scrollJustStopped instead.
+                var userHasScrolled = false
+                var wasScrolling = false
+                snapshotFlow {
+                    Pair(
+                        Triple(
+                            listState.firstVisibleItemIndex,
+                            listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
+                            // Including bookmarks.size ensures the flow re-emits when pagination loads
+                            // more items, so the bottom-of-list check is re-evaluated.
+                            bookmarks.size
+                        ),
+                        listState.isScrollInProgress
+                    )
+                }.collect { (scrollState, isScrolling) ->
+                    val (newFirstIndex, lastVisibleIndex, _) = scrollState
+                    val currentBookmarks = bookmarks
+                    val totalBookmarks = currentBookmarks.size
+
+                    // Detect when the user finishes a scroll gesture (finger lifted).
+                    // Used to trigger the bottom action for short lists where items never
+                    // scroll past the title bar.
+                    val scrollJustStopped = wasScrolling && !isScrolling
+                    wasScrolling = isScrolling
+
+                    if (newFirstIndex > lastFirstVisibleIndex) {
+                        // Items from lastFirstVisibleIndex to newFirstIndex - 1 have scrolled off screen
+                        userHasScrolled = true
+                        for (i in lastFirstVisibleIndex until newFirstIndex) {
+                            val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
+                            screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
+                        }
+                        lastFirstVisibleIndex = newFirstIndex
+                        bottomReached = false
+                    }
+
+                    // When the last visible item is the last bookmark in the list, apply the action
+                    // to all remaining visible items that haven't been processed yet.
+                    // For long lists: fires when items have scrolled off the top (userHasScrolled).
+                    // For short lists where no item ever leaves the top: fires when the user
+                    // pulls/scrolls to the bottom and releases (scrollJustStopped).
+                    val atBottom = totalBookmarks > 0 && lastVisibleIndex >= totalBookmarks - 1
+                    if (!bottomReached && atBottom && (userHasScrolled || scrollJustStopped)) {
+                        for (i in lastFirstVisibleIndex until totalBookmarks) {
+                            val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
+                            screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
+                        }
+                        lastFirstVisibleIndex = totalBookmarks
+                        bottomReached = true
+                    }
+                }
             }
         }
 
@@ -204,6 +280,19 @@ object MainScreen : Screen {
             onToggleListExpanded = { listId ->
                 screenModel.toggleListExpanded(listId)
             },
+            onMarkAllAsRead = { listId ->
+                screenModel.markAllBookmarksInListAsRead(listId)
+                scope.launch { drawerState.close() }
+            },
+            onRenameList = { listId, listName ->
+                val targetList = lists.find { it.id == listId }
+                renameListTarget = Triple(listId, listName, targetList?.icon)
+                scope.launch { drawerState.close() }
+            },
+            onNavigateToListSettings = { listId, listName ->
+                navigator.push(PerListSettingsScreen(listId, listName))
+                scope.launch { drawerState.close() }
+            },
             onNavigateToSettings = {
                 navigator.push(SettingsScreen())
                 scope.launch { drawerState.close() }
@@ -213,6 +302,19 @@ object MainScreen : Screen {
                 scope.launch { drawerState.close() }
             }
         ) {
+            // Rename list dialog
+            renameListTarget?.let { (listId, initialName, initialIcon) ->
+                RenameListDialog(
+                    initialName = initialName,
+                    initialIcon = initialIcon ?: "",
+                    onDismiss = { renameListTarget = null },
+                    onConfirm = { newName, newIcon ->
+                        screenModel.renameList(listId, newName, newIcon.ifBlank { null })
+                        renameListTarget = null
+                    }
+                )
+            }
+
             Scaffold(
                 modifier = Modifier.fillMaxSize().onKeyEvent { keyEvent ->
                     if (keyEvent.type == KeyEventType.KeyDown && keyEvent.keyboardKey == Key.Escape && isSearchActive) {
@@ -533,4 +635,51 @@ fun rememberSnackbarHostState(manager: ActionSnackbarManager): androidx.compose.
     }
 
     return snackbarHostState
+}
+
+@Composable
+private fun RenameListDialog(
+    initialName: String,
+    initialIcon: String,
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, icon: String) -> Unit
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var icon by remember { mutableStateOf(initialIcon) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { androidx.compose.material3.Text("Rename list") },
+        text = {
+            Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { androidx.compose.material3.Text("List name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = icon,
+                    onValueChange = { icon = it },
+                    label = { androidx.compose.material3.Text("Icon (emoji)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name.trim(), icon.trim()) },
+                enabled = name.isNotBlank()
+            ) {
+                androidx.compose.material3.Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                androidx.compose.material3.Text("Cancel")
+            }
+        }
+    )
 }

@@ -94,6 +94,26 @@ class ListRepository(
     }
 
     /**
+     * Rename a list and optionally update its icon.
+     * Updates the server and then reloads from the local database.
+     */
+    suspend fun renameList(server: Server, listId: String, newName: String, newIcon: String?): Result<Unit> {
+        return try {
+            val updated = remoteDataSource.updateList(server, listId, newName, newIcon)
+            val entity = updated.toEntity(server.id)
+            listDao.insertLists(listOf(entity))
+            loadListsFromDatabase(server.id)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Update locally for immediate feedback even when remote fails
+            listDao.updateListNameAndIcon(listId, server.id, newName, newIcon, System.currentTimeMillis())
+            loadListsFromDatabase(server.id)
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Observe lists changes in the database for a specific server.
      * This is useful for reacting to database changes in real-time.
      */

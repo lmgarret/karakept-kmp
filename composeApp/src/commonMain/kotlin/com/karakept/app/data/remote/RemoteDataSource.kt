@@ -253,6 +253,24 @@ class RemoteDataSource(
     }
 
     /**
+     * Update a list's name and/or icon
+     * PATCH /api/v1/lists/:listId
+     */
+    suspend fun updateList(
+        server: Server,
+        listId: String,
+        name: String,
+        icon: String?
+    ): KarakeepList = guardedCall {
+        try {
+            val request = ListsListIdPatchRequest(name = name, icon = icon)
+            listsApi(server).listsListIdPatch(listId, request).body()
+        } catch (e: Exception) {
+            throw ApiException("Error updating list: ${e.message}", e)
+        }
+    }
+
+    /**
      * Get all highlights
      * GET /api/v1/highlights
      */

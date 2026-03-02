@@ -117,18 +117,23 @@ class MainScreenModel(
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Track list counts (map of list ID to bookmark count)
+    // Respects per-list "countOnlyUnread" setting and includes bookmarks from descendant lists
     val listCounts: StateFlow<Map<String, Int>> = combine(
         selectedServer,
         lists,
-        allBookmarks
-    ) { server, listItems, bookmarks ->
+        allBookmarks,
+        settingsRepository.allListSettings
+    ) { server, listItems, bookmarks, allSettings ->
         if (server == null) return@combine emptyMap()
 
         listItems.associate { list ->
             val listId = list.id ?: ""
+            val settings = allSettings[listId] ?: com.karakept.app.data.model.ListSettings()
+            val descendantIds = getAllDescendantIds(listId, listItems)
+            val relevantIds = setOf(listId) + descendantIds
             val count = bookmarks.count { bookmark ->
                 val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                bookmarkLists.contains(listId)
+                bookmarkLists.any { it in relevantIds } && (!settings.countOnlyUnread || !bookmark.isRead)
             }
             listId to count
         }
@@ -171,6 +176,31 @@ class MainScreenModel(
         initialValue = true
     )
 
+    // Per-list scroll action: the action configured for the currently filtered list (if any single list is active)
+    val currentListScrollAction: StateFlow<com.karakept.app.data.model.SwipeAction> =
+        _currentListContext
+            .flatMapLatest { listId ->
+                if (listId != null) {
+                    settingsRepository.getListSettings(listId).map { it.scrollAction }
+                } else {
+                    flowOf(com.karakept.app.data.model.SwipeAction.NONE)
+                }
+            }
+            .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), com.karakept.app.data.model.SwipeAction.NONE)
+
+    // The custom action config for the scroll action (if a custom action is configured)
+    val currentListScrollActionConfig: StateFlow<com.karakept.app.data.model.CustomSwipeActionConfig?> =
+        combine(
+            _currentListContext,
+            settingsRepository.allListSettings,
+            customSwipeActionConfigs
+        ) { listId, allSettings, configs ->
+            if (listId == null) return@combine null
+            val settings = allSettings[listId] ?: return@combine null
+            val configId = settings.scrollActionConfigId ?: return@combine null
+            configs.find { it.id == configId }
+        }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     init {
         // Initialize selected server
         screenModelScope.launch {
@@ -208,9 +238,16 @@ class MainScreenModel(
                     _accumulatedBookmarks.value = emptyList()
                     _hasMoreItems.value = true
 
-                    // Load first page
-                    val newItems = loadBookmarksPage(server, filter, 0)
+                    // Use findPageWithItems so that we skip over DB pages that are entirely
+                    // filtered out by the client-side list filter (e.g. multi-list expansion).
+                    // Without this, the initial view could show 0 items when page 0 is filtered
+                    // out but later pages contain matching items.
+                    val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
                     _accumulatedBookmarks.value = newItems
+                    _currentPage.value = lastPage
+                    if (dbExhausted) {
+                        _hasMoreItems.value = false
+                    }
                 }
             }
         }
@@ -232,17 +269,20 @@ class MainScreenModel(
                     val allItems = mutableListOf<BookmarkEntity>()
 
                     for (page in 0..currentPage) {
-                        val pageItems = loadBookmarksPage(server, filter, page)
+                        val (pageItems, _) = loadBookmarksPage(server, filter, page)
                         allItems.addAll(pageItems)
-                        if (pageItems.size < pageSize) {
-                            // Reached the end
-                            _hasMoreItems.value = false
-                            break
-                        }
+                        // Do NOT break when pageItems.size < pageSize. When multi-list
+                        // client-side filtering is active (includeChildListBookmarks = true),
+                        // a DB page of 20 items may yield only a few matches. Breaking early
+                        // here causes bookmarks to disappear after pull-to-refresh.
+                        // The true end-of-data is detected by loadNextPage on the next scroll.
                     }
 
                     // Swap in the new data atomically (no empty state in between)
                     _accumulatedBookmarks.value = allItems
+                    // Reset so the user can scroll to discover whether more data exists;
+                    // loadNextPage will set this to false when the DB is truly exhausted.
+                    _hasMoreItems.value = true
                 }
             }
         }
@@ -382,33 +422,95 @@ class MainScreenModel(
     }
 
     // Pagination helper functions
+
+    /**
+     * Loads a single page from the DB and applies client-side filters.
+     *
+     * @return Pair of (filtered items, raw DB item count before filtering).
+     *         The raw count is used to detect true DB exhaustion: when rawCount < pageSize
+     *         there are no more DB pages, even if the filtered list is empty.
+     */
     private suspend fun loadBookmarksPage(
         server: Server,
         filter: FilterConfig,
         page: Int
-    ): List<BookmarkEntity> {
+    ): Pair<List<BookmarkEntity>, Int> {
         val offset = page * pageSize
 
+        // Expand filter lists to include child lists for those with includeChildListBookmarks enabled
+        val expandedFilter = if (filter.lists.isNotEmpty()) {
+            val expandedLists = expandListsWithChildren(filter.lists)
+            if (expandedLists != filter.lists) filter.copy(lists = expandedLists) else filter
+        } else {
+            filter
+        }
+
         // If filtering by a single list, use DB-level list filtering
-        val singleListId = if (filter.lists.size == 1) filter.lists.first() else null
+        val singleListId = if (expandedFilter.lists.size == 1) expandedFilter.lists.first() else null
 
         // Fetch paginated bookmarks from repository (filtered by status at DB level)
         val pagedBookmarks = bookmarkRepository.getBookmarksPaged(
             server = server,
-            status = filter.status,
+            status = expandedFilter.status,
             offset = offset,
             limit = pageSize,
             listId = singleListId
         )
 
+        val rawCount = pagedBookmarks.size
+
         // Apply client-side filters (tags, lists)
         // Note: if we already filtered by single list at DB level, skip client-side list filter
-        val filtered = applyClientSideFilters(pagedBookmarks, filter, skipListFilter = singleListId != null)
+        val filtered = applyClientSideFilters(pagedBookmarks, expandedFilter, skipListFilter = singleListId != null)
 
         // Apply sorting
-        val sorted = applySorting(filtered, filter.sort)
+        val sorted = applySorting(filtered, expandedFilter.sort)
 
-        return sorted
+        return Pair(sorted, rawCount)
+    }
+
+    /**
+     * Advances through consecutive DB pages starting at [startPage] until either:
+     * - At least one item survives the client-side filter, OR
+     * - The DB is truly exhausted (raw page size < [pageSize]).
+     *
+     * Delegates to the package-level [advancePagesUntilItemsFound] so the algorithm is
+     * unit-testable without instantiating the ScreenModel.
+     *
+     * @return Triple(filteredItems, lastPageLoaded, dbExhausted)
+     */
+    internal suspend fun findPageWithItems(
+        server: Server,
+        filter: FilterConfig,
+        startPage: Int
+    ): Triple<List<BookmarkEntity>, Int, Boolean> {
+        return advancePagesUntilItemsFound(startPage, pageSize) { page ->
+            loadBookmarksPage(server, filter, page)
+        }
+    }
+
+    private suspend fun expandListsWithChildren(listIds: List<String>): List<String> {
+        val result = listIds.toMutableList()
+        val allLists = lists.value
+
+        for (listId in listIds) {
+            val settings = settingsRepository.getListSettings(listId).first()
+            if (settings.includeChildListBookmarks) {
+                val childIds = getAllDescendantIds(listId, allLists)
+                childIds.forEach { if (!result.contains(it)) result.add(it) }
+            }
+        }
+
+        return result
+    }
+
+    private fun getAllDescendantIds(parentId: String, allLists: List<KarakeepList>): List<String> {
+        val directChildren = allLists.filter { it.parentId == parentId }.mapNotNull { it.id }
+        val allDescendants = directChildren.toMutableList()
+        for (childId in directChildren) {
+            allDescendants.addAll(getAllDescendantIds(childId, allLists))
+        }
+        return allDescendants
     }
 
     private fun applyClientSideFilters(
@@ -477,14 +579,17 @@ class MainScreenModel(
                 val filter = _currentFilter.value
                 val nextPage = _currentPage.value + 1
 
-                val newItems = loadBookmarksPage(server, filter, nextPage)
+                // Keep advancing through DB pages until we find visible items or the DB is
+                // truly exhausted. When multi-list client-side filtering is active, a full DB
+                // page may be entirely filtered out; we must NOT stop there.
+                val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, nextPage)
 
-                if (newItems.isEmpty()) {
-                    _hasMoreItems.value = false
-                } else {
-                    // Append to accumulated list
+                if (newItems.isNotEmpty()) {
                     _accumulatedBookmarks.value = _accumulatedBookmarks.value + newItems
-                    _currentPage.value = nextPage
+                    _currentPage.value = lastPage
+                }
+                if (dbExhausted) {
+                    _hasMoreItems.value = false
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -810,6 +915,84 @@ class MainScreenModel(
                 } else {
                     it
                 }
+            }
+        }
+    }
+
+    /**
+     * Mark all bookmarks in a list as read. No snackbar shown.
+     */
+    fun markAllBookmarksInListAsRead(listId: String) {
+        screenModelScope.launch {
+            val serverId = _selectedServer.value?.id ?: return@launch
+            val unreadInList = allBookmarks.value.filter { bookmark ->
+                val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                bookmarkLists.contains(listId) && !bookmark.isRead
+            }
+            unreadInList.forEach { bookmark ->
+                bookmarkActionsRepository.markAsRead(bookmark.remoteId, serverId)
+            }
+            // Update accumulated list immediately for UI feedback
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                val bookmarkLists = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotEmpty() }
+                if (bookmarkLists.contains(listId)) it.copy(isRead = true) else it
+            }
+        }
+    }
+
+    /**
+     * Rename a list and optionally change its icon.
+     */
+    fun renameList(listId: String, newName: String, newIcon: String?) {
+        screenModelScope.launch {
+            val server = _selectedServer.value ?: return@launch
+            listRepository.renameList(server, listId, newName, newIcon)
+        }
+    }
+
+    /**
+     * Execute a scroll-triggered action on a bookmark silently (no snackbar).
+     * Called when a bookmark scrolls off screen or when the bottom of the list is reached.
+     */
+    fun executeScrollAction(
+        bookmark: BookmarkEntity,
+        action: com.karakept.app.data.model.SwipeAction,
+        config: com.karakept.app.data.model.CustomSwipeActionConfig?
+    ) {
+        screenModelScope.launch {
+            when (action) {
+                com.karakept.app.data.model.SwipeAction.MARK_READ -> {
+                    if (!bookmark.isRead) {
+                        bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
+                        _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                            if (it.remoteId == bookmark.remoteId) it.copy(isRead = true) else it
+                        }
+                    }
+                }
+                com.karakept.app.data.model.SwipeAction.ARCHIVE -> {
+                    if (!bookmark.isArchived) {
+                        bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
+                        _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
+                            it.remoteId != bookmark.remoteId
+                        }
+                    }
+                }
+                com.karakept.app.data.model.SwipeAction.FAVOURITE -> {
+                    bookmarkActionsRepository.toggleFavourite(bookmark.remoteId, bookmark.serverId, bookmark.isStarred)
+                }
+                com.karakept.app.data.model.SwipeAction.ADD_TAG -> {
+                    val tagName = config?.tagName
+                    if (tagName != null) {
+                        addBookmarkTag(bookmark, tagName)
+                    }
+                }
+                com.karakept.app.data.model.SwipeAction.ADD_TO_LIST -> {
+                    val listId = config?.listId
+                    if (listId != null) {
+                        moveBookmarkToList(bookmark, listId)
+                    }
+                }
+                else -> {}
             }
         }
     }

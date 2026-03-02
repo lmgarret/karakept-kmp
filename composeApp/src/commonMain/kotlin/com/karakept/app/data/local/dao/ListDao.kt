@@ -26,4 +26,7 @@ interface ListDao {
 
     @Query("DELETE FROM lists WHERE serverId = :serverId")
     suspend fun deleteAllForServer(serverId: String)
+
+    @Query("UPDATE lists SET name = :name, icon = :icon, updatedAt = :updatedAt WHERE remoteId = :remoteId AND serverId = :serverId")
+    suspend fun updateListNameAndIcon(remoteId: String, serverId: String, name: String, icon: String?, updatedAt: Long)
 }

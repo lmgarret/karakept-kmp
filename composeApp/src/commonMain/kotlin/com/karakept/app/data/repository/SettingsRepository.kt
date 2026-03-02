@@ -419,6 +419,42 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    private val PER_LIST_SETTINGS_KEY = stringPreferencesKey("per_list_settings")
+
+    val allListSettings: Flow<Map<String, com.karakept.app.data.model.ListSettings>> =
+        dataStore.data.map { preferences ->
+            val json = preferences[PER_LIST_SETTINGS_KEY] ?: "{}"
+            try {
+                Json.decodeFromString(json)
+            } catch (e: Exception) {
+                emptyMap()
+            }
+        }
+
+    fun getListSettings(listId: String): Flow<com.karakept.app.data.model.ListSettings> =
+        dataStore.data.map { preferences ->
+            val json = preferences[PER_LIST_SETTINGS_KEY] ?: "{}"
+            try {
+                val map: Map<String, com.karakept.app.data.model.ListSettings> = Json.decodeFromString(json)
+                map[listId] ?: com.karakept.app.data.model.ListSettings()
+            } catch (e: Exception) {
+                com.karakept.app.data.model.ListSettings()
+            }
+        }
+
+    suspend fun setListSettings(listId: String, settings: com.karakept.app.data.model.ListSettings) {
+        dataStore.edit { preferences ->
+            val current: MutableMap<String, com.karakept.app.data.model.ListSettings> = try {
+                val json = preferences[PER_LIST_SETTINGS_KEY] ?: "{}"
+                Json.decodeFromString<Map<String, com.karakept.app.data.model.ListSettings>>(json).toMutableMap()
+            } catch (e: Exception) {
+                mutableMapOf()
+            }
+            current[listId] = settings
+            preferences[PER_LIST_SETTINGS_KEY] = Json.encodeToString<Map<String, com.karakept.app.data.model.ListSettings>>(current)
+        }
+    }
+
     private val ONBOARDING_COMPLETED_KEY = booleanPreferencesKey("onboarding_completed")
 
     private val DIM_READ_BOOKMARKS_KEY = booleanPreferencesKey("dim_read_bookmarks")
