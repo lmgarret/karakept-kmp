@@ -31,7 +31,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Decode keystore
-        if: ${{ env.RELEASE_KEYSTORE != '' }}
+        if: ${{ secrets.RELEASE_KEYSTORE != '' }}
         env:
           RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
         run: echo "$RELEASE_KEYSTORE" | base64 -d > release.jks
@@ -47,40 +47,6 @@ jobs:
           -PversionName=${{ inputs.version || 'nightly' }}
           -PversionCode=${{ github.run_number }}
 
-      - name: Generate release notes with Claude
-        id: release-notes
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          # Commits since last versioned tag (ignores the rolling 'nightly' tag)
-          LAST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]' | head -1)
-          if [ -n "$LAST_TAG" ]; then
-            COMMITS=$(git log "${LAST_TAG}..HEAD" --pretty=format:"- %s" --no-merges)
-          else
-            COMMITS=$(git log --pretty=format:"- %s" --no-merges -n 30)
-          fi
-
-          RESPONSE=$(jq -n --arg commits "$COMMITS" '{
-            model: "claude-sonnet-4-6",
-            max_tokens: 1024,
-            messages: [{
-              role: "user",
-              content: ("Convert these git commits into user-friendly release notes for Karakept, a Kindle companion app for Android. Group related changes, use plain language (no technical jargon), and format as markdown bullet points. Skip any CI/build/tooling commits. Output only the release notes, no preamble:\n\n" + $commits)
-            }]
-          }' | curl -sf https://api.anthropic.com/v1/messages \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "content-type: application/json" \
-            -d @-)
-
-          NOTES=$(echo "$RESPONSE" | jq -r '.content[0].text // empty')
-
-          {
-            echo "body<<EOF"
-            echo "${NOTES:-$COMMITS}"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Create versioned release
         if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
@@ -88,7 +54,7 @@ jobs:
           tag_name: v${{ inputs.version }}
           name: "v${{ inputs.version }}"
           files: composeApp/build/outputs/apk/release/*.apk
-          body: ${{ steps.release-notes.outputs.body }}
+          generate_release_notes: true
 
       - name: Update nightly pre-release
         if: github.event_name == 'push'
@@ -98,5 +64,5 @@ jobs:
           name: "Nightly (#${{ github.run_number }})"
           files: composeApp/build/outputs/apk/release/*.apk
           prerelease: true
-          body: ${{ steps.release-notes.outputs.body }}
+          generate_release_notes: true
           make_latest: false

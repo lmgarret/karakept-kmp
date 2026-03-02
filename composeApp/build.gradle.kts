@@ -158,8 +158,8 @@ android {
         }
     }
     signingConfigs {
-        val keystorePath = System.getenv("KEYSTORE_PATH")
-        if (keystorePath != null) {
+        val keystorePath = System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+        if (keystorePath != null && file(keystorePath).exists()) {
             create("ciSigning") {
                 storeFile = file(keystorePath)
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
