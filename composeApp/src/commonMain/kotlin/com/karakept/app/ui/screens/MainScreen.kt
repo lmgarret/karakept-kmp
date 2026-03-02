@@ -172,17 +172,26 @@ object MainScreen : Screen {
             if (currentListScrollAction != SwipeAction.NONE) {
                 var lastFirstVisibleIndex = listState.firstVisibleItemIndex
                 var bottomReached = false
+                // Set to true only once the user has actively scrolled (items scrolled off top).
+                // This prevents the bottom-of-list action from firing immediately when the list
+                // loads and all items fit on one screen — the action should require intentional
+                // scrolling to the bottom.
+                var userHasScrolled = false
                 snapshotFlow {
-                    Pair(
+                    Triple(
                         listState.firstVisibleItemIndex,
-                        listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+                        listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
+                        // Including bookmarks.size ensures the flow re-emits when pagination loads
+                        // more items, so the bottom-of-list check is re-evaluated.
+                        bookmarks.size
                     )
-                }.collect { (newFirstIndex, lastVisibleIndex) ->
+                }.collect { (newFirstIndex, lastVisibleIndex, _) ->
                     val currentBookmarks = bookmarks
                     val totalBookmarks = currentBookmarks.size
 
                     if (newFirstIndex > lastFirstVisibleIndex) {
                         // Items from lastFirstVisibleIndex to newFirstIndex - 1 have scrolled off screen
+                        userHasScrolled = true
                         for (i in lastFirstVisibleIndex until newFirstIndex) {
                             val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
                             screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
@@ -193,7 +202,8 @@ object MainScreen : Screen {
 
                     // When the last visible item is the last bookmark in the list, apply the action
                     // to all remaining visible items that haven't been processed yet.
-                    if (!bottomReached && totalBookmarks > 0 && lastFirstVisibleIndex > 0 &&
+                    // Require userHasScrolled to avoid firing immediately when the list opens.
+                    if (userHasScrolled && !bottomReached && totalBookmarks > 0 &&
                         lastVisibleIndex >= totalBookmarks - 1) {
                         for (i in lastFirstVisibleIndex until totalBookmarks) {
                             val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
