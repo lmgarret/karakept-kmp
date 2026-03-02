@@ -4,7 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import cafe.adriel.voyager.navigator.Navigator
-import cafe.adriel.voyager.transitions.SlideTransition
+import com.karakept.app.ui.transitions.PredictiveBackTransition
 import com.karakept.app.di.appModule
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.KoinApplication
@@ -119,7 +119,7 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
 
             if (initialScreens != null) {
                 Navigator(initialScreens!!) { navigator ->
-                    SlideTransition(navigator)
+                    PredictiveBackTransition(navigator)
                 }
             }
     }
