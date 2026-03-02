@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
 
     steps:
       - uses: actions/checkout@v4
@@ -31,9 +33,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Decode keystore
-        if: ${{ secrets.RELEASE_KEYSTORE != '' }}
-        env:
-          RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
+        if: env.RELEASE_KEYSTORE != ''
         run: echo "$RELEASE_KEYSTORE" | base64 -d > release.jks
 
       - name: Build release APK
