@@ -348,19 +348,25 @@ class MainScreenModel(
         }
     }
 
-    val bookmarks: StateFlow<List<BookmarkEntity>> = combine(
-        _pendingBookmarks,
-        _accumulatedBookmarks,
-        allBookmarks,
-        _currentFilter,
-        _searchQuery
-    ) { pending, accumulated, all, filter, query ->
-        if (query.isBlank()) {
-            pending + accumulated
-        } else {
-            applySearchFilter(all, filter, query)
+    // Split into two completely independent pipelines so that DB writes during sync
+    // (which cause allBookmarks to emit) never trigger recomposition of the normal list.
+    // flatMapLatest switches between pipelines when the search query changes; collectLatest
+    // in each collector ensures only the latest emission is processed.
+    val bookmarks: StateFlow<List<BookmarkEntity>> = _searchQuery
+        .flatMapLatest { query ->
+            if (query.isBlank()) {
+                // Pagination mode: only pending + accumulated matter; allBookmarks is irrelevant
+                combine(_pendingBookmarks, _accumulatedBookmarks) { pending, accumulated ->
+                    pending + accumulated
+                }
+            } else {
+                // Search mode: filter the full DB snapshot by query + current filter
+                combine(allBookmarks, _currentFilter) { all, filter ->
+                    applySearchFilter(all, filter, query)
+                }
+            }
         }
-    }.stateIn(screenModelScope, SharingStarted.Lazily, emptyList())
+        .stateIn(screenModelScope, SharingStarted.Lazily, emptyList())
 
     private fun applySearchFilter(
         all: List<BookmarkEntity>,
@@ -717,9 +723,11 @@ class MainScreenModel(
      */
     private suspend fun resetPaginationAndLoad(server: Server, filter: FilterConfig) {
         _currentPage.value = 0
-        _accumulatedBookmarks.value = emptyList()
         _hasMoreItems.value = true
 
+        // Load new items first, then swap atomically — same pattern as the reloadTrigger observer.
+        // Setting emptyList() before the suspend DB call would flash a blank screen on every
+        // filter change and on initial startup, which is worse UX than briefly showing stale items.
         val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
         _accumulatedBookmarks.value = newItems
         _currentPage.value = lastPage
