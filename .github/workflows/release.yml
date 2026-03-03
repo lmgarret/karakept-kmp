@@ -17,7 +17,7 @@ jobs:
     permissions:
       contents: write
     env:
-      RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
+      HAS_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Decode keystore
-        if: env.RELEASE_KEYSTORE != ''
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
         run: echo "$RELEASE_KEYSTORE" | base64 -d > release.jks
 
       - name: Build release APK
