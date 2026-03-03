@@ -214,6 +214,11 @@ class BookmarkViewerScreenModel(
         screenModelScope.launch {
             try {
                 var hasLoadedOnce = false
+                // Cache for transient content (not persisted to DB). Without this cache,
+                // every DB update (e.g. reading-progress saves) would re-emit a bookmark
+                // with null content, causing the screen model to re-fetch the content and
+                // reset the WebView — making scrolling hectic.
+                var transientContent: String? = null
                 // Observe bookmark changes from DB reactively
                 bookmarkDao.observeBookmarkById(id).collect { bookmark ->
                     if (bookmark != null) {
@@ -232,46 +237,56 @@ class BookmarkViewerScreenModel(
                             }
                         }
                         hasLoadedOnce = true
-                        
+
                         // Check for content availability
                         if (bookmark.content.isNullOrBlank()) {
-                            // Show existing with loading indicator if possible, or just the bookmark metadata
-                            _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
-                            
-                            // Trigger on-demand fetch
-                            try {
-                                val strategy = settingsRepository.contentSyncStrategy.first()
-                                if (strategy == com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK || 
-                                    strategy == com.karakept.app.data.model.SyncStrategy.NEVER ||
-                                    strategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
-                                    
-                                    val content = bookmarkRepository.fetchBookmarkContent(bookmark.remoteId, bookmark.serverId)
-                                    if (!content.isNullOrBlank()) {
-                                        var shouldPersist = false
-                                        
-                                        if (strategy == com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK) {
-                                            shouldPersist = true
-                                        } else if (strategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
-                                            // Check if in target list
-                                            val targetLists = settingsRepository.contentSyncTargetLists.first()
-                                            val bookmarkListIds = bookmark.listIds.split(",").filter { it.isNotBlank() }
-                                            shouldPersist = bookmarkListIds.any { targetLists.contains(it) }
-                                        }
-                                        
-                                        if (shouldPersist) {
-                                            // Persist it
-                                            val readingTime = com.karakept.app.utils.ReadingTimeCalculator.calculateReadingTime(content)
-                                            bookmarkDao.updateContent(bookmark.localId, content, readingTime)
-                                            // The flow will emit the updated bookmark automatically
-                                        } else {
-                                            // Transient (NEVER or PER_LIST outside target list)
-                                            val transientBookmark = bookmark.copy(content = content)
-                                            _loadingState.value = BookmarkLoadingState.FullyLoaded(transientBookmark)
+                            // If we already fetched transient content this session, reuse it
+                            // to avoid resetting the WebView on every DB change (e.g. reading-
+                            // progress saves). The updated bookmark metadata (scroll position,
+                            // reading progress, etc.) is still reflected via bookmark.copy().
+                            if (transientContent != null) {
+                                _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark.copy(content = transientContent))
+                            } else {
+                                // Show existing with loading indicator if possible, or just the bookmark metadata
+                                _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
+
+                                // Trigger on-demand fetch
+                                try {
+                                    val strategy = settingsRepository.contentSyncStrategy.first()
+                                    if (strategy == com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK ||
+                                        strategy == com.karakept.app.data.model.SyncStrategy.NEVER ||
+                                        strategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
+
+                                        val content = bookmarkRepository.fetchBookmarkContent(bookmark.remoteId, bookmark.serverId)
+                                        if (!content.isNullOrBlank()) {
+                                            var shouldPersist = false
+
+                                            if (strategy == com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK) {
+                                                shouldPersist = true
+                                            } else if (strategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
+                                                // Check if in target list
+                                                val targetLists = settingsRepository.contentSyncTargetLists.first()
+                                                val bookmarkListIds = bookmark.listIds.split(",").filter { it.isNotBlank() }
+                                                shouldPersist = bookmarkListIds.any { targetLists.contains(it) }
+                                            }
+
+                                            if (shouldPersist) {
+                                                // Persist it
+                                                val readingTime = com.karakept.app.utils.ReadingTimeCalculator.calculateReadingTime(content)
+                                                bookmarkDao.updateContent(bookmark.localId, content, readingTime)
+                                                // The flow will emit the updated bookmark automatically
+                                            } else {
+                                                // Transient (NEVER or PER_LIST outside target list):
+                                                // cache content so future DB observations don't re-fetch
+                                                transientContent = content
+                                                val transientBookmark = bookmark.copy(content = content)
+                                                _loadingState.value = BookmarkLoadingState.FullyLoaded(transientBookmark)
+                                            }
                                         }
                                     }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
                                 }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
                             }
                         } else {
                             _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
