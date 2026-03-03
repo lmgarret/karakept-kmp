@@ -33,7 +33,7 @@ jobs:
       - name: Decode keystore
         env:
           RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
-        run: echo "$RELEASE_KEYSTORE" | base64 -d > release.jks
+        run: echo "$RELEASE_KEYSTORE" | tr -d '[:space:]' | base64 -d > release.jks
 
       - name: Build release APK
         env:
