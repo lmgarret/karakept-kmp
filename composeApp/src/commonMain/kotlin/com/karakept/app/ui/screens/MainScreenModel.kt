@@ -17,7 +17,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -52,11 +54,6 @@ class MainScreenModel(
 
     private val _currentFilter = MutableStateFlow(FilterConfig())
     val currentFilter: StateFlow<FilterConfig> = _currentFilter
-
-    // Signals that the default list setting has been loaded and applied to _currentFilter.
-    // The pagination observer waits for this to be true before triggering the first load,
-    // ensuring the user's default list is used instead of the generic ALL_BOOKMARKS.
-    private val _defaultFilterInitialized = MutableStateFlow(false)
 
     // Tracks the bookmark that triggered a tag filter, so back navigation can return to it
     private val _tagFilterSourceBookmarkId = MutableStateFlow<Long?>(null)
@@ -208,30 +205,8 @@ class MainScreenModel(
         }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     init {
-        // Load the user's default list setting and apply it as the initial filter.
-        // This must complete before the pagination observer fires its first load so that
-        // the app opens directly on the user's preferred list.
-        screenModelScope.launch {
-            val defaultType = settingsRepository.defaultListType.first()
-            val defaultListId = settingsRepository.defaultListId.first()
-            val defaultFilter = when (defaultType) {
-                DefaultListType.ALL_BOOKMARKS -> FilterConfig()
-                DefaultListType.FAVORITES -> FilterConfig(status = FilterStatus.FAVORITES)
-                DefaultListType.ARCHIVED -> FilterConfig(status = FilterStatus.ARCHIVED)
-                DefaultListType.SPECIFIC_LIST -> if (defaultListId != null) {
-                    FilterConfig(lists = listOf(defaultListId))
-                } else {
-                    FilterConfig()
-                }
-            }
-            _currentFilter.value = defaultFilter
-            if (defaultFilter.lists.size == 1) {
-                _currentListContext.value = defaultFilter.lists.first()
-            }
-            _defaultFilterInitialized.value = true
-        }
-
-        // Initialize selected server
+        // Coroutine A: keep _selectedServer in sync with the server list.
+        // Long-running observer; responds to server additions/removals.
         screenModelScope.launch {
             servers.collect { serverList ->
                 if (_selectedServer.value == null && serverList.isNotEmpty()) {
@@ -243,43 +218,59 @@ class MainScreenModel(
             }
         }
 
-        // Auto-sync on startup if offline mode is disabled.
-        // Wait for BOTH the server to be available AND the default filter to be initialized so
-        // that _currentListContext is set before syncBookmarks() decides what to sync.
-        // Without this wait, syncBookmarks() sees _currentListContext=null and syncs ALL
-        // bookmarks, causing the reload trigger to briefly show all bookmarks before the
-        // combine observer overrides with the user's default list — resulting in a blink.
+        // Coroutine B: sequential startup — eliminates race conditions.
+        //
+        // Previous approach used competing coroutines gated by a
+        // _defaultFilterInitialized flag.  The flag never fully solved the
+        // problem: the combine(selectedServer, _currentFilter, _defaultFilterInitialized)
+        // observer could still fire multiple times with inconsistent intermediate
+        // state (e.g. after sync updates the DB, dependent flows re-emit and can
+        // retrigger the combine), causing the UI to alternate between All Bookmarks
+        // and the selected list indefinitely.
+        //
+        // The clean fix: load the default filter, wait for the server, do ONE
+        // initial load, THEN start listening for user-driven filter/server changes,
+        // and finally start auto-sync.  No flags, no races.
         screenModelScope.launch {
-            _defaultFilterInitialized.first { it }
+            // 1. Read persisted default filter before doing anything else.
+            val defaultFilter = computeDefaultFilter()
+            _currentFilter.value = defaultFilter
+            if (defaultFilter.lists.size == 1) {
+                _currentListContext.value = defaultFilter.lists.first()
+            }
+
+            // 2. Wait for a server to become available.
             val server = selectedServer.first { it != null } ?: return@launch
+
+            // 3. Perform the initial load with the correct filter.
+            resetPaginationAndLoad(server, defaultFilter)
+
+            // 4. React to user-driven filter changes.
+            //    drop(1) skips the current StateFlow value (defaultFilter) so we
+            //    don't immediately re-trigger the load we just completed.
+            //    collectLatest cancels any in-flight load when a new filter arrives.
+            launch {
+                _currentFilter.drop(1).collectLatest { filter ->
+                    val currentServer = _selectedServer.value ?: return@collectLatest
+                    resetPaginationAndLoad(currentServer, filter)
+                }
+            }
+
+            // 5. React to server switches.
+            //    drop(1) skips the server we already used in step 3.
+            launch {
+                _selectedServer.drop(1).collectLatest { newServer ->
+                    if (newServer != null) {
+                        resetPaginationAndLoad(newServer, _currentFilter.value)
+                    }
+                }
+            }
+
+            // 6. Auto-sync — starts after the initial load so cached data is
+            //    already visible while the background sync runs.
             val isOffline: Boolean = settingsRepository.offlineMode.first()
             if (!isOffline && !_isSyncing.value) {
                 syncBookmarks()
-            }
-        }
-
-        // Observe filter and server changes to trigger initial load
-        screenModelScope.launch {
-            combine(selectedServer, _currentFilter, _defaultFilterInitialized) { server, filter, initialized ->
-                Triple(server, filter, initialized)
-            }.collect { (server, filter, initialized) ->
-                if (server != null && initialized) {
-                    // Reset pagination
-                    _currentPage.value = 0
-                    _accumulatedBookmarks.value = emptyList()
-                    _hasMoreItems.value = true
-
-                    // Use findPageWithItems so that we skip over DB pages that are entirely
-                    // filtered out by the client-side list filter (e.g. multi-list expansion).
-                    // Without this, the initial view could show 0 items when page 0 is filtered
-                    // out but later pages contain matching items.
-                    val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
-                    _accumulatedBookmarks.value = newItems
-                    _currentPage.value = lastPage
-                    if (dbExhausted) {
-                        _hasMoreItems.value = false
-                    }
-                }
             }
         }
 
@@ -700,6 +691,40 @@ class MainScreenModel(
             selectedServer.value?.let { server ->
                 listRepository.refreshLists(server)
             }
+        }
+    }
+
+    /** Read the persisted default filter from settings. Pure suspend read — no side-effects. */
+    private suspend fun computeDefaultFilter(): FilterConfig {
+        val defaultType = settingsRepository.defaultListType.first()
+        val defaultListId = settingsRepository.defaultListId.first()
+        return when (defaultType) {
+            DefaultListType.ALL_BOOKMARKS -> FilterConfig()
+            DefaultListType.FAVORITES -> FilterConfig(status = FilterStatus.FAVORITES)
+            DefaultListType.ARCHIVED -> FilterConfig(status = FilterStatus.ARCHIVED)
+            DefaultListType.SPECIFIC_LIST -> if (defaultListId != null) {
+                FilterConfig(lists = listOf(defaultListId))
+            } else {
+                FilterConfig()
+            }
+        }
+    }
+
+    /**
+     * Reset pagination state and load the first page for [filter].
+     * This is the single entry-point for "start displaying a (possibly new) filter".
+     * It clears the accumulated list, loads from the DB, then re-enables pagination.
+     */
+    private suspend fun resetPaginationAndLoad(server: Server, filter: FilterConfig) {
+        _currentPage.value = 0
+        _accumulatedBookmarks.value = emptyList()
+        _hasMoreItems.value = true
+
+        val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
+        _accumulatedBookmarks.value = newItems
+        _currentPage.value = lastPage
+        if (dbExhausted) {
+            _hasMoreItems.value = false
         }
     }
 
