@@ -162,6 +162,7 @@ android {
         if (keystorePath != null && file(keystorePath).exists()) {
             create("ciSigning") {
                 storeFile = file(keystorePath)
+                storeType = "PKCS12"
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
