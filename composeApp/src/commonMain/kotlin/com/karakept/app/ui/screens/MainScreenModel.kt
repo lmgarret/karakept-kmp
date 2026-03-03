@@ -80,9 +80,6 @@ class MainScreenModel(
     private val _currentPage = MutableStateFlow(0)
     private val _accumulatedBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
 
-    // Reload trigger for sync completion - increment to trigger reload without clearing UI
-    private val _reloadTrigger = MutableStateFlow(0)
-
     // Event flow for scroll-to-top trigger
     private val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
@@ -271,41 +268,6 @@ class MainScreenModel(
             val isOffline: Boolean = settingsRepository.offlineMode.first()
             if (!isOffline && !_isSyncing.value) {
                 syncBookmarks()
-            }
-        }
-
-        // Observe reload trigger separately to avoid clearing UI
-        screenModelScope.launch {
-            var first = true
-            _reloadTrigger.collect {
-                if (first) {
-                    first = false // Skip initial value
-                    return@collect
-                }
-
-                val server = _selectedServer.value
-                val filter = _currentFilter.value
-                if (server != null) {
-                    // Reload all pages that were previously loaded to preserve scroll position
-                    val currentPage = _currentPage.value
-                    val allItems = mutableListOf<BookmarkEntity>()
-
-                    for (page in 0..currentPage) {
-                        val (pageItems, _) = loadBookmarksPage(server, filter, page)
-                        allItems.addAll(pageItems)
-                        // Do NOT break when pageItems.size < pageSize. When multi-list
-                        // client-side filtering is active (includeChildListBookmarks = true),
-                        // a DB page of 20 items may yield only a few matches. Breaking early
-                        // here causes bookmarks to disappear after pull-to-refresh.
-                        // The true end-of-data is detected by loadNextPage on the next scroll.
-                    }
-
-                    // Swap in the new data atomically (no empty state in between)
-                    _accumulatedBookmarks.value = allItems
-                    // Reset so the user can scroll to discover whether more data exists;
-                    // loadNextPage will set this to false when the DB is truly exhausted.
-                    _hasMoreItems.value = true
-                }
             }
         }
 
@@ -636,52 +598,53 @@ class MainScreenModel(
 
     fun syncBookmarks() {
         screenModelScope.launch {
-            // Guard: Don't sync if offline mode is enabled
+            // Capture filter state BEFORE any suspension so the sync strategy
+            // and the post-sync reload both use the same, consistent snapshot.
+            // Reading StateFlow values inside withContext(Dispatchers.IO) is unsafe
+            // because another coroutine may update them between the context switch
+            // and the read, causing the sync and reload to disagree on which filter
+            // was active — the root cause of the alternating-drawer blink.
+            val capturedListContext = _currentListContext.value
+            val capturedFilter = _currentFilter.value
+
             val isOffline: Boolean = settingsRepository.offlineMode.first()
-            if (isOffline) {
-                return@launch
-            }
+            if (isOffline) return@launch
 
-            selectedServer.value?.let { server ->
-                try {
-                    _isSyncing.value = true
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        // Context-aware bookmark sync
-                        val activeListId = _currentListContext.value
-                        val currentStatus = _currentFilter.value.status
+            val server = selectedServer.value ?: return@launch
 
-                        when {
-                            activeListId != null -> {
-                                // Sync only bookmarks from the current list
-                                bookmarkRepository.syncBookmarksForList(server, activeListId)
-                            }
-                            currentStatus == FilterStatus.FAVORITES -> {
-                                // Sync only favorites
-                                bookmarkRepository.syncFavorites(server)
-                            }
-                            currentStatus == FilterStatus.ARCHIVED -> {
-                                // Sync only archived
-                                bookmarkRepository.syncArchived(server)
-                            }
-                            else -> {
-                                // Sync all bookmarks (ALL filter)
-                                bookmarkRepository.syncBookmarks(server)
-                            }
-                        }
-
-                        // Always refresh lists metadata (lightweight)
-                        listRepository.refreshLists(server)
+            try {
+                _isSyncing.value = true
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    when {
+                        capturedListContext != null ->
+                            bookmarkRepository.syncBookmarksForList(server, capturedListContext)
+                        capturedFilter.status == FilterStatus.FAVORITES ->
+                            bookmarkRepository.syncFavorites(server)
+                        capturedFilter.status == FilterStatus.ARCHIVED ->
+                            bookmarkRepository.syncArchived(server)
+                        else ->
+                            bookmarkRepository.syncBookmarks(server)
                     }
-
-                    // Trigger reload without clearing the UI (prevents flashing)
-                    // This increments the reload trigger which loads new data in background
-                    // and swaps it in atomically
-                    _reloadTrigger.value += 1
-                } catch (e: Exception) {
-                    // Handle error
-                } finally {
-                    _isSyncing.value = false
+                    listRepository.refreshLists(server)
                 }
+
+                // Only reload if the user hasn't changed the filter while sync was running.
+                // If they did change it, the _currentFilter.drop(1) observer already
+                // triggered resetPaginationAndLoad with the new filter — don't clobber it.
+                if (_currentFilter.value == capturedFilter) {
+                    val currentPage = _currentPage.value
+                    val allItems = mutableListOf<BookmarkEntity>()
+                    for (page in 0..currentPage) {
+                        val (pageItems, _) = loadBookmarksPage(server, capturedFilter, page)
+                        allItems.addAll(pageItems)
+                    }
+                    _accumulatedBookmarks.value = allItems
+                    _hasMoreItems.value = true
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isSyncing.value = false
             }
         }
     }
