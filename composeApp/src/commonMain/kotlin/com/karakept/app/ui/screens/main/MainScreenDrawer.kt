@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -50,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.api.model.KarakeepList
@@ -68,6 +70,8 @@ internal fun MainScreenDrawer(
     onMarkAllAsRead: (listId: String) -> Unit,
     onRenameList: (listId: String, listName: String) -> Unit,
     onNavigateToListSettings: (listId: String, listName: String) -> Unit,
+    onSetAsDefault: (listId: String) -> Unit,
+    onSetAsDefaultType: (DefaultListType) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToHighlights: () -> Unit,
     content: @Composable () -> Unit
@@ -87,44 +91,28 @@ internal fun MainScreenDrawer(
                         // Quick Filters Section
                         Text("Quick Filters", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
 
-                        NavigationDrawerItem(
-                            label = { Text("All Bookmarks") },
-                            selected = currentFilter == FilterConfig(),
+                        BuiltinDrawerItem(
+                            label = "All Bookmarks",
                             icon = { Icon(Icons.Default.Book, contentDescription = null) },
-                            colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary
-                            ),
-                            onClick = onClearFilter
+                            selected = currentFilter == FilterConfig(),
+                            onClick = onClearFilter,
+                            onSetAsHome = { onSetAsDefaultType(DefaultListType.ALL_BOOKMARKS) }
                         )
 
-                        NavigationDrawerItem(
-                            label = { Text("Favorites") },
-                            selected = currentFilter == FilterConfig(status = FilterStatus.FAVORITES),
+                        BuiltinDrawerItem(
+                            label = "Favorites",
                             icon = { Icon(Icons.Default.Star, contentDescription = null) },
-                            colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary
-                            ),
-                            onClick = {
-                                onFilterApply(FilterConfig(status = FilterStatus.FAVORITES))
-                            }
+                            selected = currentFilter == FilterConfig(status = FilterStatus.FAVORITES),
+                            onClick = { onFilterApply(FilterConfig(status = FilterStatus.FAVORITES)) },
+                            onSetAsHome = { onSetAsDefaultType(DefaultListType.FAVORITES) }
                         )
 
-                        NavigationDrawerItem(
-                            label = { Text("Archived") },
-                            selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
+                        BuiltinDrawerItem(
+                            label = "Archived",
                             icon = { Icon(Icons.Default.Archive, contentDescription = null) },
-                            colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary
-                            ),
-                            onClick = {
-                                onFilterApply(FilterConfig(status = FilterStatus.ARCHIVED))
-                            }
+                            selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
+                            onClick = { onFilterApply(FilterConfig(status = FilterStatus.ARCHIVED)) },
+                            onSetAsHome = { onSetAsDefaultType(DefaultListType.ARCHIVED) }
                         )
 
                         // Lists Section (Hierarchical)
@@ -157,7 +145,8 @@ internal fun MainScreenDrawer(
                                         },
                                         onMarkAllAsRead = { onMarkAllAsRead(listId) },
                                         onRenameList = { onRenameList(listId, list.name ?: "") },
-                                        onListSettings = { onNavigateToListSettings(listId, list.name ?: "") }
+                                        onListSettings = { onNavigateToListSettings(listId, list.name ?: "") },
+                                        onSetAsDefault = { onSetAsDefault(listId) }
                                     )
                                 }
                             }
@@ -199,6 +188,64 @@ internal fun MainScreenDrawer(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
+private fun BuiltinDrawerItem(
+    label: String,
+    icon: @Composable () -> Unit,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onSetAsHome: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    val selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+    val selectedTextColor = MaterialTheme.colorScheme.primary
+    val normalTextColor = MaterialTheme.colorScheme.onSurface
+
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(50))
+                .background(if (selected) selectedContainerColor else Color.Transparent)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { showMenu = true }
+                )
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides
+                    if (selected) selectedTextColor else normalTextColor
+            ) {
+                icon()
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (selected) selectedTextColor else normalTextColor
+            )
+        }
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Set as home") },
+                leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    onSetAsHome()
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
 private fun ListDrawerItem(
     list: KarakeepList,
     depth: Int,
@@ -210,7 +257,8 @@ private fun ListDrawerItem(
     onSelected: () -> Unit,
     onMarkAllAsRead: () -> Unit,
     onRenameList: () -> Unit,
-    onListSettings: () -> Unit
+    onListSettings: () -> Unit,
+    onSetAsDefault: () -> Unit
 ) {
     val listId = list.id ?: ""
     var showMenu by remember { mutableStateOf(false) }
@@ -280,6 +328,14 @@ private fun ListDrawerItem(
             expanded = showMenu,
             onDismissRequest = { showMenu = false }
         ) {
+            DropdownMenuItem(
+                text = { Text("Set as home") },
+                leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                onClick = {
+                    showMenu = false
+                    onSetAsDefault()
+                }
+            )
             DropdownMenuItem(
                 text = { Text("Mark all as read") },
                 leadingIcon = { Icon(Icons.Default.DoneAll, contentDescription = null) },

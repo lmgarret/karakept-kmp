@@ -51,6 +51,7 @@ import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.AddBookmarkDialog
@@ -291,6 +292,14 @@ object MainScreen : Screen {
             },
             onNavigateToListSettings = { listId, listName ->
                 navigator.push(PerListSettingsScreen(listId, listName))
+                scope.launch { drawerState.close() }
+            },
+            onSetAsDefault = { listId ->
+                screenModel.setDefaultList(listId)
+                scope.launch { drawerState.close() }
+            },
+            onSetAsDefaultType = { type ->
+                screenModel.setDefaultListType(type)
                 scope.launch { drawerState.close() }
             },
             onNavigateToSettings = {

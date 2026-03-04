@@ -45,14 +45,17 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.HorizontalDivider
+import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.CustomSwipeActionType
+import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.components.getIcon
 import com.karakept.app.ui.screens.SettingsScreenModel
-import androidx.compose.foundation.layout.width
 
 class BookmarkListSettingsScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -68,7 +71,88 @@ class BookmarkListSettingsScreen : Screen {
         val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
         val swipeLeftConfigId by screenModel.swipeLeftConfigId.collectAsState()
         val swipeRightConfigId by screenModel.swipeRightConfigId.collectAsState()
+        val defaultListType by screenModel.defaultListType.collectAsState()
+        val defaultListId by screenModel.defaultListId.collectAsState()
+        val availableLists by screenModel.availableLists.collectAsState()
+        var showListPickerDialog by remember { mutableStateOf(false) }
         var showReadingSpeedDialog by remember { mutableStateOf(false) }
+
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            screenModel.fetchAvailableLists()
+        }
+
+        if (showListPickerDialog) {
+            androidx.compose.ui.window.Dialog(onDismissRequest = { showListPickerDialog = false }) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 16.dp)) {
+                        Text(
+                            text = "Select Default List",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                        )
+                        if (availableLists.isEmpty()) {
+                            Text(
+                                text = "No lists available.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                            )
+                        } else {
+                            val hierarchy = buildListHierarchy(availableLists)
+                            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                                hierarchy.forEach { (list, depth) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                screenModel.setDefaultListType(DefaultListType.SPECIFIC_LIST)
+                                                screenModel.setDefaultListId(list.id)
+                                                showListPickerDialog = false
+                                            }
+                                            .padding(
+                                                start = (24 + depth * 16).dp,
+                                                end = 24.dp,
+                                                top = 8.dp,
+                                                bottom = 8.dp
+                                            ),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = list.id == defaultListId,
+                                            onClick = {
+                                                screenModel.setDefaultListType(DefaultListType.SPECIFIC_LIST)
+                                                screenModel.setDefaultListId(list.id)
+                                                showListPickerDialog = false
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "${list.icon ?: ""} ${list.name ?: list.id ?: ""}".trim(),
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(end = 24.dp, top = 8.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            androidx.compose.material3.TextButton(onClick = { showListPickerDialog = false }) {
+                                Text("Cancel")
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // Show reading speed dialog
         if (showReadingSpeedDialog) {
@@ -101,6 +185,85 @@ class BookmarkListSettingsScreen : Screen {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.Top
             ) {
+                // Default View Section
+                Text(
+                    text = "Default View",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Text(
+                    text = "The list shown when the app opens",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        DefaultViewOption(
+                            title = "All Bookmarks",
+                            isSelected = defaultListType == DefaultListType.ALL_BOOKMARKS,
+                            onClick = {
+                                screenModel.setDefaultListType(DefaultListType.ALL_BOOKMARKS)
+                                screenModel.setDefaultListId(null)
+                            }
+                        )
+                        HorizontalDivider()
+                        DefaultViewOption(
+                            title = "Favorites",
+                            isSelected = defaultListType == DefaultListType.FAVORITES,
+                            onClick = {
+                                screenModel.setDefaultListType(DefaultListType.FAVORITES)
+                                screenModel.setDefaultListId(null)
+                            }
+                        )
+                        HorizontalDivider()
+                        DefaultViewOption(
+                            title = "Archived",
+                            isSelected = defaultListType == DefaultListType.ARCHIVED,
+                            onClick = {
+                                screenModel.setDefaultListType(DefaultListType.ARCHIVED)
+                                screenModel.setDefaultListId(null)
+                            }
+                        )
+                        HorizontalDivider()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showListPickerDialog = true }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = defaultListType == DefaultListType.SPECIFIC_LIST,
+                                onClick = { showListPickerDialog = true }
+                            )
+                            Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                                Text(
+                                    text = "Specific List",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                if (defaultListType == DefaultListType.SPECIFIC_LIST) {
+                                    val selectedListName = availableLists.find { it.id == defaultListId }?.name
+                                        ?: defaultListId
+                                        ?: "None selected"
+                                    Text(
+                                        text = selectedListName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Select list"
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
                 Text(
                     text = "Article Display Layout",
                     style = MaterialTheme.typography.titleLarge,
@@ -317,6 +480,31 @@ class BookmarkListSettingsScreen : Screen {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DefaultViewOption(
+    title: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = isSelected,
+            onClick = onClick
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(start = 8.dp)
+        )
     }
 }
 
@@ -588,4 +776,37 @@ private fun SwipeActionSettingItem(
             )
         }
     }
+}
+
+/**
+ * Builds a hierarchical display order from a flat list of KarakeepLists.
+ * Returns pairs of (list, depth) in DFS order so parent lists appear before their children.
+ */
+private fun buildListHierarchy(lists: List<KarakeepList>): List<Pair<KarakeepList, Int>> {
+    val result = mutableListOf<Pair<KarakeepList, Int>>()
+    val grouped = lists.groupBy { it.parentId }
+    val visited = mutableSetOf<String>()
+
+    fun recurse(parentId: String?, depth: Int) {
+        if (depth > 10) return
+        val children = grouped[parentId] ?: return
+        children.forEach { child ->
+            val childId = child.id ?: ""
+            if (!visited.contains(childId)) {
+                visited.add(childId)
+                result.add(child to depth)
+                recurse(childId, depth + 1)
+            }
+        }
+    }
+
+    recurse(null, 0)
+
+    // Append orphans (lists whose parent was not found)
+    val processed = result.map { it.first.id ?: "" }.toSet()
+    lists.filter { (it.id ?: "") !in processed }.forEach { list ->
+        result.add(list to 0)
+    }
+
+    return result
 }

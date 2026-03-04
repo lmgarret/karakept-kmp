@@ -23,7 +23,6 @@ import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
 import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
  * Bottom panel for live filter editing with swipe-to-dismiss.
@@ -44,14 +43,14 @@ fun FilterBottomPanel(
     var filter by remember(currentFilter) { mutableStateOf(currentFilter) }
     var showTagsDialog by remember { mutableStateOf(false) }
 
-    val scope = rememberCoroutineScope()
-
-    // Live filtering with 300ms debounce
+    // Live filtering with 300ms debounce.
+    // delay() runs directly inside LaunchedEffect so it is cancelled when
+    // `filter` changes — preventing stale ghost coroutines from firing
+    // onFilterChange with an outdated filter value (which caused the
+    // rapid list-switching bug on startup).
     LaunchedEffect(filter) {
-        scope.launch {
-            delay(300)
-            onFilterChange(filter)
-        }
+        delay(300)
+        onFilterChange(filter)
     }
 
     BaseBottomPanel(

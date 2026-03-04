@@ -26,6 +26,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import com.karakept.app.data.model.LinkOpenMode
+import com.karakept.app.data.model.DefaultListType
 
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val LAYOUT_TYPE_KEY = stringPreferencesKey("layout_type")
@@ -452,6 +453,34 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             }
             current[listId] = settings
             preferences[PER_LIST_SETTINGS_KEY] = Json.encodeToString<Map<String, com.karakept.app.data.model.ListSettings>>(current)
+        }
+    }
+
+    private val DEFAULT_LIST_TYPE_KEY = stringPreferencesKey("default_list_type")
+    private val DEFAULT_LIST_ID_KEY = stringPreferencesKey("default_list_id")
+
+    val defaultListType: Flow<DefaultListType> = dataStore.data.map { preferences ->
+        val typeString = preferences[DEFAULT_LIST_TYPE_KEY] ?: DefaultListType.ALL_BOOKMARKS.name
+        DefaultListType.fromString(typeString)
+    }
+
+    val defaultListId: Flow<String?> = dataStore.data.map { preferences ->
+        preferences[DEFAULT_LIST_ID_KEY]
+    }
+
+    suspend fun setDefaultListType(type: DefaultListType) {
+        dataStore.edit { preferences ->
+            preferences[DEFAULT_LIST_TYPE_KEY] = type.name
+        }
+    }
+
+    suspend fun setDefaultListId(id: String?) {
+        dataStore.edit { preferences ->
+            if (id != null) {
+                preferences[DEFAULT_LIST_ID_KEY] = id
+            } else {
+                preferences.remove(DEFAULT_LIST_ID_KEY)
+            }
         }
     }
 
