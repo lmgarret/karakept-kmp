@@ -378,7 +378,7 @@ private fun buildHierarchy(lists: List<KarakeepList>): List<Pair<KarakeepList, I
 
     fun recurse(parentId: String?, depth: Int) {
         if (depth > 10) return // Max depth protection
-        val children = grouped[parentId] ?: return
+        val children = (grouped[parentId] ?: return).sortedBy { it.name?.lowercase() ?: "" }
         children.forEach { child ->
             val childId = child.id ?: ""
             if (!visited.contains(childId)) {

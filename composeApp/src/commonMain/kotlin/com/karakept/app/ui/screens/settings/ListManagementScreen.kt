@@ -275,7 +275,7 @@ class ListManagementScreen : Screen {
         val grouped = lists.groupBy { it.parentId }
         
         fun recurse(parentId: String?, depth: Int) {
-            val children = grouped[parentId] ?: return
+            val children = (grouped[parentId] ?: return).sortedBy { it.name?.lowercase() ?: "" }
             children.forEach { child ->
                 result.add(child to depth)
                 recurse(child.id, depth + 1)
