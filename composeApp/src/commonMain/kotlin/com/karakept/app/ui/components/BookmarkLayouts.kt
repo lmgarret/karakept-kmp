@@ -40,6 +40,8 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.DateDisplayMode
+import com.karakept.app.utils.formatBookmarkDate
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -51,6 +53,8 @@ fun BookmarkCardLayout(
     showReadingTime: Boolean = true,
     showReadingProgress: Boolean = true,
     showTags: Boolean = true,
+    showDate: Boolean = true,
+    dateDisplayMode: DateDisplayMode = DateDisplayMode.ELAPSED,
     dimRead: Boolean = false,
     offlineMode: Boolean = false,
     bannerImageUrl: String? = null,
@@ -164,6 +168,14 @@ fun BookmarkCardLayout(
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
+                    if (showDate) {
+                        Text(
+                            text = formatBookmarkDate(bookmark.createdAt, dateDisplayMode),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                 }
             }
 
@@ -188,6 +200,8 @@ fun BookmarkListLayout(
     showReadingTime: Boolean = true,
     showReadingProgress: Boolean = true,
     showTags: Boolean = true,
+    showDate: Boolean = true,
+    dateDisplayMode: DateDisplayMode = DateDisplayMode.ELAPSED,
     dimRead: Boolean = false,
     offlineMode: Boolean = false,
     bannerImageUrl: String? = null,
@@ -300,6 +314,14 @@ fun BookmarkListLayout(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        if (showDate) {
+                            Text(
+                                text = formatBookmarkDate(bookmark.createdAt, dateDisplayMode),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }

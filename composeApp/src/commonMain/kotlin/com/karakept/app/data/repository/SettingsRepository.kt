@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.utils.BackupCrypto
 import kotlinx.serialization.decodeFromString
@@ -753,6 +754,31 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setLastAutoExportTime(timestamp: Long) {
         dataStore.edit { it[LAST_AUTO_EXPORT_TIME_KEY] = timestamp }
     }
+
+    // ── Date display settings (non-backed-up individual keys) ────────────────
+
+    private val SHOW_DATE_IN_LIST_KEY = booleanPreferencesKey("show_date_in_list")
+    private val DATE_DISPLAY_MODE_KEY = stringPreferencesKey("date_display_mode")
+
+    val showDateInList: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[SHOW_DATE_IN_LIST_KEY] ?: true
+    }
+
+    val dateDisplayMode: Flow<DateDisplayMode> = dataStore.data.map { preferences ->
+        val modeString = preferences[DATE_DISPLAY_MODE_KEY] ?: DateDisplayMode.ELAPSED.name
+        DateDisplayMode.fromString(modeString)
+    }
+
+    suspend fun setShowDateInList(show: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[SHOW_DATE_IN_LIST_KEY] = show
+        }
+    }
+
+    suspend fun setDateDisplayMode(mode: DateDisplayMode) {
+        dataStore.edit { preferences ->
+            preferences[DATE_DISPLAY_MODE_KEY] = mode.name
+        }
 
     // ── Per-list settings (separate JSON blob, not part of the backup) ────────
 

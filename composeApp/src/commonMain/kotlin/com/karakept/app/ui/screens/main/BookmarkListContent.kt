@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
+import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.BookmarkCardLayout
@@ -65,6 +66,8 @@ internal fun BookmarkListContent(
     showReadingTimeBadge: Boolean,
     showReadingProgress: Boolean = true,
     showTags: Boolean,
+    showDate: Boolean = true,
+    dateDisplayMode: DateDisplayMode = DateDisplayMode.ELAPSED,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
     isSelectionMode: Boolean = false,
@@ -367,6 +370,8 @@ internal fun BookmarkListContent(
                                 showReadingTime = showReadingTimeBadge,
                                 showReadingProgress = showReadingProgress,
                                 showTags = showTags,
+                                showDate = showDate,
+                                dateDisplayMode = dateDisplayMode,
                                 dimRead = dimReadBookmarks,
                                 offlineMode = offlineMode,
                                 bannerImageUrl = bannerImageUrl,
@@ -388,6 +393,8 @@ internal fun BookmarkListContent(
                                 showReadingTime = showReadingTimeBadge,
                                 showReadingProgress = showReadingProgress,
                                 showTags = showTags,
+                                showDate = showDate,
+                                dateDisplayMode = dateDisplayMode,
                                 dimRead = dimReadBookmarks,
                                 offlineMode = offlineMode,
                                 bannerImageUrl = bannerImageUrl,

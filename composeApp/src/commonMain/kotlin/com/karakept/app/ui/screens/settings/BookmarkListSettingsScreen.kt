@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Speed
@@ -50,6 +51,7 @@ import androidx.compose.material3.HorizontalDivider
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.CustomSwipeActionType
+import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
@@ -73,6 +75,8 @@ class BookmarkListSettingsScreen : Screen {
         val currentLayoutType by screenModel.layoutType.collectAsState()
         val showReadingTimeBadge by screenModel.showReadingTimeBadge.collectAsState()
         val readingSpeedWpm by screenModel.readingSpeedWpm.collectAsState()
+        val showDateInList by screenModel.showDateInList.collectAsState()
+        val dateDisplayMode by screenModel.dateDisplayMode.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
         val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
@@ -465,6 +469,107 @@ class BookmarkListSettingsScreen : Screen {
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Adjust"
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Date Display Section
+                Text(
+                    text = "Date Display",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                // Show Date Toggle
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Show Date",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Display creation date on bookmark cards",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = showDateInList,
+                            onCheckedChange = { screenModel.setShowDateInList(it) }
+                        )
+                    }
+                }
+
+                // Date Format Selection
+                if (showDateInList) {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { screenModel.setDateDisplayMode(DateDisplayMode.ELAPSED) }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = dateDisplayMode == DateDisplayMode.ELAPSED,
+                                    onClick = { screenModel.setDateDisplayMode(DateDisplayMode.ELAPSED) }
+                                )
+                                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                                    Text(
+                                        text = "Relative time",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(
+                                        text = "e.g., 33m ago, 2h ago, 3d ago",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            HorizontalDivider()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { screenModel.setDateDisplayMode(DateDisplayMode.ABSOLUTE) }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = dateDisplayMode == DateDisplayMode.ABSOLUTE,
+                                    onClick = { screenModel.setDateDisplayMode(DateDisplayMode.ABSOLUTE) }
+                                )
+                                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                                    Text(
+                                        text = "Absolute date",
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(
+                                        text = "e.g., 2024-01-15",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

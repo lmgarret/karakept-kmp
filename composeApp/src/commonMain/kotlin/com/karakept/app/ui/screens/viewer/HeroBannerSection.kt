@@ -2,6 +2,7 @@ package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.ui.components.HeroImageBanner
 
 @Composable
@@ -12,6 +13,8 @@ internal fun HeroBannerSection(
     readingTimeMinutes: Int,
     showTags: Boolean,
     scrollState: LazyListState,
+    createdAt: Long? = null,
+    dateDisplayMode: DateDisplayMode = DateDisplayMode.ELAPSED,
     onUrlClick: (() -> Unit)?,
     onTagClick: ((String) -> Unit)? = null,
     onInfoClick: (() -> Unit)? = null,
@@ -31,6 +34,8 @@ internal fun HeroBannerSection(
             1f
         },
         showTags = showTags,
+        createdAt = createdAt,
+        dateDisplayMode = dateDisplayMode,
         onUrlClick = onUrlClick,
         onTagClick = onTagClick,
         onInfoClick = onInfoClick,

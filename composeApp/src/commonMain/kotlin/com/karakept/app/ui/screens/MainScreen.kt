@@ -93,6 +93,8 @@ object MainScreen : Screen {
         val showReadingTimeBadge by settingsScreenModel.showReadingTimeBadge.collectAsState()
         val trackReadingProgress by settingsScreenModel.trackReadingProgress.collectAsState()
         val showTags by settingsScreenModel.showTags.collectAsState()
+        val showDateInList by settingsScreenModel.showDateInList.collectAsState()
+        val dateDisplayMode by settingsScreenModel.dateDisplayMode.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
         val customSwipeActionConfigs by screenModel.customSwipeActionConfigs.collectAsState()
@@ -559,6 +561,8 @@ object MainScreen : Screen {
                         showReadingTimeBadge = showReadingTimeBadge,
                         showReadingProgress = trackReadingProgress,
                         showTags = showTags,
+                        showDate = showDateInList,
+                        dateDisplayMode = dateDisplayMode,
                         offlineMode = offlineMode || isAutoOffline,
                         pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                         isSelectionMode = isSelectionMode,
