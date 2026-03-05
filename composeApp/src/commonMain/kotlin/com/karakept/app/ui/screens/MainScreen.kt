@@ -58,6 +58,7 @@ import com.karakept.app.ui.components.AddBookmarkDialog
 import com.karakept.app.ui.components.FilterBottomPanel
 import com.karakept.app.ui.components.BookmarkActionsMenu
 import com.karakept.app.ui.components.BookmarkAction
+import com.karakept.app.ui.components.ListPickerDialog
 import com.karakept.app.ui.screens.main.BookmarkListContent
 import com.karakept.app.ui.screens.main.MainScreenDrawer
 import com.karakept.app.ui.screens.main.MainScreenTopBar
@@ -118,6 +119,8 @@ object MainScreen : Screen {
         val pendingBookmarkRemoteIds by screenModel.pendingBookmarkRemoteIds.collectAsState()
         var isSearchActive by remember { mutableStateOf(false) }
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
+        var showBatchDeleteConfirm by remember { mutableStateOf(false) }
+        var showBatchListPicker by remember { mutableStateOf(false) }
         val snackbarManager = koinInject<ActionSnackbarManager>()
         val snackbarHostState = rememberSnackbarHostState(snackbarManager)
 
@@ -369,7 +372,15 @@ object MainScreen : Screen {
                         onSelectAll = {
                             if (selectedBookmarkIds.size == bookmarks.size) screenModel.clearSelection()
                             else screenModel.selectAll()
-                        }
+                        },
+                        onBatchMarkRead = { screenModel.batchMarkRead() },
+                        onBatchMarkUnread = { screenModel.batchMarkUnread() },
+                        onBatchArchive = { screenModel.batchArchive() },
+                        onBatchUnarchive = { screenModel.batchUnarchive() },
+                        onBatchFavourite = { screenModel.batchFavourite() },
+                        onBatchUnfavourite = { screenModel.batchUnfavourite() },
+                        onBatchMoveToList = { showBatchListPicker = true },
+                        onBatchDelete = { showBatchDeleteConfirm = true }
                     )
                 },
                 floatingActionButton = {
@@ -382,27 +393,6 @@ object MainScreen : Screen {
                                 contentDescription = "Add bookmark"
                             )
                         }
-                    }
-                },
-                bottomBar = {
-                    if (isSelectionMode) {
-                        com.karakept.app.ui.components.BatchActionsBar(
-                            selectedCount = selectedBookmarkIds.size,
-                            allSelected = selectedBookmarkIds.size == bookmarks.size && bookmarks.isNotEmpty(),
-                            availableLists = lists,
-                            onArchive = { screenModel.batchArchive() },
-                            onUnarchive = { screenModel.batchUnarchive() },
-                            onMarkRead = { screenModel.batchMarkRead() },
-                            onMarkUnread = { screenModel.batchMarkUnread() },
-                            onFavourite = { screenModel.batchFavourite() },
-                            onUnfavourite = { screenModel.batchUnfavourite() },
-                            onDelete = { screenModel.batchDelete() },
-                            onMoveToList = { listId -> screenModel.batchMoveToList(listId) },
-                            onSelectAll = {
-                                if (selectedBookmarkIds.size == bookmarks.size) screenModel.clearSelection()
-                                else screenModel.selectAll()
-                            }
-                        )
                     }
                 },
                 snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) }
@@ -454,7 +444,7 @@ object MainScreen : Screen {
                             if (isSelectionMode) {
                                 screenModel.toggleBookmarkSelection(bookmark)
                             } else {
-                                screenModel.enterSelectionMode(bookmark)
+                                selectedBookmarkForActions = bookmark
                             }
                         },
                         serverUrl = servers.firstOrNull()?.url,
@@ -562,6 +552,7 @@ object MainScreen : Screen {
         }
 
         // Scrim for Filter Panel
+        // Scrim for Filter Panel
         androidx.compose.animation.AnimatedVisibility(
             visible = showFilterDialog,
             enter = androidx.compose.animation.fadeIn(),
@@ -600,6 +591,38 @@ object MainScreen : Screen {
             )
         }
 
+        // Bookmark Actions Menu (ModalBottomSheet provides its own scrim)
+        if (selectedBookmarkForActions != null) {
+            BookmarkActionsMenu(
+                bookmark = selectedBookmarkForActions!!,
+                availableLists = lists,
+                availableTags = allAvailableTags,
+                onAction = { action ->
+                    when (action) {
+                        is BookmarkAction.ToggleArchive -> screenModel.toggleBookmarkArchive(selectedBookmarkForActions!!)
+                        is BookmarkAction.ToggleFavorite -> screenModel.toggleBookmarkFavorite(selectedBookmarkForActions!!)
+                        is BookmarkAction.ToggleRead -> screenModel.toggleBookmarkRead(selectedBookmarkForActions!!)
+                        is BookmarkAction.MoveToList -> screenModel.moveBookmarkToList(selectedBookmarkForActions!!, action.listId)
+                        is BookmarkAction.UpdateTags -> screenModel.updateBookmarkTags(selectedBookmarkForActions!!, action.tags)
+                        is BookmarkAction.Delete -> screenModel.deleteBookmark(selectedBookmarkForActions!!)
+                        is BookmarkAction.Share -> {
+                            com.karakept.app.utils.ShareUtils.shareText(selectedBookmarkForActions!!.url, selectedBookmarkForActions!!.title)
+                        }
+                        is BookmarkAction.OpenInBrowser -> {
+                            try {
+                                uriHandler.openUri(selectedBookmarkForActions!!.url)
+                                scope.launch { snackbarManager.showSnackbar("Opening in browser") }
+                            } catch (e: Exception) {
+                                scope.launch { snackbarManager.showSnackbar("Could not open link") }
+                            }
+                        }
+                        is BookmarkAction.Select -> screenModel.enterSelectionMode(selectedBookmarkForActions!!)
+                    }
+                },
+                onDismiss = { selectedBookmarkForActions = null }
+            )
+        }
+
         // Add Bookmark Dialog
         if (showAddBookmarkDialog) {
             AddBookmarkDialog(
@@ -612,50 +635,40 @@ object MainScreen : Screen {
             )
         }
 
-        // Bookmark Actions Menu
-        if (selectedBookmarkForActions != null) {
-            BookmarkActionsMenu(
-                bookmark = selectedBookmarkForActions!!,
-                availableLists = lists,
-                availableTags = allAvailableTags,
-                onAction = { action ->
-                    when (action) {
-                        is BookmarkAction.ToggleArchive -> {
-                            screenModel.toggleBookmarkArchive(selectedBookmarkForActions!!)
+        // Batch delete confirmation
+        if (showBatchDeleteConfirm) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showBatchDeleteConfirm = false },
+                title = { androidx.compose.material3.Text("Delete ${selectedBookmarkIds.size} bookmark${if (selectedBookmarkIds.size > 1) "s" else ""}?") },
+                text = { androidx.compose.material3.Text("This action cannot be undone. The selected bookmarks will be permanently deleted from the server.") },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            screenModel.batchDelete()
+                            showBatchDeleteConfirm = false
                         }
-                        is BookmarkAction.ToggleFavorite -> {
-                            screenModel.toggleBookmarkFavorite(selectedBookmarkForActions!!)
-                        }
-                        is BookmarkAction.ToggleRead -> {
-                            screenModel.toggleBookmarkRead(selectedBookmarkForActions!!)
-                        }
-                        is BookmarkAction.MoveToList -> {
-                            screenModel.moveBookmarkToList(selectedBookmarkForActions!!, action.listId)
-                        }
-                        is BookmarkAction.UpdateTags -> {
-                            screenModel.updateBookmarkTags(selectedBookmarkForActions!!, action.tags)
-                        }
-                        is BookmarkAction.Delete -> {
-                            screenModel.deleteBookmark(selectedBookmarkForActions!!)
-                        }
-                        is BookmarkAction.Share -> {
-                            com.karakept.app.utils.ShareUtils.shareText(selectedBookmarkForActions!!.url, selectedBookmarkForActions!!.title)
-                        }
-                        is BookmarkAction.OpenInBrowser -> {
-                            try {
-                                uriHandler.openUri(selectedBookmarkForActions!!.url)
-                                scope.launch {
-                                    snackbarManager.showSnackbar("Opening in browser")
-                                }
-                            } catch (e: Exception) {
-                                scope.launch {
-                                    snackbarManager.showSnackbar("Could not open link")
-                                }
-                            }
-                        }
+                    ) {
+                        androidx.compose.material3.Text("Delete", color = androidx.compose.material3.MaterialTheme.colorScheme.error)
                     }
                 },
-                onDismiss = { selectedBookmarkForActions = null }
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showBatchDeleteConfirm = false }) {
+                        androidx.compose.material3.Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // Batch move-to-list picker
+        if (showBatchListPicker) {
+            ListPickerDialog(
+                lists = lists,
+                currentListIds = emptyList(),
+                onListSelected = { listId ->
+                    screenModel.batchMoveToList(listId)
+                    showBatchListPicker = false
+                },
+                onDismiss = { showBatchListPicker = false }
             )
         }
     }

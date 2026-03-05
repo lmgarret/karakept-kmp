@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
@@ -40,6 +41,8 @@ import com.karakept.api.model.KarakeepList as KarakeepList
  * Bottom sheet showing all available bookmark actions.
  * Displayed from long press or overflow menu.
  * Follows MD3 menu guidelines with ModalBottomSheet and DropdownMenuItem styling.
+ *
+ * Includes a "Select" option to enter multi-select mode for batch operations.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -161,6 +164,23 @@ fun BookmarkActionsMenu(
 
         HorizontalDivider()
 
+        // Enter multi-select mode
+        DropdownMenuItem(
+            text = { Text("Select") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.CheckBox,
+                    contentDescription = null
+                )
+            },
+            onClick = {
+                onAction(BookmarkAction.Select)
+                onDismiss()
+            }
+        )
+
+        HorizontalDivider()
+
         // Destructive action
         DropdownMenuItem(
             text = { Text("Delete") },
@@ -246,4 +266,6 @@ sealed class BookmarkAction {
     data object Share : BookmarkAction()
     data object OpenInBrowser : BookmarkAction()
     data object Delete : BookmarkAction()
+    /** Enter multi-select mode for this bookmark. */
+    data object Select : BookmarkAction()
 }
