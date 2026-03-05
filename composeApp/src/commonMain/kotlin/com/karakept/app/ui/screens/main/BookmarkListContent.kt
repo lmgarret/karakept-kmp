@@ -59,6 +59,9 @@ internal fun BookmarkListContent(
     showTags: Boolean,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
+    isSelectionMode: Boolean = false,
+    selectedBookmarkIds: Set<Long> = emptySet(),
+    onBookmarkSelectionToggle: (BookmarkEntity) -> Unit = {},
     listState: LazyListState,
     pullRefreshState: PullRefreshState,
     onBookmarkClick: (BookmarkEntity) -> Unit,
@@ -145,9 +148,10 @@ internal fun BookmarkListContent(
                         else -> null
                     }
 
+                    val isSelected = bookmark.remoteId in selectedBookmarkIds
                     SwipeableBookmarkItem(
-                        leftSwipeAction = swipeLeftAction,
-                        rightSwipeAction = swipeRightAction,
+                        leftSwipeAction = if (isSelectionMode) SwipeAction.NONE else swipeLeftAction,
+                        rightSwipeAction = if (isSelectionMode) SwipeAction.NONE else swipeRightAction,
                         leftIcon = leftIcon,
                         rightIcon = rightIcon,
                         leftColor = swipeLeftConfig.getEffectiveColor(swipeLeftAction).takeIf {
@@ -204,8 +208,11 @@ internal fun BookmarkListContent(
                         when (layoutType) {
                             LayoutType.CARD -> BookmarkCardLayout(
                                 bookmark = bookmark,
-                                onClick = remember(bookmark.localId) {
-                                    { onBookmarkClick(bookmark) }
+                                onClick = remember(bookmark.localId, isSelectionMode) {
+                                    {
+                                        if (isSelectionMode) onBookmarkSelectionToggle(bookmark)
+                                        else onBookmarkClick(bookmark)
+                                    }
                                 },
                                 onLongClick = { onBookmarkLongClick(bookmark) },
                                 showReadingTime = showReadingTimeBadge,
@@ -214,12 +221,16 @@ internal fun BookmarkListContent(
                                 dimRead = dimReadBookmarks,
                                 offlineMode = offlineMode,
                                 bannerImageUrl = bannerImageUrl,
-                                screenshotUrl = screenshotUrl
+                                screenshotUrl = screenshotUrl,
+                                isSelected = isSelected
                             )
                             LayoutType.LIST -> BookmarkListLayout(
                                 bookmark = bookmark,
-                                onClick = remember(bookmark.localId) {
-                                    { onBookmarkClick(bookmark) }
+                                onClick = remember(bookmark.localId, isSelectionMode) {
+                                    {
+                                        if (isSelectionMode) onBookmarkSelectionToggle(bookmark)
+                                        else onBookmarkClick(bookmark)
+                                    }
                                 },
                                 onLongClick = { onBookmarkLongClick(bookmark) },
                                 showReadingTime = showReadingTimeBadge,
@@ -228,7 +239,8 @@ internal fun BookmarkListContent(
                                 dimRead = dimReadBookmarks,
                                 offlineMode = offlineMode,
                                 bannerImageUrl = bannerImageUrl,
-                                screenshotUrl = screenshotUrl
+                                screenshotUrl = screenshotUrl,
+                                isSelected = isSelected
                             )
                         }
                     }

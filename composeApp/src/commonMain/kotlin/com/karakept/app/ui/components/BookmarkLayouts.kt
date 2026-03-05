@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Color
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,8 +16,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,97 +53,119 @@ fun BookmarkCardLayout(
     offlineMode: Boolean = false,
     bannerImageUrl: String? = null,
     screenshotUrl: String? = null,
+    isSelected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isFullyRead = bookmark.isRead
     val alpha = if (isFullyRead && dimRead) 0.5f else 1f
+    val selectionBorderModifier = if (isSelected) {
+        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+    } else {
+        Modifier
+    }
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .then(selectionBorderModifier)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
-            )
+            ),
+        colors = if (isSelected) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+        } else {
+            CardDefaults.cardColors()
+        }
     ) {
-        Box(modifier = Modifier.alpha(alpha)) {
-            Column {
-                // Determine which image to show: bannerImageUrl (server asset) → screenshotUrl → emoji
-                val effectiveImageUrl = bannerImageUrl ?: screenshotUrl
+        Box {
+            Box(modifier = Modifier.alpha(alpha)) {
+                Column {
+                    // Determine which image to show: bannerImageUrl (server asset) → screenshotUrl → emoji
+                    val effectiveImageUrl = bannerImageUrl ?: screenshotUrl
 
-                if (effectiveImageUrl != null) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalPlatformContext.current)
-                            .data(effectiveImageUrl)
-                            .size(600) // Request a reasonable size for the card
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
+                    if (effectiveImageUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalPlatformContext.current)
+                                .data(effectiveImageUrl)
+                                .size(600) // Request a reasonable size for the card
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentScale = ContentScale.Crop,
+                            filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "📰",
+                                style = MaterialTheme.typography.displayLarge
+                            )
+                        }
+                    }
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentScale = ContentScale.Crop,
-                        filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
+                            .padding(16.dp)
                     ) {
                         Text(
-                            text = "📰",
-                            style = MaterialTheme.typography.displayLarge
+                            text = bookmark.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = bookmark.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+
+                // Reading time badge - or not-synced badge when offline and content not synced
+                if (showReadingTime) {
+                    if (bookmark.readingTimeMinutes > 0) {
+                        ReadingTimeBadge(
+                            readingTimeMinutes = bookmark.readingTimeMinutes,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(8.dp)
+                        )
+                    } else if (offlineMode) {
+                        // Only show not-synced badge when in offline mode
+                        NotSyncedBadge(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(8.dp)
+                        )
+                    }
+                }
+
+                // Reading progress bar
+                if (showReadingProgress && bookmark.readingProgress > 0f) {
+                    LinearProgressIndicator(
+                        progress = { bookmark.readingProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .align(Alignment.BottomCenter),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 }
             }
 
-            // Reading time badge - or not-synced badge when offline and content not synced
-            if (showReadingTime) {
-                if (bookmark.readingTimeMinutes > 0) {
-                    ReadingTimeBadge(
-                        readingTimeMinutes = bookmark.readingTimeMinutes,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(8.dp)
-                    )
-                } else if (offlineMode) {
-                    // Only show not-synced badge when in offline mode
-                    NotSyncedBadge(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(8.dp)
-                    )
-                }
-            }
-
-            // Reading progress bar
-            if (showReadingProgress && bookmark.readingProgress > 0f) {
-                LinearProgressIndicator(
-                    progress = { bookmark.readingProgress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .align(Alignment.BottomCenter),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            }
+            // Selection indicator (not affected by dim alpha)
+            SelectionIndicator(
+                isSelected = isSelected,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+            )
         }
     }
 }
@@ -156,18 +184,31 @@ fun BookmarkListLayout(
     offlineMode: Boolean = false,
     bannerImageUrl: String? = null,
     screenshotUrl: String? = null,
+    isSelected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isFullyRead = bookmark.isRead
     val alpha = if (isFullyRead && dimRead) 0.5f else 1f
+    val selectionBorderModifier = if (isSelected) {
+        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+    } else {
+        Modifier
+    }
     Card(
         modifier = modifier
            .fillMaxWidth()
+            .then(selectionBorderModifier)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
-            )
+            ),
+        colors = if (isSelected) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+        } else {
+            CardDefaults.cardColors()
+        }
     ) {
+        Box {
         Box(modifier = Modifier.alpha(alpha)) {
             Column(
                 modifier = Modifier
@@ -283,6 +324,38 @@ fun BookmarkListLayout(
                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             }
+        }
+
+        // Selection indicator (not affected by dim alpha)
+        SelectionIndicator(
+            isSelected = isSelected,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+        )
+        }
+    }
+}
+
+@Composable
+fun SelectionIndicator(
+    isSelected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    if (isSelected) {
+        Box(
+            modifier = modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = "Selected",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }

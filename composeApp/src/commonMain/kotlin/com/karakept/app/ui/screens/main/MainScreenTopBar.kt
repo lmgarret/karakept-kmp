@@ -8,6 +8,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Menu
@@ -49,13 +51,38 @@ internal fun MainScreenTopBar(
     searchQuery: String = "",
     onSearchClick: () -> Unit = {},
     onSearchQueryChange: (String) -> Unit = {},
-    onSearchClose: () -> Unit = {}
+    onSearchClose: () -> Unit = {},
+    isSelectionMode: Boolean = false,
+    selectedCount: Int = 0,
+    allSelected: Boolean = false,
+    onClearSelection: () -> Unit = {},
+    onSelectAll: () -> Unit = {}
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(isSearchActive) {
         if (isSearchActive) {
             focusRequester.requestFocus()
         }
+    }
+
+    if (isSelectionMode) {
+        TopAppBar(
+            title = { Text("$selectedCount selected") },
+            navigationIcon = {
+                IconButton(onClick = onClearSelection) {
+                    Icon(Icons.Default.Close, contentDescription = "Exit selection mode")
+                }
+            },
+            actions = {
+                IconButton(onClick = onSelectAll) {
+                    Icon(
+                        imageVector = if (allSelected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                        contentDescription = if (allSelected) "Deselect all" else "Select all"
+                    )
+                }
+            }
+        )
+        return
     }
 
     TopAppBar(

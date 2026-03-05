@@ -104,6 +104,8 @@ object MainScreen : Screen {
         val currentListScrollActionConfig by screenModel.currentListScrollActionConfig.collectAsState()
 
         val searchQuery by screenModel.searchQuery.collectAsState()
+        val isSelectionMode by screenModel.isSelectionMode.collectAsState()
+        val selectedBookmarkIds by screenModel.selectedBookmarkIds.collectAsState()
 
         val hasActiveFilter = currentFilter.tags.isNotEmpty() ||
             currentFilter.lists.isNotEmpty() ||
@@ -359,11 +361,19 @@ object MainScreen : Screen {
                         onSearchClose = {
                             isSearchActive = false
                             screenModel.clearSearch()
+                        },
+                        isSelectionMode = isSelectionMode,
+                        selectedCount = selectedBookmarkIds.size,
+                        allSelected = selectedBookmarkIds.size == bookmarks.size && bookmarks.isNotEmpty(),
+                        onClearSelection = { screenModel.clearSelection() },
+                        onSelectAll = {
+                            if (selectedBookmarkIds.size == bookmarks.size) screenModel.clearSelection()
+                            else screenModel.selectAll()
                         }
                     )
                 },
                 floatingActionButton = {
-                    if (!offlineMode && !isAutoOffline) {
+                    if (!offlineMode && !isAutoOffline && !isSelectionMode) {
                         FloatingActionButton(
                             onClick = { showAddBookmarkDialog = true }
                         ) {
@@ -372,6 +382,27 @@ object MainScreen : Screen {
                                 contentDescription = "Add bookmark"
                             )
                         }
+                    }
+                },
+                bottomBar = {
+                    if (isSelectionMode) {
+                        com.karakept.app.ui.components.BatchActionsBar(
+                            selectedCount = selectedBookmarkIds.size,
+                            allSelected = selectedBookmarkIds.size == bookmarks.size && bookmarks.isNotEmpty(),
+                            availableLists = lists,
+                            onArchive = { screenModel.batchArchive() },
+                            onUnarchive = { screenModel.batchUnarchive() },
+                            onMarkRead = { screenModel.batchMarkRead() },
+                            onMarkUnread = { screenModel.batchMarkUnread() },
+                            onFavourite = { screenModel.batchFavourite() },
+                            onUnfavourite = { screenModel.batchUnfavourite() },
+                            onDelete = { screenModel.batchDelete() },
+                            onMoveToList = { listId -> screenModel.batchMoveToList(listId) },
+                            onSelectAll = {
+                                if (selectedBookmarkIds.size == bookmarks.size) screenModel.clearSelection()
+                                else screenModel.selectAll()
+                            }
+                        )
                     }
                 },
                 snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) }
@@ -409,13 +440,22 @@ object MainScreen : Screen {
                         showTags = showTags,
                         offlineMode = offlineMode || isAutoOffline,
                         pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
+                        isSelectionMode = isSelectionMode,
+                        selectedBookmarkIds = selectedBookmarkIds,
+                        onBookmarkSelectionToggle = { bookmark ->
+                            screenModel.toggleBookmarkSelection(bookmark)
+                        },
                         listState = listState,
                         pullRefreshState = pullRefreshState,
                         onBookmarkClick = { bookmark ->
                             navigator.push(BookmarkViewerScreen(bookmark.localId))
                         },
                         onBookmarkLongClick = { bookmark ->
-                            selectedBookmarkForActions = bookmark
+                            if (isSelectionMode) {
+                                screenModel.toggleBookmarkSelection(bookmark)
+                            } else {
+                                screenModel.enterSelectionMode(bookmark)
+                            }
                         },
                         serverUrl = servers.firstOrNull()?.url,
                         onSwipeAction = { bookmark, action, config ->
@@ -491,6 +531,11 @@ object MainScreen : Screen {
                     )
                 }
             }
+        }
+
+        // Back Handler for selection mode
+        com.karakept.app.ui.components.BackHandler(enabled = isSelectionMode) {
+            screenModel.clearSelection()
         }
 
         // Back Handler for search
