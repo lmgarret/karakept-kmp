@@ -172,6 +172,7 @@ object MainScreen : Screen {
         LaunchedEffect(currentListScrollAction, currentListScrollActionConfig) {
             if (currentListScrollAction != SwipeAction.NONE) {
                 var lastFirstVisibleIndex = listState.firstVisibleItemIndex
+                var lastKnownBookmarksSize = bookmarks.size
                 var bottomReached = false
                 // Set to true once the user has actively scrolled (items scrolled off top).
                 // For short lists where no item ever leaves the top, we use scrollJustStopped instead.
@@ -189,7 +190,7 @@ object MainScreen : Screen {
                         listState.isScrollInProgress
                     )
                 }.collect { (scrollState, isScrolling) ->
-                    val (newFirstIndex, lastVisibleIndex, _) = scrollState
+                    val (newFirstIndex, lastVisibleIndex, currentBookmarksSize) = scrollState
                     val currentBookmarks = bookmarks
                     val totalBookmarks = currentBookmarks.size
 
@@ -200,15 +201,29 @@ object MainScreen : Screen {
                     wasScrolling = isScrolling
 
                     if (newFirstIndex > lastFirstVisibleIndex) {
-                        // Items from lastFirstVisibleIndex to newFirstIndex - 1 have scrolled off screen
-                        userHasScrolled = true
-                        for (i in lastFirstVisibleIndex until newFirstIndex) {
-                            val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
-                            screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
+                        val indexIncrease = newFirstIndex - lastFirstVisibleIndex
+                        val sizeIncrease = currentBookmarksSize - lastKnownBookmarksSize
+
+                        // When items are prepended to the list (e.g. after auto-refresh), the
+                        // LazyListState increments firstVisibleItemIndex to keep the same item in
+                        // view. This looks identical to the user scrolling down, but those items
+                        // were never actually scrolled past. Skip the scroll action for them.
+                        val prependedCount = if (sizeIncrease > 0) minOf(sizeIncrease, indexIncrease) else 0
+                        val actualScrollStart = lastFirstVisibleIndex + prependedCount
+
+                        if (actualScrollStart < newFirstIndex) {
+                            // Items from actualScrollStart to newFirstIndex - 1 truly scrolled off screen
+                            userHasScrolled = true
+                            for (i in actualScrollStart until newFirstIndex) {
+                                val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
+                                screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
+                            }
                         }
                         lastFirstVisibleIndex = newFirstIndex
                         bottomReached = false
                     }
+
+                    lastKnownBookmarksSize = currentBookmarksSize
 
                     // When the last visible item is the last bookmark in the list, apply the action
                     // to all remaining visible items that haven't been processed yet.
