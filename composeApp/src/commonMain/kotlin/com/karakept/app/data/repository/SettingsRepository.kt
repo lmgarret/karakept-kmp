@@ -779,6 +779,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { preferences ->
             preferences[DATE_DISPLAY_MODE_KEY] = mode.name
         }
+    }
 
     // ── Per-list settings (separate JSON blob, not part of the backup) ────────
 

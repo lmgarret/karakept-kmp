@@ -28,7 +28,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -325,45 +324,31 @@ fun BookmarkListLayout(
                         }
                     }
                 }
-                // Bottom metadata row: date on left, tags + reading time on right
-                Row(
+                // Bottom metadata: tags row (wrapping) + date/reading-time row
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(top = 8.dp)
                 ) {
-                    if (showDate) {
-                        Text(
-                            text = formatBookmarkDate(bookmark.createdAt, dateDisplayMode),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
+                    if (showTags && bookmark.tags.isNotBlank()) {
+                        BookmarkTagsDisplay(
+                            tags = bookmark.tags,
+                            style = TagsDisplayStyle.COMPACT,
+                            modifier = Modifier.padding(bottom = 4.dp)
                         )
-                    } else {
-                        Spacer(modifier = Modifier.weight(1f))
                     }
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (showTags && bookmark.tags.isNotBlank()) {
-                            val tagList = bookmark.tags.split(",")
-                                .map { it.trim() }
-                                .filter { it.isNotBlank() }
-                            tagList.take(3).forEach { tag ->
-                                Surface(
-                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
-                                    shape = MaterialTheme.shapes.small,
-                                ) {
-                                    Text(
-                                        text = tag,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
+                        if (showDate) {
+                            Text(
+                                text = formatBookmarkDate(bookmark.createdAt, dateDisplayMode),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
+                        Spacer(modifier = Modifier.weight(1f))
                         if (showReadingTime) {
                             if (bookmark.readingTimeMinutes > 0) {
                                 ReadingTimeBadge(readingTimeMinutes = bookmark.readingTimeMinutes)

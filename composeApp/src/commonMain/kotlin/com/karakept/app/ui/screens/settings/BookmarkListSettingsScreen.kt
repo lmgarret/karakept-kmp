@@ -75,6 +75,7 @@ class BookmarkListSettingsScreen : Screen {
         val currentLayoutType by screenModel.layoutType.collectAsState()
         val showReadingTimeBadge by screenModel.showReadingTimeBadge.collectAsState()
         val readingSpeedWpm by screenModel.readingSpeedWpm.collectAsState()
+        val showTags by screenModel.showTags.collectAsState()
         val showDateInList by screenModel.showDateInList.collectAsState()
         val dateDisplayMode by screenModel.dateDisplayMode.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
@@ -297,6 +298,43 @@ class BookmarkListSettingsScreen : Screen {
                         Switch(
                             checked = dimReadBookmarks,
                             onCheckedChange = { screenModel.setDimReadBookmarks(it) }
+                        )
+                    }
+                }
+
+                // Show Tags toggle
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Label,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Show Tags",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Display tags on bookmark cards",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = showTags,
+                            onCheckedChange = { screenModel.setShowTags(it) }
                         )
                     }
                 }
