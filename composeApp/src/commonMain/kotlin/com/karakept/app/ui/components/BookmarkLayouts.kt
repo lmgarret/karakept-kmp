@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,6 +28,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -135,48 +137,52 @@ fun BookmarkCardLayout(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
-                    }
-                }
-
-                // Reading time badge - or not-synced badge when offline and content not synced
-                if (showReadingTime) {
-                    if (bookmark.readingTimeMinutes > 0) {
-                        ReadingTimeBadge(
-                            readingTimeMinutes = bookmark.readingTimeMinutes,
+                        if (showTags && bookmark.tags.isNotBlank()) {
+                            BookmarkTagsDisplay(
+                                tags = bookmark.tags,
+                                style = TagsDisplayStyle.COMPACT,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        Row(
                             modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(8.dp)
-                        )
-                    } else if (offlineMode) {
-                        // Only show not-synced badge when in offline mode
-                        NotSyncedBadge(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(8.dp)
-                        )
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (showDate) {
+                                Text(
+                                    text = formatBookmarkDate(bookmark.createdAt, dateDisplayMode),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                            if (showReadingTime) {
+                                if (bookmark.readingTimeMinutes > 0) {
+                                    ReadingTimeBadge(readingTimeMinutes = bookmark.readingTimeMinutes)
+                                } else if (offlineMode) {
+                                    NotSyncedBadge()
+                                }
+                            }
+                        }
                     }
                 }
+            }
 
-                // Reading progress bar
-                if (showReadingProgress && bookmark.readingProgress > 0f) {
-                    LinearProgressIndicator(
-                        progress = { bookmark.readingProgress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .align(Alignment.BottomCenter),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                    if (showDate) {
-                        Text(
-                            text = formatBookmarkDate(bookmark.createdAt, dateDisplayMode),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                }
+            // Reading progress bar
+            if (showReadingProgress && bookmark.readingProgress > 0f) {
+                LinearProgressIndicator(
+                    progress = { bookmark.readingProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .align(Alignment.BottomCenter),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             }
 
             // Selection indicator (not affected by dim alpha)
@@ -317,34 +323,55 @@ fun BookmarkListLayout(
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
-                        if (showDate) {
-                            Text(
-                                text = formatBookmarkDate(bookmark.createdAt, dateDisplayMode),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
                     }
                 }
-            }
-
-            // Reading time badge - or not-synced badge when offline and content not synced
-            if (showReadingTime) {
-                if (bookmark.readingTimeMinutes > 0) {
-                    ReadingTimeBadge(
-                        readingTimeMinutes = bookmark.readingTimeMinutes,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(8.dp)
-                    )
-                } else if (offlineMode) {
-                    // Only show not-synced badge when in offline mode
-                    NotSyncedBadge(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(8.dp)
-                    )
+                // Bottom metadata row: date on left, tags + reading time on right
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (showDate) {
+                        Text(
+                            text = formatBookmarkDate(bookmark.createdAt, dateDisplayMode),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (showTags && bookmark.tags.isNotBlank()) {
+                            val tagList = bookmark.tags.split(",")
+                                .map { it.trim() }
+                                .filter { it.isNotBlank() }
+                            tagList.take(3).forEach { tag ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
+                                    shape = MaterialTheme.shapes.small,
+                                ) {
+                                    Text(
+                                        text = tag,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                        if (showReadingTime) {
+                            if (bookmark.readingTimeMinutes > 0) {
+                                ReadingTimeBadge(readingTimeMinutes = bookmark.readingTimeMinutes)
+                            } else if (offlineMode) {
+                                NotSyncedBadge()
+                            }
+                        }
+                    }
                 }
             }
 
