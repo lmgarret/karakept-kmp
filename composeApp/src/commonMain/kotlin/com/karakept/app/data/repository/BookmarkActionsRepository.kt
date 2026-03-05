@@ -2,6 +2,7 @@ package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
+import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.entity.PendingActionType
 import com.karakept.app.data.model.Server
