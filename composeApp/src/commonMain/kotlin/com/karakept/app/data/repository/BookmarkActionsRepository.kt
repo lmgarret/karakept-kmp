@@ -2,6 +2,7 @@ package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
+import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.entity.PendingActionType
 import com.karakept.app.data.model.Server
@@ -310,6 +311,171 @@ class BookmarkActionsRepository(
 
             // Auto-sync if not in offline mode
             triggerAutoSync(serverId)
+        }
+    }
+
+    // =========================================================================
+    // Batch operations (no snackbar — callers handle UI feedback)
+    // =========================================================================
+
+    /**
+     * Archive a list of bookmarks without showing individual snackbars.
+     */
+    suspend fun batchArchive(bookmarks: List<BookmarkEntity>) {
+        withContext(Dispatchers.IO) {
+            bookmarks.forEach { bookmark ->
+                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
+                current?.let { bookmarkDao.insertBookmark(it.copy(isArchived = true)) }
+                queueAction(
+                    bookmarkRemoteId = bookmark.remoteId,
+                    serverId = bookmark.serverId,
+                    actionType = PendingActionType.ARCHIVE,
+                    actionData = "{}"
+                )
+                _bookmarkChangedEvents.emit(bookmark.remoteId)
+            }
+            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
+        }
+    }
+
+    /**
+     * Unarchive a list of bookmarks without showing individual snackbars.
+     */
+    suspend fun batchUnarchive(bookmarks: List<BookmarkEntity>) {
+        withContext(Dispatchers.IO) {
+            bookmarks.forEach { bookmark ->
+                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
+                current?.let { bookmarkDao.insertBookmark(it.copy(isArchived = false)) }
+                queueAction(
+                    bookmarkRemoteId = bookmark.remoteId,
+                    serverId = bookmark.serverId,
+                    actionType = PendingActionType.UNARCHIVE,
+                    actionData = "{}"
+                )
+                _bookmarkChangedEvents.emit(bookmark.remoteId)
+            }
+            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
+        }
+    }
+
+    /**
+     * Mark a list of bookmarks as read without showing individual snackbars.
+     */
+    suspend fun batchMarkRead(bookmarks: List<BookmarkEntity>) {
+        withContext(Dispatchers.IO) {
+            bookmarks.forEach { bookmark ->
+                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
+                current?.let { bookmarkDao.insertBookmark(it.copy(isRead = true)) }
+                _bookmarkChangedEvents.emit(bookmark.remoteId)
+            }
+        }
+    }
+
+    /**
+     * Mark a list of bookmarks as unread without showing individual snackbars.
+     */
+    suspend fun batchMarkUnread(bookmarks: List<BookmarkEntity>, resetProgress: Boolean = false) {
+        withContext(Dispatchers.IO) {
+            bookmarks.forEach { bookmark ->
+                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
+                current?.let {
+                    val updated = if (resetProgress) {
+                        it.copy(isRead = false, readingProgress = 0f, readingScrollIndex = 0, readingScrollOffset = 0)
+                    } else {
+                        it.copy(isRead = false)
+                    }
+                    bookmarkDao.insertBookmark(updated)
+                }
+                _bookmarkChangedEvents.emit(bookmark.remoteId)
+            }
+        }
+    }
+
+    /**
+     * Set favourite status for a list of bookmarks without showing individual snackbars.
+     */
+    suspend fun batchSetFavourite(bookmarks: List<BookmarkEntity>, makeFavourite: Boolean) {
+        withContext(Dispatchers.IO) {
+            bookmarks.forEach { bookmark ->
+                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
+                current?.let { bookmarkDao.insertBookmark(it.copy(isStarred = makeFavourite)) }
+                queueAction(
+                    bookmarkRemoteId = bookmark.remoteId,
+                    serverId = bookmark.serverId,
+                    actionType = if (makeFavourite) PendingActionType.FAVOURITE else PendingActionType.UNFAVOURITE,
+                    actionData = "{}"
+                )
+                _bookmarkChangedEvents.emit(bookmark.remoteId)
+            }
+            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
+        }
+    }
+
+    /**
+     * Delete a list of bookmarks without showing individual snackbars.
+     */
+    suspend fun batchDelete(bookmarks: List<BookmarkEntity>) {
+        withContext(Dispatchers.IO) {
+            bookmarks.forEach { bookmark ->
+                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
+                if (current != null) {
+                    val originalRemoteId = current.originalRemoteId
+                    bookmarkDao.deleteBookmark(current)
+                    queueAction(
+                        bookmarkRemoteId = bookmark.remoteId,
+                        serverId = bookmark.serverId,
+                        actionType = PendingActionType.DELETE,
+                        actionData = json.encodeToString(mapOf("originalRemoteId" to originalRemoteId))
+                    )
+                    _bookmarkChangedEvents.emit(bookmark.remoteId)
+                }
+            }
+            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
+        }
+    }
+
+    /**
+     * Set the same tag list on all selected bookmarks without showing individual snackbars.
+     */
+    suspend fun batchUpdateTags(bookmarks: List<BookmarkEntity>, newTags: List<String>) {
+        withContext(Dispatchers.IO) {
+            bookmarks.forEach { bookmark ->
+                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
+                current?.let { bookmarkDao.insertBookmark(it.copy(tags = newTags.joinToString(","))) }
+                queueAction(
+                    bookmarkRemoteId = bookmark.remoteId,
+                    serverId = bookmark.serverId,
+                    actionType = PendingActionType.UPDATE_TAGS,
+                    actionData = json.encodeToString(mapOf("tags" to newTags))
+                )
+                _bookmarkChangedEvents.emit(bookmark.remoteId)
+            }
+            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
+        }
+    }
+
+    /**
+     * Add a list of bookmarks to a list without showing individual snackbars.
+     */
+    suspend fun batchMoveToList(bookmarks: List<BookmarkEntity>, listId: String) {
+        withContext(Dispatchers.IO) {
+            bookmarks.forEach { bookmark ->
+                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
+                current?.let {
+                    val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
+                    if (!currentListIds.contains(listId)) {
+                        bookmarkDao.insertBookmark(it.copy(listIds = (currentListIds + listId).joinToString(",")))
+                    }
+                }
+                queueAction(
+                    bookmarkRemoteId = bookmark.remoteId,
+                    serverId = bookmark.serverId,
+                    actionType = PendingActionType.MOVE_TO_LIST,
+                    actionData = json.encodeToString(mapOf("listId" to listId))
+                )
+                _bookmarkChangedEvents.emit(bookmark.remoteId)
+            }
+            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
         }
     }
 
