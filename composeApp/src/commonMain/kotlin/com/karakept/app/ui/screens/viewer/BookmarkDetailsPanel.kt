@@ -24,7 +24,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CalendarToday
@@ -48,6 +47,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.ui.components.BookmarkTagsDisplay
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -154,18 +154,13 @@ internal fun BookmarkDetailsPanel(
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // Tags
-                            val tags = bookmark.tags.split(",").filter { it.isNotBlank() }
-                            if (tags.isNotEmpty()) {
+                            // Tags — use BookmarkTagsDisplay for consistent chip design
+                            if (bookmark.tags.isNotBlank()) {
                                 DetailsSectionTitle("Tags")
-                                tags.forEach { tag ->
-                                    DetailsRow(
-                                        icon = Icons.AutoMirrored.Filled.Label,
-                                        label = tag,
-                                        value = null
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(16.dp))
+                                BookmarkTagsDisplay(
+                                    tags = bookmark.tags,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
                             }
 
                             // Status

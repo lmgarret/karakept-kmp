@@ -147,7 +147,8 @@ internal fun ViewerTopBar(
 
             DropdownMenu(
                 expanded = showMenu,
-                onDismissRequest = { onMenuToggle(false) }
+                onDismissRequest = { onMenuToggle(false) },
+                shape = MaterialTheme.shapes.extraSmall
             ) {
                 DropdownMenuItem(
                     text = { Text("Reader Appearance") },
