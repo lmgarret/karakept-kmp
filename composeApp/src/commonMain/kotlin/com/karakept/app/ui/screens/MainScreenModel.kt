@@ -90,6 +90,13 @@ class MainScreenModel(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
+    // Multi-select state
+    private val _selectedBookmarkIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedBookmarkIds: StateFlow<Set<Long>> = _selectedBookmarkIds
+    val isSelectionMode: StateFlow<Boolean> = _selectedBookmarkIds
+        .map { it.isNotEmpty() }
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> =
         bookmarkRepository.syncProgress.stateIn(
             screenModelScope,
@@ -716,6 +723,159 @@ class MainScreenModel(
                 val bookmarkLists = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotEmpty() }
                 if (bookmarkLists.contains(listId)) it.copy(isRead = true) else it
             }
+        }
+    }
+
+    // =========================================================================
+    // Multi-select & batch operations
+    // =========================================================================
+
+    fun enterSelectionMode(bookmark: BookmarkEntity) {
+        _selectedBookmarkIds.value = setOf(bookmark.remoteId)
+    }
+
+    fun toggleBookmarkSelection(bookmark: BookmarkEntity) {
+        val current = _selectedBookmarkIds.value
+        _selectedBookmarkIds.value = if (bookmark.remoteId in current) {
+            current - bookmark.remoteId
+        } else {
+            current + bookmark.remoteId
+        }
+    }
+
+    fun clearSelection() {
+        _selectedBookmarkIds.value = emptySet()
+    }
+
+    fun selectAll() {
+        _selectedBookmarkIds.value = _accumulatedBookmarks.value.map { it.remoteId }.toSet()
+    }
+
+    private fun getSelectedBookmarks(): List<BookmarkEntity> {
+        val ids = _selectedBookmarkIds.value
+        return _accumulatedBookmarks.value.filter { it.remoteId in ids }
+    }
+
+    fun batchArchive() {
+        val bookmarks = getSelectedBookmarks().filter { !it.isArchived }
+        if (bookmarks.isEmpty()) { clearSelection(); return }
+        screenModelScope.launch {
+            bookmarkActionsRepository.batchArchive(bookmarks)
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
+                it.remoteId !in bookmarks.map { b -> b.remoteId }
+            }
+            clearSelection()
+        }
+    }
+
+    fun batchUnarchive() {
+        val bookmarks = getSelectedBookmarks().filter { it.isArchived }
+        if (bookmarks.isEmpty()) { clearSelection(); return }
+        screenModelScope.launch {
+            bookmarkActionsRepository.batchUnarchive(bookmarks)
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
+                it.remoteId !in bookmarks.map { b -> b.remoteId }
+            }
+            clearSelection()
+        }
+    }
+
+    fun batchMarkRead() {
+        val bookmarks = getSelectedBookmarks().filter { !it.isRead }
+        if (bookmarks.isEmpty()) { clearSelection(); return }
+        screenModelScope.launch {
+            bookmarkActionsRepository.batchMarkRead(bookmarks)
+            val ids = bookmarks.map { it.remoteId }.toSet()
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                if (it.remoteId in ids) it.copy(isRead = true) else it
+            }
+            clearSelection()
+        }
+    }
+
+    fun batchMarkUnread() {
+        val bookmarks = getSelectedBookmarks().filter { it.isRead }
+        if (bookmarks.isEmpty()) { clearSelection(); return }
+        screenModelScope.launch {
+            val resetProgress = settingsRepository.resetProgressOnMarkUnread.first()
+            bookmarkActionsRepository.batchMarkUnread(bookmarks, resetProgress)
+            val ids = bookmarks.map { it.remoteId }.toSet()
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                if (it.remoteId in ids) {
+                    if (resetProgress) it.copy(isRead = false, readingProgress = 0f, readingScrollIndex = 0, readingScrollOffset = 0)
+                    else it.copy(isRead = false)
+                } else it
+            }
+            clearSelection()
+        }
+    }
+
+    fun batchFavourite() {
+        val bookmarks = getSelectedBookmarks().filter { !it.isStarred }
+        if (bookmarks.isEmpty()) { clearSelection(); return }
+        screenModelScope.launch {
+            bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = true)
+            val ids = bookmarks.map { it.remoteId }.toSet()
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                if (it.remoteId in ids) it.copy(isStarred = true) else it
+            }
+            clearSelection()
+        }
+    }
+
+    fun batchUnfavourite() {
+        val bookmarks = getSelectedBookmarks().filter { it.isStarred }
+        if (bookmarks.isEmpty()) { clearSelection(); return }
+        screenModelScope.launch {
+            bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = false)
+            val ids = bookmarks.map { it.remoteId }.toSet()
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
+                if (it.remoteId in ids) it.copy(isStarred = false) else it
+            }
+            clearSelection()
+        }
+    }
+
+    fun batchDelete() {
+        val bookmarks = getSelectedBookmarks()
+        if (bookmarks.isEmpty()) { clearSelection(); return }
+        screenModelScope.launch {
+            bookmarkActionsRepository.batchDelete(bookmarks)
+            val ids = bookmarks.map { it.remoteId }.toSet()
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter { it.remoteId !in ids }
+            clearSelection()
+        }
+    }
+
+    fun batchSetTags(newTags: List<String>) {
+        val bookmarks = getSelectedBookmarks()
+        if (bookmarks.isEmpty()) { clearSelection(); return }
+        screenModelScope.launch {
+            bookmarkActionsRepository.batchUpdateTags(bookmarks, newTags)
+            val ids = bookmarks.map { it.remoteId }.toSet()
+            val tagString = newTags.joinToString(",")
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map { bookmark ->
+                if (bookmark.remoteId in ids) bookmark.copy(tags = tagString) else bookmark
+            }
+            clearSelection()
+        }
+    }
+
+    fun batchMoveToList(listId: String) {
+        val bookmarks = getSelectedBookmarks()
+        if (bookmarks.isEmpty()) { clearSelection(); return }
+        screenModelScope.launch {
+            bookmarkActionsRepository.batchMoveToList(bookmarks, listId)
+            val ids = bookmarks.map { it.remoteId }.toSet()
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map { bookmark ->
+                if (bookmark.remoteId in ids) {
+                    val currentListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                    if (!currentListIds.contains(listId)) {
+                        bookmark.copy(listIds = (currentListIds + listId).joinToString(","))
+                    } else bookmark
+                } else bookmark
+            }
+            clearSelection()
         }
     }
 

@@ -1,13 +1,15 @@
 package com.karakept.app.ui.screens.main
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
@@ -21,10 +23,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -59,6 +67,9 @@ internal fun BookmarkListContent(
     showTags: Boolean,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
+    isSelectionMode: Boolean = false,
+    selectedBookmarkIds: Set<Long> = emptySet(),
+    onBookmarkSelectionToggle: (BookmarkEntity) -> Unit = {},
     listState: LazyListState,
     pullRefreshState: PullRefreshState,
     onBookmarkClick: (BookmarkEntity) -> Unit,
@@ -84,17 +95,155 @@ internal fun BookmarkListContent(
             }
     }
 
+    val hapticFeedback = LocalHapticFeedback.current
+    val updatedBookmarks = rememberUpdatedState(bookmarks)
+    val updatedSelectedIds = rememberUpdatedState(selectedBookmarkIds)
+    // Tracks whether a drag-selection gesture is currently active (started from long press in selection mode)
+    val isDragSelecting = remember { mutableStateOf(false) }
+    // Scroll speed (px/frame) applied at the list edges during drag selection.
+    // Negative = scroll up, positive = scroll down, 0 = no auto-scroll.
+    val autoScrollSpeed = remember { mutableStateOf(0f) }
+
+    // Edge-scroll loop: while a drag-selection is active, scroll the list at `autoScrollSpeed`
+    // at ~60 fps. The speed is updated by the container's onDrag handler based on proximity to
+    // the viewport edges (0 at the zone boundary → maxSpeed at the very edge, quadratic easing).
+    LaunchedEffect(isDragSelecting.value) {
+        if (!isDragSelecting.value) {
+            autoScrollSpeed.value = 0f
+            return@LaunchedEffect
+        }
+        while (isDragSelecting.value) {
+            val speed = autoScrollSpeed.value
+            if (speed != 0f) {
+                listState.scrollBy(speed)
+            }
+            delay(16L) // ~60 fps
+        }
+        autoScrollSpeed.value = 0f
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .pullRefresh(pullRefreshState)
     ) {
+        // Container-level drag selection: the gesture lives here (not per-item) so that
+        // edge-scroll auto-scrolling does not recycle the item that owns the gesture detector,
+        // which would kill the drag mid-gesture.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(isSelectionMode) {
+                    if (!isSelectionMode) return@pointerInput
+                    // Bidirectional range selection:
+                    //  - dragStartIndex: fixed anchor (where the long-press started)
+                    //  - lastDragIndex: updated on each drag event to the current finger position
+                    // On each event the OLD range [dragStartIndex, lastDragIndex] and the NEW range
+                    // [dragStartIndex, currentIndex] are diffed:
+                    //  - items entering the new range → selected
+                    //  - items leaving the new range → deselected
+                    // "Pulling back" the finger therefore un-selects the overshoot items.
+                    var dragStartIndex = -1
+                    var lastDragIndex = -1
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { offset ->
+                            val viewportStart = listState.layoutInfo.viewportStartOffset
+                            val absoluteY = offset.y + viewportStart
+                            val initialItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+                                absoluteY.toInt() in info.offset until (info.offset + info.size)
+                            } ?: return@detectDragGesturesAfterLongPress
+                            dragStartIndex = initialItem.index
+                            lastDragIndex = dragStartIndex
+                            isDragSelecting.value = true
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val bm = updatedBookmarks.value.getOrNull(initialItem.index)
+                            if (bm != null && bm.remoteId !in updatedSelectedIds.value) {
+                                onBookmarkSelectionToggle(bm)
+                            }
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            if (dragStartIndex >= 0) {
+                                val viewportStart = listState.layoutInfo.viewportStartOffset
+                                val absoluteY = change.position.y + viewportStart
+                                val targetItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+                                    absoluteY.toInt() in info.offset until (info.offset + info.size)
+                                }
+                                if (targetItem != null) {
+                                    val currentIndex = targetItem.index
+                                    if (currentIndex != lastDragIndex) {
+                                        val oldRangeStart = minOf(dragStartIndex, lastDragIndex)
+                                        val oldRangeEnd = maxOf(dragStartIndex, lastDragIndex)
+                                        val newRangeStart = minOf(dragStartIndex, currentIndex)
+                                        val newRangeEnd = maxOf(dragStartIndex, currentIndex)
+                                        val bookmarkList = updatedBookmarks.value
+                                        val selectedIds = updatedSelectedIds.value
+                                        // Select items entering the range
+                                        for (i in newRangeStart..newRangeEnd) {
+                                            if (i < oldRangeStart || i > oldRangeEnd) {
+                                                val bm = bookmarkList.getOrNull(i)
+                                                if (bm != null && bm.remoteId !in selectedIds) {
+                                                    onBookmarkSelectionToggle(bm)
+                                                }
+                                            }
+                                        }
+                                        // Deselect items leaving the range
+                                        for (i in oldRangeStart..oldRangeEnd) {
+                                            if (i < newRangeStart || i > newRangeEnd) {
+                                                val bm = bookmarkList.getOrNull(i)
+                                                if (bm != null && bm.remoteId in selectedIds) {
+                                                    onBookmarkSelectionToggle(bm)
+                                                }
+                                            }
+                                        }
+                                        lastDragIndex = currentIndex
+                                    }
+                                }
+                            }
+
+                            // Edge-scroll: speed scales quadratically from 0 at zone boundary
+                            // to maxSpeed at the very edge (15% zone on each side).
+                            val viewportHeight = (listState.layoutInfo.viewportEndOffset -
+                                listState.layoutInfo.viewportStartOffset).toFloat()
+                            val edgeZone = viewportHeight * 0.15f
+                            val maxSpeed = 25f
+                            val y = change.position.y
+                            autoScrollSpeed.value = when {
+                                y < edgeZone -> {
+                                    val fraction = ((edgeZone - y) / edgeZone).coerceIn(0f, 1f)
+                                    -maxSpeed * fraction * fraction
+                                }
+                                y > viewportHeight - edgeZone -> {
+                                    val fraction = ((y - (viewportHeight - edgeZone)) / edgeZone).coerceIn(0f, 1f)
+                                    maxSpeed * fraction * fraction
+                                }
+                                else -> 0f
+                            }
+                        },
+                        onDragEnd = {
+                            dragStartIndex = -1
+                            lastDragIndex = -1
+                            autoScrollSpeed.value = 0f
+                            isDragSelecting.value = false
+                        },
+                        onDragCancel = {
+                            dragStartIndex = -1
+                            lastDragIndex = -1
+                            autoScrollSpeed.value = 0f
+                            isDragSelecting.value = false
+                        }
+                    )
+                }
+        ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState
         ) {
-            items(bookmarks, key = { it.remoteId }) { bookmark ->
-                Box(modifier = Modifier.animateItemPlacement()) {
+            itemsIndexed(bookmarks, key = { _, bookmark -> bookmark.remoteId }) { _, bookmark ->
+                Box(
+                    modifier = Modifier
+                        .animateItemPlacement()
+                ) {
                     if (bookmark.remoteId in pendingBookmarkRemoteIds) {
                         BookmarkPlaceholderItem(url = bookmark.url, layoutType = layoutType)
                         return@Box
@@ -145,9 +294,10 @@ internal fun BookmarkListContent(
                         else -> null
                     }
 
+                    val isSelected = bookmark.remoteId in selectedBookmarkIds
                     SwipeableBookmarkItem(
-                        leftSwipeAction = swipeLeftAction,
-                        rightSwipeAction = swipeRightAction,
+                        leftSwipeAction = if (isSelectionMode) SwipeAction.NONE else swipeLeftAction,
+                        rightSwipeAction = if (isSelectionMode) SwipeAction.NONE else swipeRightAction,
                         leftIcon = leftIcon,
                         rightIcon = rightIcon,
                         leftColor = swipeLeftConfig.getEffectiveColor(swipeLeftAction).takeIf {
@@ -204,31 +354,45 @@ internal fun BookmarkListContent(
                         when (layoutType) {
                             LayoutType.CARD -> BookmarkCardLayout(
                                 bookmark = bookmark,
-                                onClick = remember(bookmark.localId) {
-                                    { onBookmarkClick(bookmark) }
+                                onClick = remember(bookmark.localId, isSelectionMode) {
+                                    {
+                                        if (isSelectionMode) onBookmarkSelectionToggle(bookmark)
+                                        else onBookmarkClick(bookmark)
+                                    }
                                 },
-                                onLongClick = { onBookmarkLongClick(bookmark) },
+                                // In selection mode, long press is handled by detectDragGesturesAfterLongPress
+                                onLongClick = remember(bookmark.localId, isSelectionMode) {
+                                    if (isSelectionMode) null else { { onBookmarkLongClick(bookmark) } }
+                                },
                                 showReadingTime = showReadingTimeBadge,
                                 showReadingProgress = showReadingProgress,
                                 showTags = showTags,
                                 dimRead = dimReadBookmarks,
                                 offlineMode = offlineMode,
                                 bannerImageUrl = bannerImageUrl,
-                                screenshotUrl = screenshotUrl
+                                screenshotUrl = screenshotUrl,
+                                isSelected = isSelected
                             )
                             LayoutType.LIST -> BookmarkListLayout(
                                 bookmark = bookmark,
-                                onClick = remember(bookmark.localId) {
-                                    { onBookmarkClick(bookmark) }
+                                onClick = remember(bookmark.localId, isSelectionMode) {
+                                    {
+                                        if (isSelectionMode) onBookmarkSelectionToggle(bookmark)
+                                        else onBookmarkClick(bookmark)
+                                    }
                                 },
-                                onLongClick = { onBookmarkLongClick(bookmark) },
+                                // In selection mode, long press is handled by detectDragGesturesAfterLongPress
+                                onLongClick = remember(bookmark.localId, isSelectionMode) {
+                                    if (isSelectionMode) null else { { onBookmarkLongClick(bookmark) } }
+                                },
                                 showReadingTime = showReadingTimeBadge,
                                 showReadingProgress = showReadingProgress,
                                 showTags = showTags,
                                 dimRead = dimReadBookmarks,
                                 offlineMode = offlineMode,
                                 bannerImageUrl = bannerImageUrl,
-                                screenshotUrl = screenshotUrl
+                                screenshotUrl = screenshotUrl,
+                                isSelected = isSelected
                             )
                         }
                     }
@@ -267,6 +431,7 @@ internal fun BookmarkListContent(
                 }
             }
         }
+        } // end drag-selection container Box
 
         if (isSyncing) {
             // Show determinate progress when available
