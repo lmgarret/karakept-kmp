@@ -20,7 +20,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -128,7 +128,7 @@ class ListManagementScreen : Screen {
                             allLists = lists,
                             onCycleState = { state -> screenModel.cycleListSyncState(list.id ?: "", state) }
                         )
-                        Divider()
+                        HorizontalDivider()
                     }
                 }
             }

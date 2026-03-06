@@ -1,18 +1,8 @@
 package com.karakept.app.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
@@ -26,30 +16,32 @@ import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.api.model.KarakeepList as KarakeepList
 
 /**
- * Sheet showing all available bookmark actions.
+ * Bottom sheet showing all available bookmark actions.
  * Displayed from long press or overflow menu.
+ * Follows MD3 menu guidelines with ModalBottomSheet and DropdownMenuItem styling.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookmarkActionsMenu(
     bookmark: BookmarkEntity,
@@ -61,110 +53,130 @@ fun BookmarkActionsMenu(
     var showListPicker by remember { mutableStateOf(false) }
     var showTagEditor by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            LazyColumn(
-                modifier = Modifier.padding(vertical = 8.dp)
-            ) {
-                item {
-                    Text(
-                        text = "Bookmark Actions",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                    )
-                    Divider()
-                }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-                item {
-                    BookmarkActionItem(
-                        icon = if (bookmark.isStarred) Icons.Default.Star else Icons.Default.StarBorder,
-                        label = if (bookmark.isStarred) "Remove from Favorites" else "Add to Favorites",
-                        onClick = {
-                            onAction(BookmarkAction.ToggleFavorite)
-                            onDismiss()
-                        }
-                    )
-                }
-
-                item {
-                    BookmarkActionItem(
-                        icon = if (bookmark.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
-                        label = if (bookmark.isArchived) "Unarchive" else "Archive",
-                        onClick = {
-                            onAction(BookmarkAction.ToggleArchive)
-                            onDismiss()
-                        }
-                    )
-                }
-
-                item {
-                    BookmarkActionItem(
-                        icon = if (bookmark.isRead) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        label = if (bookmark.isRead) "Mark as Unread" else "Mark as Read",
-                        onClick = {
-                            onAction(BookmarkAction.ToggleRead)
-                            onDismiss()
-                        }
-                    )
-                }
-
-                item {
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
-                    BookmarkActionItem(
-                        icon = Icons.Default.FolderOpen,
-                        label = "Move to List",
-                        onClick = { showListPicker = true }
-                    )
-                }
-
-                item {
-                    BookmarkActionItem(
-                        icon = Icons.Default.Edit,
-                        label = "Edit Tags",
-                        onClick = { showTagEditor = true }
-                    )
-                }
-
-                item {
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
-                    BookmarkActionItem(
-                        icon = Icons.Default.Share,
-                        label = "Share",
-                        onClick = {
-                            onAction(BookmarkAction.Share)
-                            onDismiss()
-                        }
-                    )
-                }
-
-                item {
-                    BookmarkActionItem(
-                        icon = Icons.Default.OpenInBrowser,
-                        label = "Open in Browser",
-                        onClick = {
-                            onAction(BookmarkAction.OpenInBrowser)
-                            onDismiss()
-                        }
-                    )
-                }
-
-                item {
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
-                    BookmarkActionItem(
-                        icon = Icons.Default.Delete,
-                        label = "Delete",
-                        tint = MaterialTheme.colorScheme.error,
-                        onClick = { showDeleteConfirm = true }
-                    )
-                }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        // Status actions
+        DropdownMenuItem(
+            text = { Text(if (bookmark.isStarred) "Remove from Favorites" else "Add to Favorites") },
+            leadingIcon = {
+                Icon(
+                    imageVector = if (bookmark.isStarred) Icons.Default.Star else Icons.Default.StarBorder,
+                    contentDescription = null
+                )
+            },
+            onClick = {
+                onAction(BookmarkAction.ToggleFavorite)
+                onDismiss()
             }
-        }
+        )
+
+        DropdownMenuItem(
+            text = { Text(if (bookmark.isArchived) "Unarchive" else "Archive") },
+            leadingIcon = {
+                Icon(
+                    imageVector = if (bookmark.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
+                    contentDescription = null
+                )
+            },
+            onClick = {
+                onAction(BookmarkAction.ToggleArchive)
+                onDismiss()
+            }
+        )
+
+        DropdownMenuItem(
+            text = { Text(if (bookmark.isRead) "Mark as Unread" else "Mark as Read") },
+            leadingIcon = {
+                Icon(
+                    imageVector = if (bookmark.isRead) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = null
+                )
+            },
+            onClick = {
+                onAction(BookmarkAction.ToggleRead)
+                onDismiss()
+            }
+        )
+
+        HorizontalDivider()
+
+        // Organization actions
+        DropdownMenuItem(
+            text = { Text("Move to List") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.FolderOpen,
+                    contentDescription = null
+                )
+            },
+            onClick = { showListPicker = true }
+        )
+
+        DropdownMenuItem(
+            text = { Text("Edit Tags") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null
+                )
+            },
+            onClick = { showTagEditor = true }
+        )
+
+        HorizontalDivider()
+
+        // External actions
+        DropdownMenuItem(
+            text = { Text("Share") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = null
+                )
+            },
+            onClick = {
+                onAction(BookmarkAction.Share)
+                onDismiss()
+            }
+        )
+
+        DropdownMenuItem(
+            text = { Text("Open in Browser") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.OpenInBrowser,
+                    contentDescription = null
+                )
+            },
+            onClick = {
+                onAction(BookmarkAction.OpenInBrowser)
+                onDismiss()
+            }
+        )
+
+        HorizontalDivider()
+
+        // Destructive action
+        DropdownMenuItem(
+            text = { Text("Delete") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            onClick = { showDeleteConfirm = true },
+            colors = MenuDefaults.itemColors(
+                textColor = MaterialTheme.colorScheme.error
+            )
+        )
+
+        Spacer(modifier = Modifier.height(8.dp).navigationBarsPadding())
     }
 
     // Delete confirmation dialog
@@ -216,34 +228,6 @@ fun BookmarkActionsMenu(
                 onDismiss()
             },
             onDismiss = { showTagEditor = false }
-        )
-    }
-}
-
-@Composable
-private fun BookmarkActionItem(
-    icon: ImageVector,
-    label: String,
-    tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = tint
         )
     }
 }

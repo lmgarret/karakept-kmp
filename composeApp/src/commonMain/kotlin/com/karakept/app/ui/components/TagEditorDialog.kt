@@ -1,26 +1,26 @@
 package com.karakept.app.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,14 +28,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 
 /**
- * Dialog for editing tags on a bookmark.
+ * MD3 AlertDialog for editing tags on a bookmark.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -47,31 +45,16 @@ fun TagEditorDialog(
     var tags by remember { mutableStateOf(currentTags.toMutableList()) }
     var newTagInput by remember { mutableStateOf("") }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Edit Tags",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                
-                Divider()
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Tags") },
+        text = {
+            Column {
                 // Current tags
                 if (tags.isNotEmpty()) {
                     FlowRow(
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         tags.forEach { tag ->
                             AssistChip(
@@ -93,14 +76,14 @@ fun TagEditorDialog(
                                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                                     labelColor = MaterialTheme.colorScheme.onPrimaryContainer
                                 ),
-                                modifier = Modifier.padding(end = 8.dp, bottom = 8.dp)
+                                modifier = Modifier.padding(bottom = 4.dp)
                             )
                         }
                     }
-                    
+
                     Spacer(modifier = Modifier.height(8.dp))
                 }
-                
+
                 // Add new tag input
                 OutlinedTextField(
                     value = newTagInput,
@@ -138,41 +121,19 @@ fun TagEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Actions
-                Row(
-                    modifier = Modifier.align(Alignment.End),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Cancel")
-                    }
-                    TextButton(
-                        onClick = {
-                            onTagsUpdated(tags.filter { it.isNotBlank() })
-                        }
-                    ) {
-                        Text("Save")
-                    }
-                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onTagsUpdated(tags.filter { it.isNotBlank() }) }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
             }
         }
-    }
-}
-
-@Composable
-private fun Row(
-    modifier: Modifier = Modifier,
-    horizontalArrangement: androidx.compose.foundation.layout.Arrangement.Horizontal = androidx.compose.foundation.layout.Arrangement.Start,
-    verticalAlignment: Alignment.Vertical = Alignment.Top,
-    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
-) {
-    androidx.compose.foundation.layout.Row(
-        modifier = modifier,
-        horizontalArrangement = horizontalArrangement,
-        verticalAlignment = verticalAlignment,
-        content = content
     )
 }
