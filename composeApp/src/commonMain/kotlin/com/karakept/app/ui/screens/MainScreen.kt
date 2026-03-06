@@ -188,7 +188,6 @@ object MainScreen : Screen {
                 var anchorKey: Any? = null   // key of the first visible item we're tracking
                 var anchorIndex = 0          // current index of that anchor item
                 var bottomReached = false
-                var userHasScrolled = false  // true once an item has scrolled off the top
                 var wasScrolling = false
                 snapshotFlow {
                     Triple(
@@ -226,7 +225,6 @@ object MainScreen : Screen {
                             } else {
                                 // A different item is now first-visible — the user actually
                                 // scrolled down. Items [anchorIndex, newFirstIndex) left the top.
-                                userHasScrolled = true
                                 for (i in anchorIndex until newFirstIndex) {
                                     val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
                                     screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
@@ -250,11 +248,14 @@ object MainScreen : Screen {
 
                     // When the last visible item is the last bookmark, apply the action to all
                     // remaining visible items that haven't been processed yet.
-                    // For long lists: fires after items have scrolled off the top (userHasScrolled).
+                    // For long lists: anchorIndex > 0 means the user has scrolled at least one
+                    // item off the top in the current direction. This naturally resets to false
+                    // when the user scrolls back to the top (anchorIndex returns to 0), preventing
+                    // newly prepended items from being fired when the user hasn't scrolled.
                     // For short lists where no item ever leaves the top: fires when the user
                     // finishes a scroll gesture at the bottom (scrollJustStopped).
                     val atBottom = totalBookmarks > 0 && lastVisibleIndex >= totalBookmarks - 1
-                    if (!bottomReached && atBottom && (userHasScrolled || scrollJustStopped)) {
+                    if (!bottomReached && atBottom && (anchorIndex > 0 || scrollJustStopped)) {
                         for (i in anchorIndex until totalBookmarks) {
                             val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
                             screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
