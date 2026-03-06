@@ -1,8 +1,7 @@
 package com.karakept.app.ui.screens.main
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +25,7 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
@@ -56,7 +56,6 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.api.model.KarakeepList
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun MainScreenDrawer(
     drawerState: DrawerState,
@@ -186,7 +185,6 @@ internal fun MainScreenDrawer(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BuiltinDrawerItem(
     label: String,
@@ -201,18 +199,19 @@ private fun BuiltinDrawerItem(
     val selectedTextColor = MaterialTheme.colorScheme.primary
     val normalTextColor = MaterialTheme.colorScheme.onSurface
 
-    Box {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) selectedContainerColor else Color.Transparent),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 2.dp)
-                .clip(RoundedCornerShape(50))
-                .background(if (selected) selectedContainerColor else Color.Transparent)
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = { showMenu = true }
-                )
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .weight(1f)
+                .clickable(onClick = onClick)
+                .padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -228,23 +227,31 @@ private fun BuiltinDrawerItem(
                 color = if (selected) selectedTextColor else normalTextColor
             )
         }
-        DropdownMenu(
-            expanded = showMenu,
-            onDismissRequest = { showMenu = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text("Set as home") },
-                leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
-                onClick = {
-                    showMenu = false
-                    onSetAsHome()
-                }
-            )
+        Box {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                    tint = if (selected) selectedTextColor else normalTextColor
+                )
+            }
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Set as home") },
+                    leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                    onClick = {
+                        showMenu = false
+                        onSetAsHome()
+                    }
+                )
+            }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ListDrawerItem(
     list: KarakeepList,
@@ -267,99 +274,104 @@ private fun ListDrawerItem(
     val selectedTextColor = MaterialTheme.colorScheme.primary
     val normalTextColor = MaterialTheme.colorScheme.onSurface
 
-    Box {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Spacer(Modifier.width((depth * 16).dp))
+
+        // Expand/collapse icon
+        if (hasChildLists) {
+            IconButton(
+                onClick = onToggleExpanded,
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    imageVector = if (expandedLists.contains(listId)) {
+                        Icons.Default.KeyboardArrowDown
+                    } else {
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight
+                    },
+                    contentDescription = if (expandedLists.contains(listId)) "Collapse" else "Expand",
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        } else {
+            Spacer(Modifier.width(24.dp))
+        }
+
+        // List item
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(50))
+                .background(if (isSelected) selectedContainerColor else Color.Transparent)
+                .clickable(onClick = onSelected)
+                .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Spacer(Modifier.width((depth * 16).dp))
-
-            // Expand/collapse icon
-            if (hasChildLists) {
-                IconButton(
-                    onClick = onToggleExpanded,
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = if (expandedLists.contains(listId)) {
-                            Icons.Default.KeyboardArrowDown
-                        } else {
-                            Icons.AutoMirrored.Filled.KeyboardArrowRight
-                        },
-                        contentDescription = if (expandedLists.contains(listId)) "Collapse" else "Expand",
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            } else {
-                Spacer(Modifier.width(24.dp))
-            }
-
-            // List item with long press for context menu
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(50))
-                    .background(if (isSelected) selectedContainerColor else Color.Transparent)
-                    .combinedClickable(
-                        onClick = onSelected,
-                        onLongClick = { showMenu = true }
-                    )
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Text(
+                text = "${list.icon ?: ""} ${list.name ?: ""}".trim(),
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (isSelected) selectedTextColor else normalTextColor
+            )
+            count?.let {
                 Text(
-                    text = "${list.icon ?: ""} ${list.name ?: ""}".trim(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (isSelected) selectedTextColor else normalTextColor
+                    text = it.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = (if (isSelected) selectedTextColor else MaterialTheme.colorScheme.onSurfaceVariant)
+                        .copy(alpha = 0.6f)
                 )
-                count?.let {
-                    Text(
-                        text = it.toString(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = (if (isSelected) selectedTextColor else MaterialTheme.colorScheme.onSurfaceVariant)
-                            .copy(alpha = 0.6f)
-                    )
-                }
             }
         }
 
-        DropdownMenu(
-            expanded = showMenu,
-            onDismissRequest = { showMenu = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text("Set as home") },
-                leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
-                onClick = {
-                    showMenu = false
-                    onSetAsDefault()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Mark all as read") },
-                leadingIcon = { Icon(Icons.Default.DoneAll, contentDescription = null) },
-                onClick = {
-                    showMenu = false
-                    onMarkAllAsRead()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Rename / Change icon") },
-                leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
-                onClick = {
-                    showMenu = false
-                    onRenameList()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("List settings") },
-                leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
-                onClick = {
-                    showMenu = false
-                    onListSettings()
-                }
-            )
+        // Overflow menu button
+        Box {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                    tint = if (isSelected) selectedTextColor else normalTextColor
+                )
+            }
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Set as home") },
+                    leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                    onClick = {
+                        showMenu = false
+                        onSetAsDefault()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Mark all as read") },
+                    leadingIcon = { Icon(Icons.Default.DoneAll, contentDescription = null) },
+                    onClick = {
+                        showMenu = false
+                        onMarkAllAsRead()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Rename / Change icon") },
+                    leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
+                    onClick = {
+                        showMenu = false
+                        onRenameList()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("List settings") },
+                    leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
+                    onClick = {
+                        showMenu = false
+                        onListSettings()
+                    }
+                )
+            }
         }
     }
 }
