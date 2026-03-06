@@ -135,6 +135,10 @@ internal fun BookmarkListContent(
                 .fillMaxSize()
                 .pointerInput(isSelectionMode) {
                     if (!isSelectionMode) return@pointerInput
+                    // Range selection: tracks where the drag started so we can select the full
+                    // range [dragStartIndex, currentIndex] on every drag event. This avoids
+                    // missing items when the list auto-scrolls quickly.
+                    var dragStartIndex = -1
                     detectDragGesturesAfterLongPress(
                         onDragStart = { offset ->
                             val viewportStart = listState.layoutInfo.viewportStartOffset
@@ -142,6 +146,7 @@ internal fun BookmarkListContent(
                             val initialItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
                                 absoluteY.toInt() in info.offset until (info.offset + info.size)
                             } ?: return@detectDragGesturesAfterLongPress
+                            dragStartIndex = initialItem.index
                             isDragSelecting.value = true
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                             val bm = updatedBookmarks.value.getOrNull(initialItem.index)
@@ -151,15 +156,28 @@ internal fun BookmarkListContent(
                         },
                         onDrag = { change, _ ->
                             change.consume()
-                            // Map finger Y (viewport-relative) to a list item and select it.
-                            val viewportStart = listState.layoutInfo.viewportStartOffset
-                            val absoluteY = change.position.y + viewportStart
-                            val targetItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
-                                absoluteY.toInt() in info.offset until (info.offset + info.size)
-                            }
-                            val targetBm = targetItem?.let { updatedBookmarks.value.getOrNull(it.index) }
-                            if (targetBm != null && targetBm.remoteId !in updatedSelectedIds.value) {
-                                onBookmarkSelectionToggle(targetBm)
+                            // Map finger Y to a list item, then select the full range from
+                            // dragStartIndex to currentIndex. This guarantees no items are
+                            // skipped even when the list auto-scrolls between drag events.
+                            if (dragStartIndex >= 0) {
+                                val viewportStart = listState.layoutInfo.viewportStartOffset
+                                val absoluteY = change.position.y + viewportStart
+                                val targetItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+                                    absoluteY.toInt() in info.offset until (info.offset + info.size)
+                                }
+                                if (targetItem != null) {
+                                    val currentIndex = targetItem.index
+                                    val rangeStart = minOf(dragStartIndex, currentIndex)
+                                    val rangeEnd = maxOf(dragStartIndex, currentIndex)
+                                    val bookmarkList = updatedBookmarks.value
+                                    val selectedIds = updatedSelectedIds.value
+                                    for (i in rangeStart..rangeEnd) {
+                                        val bm = bookmarkList.getOrNull(i)
+                                        if (bm != null && bm.remoteId !in selectedIds) {
+                                            onBookmarkSelectionToggle(bm)
+                                        }
+                                    }
+                                }
                             }
 
                             // Edge-scroll: speed scales quadratically from 0 at zone boundary
@@ -182,10 +200,12 @@ internal fun BookmarkListContent(
                             }
                         },
                         onDragEnd = {
+                            dragStartIndex = -1
                             autoScrollSpeed.value = 0f
                             isDragSelecting.value = false
                         },
                         onDragCancel = {
+                            dragStartIndex = -1
                             autoScrollSpeed.value = 0f
                             isDragSelecting.value = false
                         }
