@@ -17,15 +17,17 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 
@@ -101,10 +103,10 @@ fun TagEditorDialog(
                 val canAdd = searchInput.isNotBlank() && !tags.contains(searchInput.trim()) &&
                     (canCreateNew || exactMatch != null)
 
-                OutlinedTextField(
+                TextField(
                     value = searchInput,
                     onValueChange = { searchInput = it },
-                    label = { Text(if (canCreateNew) "Search or add tag" else "Search tags") },
+                    placeholder = { Text(if (canCreateNew) "Search or add tag" else "Search tags") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (searchInput.isNotBlank()) {
@@ -121,6 +123,12 @@ fun TagEditorDialog(
                         onDone = { if (canAdd) addTag(exactMatch ?: searchInput) }
                     ),
                     singleLine = true,
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = TextFieldDefaults.colors(
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -136,7 +144,7 @@ fun TagEditorDialog(
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         suggestions.forEach { suggestion ->
                             TagChip(

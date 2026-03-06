@@ -58,6 +58,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.CustomSwipeActionType
 import com.karakept.app.ui.components.TagChip
+import com.karakept.app.ui.components.TagEditorDialog
 import com.karakept.app.ui.screens.SettingsScreenModel
 import com.karakept.app.ui.utils.buildListHierarchy
 import com.karakept.api.model.KarakeepList
@@ -267,6 +268,22 @@ private fun CustomActionDialog(
     var customName by remember { mutableStateOf(existing?.customName ?: "") }
     var selectedColorHex by remember { mutableStateOf(existing?.colorHex) }
     var showListPicker by remember { mutableStateOf(false) }
+    var showTagEditor by remember { mutableStateOf(false) }
+
+    if (showTagEditor) {
+        TagEditorDialog(
+            currentTags = if (tagName.isNotBlank()) listOf(tagName) else emptyList(),
+            availableTags = emptyList(),
+            canCreateNew = true,
+            title = "Select Tag",
+            confirmLabel = "Select",
+            onTagsUpdated = { selectedTags ->
+                tagName = selectedTags.firstOrNull() ?: tagName
+                showTagEditor = false
+            },
+            onDismiss = { showTagEditor = false }
+        )
+    }
 
     if (showListPicker) {
         val listSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -349,13 +366,30 @@ private fun CustomActionDialog(
 
                 // Type-specific input
                 if (selectedType == CustomSwipeActionType.ADD_TAG) {
-                    OutlinedTextField(
-                        value = tagName,
-                        onValueChange = { tagName = it },
-                        label = { Text("Tag name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (tagName.isNotBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            TagChip(
+                                tag = tagName,
+                                onRemove = { tagName = "" }
+                            )
+                            TextButton(onClick = { showTagEditor = true }) {
+                                Text("Change")
+                            }
+                        }
+                    } else {
+                        TextButton(
+                            onClick = { showTagEditor = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Label, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Choose tag…")
+                        }
+                    }
                 } else {
                     Card(
                         modifier = Modifier
