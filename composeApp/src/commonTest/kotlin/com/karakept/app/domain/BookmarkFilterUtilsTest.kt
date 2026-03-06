@@ -159,6 +159,113 @@ class BookmarkFilterUtilsTest {
     }
 
     // -------------------------------------------------------------------------
+    // applyClientSideFilters — combined tag + list filtering (regression tests)
+    //
+    // These tests guard the crash that occurred when FilterConfig had both
+    // non-empty `tags` and `lists` simultaneously (e.g. the user selected a
+    // list from the drawer AND then added a tag via the filter panel).
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun combinedFilter_tagAndList_onlyMatchingBothAreReturned() {
+        val matchesBoth    = makeBookmark(tags = "kotlin", listIds = "list-1")
+        val matchesTagOnly = makeBookmark(tags = "kotlin", listIds = "list-2")
+        val matchesListOnly = makeBookmark(tags = "swift",  listIds = "list-1")
+        val matchesNeither = makeBookmark(tags = "swift",  listIds = "list-2")
+
+        val result = BookmarkFilterUtils.applyClientSideFilters(
+            listOf(matchesBoth, matchesTagOnly, matchesListOnly, matchesNeither),
+            FilterConfig(tags = listOf("kotlin"), lists = listOf("list-1"))
+        )
+        assertEquals(listOf(matchesBoth), result)
+    }
+
+    @Test
+    fun combinedFilter_tagAndList_multipleTagsAndLists_usesOrLogicWithinEach() {
+        val matchesBoth      = makeBookmark(tags = "kotlin", listIds = "list-a")
+        val matchesOtherTag  = makeBookmark(tags = "swift",  listIds = "list-a")
+        val matchesOtherList = makeBookmark(tags = "kotlin", listIds = "list-b")
+        val matchesNeither   = makeBookmark(tags = "java",   listIds = "list-c")
+
+        val result = BookmarkFilterUtils.applyClientSideFilters(
+            listOf(matchesBoth, matchesOtherTag, matchesOtherList, matchesNeither),
+            FilterConfig(tags = listOf("kotlin", "swift"), lists = listOf("list-a", "list-b"))
+        )
+        // All three that match at least one tag AND at least one list should be included.
+        assertEquals(listOf(matchesBoth, matchesOtherTag, matchesOtherList), result)
+    }
+
+    @Test
+    fun combinedFilter_skipListFilter_onlyTagFilterApplied() {
+        // Simulates the case where the list was already filtered at the DB level.
+        // Both bookmarks are in "list-1" (DB already filtered), but only the one
+        // with the matching tag should survive.
+        val matchingTag    = makeBookmark(tags = "kotlin", listIds = "list-1")
+        val nonMatchingTag = makeBookmark(tags = "swift",  listIds = "list-1")
+
+        val result = BookmarkFilterUtils.applyClientSideFilters(
+            listOf(matchingTag, nonMatchingTag),
+            FilterConfig(tags = listOf("kotlin"), lists = listOf("list-1")),
+            skipListFilter = true
+        )
+        assertEquals(listOf(matchingTag), result)
+    }
+
+    @Test
+    fun combinedFilter_noBookmarkMatchesBoth_returnsEmpty() {
+        val tagOnlyMatch  = makeBookmark(tags = "kotlin", listIds = "list-2")
+        val listOnlyMatch = makeBookmark(tags = "swift",  listIds = "list-1")
+
+        val result = BookmarkFilterUtils.applyClientSideFilters(
+            listOf(tagOnlyMatch, listOnlyMatch),
+            FilterConfig(tags = listOf("kotlin"), lists = listOf("list-1"))
+        )
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun combinedFilter_emptyBookmarkList_returnsEmpty() {
+        val result = BookmarkFilterUtils.applyClientSideFilters(
+            emptyList(),
+            FilterConfig(tags = listOf("kotlin"), lists = listOf("list-1"))
+        )
+        assertTrue(result.isEmpty())
+    }
+
+    // -------------------------------------------------------------------------
+    // applySearchFilter — combined tag + list filtering (regression tests)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun searchFilter_withTagAndListFilter_onlyMatchingAllConditionsReturned() {
+        val matchesAll    = makeBookmark(tags = "kotlin", listIds = "list-1", title = "Guide")
+        val wrongTag      = makeBookmark(tags = "swift",  listIds = "list-1", title = "Guide")
+        val wrongList     = makeBookmark(tags = "kotlin", listIds = "list-2", title = "Guide")
+        val wrongQuery    = makeBookmark(tags = "kotlin", listIds = "list-1", title = "Unrelated")
+
+        val result = BookmarkFilterUtils.applySearchFilter(
+            listOf(matchesAll, wrongTag, wrongList, wrongQuery),
+            FilterConfig(tags = listOf("kotlin"), lists = listOf("list-1")),
+            "guide"
+        )
+        assertEquals(listOf(matchesAll), result)
+    }
+
+    @Test
+    fun searchFilter_withTagAndListFilter_emptyQuery_appliesTagAndListFiltersOnly() {
+        val matchesBoth    = makeBookmark(tags = "kotlin", listIds = "list-1")
+        val matchesTagOnly = makeBookmark(tags = "kotlin", listIds = "list-2")
+        val matchesListOnly = makeBookmark(tags = "swift", listIds = "list-1")
+
+        val result = BookmarkFilterUtils.applySearchFilter(
+            listOf(matchesBoth, matchesTagOnly, matchesListOnly),
+            FilterConfig(tags = listOf("kotlin"), lists = listOf("list-1")),
+            ""
+        )
+        assertEquals(listOf(matchesBoth), result)
+    }
+
+    // -------------------------------------------------------------------------
     // applySorting
     // -------------------------------------------------------------------------
 
