@@ -201,22 +201,29 @@ object MainScreen : Screen {
                     wasScrolling = isScrolling
 
                     if (newFirstIndex > lastFirstVisibleIndex) {
-                        val indexIncrease = newFirstIndex - lastFirstVisibleIndex
-                        val sizeIncrease = currentBookmarksSize - lastKnownBookmarksSize
+                        // Only fire actions when the user is actively scrolling down.
+                        // When items are prepended (e.g. after auto-refresh), Compose silently
+                        // increments firstVisibleItemIndex to keep the same item in view, but
+                        // isScrollInProgress stays false. Checking isScrolling/wasScrolling
+                        // reliably distinguishes user scrolling from layout adjustments, avoiding
+                        // the race condition where bookmarks.size and firstVisibleItemIndex update
+                        // in different snapshots.
+                        if (isScrolling || wasScrolling) {
+                            val indexIncrease = newFirstIndex - lastFirstVisibleIndex
+                            val sizeIncrease = currentBookmarksSize - lastKnownBookmarksSize
 
-                        // When items are prepended to the list (e.g. after auto-refresh), the
-                        // LazyListState increments firstVisibleItemIndex to keep the same item in
-                        // view. This looks identical to the user scrolling down, but those items
-                        // were never actually scrolled past. Skip the scroll action for them.
-                        val prependedCount = if (sizeIncrease > 0) minOf(sizeIncrease, indexIncrease) else 0
-                        val actualScrollStart = lastFirstVisibleIndex + prependedCount
+                            // If a prepend happens while the user is actively scrolling, skip the
+                            // newly-prepended items (they were never scrolled past by the user).
+                            val prependedCount = if (sizeIncrease > 0) minOf(sizeIncrease, indexIncrease) else 0
+                            val actualScrollStart = lastFirstVisibleIndex + prependedCount
 
-                        if (actualScrollStart < newFirstIndex) {
-                            // Items from actualScrollStart to newFirstIndex - 1 truly scrolled off screen
-                            userHasScrolled = true
-                            for (i in actualScrollStart until newFirstIndex) {
-                                val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
-                                screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
+                            if (actualScrollStart < newFirstIndex) {
+                                // Items from actualScrollStart to newFirstIndex - 1 truly scrolled off screen
+                                userHasScrolled = true
+                                for (i in actualScrollStart until newFirstIndex) {
+                                    val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
+                                    screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
+                                }
                             }
                         }
                         lastFirstVisibleIndex = newFirstIndex
