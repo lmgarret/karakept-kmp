@@ -176,60 +176,123 @@ object MainScreen : Screen {
 
         // Scroll-triggered action: apply the active list's scroll action silently (no snackbar)
         // when bookmarks scroll off the top, or when reaching the bottom of the list.
+        //
+        // Key insight: LazyList uses stable keys (bookmark IDs). When items are prepended,
+        // Compose adjusts firstVisibleItemIndex to keep the same item on screen — the key of
+        // the first visible item stays the same, only its index changes. When the user actually
+        // scrolls, a different item becomes first-visible (different key). We use this identity
+        // check to distinguish prepend adjustments from real user scrolling, eliminating the
+        // fragile isScrollInProgress / wasScrolling approach entirely.
+        //
+        // Edge case — prepend at absolute top (firstVisibleItemIndex stays 0):
+        // When the user is at the very top (index 0, zero scroll offset), Compose does NOT adjust
+        // firstVisibleItemIndex on prepend — the new items simply appear above, so the key at
+        // index 0 changes. We detect this in the else branch by looking up the old anchor key in
+        // the visible items list: if it's now at a higher index, we know N items were prepended.
+        // We record this as newItemsUntil so the fire loop skips those newly prepended slots.
         LaunchedEffect(currentListScrollAction, currentListScrollActionConfig) {
             if (currentListScrollAction != SwipeAction.NONE) {
-                var lastFirstVisibleIndex = listState.firstVisibleItemIndex
+                var anchorKey: Any? = null   // key of the first visible item we're tracking
+                var anchorIndex = 0          // current index of that anchor item
                 var bottomReached = false
-                // Set to true once the user has actively scrolled (items scrolled off top).
-                // For short lists where no item ever leaves the top, we use scrollJustStopped instead.
-                var userHasScrolled = false
                 var wasScrolling = false
+                // Indices [0, newItemsUntil) were prepended since the last user interaction.
+                // The fire loop skips these slots so newly appeared bookmarks are not acted on
+                // until the user has scrolled past them intentionally.
+                var newItemsUntil = 0
                 snapshotFlow {
-                    Pair(
-                        Triple(
-                            listState.firstVisibleItemIndex,
-                            listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
-                            // Including bookmarks.size ensures the flow re-emits when pagination loads
-                            // more items, so the bottom-of-list check is re-evaluated.
-                            bookmarks.size
-                        ),
-                        listState.isScrollInProgress
+                    Triple(
+                        listState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { Pair(it.index, it.key) },
+                        listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
+                        // Track bookmarks.size so the flow re-emits on pagination and prepends,
+                        // ensuring the bottom-of-list check is always re-evaluated.
+                        bookmarks.size to listState.isScrollInProgress
                     )
-                }.collect { (scrollState, isScrolling) ->
-                    val (newFirstIndex, lastVisibleIndex, _) = scrollState
+                }.collect { (firstItemInfo, lastVisibleIndex, sizeAndScrolling) ->
+                    val (_, isScrolling) = sizeAndScrolling
                     val currentBookmarks = bookmarks
                     val totalBookmarks = currentBookmarks.size
+                    val newFirstIndex = firstItemInfo?.first ?: 0
+                    val newFirstKey = firstItemInfo?.second
 
-                    // Detect when the user finishes a scroll gesture (finger lifted).
-                    // Used to trigger the bottom action for short lists where items never
-                    // scroll past the title bar.
+                    // scrollJustStopped is used only for the short-list bottom case below.
                     val scrollJustStopped = wasScrolling && !isScrolling
                     wasScrolling = isScrolling
 
-                    if (newFirstIndex > lastFirstVisibleIndex) {
-                        // Items from lastFirstVisibleIndex to newFirstIndex - 1 have scrolled off screen
-                        userHasScrolled = true
-                        for (i in lastFirstVisibleIndex until newFirstIndex) {
-                            val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
-                            screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
-                        }
-                        lastFirstVisibleIndex = newFirstIndex
-                        bottomReached = false
+                    if (anchorKey == null) {
+                        // First emission: initialise anchor without firing any actions.
+                        anchorKey = newFirstKey
+                        anchorIndex = newFirstIndex
+                        return@collect
                     }
 
-                    // When the last visible item is the last bookmark in the list, apply the action
-                    // to all remaining visible items that haven't been processed yet.
-                    // For long lists: fires when items have scrolled off the top (userHasScrolled).
+                    when {
+                        newFirstIndex > anchorIndex -> {
+                            if (newFirstKey == anchorKey) {
+                                // Same item is now at a higher index — Compose adjusted the list
+                                // because new items were prepended above us (user was not at the
+                                // absolute top, so the index was adjusted to keep this item visible).
+                                // Record how many slots to skip.
+                                newItemsUntil = maxOf(newItemsUntil, newFirstIndex)
+                                anchorIndex = newFirstIndex
+                            } else {
+                                // A different item is now first-visible — the user actually
+                                // scrolled down. Items [anchorIndex, newFirstIndex) left the top.
+                                for (i in anchorIndex until newFirstIndex) {
+                                    if (i < newItemsUntil) continue  // skip newly prepended items
+                                    val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
+                                    screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
+                                }
+                                anchorIndex = newFirstIndex
+                                anchorKey = newFirstKey
+                                bottomReached = false
+                                if (anchorIndex >= newItemsUntil) newItemsUntil = 0
+                            }
+                        }
+                        newFirstIndex < anchorIndex -> {
+                            // Scrolled back up — reset anchor and bottom state.
+                            anchorIndex = newFirstIndex
+                            anchorKey = newFirstKey ?: anchorKey
+                            bottomReached = false
+                        }
+                        else -> {
+                            // Index unchanged — key may have changed (e.g. prepend at absolute
+                            // top where Compose keeps firstVisibleItemIndex at 0, or list replaced).
+                            if (newFirstKey != null && newFirstKey != anchorKey) {
+                                // Find where the old anchor item moved to in the new layout.
+                                // If it is now at a higher index, items were prepended above it.
+                                val oldAnchorNewIndex = listState.layoutInfo.visibleItemsInfo
+                                    .firstOrNull { it.key == anchorKey }?.index
+                                if (oldAnchorNewIndex != null && oldAnchorNewIndex > anchorIndex) {
+                                    newItemsUntil = maxOf(newItemsUntil, oldAnchorNewIndex)
+                                } else {
+                                    // Old anchor not found at a higher index — list was replaced
+                                    // (e.g. filter changed), not prepended. Reset the skip guard.
+                                    newItemsUntil = 0
+                                }
+                                anchorKey = newFirstKey
+                            }
+                        }
+                    }
+
+                    // When the last visible item is the last bookmark, apply the action to all
+                    // remaining visible items that haven't been processed yet.
+                    // For long lists: anchorIndex > 0 means the user has scrolled at least one
+                    // item off the top in the current direction. This naturally resets to false
+                    // when the user scrolls back to the top (anchorIndex returns to 0), preventing
+                    // newly prepended items from being fired when the user hasn't scrolled.
                     // For short lists where no item ever leaves the top: fires when the user
-                    // pulls/scrolls to the bottom and releases (scrollJustStopped).
+                    // finishes a scroll gesture at the bottom (scrollJustStopped).
                     val atBottom = totalBookmarks > 0 && lastVisibleIndex >= totalBookmarks - 1
-                    if (!bottomReached && atBottom && (userHasScrolled || scrollJustStopped)) {
-                        for (i in lastFirstVisibleIndex until totalBookmarks) {
+                    if (!bottomReached && atBottom && (anchorIndex > 0 || scrollJustStopped)) {
+                        for (i in anchorIndex until totalBookmarks) {
+                            if (i < newItemsUntil) continue
                             val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
                             screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
                         }
-                        lastFirstVisibleIndex = totalBookmarks
+                        anchorIndex = totalBookmarks
                         bottomReached = true
+                        if (anchorIndex >= newItemsUntil) newItemsUntil = 0
                     }
                 }
             }
