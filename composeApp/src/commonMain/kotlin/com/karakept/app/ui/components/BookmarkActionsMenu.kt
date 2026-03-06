@@ -46,6 +46,7 @@ import com.karakept.api.model.KarakeepList as KarakeepList
 fun BookmarkActionsMenu(
     bookmark: BookmarkEntity,
     availableLists: List<KarakeepList>,
+    availableTags: List<String> = emptyList(),
     onAction: (BookmarkAction) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -222,6 +223,7 @@ fun BookmarkActionsMenu(
     if (showTagEditor) {
         TagEditorDialog(
             currentTags = bookmark.tags.split(",").filter { it.isNotBlank() },
+            availableTags = availableTags,
             onTagsUpdated = { newTags ->
                 onAction(BookmarkAction.UpdateTags(newTags))
                 showTagEditor = false

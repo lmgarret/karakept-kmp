@@ -53,12 +53,24 @@ Use `HorizontalDivider` (not deprecated `Divider`) everywhere.
 
 > **Rule:** Lists must always be displayed sorted and showing hierarchy. Use `buildListHierarchy` — never sort lists manually or show them in a flat unordered layout.
 
+### Tag editing and tag filtering
+
+**`TagEditorDialog`** (`ui/components/TagEditorDialog.kt`)
+- Unified dialog for both **editing tags on a bookmark** and **filtering by tags**.
+- As the user types, shows matching suggestions from `availableTags` as clickable chips.
+- `canCreateNew = true` (default): allows free-text tags not in `availableTags` — use for bookmark tag editing.
+- `canCreateNew = false`: only existing tags can be selected — use for filter-by-tag mode.
+- Always pass the full list of known tags as `availableTags` so suggestions work (from the screen's `allAvailableTags` state).
+
+> **Rule:** Use `TagEditorDialog` everywhere tags need to be added/removed or selected for filtering. Do **not** implement custom tag-selection dialogs or text fields.
+
 ### Menus and bottom sheets
 
 - Use **`ModalBottomSheet`** + **`DropdownMenuItem`** for contextual bookmark action menus (see `BookmarkActionsMenu.kt`).
 - Use **`ModalBottomSheet`** + MD3 `ListItem` for list pickers (see `ListPickerDialog.kt`).
 - Use **`AlertDialog`** for confirmation dialogs and simple edit dialogs (see `TagEditorDialog.kt`).
 - Use **`DropdownMenu`** anchored to an `IconButton` for overflow menus on list items (see `MainScreenDrawer.kt`).
+- Custom overlay bottom panels use **`BaseBottomPanel`** (`ui/components/BaseBottomPanel.kt`) which matches `ModalBottomSheet` background (`surfaceContainerLow`) and animation style.
 
 ## MD3 Design Guidelines
 

@@ -1,14 +1,10 @@
 package com.karakept.app.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.*
@@ -21,7 +17,6 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.utils.buildListHierarchy
-import com.karakept.app.ui.components.TagChip
 import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.delay
 
@@ -313,111 +308,23 @@ fun FilterBottomPanel(
         }
     }
 
-    // Tag selection dialog
+    // Tag selection dialog — reuses TagEditorDialog in filter-only mode (no tag creation)
     if (showTagsDialog) {
-        TagSelectionDialog(
-            availableTags = allTags, // Use all tags for the dialog
-            selectedTags = filter.tags,
-            onDismiss = { showTagsDialog = false },
-            onConfirm = { selectedTags ->
+        val cleanAllTags = remember(allTags) {
+            allTags.map { it.substringBefore(" (").trim() }.distinct().sorted()
+        }
+        TagEditorDialog(
+            currentTags = filter.tags,
+            availableTags = cleanAllTags,
+            canCreateNew = false,
+            title = "Filter by Tags",
+            confirmLabel = "Apply",
+            onTagsUpdated = { selectedTags ->
                 filter = filter.copy(tags = selectedTags)
                 showTagsDialog = false
-            }
+            },
+            onDismiss = { showTagsDialog = false }
         )
     }
 
-}
-
-@Composable
-private fun TagSelectionDialog(
-    availableTags: List<String>,
-    selectedTags: List<String>,
-    onDismiss: () -> Unit,
-    onConfirm: (List<String>) -> Unit
-) {
-    var searchQuery by remember { mutableStateOf("") }
-    var tempSelectedTags by remember { mutableStateOf(selectedTags) }
-
-    val filteredTags = remember(availableTags, searchQuery) {
-        availableTags.filter { it.contains(searchQuery, ignoreCase = true) }
-            .sortedBy { it.lowercase() }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Select Tags") },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text("Search tags") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "${tempSelectedTags.size} selected",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(400.dp)
-                ) {
-                    items(filteredTags) { tag ->
-                        FilterCheckbox(
-                            label = tag,
-                            checked = tempSelectedTags.contains(tag),
-                            onCheckedChange = { checked ->
-                                tempSelectedTags = if (checked) {
-                                    tempSelectedTags + tag
-                                } else {
-                                    tempSelectedTags - tag
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(tempSelectedTags) }) {
-                Text("Confirm")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-private fun FilterCheckbox(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    val tagName = label.substringBefore(" (").trim()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        TagChip(
-            tag = tagName,
-            selected = checked,
-            onClick = { onCheckedChange(!checked) }
-        )
-        Spacer(Modifier.weight(1f))
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-    }
 }
