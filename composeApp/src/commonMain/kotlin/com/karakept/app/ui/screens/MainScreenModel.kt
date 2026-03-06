@@ -847,6 +847,20 @@ class MainScreenModel(
         }
     }
 
+    fun batchSetTags(newTags: List<String>) {
+        val bookmarks = getSelectedBookmarks()
+        if (bookmarks.isEmpty()) { clearSelection(); return }
+        screenModelScope.launch {
+            bookmarkActionsRepository.batchUpdateTags(bookmarks, newTags)
+            val ids = bookmarks.map { it.remoteId }.toSet()
+            val tagString = newTags.joinToString(",")
+            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map { bookmark ->
+                if (bookmark.remoteId in ids) bookmark.copy(tags = tagString) else bookmark
+            }
+            clearSelection()
+        }
+    }
+
     fun batchMoveToList(listId: String) {
         val bookmarks = getSelectedBookmarks()
         if (bookmarks.isEmpty()) { clearSelection(); return }

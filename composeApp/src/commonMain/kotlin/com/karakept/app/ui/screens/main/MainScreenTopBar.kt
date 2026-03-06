@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -81,6 +82,7 @@ internal fun MainScreenTopBar(
     onBatchUnarchive: () -> Unit = {},
     onBatchFavourite: () -> Unit = {},
     onBatchUnfavourite: () -> Unit = {},
+    onBatchSetTags: () -> Unit = {},
     onBatchMoveToList: () -> Unit = {},
     onBatchDelete: () -> Unit = {}
 ) {
@@ -157,6 +159,11 @@ internal fun MainScreenTopBar(
                             text = { Text("Move to List") },
                             leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
                             onClick = { onBatchMoveToList(); showBatchMenu = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Set Tags") },
+                            leadingIcon = { Icon(Icons.Default.Label, null) },
+                            onClick = { onBatchSetTags(); showBatchMenu = false }
                         )
                         HorizontalDivider()
                         // Destructive

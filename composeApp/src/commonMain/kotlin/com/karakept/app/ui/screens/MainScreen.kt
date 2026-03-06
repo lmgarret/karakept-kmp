@@ -59,6 +59,7 @@ import com.karakept.app.ui.components.FilterBottomPanel
 import com.karakept.app.ui.components.BookmarkActionsMenu
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.ListPickerDialog
+import com.karakept.app.ui.components.TagEditorDialog
 import com.karakept.app.ui.screens.main.BookmarkListContent
 import com.karakept.app.ui.screens.main.MainScreenDrawer
 import com.karakept.app.ui.screens.main.MainScreenTopBar
@@ -121,6 +122,7 @@ object MainScreen : Screen {
         var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
         var showBatchDeleteConfirm by remember { mutableStateOf(false) }
         var showBatchListPicker by remember { mutableStateOf(false) }
+        var showBatchTagEditor by remember { mutableStateOf(false) }
         val snackbarManager = koinInject<ActionSnackbarManager>()
         val snackbarHostState = rememberSnackbarHostState(snackbarManager)
 
@@ -379,6 +381,7 @@ object MainScreen : Screen {
                         onBatchUnarchive = { screenModel.batchUnarchive() },
                         onBatchFavourite = { screenModel.batchFavourite() },
                         onBatchUnfavourite = { screenModel.batchUnfavourite() },
+                        onBatchSetTags = { showBatchTagEditor = true },
                         onBatchMoveToList = { showBatchListPicker = true },
                         onBatchDelete = { showBatchDeleteConfirm = true }
                     )
@@ -669,6 +672,35 @@ object MainScreen : Screen {
                     showBatchListPicker = false
                 },
                 onDismiss = { showBatchListPicker = false }
+            )
+        }
+
+        // Batch set-tags dialog
+        if (showBatchTagEditor) {
+            // Pre-populate with tags shared by ALL selected bookmarks (intersection)
+            val selectedBookmarks = remember(selectedBookmarkIds, bookmarks) {
+                bookmarks.filter { it.remoteId in selectedBookmarkIds }
+            }
+            val commonTags = remember(selectedBookmarks) {
+                if (selectedBookmarks.isEmpty()) emptyList()
+                else {
+                    val first = selectedBookmarks.first().tags.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+                    selectedBookmarks.drop(1).fold(first) { acc, bm ->
+                        val bmTags = bm.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+                        acc intersect bmTags
+                    }.toList()
+                }
+            }
+            TagEditorDialog(
+                currentTags = commonTags,
+                availableTags = allAvailableTags,
+                title = "Set Tags (${selectedBookmarkIds.size} bookmarks)",
+                confirmLabel = "Apply",
+                onTagsUpdated = { newTags ->
+                    screenModel.batchSetTags(newTags)
+                    showBatchTagEditor = false
+                },
+                onDismiss = { showBatchTagEditor = false }
             )
         }
     }

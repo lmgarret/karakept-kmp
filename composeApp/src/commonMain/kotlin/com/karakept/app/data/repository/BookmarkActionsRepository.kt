@@ -435,6 +435,26 @@ class BookmarkActionsRepository(
     }
 
     /**
+     * Set the same tag list on all selected bookmarks without showing individual snackbars.
+     */
+    suspend fun batchUpdateTags(bookmarks: List<BookmarkEntity>, newTags: List<String>) {
+        withContext(Dispatchers.IO) {
+            bookmarks.forEach { bookmark ->
+                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
+                current?.let { bookmarkDao.insertBookmark(it.copy(tags = newTags.joinToString(","))) }
+                queueAction(
+                    bookmarkRemoteId = bookmark.remoteId,
+                    serverId = bookmark.serverId,
+                    actionType = PendingActionType.UPDATE_TAGS,
+                    actionData = json.encodeToString(mapOf("tags" to newTags))
+                )
+                _bookmarkChangedEvents.emit(bookmark.remoteId)
+            }
+            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
+        }
+    }
+
+    /**
      * Add a list of bookmarks to a list without showing individual snackbars.
      */
     suspend fun batchMoveToList(bookmarks: List<BookmarkEntity>, listId: String) {
