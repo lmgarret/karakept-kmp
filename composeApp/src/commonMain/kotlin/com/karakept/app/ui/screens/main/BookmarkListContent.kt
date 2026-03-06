@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -97,6 +98,27 @@ internal fun BookmarkListContent(
     val updatedSelectedIds = rememberUpdatedState(selectedBookmarkIds)
     // Tracks whether a drag-selection gesture is currently active (started from long press in selection mode)
     val isDragSelecting = remember { mutableStateOf(false) }
+    // Scroll speed (px/frame) applied at the list edges during drag selection.
+    // Negative = scroll up, positive = scroll down, 0 = no auto-scroll.
+    val autoScrollSpeed = remember { mutableStateOf(0f) }
+
+    // Edge-scroll loop: while a drag-selection is active, scroll the list at `autoScrollSpeed`
+    // at ~60 fps. The speed is updated by each item's onDrag handler based on proximity to the
+    // viewport edges (0 at the zone boundary → maxSpeed at the very edge, quadratic easing).
+    LaunchedEffect(isDragSelecting.value) {
+        if (!isDragSelecting.value) {
+            autoScrollSpeed.value = 0f
+            return@LaunchedEffect
+        }
+        while (isDragSelecting.value) {
+            val speed = autoScrollSpeed.value
+            if (speed != 0f) {
+                listState.scrollBy(speed)
+            }
+            delay(16L) // ~60 fps
+        }
+        autoScrollSpeed.value = 0f
+    }
 
     Box(
         modifier = Modifier
@@ -138,9 +160,34 @@ internal fun BookmarkListContent(
                                     if (targetBm != null && targetBm.remoteId !in updatedSelectedIds.value) {
                                         onBookmarkSelectionToggle(targetBm)
                                     }
+
+                                    // Edge-scroll: compute speed based on proximity to viewport edges.
+                                    // Zone = 15% of viewport height. Speed scales quadratically from 0
+                                    // at the zone boundary to MAX_EDGE_SCROLL_SPEED at the very edge.
+                                    val viewportHeight = (listState.layoutInfo.viewportEndOffset -
+                                        listState.layoutInfo.viewportStartOffset).toFloat()
+                                    val edgeZone = viewportHeight * 0.15f
+                                    val maxSpeed = 25f
+                                    autoScrollSpeed.value = when {
+                                        absoluteY < edgeZone -> {
+                                            val fraction = ((edgeZone - absoluteY) / edgeZone).coerceIn(0f, 1f)
+                                            -maxSpeed * fraction * fraction
+                                        }
+                                        absoluteY > viewportHeight - edgeZone -> {
+                                            val fraction = ((absoluteY - (viewportHeight - edgeZone)) / edgeZone).coerceIn(0f, 1f)
+                                            maxSpeed * fraction * fraction
+                                        }
+                                        else -> 0f
+                                    }
                                 },
-                                onDragEnd = { isDragSelecting.value = false },
-                                onDragCancel = { isDragSelecting.value = false }
+                                onDragEnd = {
+                                    autoScrollSpeed.value = 0f
+                                    isDragSelecting.value = false
+                                },
+                                onDragCancel = {
+                                    autoScrollSpeed.value = 0f
+                                    isDragSelecting.value = false
+                                }
                             )
                         }
                 ) {
