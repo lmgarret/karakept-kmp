@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -52,7 +52,7 @@ fun AddBookmarkDialog(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                Divider()
+                HorizontalDivider()
 
                 Spacer(modifier = Modifier.height(16.dp))
 
