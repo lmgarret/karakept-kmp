@@ -95,6 +95,7 @@ internal fun BookmarkListContent(
             }
     }
 
+    val hapticFeedback = LocalHapticFeedback.current
     val updatedBookmarks = rememberUpdatedState(bookmarks)
     val updatedSelectedIds = rememberUpdatedState(selectedBookmarkIds)
     // Tracks whether a drag-selection gesture is currently active (started from long press in selection mode)
@@ -104,8 +105,8 @@ internal fun BookmarkListContent(
     val autoScrollSpeed = remember { mutableStateOf(0f) }
 
     // Edge-scroll loop: while a drag-selection is active, scroll the list at `autoScrollSpeed`
-    // at ~60 fps. The speed is updated by each item's onDrag handler based on proximity to the
-    // viewport edges (0 at the zone boundary → maxSpeed at the very edge, quadratic easing).
+    // at ~60 fps. The speed is updated by the container's onDrag handler based on proximity to
+    // the viewport edges (0 at the zone boundary → maxSpeed at the very edge, quadratic easing).
     LaunchedEffect(isDragSelecting.value) {
         if (!isDragSelecting.value) {
             autoScrollSpeed.value = 0f
@@ -126,71 +127,79 @@ internal fun BookmarkListContent(
             .fillMaxSize()
             .pullRefresh(pullRefreshState)
     ) {
+        // Container-level drag selection: the gesture lives here (not per-item) so that
+        // edge-scroll auto-scrolling does not recycle the item that owns the gesture detector,
+        // which would kill the drag mid-gesture.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(isSelectionMode) {
+                    if (!isSelectionMode) return@pointerInput
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { offset ->
+                            val viewportStart = listState.layoutInfo.viewportStartOffset
+                            val absoluteY = offset.y + viewportStart
+                            val initialItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+                                absoluteY.toInt() in info.offset until (info.offset + info.size)
+                            } ?: return@detectDragGesturesAfterLongPress
+                            isDragSelecting.value = true
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val bm = updatedBookmarks.value.getOrNull(initialItem.index)
+                            if (bm != null && bm.remoteId !in updatedSelectedIds.value) {
+                                onBookmarkSelectionToggle(bm)
+                            }
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            // Map finger Y (viewport-relative) to a list item and select it.
+                            val viewportStart = listState.layoutInfo.viewportStartOffset
+                            val absoluteY = change.position.y + viewportStart
+                            val targetItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+                                absoluteY.toInt() in info.offset until (info.offset + info.size)
+                            }
+                            val targetBm = targetItem?.let { updatedBookmarks.value.getOrNull(it.index) }
+                            if (targetBm != null && targetBm.remoteId !in updatedSelectedIds.value) {
+                                onBookmarkSelectionToggle(targetBm)
+                            }
+
+                            // Edge-scroll: speed scales quadratically from 0 at zone boundary
+                            // to maxSpeed at the very edge (15% zone on each side).
+                            val viewportHeight = (listState.layoutInfo.viewportEndOffset -
+                                listState.layoutInfo.viewportStartOffset).toFloat()
+                            val edgeZone = viewportHeight * 0.15f
+                            val maxSpeed = 25f
+                            val y = change.position.y
+                            autoScrollSpeed.value = when {
+                                y < edgeZone -> {
+                                    val fraction = ((edgeZone - y) / edgeZone).coerceIn(0f, 1f)
+                                    -maxSpeed * fraction * fraction
+                                }
+                                y > viewportHeight - edgeZone -> {
+                                    val fraction = ((y - (viewportHeight - edgeZone)) / edgeZone).coerceIn(0f, 1f)
+                                    maxSpeed * fraction * fraction
+                                }
+                                else -> 0f
+                            }
+                        },
+                        onDragEnd = {
+                            autoScrollSpeed.value = 0f
+                            isDragSelecting.value = false
+                        },
+                        onDragCancel = {
+                            autoScrollSpeed.value = 0f
+                            isDragSelecting.value = false
+                        }
+                    )
+                }
+        ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState
         ) {
-            itemsIndexed(bookmarks, key = { _, bookmark -> bookmark.remoteId }) { bookmarkIndex, bookmark ->
-                val hapticFeedback = LocalHapticFeedback.current
+            itemsIndexed(bookmarks, key = { _, bookmark -> bookmark.remoteId }) { _, bookmark ->
                 Box(
                     modifier = Modifier
                         .animateItemPlacement()
-                        .pointerInput(isSelectionMode) {
-                            // Drag selection only activates in selection mode via long press
-                            if (!isSelectionMode) return@pointerInput
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { _ ->
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    isDragSelecting.value = true
-                                    val bm = updatedBookmarks.value.getOrNull(bookmarkIndex)
-                                        ?: return@detectDragGesturesAfterLongPress
-                                    if (bm.remoteId !in updatedSelectedIds.value) {
-                                        onBookmarkSelectionToggle(bm)
-                                    }
-                                },
-                                onDrag = { change, _ ->
-                                    change.consume()
-                                    // Map the finger's Y position to a list item and select it
-                                    val itemInfo = listState.layoutInfo.visibleItemsInfo
-                                        .firstOrNull { it.index == bookmarkIndex }
-                                    val absoluteY = (itemInfo?.offset?.toFloat() ?: 0f) + change.position.y
-                                    val targetItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
-                                        absoluteY.toInt() in info.offset until (info.offset + info.size)
-                                    }
-                                    val targetBm = targetItem?.let { updatedBookmarks.value.getOrNull(it.index) }
-                                    if (targetBm != null && targetBm.remoteId !in updatedSelectedIds.value) {
-                                        onBookmarkSelectionToggle(targetBm)
-                                    }
-
-                                    // Edge-scroll: compute speed based on proximity to viewport edges.
-                                    // Zone = 15% of viewport height. Speed scales quadratically from 0
-                                    // at the zone boundary to MAX_EDGE_SCROLL_SPEED at the very edge.
-                                    val viewportHeight = (listState.layoutInfo.viewportEndOffset -
-                                        listState.layoutInfo.viewportStartOffset).toFloat()
-                                    val edgeZone = viewportHeight * 0.15f
-                                    val maxSpeed = 25f
-                                    autoScrollSpeed.value = when {
-                                        absoluteY < edgeZone -> {
-                                            val fraction = ((edgeZone - absoluteY) / edgeZone).coerceIn(0f, 1f)
-                                            -maxSpeed * fraction * fraction
-                                        }
-                                        absoluteY > viewportHeight - edgeZone -> {
-                                            val fraction = ((absoluteY - (viewportHeight - edgeZone)) / edgeZone).coerceIn(0f, 1f)
-                                            maxSpeed * fraction * fraction
-                                        }
-                                        else -> 0f
-                                    }
-                                },
-                                onDragEnd = {
-                                    autoScrollSpeed.value = 0f
-                                    isDragSelecting.value = false
-                                },
-                                onDragCancel = {
-                                    autoScrollSpeed.value = 0f
-                                    isDragSelecting.value = false
-                                }
-                            )
-                        }
                 ) {
                     if (bookmark.remoteId in pendingBookmarkRemoteIds) {
                         BookmarkPlaceholderItem(url = bookmark.url, layoutType = layoutType)
@@ -379,6 +388,7 @@ internal fun BookmarkListContent(
                 }
             }
         }
+        } // end drag-selection container Box
 
         if (isSyncing) {
             // Show determinate progress when available
