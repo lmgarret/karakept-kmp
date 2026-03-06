@@ -56,6 +56,13 @@ import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.components.getIcon
 import com.karakept.app.ui.screens.SettingsScreenModel
+import com.karakept.app.ui.utils.buildListHierarchy
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 
 class BookmarkListSettingsScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -82,75 +89,57 @@ class BookmarkListSettingsScreen : Screen {
         }
 
         if (showListPickerDialog) {
-            androidx.compose.ui.window.Dialog(onDismissRequest = { showListPickerDialog = false }) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 16.dp)) {
-                        Text(
-                            text = "Select Default List",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-                        )
-                        if (availableLists.isEmpty()) {
-                            Text(
-                                text = "No lists available.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-                            )
-                        } else {
-                            val hierarchy = buildListHierarchy(availableLists)
-                            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                                hierarchy.forEach { (list, depth) ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                screenModel.setDefaultListType(DefaultListType.SPECIFIC_LIST)
-                                                screenModel.setDefaultListId(list.id)
-                                                showListPickerDialog = false
-                                            }
-                                            .padding(
-                                                start = (24 + depth * 16).dp,
-                                                end = 24.dp,
-                                                top = 8.dp,
-                                                bottom = 8.dp
-                                            ),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        RadioButton(
-                                            selected = list.id == defaultListId,
-                                            onClick = {
-                                                screenModel.setDefaultListType(DefaultListType.SPECIFIC_LIST)
-                                                screenModel.setDefaultListId(list.id)
-                                                showListPickerDialog = false
-                                            }
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "${list.icon ?: ""} ${list.name ?: list.id ?: ""}".trim(),
-                                            style = MaterialTheme.typography.bodyLarge
-                                        )
+            val listSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                onDismissRequest = { showListPickerDialog = false },
+                sheetState = listSheetState
+            ) {
+                Text(
+                    text = "Select Default List",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+                HorizontalDivider()
+                if (availableLists.isEmpty()) {
+                    Text(
+                        text = "No lists available.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                } else {
+                    val hierarchy = remember(availableLists) { buildListHierarchy(availableLists) }
+                    LazyColumn {
+                        items(hierarchy) { (list, depth) ->
+                            ListItem(
+                                headlineContent = {
+                                    Text(
+                                        text = "${list.icon ?: ""} ${list.name ?: list.id ?: ""}".trim(),
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                },
+                                leadingContent = {
+                                    RadioButton(
+                                        selected = list.id == defaultListId,
+                                        onClick = {
+                                            screenModel.setDefaultListType(DefaultListType.SPECIFIC_LIST)
+                                            screenModel.setDefaultListId(list.id)
+                                            showListPickerDialog = false
+                                        }
+                                    )
+                                },
+                                modifier = Modifier
+                                    .padding(start = (depth * 16).dp)
+                                    .clickable {
+                                        screenModel.setDefaultListType(DefaultListType.SPECIFIC_LIST)
+                                        screenModel.setDefaultListId(list.id)
+                                        showListPickerDialog = false
                                     }
-                                }
-                            }
-                        }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(end = 24.dp, top = 8.dp),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            androidx.compose.material3.TextButton(onClick = { showListPickerDialog = false }) {
-                                Text("Cancel")
-                            }
+                            )
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(8.dp).navigationBarsPadding())
             }
         }
 
@@ -565,6 +554,7 @@ private fun LayoutOption(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwipeActionSettingItem(
     title: String,
@@ -576,13 +566,13 @@ private fun SwipeActionSettingItem(
     onActionSelected: (SwipeAction) -> Unit,
     onConfigSelected: (String?) -> Unit
 ) {
-    var showDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
     // Step 2: when ADD_TAG/ADD_TO_LIST is picked from step 1, show config picker
-    var pendingAction by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<SwipeAction?>(null) }
+    var pendingAction by remember { mutableStateOf<SwipeAction?>(null) }
 
     val selectedConfig = customConfigs.find { it.id == selectedConfigId }
 
-    // Step 2 dialog: pick a custom config for the pending action type
+    // Step 2 sheet: pick a custom config for the pending action type
     if (pendingAction != null) {
         val filteredConfigs = customConfigs.filter { config ->
             when (pendingAction) {
@@ -591,150 +581,107 @@ private fun SwipeActionSettingItem(
                 else -> false
             }
         }
-        androidx.compose.ui.window.Dialog(onDismissRequest = { pendingAction = null }) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
-            ) {
-                Column(modifier = Modifier.padding(vertical = 16.dp)) {
-                    Text(
-                        text = "Select Custom Action",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-                    )
-                    if (filteredConfigs.isEmpty()) {
-                        Text(
-                            text = "No custom actions of this type yet.\nGo to Manage Custom Actions to create one.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-                        )
-                    } else {
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            filteredConfigs.forEach { config ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            onActionSelected(pendingAction!!)
-                                            onConfigSelected(config.id)
-                                            pendingAction = null
-                                            showDialog = false
-                                        }
-                                        .padding(horizontal = 24.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = config.id == selectedConfigId,
-                                        onClick = {
-                                            onActionSelected(pendingAction!!)
-                                            onConfigSelected(config.id)
-                                            pendingAction = null
-                                            showDialog = false
-                                        }
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = config.getDisplayName(),
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                }
+        val pendingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { pendingAction = null },
+            sheetState = pendingSheetState
+        ) {
+            Text(
+                text = "Select Custom Action",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            HorizontalDivider()
+            if (filteredConfigs.isEmpty()) {
+                Text(
+                    text = "No custom actions of this type yet.\nGo to Manage Custom Actions to create one.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else {
+                LazyColumn {
+                    items(filteredConfigs) { config ->
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    text = config.getDisplayName(),
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
+                            leadingContent = {
+                                RadioButton(
+                                    selected = config.id == selectedConfigId,
+                                    onClick = {
+                                        onActionSelected(pendingAction!!)
+                                        onConfigSelected(config.id)
+                                        pendingAction = null
+                                        showDialog = false
+                                    }
+                                )
+                            },
+                            modifier = Modifier.clickable {
+                                onActionSelected(pendingAction!!)
+                                onConfigSelected(config.id)
+                                pendingAction = null
+                                showDialog = false
                             }
-                        }
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(end = 24.dp, top = 8.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        androidx.compose.material3.TextButton(onClick = { pendingAction = null }) {
-                            Text("Cancel")
-                        }
+                        )
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp).navigationBarsPadding())
         }
     }
 
-    // Step 1 dialog: pick the action type
+    // Step 1 sheet: pick the action type
     if (showDialog) {
-        androidx.compose.ui.window.Dialog(onDismissRequest = { showDialog = false }) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(vertical = 16.dp)
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-                    )
-
-                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        SwipeAction.entries.forEach { action ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        if (action == SwipeAction.ADD_TAG || action == SwipeAction.ADD_TO_LIST) {
-                                            pendingAction = action
-                                        } else {
-                                            onActionSelected(action)
-                                            onConfigSelected(null)
-                                            showDialog = false
-                                        }
-                                    }
-                                    .padding(horizontal = 24.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = action == selectedAction &&
-                                        (action != SwipeAction.ADD_TAG && action != SwipeAction.ADD_TO_LIST ||
-                                            selectedConfig == null),
-                                    onClick = {
-                                        if (action == SwipeAction.ADD_TAG || action == SwipeAction.ADD_TO_LIST) {
-                                            pendingAction = action
-                                        } else {
-                                            onActionSelected(action)
-                                            onConfigSelected(null)
-                                            showDialog = false
-                                        }
-                                    }
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = action.getIcon(),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = action.displayName,
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
+        val actionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showDialog = false },
+            sheetState = actionSheetState
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            HorizontalDivider()
+            LazyColumn {
+                items(SwipeAction.entries.toList()) { action ->
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                text = action.displayName,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        leadingContent = {
+                            Icon(
+                                imageVector = action.getIcon(),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        trailingContent = if (action == selectedAction &&
+                            (action != SwipeAction.ADD_TAG && action != SwipeAction.ADD_TO_LIST ||
+                                selectedConfig == null)
+                        ) {
+                            { RadioButton(selected = true, onClick = null) }
+                        } else null,
+                        modifier = Modifier.clickable {
+                            if (action == SwipeAction.ADD_TAG || action == SwipeAction.ADD_TO_LIST) {
+                                pendingAction = action
+                            } else {
+                                onActionSelected(action)
+                                onConfigSelected(null)
+                                showDialog = false
                             }
                         }
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(end = 24.dp, top = 8.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        androidx.compose.material3.TextButton(onClick = { showDialog = false }) {
-                            Text("Cancel")
-                        }
-                    }
+                    )
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp).navigationBarsPadding())
         }
     }
 
@@ -778,35 +725,3 @@ private fun SwipeActionSettingItem(
     }
 }
 
-/**
- * Builds a hierarchical display order from a flat list of KarakeepLists.
- * Returns pairs of (list, depth) in DFS order so parent lists appear before their children.
- */
-private fun buildListHierarchy(lists: List<KarakeepList>): List<Pair<KarakeepList, Int>> {
-    val result = mutableListOf<Pair<KarakeepList, Int>>()
-    val grouped = lists.groupBy { it.parentId }
-    val visited = mutableSetOf<String>()
-
-    fun recurse(parentId: String?, depth: Int) {
-        if (depth > 10) return
-        val children = grouped[parentId] ?: return
-        children.forEach { child ->
-            val childId = child.id ?: ""
-            if (!visited.contains(childId)) {
-                visited.add(childId)
-                result.add(child to depth)
-                recurse(childId, depth + 1)
-            }
-        }
-    }
-
-    recurse(null, 0)
-
-    // Append orphans (lists whose parent was not found)
-    val processed = result.map { it.first.id ?: "" }.toSet()
-    lists.filter { (it.id ?: "") !in processed }.forEach { list ->
-        result.add(list to 0)
-    }
-
-    return result
-}

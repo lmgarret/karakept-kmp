@@ -1,15 +1,10 @@
 package com.karakept.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.*
@@ -21,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
+import com.karakept.app.ui.utils.buildListHierarchy
 import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.delay
 
@@ -216,38 +212,55 @@ fun FilterBottomPanel(
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
-                // Lists
+                // Lists — shown in sorted hierarchical order matching the navigation drawer
                 if (availableLists.isNotEmpty()) {
                     Text("Lists", style = MaterialTheme.typography.titleMedium)
-                    val sortedLists = remember(availableLists, filter.lists) {
-                        val sel = availableLists.filter { filter.lists.contains(it.id ?: "") }
-                        val unsel = availableLists.filter { !filter.lists.contains(it.id ?: "") }
-                        sel + unsel
-                    }
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    ) {
-                        sortedLists.forEach { list ->
+                    val hierarchy = remember(availableLists) { buildListHierarchy(availableLists) }
+                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                        hierarchy.forEach { (list, depth) ->
                             val listId = list.id ?: ""
                             val isSelected = filter.lists.contains(listId)
-                            FilterChip(
-                                selected = isSelected,
-                                border = if (isSelected)
-                                    BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                                else
-                                    FilterChipDefaults.filterChipBorder(enabled = true, selected = false),
-                                onClick = {
-                                    val newLists = if (isSelected) {
-                                        filter.lists - listId
-                                    } else {
-                                        filter.lists + listId
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val newLists = if (isSelected) {
+                                            filter.lists - listId
+                                        } else {
+                                            filter.lists + listId
+                                        }
+                                        filter = filter.copy(lists = newLists)
                                     }
-                                    filter = filter.copy(lists = newLists)
-                                },
-                                label = { Text(list.name ?: "Untitled") },
-                                leadingIcon = { Text(list.icon ?: "") }
-                            )
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Spacer(Modifier.width((depth * 16).dp))
+                                val icon = list.icon ?: ""
+                                if (icon.isNotBlank()) {
+                                    Text(
+                                        text = icon,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                } else {
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Text(
+                                    text = list.name ?: "Untitled",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -267,17 +280,15 @@ fun FilterBottomPanel(
                     }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(vertical = 8.dp)
                     ) {
                         sortedTags.forEach { tagWithCount ->
                             val tagName = tagWithCount.substringBefore(" (").trim()
                             val isSelected = filter.tags.contains(tagName)
-                            FilterChip(
+                            TagChip(
+                                tag = tagName,
                                 selected = isSelected,
-                                border = if (isSelected)
-                                    BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                                else
-                                    FilterChipDefaults.filterChipBorder(enabled = true, selected = false),
                                 onClick = {
                                     val newTags = if (isSelected) {
                                         filter.tags - tagName
@@ -285,8 +296,7 @@ fun FilterBottomPanel(
                                         filter.tags + tagName
                                     }
                                     filter = filter.copy(tags = newTags)
-                                },
-                                label = { Text(tagWithCount) }
+                                }
                             )
                         }
                         TextButton(onClick = { showTagsDialog = true }) {
@@ -298,105 +308,23 @@ fun FilterBottomPanel(
         }
     }
 
-    // Tag selection dialog
+    // Tag selection dialog — reuses TagEditorDialog in filter-only mode (no tag creation)
     if (showTagsDialog) {
-        TagSelectionDialog(
-            availableTags = allTags, // Use all tags for the dialog
-            selectedTags = filter.tags,
-            onDismiss = { showTagsDialog = false },
-            onConfirm = { selectedTags ->
+        val cleanAllTags = remember(allTags) {
+            allTags.map { it.substringBefore(" (").trim() }.distinct().sorted()
+        }
+        TagEditorDialog(
+            currentTags = filter.tags,
+            availableTags = cleanAllTags,
+            canCreateNew = false,
+            title = "Filter by Tags",
+            confirmLabel = "Apply",
+            onTagsUpdated = { selectedTags ->
                 filter = filter.copy(tags = selectedTags)
                 showTagsDialog = false
-            }
+            },
+            onDismiss = { showTagsDialog = false }
         )
     }
 
-}
-
-@Composable
-private fun TagSelectionDialog(
-    availableTags: List<String>,
-    selectedTags: List<String>,
-    onDismiss: () -> Unit,
-    onConfirm: (List<String>) -> Unit
-) {
-    var searchQuery by remember { mutableStateOf("") }
-    var tempSelectedTags by remember { mutableStateOf(selectedTags) }
-
-    val filteredTags = remember(availableTags, searchQuery) {
-        availableTags.filter { it.contains(searchQuery, ignoreCase = true) }
-            .sortedBy { it.lowercase() }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Select Tags") },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text("Search tags") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "${tempSelectedTags.size} selected",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(400.dp)
-                ) {
-                    items(filteredTags) { tag ->
-                        FilterCheckbox(
-                            label = tag,
-                            checked = tempSelectedTags.contains(tag),
-                            onCheckedChange = { checked ->
-                                tempSelectedTags = if (checked) {
-                                    tempSelectedTags + tag
-                                } else {
-                                    tempSelectedTags - tag
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(tempSelectedTags) }) {
-                Text("Confirm")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-private fun FilterCheckbox(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, modifier = Modifier.weight(1f))
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-    }
 }

@@ -53,7 +53,7 @@ fun BaseBottomPanel(
         visible = visible,
         enter = slideInVertically(
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
+                dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium
             ),
             initialOffsetY = { it }
@@ -89,7 +89,7 @@ fun BaseBottomPanel(
                 },
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
             shadowElevation = 8.dp,
-            color = MaterialTheme.colorScheme.surfaceVariant
+            color = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             Column {
                 // Drag handle

@@ -572,6 +572,7 @@ object MainScreen : Screen {
             BookmarkActionsMenu(
                 bookmark = selectedBookmarkForActions!!,
                 availableLists = lists,
+                availableTags = allAvailableTags,
                 onAction = { action ->
                     when (action) {
                         is BookmarkAction.ToggleArchive -> {
