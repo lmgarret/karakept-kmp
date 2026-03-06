@@ -19,9 +19,11 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.karakept.api.model.KarakeepList
+import com.karakept.app.ui.utils.buildListHierarchy
 
 /**
  * Bottom sheet for selecting a list to move a bookmark to.
@@ -49,8 +51,11 @@ fun ListPickerDialog(
 
         HorizontalDivider()
 
+        // Show lists in sorted hierarchical order (parents before children, alphabetical at each level)
+        val hierarchy = remember(lists) { buildListHierarchy(lists) }
+
         LazyColumn {
-            items(lists) { list ->
+            items(hierarchy) { (list, depth) ->
                 val listId = list.id ?: ""
                 val isInList = currentListIds.contains(listId)
                 val icon = list.icon ?: ""
@@ -81,7 +86,10 @@ fun ListPickerDialog(
                     } else {
                         ListItemDefaults.colors()
                     },
-                    modifier = Modifier.clickable { onListSelected(listId) }
+                    // Indent child lists to show hierarchy
+                    modifier = Modifier
+                        .padding(start = (depth * 16).dp)
+                        .clickable { onListSelected(listId) }
                 )
             }
         }

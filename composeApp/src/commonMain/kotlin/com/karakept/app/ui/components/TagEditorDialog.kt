@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -13,10 +12,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,33 +46,17 @@ fun TagEditorDialog(
         title = { Text("Edit Tags") },
         text = {
             Column {
-                // Current tags
+                // Current tags — use TagChip for consistent design with bookmark view
                 if (tags.isNotEmpty()) {
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         tags.forEach { tag ->
-                            AssistChip(
-                                onClick = { /* Do nothing on click */ },
-                                label = { Text(tag) },
-                                trailingIcon = {
-                                    IconButton(
-                                        onClick = { tags = tags.filter { it != tag }.toMutableList() },
-                                        modifier = Modifier.padding(0.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Remove tag",
-                                            modifier = Modifier.padding(0.dp)
-                                        )
-                                    }
-                                },
-                                colors = AssistChipDefaults.assistChipColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                ),
-                                modifier = Modifier.padding(bottom = 4.dp)
+                            TagChip(
+                                tag = tag,
+                                onRemove = { tags = tags.filter { it != tag }.toMutableList() }
                             )
                         }
                     }

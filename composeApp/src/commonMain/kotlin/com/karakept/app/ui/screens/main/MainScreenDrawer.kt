@@ -54,6 +54,9 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.ui.utils.buildListHierarchy
+import com.karakept.app.ui.utils.filterExpandedHierarchy
+import com.karakept.app.ui.utils.listHasChildren
 import com.karakept.api.model.KarakeepList
 
 @Composable
@@ -119,13 +122,13 @@ internal fun MainScreenDrawer(
                             Spacer(Modifier.height(16.dp))
                             Text("Lists", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
 
-                            val hierarchy = buildHierarchy(lists)
+                            val hierarchy = buildListHierarchy(lists)
                             val visibleHierarchy = filterExpandedHierarchy(hierarchy, expandedLists)
 
                             visibleHierarchy.forEach { (list, depth) ->
                                 val listId = list.id ?: ""
                                 key(listId) {
-                                    val hasChildLists = hasChildren(listId, lists)
+                                    val hasChildLists = listHasChildren(listId, lists)
                                     ListDrawerItem(
                                         list = list,
                                         depth = depth,
@@ -376,85 +379,3 @@ private fun ListDrawerItem(
     }
 }
 
-// Hierarchy helper functions for list display
-
-/**
- * Builds a hierarchical list structure from flat list.
- * Returns list of (KarakeepList, depth) pairs in display order.
- * Reused from ListManagementScreen.kt
- */
-private fun buildHierarchy(lists: List<KarakeepList>): List<Pair<KarakeepList, Int>> {
-    val result = mutableListOf<Pair<KarakeepList, Int>>()
-    val grouped = lists.groupBy { it.parentId }
-    val visited = mutableSetOf<String>() // Prevent circular refs
-
-    fun recurse(parentId: String?, depth: Int) {
-        if (depth > 10) return // Max depth protection
-        val children = (grouped[parentId] ?: return).sortedBy { it.name?.lowercase() ?: "" }
-        children.forEach { child ->
-            val childId = child.id ?: ""
-            if (!visited.contains(childId)) {
-                visited.add(childId)
-                result.add(child to depth)
-                recurse(childId, depth + 1)
-            }
-        }
-    }
-
-    recurse(null, 0)
-
-    // Handle orphans
-    val processed = result.map { it.first.id ?: "" }.toSet()
-    lists.filter { (it.id ?: "") !in processed }.forEach { list ->
-        result.add(list to 0)
-    }
-
-    return result
-}
-
-/**
- * Filters hierarchy to only show expanded branches.
- * A list is visible only if ALL its ancestors are expanded.
- */
-private fun filterExpandedHierarchy(
-    hierarchy: List<Pair<KarakeepList, Int>>,
-    expandedIds: Set<String>
-): List<Pair<KarakeepList, Int>> {
-    val result = mutableListOf<Pair<KarakeepList, Int>>()
-
-    // Build a map of list ID to its hierarchy entry for quick lookup
-    val listMap = hierarchy.associateBy { it.first.id ?: "" }
-
-    hierarchy.forEach { (list, depth) ->
-        val shouldShow = if (depth == 0) {
-            true // Root items always visible
-        } else {
-            // Check if ALL ancestors in the parent chain are expanded
-            var allAncestorsExpanded = true
-            var currentParentId = list.parentId
-
-            while (currentParentId != null && allAncestorsExpanded) {
-                if (!expandedIds.contains(currentParentId)) {
-                    allAncestorsExpanded = false
-                }
-                // Move to next ancestor
-                currentParentId = listMap[currentParentId]?.first?.parentId
-            }
-
-            allAncestorsExpanded
-        }
-
-        if (shouldShow) {
-            result.add(list to depth)
-        }
-    }
-
-    return result
-}
-
-/**
- * Checks if a list has children
- */
-private fun hasChildren(listId: String, allLists: List<KarakeepList>): Boolean {
-    return allLists.any { it.parentId == listId }
-}

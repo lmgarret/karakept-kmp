@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
+import com.karakept.app.ui.utils.buildListHierarchy
 import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.delay
 
@@ -216,38 +217,55 @@ fun FilterBottomPanel(
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
-                // Lists
+                // Lists — shown in sorted hierarchical order matching the navigation drawer
                 if (availableLists.isNotEmpty()) {
                     Text("Lists", style = MaterialTheme.typography.titleMedium)
-                    val sortedLists = remember(availableLists, filter.lists) {
-                        val sel = availableLists.filter { filter.lists.contains(it.id ?: "") }
-                        val unsel = availableLists.filter { !filter.lists.contains(it.id ?: "") }
-                        sel + unsel
-                    }
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    ) {
-                        sortedLists.forEach { list ->
+                    val hierarchy = remember(availableLists) { buildListHierarchy(availableLists) }
+                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                        hierarchy.forEach { (list, depth) ->
                             val listId = list.id ?: ""
                             val isSelected = filter.lists.contains(listId)
-                            FilterChip(
-                                selected = isSelected,
-                                border = if (isSelected)
-                                    BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                                else
-                                    FilterChipDefaults.filterChipBorder(enabled = true, selected = false),
-                                onClick = {
-                                    val newLists = if (isSelected) {
-                                        filter.lists - listId
-                                    } else {
-                                        filter.lists + listId
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val newLists = if (isSelected) {
+                                            filter.lists - listId
+                                        } else {
+                                            filter.lists + listId
+                                        }
+                                        filter = filter.copy(lists = newLists)
                                     }
-                                    filter = filter.copy(lists = newLists)
-                                },
-                                label = { Text(list.name ?: "Untitled") },
-                                leadingIcon = { Text(list.icon ?: "") }
-                            )
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Spacer(Modifier.width((depth * 16).dp))
+                                val icon = list.icon ?: ""
+                                if (icon.isNotBlank()) {
+                                    Text(
+                                        text = icon,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                } else {
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Text(
+                                    text = list.name ?: "Untitled",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))

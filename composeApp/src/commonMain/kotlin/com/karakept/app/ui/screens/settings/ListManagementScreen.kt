@@ -52,6 +52,7 @@ import com.karakept.app.data.model.SyncStrategy
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.ui.utils.buildListHierarchy
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -87,9 +88,9 @@ class ListManagementScreen : Screen {
         val lists by screenModel.lists.collectAsState()
         val syncConfig by screenModel.syncConfig.collectAsState()
 
-        // Build hierarchy
+        // Build hierarchy using shared utility
         val hierarchicalLists = remember(lists) {
-            buildHierarchy(lists)
+            buildListHierarchy(lists)
         }
 
         Scaffold(
@@ -270,42 +271,4 @@ class ListManagementScreen : Screen {
         }
     }
 
-    private fun buildHierarchy(lists: List<KarakeepList>): List<Pair<KarakeepList, Int>> {
-        val result = mutableListOf<Pair<KarakeepList, Int>>()
-        val grouped = lists.groupBy { it.parentId }
-        
-        fun recurse(parentId: String?, depth: Int) {
-            val children = (grouped[parentId] ?: return).sortedBy { it.name?.lowercase() ?: "" }
-            children.forEach { child ->
-                result.add(child to depth)
-                recurse(child.id, depth + 1)
-            }
-        }
-        
-        // Start with root items (parentId is null or empty)
-        // Note: Some systems use "0" or empty string for root. 
-        // Assuming null based on DTO. 
-        // Also handling cases where parentId might technically be present but parent not in list (orphans currently treated as roots?)
-        // Better: Find all items whose parent is NOT in the list.
-        val allIds = lists.map { it.id }.toSet()
-        val roots = lists.filter { it.parentId == null || it.parentId !in allIds }
-        
-        // Only recurse for legitimate roots if we trust parentId, but for now let's just use the roots we found.
-        // Actually, if we just recurse from null, we might miss orphans if parentId is "root" or something.
-        // Let's assume null is root.
-        
-        recurse(null, 0)
-        
-        // If there are leftovers (lists with weird parentIds), add them at root level?
-        val processed = result.map { it.first.id }.toSet()
-        val leftovers = lists.filter { it.id !in processed }
-        leftovers.forEach { list ->
-            result.add(list to 0)
-            // And their children? 
-            // This is complex. Let's simplify: 
-            // Just use recursive generic build. If parent not found, it's a root.
-        }
-        
-        return result
-    }
 }
