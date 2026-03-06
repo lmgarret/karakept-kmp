@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens.main
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,9 +23,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -87,10 +91,58 @@ internal fun BookmarkListContent(
             }
     }
 
+    val updatedBookmarks = rememberUpdatedState(bookmarks)
+    val updatedSelectedIds = rememberUpdatedState(selectedBookmarkIds)
+    val updatedIsSelectionMode = rememberUpdatedState(isSelectionMode)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .pullRefresh(pullRefreshState)
+            .pointerInput(Unit) {
+                val touchSlop = viewConfiguration.touchSlop
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    if (!updatedIsSelectionMode.value) return@awaitEachGesture
+
+                    var dragging = false
+                    var dragSelecting: Boolean? = null
+                    val touchedIndices = mutableSetOf<Int>()
+
+                    fun trySelectAt(y: Float) {
+                        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+                            y.toInt() in info.offset until (info.offset + info.size)
+                        } ?: return
+                        if (item.index in touchedIndices) return
+                        touchedIndices.add(item.index)
+                        val bookmark = updatedBookmarks.value.getOrNull(item.index) ?: return
+                        if (dragSelecting == null) {
+                            dragSelecting = bookmark.remoteId !in updatedSelectedIds.value
+                        }
+                        val isCurrentlySelected = bookmark.remoteId in updatedSelectedIds.value
+                        if (isCurrentlySelected != dragSelecting!!) {
+                            onBookmarkSelectionToggle(bookmark)
+                        }
+                    }
+
+                    do {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+
+                        if (!dragging) {
+                            val distance = (change.position - down.position).getDistance()
+                            if (distance > touchSlop) {
+                                dragging = true
+                                trySelectAt(down.position.y)
+                            }
+                        }
+                        if (dragging) {
+                            trySelectAt(change.position.y)
+                        }
+                    } while (true)
+                }
+            }
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),

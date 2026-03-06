@@ -2,6 +2,8 @@ package com.karakept.app.ui.components
 
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.hapticfeedback.LocalHapticFeedback
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -63,13 +65,19 @@ fun BookmarkCardLayout(
     } else {
         Modifier
     }
+    val hapticFeedback = LocalHapticFeedback.current
+    val hapticLongClick = androidx.compose.runtime.remember(onLongClick) {
+        onLongClick?.let { callback ->
+            { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress); callback() }
+        }
+    }
     Card(
         modifier = modifier
             .fillMaxWidth()
             .then(selectionBorderModifier)
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = hapticLongClick
             ),
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
@@ -194,13 +202,19 @@ fun BookmarkListLayout(
     } else {
         Modifier
     }
+    val hapticFeedback = LocalHapticFeedback.current
+    val hapticLongClick = androidx.compose.runtime.remember(onLongClick) {
+        onLongClick?.let { callback ->
+            { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress); callback() }
+        }
+    }
     Card(
         modifier = modifier
            .fillMaxWidth()
             .then(selectionBorderModifier)
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = hapticLongClick
             ),
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
