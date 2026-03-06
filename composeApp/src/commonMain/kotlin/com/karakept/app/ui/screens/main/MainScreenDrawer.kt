@@ -240,7 +240,8 @@ private fun BuiltinDrawerItem(
             }
             DropdownMenu(
                 expanded = showMenu,
-                onDismissRequest = { showMenu = false }
+                onDismissRequest = { showMenu = false },
+                shape = MaterialTheme.shapes.extraSmall
             ) {
                 DropdownMenuItem(
                     text = { Text("Set as home") },
@@ -340,7 +341,8 @@ private fun ListDrawerItem(
             }
             DropdownMenu(
                 expanded = showMenu,
-                onDismissRequest = { showMenu = false }
+                onDismissRequest = { showMenu = false },
+                shape = MaterialTheme.shapes.extraSmall
             ) {
                 DropdownMenuItem(
                     text = { Text("Set as home") },

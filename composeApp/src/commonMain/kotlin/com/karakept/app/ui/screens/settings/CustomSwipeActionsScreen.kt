@@ -58,7 +58,15 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.CustomSwipeActionType
 import com.karakept.app.ui.screens.SettingsScreenModel
+import com.karakept.app.ui.utils.buildListHierarchy
 import com.karakept.api.model.KarakeepList
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 
 private val PRESET_COLORS = listOf(
     "#009688" to "Teal",
@@ -229,6 +237,7 @@ class CustomSwipeActionsScreen : Screen {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CustomActionDialog(
     existing: CustomSwipeActionConfig?,
@@ -245,23 +254,28 @@ private fun CustomActionDialog(
     var showListPicker by remember { mutableStateOf(false) }
 
     if (showListPicker) {
-        AlertDialog(
+        val listSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val hierarchy = remember(availableLists) { buildListHierarchy(availableLists) }
+        ModalBottomSheet(
             onDismissRequest = { showListPicker = false },
-            title = { Text("Pick a List") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    availableLists.forEach { list ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedListId = list.id
-                                    selectedListName = list.name
-                                    showListPicker = false
-                                }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+            sheetState = listSheetState
+        ) {
+            Text(
+                text = "Pick a List",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+            HorizontalDivider()
+            LazyColumn {
+                items(hierarchy) { (list, depth) ->
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                text = "${list.icon ?: ""} ${list.name ?: list.id ?: ""}".trim(),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        },
+                        leadingContent = {
                             RadioButton(
                                 selected = list.id == selectedListId,
                                 onClick = {
@@ -270,16 +284,19 @@ private fun CustomActionDialog(
                                     showListPicker = false
                                 }
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = list.name ?: list.id ?: "", style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
+                        },
+                        modifier = Modifier
+                            .padding(start = (depth * 16).dp)
+                            .clickable {
+                                selectedListId = list.id
+                                selectedListName = list.name
+                                showListPicker = false
+                            }
+                    )
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showListPicker = false }) { Text("Cancel") }
             }
-        )
+            Spacer(modifier = Modifier.height(8.dp).navigationBarsPadding())
+        }
     }
 
     AlertDialog(
