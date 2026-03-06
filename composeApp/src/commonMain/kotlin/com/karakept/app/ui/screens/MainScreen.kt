@@ -204,6 +204,7 @@ object MainScreen : Screen {
                     // Detect when the user finishes a scroll gesture (finger lifted).
                     // Used to trigger the bottom action for short lists where items never
                     // scroll past the title bar.
+                    val wasScrollingPrev = wasScrolling
                     val scrollJustStopped = wasScrolling && !isScrolling
                     wasScrolling = isScrolling
 
@@ -211,11 +212,11 @@ object MainScreen : Screen {
                         // Only fire actions when the user is actively scrolling down.
                         // When items are prepended (e.g. after auto-refresh), Compose silently
                         // increments firstVisibleItemIndex to keep the same item in view, but
-                        // isScrollInProgress stays false. Checking isScrolling/wasScrolling
-                        // reliably distinguishes user scrolling from layout adjustments, avoiding
-                        // the race condition where bookmarks.size and firstVisibleItemIndex update
-                        // in different snapshots.
-                        if (isScrolling || wasScrolling) {
+                        // isScrollInProgress stays false. We use wasScrollingPrev (the value from
+                        // the *previous* emission) rather than the already-updated wasScrolling, so
+                        // we don't miss items when isScrollInProgress transitions to false in the
+                        // same emission that firstVisibleItemIndex increments (e.g. fling settling).
+                        if (isScrolling || wasScrollingPrev) {
                             val indexIncrease = newFirstIndex - lastFirstVisibleIndex
                             val sizeIncrease = currentBookmarksSize - lastKnownBookmarksSize
 
