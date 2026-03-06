@@ -183,12 +183,23 @@ object MainScreen : Screen {
         // scrolls, a different item becomes first-visible (different key). We use this identity
         // check to distinguish prepend adjustments from real user scrolling, eliminating the
         // fragile isScrollInProgress / wasScrolling approach entirely.
+        //
+        // Edge case — prepend at absolute top (firstVisibleItemIndex stays 0):
+        // When the user is at the very top (index 0, zero scroll offset), Compose does NOT adjust
+        // firstVisibleItemIndex on prepend — the new items simply appear above, so the key at
+        // index 0 changes. We detect this in the else branch by looking up the old anchor key in
+        // the visible items list: if it's now at a higher index, we know N items were prepended.
+        // We record this as newItemsUntil so the fire loop skips those newly prepended slots.
         LaunchedEffect(currentListScrollAction, currentListScrollActionConfig) {
             if (currentListScrollAction != SwipeAction.NONE) {
                 var anchorKey: Any? = null   // key of the first visible item we're tracking
                 var anchorIndex = 0          // current index of that anchor item
                 var bottomReached = false
                 var wasScrolling = false
+                // Indices [0, newItemsUntil) were prepended since the last user interaction.
+                // The fire loop skips these slots so newly appeared bookmarks are not acted on
+                // until the user has scrolled past them intentionally.
+                var newItemsUntil = 0
                 snapshotFlow {
                     Triple(
                         listState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { Pair(it.index, it.key) },
@@ -219,30 +230,48 @@ object MainScreen : Screen {
                         newFirstIndex > anchorIndex -> {
                             if (newFirstKey == anchorKey) {
                                 // Same item is now at a higher index — Compose adjusted the list
-                                // because new items were prepended above us. No user scrolling
-                                // occurred; do NOT fire scroll actions for the prepended items.
+                                // because new items were prepended above us (user was not at the
+                                // absolute top, so the index was adjusted to keep this item visible).
+                                // Record how many slots to skip.
+                                newItemsUntil = maxOf(newItemsUntil, newFirstIndex)
                                 anchorIndex = newFirstIndex
                             } else {
                                 // A different item is now first-visible — the user actually
                                 // scrolled down. Items [anchorIndex, newFirstIndex) left the top.
                                 for (i in anchorIndex until newFirstIndex) {
+                                    if (i < newItemsUntil) continue  // skip newly prepended items
                                     val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
                                     screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
                                 }
                                 anchorIndex = newFirstIndex
                                 anchorKey = newFirstKey
                                 bottomReached = false
+                                if (anchorIndex >= newItemsUntil) newItemsUntil = 0
                             }
                         }
                         newFirstIndex < anchorIndex -> {
                             // Scrolled back up — reset anchor and bottom state.
                             anchorIndex = newFirstIndex
-                            anchorKey = newFirstKey
+                            anchorKey = newFirstKey ?: anchorKey
                             bottomReached = false
                         }
                         else -> {
-                            // Index unchanged — keep key in sync (e.g. list content replaced).
-                            if (newFirstKey != null) anchorKey = newFirstKey
+                            // Index unchanged — key may have changed (e.g. prepend at absolute
+                            // top where Compose keeps firstVisibleItemIndex at 0, or list replaced).
+                            if (newFirstKey != null && newFirstKey != anchorKey) {
+                                // Find where the old anchor item moved to in the new layout.
+                                // If it is now at a higher index, items were prepended above it.
+                                val oldAnchorNewIndex = listState.layoutInfo.visibleItemsInfo
+                                    .firstOrNull { it.key == anchorKey }?.index
+                                if (oldAnchorNewIndex != null && oldAnchorNewIndex > anchorIndex) {
+                                    newItemsUntil = maxOf(newItemsUntil, oldAnchorNewIndex)
+                                } else {
+                                    // Old anchor not found at a higher index — list was replaced
+                                    // (e.g. filter changed), not prepended. Reset the skip guard.
+                                    newItemsUntil = 0
+                                }
+                                anchorKey = newFirstKey
+                            }
                         }
                     }
 
@@ -257,11 +286,13 @@ object MainScreen : Screen {
                     val atBottom = totalBookmarks > 0 && lastVisibleIndex >= totalBookmarks - 1
                     if (!bottomReached && atBottom && (anchorIndex > 0 || scrollJustStopped)) {
                         for (i in anchorIndex until totalBookmarks) {
+                            if (i < newItemsUntil) continue
                             val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
                             screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
                         }
                         anchorIndex = totalBookmarks
                         bottomReached = true
+                        if (anchorIndex >= newItemsUntil) newItemsUntil = 0
                     }
                 }
             }
