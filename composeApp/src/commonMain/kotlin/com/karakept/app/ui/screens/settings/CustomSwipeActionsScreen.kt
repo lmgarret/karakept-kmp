@@ -57,6 +57,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.CustomSwipeActionType
+import com.karakept.app.ui.components.TagChip
 import com.karakept.app.ui.screens.SettingsScreenModel
 import com.karakept.app.ui.utils.buildListHierarchy
 import com.karakept.api.model.KarakeepList
@@ -212,14 +213,28 @@ class CustomSwipeActionsScreen : Screen {
                                         text = config.getDisplayName(),
                                         style = MaterialTheme.typography.titleMedium
                                     )
-                                    Text(
-                                        text = when (config.type) {
-                                            CustomSwipeActionType.ADD_TAG -> "Adds tag: ${config.tagName ?: "(none)"}"
-                                            CustomSwipeActionType.ADD_TO_LIST -> "Adds to: ${config.listName ?: config.listId ?: "(none)"}"
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    when (config.type) {
+                                        CustomSwipeActionType.ADD_TAG -> {
+                                            val tagName = config.tagName
+                                            if (tagName != null) {
+                                                TagChip(
+                                                    tag = tagName,
+                                                    modifier = Modifier.padding(top = 4.dp)
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = "No tag set",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                        CustomSwipeActionType.ADD_TO_LIST -> Text(
+                                            text = "Adds to: ${config.listName ?: config.listId ?: "(none)"}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                                 IconButton(onClick = { editingConfig = config }) {
                                     Icon(Icons.Default.Edit, contentDescription = "Edit")

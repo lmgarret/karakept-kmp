@@ -1,6 +1,5 @@
 package com.karakept.app.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,6 +21,7 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.utils.buildListHierarchy
+import com.karakept.app.ui.components.TagChip
 import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.delay
 
@@ -285,17 +285,15 @@ fun FilterBottomPanel(
                     }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(vertical = 8.dp)
                     ) {
                         sortedTags.forEach { tagWithCount ->
                             val tagName = tagWithCount.substringBefore(" (").trim()
                             val isSelected = filter.tags.contains(tagName)
-                            FilterChip(
+                            TagChip(
+                                tag = tagName,
                                 selected = isSelected,
-                                border = if (isSelected)
-                                    BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                                else
-                                    FilterChipDefaults.filterChipBorder(enabled = true, selected = false),
                                 onClick = {
                                     val newTags = if (isSelected) {
                                         filter.tags - tagName
@@ -303,8 +301,7 @@ fun FilterBottomPanel(
                                         filter.tags + tagName
                                     }
                                     filter = filter.copy(tags = newTags)
-                                },
-                                label = { Text(tagWithCount) }
+                                }
                             )
                         }
                         TextButton(onClick = { showTagsDialog = true }) {
@@ -406,15 +403,21 @@ private fun FilterCheckbox(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val tagName = label.substringBefore(" (").trim()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
             .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, modifier = Modifier.weight(1f))
+        TagChip(
+            tag = tagName,
+            selected = checked,
+            onClick = { onCheckedChange(!checked) }
+        )
+        Spacer(Modifier.weight(1f))
         Checkbox(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

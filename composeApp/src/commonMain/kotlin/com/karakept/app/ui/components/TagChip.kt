@@ -1,5 +1,6 @@
 package com.karakept.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
  * For displaying a list of tags from a comma-separated string, use [BookmarkTagsDisplay] instead.
  *
  * @param tag The tag text to display
+ * @param selected Whether the chip appears selected (e.g. when used as a filter toggle)
  * @param onRemove Optional remove callback — shows an ✕ button when provided (e.g. in TagEditorDialog)
  * @param onClick Optional click callback — makes the chip clickable (e.g. for filtering by tag)
  * @param modifier Optional modifier
@@ -33,14 +35,22 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun TagChip(
     tag: String,
+    selected: Boolean = false,
     onRemove: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                         else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f)
+    val contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                       else MaterialTheme.colorScheme.onSecondaryContainer
+    val border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+
     Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
+        color = containerColor,
         shape = MaterialTheme.shapes.small,
         shadowElevation = 2.dp,
+        border = border,
         modifier = modifier
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
     ) {
@@ -56,7 +66,7 @@ fun TagChip(
             Text(
                 text = tag,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                color = contentColor
             )
             if (onRemove != null) {
                 IconButton(
@@ -67,7 +77,7 @@ fun TagChip(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Remove tag",
                         modifier = Modifier.size(12.dp),
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        tint = contentColor
                     )
                 }
             }
