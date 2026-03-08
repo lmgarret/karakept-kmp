@@ -104,6 +104,7 @@ object MainScreen : Screen {
         val listCounts by screenModel.listCounts.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
         val currentListScrollActionConfig by screenModel.currentListScrollActionConfig.collectAsState()
+        val bookmarkListVersion by screenModel.bookmarkListVersion.collectAsState()
 
         val searchQuery by screenModel.searchQuery.collectAsState()
         val isSelectionMode by screenModel.isSelectionMode.collectAsState()
@@ -181,15 +182,19 @@ object MainScreen : Screen {
         // Compose adjusts firstVisibleItemIndex to keep the same item on screen — the key of
         // the first visible item stays the same, only its index changes. When the user actually
         // scrolls, a different item becomes first-visible (different key). We use this identity
-        // check to distinguish prepend adjustments from real user scrolling, eliminating the
-        // fragile isScrollInProgress / wasScrolling approach entirely.
+        // check to distinguish prepend adjustments from real user scrolling.
         //
         // Edge case — prepend at absolute top (firstVisibleItemIndex stays 0):
         // When the user is at the very top (index 0, zero scroll offset), Compose does NOT adjust
         // firstVisibleItemIndex on prepend — the new items simply appear above, so the key at
-        // index 0 changes. We detect this in the else branch by looking up the old anchor key in
-        // the visible items list: if it's now at a higher index, we know N items were prepended.
+        // index 0 changes. We detect this in the else branch by searching the full bookmarks list
+        // for the old anchor key: if it's now at a higher index, we know N items were prepended.
         // We record this as newItemsUntil so the fire loop skips those newly prepended slots.
+        //
+        // List replacement detection: MainScreenModel increments bookmarkListVersion on every
+        // resetPaginationAndLoad. When the version changes, we re-initialize the anchor state to
+        // the current first visible item. A processedIds set prevents double-firing on bookmarks
+        // that survive across list replacements.
         LaunchedEffect(currentListScrollAction, currentListScrollActionConfig) {
             if (currentListScrollAction != SwipeAction.NONE) {
                 var anchorKey: Any? = null   // key of the first visible item we're tracking
@@ -200,24 +205,52 @@ object MainScreen : Screen {
                 // The fire loop skips these slots so newly appeared bookmarks are not acted on
                 // until the user has scrolled past them intentionally.
                 var newItemsUntil = 0
+                var lastSeenListVersion = bookmarkListVersion
+                // Safety net: track IDs we've already fired on to avoid double-processing
+                // after anchor resets (e.g. when sync replaces the list).
+                val processedIds = mutableSetOf<Long>()
+
+                data class ScrollSnapshot(
+                    val firstIndex: Int,
+                    val firstKey: Any?,
+                    val lastVisibleIndex: Int,
+                    val currentBookmarks: List<com.karakept.app.data.local.entity.BookmarkEntity>,
+                    val isScrolling: Boolean,
+                    val listVersion: Int
+                )
+
                 snapshotFlow {
-                    Triple(
-                        listState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { Pair(it.index, it.key) },
-                        listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
-                        // Track bookmarks.size so the flow re-emits on pagination and prepends,
-                        // ensuring the bottom-of-list check is always re-evaluated.
-                        bookmarks.size to listState.isScrollInProgress
+                    ScrollSnapshot(
+                        firstIndex = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0,
+                        firstKey = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key,
+                        lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
+                        currentBookmarks = bookmarks,
+                        isScrolling = listState.isScrollInProgress,
+                        listVersion = bookmarkListVersion
                     )
-                }.collect { (firstItemInfo, lastVisibleIndex, sizeAndScrolling) ->
-                    val (_, isScrolling) = sizeAndScrolling
-                    val currentBookmarks = bookmarks
+                }.collect { snapshot ->
+                    val currentBookmarks = snapshot.currentBookmarks
                     val totalBookmarks = currentBookmarks.size
-                    val newFirstIndex = firstItemInfo?.first ?: 0
-                    val newFirstKey = firstItemInfo?.second
+                    val newFirstIndex = snapshot.firstIndex
+                    val newFirstKey = snapshot.firstKey
+                    val isScrolling = snapshot.isScrolling
 
                     // scrollJustStopped is used only for the short-list bottom case below.
                     val scrollJustStopped = wasScrolling && !isScrolling
                     wasScrolling = isScrolling
+
+                    // List replacement detection: when resetPaginationAndLoad swaps the
+                    // bookmark list (e.g. after sync), re-initialize the anchor to the
+                    // current first visible item. Keep processedIds intact to avoid
+                    // re-firing on bookmarks that survived the swap.
+                    if (snapshot.listVersion != lastSeenListVersion) {
+                        lastSeenListVersion = snapshot.listVersion
+                        anchorKey = newFirstKey
+                        anchorIndex = newFirstIndex
+                        newItemsUntil = 0
+                        bottomReached = false
+                        return@collect
+                    }
 
                     if (anchorKey == null) {
                         // First emission: initialise anchor without firing any actions.
@@ -241,6 +274,8 @@ object MainScreen : Screen {
                                 for (i in anchorIndex until newFirstIndex) {
                                     if (i < newItemsUntil) continue  // skip newly prepended items
                                     val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
+                                    if (scrolledBookmark.remoteId in processedIds) continue
+                                    processedIds.add(scrolledBookmark.remoteId)
                                     screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
                                 }
                                 anchorIndex = newFirstIndex
@@ -259,14 +294,16 @@ object MainScreen : Screen {
                             // Index unchanged — key may have changed (e.g. prepend at absolute
                             // top where Compose keeps firstVisibleItemIndex at 0, or list replaced).
                             if (newFirstKey != null && newFirstKey != anchorKey) {
-                                // Find where the old anchor item moved to in the new layout.
-                                // If it is now at a higher index, items were prepended above it.
-                                val oldAnchorNewIndex = listState.layoutInfo.visibleItemsInfo
-                                    .firstOrNull { it.key == anchorKey }?.index
-                                if (oldAnchorNewIndex != null && oldAnchorNewIndex > anchorIndex) {
+                                // Search the FULL bookmarks list for the old anchor, not just
+                                // visible items. This handles cases where many items are prepended
+                                // and the old anchor is pushed off-screen.
+                                val oldAnchorNewIndex = currentBookmarks.indexOfFirst {
+                                    it.remoteId == anchorKey
+                                }
+                                if (oldAnchorNewIndex > anchorIndex) {
                                     newItemsUntil = maxOf(newItemsUntil, oldAnchorNewIndex)
                                 } else {
-                                    // Old anchor not found at a higher index — list was replaced
+                                    // Old anchor not found or moved backward — list was replaced
                                     // (e.g. filter changed), not prepended. Reset the skip guard.
                                     newItemsUntil = 0
                                 }
@@ -283,11 +320,13 @@ object MainScreen : Screen {
                     // newly prepended items from being fired when the user hasn't scrolled.
                     // For short lists where no item ever leaves the top: fires when the user
                     // finishes a scroll gesture at the bottom (scrollJustStopped).
-                    val atBottom = totalBookmarks > 0 && lastVisibleIndex >= totalBookmarks - 1
+                    val atBottom = totalBookmarks > 0 && snapshot.lastVisibleIndex >= totalBookmarks - 1
                     if (!bottomReached && atBottom && (anchorIndex > 0 || scrollJustStopped)) {
                         for (i in anchorIndex until totalBookmarks) {
                             if (i < newItemsUntil) continue
                             val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
+                            if (scrolledBookmark.remoteId in processedIds) continue
+                            processedIds.add(scrolledBookmark.remoteId)
                             screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
                         }
                         anchorIndex = totalBookmarks
