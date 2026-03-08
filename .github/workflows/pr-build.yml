@@ -44,7 +44,7 @@ jobs:
         with:
           name: app-dev-release-pr${{ github.event.pull_request.number }}
           path: composeApp/build/outputs/apk/devRelease/*.apk
-          retention-days: 14
+          retention-days: 7
 
       - name: Comment on PR with APK link
         uses: actions/github-script@v7
