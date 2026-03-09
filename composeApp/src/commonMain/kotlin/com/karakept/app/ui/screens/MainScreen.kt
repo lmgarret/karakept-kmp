@@ -209,10 +209,15 @@ object MainScreen : Screen {
                 // Safety net: track IDs we've already fired on to avoid double-processing
                 // after anchor resets (e.g. when sync replaces the list).
                 val processedIds = mutableSetOf<Long>()
+                // True after we've early-fired on the current anchor item (scroll offset > 0
+                // but firstVisibleItemIndex hasn't changed yet). Reset each time the anchor
+                // advances or the user scrolls back up.
+                var anchorFiredEarly = false
 
                 data class ScrollSnapshot(
                     val firstIndex: Int,
                     val firstKey: Any?,
+                    val firstScrollOffset: Int,
                     val lastVisibleIndex: Int,
                     val currentBookmarks: List<com.karakept.app.data.local.entity.BookmarkEntity>,
                     val isScrolling: Boolean,
@@ -223,6 +228,7 @@ object MainScreen : Screen {
                     ScrollSnapshot(
                         firstIndex = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0,
                         firstKey = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key,
+                        firstScrollOffset = listState.firstVisibleItemScrollOffset,
                         lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
                         currentBookmarks = bookmarks,
                         isScrolling = listState.isScrollInProgress,
@@ -249,6 +255,7 @@ object MainScreen : Screen {
                         anchorIndex = newFirstIndex
                         newItemsUntil = 0
                         bottomReached = false
+                        anchorFiredEarly = false
                         return@collect
                     }
 
@@ -281,6 +288,7 @@ object MainScreen : Screen {
                                 anchorIndex = newFirstIndex
                                 anchorKey = newFirstKey
                                 bottomReached = false
+                                anchorFiredEarly = false
                                 if (anchorIndex >= newItemsUntil) newItemsUntil = 0
                             }
                         }
@@ -289,6 +297,7 @@ object MainScreen : Screen {
                             anchorIndex = newFirstIndex
                             anchorKey = newFirstKey ?: anchorKey
                             bottomReached = false
+                            anchorFiredEarly = false
                         }
                         else -> {
                             // Index unchanged — key may have changed (e.g. prepend at absolute
@@ -308,6 +317,20 @@ object MainScreen : Screen {
                                     newItemsUntil = 0
                                 }
                                 anchorKey = newFirstKey
+                            } else if (newFirstKey == anchorKey) {
+                                // Same item still at the top. Fire as soon as it starts scrolling
+                                // off — don't wait for it to fully leave the viewport.
+                                if (!anchorFiredEarly && snapshot.firstScrollOffset > 0
+                                    && anchorIndex >= newItemsUntil
+                                ) {
+                                    val anchorBookmark = currentBookmarks.getOrNull(anchorIndex)
+                                    if (anchorBookmark != null && anchorBookmark.remoteId !in processedIds) {
+                                        processedIds.add(anchorBookmark.remoteId)
+                                        screenModel.executeScrollAction(anchorBookmark, currentListScrollAction, currentListScrollActionConfig)
+                                    }
+                                    anchorFiredEarly = true
+                                }
+                                if (snapshot.firstScrollOffset == 0) anchorFiredEarly = false
                             }
                         }
                     }
