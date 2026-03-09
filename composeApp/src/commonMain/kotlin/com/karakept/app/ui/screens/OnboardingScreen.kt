@@ -23,11 +23,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +53,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.ui.components.rememberJsonFilePicker
 
 private const val STEP_WELCOME = 0
 private const val STEP_PERMISSIONS = 1
@@ -65,6 +68,7 @@ class OnboardingScreen : Screen {
 
         var currentStep by remember { mutableStateOf(STEP_WELCOME) }
         var permissionGranted by remember { mutableStateOf(false) }
+        var restoreMessage by remember { mutableStateOf<String?>(null) }
 
         val onFinish = {
             screenModel.completeOnboarding {
@@ -101,13 +105,20 @@ class OnboardingScreen : Screen {
                     modifier = Modifier.weight(1f)
                 ) { step ->
                     when (step) {
-                        STEP_WELCOME -> WelcomeStep()
+                        STEP_WELCOME -> WelcomeStep(
+                            screenModel = screenModel,
+                            onRestoreSuccess = { message ->
+                                restoreMessage = message
+                                currentStep = STEP_SERVER
+                            }
+                        )
                         STEP_PERMISSIONS -> PermissionsStep(
                             permissionGranted = permissionGranted,
                             onPermissionResult = { granted -> permissionGranted = granted }
                         )
                         STEP_SERVER -> ServerConnectionStep(
                             screenModel = screenModel,
+                            restoreMessage = restoreMessage,
                             onConnected = { onFinish() }
                         )
                     }
@@ -177,7 +188,27 @@ private fun StepIndicator(
 }
 
 @Composable
-private fun WelcomeStep() {
+private fun WelcomeStep(
+    screenModel: OnboardingScreenModel,
+    onRestoreSuccess: (String) -> Unit
+) {
+    var isRestoring by remember { mutableStateOf(false) }
+    var restoreError by remember { mutableStateOf<String?>(null) }
+
+    val pickFile = rememberJsonFilePicker { content ->
+        if (content != null) {
+            isRestoring = true
+            restoreError = null
+            screenModel.importSettings(content) { result ->
+                isRestoring = false
+                result.fold(
+                    onSuccess = { message -> onRestoreSuccess(message) },
+                    onFailure = { e -> restoreError = e.message ?: "Restore failed" }
+                )
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -223,6 +254,38 @@ private fun WelcomeStep() {
             title = "Get notified",
             description = "Receive notifications when your bookmarks are processed."
         )
+        Spacer(modifier = Modifier.height(32.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "Already have a backup?",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = { pickFile() },
+            enabled = !isRestoring,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (isRestoring) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Restoring…")
+            } else {
+                Text("Restore from backup")
+            }
+        }
+        if (restoreError != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = restoreError!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -324,6 +387,7 @@ private fun PermissionsStep(
 @Composable
 private fun ServerConnectionStep(
     screenModel: OnboardingScreenModel,
+    restoreMessage: String?,
     onConnected: () -> Unit
 ) {
     var url by remember { mutableStateOf("") }
@@ -367,7 +431,29 @@ private fun ServerConnectionStep(
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        if (restoreMessage != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp).padding(top = 2.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = restoreMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        } else {
+            Spacer(modifier = Modifier.height(24.dp))
+        }
 
         OutlinedTextField(
             value = url,

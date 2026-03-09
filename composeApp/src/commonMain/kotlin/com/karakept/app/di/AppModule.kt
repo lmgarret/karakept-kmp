@@ -101,7 +101,7 @@ val appModule = module {
     single { BackupRepository(get(), get()) }
 
     factory { LoginScreenModel(get(), get(), get()) }
-    factory { OnboardingScreenModel(get(), get(), get()) }
+    factory { OnboardingScreenModel(get(), get(), get(), get()) }
     single { MainScreenModel(get(), get(), get(), get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { SettingsScreenModel(get(), get(), get(), get()) }
