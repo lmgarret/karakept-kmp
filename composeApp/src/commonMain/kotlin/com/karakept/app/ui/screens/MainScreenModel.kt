@@ -76,6 +76,9 @@ class MainScreenModel(
     private val _currentPage = MutableStateFlow(0)
     private val _accumulatedBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
 
+    private val _bookmarkListVersion = MutableStateFlow(0)
+    val bookmarkListVersion: StateFlow<Int> = _bookmarkListVersion
+
     private val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
@@ -408,6 +411,7 @@ class MainScreenModel(
         // Load items first, then swap atomically to avoid a blank flash.
         val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
         _accumulatedBookmarks.value = newItems
+        _bookmarkListVersion.value++
         _currentPage.value = lastPage
         if (dbExhausted) {
             _hasMoreItems.value = false
