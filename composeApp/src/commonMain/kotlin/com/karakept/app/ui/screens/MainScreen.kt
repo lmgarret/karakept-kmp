@@ -210,17 +210,14 @@ object MainScreen : Screen {
                 var newItemsUntil = 0
                 var lastSeenListVersion = bookmarkListVersion
                 // Guard against double-firing: tracks remoteIds we've already acted on.
-                // Kept across list replacements so surviving bookmarks are never re-fired.
+                // Cleared for items that become visible again when the user scrolls back up,
+                // so a manually-unread bookmark can be re-triggered on the next scroll-down.
+                // Kept across list replacements so surviving bookmarks are not re-fired by sync.
                 val processedIds = mutableSetOf<Long>()
-                // True once we've early-fired on the current anchor (scroll offset > 0 but
-                // firstVisibleItemIndex hasn't advanced yet). Cleared when the anchor
-                // advances, the user scrolls back to the top, or the list version changes.
-                var anchorFiredEarly = false
 
                 data class ScrollSnapshot(
                     val firstIndex: Int,
                     val firstKey: Any?,
-                    val firstScrollOffset: Int,
                     val lastVisibleIndex: Int,
                     val currentBookmarks: List<com.karakept.app.data.local.entity.BookmarkEntity>,
                     val isScrolling: Boolean,
@@ -231,7 +228,6 @@ object MainScreen : Screen {
                     ScrollSnapshot(
                         firstIndex = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0,
                         firstKey = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key,
-                        firstScrollOffset = listState.firstVisibleItemScrollOffset,
                         lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
                         currentBookmarks = bookmarks,
                         isScrolling = listState.isScrollInProgress,
@@ -271,7 +267,6 @@ object MainScreen : Screen {
                         anchorKey = newFirstKey
                         anchorIndex = newFirstIndex
                         bottomReached = false
-                        anchorFiredEarly = false
                         return@collect
                     }
 
@@ -302,16 +297,21 @@ object MainScreen : Screen {
                                 anchorIndex = newFirstIndex
                                 anchorKey = newFirstKey
                                 bottomReached = false
-                                anchorFiredEarly = false
                                 if (anchorIndex >= newItemsUntil) newItemsUntil = 0
                             }
                         }
                         newFirstIndex < anchorIndex -> {
-                            // Scrolled back up — reset anchor and bottom state.
+                            // Scrolled back up. Items [newFirstIndex, anchorIndex) are now
+                            // visible again — remove them from processedIds so a bookmark that
+                            // was manually marked as unread can be re-triggered on the next
+                            // scroll-down.
+                            for (i in newFirstIndex until anchorIndex) {
+                                val bookmark = currentBookmarks.getOrNull(i) ?: continue
+                                processedIds.remove(bookmark.remoteId)
+                            }
                             anchorIndex = newFirstIndex
                             anchorKey = newFirstKey ?: anchorKey
                             bottomReached = false
-                            anchorFiredEarly = false
                         }
                         else -> {
                             // firstVisibleItemIndex is unchanged. The key may have changed if
@@ -335,21 +335,6 @@ object MainScreen : Screen {
                                     newItemsUntil = 0
                                 }
                                 anchorKey = newFirstKey
-                            } else if (newFirstKey == anchorKey) {
-                                // Same item still at the top. Fire as soon as it starts scrolling
-                                // off (firstScrollOffset > 0) rather than waiting for the index
-                                // to advance — this gives near-immediate feedback.
-                                if (!anchorFiredEarly && snapshot.firstScrollOffset > 0
-                                    && anchorIndex >= newItemsUntil
-                                ) {
-                                    val anchorBookmark = currentBookmarks.getOrNull(anchorIndex)
-                                    if (anchorBookmark != null && anchorBookmark.remoteId !in processedIds) {
-                                        processedIds.add(anchorBookmark.remoteId)
-                                        screenModel.executeScrollAction(anchorBookmark, currentListScrollAction, currentListScrollActionConfig)
-                                    }
-                                    anchorFiredEarly = true
-                                }
-                                if (snapshot.firstScrollOffset == 0) anchorFiredEarly = false
                             }
                         }
                     }
