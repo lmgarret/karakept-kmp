@@ -1,0 +1,47 @@
+name: Cleanup dev APK artifacts
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    name: Delete dev APK artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+
+    steps:
+      - name: Delete all dev APK artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prefix = 'app-dev-release-pr';
+            let deleted = 0;
+            let page = 1;
+
+            while (true) {
+              const { data: { artifacts } } = await github.rest.actions.listArtifactsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+                page,
+              });
+
+              if (artifacts.length === 0) break;
+
+              for (const artifact of artifacts) {
+                if (artifact.name.startsWith(prefix)) {
+                  console.log(`Deleting: ${artifact.name} (${artifact.id}, ${artifact.size_in_bytes} bytes)`);
+                  await github.rest.actions.deleteArtifact({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    artifact_id: artifact.id,
+                  });
+                  deleted++;
+                }
+              }
+
+              page++;
+            }
+
+            console.log(`Done. Deleted ${deleted} artifact(s).`);
