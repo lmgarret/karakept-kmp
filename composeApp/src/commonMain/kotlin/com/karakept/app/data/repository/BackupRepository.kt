@@ -48,26 +48,23 @@ class BackupRepository(
     /**
      * Saves the backup to the configured (or default) backup directory and returns the file path.
      *
-     * If the user has set a backup PIN, the file is AES-256-GCM encrypted and wrapped in an
-     * [EncryptedBackupEnvelope].  If [pin] is null the stored PIN from [SettingsRepository] is
-     * used; pass an explicit value to override (e.g. when the user has just changed the PIN).
+     * All backups are AES-256-GCM encrypted with [pin]. The PIN must not be null — use
+     * [settingsRepository.backupPin] to retrieve the stored PIN when no explicit value is given.
+     *
+     * @throws IllegalArgumentException if [pin] is blank.
      */
-    suspend fun exportToFile(pin: String? = null): String {
-        val backup = buildBackup()
-        val effectivePin = pin ?: settingsRepository.backupPin.first()
+    suspend fun exportToFile(pin: String): String {
+        require(pin.isNotBlank()) { "A PIN is required to export a backup." }
 
+        val backup = buildBackup()
         val now = Clock.System.now().toLocalDateTime(TimeZone.UTC)
         val datePart = "${now.year}-${now.monthNumber.toString().padStart(2, '0')}-${now.dayOfMonth.toString().padStart(2, '0')}"
         val fileName = "karakept_backup_$datePart.json"
 
-        val fileBytes: ByteArray = if (effectivePin != null) {
-            val plaintext = json.encodeToString(backup).encodeToByteArray()
-            val encryptedData = BackupCrypto.encrypt(plaintext, effectivePin)
-            val envelope = EncryptedBackupEnvelope(data = encryptedData)
-            json.encodeToString(envelope).encodeToByteArray()
-        } else {
-            json.encodeToString(backup).encodeToByteArray()
-        }
+        val plaintext = json.encodeToString(backup).encodeToByteArray()
+        val encryptedData = BackupCrypto.encrypt(plaintext, pin)
+        val envelope = EncryptedBackupEnvelope(data = encryptedData)
+        val fileBytes = json.encodeToString(envelope).encodeToByteArray()
 
         val customDir = settingsRepository.backupExportDirectory.first()
         val dir = customDir ?: FileUtils.getBackupDirectory()
@@ -79,27 +76,18 @@ class BackupRepository(
     // ── Import ─────────────────────────────────────────────────────────────────
 
     /**
-     * Parses [jsonContent], decrypting with [pin] when the file is encrypted, and atomically
-     * restores all settings it contains.  When an encrypted backup is successfully decrypted,
-     * servers are also restored (since the PIN proves explicit user intent).
-     *
-     * For unencrypted backups, servers are NOT automatically restored (legacy behaviour).
+     * Parses [jsonContent] as an [EncryptedBackupEnvelope], decrypts it with [pin], and
+     * atomically restores all settings and server connections it contains.
      *
      * Unknown fields are silently ignored to preserve forward-compatibility.
      * Returns a human-readable summary of what was restored.
      *
-     * @throws Exception if the JSON is invalid, the PIN is wrong/missing, or the version is
-     *                   unsupported.
+     * @throws Exception if the JSON is invalid, the PIN is wrong, or the version is unsupported.
      */
-    suspend fun importFromJson(jsonContent: String, pin: String? = null): String {
-        val (backup, wasEncrypted) = if (looksEncrypted(jsonContent)) {
-            if (pin == null) error("This backup is encrypted. Please provide a PIN to decrypt it.")
-            val envelope = json.decodeFromString<EncryptedBackupEnvelope>(jsonContent)
-            val decryptedBytes = BackupCrypto.decrypt(envelope.data, pin)
-            json.decodeFromString<AppBackup>(decryptedBytes.decodeToString()) to true
-        } else {
-            json.decodeFromString<AppBackup>(jsonContent) to false
-        }
+    suspend fun importFromJson(jsonContent: String, pin: String): String {
+        val envelope = json.decodeFromString<EncryptedBackupEnvelope>(jsonContent)
+        val decryptedBytes = BackupCrypto.decrypt(envelope.data, pin)
+        val backup = json.decodeFromString<AppBackup>(decryptedBytes.decodeToString())
 
         if (backup.version > CURRENT_BACKUP_VERSION) {
             error(
@@ -110,9 +98,8 @@ class BackupRepository(
 
         settingsRepository.restoreSettings(backup.settings)
 
-        // Restore servers only when the backup was encrypted — the PIN acts as an explicit
-        // trust signal that the user intended to restore everything, including API keys.
-        if (wasEncrypted && backup.servers.isNotEmpty()) {
+        // Always restore servers — PIN entry acts as explicit trust signal.
+        if (backup.servers.isNotEmpty()) {
             serverRepository.deleteAllServers()
             backup.servers.forEach { s ->
                 serverRepository.addServer(s.url, s.apiKey, s.label)
@@ -121,14 +108,8 @@ class BackupRepository(
 
         return buildString {
             appendLine("Settings restored from backup (exported ${backup.exportedAt}).")
-            when {
-                wasEncrypted && backup.servers.isNotEmpty() ->
-                    appendLine("${backup.servers.size} server connection(s) have been restored from the encrypted backup.")
-                !wasEncrypted && backup.servers.isNotEmpty() ->
-                    appendLine(
-                        "Note: ${backup.servers.size} server configuration(s) are in this backup " +
-                        "but were NOT automatically restored. Re-add your servers in Server settings."
-                    )
+            if (backup.servers.isNotEmpty()) {
+                appendLine("${backup.servers.size} server connection(s) have been restored.")
             }
         }.trim()
     }
@@ -136,13 +117,15 @@ class BackupRepository(
     // ── Scheduled Export ───────────────────────────────────────────────────────
 
     /**
-     * Checks whether a scheduled auto-export is due and, if so, runs it.
-     * Uses the PIN from [SettingsRepository.backupPin] when encryption is configured.
+     * Checks whether a scheduled auto-export is due and, if so, runs it using the stored PIN.
+     * If no PIN is configured, the scheduled export is skipped.
      * Call this at app startup.
      */
     suspend fun checkAndRunScheduledExport() {
         val interval = settingsRepository.autoExportInterval.first()
         if (interval == AutoExportInterval.NEVER) return
+
+        val pin = settingsRepository.backupPin.first() ?: return  // PIN required; skip silently
 
         val lastExport = settingsRepository.lastAutoExportTime.first()
         val now = Clock.System.now().toEpochMilliseconds()
@@ -157,22 +140,12 @@ class BackupRepository(
 
         if (elapsedMs >= intervalMs) {
             try {
-                exportToFile()  // uses stored PIN automatically
+                exportToFile(pin)
             } catch (e: Exception) {
                 // Scheduled export is best-effort – don't surface errors to user
             }
         }
     }
-
-    // ── Helpers ────────────────────────────────────────────────────────────────
-
-    /**
-     * Returns true if [jsonContent] looks like an [EncryptedBackupEnvelope].
-     * Uses lightweight string detection to avoid a full parse on every import.
-     */
-    private fun looksEncrypted(jsonContent: String): Boolean =
-        jsonContent.contains("\"encrypted\"") &&
-        (jsonContent.contains("\"encrypted\":true") || jsonContent.contains("\"encrypted\": true"))
 
     companion object {
         const val CURRENT_BACKUP_VERSION = 1

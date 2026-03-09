@@ -15,16 +15,13 @@ data class AppBackup(
 )
 
 /**
- * Wrapper written by [com.karakept.app.data.repository.BackupRepository.exportToFile] when
- * the user has set a backup PIN.
+ * Root wrapper for all backup files. Every backup is AES-256-GCM encrypted with the user's PIN.
  *
  * [data] is the Base64-encoded output of `BackupCrypto.encrypt(appBackupJson.bytes, pin)`.
- * On import, detect this envelope by parsing and checking `encrypted == true`.
  */
 @Serializable
 data class EncryptedBackupEnvelope(
     val version: Int = 2,
-    val encrypted: Boolean = true,
     /** Base64-encoded AES-256-GCM ciphertext of the serialised [AppBackup] JSON. */
     val data: String
 )

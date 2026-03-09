@@ -24,7 +24,7 @@ class BackupRestoreScreenModel(
         data object Loading : BackupState()
         data class Success(val message: String) : BackupState()
         data class Error(val message: String) : BackupState()
-        /** Import was triggered for an encrypted file but no PIN has been provided yet. */
+        /** Import was triggered — PIN is always required to decrypt. */
         data class PinRequired(val encryptedContent: String) : BackupState()
     }
 
@@ -49,7 +49,7 @@ class BackupRestoreScreenModel(
         initialValue = null
     )
 
-    /** PBKDF2 hash of the backup PIN, non-null when encryption is enabled. */
+    /** PBKDF2 hash of the backup PIN, non-null when a PIN has been set. */
     val backupPinHash: StateFlow<String?> = settingsRepository.backupPinHash.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -59,15 +59,15 @@ class BackupRestoreScreenModel(
     // ── Export ────────────────────────────────────────────────────────────────
 
     /**
-     * Exports settings.  [pin] must be provided when a backup PIN is configured.
+     * Exports and encrypts settings with the given [pin].
+     * The caller must verify the PIN matches the stored hash before calling this.
      */
-    fun exportSettings(pin: String? = null) {
+    fun exportSettings(pin: String) {
         screenModelScope.launch {
             _state.value = BackupState.Loading
             try {
                 val filePath = backupRepository.exportToFile(pin)
-                val encryptionNote = if (pin != null) " (encrypted)" else ""
-                _state.value = BackupState.Success("Backup saved$encryptionNote to:\n$filePath")
+                _state.value = BackupState.Success("Backup saved (encrypted) to:\n$filePath")
                 FileUtils.shareBackupFile(filePath)
             } catch (e: Exception) {
                 _state.value = BackupState.Error("Export failed: ${e.message}")
@@ -78,28 +78,19 @@ class BackupRestoreScreenModel(
     // ── Import ────────────────────────────────────────────────────────────────
 
     /**
-     * Called when the user picks a backup file.
-     * If the file is encrypted the state transitions to [BackupState.PinRequired] so the UI
-     * can show a PIN-entry dialog; the caller then invokes [importWithPin].
+     * Called when the user picks a backup file. All backups are encrypted, so the state always
+     * transitions to [BackupState.PinRequired] for the UI to show a PIN-entry dialog.
      */
     fun importSettings(jsonContent: String) {
-        if (looksEncrypted(jsonContent)) {
-            _state.value = BackupState.PinRequired(jsonContent)
-        } else {
-            doImport(jsonContent, null)
-        }
+        _state.value = BackupState.PinRequired(jsonContent)
     }
 
-    /** Called after the user enters the PIN for an encrypted backup. */
+    /** Called after the user enters the PIN for the encrypted backup. */
     fun importWithPin(encryptedContent: String, pin: String) {
-        doImport(encryptedContent, pin)
-    }
-
-    private fun doImport(jsonContent: String, pin: String?) {
         screenModelScope.launch {
             _state.value = BackupState.Loading
             try {
-                val summary = backupRepository.importFromJson(jsonContent, pin)
+                val summary = backupRepository.importFromJson(encryptedContent, pin)
                 _state.value = BackupState.Success(summary)
             } catch (e: Exception) {
                 _state.value = BackupState.Error("Import failed: ${e.message}")
@@ -109,17 +100,10 @@ class BackupRestoreScreenModel(
 
     // ── PIN management ────────────────────────────────────────────────────────
 
-    /** Sets the backup PIN (4–6 digits).  Stores the hash and the raw value for auto-exports. */
+    /** Sets the backup PIN (4–6 digits). Stores the hash and the raw value for auto-exports. */
     fun setBackupPin(pin: String) {
         screenModelScope.launch {
             settingsRepository.setBackupPin(pin)
-        }
-    }
-
-    /** Removes the backup PIN, disabling encryption for future exports. */
-    fun clearBackupPin() {
-        screenModelScope.launch {
-            settingsRepository.setBackupPin(null)
         }
     }
 
@@ -149,10 +133,4 @@ class BackupRestoreScreenModel(
     fun clearState() {
         _state.value = BackupState.Idle
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private fun looksEncrypted(content: String): Boolean =
-        content.contains("\"encrypted\"") &&
-        (content.contains("\"encrypted\":true") || content.contains("\"encrypted\": true"))
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -45,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -194,18 +197,32 @@ private fun WelcomeStep(
 ) {
     var isRestoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
+    var pendingBackupContent by remember { mutableStateOf<String?>(null) }
+
+    // Show PIN dialog when a backup file has been picked
+    val content = pendingBackupContent
+    if (content != null) {
+        BackupPinEntryDialog(
+            onConfirm = { pin ->
+                pendingBackupContent = null
+                isRestoring = true
+                restoreError = null
+                screenModel.importSettings(content, pin) { result ->
+                    isRestoring = false
+                    result.fold(
+                        onSuccess = { message -> onRestoreSuccess(message) },
+                        onFailure = { e -> restoreError = e.message ?: "Restore failed" }
+                    )
+                }
+            },
+            onDismiss = { pendingBackupContent = null }
+        )
+    }
 
     val pickFile = rememberJsonFilePicker { content ->
         if (content != null) {
-            isRestoring = true
             restoreError = null
-            screenModel.importSettings(content) { result ->
-                isRestoring = false
-                result.fold(
-                    onSuccess = { message -> onRestoreSuccess(message) },
-                    onFailure = { e -> restoreError = e.message ?: "Restore failed" }
-                )
-            }
+            pendingBackupContent = content
         }
     }
 
@@ -594,4 +611,49 @@ private fun OnboardingNavigationBar(
             Spacer(modifier = Modifier.width(80.dp))
         }
     }
+}
+
+/**
+ * PIN entry dialog shown after the user picks a backup file during onboarding.
+ * All backups are encrypted, so a PIN is always required.
+ */
+@Composable
+private fun BackupPinEntryDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var pin by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Enter Backup PIN") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Enter the PIN used when this backup was exported.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) pin = it },
+                    label = { Text("PIN") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(pin) },
+                enabled = pin.length in 4..6
+            ) {
+                Text("Restore")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

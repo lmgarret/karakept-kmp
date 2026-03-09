@@ -18,7 +18,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Warning
@@ -124,11 +123,11 @@ class BackupRestoreScreen : Screen {
                     }
                 )
                 is BackupRestoreScreenModel.BackupState.PinRequired -> {
-                    // Encrypted backup: ask for PIN to decrypt
+                    // All backups are encrypted — ask for PIN
                     showResultDialog = false
                     PinEntryDialog(
                         title = "Enter Backup PIN",
-                        supportingText = "This backup is encrypted. Enter the PIN used when it was exported.",
+                        supportingText = "Enter the PIN used when this backup was exported.",
                         onConfirm = { pin ->
                             screenModel.importWithPin(currentState.encryptedContent, pin)
                             showResultDialog = true
@@ -205,21 +204,21 @@ class BackupRestoreScreen : Screen {
                         ListItem(
                             leadingContent = {
                                 Icon(
-                                    if (pinIsSet) Icons.Default.Lock else Icons.Default.LockOpen,
+                                    Icons.Default.Lock,
                                     contentDescription = null,
                                     tint = if (pinIsSet) MaterialTheme.colorScheme.primary
                                            else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             },
                             headlineContent = {
-                                Text(if (pinIsSet) "PIN set — backups are encrypted" else "No PIN — backups are unencrypted")
+                                Text(if (pinIsSet) "PIN set — backups are encrypted" else "No PIN set")
                             },
                             supportingContent = {
                                 Text(
                                     if (pinIsSet)
                                         "4–6 digit PIN required to open backup files. Servers are automatically restored on import."
                                     else
-                                        "Set a 4–6 digit PIN to encrypt backup files and enable full restore (including server connections).",
+                                        "A PIN is required to export or import backups. Set a 4–6 digit PIN below.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -237,12 +236,6 @@ class BackupRestoreScreen : Screen {
                             if (pinIsSet) {
                                 TextButton(onClick = { showTestPinDialog = true }) {
                                     Text("Test PIN")
-                                }
-                                TextButton(onClick = { screenModel.clearBackupPin() }) {
-                                    Text(
-                                        "Remove PIN",
-                                        color = MaterialTheme.colorScheme.error
-                                    )
                                 }
                             }
                         }
@@ -270,10 +263,7 @@ class BackupRestoreScreen : Screen {
                                     style = MaterialTheme.typography.titleMedium
                                 )
                                 Text(
-                                    text = if (pinIsSet)
-                                        "Save all settings + servers to an encrypted JSON file"
-                                    else
-                                        "Save all settings to a JSON file",
+                                    text = "Save all settings + servers to an AES-256-GCM encrypted JSON file",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -284,17 +274,19 @@ class BackupRestoreScreen : Screen {
                             CircularProgressIndicator(modifier = Modifier.size(24.dp).align(Alignment.CenterHorizontally))
                         } else {
                             Button(
-                                onClick = {
-                                    if (pinIsSet) {
-                                        showConfirmExportPinDialog = true
-                                    } else {
-                                        showResultDialog = true
-                                        screenModel.exportSettings()
-                                    }
-                                },
+                                onClick = { showConfirmExportPinDialog = true },
+                                enabled = pinIsSet,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text("Export Now")
+                            }
+                            if (!pinIsSet) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Set a PIN above to enable exports.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                         if (lastAutoExportTime > 0L) {
@@ -376,7 +368,7 @@ class BackupRestoreScreen : Screen {
                                     style = MaterialTheme.typography.titleMedium
                                 )
                                 Text(
-                                    text = "Restore settings from a previously exported backup file (encrypted or plain)",
+                                    text = "Restore settings and servers from an encrypted backup file",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -425,8 +417,8 @@ class BackupRestoreScreen : Screen {
                                 modifier = Modifier.padding(end = 12.dp)
                             )
                             Text(
-                                text = "Automatically export settings in the background" +
-                                        if (pinIsSet) " (encrypted)" else "",
+                                text = "Automatically export encrypted settings in the background" +
+                                        if (!pinIsSet) " (requires a PIN to be set)" else "",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -465,10 +457,9 @@ class BackupRestoreScreen : Screen {
                     )
                 ) {
                     Text(
-                        text = "Backup files contain all settings. " +
-                                "When a PIN is set, the file is AES-256-GCM encrypted and server " +
-                                "connections (including API keys) are also backed up and restored. " +
-                                "Without a PIN, backups are plain JSON and server connections are excluded.",
+                        text = "All backup files are AES-256-GCM encrypted with your PIN. " +
+                                "Settings and server connections (including API keys) are fully " +
+                                "backed up and restored on import.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(12.dp)
@@ -506,7 +497,7 @@ private fun SetPinDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Enter a 4–6 digit PIN. All future backups will be encrypted with this PIN, " +
+                    "Enter a 4–6 digit PIN. All backups will be encrypted with this PIN, " +
                     "and server connections will be included.",
                     style = MaterialTheme.typography.bodySmall
                 )

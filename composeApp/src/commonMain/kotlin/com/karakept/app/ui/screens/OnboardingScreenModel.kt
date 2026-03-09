@@ -45,10 +45,10 @@ class OnboardingScreenModel(
         }
     }
 
-    fun importSettings(jsonContent: String, onResult: (Result<String>) -> Unit) {
+    fun importSettings(jsonContent: String, pin: String, onResult: (Result<String>) -> Unit) {
         screenModelScope.launch {
             try {
-                val summary = backupRepository.importFromJson(jsonContent)
+                val summary = backupRepository.importFromJson(jsonContent, pin)
                 onResult(Result.success(summary))
             } catch (e: Exception) {
                 onResult(Result.failure(e))

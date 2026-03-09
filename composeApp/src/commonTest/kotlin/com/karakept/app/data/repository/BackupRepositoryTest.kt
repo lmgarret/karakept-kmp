@@ -17,7 +17,6 @@ import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BackupRepositoryTest : BaseRepositoryTest() {
@@ -60,104 +59,18 @@ class BackupRepositoryTest : BaseRepositoryTest() {
         assertEquals("key123", backup.servers[0].apiKey)
     }
 
-    // ── importFromJson ────────────────────────────────────────────────────────
-
-    @Test
-    fun `importFromJson restores settings via restoreSettings`() = runTest(testDispatcher) {
-        val settings = BackupSettings(themeMode = "DARK", htmlFontSize = 20)
-        val backup = AppBackup(
-            version = 1,
-            exportedAt = "2024-01-01 00:00:00 UTC",
-            settings = settings,
-            servers = emptyList()
-        )
-        val jsonContent = json.encodeToString(backup)
-
-        val result = repository.importFromJson(jsonContent)
-
-        coVerify(exactly = 1) { settingsRepository.restoreSettings(settings) }
-        assertTrue(result.contains("restored"))
-        assertTrue(result.contains("2024-01-01"))
-    }
-
-    @Test
-    fun `importFromJson mentions server count when servers are present`() = runTest(testDispatcher) {
-        val backup = AppBackup(
-            version = 1,
-            exportedAt = "2024-01-01 00:00:00 UTC",
-            settings = BackupSettings(),
-            servers = listOf(ServerBackup("s1", "https://example.com", "key", "Label"))
-        )
-        val jsonContent = json.encodeToString(backup)
-
-        val result = repository.importFromJson(jsonContent)
-
-        assertTrue(result.contains("1 server configuration"))
-        assertTrue(result.contains("NOT automatically restored"))
-    }
-
-    @Test
-    fun `importFromJson rejects backup with newer version`() = runTest(testDispatcher) {
-        val newerBackup = AppBackup(
-            version = BackupRepository.CURRENT_BACKUP_VERSION + 1,
-            exportedAt = "2030-01-01 00:00:00 UTC",
-            settings = BackupSettings(),
-            servers = emptyList()
-        )
-        val jsonContent = json.encodeToString(newerBackup)
-
-        val ex = assertFailsWith<IllegalStateException> {
-            repository.importFromJson(jsonContent)
-        }
-        assertTrue(ex.message?.contains("newer version") == true)
-        coVerify(exactly = 0) { settingsRepository.restoreSettings(any()) }
-    }
-
-    @Test
-    fun `importFromJson ignores unknown fields in backup JSON`() = runTest(testDispatcher) {
-        // A backup JSON with an extra field that doesn't exist in AppBackup
-        val jsonWithUnknownField = """
-            {
-                "version": 1,
-                "exportedAt": "2024-06-15 12:00:00 UTC",
-                "settings": {
-                    "layoutType": "CARD",
-                    "futureField": "someValue"
-                },
-                "servers": [],
-                "unknownTopLevelField": true
-            }
-        """.trimIndent()
-
-        val result = repository.importFromJson(jsonWithUnknownField)
-
-        coVerify(exactly = 1) {
-            settingsRepository.restoreSettings(match { it.layoutType == "CARD" })
-        }
-        assertFalse(result.isEmpty())
-    }
-
     // ── importFromJson — encrypted ────────────────────────────────────────────
 
     @Test
-    fun `importFromJson throws when encrypted backup has no PIN`() = runTest(testDispatcher) {
-        val envelope = buildEncryptedEnvelope(BackupSettings(), emptyList(), pin = "1234")
-
-        val ex = assertFailsWith<Exception> {
-            repository.importFromJson(envelope)  // no pin provided
-        }
-        assertTrue(ex.message?.contains("encrypted") == true || ex.message?.contains("PIN") == true)
-    }
-
-    @Test
     fun `importFromJson restores settings from encrypted backup with correct PIN`() = runTest(testDispatcher) {
-        val settings = BackupSettings(themeMode = "DARK", htmlFontSize = 18)
+        val settings = BackupSettings(themeMode = "DARK", htmlFontSize = 20)
         val envelope = buildEncryptedEnvelope(settings, emptyList(), pin = "5678")
 
         val result = repository.importFromJson(envelope, pin = "5678")
 
         coVerify(exactly = 1) { settingsRepository.restoreSettings(settings) }
         assertTrue(result.contains("restored"))
+        assertTrue(result.contains("2024-01-01"))
     }
 
     @Test
@@ -173,7 +86,7 @@ class BackupRepositoryTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun `importFromJson throws when decrypting encrypted backup with wrong PIN`() = runTest(testDispatcher) {
+    fun `importFromJson throws when decrypting with wrong PIN`() = runTest(testDispatcher) {
         val envelope = buildEncryptedEnvelope(BackupSettings(), emptyList(), pin = "1234")
 
         assertFailsWith<Exception> {
@@ -183,16 +96,54 @@ class BackupRepositoryTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun `importFromJson does NOT restore servers from unencrypted backup`() = runTest(testDispatcher) {
-        val backup = AppBackup(
-            version = 1,
-            exportedAt = "2024-01-01 00:00:00 UTC",
+    fun `importFromJson rejects backup with newer version`() = runTest(testDispatcher) {
+        val newerBackup = AppBackup(
+            version = BackupRepository.CURRENT_BACKUP_VERSION + 1,
+            exportedAt = "2030-01-01 00:00:00 UTC",
             settings = BackupSettings(),
-            servers = listOf(ServerBackup("s1", "https://example.com", "key", "Label"))
+            servers = emptyList()
         )
-        val jsonContent = json.encodeToString(backup)
+        val envelope = buildEncryptedEnvelope(newerBackup, pin = "1234")
 
-        repository.importFromJson(jsonContent)
+        val ex = assertFailsWith<IllegalStateException> {
+            repository.importFromJson(envelope, pin = "1234")
+        }
+        assertTrue(ex.message?.contains("newer version") == true)
+        coVerify(exactly = 0) { settingsRepository.restoreSettings(any()) }
+    }
+
+    @Test
+    fun `importFromJson ignores unknown fields in encrypted backup JSON`() = runTest(testDispatcher) {
+        val jsonWithUnknownField = """
+            {
+                "version": 1,
+                "exportedAt": "2024-06-15 12:00:00 UTC",
+                "settings": {
+                    "layoutType": "CARD",
+                    "futureField": "someValue"
+                },
+                "servers": [],
+                "unknownTopLevelField": true
+            }
+        """.trimIndent()
+
+        val plaintext = jsonWithUnknownField.encodeToByteArray()
+        val encrypted = BackupCrypto.encrypt(plaintext, "1234")
+        val envelopeJson = json.encodeToString(EncryptedBackupEnvelope(data = encrypted))
+
+        val result = repository.importFromJson(envelopeJson, pin = "1234")
+
+        coVerify(exactly = 1) {
+            settingsRepository.restoreSettings(match { it.layoutType == "CARD" })
+        }
+        assertTrue(result.isNotEmpty())
+    }
+
+    @Test
+    fun `importFromJson does not restore servers when server list is empty`() = runTest(testDispatcher) {
+        val envelope = buildEncryptedEnvelope(BackupSettings(), emptyList(), pin = "1234")
+
+        repository.importFromJson(envelope, pin = "1234")
 
         coVerify(exactly = 0) { serverRepository.deleteAllServers() }
         coVerify(exactly = 0) { serverRepository.addServer(any(), any(), any()) }
@@ -206,7 +157,16 @@ class BackupRepositoryTest : BaseRepositoryTest() {
 
         repository.checkAndRunScheduledExport()
 
-        // exportToFile was never called (would need FileUtils which we can't call here)
+        coVerify(exactly = 0) { settingsRepository.currentSettings() }
+    }
+
+    @Test
+    fun `checkAndRunScheduledExport skips export when no PIN is configured`() = runTest(testDispatcher) {
+        coEvery { settingsRepository.autoExportInterval } returns flowOf(AutoExportInterval.DAILY)
+        coEvery { settingsRepository.backupPin } returns flowOf(null)
+
+        repository.checkAndRunScheduledExport()
+
         coVerify(exactly = 0) { settingsRepository.currentSettings() }
     }
 
@@ -214,9 +174,9 @@ class BackupRepositoryTest : BaseRepositoryTest() {
     fun `checkAndRunScheduledExport skips export when not yet due`() = runTest(testDispatcher) {
         val now = System.currentTimeMillis()
         coEvery { settingsRepository.autoExportInterval } returns flowOf(AutoExportInterval.DAILY)
+        coEvery { settingsRepository.backupPin } returns flowOf("1234")
         coEvery { settingsRepository.lastAutoExportTime } returns flowOf(now - 1_000L) // 1 second ago
 
-        // Should not call currentSettings (which leads to exportToFile)
         repository.checkAndRunScheduledExport()
 
         coVerify(exactly = 0) { settingsRepository.currentSettings() }
@@ -224,7 +184,14 @@ class BackupRepositoryTest : BaseRepositoryTest() {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /** Builds a serialised [EncryptedBackupEnvelope] string from the given settings + servers + PIN. */
+    /** Builds a serialised [EncryptedBackupEnvelope] from a pre-built [AppBackup]. */
+    private fun buildEncryptedEnvelope(backup: AppBackup, pin: String): String {
+        val plaintext = json.encodeToString(backup).encodeToByteArray()
+        val encrypted = BackupCrypto.encrypt(plaintext, pin)
+        return json.encodeToString(EncryptedBackupEnvelope(data = encrypted))
+    }
+
+    /** Builds a serialised [EncryptedBackupEnvelope] from settings + servers + PIN. */
     private fun buildEncryptedEnvelope(
         settings: BackupSettings,
         servers: List<ServerBackup>,
@@ -236,9 +203,6 @@ class BackupRepositoryTest : BaseRepositoryTest() {
             settings = settings,
             servers = servers
         )
-        val plaintext = json.encodeToString(backup).encodeToByteArray()
-        val encrypted = BackupCrypto.encrypt(plaintext, pin)
-        val envelope = EncryptedBackupEnvelope(data = encrypted)
-        return json.encodeToString(envelope)
+        return buildEncryptedEnvelope(backup, pin)
     }
 }
