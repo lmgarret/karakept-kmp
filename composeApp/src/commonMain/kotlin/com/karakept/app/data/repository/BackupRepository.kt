@@ -53,8 +53,9 @@ class BackupRepository(
         val now = Clock.System.now().toLocalDateTime(TimeZone.UTC)
         val datePart = "${now.year}-${now.monthNumber.toString().padStart(2, '0')}-${now.dayOfMonth.toString().padStart(2, '0')}"
         val fileName = "karakept_backup_$datePart.json"
-        val backupDir = FileUtils.getBackupDirectory()
-        val filePath = FileUtils.saveFile(backupDir, fileName, jsonString.encodeToByteArray())
+        val customDir = settingsRepository.backupExportDirectory.first()
+        val dir = customDir ?: FileUtils.getBackupDirectory()
+        val filePath = FileUtils.saveFileToDirectory(dir, fileName, jsonString.encodeToByteArray())
         settingsRepository.setLastAutoExportTime(Clock.System.now().toEpochMilliseconds())
         return filePath
     }

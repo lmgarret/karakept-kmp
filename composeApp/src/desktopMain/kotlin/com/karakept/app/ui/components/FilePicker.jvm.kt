@@ -34,3 +34,25 @@ actual fun rememberJsonFilePicker(onContent: (String?) -> Unit): () -> Unit {
         }
     }
 }
+
+@Composable
+actual fun rememberDirectoryPicker(onDirectorySelected: (String?) -> Unit): () -> Unit {
+    val scope = rememberCoroutineScope()
+    return {
+        scope.launch(Dispatchers.IO) {
+            val chooser = JFileChooser().apply {
+                dialogTitle = "Select Backup Export Directory"
+                fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+            }
+            val result = chooser.showOpenDialog(null)
+            val path = if (result == JFileChooser.APPROVE_OPTION) {
+                chooser.selectedFile.absolutePath
+            } else {
+                null
+            }
+            withContext(Dispatchers.Main) {
+                onDirectorySelected(path)
+            }
+        }
+    }
+}

@@ -240,7 +240,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             notificationsEnabled = this[LEGACY_NOTIFICATIONS_ENABLED_KEY] ?: true,
             offlineMode = this[LEGACY_OFFLINE_MODE_KEY] ?: false,
             onboardingCompleted = this[LEGACY_ONBOARDING_COMPLETED_KEY] ?: false,
-            autoExportInterval = this[LEGACY_AUTO_EXPORT_INTERVAL_KEY] ?: AutoExportInterval.NEVER.name
+            autoExportInterval = this[LEGACY_AUTO_EXPORT_INTERVAL_KEY] ?: AutoExportInterval.NEVER.name,
+            backupExportDirectory = null
         )
     }
 
@@ -315,7 +316,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             notificationsEnabled = app.notificationsEnabled,
             offlineMode = app.offlineMode,
             onboardingCompleted = app.onboardingCompleted,
-            autoExportInterval = app.autoExportInterval
+            autoExportInterval = app.autoExportInterval,
+            backupExportDirectory = app.backupExportDirectory
         )
     }
 
@@ -372,7 +374,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                     notificationsEnabled = s.notificationsEnabled,
                     offlineMode = s.offlineMode,
                     onboardingCompleted = s.onboardingCompleted,
-                    autoExportInterval = s.autoExportInterval
+                    autoExportInterval = s.autoExportInterval,
+                    backupExportDirectory = s.backupExportDirectory
                 )
             )
         }
@@ -478,6 +481,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     val onboardingCompleted: Flow<Boolean> =
         appSettingsFlow.map { it.onboardingCompleted }.distinctUntilChanged()
+
+    /** The user-configured backup export directory, or null if the app default should be used. */
+    val backupExportDirectory: Flow<String?> =
+        appSettingsFlow.map { it.backupExportDirectory }.distinctUntilChanged()
 
     // ── Non-backed-up flows (individual keys, unchanged) ─────────────────────
 
@@ -633,6 +640,9 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setAutoExportInterval(interval: AutoExportInterval) =
         updateAppSettings { copy(autoExportInterval = interval.name) }
+
+    suspend fun setBackupExportDirectory(path: String?) =
+        updateAppSettings { copy(backupExportDirectory = path) }
 
     // ── Setters (non-backed-up individual keys) ───────────────────────────────
 

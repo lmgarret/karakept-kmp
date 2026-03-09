@@ -235,6 +235,25 @@ class StoredSettingsSerializationTest {
     }
 
     @Test
+    fun `StoredAppSettings backupExportDirectory null by default`() {
+        assertNull(StoredAppSettings().backupExportDirectory)
+    }
+
+    @Test
+    fun `StoredAppSettings with backupExportDirectory round-trips`() {
+        val original = StoredAppSettings(backupExportDirectory = "/custom/path")
+        val deserialized = json.decodeFromString<StoredAppSettings>(json.encodeToString(original))
+        assertEquals("/custom/path", deserialized.backupExportDirectory)
+    }
+
+    @Test
+    fun `StoredAppSettings backupExportDirectory null survives JSON round-trip`() {
+        val original = StoredAppSettings(backupExportDirectory = null)
+        val deserialized = json.decodeFromString<StoredAppSettings>(json.encodeToString(original))
+        assertNull(deserialized.backupExportDirectory)
+    }
+
+    @Test
     fun `StoredAppSettings ignores unknown fields`() {
         val jsonStr = """{"notificationsEnabled":false,"futureField":"value"}"""
         val settings = json.decodeFromString<StoredAppSettings>(jsonStr)

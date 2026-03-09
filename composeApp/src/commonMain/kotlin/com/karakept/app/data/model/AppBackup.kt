@@ -83,7 +83,11 @@ data class BackupSettings(
     val onboardingCompleted: Boolean = false,
 
     // Scheduled auto-export
-    val autoExportInterval: String = AutoExportInterval.NEVER.name
+    val autoExportInterval: String = AutoExportInterval.NEVER.name,
+
+    // Export directory (null = use the app default backup directory)
+    // On Android this is a SAF URI (content://…); on Desktop a regular file path.
+    val backupExportDirectory: String? = null
 )
 
 /**

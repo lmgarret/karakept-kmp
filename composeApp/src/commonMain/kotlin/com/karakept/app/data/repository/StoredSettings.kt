@@ -77,11 +77,13 @@ internal data class StoredSyncSettings(
     val contentSyncWithChildren: Set<String> = emptySet()
 )
 
-/** App-level settings: notifications, offline mode, onboarding state, and auto-export schedule. */
+/** App-level settings: notifications, offline mode, onboarding state, auto-export schedule, and export directory. */
 @Serializable
 internal data class StoredAppSettings(
     val notificationsEnabled: Boolean = true,
     val offlineMode: Boolean = false,
     val onboardingCompleted: Boolean = false,
-    val autoExportInterval: String = AutoExportInterval.NEVER.name
+    val autoExportInterval: String = AutoExportInterval.NEVER.name,
+    /** null = use the platform default backup directory. On Android a SAF URI; on Desktop a file path. */
+    val backupExportDirectory: String? = null
 )

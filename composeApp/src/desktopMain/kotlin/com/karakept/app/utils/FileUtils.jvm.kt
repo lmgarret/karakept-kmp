@@ -59,6 +59,11 @@ actual object FileUtils {
         return dir.absolutePath
     }
 
+    actual fun saveFileToDirectory(directoryPath: String, fileName: String, content: ByteArray): String =
+        saveFile(directoryPath, fileName, content)
+
+    actual fun getDirectoryDisplayName(directoryPath: String): String = directoryPath
+
     actual fun readFileAsText(path: String): String? {
         return try {
             File(path).readText()

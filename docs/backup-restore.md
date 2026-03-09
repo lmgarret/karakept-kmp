@@ -53,6 +53,7 @@ All user-configurable preferences stored in the `settings_json` DataStore blob:
 | Offline mode | `offlineMode` |
 | Onboarding | `onboardingCompleted` |
 | Auto-export | `autoExportInterval` |
+| Export directory | `backupExportDirectory` (null = platform default) |
 
 ### Also included (but not auto-restored)
 
@@ -217,7 +218,10 @@ BackupRepository.exportToFile()
     │       └── serverRepository.servers.first()      → List<ServerInfo>
     │
     ├── Json.encodeToString(backup)  → JSON string
-    ├── FileUtils.saveFile(backupDir, fileName, bytes)  → absolute path
+    ├── settingsRepository.backupExportDirectory.first()
+    │       ├── non-null  → custom directory (SAF URI on Android, file path on Desktop)
+    │       └── null      → FileUtils.getBackupDirectory() (platform default)
+    ├── FileUtils.saveFileToDirectory(dir, fileName, bytes)  → path / URI string
     └── settingsRepository.setLastAutoExportTime(now)
     │
     ▼
@@ -302,17 +306,21 @@ Removing or renaming a field without a migration path is a breaking change. If n
 
 | Action | Behaviour |
 |---|---|
-| Export | File saved to `<app-external-files>/backups/`; Android share sheet opened |
+| Export | File saved to the configured export directory (default: `<app-external-files>/backups/`); Android share sheet opened |
 | Import | Android system file picker (`.json` filter) |
-| Backup directory | `Context.getExternalFilesDir("backups")` |
+| Default backup directory | `Context.getExternalFilesDir("backups")` |
+| Directory picker | SAF `ACTION_OPEN_DOCUMENT_TREE`; persistable URI permissions are requested so scheduled exports can write without UI interaction |
+| Directory storage | SAF URI string (`content://…`) stored in settings; decoded to a human-readable label (e.g. "Internal Storage/Downloads") in the UI |
 
 ### Desktop (JVM)
 
 | Action | Behaviour |
 |---|---|
-| Export | File saved to `<user-home>/.karakept/backups/`; native save dialog opened |
+| Export | File saved to the configured export directory (default: `<user-home>/.karakept/backups/`); parent folder opened in Finder/Explorer |
 | Import | AWT `JFileChooser` with `.json` filter |
-| Backup directory | `System.getProperty("user.home") + "/.karakept/backups"` |
+| Default backup directory | `System.getProperty("user.home") + "/.karakept/backups"` |
+| Directory picker | AWT `JFileChooser` in directory-selection mode |
+| Directory storage | Absolute file-system path |
 
 ### iOS / other platforms
 

@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Warning
@@ -26,6 +27,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
@@ -47,7 +49,9 @@ import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.AutoExportInterval
+import com.karakept.app.ui.components.rememberDirectoryPicker
 import com.karakept.app.ui.components.rememberJsonFilePicker
+import com.karakept.app.utils.FileUtils
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -63,6 +67,7 @@ class BackupRestoreScreen : Screen {
         val state by screenModel.state.collectAsState()
         val autoExportInterval by screenModel.autoExportInterval.collectAsState()
         val lastAutoExportTime by screenModel.lastAutoExportTime.collectAsState()
+        val backupExportDirectory by screenModel.backupExportDirectory.collectAsState()
 
         var showResultDialog by remember { mutableStateOf(false) }
 
@@ -70,6 +75,12 @@ class BackupRestoreScreen : Screen {
             if (content != null) {
                 screenModel.importSettings(content)
                 showResultDialog = true
+            }
+        }
+
+        val directoryPicker = rememberDirectoryPicker { path ->
+            if (path != null) {
+                screenModel.setBackupExportDirectory(path)
             }
         }
 
@@ -187,6 +198,51 @@ class BackupRestoreScreen : Screen {
                     }
                 }
 
+                // ── Export directory ──────────────────────────────────────────
+                Text("Export Directory", style = MaterialTheme.typography.titleMedium)
+
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        val displayName = backupExportDirectory
+                            ?.let { FileUtils.getDirectoryDisplayName(it) }
+                            ?: "Default (app backup folder)"
+                        ListItem(
+                            leadingContent = {
+                                Icon(
+                                    Icons.Default.Folder,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            headlineContent = { Text("Export to") },
+                            supportingContent = {
+                                Text(
+                                    text = displayName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            trailingContent = {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    TextButton(onClick = { directoryPicker() }) {
+                                        Text("Change")
+                                    }
+                                    if (backupExportDirectory != null) {
+                                        TextButton(
+                                            onClick = { screenModel.setBackupExportDirectory(null) }
+                                        ) {
+                                            Text(
+                                                "Reset",
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+
                 // ── Import ────────────────────────────────────────────────────
                 Text("Restore", style = MaterialTheme.typography.titleMedium)
 
@@ -296,7 +352,7 @@ class BackupRestoreScreen : Screen {
                     )
                 ) {
                     Text(
-                        text = "Backup files are stored in the app's backup directory. " +
+                        text = "Backup files are saved to the configured export directory (or the app's default backup folder if none is set). " +
                                 "They contain all your settings but NOT your bookmarks (those live on your Karakeep server). " +
                                 "Server API keys are included in the backup – keep your backup files secure.",
                         style = MaterialTheme.typography.bodySmall,

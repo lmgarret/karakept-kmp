@@ -40,6 +40,12 @@ class BackupRestoreScreenModel(
         initialValue = 0L
     )
 
+    val backupExportDirectory: StateFlow<String?> = settingsRepository.backupExportDirectory.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
     fun exportSettings() {
         screenModelScope.launch {
             _state.value = BackupState.Loading
@@ -68,6 +74,12 @@ class BackupRestoreScreenModel(
     fun setAutoExportInterval(interval: AutoExportInterval) {
         screenModelScope.launch {
             settingsRepository.setAutoExportInterval(interval)
+        }
+    }
+
+    fun setBackupExportDirectory(path: String?) {
+        screenModelScope.launch {
+            settingsRepository.setBackupExportDirectory(path)
         }
     }
 

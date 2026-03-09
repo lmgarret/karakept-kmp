@@ -107,6 +107,25 @@ class BackupSettingsSerializationTest {
         assertNull(deserialized.swipeRightConfigId)
     }
 
+    @Test
+    fun `backupExportDirectory null by default`() {
+        assertNull(BackupSettings().backupExportDirectory)
+    }
+
+    @Test
+    fun `backupExportDirectory round-trips when set`() {
+        val settings = BackupSettings(backupExportDirectory = "/custom/backup/dir")
+        val deserialized = json.decodeFromString<BackupSettings>(json.encodeToString(settings))
+        assertEquals("/custom/backup/dir", deserialized.backupExportDirectory)
+    }
+
+    @Test
+    fun `backupExportDirectory null survives JSON round-trip`() {
+        val settings = BackupSettings(backupExportDirectory = null)
+        val deserialized = json.decodeFromString<BackupSettings>(json.encodeToString(settings))
+        assertNull(deserialized.backupExportDirectory)
+    }
+
     // ── Set fields ────────────────────────────────────────────────────────────
 
     @Test
