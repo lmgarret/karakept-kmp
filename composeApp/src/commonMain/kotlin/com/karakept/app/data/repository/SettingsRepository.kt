@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.utils.BackupCrypto
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -56,6 +57,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private val AUTO_OFFLINE_DETECTED_KEY = booleanPreferencesKey("auto_offline_detected")
     private val LAST_AUTO_EXPORT_TIME_KEY = longPreferencesKey("last_auto_export_time")
     private val PER_LIST_SETTINGS_KEY = stringPreferencesKey("per_list_settings")
+
+    /**
+     * The actual backup PIN (4–6 digits), stored locally for use by scheduled auto-exports.
+     * Never included in the backup file itself; only the derived hash is.
+     */
+    private val BACKUP_PIN_KEY = stringPreferencesKey("backup_pin")
 
     // ── Legacy keys (read-only, migration only) ───────────────────────────────
     // Two generations of legacy storage are supported:
@@ -241,7 +248,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             offlineMode = this[LEGACY_OFFLINE_MODE_KEY] ?: false,
             onboardingCompleted = this[LEGACY_ONBOARDING_COMPLETED_KEY] ?: false,
             autoExportInterval = this[LEGACY_AUTO_EXPORT_INTERVAL_KEY] ?: AutoExportInterval.NEVER.name,
-            backupExportDirectory = null
+            backupExportDirectory = null,
+            backupPinHash = null
         )
     }
 
@@ -278,7 +286,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     /**
      * Returns a one-shot snapshot of all backed-up settings as a flat [BackupSettings].
-     * Reads all six category blobs in a single DataStore snapshot. Used by [BackupRepository].
+     * Reads all category blobs plus the per-list-settings key in a single DataStore snapshot.
+     * Used by [com.karakept.app.data.repository.BackupRepository].
      */
     suspend fun currentSettings(): BackupSettings {
         val prefs = dataStore.data.first()
@@ -288,6 +297,9 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val swipe = prefs.readSwipeSettings()
         val sync = prefs.readSyncSettings()
         val app = prefs.readAppSettings()
+        val listSettingsMap: Map<String, ListSettings> = runCatching {
+            settingsJson.decodeFromString<Map<String, ListSettings>>(prefs[PER_LIST_SETTINGS_KEY] ?: "{}")
+        }.getOrDefault(emptyMap())
         return BackupSettings(
             themeMode = theme.themeMode,
             accentColor = theme.accentColor,
@@ -317,7 +329,11 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             offlineMode = app.offlineMode,
             onboardingCompleted = app.onboardingCompleted,
             autoExportInterval = app.autoExportInterval,
-            backupExportDirectory = app.backupExportDirectory
+            backupExportDirectory = app.backupExportDirectory,
+            perListSettings = listSettingsMap,
+            defaultListType = prefs[DEFAULT_LIST_TYPE_KEY] ?: DefaultListType.ALL_BOOKMARKS.name,
+            defaultListId = prefs[DEFAULT_LIST_ID_KEY],
+            backupPinHash = app.backupPinHash
         )
     }
 
@@ -375,9 +391,19 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                     offlineMode = s.offlineMode,
                     onboardingCompleted = s.onboardingCompleted,
                     autoExportInterval = s.autoExportInterval,
-                    backupExportDirectory = s.backupExportDirectory
+                    backupExportDirectory = s.backupExportDirectory,
+                    backupPinHash = s.backupPinHash
                 )
             )
+            // Restore per-list settings
+            prefs[PER_LIST_SETTINGS_KEY] = settingsJson.encodeToString<Map<String, ListSettings>>(s.perListSettings)
+            // Restore default list
+            prefs[DEFAULT_LIST_TYPE_KEY] = s.defaultListType
+            if (s.defaultListId != null) {
+                prefs[DEFAULT_LIST_ID_KEY] = s.defaultListId
+            } else {
+                prefs.remove(DEFAULT_LIST_ID_KEY)
+            }
         }
     }
 
@@ -485,6 +511,19 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     /** The user-configured backup export directory, or null if the app default should be used. */
     val backupExportDirectory: Flow<String?> =
         appSettingsFlow.map { it.backupExportDirectory }.distinctUntilChanged()
+
+    /**
+     * The PBKDF2 hash of the backup PIN, or null when encryption is disabled.
+     * Included in backups so the importing device knows encryption was configured.
+     */
+    val backupPinHash: Flow<String?> =
+        appSettingsFlow.map { it.backupPinHash }.distinctUntilChanged()
+
+    /**
+     * The actual backup PIN stored locally for scheduled auto-exports, or null if not set.
+     * Never included in the backup file itself — only the derived hash is.
+     */
+    val backupPin: Flow<String?> = dataStore.data.map { it[BACKUP_PIN_KEY] }
 
     // ── Non-backed-up flows (individual keys, unchanged) ─────────────────────
 
@@ -643,6 +682,24 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setBackupExportDirectory(path: String?) =
         updateAppSettings { copy(backupExportDirectory = path) }
+
+    /**
+     * Sets (or clears) the backup PIN.
+     * Writes the actual PIN to [BACKUP_PIN_KEY] (for scheduled exports) and
+     * stores its PBKDF2 hash in [StoredAppSettings.backupPinHash] (for verification and backup).
+     */
+    suspend fun setBackupPin(pin: String?) {
+        dataStore.edit { prefs ->
+            if (pin != null) {
+                prefs[BACKUP_PIN_KEY] = pin
+            } else {
+                prefs.remove(BACKUP_PIN_KEY)
+            }
+        }
+        updateAppSettings {
+            copy(backupPinHash = if (pin != null) BackupCrypto.hashPin(pin) else null)
+        }
+    }
 
     // ── Setters (non-backed-up individual keys) ───────────────────────────────
 

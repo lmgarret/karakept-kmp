@@ -200,6 +200,61 @@ class BackupSettingsSerializationTest {
         assertTrue(serialized.contains("\"autoExportInterval\""))
     }
 
+    // ── New fields: perListSettings, defaultListType, defaultListId, backupPinHash ────
+
+    @Test
+    fun `perListSettings defaults to empty map`() {
+        assertTrue(BackupSettings().perListSettings.isEmpty())
+    }
+
+    @Test
+    fun `perListSettings round-trips through JSON`() {
+        val listSettings = mapOf("list-1" to ListSettings(syncOffline = true, countOnlyUnread = true))
+        val settings = BackupSettings(perListSettings = listSettings)
+        val deserialized = json.decodeFromString<BackupSettings>(json.encodeToString(settings))
+        assertEquals(listSettings, deserialized.perListSettings)
+    }
+
+    @Test
+    fun `defaultListType defaults to ALL_BOOKMARKS`() {
+        assertEquals(DefaultListType.ALL_BOOKMARKS.name, BackupSettings().defaultListType)
+    }
+
+    @Test
+    fun `defaultListId is null by default`() {
+        assertNull(BackupSettings().defaultListId)
+    }
+
+    @Test
+    fun `defaultListType and defaultListId round-trip`() {
+        val settings = BackupSettings(
+            defaultListType = DefaultListType.SPECIFIC_LIST.name,
+            defaultListId = "my-list-id"
+        )
+        val deserialized = json.decodeFromString<BackupSettings>(json.encodeToString(settings))
+        assertEquals(DefaultListType.SPECIFIC_LIST.name, deserialized.defaultListType)
+        assertEquals("my-list-id", deserialized.defaultListId)
+    }
+
+    @Test
+    fun `backupPinHash is null by default`() {
+        assertNull(BackupSettings().backupPinHash)
+    }
+
+    @Test
+    fun `backupPinHash round-trips when set`() {
+        val settings = BackupSettings(backupPinHash = "aGVsbG8=:d29ybGQ=")
+        val deserialized = json.decodeFromString<BackupSettings>(json.encodeToString(settings))
+        assertEquals("aGVsbG8=:d29ybGQ=", deserialized.backupPinHash)
+    }
+
+    @Test
+    fun `backupPinHash null survives JSON round-trip`() {
+        val settings = BackupSettings(backupPinHash = null)
+        val deserialized = json.decodeFromString<BackupSettings>(json.encodeToString(settings))
+        assertNull(deserialized.backupPinHash)
+    }
+
     // ── AppBackup envelope ────────────────────────────────────────────────────
 
     @Test

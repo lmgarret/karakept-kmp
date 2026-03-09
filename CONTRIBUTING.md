@@ -147,7 +147,11 @@ The **backup file format** (`BackupSettings` in `AppBackup.kt`) remains flat. `S
 
 On first read after an upgrade, the category read helpers walk this chain automatically. Once a per-category key is written, the legacy fallbacks are never consulted again.
 
-**Non-backed-up settings** (session state such as `activeServerId`, `autoOfflineDetected`): stored as individual DataStore keys and excluded from `BackupSettings`.
+**Non-backed-up settings** (session state such as `activeServerId`, `autoOfflineDetected`, and `backup_pin`): stored as individual DataStore keys and excluded from `BackupSettings`.  Note: `backup_pin` (the raw PIN) is stored locally for scheduled auto-exports; only its PBKDF2 hash is written to the backup file.
+
+**Per-list settings and default list** (`perListSettings`, `defaultListType`, `defaultListId`): stored in individual DataStore keys (`per_list_settings`, `default_list_type`, `default_list_id`) and are mapped in `currentSettings()` / `restoreSettings()` directly — they do not go through a category blob.
+
+**Backup encryption**: when the user sets a backup PIN, `BackupRepository.exportToFile()` serializes the `AppBackup` to JSON, encrypts it with AES-256-GCM (key derived via PBKDF2WithHmacSHA256, 100 000 iterations), and wraps the ciphertext in an `EncryptedBackupEnvelope`.  Server connections (including API keys) are restored automatically when importing an encrypted backup because the PIN acts as an explicit trust signal.
 
 For a deeper dive into the backup system architecture, see [docs/backup-restore.md](docs/backup-restore.md).
 

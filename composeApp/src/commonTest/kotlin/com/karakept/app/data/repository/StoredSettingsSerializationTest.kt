@@ -267,6 +267,25 @@ class StoredSettingsSerializationTest {
         assertEquals(StoredAppSettings(), settings)
     }
 
+    @Test
+    fun `StoredAppSettings backupPinHash null by default`() {
+        assertNull(StoredAppSettings().backupPinHash)
+    }
+
+    @Test
+    fun `StoredAppSettings backupPinHash round-trips when set`() {
+        val original = StoredAppSettings(backupPinHash = "aGVsbG8=:d29ybGQ=")
+        val deserialized = json.decodeFromString<StoredAppSettings>(json.encodeToString(original))
+        assertEquals("aGVsbG8=:d29ybGQ=", deserialized.backupPinHash)
+    }
+
+    @Test
+    fun `StoredAppSettings backupPinHash null survives JSON round-trip`() {
+        val original = StoredAppSettings(backupPinHash = null)
+        val deserialized = json.decodeFromString<StoredAppSettings>(json.encodeToString(original))
+        assertNull(deserialized.backupPinHash)
+    }
+
     // ── Cross-category isolation ──────────────────────────────────────────────
 
     @Test

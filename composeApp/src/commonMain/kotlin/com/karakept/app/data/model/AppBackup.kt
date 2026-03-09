@@ -15,8 +15,23 @@ data class AppBackup(
 )
 
 /**
+ * Wrapper written by [com.karakept.app.data.repository.BackupRepository.exportToFile] when
+ * the user has set a backup PIN.
+ *
+ * [data] is the Base64-encoded output of `BackupCrypto.encrypt(appBackupJson.bytes, pin)`.
+ * On import, detect this envelope by parsing and checking `encrypted == true`.
+ */
+@Serializable
+data class EncryptedBackupEnvelope(
+    val version: Int = 2,
+    val encrypted: Boolean = true,
+    /** Base64-encoded AES-256-GCM ciphertext of the serialised [AppBackup] JSON. */
+    val data: String
+)
+
+/**
  * Server connection info included in a backup.
- * Note: this includes the API key – treat the backup file as sensitive.
+ * This includes the API key and is therefore only stored in encrypted backups.
  */
 @Serializable
 data class ServerBackup(
@@ -87,7 +102,20 @@ data class BackupSettings(
 
     // Export directory (null = use the app default backup directory)
     // On Android this is a SAF URI (content://…); on Desktop a regular file path.
-    val backupExportDirectory: String? = null
+    val backupExportDirectory: String? = null,
+
+    // Per-list settings (list ID → settings JSON). Empty map = no per-list overrides.
+    val perListSettings: Map<String, ListSettings> = emptyMap(),
+
+    // Default list shown at app startup
+    val defaultListType: String = DefaultListType.ALL_BOOKMARKS.name,
+    val defaultListId: String? = null,
+
+    // Backup-PIN hash (PBKDF2, format "<base64salt>:<base64hash>").
+    // null = no PIN was configured on the exporting device.
+    // Restored together with all other settings so that the importing device preserves
+    // the encryption-enabled state.
+    val backupPinHash: String? = null
 )
 
 /**

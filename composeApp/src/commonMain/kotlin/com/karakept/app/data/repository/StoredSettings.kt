@@ -77,7 +77,7 @@ internal data class StoredSyncSettings(
     val contentSyncWithChildren: Set<String> = emptySet()
 )
 
-/** App-level settings: notifications, offline mode, onboarding state, auto-export schedule, and export directory. */
+/** App-level settings: notifications, offline mode, onboarding state, auto-export schedule, export directory, and backup PIN. */
 @Serializable
 internal data class StoredAppSettings(
     val notificationsEnabled: Boolean = true,
@@ -85,5 +85,11 @@ internal data class StoredAppSettings(
     val onboardingCompleted: Boolean = false,
     val autoExportInterval: String = AutoExportInterval.NEVER.name,
     /** null = use the platform default backup directory. On Android a SAF URI; on Desktop a file path. */
-    val backupExportDirectory: String? = null
+    val backupExportDirectory: String? = null,
+    /**
+     * PBKDF2 hash of the backup PIN (format `"<base64salt>:<base64hash>"`), or null when
+     * encryption is disabled. Stored here so it can be round-tripped through [BackupSettings]
+     * and re-applied when restoring a backup to a new device.
+     */
+    val backupPinHash: String? = null
 )

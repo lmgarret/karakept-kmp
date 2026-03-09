@@ -55,11 +55,27 @@ All user-configurable preferences stored in the `settings_json` DataStore blob:
 | Auto-export | `autoExportInterval` |
 | Export directory | `backupExportDirectory` (null = platform default) |
 
-### Also included (but not auto-restored)
+### Backed up — list settings
 
-| Data | Reason not auto-restored |
+| Setting | DataStore key | Description |
+|---|---|---|
+| `perListSettings` | `per_list_settings` | Per-list configuration map (sync, notifications, etc.) keyed by list ID |
+| `defaultListType` | `default_list_type` | Which list type is shown on startup |
+| `defaultListId` | `default_list_id` | Specific list ID for `SPECIFIC_LIST` default |
+
+### Backed up — backup PIN hash
+
+| Setting | Description |
 |---|---|
-| Server connections (`servers`) | Contain API keys; require explicit user action to re-add for security |
+| `backupPinHash` | PBKDF2 hash of the backup PIN.  Restored together with other settings so the importing device knows encryption is configured.  The actual PIN is never stored in the backup. |
+
+### Also included (and auto-restored on encrypted import)
+
+When a backup is encrypted (i.e. protected by a PIN), server connections are also restored after successful decryption — the PIN acts as an explicit trust signal.
+
+| Data | Encrypted import | Plain import |
+|---|---|---|
+| Server connections (`servers`, including API keys) | Restored automatically | NOT auto-restored (user must re-add manually) |
 
 ### Not backed up
 
@@ -68,7 +84,7 @@ All user-configurable preferences stored in the `settings_json` DataStore blob:
 | `activeServerId` | Session state; meaningless on another device |
 | `autoOfflineDetected` | Transient network state |
 | `lastAutoExportTime` | Tracks scheduler state; not a user preference |
-| Per-list settings (`per_list_settings`) | List-specific state; list IDs may differ between server instances |
+| `backup_pin` (raw PIN) | Stored locally only; never written to backup file |
 | Bookmarks | Live on the Karakeep server, not in the app |
 
 ---
@@ -78,6 +94,30 @@ All user-configurable preferences stored in the `settings_json` DataStore blob:
 Backup files are UTF-8 encoded JSON with the extension `.json`.
 
 **File name pattern:** `karakept_backup_YYYY-MM-DD.json`
+
+### Encrypted backups (`EncryptedBackupEnvelope`)
+
+When the user has set a backup PIN, the file contains an encrypted envelope instead of a plain `AppBackup`:
+
+```json
+{
+  "version": 2,
+  "encrypted": true,
+  "data": "<Base64-encoded AES-256-GCM ciphertext>"
+}
+```
+
+| Field | Description |
+|---|---|
+| `version` | `2` — identifies the encrypted envelope format |
+| `encrypted` | Always `true` — used to detect this format on import |
+| `data` | Base64 string: `[16-byte PBKDF2 salt][12-byte AES-GCM IV][N-byte ciphertext + 16-byte auth tag]` |
+
+The plaintext behind `data` is the serialized `AppBackup` JSON.  The key is derived with PBKDF2WithHmacSHA256 (100 000 iterations, 256-bit output) from the user's 4–6 digit PIN and the per-file salt.  AES-256-GCM provides authenticated encryption — a wrong PIN causes decryption to fail with an integrity error.
+
+Detection on import: the importer checks for `"encrypted":true` in the top-level JSON before attempting to parse as `AppBackup`.
+
+### Plain (unencrypted) backups (`AppBackup`)
 
 ### Top-level schema (`AppBackup`)
 
@@ -330,10 +370,23 @@ Not yet implemented. `FilePicker` and `FileUtils.shareBackupFile` use `expect`/`
 
 ## Security Considerations
 
-- Backup files contain **API keys** for all configured servers. They should be treated like passwords.
-- There is no encryption at rest. Users are responsible for storing backup files securely (e.g. in a password-protected location).
+### Encryption (recommended)
+
+- Setting a **4–6 digit PIN** encrypts the backup with AES-256-GCM and a PBKDF2-derived key.  An attacker without the PIN cannot read the file.
+- Key derivation: PBKDF2WithHmacSHA256, 100 000 iterations, 256-bit key, 16-byte random salt per export.
+- AES-256-GCM provides authenticated encryption — a wrong PIN causes decryption to fail with an authentication error, not silent corruption.
+- When importing an encrypted backup, server connections (including API keys) are automatically restored — the successful decryption proves the user knows the PIN.
+- The raw PIN is stored locally in DataStore (app-private storage) so that scheduled auto-exports can run without user interaction.  Only the PBKDF2 hash is written to the backup file.
+
+### Unencrypted backups (legacy / plain JSON)
+
+- Plain backup files contain **all settings** but **not server API keys** (servers are excluded from automatic restore for unencrypted files).
+- Users are responsible for storing unencrypted backup files securely.
+
+### General
+
 - `onboardingCompleted = true` is included in the backup. Restoring a backup from another device will skip onboarding on the target device. This is intentional.
-- Server connections are included in the backup JSON but are **not automatically restored** on import — users must re-add them manually, providing a deliberate security checkpoint.
+- PIN strength: 4–6 digits provides 10 000–1 000 000 possible values. Combined with PBKDF2 at 100 000 iterations, brute-force is made significantly more expensive but a strong passphrase would offer better security. A future improvement could allow alphanumeric PINs.
 
 ---
 

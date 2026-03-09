@@ -3,8 +3,10 @@ package com.karakept.app.data.repository
 import com.karakept.app.data.model.AppBackup
 import com.karakept.app.data.model.AutoExportInterval
 import com.karakept.app.data.model.BackupSettings
+import com.karakept.app.data.model.EncryptedBackupEnvelope
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ServerBackup
+import com.karakept.app.utils.BackupCrypto
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -135,6 +137,67 @@ class BackupRepositoryTest : BaseRepositoryTest() {
         assertFalse(result.isEmpty())
     }
 
+    // ── importFromJson — encrypted ────────────────────────────────────────────
+
+    @Test
+    fun `importFromJson throws when encrypted backup has no PIN`() = runTest(testDispatcher) {
+        val envelope = buildEncryptedEnvelope(BackupSettings(), emptyList(), pin = "1234")
+
+        val ex = assertFailsWith<Exception> {
+            repository.importFromJson(envelope)  // no pin provided
+        }
+        assertTrue(ex.message?.contains("encrypted") == true || ex.message?.contains("PIN") == true)
+    }
+
+    @Test
+    fun `importFromJson restores settings from encrypted backup with correct PIN`() = runTest(testDispatcher) {
+        val settings = BackupSettings(themeMode = "DARK", htmlFontSize = 18)
+        val envelope = buildEncryptedEnvelope(settings, emptyList(), pin = "5678")
+
+        val result = repository.importFromJson(envelope, pin = "5678")
+
+        coVerify(exactly = 1) { settingsRepository.restoreSettings(settings) }
+        assertTrue(result.contains("restored"))
+    }
+
+    @Test
+    fun `importFromJson restores servers from encrypted backup`() = runTest(testDispatcher) {
+        val servers = listOf(ServerBackup("s1", "https://example.com", "apikey", "Server 1"))
+        val envelope = buildEncryptedEnvelope(BackupSettings(), servers, pin = "1111")
+
+        val result = repository.importFromJson(envelope, pin = "1111")
+
+        coVerify(exactly = 1) { serverRepository.deleteAllServers() }
+        coVerify(exactly = 1) { serverRepository.addServer("https://example.com", "apikey", "Server 1") }
+        assertTrue(result.contains("1 server connection"))
+    }
+
+    @Test
+    fun `importFromJson throws when decrypting encrypted backup with wrong PIN`() = runTest(testDispatcher) {
+        val envelope = buildEncryptedEnvelope(BackupSettings(), emptyList(), pin = "1234")
+
+        assertFailsWith<Exception> {
+            repository.importFromJson(envelope, pin = "9999")
+        }
+        coVerify(exactly = 0) { settingsRepository.restoreSettings(any()) }
+    }
+
+    @Test
+    fun `importFromJson does NOT restore servers from unencrypted backup`() = runTest(testDispatcher) {
+        val backup = AppBackup(
+            version = 1,
+            exportedAt = "2024-01-01 00:00:00 UTC",
+            settings = BackupSettings(),
+            servers = listOf(ServerBackup("s1", "https://example.com", "key", "Label"))
+        )
+        val jsonContent = json.encodeToString(backup)
+
+        repository.importFromJson(jsonContent)
+
+        coVerify(exactly = 0) { serverRepository.deleteAllServers() }
+        coVerify(exactly = 0) { serverRepository.addServer(any(), any(), any()) }
+    }
+
     // ── checkAndRunScheduledExport ────────────────────────────────────────────
 
     @Test
@@ -157,5 +220,25 @@ class BackupRepositoryTest : BaseRepositoryTest() {
         repository.checkAndRunScheduledExport()
 
         coVerify(exactly = 0) { settingsRepository.currentSettings() }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Builds a serialised [EncryptedBackupEnvelope] string from the given settings + servers + PIN. */
+    private fun buildEncryptedEnvelope(
+        settings: BackupSettings,
+        servers: List<ServerBackup>,
+        pin: String
+    ): String {
+        val backup = AppBackup(
+            version = 1,
+            exportedAt = "2024-01-01 00:00:00 UTC",
+            settings = settings,
+            servers = servers
+        )
+        val plaintext = json.encodeToString(backup).encodeToByteArray()
+        val encrypted = BackupCrypto.encrypt(plaintext, pin)
+        val envelope = EncryptedBackupEnvelope(data = encrypted)
+        return json.encodeToString(envelope)
     }
 }
