@@ -178,40 +178,43 @@ object MainScreen : Screen {
         // Scroll-triggered action: apply the active list's scroll action silently (no snackbar)
         // when bookmarks scroll off the top, or when reaching the bottom of the list.
         //
-        // Key insight: LazyList uses stable keys (bookmark IDs). When items are prepended,
-        // Compose adjusts firstVisibleItemIndex to keep the same item on screen — the key of
-        // the first visible item stays the same, only its index changes. When the user actually
-        // scrolls, a different item becomes first-visible (different key). We use this identity
-        // check to distinguish prepend adjustments from real user scrolling.
+        // How we distinguish real scrolling from list mutations:
+        // LazyList uses stable keys (bookmark remoteIds). When items are prepended above the
+        // viewport, Compose adjusts firstVisibleItemIndex so the same item stays on screen —
+        // the key at the current position is unchanged, only the index grows. When the user
+        // actually scrolls down, a new item becomes first-visible (different key). We track
+        // the "anchor" (key + index of the first visible item) and compare it on each emission.
         //
-        // Edge case — prepend at absolute top (firstVisibleItemIndex stays 0):
-        // When the user is at the very top (index 0, zero scroll offset), Compose does NOT adjust
-        // firstVisibleItemIndex on prepend — the new items simply appear above, so the key at
-        // index 0 changes. We detect this in the else branch by searching the full bookmarks list
-        // for the old anchor key: if it's now at a higher index, we know N items were prepended.
-        // We record this as newItemsUntil so the fire loop skips those newly prepended slots.
+        // Prepend at absolute top (firstVisibleItemIndex stays 0):
+        // When the user is at index 0 with no scroll offset, Compose does NOT shift the index
+        // on prepend — the new items appear above and the key at index 0 changes. We detect this
+        // by searching the full bookmarks list for the old anchor key: if it moved to a higher
+        // index, N items were prepended. We record this as newItemsUntil so the fire loop skips
+        // those slots until the user explicitly scrolls past them.
         //
-        // List replacement detection: MainScreenModel increments bookmarkListVersion on every
-        // resetPaginationAndLoad. When the version changes, we re-initialize the anchor state to
-        // the current first visible item. A processedIds set prevents double-firing on bookmarks
-        // that survive across list replacements.
+        // List replacement (sync / filter change):
+        // MainScreenModel increments bookmarkListVersion on every resetPaginationAndLoad. When
+        // the version changes we run the same old-anchor search so newly inserted items are
+        // protected by newItemsUntil — preventing them from being bulk-fired before the user
+        // has scrolled past them individually. processedIds persists across replacements to
+        // avoid double-firing on bookmarks that survive the swap.
         LaunchedEffect(currentListScrollAction, currentListScrollActionConfig) {
             if (currentListScrollAction != SwipeAction.NONE) {
                 var anchorKey: Any? = null   // key of the first visible item we're tracking
                 var anchorIndex = 0          // current index of that anchor item
                 var bottomReached = false
                 var wasScrolling = false
-                // Indices [0, newItemsUntil) were prepended since the last user interaction.
-                // The fire loop skips these slots so newly appeared bookmarks are not acted on
-                // until the user has scrolled past them intentionally.
+                // Indices [0, newItemsUntil) contain items that appeared via prepend/sync.
+                // The fire loop skips those slots so the action isn't triggered on bookmarks
+                // the user hasn't explicitly scrolled past.
                 var newItemsUntil = 0
                 var lastSeenListVersion = bookmarkListVersion
-                // Safety net: track IDs we've already fired on to avoid double-processing
-                // after anchor resets (e.g. when sync replaces the list).
+                // Guard against double-firing: tracks remoteIds we've already acted on.
+                // Kept across list replacements so surviving bookmarks are never re-fired.
                 val processedIds = mutableSetOf<Long>()
-                // True after we've early-fired on the current anchor item (scroll offset > 0
-                // but firstVisibleItemIndex hasn't changed yet). Reset each time the anchor
-                // advances or the user scrolls back up.
+                // True once we've early-fired on the current anchor (scroll offset > 0 but
+                // firstVisibleItemIndex hasn't advanced yet). Cleared when the anchor
+                // advances, the user scrolls back to the top, or the list version changes.
                 var anchorFiredEarly = false
 
                 data class ScrollSnapshot(
@@ -245,15 +248,28 @@ object MainScreen : Screen {
                     val scrollJustStopped = wasScrolling && !isScrolling
                     wasScrolling = isScrolling
 
-                    // List replacement detection: when resetPaginationAndLoad swaps the
-                    // bookmark list (e.g. after sync), re-initialize the anchor to the
-                    // current first visible item. Keep processedIds intact to avoid
-                    // re-firing on bookmarks that survived the swap.
+                    // List replacement detection: bookmarkListVersion is incremented on every
+                    // resetPaginationAndLoad (sync, filter change, server switch). When it
+                    // changes we must re-initialize the anchor AND apply the same prepend-
+                    // detection logic used in the else branch below: if the old anchor survived
+                    // in the new list at a higher index, new items were inserted above it and
+                    // must be protected by newItemsUntil so they aren't bulk-fired before the
+                    // user has scrolled past each one individually. processedIds is kept intact
+                    // so bookmarks that survived the swap are never acted on twice.
                     if (snapshot.listVersion != lastSeenListVersion) {
                         lastSeenListVersion = snapshot.listVersion
+                        val oldAnchorNewIndex = if (anchorKey != null) {
+                            currentBookmarks.indexOfFirst { it.remoteId == anchorKey }
+                        } else -1
+                        if (oldAnchorNewIndex > anchorIndex) {
+                            // Items were inserted above the old anchor — protect the new slots.
+                            newItemsUntil = maxOf(newItemsUntil, oldAnchorNewIndex)
+                        } else {
+                            // Full replacement or anchor not found — reset all guards.
+                            newItemsUntil = 0
+                        }
                         anchorKey = newFirstKey
                         anchorIndex = newFirstIndex
-                        newItemsUntil = 0
                         bottomReached = false
                         anchorFiredEarly = false
                         return@collect
@@ -269,10 +285,8 @@ object MainScreen : Screen {
                     when {
                         newFirstIndex > anchorIndex -> {
                             if (newFirstKey == anchorKey) {
-                                // Same item is now at a higher index — Compose adjusted the list
-                                // because new items were prepended above us (user was not at the
-                                // absolute top, so the index was adjusted to keep this item visible).
-                                // Record how many slots to skip.
+                                // Same item at a higher index: Compose shifted the index because
+                                // items were prepended above the viewport. Protect those new slots.
                                 newItemsUntil = maxOf(newItemsUntil, newFirstIndex)
                                 anchorIndex = newFirstIndex
                             } else {
@@ -300,26 +314,31 @@ object MainScreen : Screen {
                             anchorFiredEarly = false
                         }
                         else -> {
-                            // Index unchanged — key may have changed (e.g. prepend at absolute
-                            // top where Compose keeps firstVisibleItemIndex at 0, or list replaced).
+                            // firstVisibleItemIndex is unchanged. The key may have changed if
+                            // items were prepended while the user was at the absolute top
+                            // (index 0, zero scroll offset): Compose keeps the index at 0 and
+                            // the new items slide in above, making a different key appear at 0.
                             if (newFirstKey != null && newFirstKey != anchorKey) {
-                                // Search the FULL bookmarks list for the old anchor, not just
-                                // visible items. This handles cases where many items are prepended
-                                // and the old anchor is pushed off-screen.
+                                // Search the FULL bookmarks list for the old anchor — not just
+                                // visible items — so we catch prepends larger than the viewport.
                                 val oldAnchorNewIndex = currentBookmarks.indexOfFirst {
                                     it.remoteId == anchorKey
                                 }
                                 if (oldAnchorNewIndex > anchorIndex) {
+                                    // Old anchor moved down: N items were prepended. Protect
+                                    // those new slots so they are skipped until intentionally
+                                    // scrolled past.
                                     newItemsUntil = maxOf(newItemsUntil, oldAnchorNewIndex)
                                 } else {
-                                    // Old anchor not found or moved backward — list was replaced
-                                    // (e.g. filter changed), not prepended. Reset the skip guard.
+                                    // Old anchor not found or unchanged — unexpected state;
+                                    // reset the skip guard conservatively.
                                     newItemsUntil = 0
                                 }
                                 anchorKey = newFirstKey
                             } else if (newFirstKey == anchorKey) {
                                 // Same item still at the top. Fire as soon as it starts scrolling
-                                // off — don't wait for it to fully leave the viewport.
+                                // off (firstScrollOffset > 0) rather than waiting for the index
+                                // to advance — this gives near-immediate feedback.
                                 if (!anchorFiredEarly && snapshot.firstScrollOffset > 0
                                     && anchorIndex >= newItemsUntil
                                 ) {
