@@ -1,5 +1,6 @@
 package com.karakept.app.utils
 
+import java.awt.Desktop
 import java.io.File
 
 actual object FileUtils {
@@ -47,6 +48,40 @@ actual object FileUtils {
             freeBytes = freeSpace,
             totalBytes = totalSpace
         )
+    }
+
+    actual fun getBackupDirectory(): String {
+        val userHome = System.getProperty("user.home")
+        val dir = File(userHome, ".karakept/backups")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        return dir.absolutePath
+    }
+
+    actual fun saveFileToDirectory(directoryPath: String, fileName: String, content: ByteArray): String =
+        saveFile(directoryPath, fileName, content)
+
+    actual fun getDirectoryDisplayName(directoryPath: String): String = directoryPath
+
+    actual fun readFileAsText(path: String): String? {
+        return try {
+            File(path).readText()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    actual fun shareBackupFile(filePath: String) {
+        val file = File(filePath)
+        if (!file.exists()) return
+        try {
+            if (Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(file.parentFile)
+            }
+        } catch (e: Exception) {
+            // Silently fail – user can navigate manually
+        }
     }
 
     private fun getFolderSize(file: File): Long {

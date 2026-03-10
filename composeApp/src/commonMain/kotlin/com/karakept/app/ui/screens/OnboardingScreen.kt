@@ -18,16 +18,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -51,6 +56,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.ui.components.rememberJsonFilePicker
 
 private const val STEP_WELCOME = 0
 private const val STEP_PERMISSIONS = 1
@@ -65,6 +71,7 @@ class OnboardingScreen : Screen {
 
         var currentStep by remember { mutableStateOf(STEP_WELCOME) }
         var permissionGranted by remember { mutableStateOf(false) }
+        var restoreMessage by remember { mutableStateOf<String?>(null) }
 
         val onFinish = {
             screenModel.completeOnboarding {
@@ -101,13 +108,26 @@ class OnboardingScreen : Screen {
                     modifier = Modifier.weight(1f)
                 ) { step ->
                     when (step) {
-                        STEP_WELCOME -> WelcomeStep()
+                        STEP_WELCOME -> WelcomeStep(
+                            screenModel = screenModel,
+                            onRestoreSuccess = { message, serversRestored ->
+                                if (serversRestored) {
+                                    // Servers were restored from backup — no need to show the
+                                    // server connection step, complete onboarding immediately.
+                                    onFinish()
+                                } else {
+                                    restoreMessage = message
+                                    currentStep = STEP_SERVER
+                                }
+                            }
+                        )
                         STEP_PERMISSIONS -> PermissionsStep(
                             permissionGranted = permissionGranted,
                             onPermissionResult = { granted -> permissionGranted = granted }
                         )
                         STEP_SERVER -> ServerConnectionStep(
                             screenModel = screenModel,
+                            restoreMessage = restoreMessage,
                             onConnected = { onFinish() }
                         )
                     }
@@ -177,7 +197,41 @@ private fun StepIndicator(
 }
 
 @Composable
-private fun WelcomeStep() {
+private fun WelcomeStep(
+    screenModel: OnboardingScreenModel,
+    onRestoreSuccess: (message: String, serversRestored: Boolean) -> Unit
+) {
+    var isRestoring by remember { mutableStateOf(false) }
+    var restoreError by remember { mutableStateOf<String?>(null) }
+    var pendingBackupContent by remember { mutableStateOf<String?>(null) }
+
+    // Show PIN dialog when a backup file has been picked
+    val content = pendingBackupContent
+    if (content != null) {
+        BackupPinEntryDialog(
+            onConfirm = { pin ->
+                pendingBackupContent = null
+                isRestoring = true
+                restoreError = null
+                screenModel.importSettings(content, pin) { result ->
+                    isRestoring = false
+                    result.fold(
+                        onSuccess = { (message, serversRestored) -> onRestoreSuccess(message, serversRestored) },
+                        onFailure = { e -> restoreError = e.message ?: "Restore failed" }
+                    )
+                }
+            },
+            onDismiss = { pendingBackupContent = null }
+        )
+    }
+
+    val pickFile = rememberJsonFilePicker { content ->
+        if (content != null) {
+            restoreError = null
+            pendingBackupContent = content
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -223,6 +277,38 @@ private fun WelcomeStep() {
             title = "Get notified",
             description = "Receive notifications when your bookmarks are processed."
         )
+        Spacer(modifier = Modifier.height(32.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "Already have a backup?",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = { pickFile() },
+            enabled = !isRestoring,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (isRestoring) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Restoring…")
+            } else {
+                Text("Restore from backup")
+            }
+        }
+        if (restoreError != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = restoreError!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -324,6 +410,7 @@ private fun PermissionsStep(
 @Composable
 private fun ServerConnectionStep(
     screenModel: OnboardingScreenModel,
+    restoreMessage: String?,
     onConnected: () -> Unit
 ) {
     var url by remember { mutableStateOf("") }
@@ -367,7 +454,29 @@ private fun ServerConnectionStep(
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        if (restoreMessage != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp).padding(top = 2.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = restoreMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        } else {
+            Spacer(modifier = Modifier.height(24.dp))
+        }
 
         OutlinedTextField(
             value = url,
@@ -508,4 +617,49 @@ private fun OnboardingNavigationBar(
             Spacer(modifier = Modifier.width(80.dp))
         }
     }
+}
+
+/**
+ * PIN entry dialog shown after the user picks a backup file during onboarding.
+ * All backups are encrypted, so a PIN is always required.
+ */
+@Composable
+private fun BackupPinEntryDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var pin by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Enter Backup PIN") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Enter the PIN used when this backup was exported.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedTextField(
+                    value = pin,
+                    onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) pin = it },
+                    label = { Text("PIN") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(pin) },
+                enabled = pin.length in 4..6
+            ) {
+                Text("Restore")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
