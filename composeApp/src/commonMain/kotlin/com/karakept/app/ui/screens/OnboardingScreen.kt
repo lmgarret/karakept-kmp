@@ -110,9 +110,15 @@ class OnboardingScreen : Screen {
                     when (step) {
                         STEP_WELCOME -> WelcomeStep(
                             screenModel = screenModel,
-                            onRestoreSuccess = { message ->
-                                restoreMessage = message
-                                currentStep = STEP_SERVER
+                            onRestoreSuccess = { message, serversRestored ->
+                                if (serversRestored) {
+                                    // Servers were restored from backup — no need to show the
+                                    // server connection step, complete onboarding immediately.
+                                    onFinish()
+                                } else {
+                                    restoreMessage = message
+                                    currentStep = STEP_SERVER
+                                }
                             }
                         )
                         STEP_PERMISSIONS -> PermissionsStep(
@@ -193,7 +199,7 @@ private fun StepIndicator(
 @Composable
 private fun WelcomeStep(
     screenModel: OnboardingScreenModel,
-    onRestoreSuccess: (String) -> Unit
+    onRestoreSuccess: (message: String, serversRestored: Boolean) -> Unit
 ) {
     var isRestoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
@@ -210,7 +216,7 @@ private fun WelcomeStep(
                 screenModel.importSettings(content, pin) { result ->
                     isRestoring = false
                     result.fold(
-                        onSuccess = { message -> onRestoreSuccess(message) },
+                        onSuccess = { (message, serversRestored) -> onRestoreSuccess(message, serversRestored) },
                         onFailure = { e -> restoreError = e.message ?: "Restore failed" }
                     )
                 }

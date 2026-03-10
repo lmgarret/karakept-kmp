@@ -45,11 +45,21 @@ class OnboardingScreenModel(
         }
     }
 
-    fun importSettings(jsonContent: String, pin: String, onResult: (Result<String>) -> Unit) {
+    /**
+     * @param onResult delivers a [Result] containing the import summary message and a flag
+     *   indicating whether server connections were restored. When servers are restored the
+     *   caller can skip the server-connection step.
+     */
+    fun importSettings(
+        jsonContent: String,
+        pin: String,
+        onResult: (Result<Pair<String, Boolean>>) -> Unit
+    ) {
         screenModelScope.launch {
             try {
                 val summary = backupRepository.importFromJson(jsonContent, pin)
-                onResult(Result.success(summary))
+                val serversRestored = serverRepository.servers.first().isNotEmpty()
+                onResult(Result.success(Pair(summary, serversRestored)))
             } catch (e: Exception) {
                 onResult(Result.failure(e))
             }
