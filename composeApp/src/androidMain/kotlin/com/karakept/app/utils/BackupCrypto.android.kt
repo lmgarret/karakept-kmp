@@ -1,8 +1,8 @@
 package com.karakept.app.utils
 
-import android.util.Base64
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
@@ -22,11 +22,11 @@ actual object BackupCrypto {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, deriveKey(pin, salt), GCMParameterSpec(GCM_TAG_BITS, iv))
         val ciphertext = cipher.doFinal(plaintext)
-        return Base64.encodeToString(salt + iv + ciphertext, Base64.NO_WRAP)
+        return Base64.getEncoder().encodeToString(salt + iv + ciphertext)
     }
 
     actual fun decrypt(encoded: String, pin: String): ByteArray {
-        val combined = Base64.decode(encoded, Base64.NO_WRAP)
+        val combined = Base64.getDecoder().decode(encoded)
         require(combined.size > SALT_LENGTH + IV_LENGTH) { "Invalid encrypted data: too short" }
         val salt = combined.copyOfRange(0, SALT_LENGTH)
         val iv = combined.copyOfRange(SALT_LENGTH, SALT_LENGTH + IV_LENGTH)
@@ -39,15 +39,17 @@ actual object BackupCrypto {
     actual fun hashPin(pin: String): String {
         val salt = ByteArray(SALT_LENGTH).also { SecureRandom().nextBytes(it) }
         val hash = pbkdf2(pin, salt)
-        return "${Base64.encodeToString(salt, Base64.NO_WRAP)}:${Base64.encodeToString(hash, Base64.NO_WRAP)}"
+        val enc = Base64.getEncoder()
+        return "${enc.encodeToString(salt)}:${enc.encodeToString(hash)}"
     }
 
     actual fun verifyPin(pin: String, storedHash: String): Boolean {
         val parts = storedHash.split(":")
         if (parts.size != 2) return false
         return try {
-            val salt = Base64.decode(parts[0], Base64.NO_WRAP)
-            val expected = Base64.decode(parts[1], Base64.NO_WRAP)
+            val dec = Base64.getDecoder()
+            val salt = dec.decode(parts[0])
+            val expected = dec.decode(parts[1])
             MessageDigest.isEqual(expected, pbkdf2(pin, salt))
         } catch (e: Exception) {
             false
