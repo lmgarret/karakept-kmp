@@ -49,6 +49,7 @@ import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.screens.ReaderAppearanceScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
+import getPlatform
 
 class BookmarkViewSettingsScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -94,15 +95,18 @@ class BookmarkViewSettingsScreen : Screen {
                     onClick = { screenModel.setViewerMode(ViewerMode.READER) }
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                // WEB mode is only available on Android (uses WebView)
+                if (!getPlatform().isDesktop) {
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                LayoutOption(
-                    title = "Web",
-                    description = "Web view with original HTML and stylesheets (JavaScript disabled)",
-                    icon = Icons.Default.Public,
-                    isSelected = currentViewerMode == ViewerMode.WEB,
-                    onClick = { screenModel.setViewerMode(ViewerMode.WEB) }
-                )
+                    LayoutOption(
+                        title = "Web",
+                        description = "Web view with original HTML and stylesheets (JavaScript disabled)",
+                        icon = Icons.Default.Public,
+                        isSelected = currentViewerMode == ViewerMode.WEB,
+                        onClick = { screenModel.setViewerMode(ViewerMode.WEB) }
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(24.dp))
 

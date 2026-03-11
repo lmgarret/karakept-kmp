@@ -32,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
+import com.karakept.app.ui.components.reader.NativeHtmlRenderer
 import com.karakept.app.utils.HtmlArchiveProcessor
 import com.karakept.app.utils.HtmlCache
 import com.karakept.app.utils.HtmlSanitizer
@@ -157,36 +158,63 @@ fun HtmlContent(
             }
 
             Box(modifier = Modifier.fillMaxWidth()) {
-                // Always render HtmlRenderer if content is processed OR we have a local file
+                // Always render if content is processed OR we have a local file
                 if ((processedHtml != null && processedHtml!!.isNotBlank()) || localFilePath != null) {
-                    // Apply background color directly to HtmlRenderer modifier for READER mode
+                    // Apply background color directly to renderer modifier for READER mode
                     val rendererModifier = if (viewerMode == ViewerMode.READER && customBackgroundColor != null) {
                         Modifier.fillMaxWidth().background(customBackgroundColor)
                     } else {
                         Modifier.fillMaxWidth()
                     }
 
-                    HtmlRenderer(
-                        html = processedHtml ?: "",
-                        viewerMode = viewerMode,
-                        modifier = rendererModifier,
-                        onLinkClick = onLinkClick,
-                        onLoaded = {
-                            isContentLoaded = true
-                        },
-                        customTextColor = customTextColor,
-                        customFontSize = customFontSize,
-                        customFontFamily = customFontFamily,
-                        localFilePath = localFilePath,
-                        highlights = highlights,
-                        onCreateHighlight = onCreateHighlight,
-                        onDeleteHighlight = onDeleteHighlight,
-                        onHighlightClick = { highlightId ->
-                            onHighlightClick?.invoke(highlightId)
-                        },
-                        onHighlightPosition = onHighlightPosition,
-                        scrollToHighlightId = scrollToHighlightId
-                    )
+                    when (viewerMode) {
+                        ViewerMode.READER -> {
+                            // Native Compose renderer — no WebView needed
+                            NativeHtmlRenderer(
+                                html = processedHtml ?: "",
+                                modifier = rendererModifier,
+                                highlights = highlights,
+                                textColor = customTextColor,
+                                backgroundColor = customBackgroundColor,
+                                fontSize = customFontSize,
+                                fontFamily = customFontFamily,
+                                onLinkClick = onLinkClick,
+                                onHighlightClick = { highlightId ->
+                                    onHighlightClick?.invoke(highlightId)
+                                },
+                                onCreateHighlight = onCreateHighlight,
+                                onHighlightPosition = onHighlightPosition,
+                                scrollToHighlightId = scrollToHighlightId,
+                                onLoaded = {
+                                    isContentLoaded = true
+                                }
+                            )
+                        }
+                        ViewerMode.WEB -> {
+                            // WebView-based renderer (Android only; Desktop overrides to READER)
+                            HtmlRenderer(
+                                html = processedHtml ?: "",
+                                viewerMode = viewerMode,
+                                modifier = rendererModifier,
+                                onLinkClick = onLinkClick,
+                                onLoaded = {
+                                    isContentLoaded = true
+                                },
+                                customTextColor = customTextColor,
+                                customFontSize = customFontSize,
+                                customFontFamily = customFontFamily,
+                                localFilePath = localFilePath,
+                                highlights = highlights,
+                                onCreateHighlight = onCreateHighlight,
+                                onDeleteHighlight = onDeleteHighlight,
+                                onHighlightClick = { highlightId ->
+                                    onHighlightClick?.invoke(highlightId)
+                                },
+                                onHighlightPosition = onHighlightPosition,
+                                scrollToHighlightId = scrollToHighlightId
+                            )
+                        }
+                    }
                 }
 
                 // Show SkeletonLoader until content is fully loaded

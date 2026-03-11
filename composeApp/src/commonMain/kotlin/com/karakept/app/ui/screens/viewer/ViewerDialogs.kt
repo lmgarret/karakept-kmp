@@ -39,6 +39,7 @@ import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
 import com.karakept.app.ui.components.HighlightDetailsBottomPanel
 import com.karakept.app.data.model.Highlight
+import getPlatform
 
 /**
  * Viewer mode selection dialog
@@ -50,6 +51,8 @@ internal fun ViewerModeDialog(
     onModeSelected: (ViewerMode) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val isDesktop = getPlatform().isDesktop
+
     if (visible) {
         AlertDialog(
             onDismissRequest = onDismiss,
@@ -72,15 +75,18 @@ internal fun ViewerModeDialog(
                         }
                     )
 
-                    ViewerModeOptionCard(
-                        title = "Web",
-                        description = "Web view with original HTML and stylesheets (JavaScript disabled)",
-                        icon = Icons.Default.Public,
-                        isSelected = viewerMode == ViewerMode.WEB,
-                        onClick = {
-                            onModeSelected(ViewerMode.WEB)
-                        }
-                    )
+                    // WEB mode is only available on Android (uses WebView)
+                    if (!isDesktop) {
+                        ViewerModeOptionCard(
+                            title = "Web",
+                            description = "Web view with original HTML and stylesheets (JavaScript disabled)",
+                            icon = Icons.Default.Public,
+                            isSelected = viewerMode == ViewerMode.WEB,
+                            onClick = {
+                                onModeSelected(ViewerMode.WEB)
+                            }
+                        )
+                    }
                 }
             },
             confirmButton = {

@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
+import getPlatform
 
 class BookmarkViewerScreenModel(
     private val bookmarkDao: BookmarkDao,
@@ -48,8 +49,13 @@ class BookmarkViewerScreenModel(
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
     val loadingState: StateFlow<BookmarkLoadingState> = _loadingState.asStateFlow()
 
-    val viewerMode: StateFlow<ViewerMode> = settingsRepository.viewerMode
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ViewerMode.READER)
+    val viewerMode: StateFlow<ViewerMode> = if (getPlatform().isDesktop) {
+        // Desktop only supports READER mode (no WebView)
+        MutableStateFlow(ViewerMode.READER)
+    } else {
+        settingsRepository.viewerMode
+            .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ViewerMode.READER)
+    }
 
     val hideArticleThumbnails: StateFlow<Boolean> = settingsRepository.hideArticleThumbnails
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
