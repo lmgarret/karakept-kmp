@@ -44,9 +44,12 @@ jobs:
           model: mistral/mistral-small-latest
           changelog_config: |
             default:
+              preset: customer
               languages: [en]
               tone: friendly
-              sections: [breaking, features, improvements, fixes, performance, infrastructure]
+              sections: [breaking, features, improvements, fixes]
+              benefit_focused: true
+              include_infrastructure: false
           context_files: README.md,CLAUDE.md
           max_commits: 50
           temperature: 0.2
