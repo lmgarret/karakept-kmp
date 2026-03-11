@@ -1,6 +1,6 @@
 [versions]
 openapi-generator = "7.10.0"
-agp = "8.13.0"
+agp = "8.10.0"
 android-compileSdk = "35"
 android-minSdk = "24"
 android-targetSdk = "35"
@@ -8,22 +8,21 @@ androidx-activityCompose = "1.9.3"
 androidx-lifecycle = "2.8.4"
 androidx-core-splashscreen = "1.0.1"
 androidx-browser = "1.8.0"
-compose-plugin = "1.7.1"
+compose-plugin = "1.10.0"
 junit = "4.13.2"
-kotlin = "2.1.0"
+kotlin = "2.2.0"
 ktor = "3.3.2"
 voyager = "1.1.0-beta03"
 coil = "3.0.0"
 koin = "4.0.0"
-room = "2.7.0-alpha11" # Using alpha for KMP support as per search results, or 2.8.4 if stable available. Search said 2.8.4 is latest stable with KMP.
-sqlite = "2.5.0-alpha11" 
+room = "2.7.0-alpha11"
+sqlite = "2.5.0-alpha11"
 kotlinx-coroutines = "1.9.0"
 kotlinx-serialization = "1.7.3"
-kotlinx-datetime = "0.6.1"
+kotlinx-datetime = "0.6.2"
 datastore = "1.1.1"
-jsoup = "1.17.2"
-javafx = "21.0.1"
-reorderable = "0.9.6"
+ksoup = "0.2.1"
+compose-webview = "1.0.0-beta-01"
 testcontainers = "1.20.1"
 mockk = "1.13.12"
 
@@ -81,11 +80,11 @@ kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 androidx-datastore-preferences-android = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 
-# HTML Parsing
-jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+# HTML Parsing (KMP)
+ksoup = { module = "com.fleeksoft.ksoup:ksoup", version.ref = "ksoup" }
 
-# Drag and Drop Reordering
-reorderable = { module = "org.burnoutcrew.composereorderable:reorderable", version.ref = "reorderable" }
+# Native WebView (Desktop: WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
+compose-webview = { module = "io.github.kdroidfilter:composewebview", version.ref = "compose-webview" }
 
 # WorkManager
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version = "2.9.0" }
@@ -106,4 +105,4 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 room = { id = "androidx.room", version.ref = "room" }
-ksp = { id = "com.google.devtools.ksp", version = "2.1.0-1.0.29" } # Match kotlin version
+ksp = { id = "com.google.devtools.ksp", version = "2.2.0-2.0.2" }

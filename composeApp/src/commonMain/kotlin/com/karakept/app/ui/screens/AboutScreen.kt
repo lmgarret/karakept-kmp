@@ -154,7 +154,7 @@ class AboutScreen : Screen {
                     FossLibrary("Kotlinx Serialization", "Apache 2.0", "https://github.com/Kotlin/kotlinx.serialization"),
                     FossLibrary("Kotlinx DateTime", "Apache 2.0", "https://github.com/Kotlin/kotlinx-datetime"),
                     FossLibrary("DataStore", "Apache 2.0", "https://developer.android.com/topic/libraries/architecture/datastore"),
-                    FossLibrary("Jsoup", "MIT", "https://github.com/jhy/jsoup"),
+                    FossLibrary("Ksoup", "MIT", "https://github.com/fleeksoft/ksoup"),
                     FossLibrary("Reorderable", "Apache 2.0", "https://github.com/aclassen/ComposeReorderable"),
                     FossLibrary("JavaFX", "GPL 2.0 with Classpath Exception", "https://github.com/openjdk/jfx"),
                     FossLibrary("OkHttp", "Apache 2.0", "https://github.com/square/okhttp"),

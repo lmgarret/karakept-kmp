@@ -1,7 +1,8 @@
 package com.karakept.app.utils
 
-import org.jsoup.Jsoup
-import org.jsoup.safety.Safelist
+import com.fleeksoft.ksoup.Ksoup
+import com.fleeksoft.ksoup.safety.Cleaner
+import com.fleeksoft.ksoup.safety.Safelist
 
 /**
  * HTML sanitizer that removes potentially dangerous content while preserving safe HTML elements.
@@ -47,16 +48,18 @@ object HtmlSanitizer {
 
         return try {
             // Parse and sanitize
-            val doc = Jsoup.parse(html)
-            
+            val doc = Ksoup.parse(html)
+
             // Remove first image if requested
             if (removeFirstImage) {
                 doc.selectFirst("img")?.remove()
             }
-            
-            // Apply safelist and return
-            val outputSettings = doc.outputSettings().prettyPrint(false)
-            Jsoup.clean(doc.html(), "", safelist, outputSettings)
+
+            // Apply safelist via Cleaner and return
+            val cleaner = Cleaner(safelist)
+            val cleanDoc = cleaner.clean(doc)
+            cleanDoc.outputSettings().prettyPrint(false)
+            cleanDoc.body().html()
         } catch (e: Exception) {
             // If sanitization fails, return empty string as a safe fallback
             ""

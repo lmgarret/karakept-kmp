@@ -53,7 +53,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.getScreenModel
+import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.ui.components.rememberJsonFilePicker
@@ -67,7 +67,7 @@ class OnboardingScreen : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = getScreenModel<OnboardingScreenModel>()
+        val screenModel = koinScreenModel<OnboardingScreenModel>()
 
         var currentStep by remember { mutableStateOf(STEP_WELCOME) }
         var permissionGranted by remember { mutableStateOf(false) }

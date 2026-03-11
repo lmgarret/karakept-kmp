@@ -21,7 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.getScreenModel
+import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import androidx.compose.material.icons.Icons
@@ -41,7 +41,7 @@ class LoginScreen(val serverUrl: String? = null) : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = getScreenModel<LoginScreenModel>()
+        val screenModel = koinScreenModel<LoginScreenModel>()
 
         var url by remember { mutableStateOf(serverUrl ?: "") }
         var apiKey by remember { mutableStateOf("") }

@@ -6,7 +6,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
-import org.jsoup.Jsoup
+import com.fleeksoft.ksoup.Ksoup
 
 /**
  * Manages offline image caching for bookmark HTML content.
@@ -59,7 +59,7 @@ class ImageCacheManager(
         if (html.isBlank()) return html
 
         return try {
-            val doc = Jsoup.parse(html)
+            val doc = Ksoup.parse(html)
             val imgElements = doc.select("img[src]")
 
             if (imgElements.isEmpty()) {

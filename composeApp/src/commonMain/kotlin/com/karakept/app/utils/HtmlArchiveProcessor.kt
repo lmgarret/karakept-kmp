@@ -1,6 +1,6 @@
 package com.karakept.app.utils
 
-import org.jsoup.Jsoup
+import com.fleeksoft.ksoup.Ksoup
 
 /**
  * Processes HTML for Archive mode rendering.
@@ -19,7 +19,7 @@ object HtmlArchiveProcessor {
         if (html.isNullOrBlank()) return ""
 
         return try {
-            val doc = Jsoup.parse(html)
+            val doc = Ksoup.parse(html)
 
             // Optimize: Disable pretty printing
             doc.outputSettings().prettyPrint(false)
