@@ -177,9 +177,9 @@ fun NativeHtmlRenderer(
                         i++
                     } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
                         // Bare text node at body level — skip if whitespace only
-                        if (child.wholeText.isNotBlank()) {
+                        if (child.getWholeText().isNotBlank()) {
                             val theme = LocalReaderTheme.current
-                            val text = child.wholeText
+                            val text = child.getWholeText()
                             textOffset.advance(text.length)
                             androidx.compose.material3.Text(
                                 text = text,
@@ -189,7 +189,7 @@ fun NativeHtmlRenderer(
                                 lineHeight = (theme.fontSize.value * 1.6f).sp
                             )
                         } else {
-                            textOffset.advance(child.wholeText.length)
+                            textOffset.advance(child.getWholeText().length)
                         }
                         i++
                     } else {

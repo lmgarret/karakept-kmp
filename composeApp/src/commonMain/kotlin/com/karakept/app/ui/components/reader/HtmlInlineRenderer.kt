@@ -128,7 +128,7 @@ private fun appendNodeChildren(
     for (child in node.childNodes()) {
         when (child) {
             is TextNode -> {
-                val text = child.wholeText
+                val text = child.getWholeText()
                 builder.append(text)
                 textOffset.advance(text.length)
             }

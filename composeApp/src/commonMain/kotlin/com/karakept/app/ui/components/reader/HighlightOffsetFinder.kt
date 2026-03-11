@@ -69,7 +69,7 @@ fun findTextOffsets(html: String, searchText: String): TextOffsetResult? {
 private fun collectTextNodes(node: com.fleeksoft.ksoup.nodes.Node, sb: StringBuilder) {
     for (child in node.childNodes()) {
         when (child) {
-            is TextNode -> sb.append(child.wholeText)
+            is TextNode -> sb.append(child.getWholeText())
             is Element -> collectTextNodes(child, sb)
         }
     }

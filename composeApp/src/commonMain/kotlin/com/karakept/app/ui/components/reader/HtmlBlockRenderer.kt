@@ -159,9 +159,9 @@ fun RenderChildren(
                 val node = children[i]
                 if (node is Element && isBlockElement(node)) break
                 // Skip whitespace-only text nodes between blocks
-                if (node is TextNode && node.wholeText.isBlank() && i > 0) {
+                if (node is TextNode && node.getWholeText().isBlank() && i > 0) {
                     // Still count the text for offset tracking
-                    textOffset.advance(node.wholeText.length)
+                    textOffset.advance(node.getWholeText().length)
                     i++
                     continue
                 }
@@ -169,7 +169,7 @@ fun RenderChildren(
                 i++
             }
             if (inlineNodes.isNotEmpty() && inlineNodes.any {
-                    (it is TextNode && it.wholeText.isNotBlank()) || it is Element
+                    (it is TextNode && it.getWholeText().isNotBlank()) || it is Element
                 }) {
                 // Create a virtual wrapper element to render inline content together
                 // We'll use buildInlineAnnotatedString directly on the parent but
@@ -201,7 +201,7 @@ private fun RenderInlineGroup(
     for (node in nodes) {
         when (node) {
             is TextNode -> {
-                val text = node.wholeText
+                val text = node.getWholeText()
                 builder.append(text)
                 textOffset.advance(text.length)
             }
@@ -270,8 +270,8 @@ private fun appendInlineElement(
     for (child in element.childNodes()) {
         when (child) {
             is TextNode -> {
-                builder.append(child.wholeText)
-                textOffset.advance(child.wholeText.length)
+                builder.append(child.getWholeText())
+                textOffset.advance(child.getWholeText().length)
             }
             is Element -> appendInlineElement(builder, child, theme, textOffset, onLinkClick)
         }
@@ -471,7 +471,7 @@ private fun RenderCodeBlock(
         for (child in element.childNodes()) {
             if (child is Element && child == codeElement) continue
             if (child is TextNode) {
-                textOffset.advance(child.wholeText.length)
+                textOffset.advance(child.getWholeText().length)
             }
         }
     }
