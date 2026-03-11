@@ -47,10 +47,10 @@ jobs:
               languages: [en]
               tone: professional
               sections: [breaking, features, improvements, fixes]
-              benefit_focused: false
+              benefit_focused: true
               include_infrastructure: false
               summary_only: false
-              emojis: false
+              emojis: true
           context_files: README.md,CLAUDE.md
           max_commits: 50
           temperature: 0.2
