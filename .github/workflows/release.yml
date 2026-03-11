@@ -41,7 +41,7 @@ jobs:
         id: changelog
         uses: nosovj/llm-release-action@v1
         with:
-          model: mistral/mistral-small-latest
+          model: mistral/mistral-large-latest
           changelog_config: |
             default:
               preset: customer
