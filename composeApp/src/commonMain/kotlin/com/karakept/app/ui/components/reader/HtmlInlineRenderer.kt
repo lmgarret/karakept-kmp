@@ -2,9 +2,7 @@ package com.karakept.app.ui.components.reader
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -100,16 +98,6 @@ fun buildInlineAnnotatedString(
                 start = localStart,
                 end = localEnd
             )
-            // Add a clickable link annotation for the highlight
-            val highlightId = highlight.id
-            addLink(
-                clickable = LinkAnnotation.Clickable(
-                    tag = HIGHLIGHT_ANNOTATION_TAG,
-                    linkInteractionListener = { onHighlightClick(highlightId) }
-                ),
-                start = localStart,
-                end = localEnd
-            )
         }
     }
 }
@@ -188,12 +176,9 @@ private fun appendNodeChildren(
                                 start,
                                 end
                             )
-                            val linkUrl = href
-                            builder.addLink(
-                                clickable = LinkAnnotation.Clickable(
-                                    tag = LINK_ANNOTATION_TAG,
-                                    linkInteractionListener = { onLinkClick(linkUrl) }
-                                ),
+                            builder.addStringAnnotation(
+                                tag = LINK_ANNOTATION_TAG,
+                                annotation = href,
                                 start = start,
                                 end = end
                             )

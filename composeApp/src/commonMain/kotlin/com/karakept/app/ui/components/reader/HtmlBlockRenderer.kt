@@ -112,8 +112,10 @@ fun RenderBlock(
         "dl" -> RenderDefinitionList(element, highlights, textOffset, onLinkClick, onHighlightClick, depth)
         "dt" -> {
             val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
-            Text(
+            AnnotatedClickableText(
                 text = text,
+                onLinkClick = onLinkClick,
+                onHighlightClick = onHighlightClick,
                 color = theme.textColor,
                 fontSize = theme.fontSize,
                 fontFamily = theme.fontFamily,
@@ -229,22 +231,15 @@ private fun RenderInlineGroup(
                     ?: theme.highlightColors["yellow"]!!
                 addStyle(SpanStyle(background = bgColor.copy(alpha = 0.4f), color = ReaderThemeData.highlightTextColor), localStart, localEnd)
                 addStringAnnotation(HIGHLIGHT_ANNOTATION_TAG, highlight.id, localStart, localEnd)
-                val highlightId = highlight.id
-                addLink(
-                    clickable = androidx.compose.ui.text.LinkAnnotation.Clickable(
-                        tag = HIGHLIGHT_ANNOTATION_TAG,
-                        linkInteractionListener = { onHighlightClick(highlightId) }
-                    ),
-                    start = localStart,
-                    end = localEnd
-                )
             }
         }
     }
 
     if (result.isNotEmpty()) {
-        Text(
+        AnnotatedClickableText(
             text = result,
+            onLinkClick = onLinkClick,
+            onHighlightClick = onHighlightClick,
             color = theme.textColor,
             fontSize = theme.fontSize,
             fontFamily = theme.fontFamily,
@@ -290,12 +285,9 @@ private fun appendInlineElement(
             val href = element.attr("href")
             if (href.isNotBlank() && start < end) {
                 builder.addStyle(SpanStyle(color = theme.linkColor, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline), start, end)
-                val linkUrl = href
-                builder.addLink(
-                    clickable = androidx.compose.ui.text.LinkAnnotation.Clickable(
-                        tag = LINK_ANNOTATION_TAG,
-                        linkInteractionListener = { onLinkClick(linkUrl) }
-                    ),
+                builder.addStringAnnotation(
+                    tag = LINK_ANNOTATION_TAG,
+                    annotation = href,
                     start = start,
                     end = end
                 )
@@ -330,8 +322,10 @@ private fun RenderParagraph(
     } else {
         val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
         if (text.isNotEmpty()) {
-            Text(
+            AnnotatedClickableText(
                 text = text,
+                onLinkClick = onLinkClick,
+                onHighlightClick = onHighlightClick,
                 color = theme.textColor,
                 fontSize = theme.fontSize,
                 fontFamily = theme.fontFamily,
@@ -360,8 +354,10 @@ private fun RenderDiv(
     } else {
         val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
         if (text.isNotEmpty()) {
-            Text(
+            AnnotatedClickableText(
                 text = text,
+                onLinkClick = onLinkClick,
+                onHighlightClick = onHighlightClick,
                 color = theme.textColor,
                 fontSize = theme.fontSize,
                 fontFamily = theme.fontFamily,
@@ -392,8 +388,10 @@ private fun RenderHeading(
     }
     val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
     if (text.isNotEmpty()) {
-        Text(
+        AnnotatedClickableText(
             text = text,
+            onLinkClick = onLinkClick,
+            onHighlightClick = onHighlightClick,
             color = theme.textColor,
             fontSize = (theme.fontSize.value * scaleFactor).sp,
             fontFamily = theme.fontFamily,
@@ -438,8 +436,10 @@ private fun RenderBlockquote(
             } else {
                 val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
                 if (text.isNotEmpty()) {
-                    Text(
+                    AnnotatedClickableText(
                         text = text,
+                        onLinkClick = onLinkClick,
+                        onHighlightClick = onHighlightClick,
                         color = theme.textColor,
                         fontSize = theme.fontSize,
                         fontFamily = theme.fontFamily,
@@ -485,8 +485,10 @@ private fun RenderCodeBlock(
             .horizontalScroll(rememberScrollState())
             .padding(8.dp)
     ) {
-        Text(
+        AnnotatedClickableText(
             text = text,
+            onLinkClick = onLinkClick,
+            onHighlightClick = onHighlightClick,
             color = theme.textColor,
             fontSize = (theme.fontSize.value * 0.875f).sp,
             fontFamily = FontFamily.Monospace,
@@ -565,8 +567,10 @@ private fun RenderListItem(
                 RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, depth + 1)
             } else {
                 val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
-                Text(
+                AnnotatedClickableText(
                     text = text,
+                    onLinkClick = onLinkClick,
+                    onHighlightClick = onHighlightClick,
                     color = theme.textColor,
                     fontSize = theme.fontSize,
                     fontFamily = theme.fontFamily,
@@ -607,8 +611,10 @@ private fun RenderFigcaption(
 ) {
     val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
     if (text.isNotEmpty()) {
-        Text(
+        AnnotatedClickableText(
             text = text,
+            onLinkClick = onLinkClick,
+            onHighlightClick = onHighlightClick,
             color = theme.textColor.copy(alpha = 0.8f),
             fontSize = (theme.fontSize.value * 0.875f).sp,
             fontFamily = theme.fontFamily,
@@ -669,7 +675,7 @@ private fun RenderTable(
                 "tr" -> RenderTableRow(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth)
                 "caption" -> {
                     val text = buildInlineAnnotatedString(child, theme, highlights, textOffset, onLinkClick, onHighlightClick)
-                    Text(text = text, color = theme.textColor, fontSize = theme.fontSize, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
+                    AnnotatedClickableText(text = text, onLinkClick = onLinkClick, onHighlightClick = onHighlightClick, color = theme.textColor, fontSize = theme.fontSize, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
                 }
                 else -> RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, depth)
             }
@@ -734,8 +740,10 @@ private fun RenderTableCell(
         }
     } else {
         val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
-        Text(
+        AnnotatedClickableText(
             text = text,
+            onLinkClick = onLinkClick,
+            onHighlightClick = onHighlightClick,
             color = theme.textColor,
             fontSize = theme.fontSize,
             fontFamily = theme.fontFamily,
