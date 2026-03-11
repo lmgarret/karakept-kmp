@@ -1,6 +1,6 @@
 package com.karakept.app.utils
 
-import org.jsoup.Jsoup
+import com.fleeksoft.ksoup.Ksoup
 import kotlin.math.ceil
 
 /**
@@ -17,7 +17,7 @@ object ReadingTimeCalculator {
      * Calculates estimated reading time from HTML content.
      *
      * Algorithm:
-     * 1. Strip HTML tags and extract plain text using JSoup
+     * 1. Strip HTML tags and extract plain text using Ksoup
      * 2. Count words (whitespace-separated sequences)
      * 3. Apply adjustment factor for word length (longer words = slower reading)
      * 4. Count images and apply time penalties
@@ -45,7 +45,7 @@ object ReadingTimeCalculator {
         }
 
         return try {
-            val doc = Jsoup.parse(htmlContent)
+            val doc = Ksoup.parse(htmlContent)
 
             // 1. Extract text content (strips all HTML tags)
             val text = doc.body()?.text() ?: ""

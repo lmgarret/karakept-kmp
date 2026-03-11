@@ -47,7 +47,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.platform.LocalUriHandler
 import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.getScreenModel
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow

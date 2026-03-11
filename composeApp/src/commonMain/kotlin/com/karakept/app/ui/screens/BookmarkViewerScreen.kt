@@ -36,7 +36,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.getScreenModel
+import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.LinkOpenMode
@@ -61,7 +61,7 @@ data class BookmarkViewerScreen(
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = getScreenModel<BookmarkViewerScreenModel>()
+        val screenModel = koinScreenModel<BookmarkViewerScreenModel>()
         val mainScreenModel = koinInject<MainScreenModel>()
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()

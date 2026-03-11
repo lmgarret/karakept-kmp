@@ -71,11 +71,11 @@ kotlin {
                 // DataStore
                 implementation(libs.androidx.datastore.preferences)
 
-                // HTML Parsing
-                implementation(libs.jsoup)
+                // HTML Parsing (KMP)
+                implementation(libs.ksoup)
 
-                // Drag and Drop Reordering
-                implementation(libs.reorderable)
+                // Native WebView (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
+                implementation(libs.compose.webview)
             }
         }
         val androidMain by getting {
@@ -101,21 +101,6 @@ kotlin {
                 // Coroutines Swing dispatcher for desktop Main dispatcher
                 implementation(libs.kotlinx.coroutines.swing)
                 
-                // JavaFX
-                val osName = System.getProperty("os.name")
-                val targetOs = when {
-                    osName == "Mac OS X" -> "mac"
-                    osName.startsWith("Win") -> "win"
-                    osName.startsWith("Linux") -> "linux"
-                    else -> error("Unsupported OS: $osName")
-                }
-
-                implementation("org.openjfx:javafx-base:21.0.1:$targetOs")
-                implementation("org.openjfx:javafx-graphics:21.0.1:$targetOs")
-                implementation("org.openjfx:javafx-controls:21.0.1:$targetOs")
-                implementation("org.openjfx:javafx-swing:21.0.1:$targetOs")
-                implementation("org.openjfx:javafx-web:21.0.1:$targetOs")
-                implementation("org.openjfx:javafx-media:21.0.1:$targetOs")
             }
         }
         val desktopTest by getting {
@@ -203,33 +188,12 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "MainKt"
+        jvmArgs += "--enable-native-access=ALL-UNNAMED"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.karakept.app"
             packageVersion = "1.0.0"
         }
-    }
-}
-
-// Force Skiko version to resolve version mismatch
-configurations.all {
-    resolutionStrategy {
-        force("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.9.4.2")
-        force("org.jetbrains.skiko:skiko:0.9.4.2")
-        force("org.jetbrains.skiko:skiko-awt:0.9.4.2")
-        
-        // Force all Compose dependencies to use the same version to prevent API mismatches
-        force("org.jetbrains.compose.foundation:foundation:1.7.1")
-        force("org.jetbrains.compose.foundation:foundation-layout:1.7.1")
-        force("org.jetbrains.compose.ui:ui:1.7.1")
-        force("org.jetbrains.compose.ui:ui-graphics:1.7.1")
-        force("org.jetbrains.compose.ui:ui-text:1.7.1")
-        force("org.jetbrains.compose.ui:ui-unit:1.7.1")
-        force("org.jetbrains.compose.ui:ui-util:1.7.1")
-        force("org.jetbrains.compose.ui:ui-geometry:1.7.1")
-        force("org.jetbrains.compose.runtime:runtime:1.7.1")
-        force("org.jetbrains.compose.animation:animation:1.7.1")
-        force("org.jetbrains.compose.animation:animation-core:1.7.1")
     }
 }
 

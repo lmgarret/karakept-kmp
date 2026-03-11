@@ -197,6 +197,36 @@ karakept-kmp/
 - **Desktop app in devcontainer**: Requires GUI forwarding setup (see above)
 - **compileSdk warning**: Using compileSdk 35 with AGP 8.5.2 (warning can be suppressed)
 
+## Roadmap
+
+### Native macOS Build
+
+Goal: ship Karakept as a native macOS app (Kotlin/Native, no JVM dependency).
+
+**Library migrations required:**
+
+| Library | Current (JVM) | KMP Replacement | Status |
+|---------|--------------|-----------------|--------|
+| HTML parsing | JSoup | [Ksoup](https://github.com/fleeksoft/ksoup) | Done |
+| Database | Room (alpha KMP) | SQLDelight | Planned |
+| HTTP engine | OkHttp | Ktor Darwin engine | Planned |
+| HTML rendering | JavaFX WebView | WKWebView (Kotlin/Native interop) | Planned |
+| DataStore | AndroidX DataStore | File-based / NSUserDefaults | Planned |
+| File I/O | `java.io.File` | Kotlin/Native Foundation APIs | Planned |
+
+**Platform implementations needed (expect/actual):**
+- Database builder (`Database.kt`)
+- Preferences storage (`DataStoreFactory.kt`)
+- Platform detection & cache dir (`Platform.kt`)
+- File operations (`FileUtils.kt`)
+- Share functionality (`ShareUtils.kt`)
+- Haptic feedback (`HapticUtils.kt`)
+- HTML display (`HtmlRenderer.kt`)
+- Back navigation (`BackHandler.kt`)
+- URL opening (`CustomTabOpener.kt`)
+- Dynamic theme colors (`PlatformTheme.kt`)
+- Notification permissions (`NotificationPermissionRequest.kt`)
+
 ## 📄 License
 
 [Add your license here]

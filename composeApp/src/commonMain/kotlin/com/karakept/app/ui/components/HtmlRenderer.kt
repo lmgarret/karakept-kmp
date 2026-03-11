@@ -11,7 +11,7 @@ import com.karakept.app.data.model.ViewerMode
  *
  * Implementations:
  * - Android: Uses WebView with JavaScript disabled
- * - Desktop: Uses compose-webview-multiplatform with JCEF
+ * - Desktop: Uses ComposeNativeWebView (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
  *
  * @param html Processed HTML content to render
  * @param viewerMode Viewer mode (READER or WEB)
