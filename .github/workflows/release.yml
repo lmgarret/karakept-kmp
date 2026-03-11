@@ -45,6 +45,23 @@ jobs:
           -PversionName=${{ inputs.version || 'nightly' }}
           -PversionCode=${{ github.run_number }}
 
+      - name: Generate AI changelog
+        id: changelog
+        uses: nosovj/llm-release-action@v1
+        with:
+          model: mistral/mistral-small-latest
+          changelog_config: |
+            audiences:
+              - name: default
+                languages: [en]
+                tone: friendly
+                sections: [breaking, features, improvements, fixes, performance, infrastructure]
+          context_files: README.md,CLAUDE.md
+          max_commits: 50
+          temperature: 0.2
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+
       - name: Create versioned release
         if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
@@ -52,7 +69,8 @@ jobs:
           tag_name: v${{ inputs.version }}
           name: "v${{ inputs.version }}"
           files: composeApp/build/outputs/apk/release/*.apk
-          generate_release_notes: true
+          body: ${{ fromJSON(steps.changelog.outputs.changelogs).default.en }}
+          generate_release_notes: false
 
       - name: Update nightly pre-release
         if: github.event_name == 'push'
@@ -61,6 +79,6 @@ jobs:
           tag_name: nightly
           name: "Nightly (#${{ github.run_number }})"
           files: composeApp/build/outputs/apk/release/*.apk
+          body: ${{ fromJSON(steps.changelog.outputs.changelogs).default.en }}
           prerelease: true
-          generate_release_notes: true
           make_latest: false

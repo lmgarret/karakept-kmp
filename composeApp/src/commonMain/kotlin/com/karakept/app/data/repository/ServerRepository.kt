@@ -24,6 +24,10 @@ class ServerRepository(private val serverDao: ServerDao) {
         serverDao.deleteServer(server.toEntity())
     }
 
+    suspend fun deleteAllServers() {
+        serverDao.deleteAllServers()
+    }
+
     private fun ServerEntity.toDomain() = Server(id, url, apiKey, label)
     private fun Server.toEntity() = ServerEntity(id, url, apiKey, label)
 }

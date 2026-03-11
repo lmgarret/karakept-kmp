@@ -24,4 +24,7 @@ interface ServerDao {
 
     @Delete
     suspend fun deleteServer(server: ServerEntity)
+
+    @Query("DELETE FROM servers")
+    suspend fun deleteAllServers()
 }
