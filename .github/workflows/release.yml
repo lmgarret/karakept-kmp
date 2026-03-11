@@ -30,6 +30,13 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install missing language_data dependency
+        run: pip install language_data
+
       - name: Generate AI changelog
         id: changelog
         uses: nosovj/llm-release-action@v1
