@@ -53,17 +53,30 @@ jobs:
           model: mistral/mistral-large-latest
           changelog_config: |
             default:
-              preset: customer
               languages: [en]
-              tone: friendly
+              tone: professional
               sections: [breaking, features, improvements, fixes]
               benefit_focused: true
               include_infrastructure: false
+              summary_only: false
+              emojis: true
           context_files: README.md,CLAUDE.md
           max_commits: 50
           temperature: 0.2
         env:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+
+      - name: Generate commit log
+        id: commitlog
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          LOG=$(git log --oneline "${PREVIOUS_TAG}..HEAD" 2>/dev/null || git log --oneline)
+          # Write to output using heredoc delimiter for multiline
+          {
+            echo "log<<COMMITLOG_EOF"
+            echo "$LOG"
+            echo "COMMITLOG_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Resolve release version
         id: version
@@ -89,6 +102,26 @@ jobs:
           -PversionName=${{ steps.version.outputs.name }}
           -PversionCode=${{ github.run_number }}
 
+      - name: Compose release body
+        id: body
+        run: |
+          CHANGELOG='${{ fromJSON(steps.changelog.outputs.changelogs).default.en }}'
+          COMMITS='${{ steps.commitlog.outputs.log }}'
+          {
+            echo "body<<BODY_EOF"
+            echo "$CHANGELOG"
+            echo ""
+            echo "---"
+            echo ""
+            echo "<details><summary>Full commit log</summary>"
+            echo ""
+            echo '```'
+            echo "$COMMITS"
+            echo '```'
+            echo "</details>"
+            echo "BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create versioned release
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -98,7 +131,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
           files: composeApp/build/outputs/apk/release/*.apk
-          body: ${{ fromJSON(steps.changelog.outputs.changelogs).default.en }}
+          body: ${{ steps.body.outputs.body }}
           generate_release_notes: false
 
       - name: Update nightly pre-release
@@ -108,6 +141,6 @@ jobs:
           tag_name: nightly
           name: "Nightly (#${{ github.run_number }})"
           files: composeApp/build/outputs/apk/release/*.apk
-          body: ${{ fromJSON(steps.changelog.outputs.changelogs).default.en }}
+          body: ${{ steps.body.outputs.body }}
           prerelease: true
           make_latest: false
