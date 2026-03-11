@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version name (e.g. 1.2.3)'
-        required: true
+        description: 'Version name (e.g. 1.2.3). Leave empty to auto-detect from tags.'
+        required: false
         type: string
 
 jobs:
@@ -30,6 +30,22 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Generate AI changelog
+        id: changelog
+        uses: nosovj/llm-release-action@v1
+        with:
+          model: mistral/mistral-small-latest
+          changelog_config: |
+            default:
+              languages: [en]
+              tone: friendly
+              sections: [breaking, features, improvements, fixes, performance, infrastructure]
+          context_files: README.md,CLAUDE.md
+          max_commits: 50
+          temperature: 0.2
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+
       - name: Decode keystore
         env:
           DEV_KEYSTORE_BASE64: ${{ secrets.DEV_KEYSTORE_BASE64 }}
@@ -42,32 +58,17 @@ jobs:
           KEY_ALIAS: ${{ secrets.DEV_KEY_ALIAS }}
         run: >
           ./gradlew :composeApp:assembleRelease
-          -PversionName=${{ inputs.version || 'nightly' }}
+          -PversionName=${{ inputs.version || steps.changelog.outputs.next_version || 'nightly' }}
           -PversionCode=${{ github.run_number }}
-
-      - name: Generate AI changelog
-        id: changelog
-        uses: nosovj/llm-release-action@v1
-        with:
-          model: mistral/mistral-small-latest
-          changelog_config: |
-            audiences:
-              - name: default
-                languages: [en]
-                tone: friendly
-                sections: [breaking, features, improvements, fixes, performance, infrastructure]
-          context_files: README.md,CLAUDE.md
-          max_commits: 50
-          temperature: 0.2
-        env:
-          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
 
       - name: Create versioned release
         if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_VERSION: ${{ inputs.version || steps.changelog.outputs.next_version }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ inputs.version }}
-          name: "v${{ inputs.version }}"
+          tag_name: v${{ env.RELEASE_VERSION }}
+          name: "v${{ env.RELEASE_VERSION }}"
           files: composeApp/build/outputs/apk/release/*.apk
           body: ${{ fromJSON(steps.changelog.outputs.changelogs).default.en }}
           generate_release_notes: false
