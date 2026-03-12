@@ -88,10 +88,14 @@ internal fun ContentBodySection(
                 )
             }
 
-            // Show skeleton on top until content ready (top layer)
+            // Show skeleton on top until content ready (top layer).
+            // Always use Initial state so the shimmer skeleton is visible.
+            // Using the actual loadingState would render nothing for FullyLoaded,
+            // letting the CloudOff placeholder in HtmlContent flash briefly
+            // before the HTML is processed.
             if (!htmlContentReady) {
                 BookmarkContentLoader(
-                    loadingState = loadingState,
+                    loadingState = BookmarkLoadingState.Initial,
                     modifier = Modifier.background(MaterialTheme.colorScheme.background)
                 )
             }

@@ -52,17 +52,6 @@ actual fun rememberHighlightTextToolbar(
                 color = MaterialTheme.colorScheme.surfaceContainer
             ) {
                 Row(modifier = androidx.compose.ui.Modifier.padding(horizontal = 4.dp)) {
-                    if (copyCallback != null) {
-                        TextButton(onClick = {
-                            copyCallback?.invoke()
-                            showPopup = false
-                        }) { Text("Copy") }
-                    }
-                    if (selectAllCallback != null) {
-                        TextButton(onClick = {
-                            selectAllCallback?.invoke()
-                        }) { Text("Select All") }
-                    }
                     TextButton(onClick = {
                         // Copy to clipboard first, then read back for highlight
                         copyCallback?.invoke()
@@ -76,6 +65,17 @@ actual fun rememberHighlightTextToolbar(
                             "Highlight",
                             color = MaterialTheme.colorScheme.primary
                         )
+                    }
+                    if (copyCallback != null) {
+                        TextButton(onClick = {
+                            copyCallback?.invoke()
+                            showPopup = false
+                        }) { Text("Copy") }
+                    }
+                    if (selectAllCallback != null) {
+                        TextButton(onClick = {
+                            selectAllCallback?.invoke()
+                        }) { Text("Select All") }
                     }
                 }
             }

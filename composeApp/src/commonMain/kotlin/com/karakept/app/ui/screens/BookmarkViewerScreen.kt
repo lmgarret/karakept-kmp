@@ -191,27 +191,28 @@ data class BookmarkViewerScreen(
             if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
                 if (bookmark.readingProgress > 0f && !bookmark.content.isNullOrBlank()) {
-                    if (isNativeRenderer || contentRendered) {
+                    if (contentRendered) {
                         if (!isNativeRenderer) {
                             // Allow the WebView's measured height to propagate through
                             // the Compose layout system before scrolling.
                             delay(300)
                         }
-                        for (attempt in 1..if (isNativeRenderer) 1 else 3) {
-                            scrollState.scrollToItem(
-                                bookmark.readingScrollIndex,
-                                bookmark.readingScrollOffset
-                            )
-                            if (isNativeRenderer) break
-                            // Check if the scroll reached approximately the right
-                            // position. A small expected offset (< 200px) always
-                            // passes; otherwise verify we got at least a third of
-                            // the way there, which filters out clamped scrolls
-                            // caused by WebView height not yet being reported.
-                            val offsetOk = bookmark.readingScrollOffset < 200 ||
-                                scrollState.firstVisibleItemScrollOffset >= bookmark.readingScrollOffset / 3
-                            if (scrollState.firstVisibleItemIndex == bookmark.readingScrollIndex && offsetOk) break
-                            delay(250)
+                        scrollState.scrollToItem(
+                            bookmark.readingScrollIndex,
+                            bookmark.readingScrollOffset
+                        )
+                        if (!isNativeRenderer) {
+                            // WebView may not have its full height yet — retry
+                            for (attempt in 1..3) {
+                                val offsetOk = bookmark.readingScrollOffset < 200 ||
+                                    scrollState.firstVisibleItemScrollOffset >= bookmark.readingScrollOffset / 3
+                                if (scrollState.firstVisibleItemIndex == bookmark.readingScrollIndex && offsetOk) break
+                                delay(250)
+                                scrollState.scrollToItem(
+                                    bookmark.readingScrollIndex,
+                                    bookmark.readingScrollOffset
+                                )
+                            }
                         }
                         hasRestoredScroll = true
                     }
@@ -259,6 +260,18 @@ data class BookmarkViewerScreen(
         )
 
         val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
+
+        // Force LazyColumn to settle layout after content is rendered.
+        // This ensures item heights are cached correctly and prevents a scroll
+        // jump on first text selection caused by SelectionContainer's focus-based
+        // bringIntoView miscalculating the scroll target.
+        LaunchedEffect(contentRendered, hasRestoredScroll) {
+            if (contentRendered && hasRestoredScroll) {
+                val index = scrollState.firstVisibleItemIndex
+                val offset = scrollState.firstVisibleItemScrollOffset
+                scrollState.scrollToItem(index, offset)
+            }
+        }
 
         // Push reading state to the screen model on every scroll change.
         // The screen model debounces DB writes internally (500 ms).
