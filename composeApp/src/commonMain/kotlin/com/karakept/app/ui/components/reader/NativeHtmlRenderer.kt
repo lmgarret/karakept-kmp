@@ -1,12 +1,16 @@
 package com.karakept.app.ui.components.reader
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewResponder
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -37,6 +41,7 @@ import com.karakept.app.ui.components.HighlightPosition
  * Highlight offsets are compatible with the WebView's JavaScript TreeWalker
  * approach: both walk text nodes in document order and count characters.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NativeHtmlRenderer(
     html: String,
@@ -129,6 +134,17 @@ fun NativeHtmlRenderer(
                         .fillMaxWidth()
                         .padding(horizontal = 28.dp, vertical = 0.dp)
                         .padding(bottom = 28.dp)
+                        // Block bringIntoView from propagating to the parent LazyColumn.
+                        // SelectionContainer calls bringIntoView when text is selected, which
+                        // causes LazyColumn to scroll incorrectly before item heights are cached
+                        // (visible as a jump on first selection after opening). Scroll-to-highlight
+                        // uses explicit scrollState.animateScrollToItem() so this is safe to block.
+                        .bringIntoViewResponder(remember {
+                            object : BringIntoViewResponder {
+                                override fun calculateRectForParent(localRect: ComposeRect): ComposeRect = localRect
+                                override suspend fun bringChildIntoView(localRect: () -> ComposeRect?) { /* consumed */ }
+                            }
+                        })
                 ) {
                 // Reset offset at start of rendering
                 textOffset.offset = 0

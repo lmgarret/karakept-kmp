@@ -265,23 +265,6 @@ data class BookmarkViewerScreen(
 
         val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
 
-        // Force LazyColumn to settle layout after content is rendered.
-        // This ensures item heights are cached correctly and prevents a scroll
-        // jump on first text selection caused by SelectionContainer's focus-based
-        // bringIntoView miscalculating the scroll target.
-        // We scroll slightly away and back because scrollToItem(0, 0) when already
-        // at (0, 0) is a no-op — the LazyColumn won't recalculate item heights.
-        LaunchedEffect(contentRendered, hasRestoredScroll) {
-            if (contentRendered && hasRestoredScroll) {
-                // Wait for layout to stabilize
-                kotlinx.coroutines.delay(100)
-                val index = scrollState.firstVisibleItemIndex
-                val offset = scrollState.firstVisibleItemScrollOffset
-                scrollState.scrollToItem(index, offset + 1)
-                scrollState.scrollToItem(index, offset)
-            }
-        }
-
         // Push reading state to the screen model on every scroll change.
         // The screen model debounces DB writes internally (500 ms).
         LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
