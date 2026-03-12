@@ -45,6 +45,12 @@ internal fun ContentBodySection(
     // Track when HTML content is truly ready (processed + rendered)
     var htmlContentReady by remember { mutableStateOf(false) }
 
+    // Reset when content changes (e.g. null → actual content for on-demand bookmarks)
+    // so the skeleton shows during the transition and contentRendered is accurate.
+    LaunchedEffect(content) {
+        htmlContentReady = false
+    }
+
     // Notify parent when content is fully rendered
     LaunchedEffect(htmlContentReady) {
         if (htmlContentReady) {

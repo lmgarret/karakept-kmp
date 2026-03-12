@@ -269,13 +269,15 @@ data class BookmarkViewerScreen(
         // This ensures item heights are cached correctly and prevents a scroll
         // jump on first text selection caused by SelectionContainer's focus-based
         // bringIntoView miscalculating the scroll target.
-        // We wait two frames so all pending measure/layout passes complete first.
+        // We scroll slightly away and back because scrollToItem(0, 0) when already
+        // at (0, 0) is a no-op — the LazyColumn won't recalculate item heights.
         LaunchedEffect(contentRendered, hasRestoredScroll) {
             if (contentRendered && hasRestoredScroll) {
-                // Wait for layout to stabilize (two frames)
+                // Wait for layout to stabilize
                 kotlinx.coroutines.delay(100)
                 val index = scrollState.firstVisibleItemIndex
                 val offset = scrollState.firstVisibleItemScrollOffset
+                scrollState.scrollToItem(index, offset + 1)
                 scrollState.scrollToItem(index, offset)
             }
         }

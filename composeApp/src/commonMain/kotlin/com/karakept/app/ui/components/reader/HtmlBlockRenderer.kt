@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -710,17 +711,22 @@ private fun RenderTableRow(
     onHighlightClick: (String) -> Unit,
     depth: Int
 ) {
-    Row(modifier = Modifier.fillMaxWidth()) {
+    Row(modifier = Modifier.height(IntrinsicSize.Min)) {
         for (child in element.children()) {
             val tag = child.tagName().lowercase()
             if (tag == "td" || tag == "th") {
-                Box(modifier = Modifier.weight(1f).padding(4.dp)) {
+                Box(
+                    modifier = Modifier
+                        .widthIn(min = 80.dp)
+                        .fillMaxHeight()
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
                     RenderTableCell(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth, isHeader = tag == "th")
                 }
             }
         }
     }
-    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+    HorizontalDivider()
 }
 
 @Composable

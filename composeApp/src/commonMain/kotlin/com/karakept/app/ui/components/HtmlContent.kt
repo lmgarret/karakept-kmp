@@ -114,12 +114,10 @@ fun HtmlContent(
         }
     }
 
-    // Notify parent immediately when there's no content to render
-    androidx.compose.runtime.LaunchedEffect(html) {
-        if (html.isNullOrBlank() && onReady != null) {
-            onReady()
-        }
-    }
+    // Note: we intentionally do NOT call onReady() when html is null/blank.
+    // Calling onReady() prematurely would set contentRendered = true in the
+    // viewer screen, causing scroll restoration to fire before actual HTML
+    // content is rendered — breaking resume-reading for on-demand bookmarks.
 
     Box(modifier = modifier) {
         if (html.isNullOrBlank()) {
