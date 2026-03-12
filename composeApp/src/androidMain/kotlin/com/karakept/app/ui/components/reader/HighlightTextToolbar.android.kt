@@ -1,100 +1,54 @@
 package com.karakept.app.ui.components.reader
 
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import android.view.ActionMode
+import android.view.Menu
+import android.view.MenuItem
+import android.view.View
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
 import kotlin.math.roundToInt
 
+private const val MENU_ID_HIGHLIGHT = 1
+private const val MENU_ID_COPY = 2
+private const val MENU_ID_SELECT_ALL = 3
+
 /**
- * Android implementation that shows a floating Compose Popup with Highlight,
- * Copy, and Select All actions when text is selected in a [SelectionContainer].
+ * Android implementation that uses a native floating [ActionMode] to present
+ * Highlight / Copy / Select All actions when text is selected.
  *
- * Uses a [PopupPositionProvider] that converts the window-space selection rect
- * (received from [TextToolbar.showMenu]) into absolute popup coordinates so the
- * toolbar appears directly above the selected text, regardless of where the
- * composable sits in the layout tree.
+ * Why ActionMode instead of a Compose Popup:
+ *  - ActionMode is rendered by the Android framework, completely outside the Compose
+ *    layout tree. Showing it does **not** mutate any Compose state and therefore
+ *    does **not** trigger recomposition.
+ *  - Recomposition was the root cause of both bugs: the popup sometimes failed to
+ *    appear due to z-ordering / coordinate issues, AND it caused the LazyColumn to
+ *    remeasure its items and produce a visible scroll jump on the first text selection.
+ *  - ActionMode positioning is handled by Android via [ActionMode.Callback2.onGetContentRect],
+ *    which receives coordinates in the view's local space — no manual coordinate
+ *    conversion needed.
  */
 @Composable
 actual fun rememberHighlightTextToolbar(
     onHighlightRequested: (selectedText: String) -> Unit
 ): TextToolbar? {
+    val view = LocalView.current
     val clipboardManager = LocalClipboardManager.current
+    // rememberUpdatedState ensures the lambda inside `remember` always calls the
+    // latest version of onHighlightRequested without needing to recreate the toolbar.
+    val latestOnHighlight = rememberUpdatedState(onHighlightRequested)
 
-    var showPopup by remember { mutableStateOf(false) }
-    var selectionRect by remember { mutableStateOf(Rect.Zero) }
-    var copyCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var selectAllCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
-
-    if (showPopup) {
-        val positionProvider = remember(selectionRect) {
-            AboveSelectionPositionProvider(selectionRect)
-        }
-        Popup(
-            popupPositionProvider = positionProvider,
-            onDismissRequest = { showPopup = false }
-        ) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                shadowElevation = 4.dp,
-                color = MaterialTheme.colorScheme.surfaceContainer
-            ) {
-                Row(modifier = Modifier.padding(horizontal = 4.dp)) {
-                    TextButton(onClick = {
-                        // Capture callback and hide before invoking to avoid state conflicts
-                        val cb = copyCallback
-                        showPopup = false
-                        cb?.invoke()
-                        val text = clipboardManager.getText()?.text
-                        if (!text.isNullOrBlank()) {
-                            onHighlightRequested(text)
-                        }
-                    }) {
-                        Text(
-                            "Highlight",
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    if (copyCallback != null) {
-                        TextButton(onClick = {
-                            copyCallback?.invoke()
-                            showPopup = false
-                        }) { Text("Copy") }
-                    }
-                    if (selectAllCallback != null) {
-                        TextButton(onClick = {
-                            selectAllCallback?.invoke()
-                        }) { Text("Select All") }
-                    }
-                }
-            }
-        }
-    }
-
-    return remember {
+    val toolbar = remember(view) {
         object : TextToolbar {
+            private var actionMode: ActionMode? = null
             private var _status = TextToolbarStatus.Hidden
-            override val status get() = _status
+            override val status: TextToolbarStatus get() = _status
 
             override fun showMenu(
                 rect: Rect,
@@ -103,46 +57,89 @@ actual fun rememberHighlightTextToolbar(
                 onCutRequested: (() -> Unit)?,
                 onSelectAllRequested: (() -> Unit)?
             ) {
-                copyCallback = onCopyRequested
-                selectAllCallback = onSelectAllRequested
-                selectionRect = rect
-                showPopup = true
-                _status = TextToolbarStatus.Shown
+                // Dismiss any previous action mode before creating a new one.
+                actionMode?.finish()
+
+                val callback = object : ActionMode.Callback2() {
+                    override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+                        menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 0, "Highlight")
+                        if (onCopyRequested != null) {
+                            menu.add(Menu.NONE, MENU_ID_COPY, 1, "Copy")
+                        }
+                        if (onSelectAllRequested != null) {
+                            menu.add(Menu.NONE, MENU_ID_SELECT_ALL, 2, "Select All")
+                        }
+                        return true
+                    }
+
+                    override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean = false
+
+                    override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+                        when (item.itemId) {
+                            MENU_ID_HIGHLIGHT -> {
+                                // Copy the selection to the clipboard first (synchronous),
+                                // then read back the text for highlight creation.
+                                onCopyRequested?.invoke()
+                                val selectedText = clipboardManager.getText()?.text
+                                if (!selectedText.isNullOrBlank()) {
+                                    latestOnHighlight.value(selectedText)
+                                }
+                                mode.finish()
+                            }
+                            MENU_ID_COPY -> {
+                                onCopyRequested?.invoke()
+                                mode.finish()
+                            }
+                            MENU_ID_SELECT_ALL -> {
+                                onSelectAllRequested?.invoke()
+                                // Don't finish — user may want to copy/highlight after select all.
+                            }
+                            else -> return false
+                        }
+                        return true
+                    }
+
+                    override fun onDestroyActionMode(mode: ActionMode) {
+                        if (actionMode == mode) {
+                            actionMode = null
+                            _status = TextToolbarStatus.Hidden
+                        }
+                    }
+
+                    /**
+                     * Provides Android with the bounding rect of the selected content so the
+                     * floating toolbar is positioned above (or below) the selection.
+                     *
+                     * [rect] from [showMenu] is in Compose-root (ComposeView-local) coordinates.
+                     * [onGetContentRect] expects coordinates in the same view-local space as the
+                     * [View] passed to [View.startActionMode]. Since [LocalView.current] IS the
+                     * ComposeView, the coordinate spaces are identical — no offset conversion needed.
+                     */
+                    override fun onGetContentRect(mode: ActionMode, view: View, outRect: android.graphics.Rect) {
+                        val left = rect.left.roundToInt().coerceAtLeast(0)
+                        val top = rect.top.roundToInt().coerceAtLeast(0)
+                        // Ensure non-empty rect so Android has a valid anchor.
+                        val right = rect.right.roundToInt().coerceAtLeast(left + 1)
+                        val bottom = rect.bottom.roundToInt().coerceAtLeast(top + 1)
+                        outRect.set(left, top, right, bottom)
+                    }
+                }
+
+                actionMode = view.startActionMode(callback, ActionMode.TYPE_FLOATING)
+                _status = if (actionMode != null) TextToolbarStatus.Shown else TextToolbarStatus.Hidden
             }
 
             override fun hide() {
-                showPopup = false
+                actionMode?.finish()
+                actionMode = null
                 _status = TextToolbarStatus.Hidden
             }
         }
     }
-}
 
-/**
- * Positions a popup above [selectionRect] using window-space coordinates.
- *
- * [selectionRect] comes from [TextToolbar.showMenu], which provides it in the
- * composable root's coordinate space (equivalent to window-space on Android).
- * [PopupPositionProvider.calculatePosition] returns absolute window coordinates,
- * so we can use the rect values directly without anchor-relative math.
- *
- * Falls back to below the selection when there is insufficient space above.
- */
-private class AboveSelectionPositionProvider(
-    private val selectionRect: Rect
-) : PopupPositionProvider {
-    override fun calculatePosition(
-        anchorBounds: IntRect,
-        windowSize: IntSize,
-        layoutDirection: LayoutDirection,
-        popupContentSize: IntSize
-    ): IntOffset {
-        val x = selectionRect.left.roundToInt()
-            .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
-        val yAbove = selectionRect.top.roundToInt() - popupContentSize.height - 8
-        val yBelow = selectionRect.bottom.roundToInt() + 8
-        val y = if (yAbove >= 0) yAbove
-                else yBelow.coerceAtMost((windowSize.height - popupContentSize.height).coerceAtLeast(0))
-        return IntOffset(x, y)
+    DisposableEffect(Unit) {
+        onDispose { toolbar.hide() }
     }
+
+    return toolbar
 }
