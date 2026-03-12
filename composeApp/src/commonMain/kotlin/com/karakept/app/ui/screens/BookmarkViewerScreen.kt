@@ -182,23 +182,27 @@ data class BookmarkViewerScreen(
             }
         }
 
-        // Restore scroll position once content is fully rendered in the WebView.
+        // Restore scroll position once content is fully rendered.
+        // For READER mode (native renderer), content renders immediately — no delays needed.
+        // For WEB mode (WebView), we must wait for the WebView to measure its height.
         var hasRestoredScroll by remember { mutableStateOf(false) }
+        val isNativeRenderer = viewerMode == ViewerMode.READER
         LaunchedEffect(loadingState, trackReadingProgress, contentRendered) {
             if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
                 if (bookmark.readingProgress > 0f && !bookmark.content.isNullOrBlank()) {
-                    if (contentRendered) {
-                        // Allow the WebView's measured height to propagate through
-                        // the Compose layout system before scrolling. On the first
-                        // WebView render in a session (cold engine), this takes
-                        // longer than usual — retry if the scroll was clamped.
-                        delay(300)
-                        for (attempt in 1..3) {
+                    if (isNativeRenderer || contentRendered) {
+                        if (!isNativeRenderer) {
+                            // Allow the WebView's measured height to propagate through
+                            // the Compose layout system before scrolling.
+                            delay(300)
+                        }
+                        for (attempt in 1..if (isNativeRenderer) 1 else 3) {
                             scrollState.scrollToItem(
                                 bookmark.readingScrollIndex,
                                 bookmark.readingScrollOffset
                             )
+                            if (isNativeRenderer) break
                             // Check if the scroll reached approximately the right
                             // position. A small expected offset (< 200px) always
                             // passes; otherwise verify we got at least a third of
@@ -383,7 +387,9 @@ data class BookmarkViewerScreen(
                         // Only blur when the highlight is actually found and panel will show
                         // Hide content until scroll position is restored to prevent a flash
                         // where the top of the article shows before jumping to the saved position.
-                        val needsScrollRestore = trackReadingProgress &&
+                        // Only needed for WEB mode (WebView) — native renderer restores instantly.
+                        val needsScrollRestore = !isNativeRenderer &&
+                            trackReadingProgress &&
                             !hasRestoredScroll &&
                             loadingState is BookmarkLoadingState.FullyLoaded &&
                             (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0f &&

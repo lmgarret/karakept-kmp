@@ -1,123 +1,156 @@
 package com.karakept.app.ui.components.reader
 
+import android.app.Activity
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.ContextWrapper
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.Window
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.TextToolbar
-import androidx.compose.ui.platform.TextToolbarStatus
 
 /**
- * Android implementation that adds a "Highlight" action to the text selection toolbar.
+ * Android implementation that intercepts the system ActionMode to add a "Highlight"
+ * action to the text selection toolbar.
  *
- * Uses the platform floating ActionMode to add a custom menu item alongside
- * the standard Copy/Select All actions.
+ * Compose's [SelectionContainer] on Android manages its own ActionMode internally
+ * and does NOT use [LocalTextToolbar]. Therefore, we intercept at the Activity's
+ * [Window.Callback] level, wrapping any ActionMode.Callback to inject our custom
+ * menu item.
+ *
+ * Returns `null` so that [NativeHtmlRenderer] does not provide a custom TextToolbar
+ * (which would be ignored by SelectionContainer on Android anyway).
  */
 @Composable
 actual fun rememberHighlightTextToolbar(
     onHighlightRequested: (selectedText: String) -> Unit
 ): TextToolbar? {
     val view = LocalView.current
-    return remember(view) {
-        AndroidHighlightTextToolbar(view, onHighlightRequested)
-    }
-}
 
-private class AndroidHighlightTextToolbar(
-    private val view: View,
-    private val onHighlightRequested: (String) -> Unit
-) : TextToolbar {
+    DisposableEffect(view) {
+        val activity = view.context.findActivity()
+        if (activity == null) {
+            return@DisposableEffect onDispose {}
+        }
 
-    private var actionMode: ActionMode? = null
-    private var _status = TextToolbarStatus.Hidden
+        val originalCallback = activity.window.callback
 
-    override val status: TextToolbarStatus
-        get() = _status
-
-    override fun showMenu(
-        rect: Rect,
-        onCopyRequested: (() -> Unit)?,
-        onPasteRequested: (() -> Unit)?,
-        onCutRequested: (() -> Unit)?,
-        onSelectAllRequested: (() -> Unit)?
-    ) {
-        val callback = object : ActionMode.Callback2() {
-            override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-                if (onCopyRequested != null) {
-                    menu.add(0, MENU_COPY, 0, "Copy")
+        val wrappedCallback = object : Window.Callback by originalCallback {
+            override fun onWindowStartingActionMode(callback: ActionMode.Callback?): ActionMode? {
+                val wrapped = callback?.let {
+                    HighlightActionModeWrapper(it, view, onHighlightRequested)
                 }
-                if (onSelectAllRequested != null) {
-                    menu.add(0, MENU_SELECT_ALL, 1, "Select All")
-                }
-                // Add Highlight action
-                menu.add(0, MENU_HIGHLIGHT, 2, "Highlight")
-                return true
+                return originalCallback.onWindowStartingActionMode(wrapped)
             }
 
-            override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean = false
-
-            override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-                return when (item.itemId) {
-                    MENU_COPY -> {
-                        onCopyRequested?.invoke()
-                        mode.finish()
-                        true
-                    }
-                    MENU_SELECT_ALL -> {
-                        onSelectAllRequested?.invoke()
-                        true
-                    }
-                    MENU_HIGHLIGHT -> {
-                        // Get the selected text from the clipboard manager
-                        // Unfortunately, SelectionContainer doesn't directly expose selection text.
-                        // We copy first, then read from clipboard.
-                        onCopyRequested?.invoke()
-                        // Read from clipboard
-                        val clipboard = view.context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        val selectedText = clipboard.primaryClip?.getItemAt(0)?.text?.toString()
-                        if (!selectedText.isNullOrBlank()) {
-                            onHighlightRequested(selectedText)
-                        }
-                        mode.finish()
-                        true
-                    }
-                    else -> false
+            override fun onWindowStartingActionMode(
+                callback: ActionMode.Callback?,
+                type: Int
+            ): ActionMode? {
+                val wrapped = callback?.let {
+                    HighlightActionModeWrapper(it, view, onHighlightRequested)
                 }
-            }
-
-            override fun onDestroyActionMode(mode: ActionMode) {
-                actionMode = null
-                _status = TextToolbarStatus.Hidden
-            }
-
-            override fun onGetContentRect(mode: ActionMode, view: View, outRect: android.graphics.Rect) {
-                outRect.set(
-                    rect.left.toInt(),
-                    rect.top.toInt(),
-                    rect.right.toInt(),
-                    rect.bottom.toInt()
-                )
+                return originalCallback.onWindowStartingActionMode(wrapped, type)
             }
         }
 
-        actionMode?.finish()
-        actionMode = view.startActionMode(callback, ActionMode.TYPE_FLOATING)
-        _status = TextToolbarStatus.Shown
+        activity.window.callback = wrappedCallback
+
+        onDispose {
+            // Only restore if our wrapper is still the active callback
+            if (activity.window.callback === wrappedCallback) {
+                activity.window.callback = originalCallback
+            }
+        }
     }
 
-    override fun hide() {
-        actionMode?.finish()
-        actionMode = null
-        _status = TextToolbarStatus.Hidden
+    // Return null — don't provide a custom TextToolbar.
+    // The ActionMode interception above handles adding "Highlight" to the system toolbar.
+    return null
+}
+
+/**
+ * Wraps an [ActionMode.Callback] to inject a "Highlight" menu item.
+ *
+ * Extends [ActionMode.Callback2] so that the floating ActionMode positioning
+ * (via [onGetContentRect]) is preserved from the original callback.
+ */
+private class HighlightActionModeWrapper(
+    private val delegate: ActionMode.Callback,
+    private val view: View,
+    private val onHighlightRequested: (String) -> Unit
+) : ActionMode.Callback2() {
+
+    override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+        val result = delegate.onCreateActionMode(mode, menu)
+        if (result) {
+            // Add Highlight before other items (order = 0 puts it first)
+            menu.add(0, MENU_HIGHLIGHT_ID, 0, "Highlight")
+        }
+        return result
+    }
+
+    override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
+        return delegate.onPrepareActionMode(mode, menu)
+    }
+
+    override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+        if (item.itemId == MENU_HIGHLIGHT_ID) {
+            // Trigger Copy to put selected text on the clipboard.
+            // Compose's SelectionContainer uses itemId = 0 for Copy.
+            val copyItem = mode.menu.findItem(COMPOSE_COPY_ITEM_ID)
+            if (copyItem != null) {
+                delegate.onActionItemClicked(mode, copyItem)
+            }
+
+            // Read the selected text from clipboard
+            val clipboard = view.context.getSystemService(
+                Context.CLIPBOARD_SERVICE
+            ) as ClipboardManager
+            val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString()
+            if (!text.isNullOrBlank()) {
+                onHighlightRequested(text)
+            }
+            mode.finish()
+            return true
+        }
+        return delegate.onActionItemClicked(mode, item)
+    }
+
+    override fun onDestroyActionMode(mode: ActionMode) {
+        delegate.onDestroyActionMode(mode)
+    }
+
+    override fun onGetContentRect(mode: ActionMode, view: View, outRect: android.graphics.Rect) {
+        if (delegate is ActionMode.Callback2) {
+            delegate.onGetContentRect(mode, view, outRect)
+        } else {
+            super.onGetContentRect(mode, view, outRect)
+        }
     }
 
     companion object {
-        private const val MENU_COPY = 1
-        private const val MENU_SELECT_ALL = 2
-        private const val MENU_HIGHLIGHT = 3
+        /** Unique ID for our Highlight menu item. */
+        private const val MENU_HIGHLIGHT_ID = 0x7f0f_0001
+
+        /**
+         * Compose's SelectionContainer uses itemId = 0 for the Copy action.
+         * See AndroidTextToolbar.android.kt in the Compose source.
+         */
+        private const val COMPOSE_COPY_ITEM_ID = 0
     }
+}
+
+private fun Context.findActivity(): Activity? {
+    var ctx: Context = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }
