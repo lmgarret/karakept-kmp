@@ -106,7 +106,9 @@ fun NativeHtmlRenderer(
         if (scrollToHighlightId != null) highlights.find { it.id == scrollToHighlightId } else null
     }
 
-    // Custom text toolbar with "Highlight" action (Android only)
+    // Highlight action for text selection.
+    // Android: installs a Window.Callback interceptor (returns null here).
+    // Desktop: returns a custom TextToolbar with a Highlight popup.
     val highlightToolbar = rememberHighlightTextToolbar { selectedText ->
         // Find offsets for the selected text in the HTML document
         val offsets = findTextOffsets(html, selectedText)
@@ -116,7 +118,7 @@ fun NativeHtmlRenderer(
     }
 
     ReaderThemeProvider(theme = theme) {
-        // Provide custom text toolbar if available (Android), otherwise use default
+        // Provide custom text toolbar if available (Desktop), otherwise use default
         val toolbarProvider: @Composable (@Composable () -> Unit) -> Unit = if (highlightToolbar != null) {
             { content ->
                 CompositionLocalProvider(LocalTextToolbar provides highlightToolbar) {
