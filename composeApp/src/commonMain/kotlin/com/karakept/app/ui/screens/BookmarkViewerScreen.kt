@@ -192,7 +192,11 @@ data class BookmarkViewerScreen(
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
                 if (bookmark.readingProgress > 0f && !bookmark.content.isNullOrBlank()) {
                     if (contentRendered) {
-                        if (!isNativeRenderer) {
+                        if (isNativeRenderer) {
+                            // Native renderer content is composed immediately but
+                            // LazyColumn needs one frame to measure item heights.
+                            kotlinx.coroutines.yield()
+                        } else {
                             // Allow the WebView's measured height to propagate through
                             // the Compose layout system before scrolling.
                             delay(300)
@@ -265,8 +269,11 @@ data class BookmarkViewerScreen(
         // This ensures item heights are cached correctly and prevents a scroll
         // jump on first text selection caused by SelectionContainer's focus-based
         // bringIntoView miscalculating the scroll target.
+        // We wait two frames so all pending measure/layout passes complete first.
         LaunchedEffect(contentRendered, hasRestoredScroll) {
             if (contentRendered && hasRestoredScroll) {
+                // Wait for layout to stabilize (two frames)
+                kotlinx.coroutines.delay(100)
                 val index = scrollState.firstVisibleItemIndex
                 val offset = scrollState.firstVisibleItemScrollOffset
                 scrollState.scrollToItem(index, offset)
