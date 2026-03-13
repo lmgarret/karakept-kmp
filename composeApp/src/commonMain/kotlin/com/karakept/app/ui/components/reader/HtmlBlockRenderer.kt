@@ -38,7 +38,7 @@ import com.karakept.app.data.model.Highlight
 /**
  * Set of HTML tags that are treated as block-level elements.
  */
-private val BLOCK_TAGS = setOf(
+val BLOCK_TAGS = setOf(
     "p", "div", "h1", "h2", "h3", "h4", "h5", "h6",
     "blockquote", "pre", "ul", "ol", "li",
     "figure", "figcaption", "table", "thead", "tbody", "tr", "td", "th",
@@ -153,6 +153,10 @@ fun RenderChildren(
     while (i < children.size) {
         val child = children[i]
         if (child is Element && isBlockElement(child)) {
+            // Add a virtual newline offset before block elements (match Compose selection joining)
+            if (textOffset.offset > 0) {
+                textOffset.advance(1)
+            }
             RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, depth)
             i++
         } else {

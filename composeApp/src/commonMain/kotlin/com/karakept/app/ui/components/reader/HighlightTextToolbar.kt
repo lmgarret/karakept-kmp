@@ -8,7 +8,7 @@ import androidx.compose.ui.platform.TextToolbar
  * to the text selection context menu.
  *
  * On Android: adds a custom menu item to the floating action mode.
- * On Desktop: returns null (no custom toolbar; standard copy works via SelectionContainer).
+ * On Desktop: shows a floating popup with Highlight, Copy, and Select All actions.
  *
  * @param onHighlightRequested Called when the user taps the "Highlight" action.
  *   Receives the selected text string. The caller is responsible for finding

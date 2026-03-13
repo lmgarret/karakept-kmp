@@ -106,9 +106,8 @@ fun NativeHtmlRenderer(
         if (scrollToHighlightId != null) highlights.find { it.id == scrollToHighlightId } else null
     }
 
-    // Custom text toolbar with "Highlight" action (Android only)
+    // Custom text toolbar with "Highlight" action
     val highlightToolbar = rememberHighlightTextToolbar { selectedText ->
-        // Find offsets for the selected text in the HTML document
         val offsets = findTextOffsets(html, selectedText)
         if (offsets != null) {
             onCreateHighlight(offsets.matchedText, offsets.startOffset, offsets.endOffset, null, null)
@@ -116,35 +115,33 @@ fun NativeHtmlRenderer(
     }
 
     ReaderThemeProvider(theme = theme) {
-        // Provide custom text toolbar if available (Android), otherwise use default
-        val toolbarProvider: @Composable (@Composable () -> Unit) -> Unit = if (highlightToolbar != null) {
-            { content ->
-                CompositionLocalProvider(LocalTextToolbar provides highlightToolbar) {
-                    content()
-                }
-            }
-        } else {
-            { content -> content() }
-        }
-
-        toolbarProvider {
+        val textToolbar = highlightToolbar ?: LocalTextToolbar.current
+        CompositionLocalProvider(
+            LocalTextToolbar provides textToolbar
+        ) {
+            // Block bringIntoView from propagating to the parent LazyColumn.
+            // SelectionContainer initiates bringIntoView at its OWN layout level
+            // (not from inside the Column), so the responder must be an ANCESTOR
+            // of SelectionContainer to intercept the request.
+            // Scroll-to-highlight uses explicit scrollState.animateScrollToItem()
+            // so this is safe to block.
+            Box(
+                modifier = Modifier.bringIntoViewResponder(remember {
+                    object : BringIntoViewResponder {
+                        override fun calculateRectForParent(localRect: ComposeRect): ComposeRect = localRect
+                        override suspend fun bringChildIntoView(localRect: () -> ComposeRect?) {
+                            // Intentionally blocked — scroll-to-highlight uses
+                            // explicit scrollState.animateScrollToItem() instead.
+                        }
+                    }
+                })
+            ) {
             SelectionContainer {
                 Column(
                     modifier = modifier
                         .fillMaxWidth()
                         .padding(horizontal = 28.dp, vertical = 0.dp)
                         .padding(bottom = 28.dp)
-                        // Block bringIntoView from propagating to the parent LazyColumn.
-                        // SelectionContainer calls bringIntoView when text is selected, which
-                        // causes LazyColumn to scroll incorrectly before item heights are cached
-                        // (visible as a jump on first selection after opening). Scroll-to-highlight
-                        // uses explicit scrollState.animateScrollToItem() so this is safe to block.
-                        .bringIntoViewResponder(remember {
-                            object : BringIntoViewResponder {
-                                override fun calculateRectForParent(localRect: ComposeRect): ComposeRect = localRect
-                                override suspend fun bringChildIntoView(localRect: () -> ComposeRect?) { /* consumed */ }
-                            }
-                        })
                 ) {
                 // Reset offset at start of rendering
                 textOffset.offset = 0
@@ -193,19 +190,19 @@ fun NativeHtmlRenderer(
                         i++
                     } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
                         // Bare text node at body level — skip if whitespace only
-                        if (child.getWholeText().isNotBlank()) {
-                            val theme = LocalReaderTheme.current
-                            val text = child.getWholeText()
+                        val text = child.getWholeText()
+                        if (text.isNotBlank()) {
+                            val currentTheme = LocalReaderTheme.current
                             textOffset.advance(text.length)
                             androidx.compose.material3.Text(
                                 text = text,
-                                color = theme.textColor,
-                                fontSize = theme.fontSize,
-                                fontFamily = theme.fontFamily,
-                                lineHeight = (theme.fontSize.value * 1.6f).sp
+                                color = currentTheme.textColor,
+                                fontSize = currentTheme.fontSize,
+                                fontFamily = currentTheme.fontFamily,
+                                lineHeight = (currentTheme.fontSize.value * 1.6f).sp
                             )
                         } else {
-                            textOffset.advance(child.getWholeText().length)
+                            textOffset.advance(text.length)
                         }
                         i++
                     } else {
@@ -217,6 +214,7 @@ fun NativeHtmlRenderer(
                 Spacer(Modifier.height(16.dp))
             }
             }
+            } // Box (bringIntoView blocker)
         }
     }
 

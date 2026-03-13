@@ -40,15 +40,18 @@ fun findTextOffsets(html: String, searchText: String): TextOffsetResult? {
 
     val docText = fullText.toString()
 
-    // Normalize whitespace for matching (same as JS highlightByText)
-    val normalizedSearch = searchText.replace(Regex("\\s+"), " ").trim()
+    // Normalize whitespace for matching
+    // Replace NBSP with regular space first, then collapse all whitespace
+    val normalizedSearch = searchText.replace('\u00A0', ' ').replace(Regex("\\s+"), " ").trim()
     val normalizedDoc = buildNormalizedMapping(docText)
 
     // Find in normalized text
     val normalizedSearchIndex = normalizedDoc.normalizedText.lowercase()
         .indexOf(normalizedSearch.lowercase())
 
-    if (normalizedSearchIndex == -1) return null
+    if (normalizedSearchIndex == -1) {
+        return null
+    }
 
     // Map back to original offsets
     val originalStart = normalizedDoc.normalizedToOriginal[normalizedSearchIndex]
@@ -59,10 +62,11 @@ fun findTextOffsets(html: String, searchText: String): TextOffsetResult? {
         docText.length
     }
 
+    val resultText = docText.substring(originalStart, originalEnd)
     return TextOffsetResult(
         startOffset = originalStart,
         endOffset = originalEnd,
-        matchedText = docText.substring(originalStart, originalEnd)
+        matchedText = resultText
     )
 }
 
@@ -70,7 +74,13 @@ private fun collectTextNodes(node: com.fleeksoft.ksoup.nodes.Node, sb: StringBui
     for (child in node.childNodes()) {
         when (child) {
             is TextNode -> sb.append(child.getWholeText())
-            is Element -> collectTextNodes(child, sb)
+            is Element -> {
+                // Add a virtual newline before block elements (match Compose selection joining)
+                if (isBlockElement(child) && sb.isNotEmpty()) {
+                    sb.append("\n")
+                }
+                collectTextNodes(child, sb)
+            }
         }
     }
 }

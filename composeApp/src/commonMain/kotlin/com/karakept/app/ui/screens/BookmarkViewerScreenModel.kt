@@ -435,12 +435,23 @@ class BookmarkViewerScreenModel(
     }
 
     fun createHighlight(bookmark: BookmarkEntity, text: String, startOffset: Int, endOffset: Int, note: String? = null, color: String? = null, onCreated: (String) -> Unit = {}) {
+        println("BookmarkViewerScreenModel: createHighlight requested - text='${text.take(30)}...', start=$startOffset, end=$endOffset")
         screenModelScope.launch {
-            val servers = serverRepository.servers.first()
-            val server = servers.find { it.id == bookmark.serverId } ?: return@launch
-            val remoteId = bookmark.originalRemoteId ?: bookmark.remoteId.toString()
-            val highlightId = highlightRepository.createHighlight(server, bookmark.localId, remoteId, text, startOffset, endOffset, note, color)
-            onCreated(highlightId)
+            try {
+                val servers = serverRepository.servers.first()
+                val server = servers.find { it.id == bookmark.serverId } ?: run {
+                    println("BookmarkViewerScreenModel: Server not found for serverId=${bookmark.serverId}")
+                    return@launch
+                }
+                val remoteId = bookmark.originalRemoteId ?: bookmark.remoteId.toString()
+                println("BookmarkViewerScreenModel: Calling highlightRepository.createHighlight for remoteId=$remoteId")
+                val highlightId = highlightRepository.createHighlight(server, bookmark.localId, remoteId, text, startOffset, endOffset, note, color)
+                println("BookmarkViewerScreenModel: Highlight created successfully, id=$highlightId")
+                onCreated(highlightId)
+            } catch (e: Exception) {
+                println("BookmarkViewerScreenModel: FAILED to create highlight: ${e.message}")
+                e.printStackTrace()
+            }
         }
     }
 

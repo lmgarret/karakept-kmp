@@ -12,30 +12,76 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 
 /**
- * Desktop implementation that shows a floating popup with Copy, Select All,
- * and Highlight actions when text is selected in a [SelectionContainer].
+ * Extracts the selected text from Compose's internal `SelectionManager` by
+ * navigating the [onCopyRequested] lambda's closure fields via reflection.
  *
- * The popup appears near the selection and allows the user to highlight
- * selected text in a single click. Copy is triggered first to put the
- * selected text on the clipboard, then it is read back for highlighting.
+ * `SelectionManager` calls `TextToolbar.showMenu(onCopyRequested = { copy() })`,
+ * so the lambda captures the manager. We find it and call `getSelectedText$<module>()`.
+ */
+private fun extractSelectedTextViaReflection(onCopyRequested: (() -> Unit)?): String? {
+    if (onCopyRequested == null) return null
+    return try {
+        val manager = findSelectionManager(onCopyRequested) ?: return null
+        val method = manager.javaClass.methods
+            .find { it.name.startsWith("getSelectedText") } ?: return null
+        (method.invoke(manager) as? AnnotatedString)?.text
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun findSelectionManager(
+    root: Any,
+    maxDepth: Int = 6,
+    visited: MutableSet<Int> = mutableSetOf()
+): Any? {
+    val id = System.identityHashCode(root)
+    if (!visited.add(id)) return null
+    if (maxDepth <= 0) return null
+    val name = root.javaClass.name
+    if (name.contains("SelectionManager") && !name.contains("\$\$") && !name.contains("\$Lambda")) {
+        return root
+    }
+    return try {
+        for (field in root.javaClass.declaredFields) {
+            field.isAccessible = true
+            val value = field.get(root) ?: continue
+            val typeName = value.javaClass.name
+            if (typeName.startsWith("java.lang.") || typeName.startsWith("kotlin.")) continue
+            val valName = value.javaClass.name
+            if (valName.contains("SelectionManager") && !valName.contains("\$\$") && !valName.contains("\$Lambda")) {
+                return value
+            }
+            val found = findSelectionManager(value, maxDepth - 1, visited)
+            if (found != null) return found
+        }
+        null
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/**
+ * Desktop implementation that shows a floating popup with Highlight, Copy, and
+ * Select All actions when text is selected in a `SelectionContainer`.
+ *
+ * When "Highlight" is tapped the selected text is extracted directly from
+ * Compose's internal `SelectionManager` via reflection — no clipboard involved.
  */
 @Composable
 actual fun rememberHighlightTextToolbar(
     onHighlightRequested: (selectedText: String) -> Unit
 ): TextToolbar? {
-    val clipboardManager = LocalClipboardManager.current
-    val density = LocalDensity.current
-
     var showPopup by remember { mutableStateOf(false) }
     var popupOffset by remember { mutableStateOf(IntOffset.Zero) }
     var copyCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -51,20 +97,15 @@ actual fun rememberHighlightTextToolbar(
                 shadowElevation = 4.dp,
                 color = MaterialTheme.colorScheme.surfaceContainer
             ) {
-                Row(modifier = androidx.compose.ui.Modifier.padding(horizontal = 4.dp)) {
+                Row(modifier = Modifier.padding(horizontal = 4.dp)) {
                     TextButton(onClick = {
-                        // Copy to clipboard first, then read back for highlight
-                        copyCallback?.invoke()
-                        val text = clipboardManager.getText()?.text
                         showPopup = false
-                        if (!text.isNullOrBlank()) {
-                            onHighlightRequested(text)
+                        val selectedText = extractSelectedTextViaReflection(copyCallback)
+                        if (selectedText != null) {
+                            onHighlightRequested(selectedText)
                         }
                     }) {
-                        Text(
-                            "Highlight",
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Text("Highlight", color = MaterialTheme.colorScheme.primary)
                     }
                     if (copyCallback != null) {
                         TextButton(onClick = {

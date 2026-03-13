@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
@@ -140,9 +141,52 @@ data class BookmarkViewerScreen(
             }
         }
 
-        // Hoist state management OUTSIDE the when to prevent recomposition flash
-        val scrollState = rememberLazyListState()
+        // Use a plain (non-saveable) LazyListState so the list always starts at (0,0)
+        // on a fresh open. rememberLazyListState() uses rememberSaveable internally,
+        // which restores the previous scroll position from any earlier visit — causing a
+        // visible jump before our explicit reading-progress restoration can run.
+        // Our reading-progress code already handles scroll restoration from the DB, so
+        // persisting via rememberSaveable is both redundant and harmful here.
+        val scrollState = remember { LazyListState() }
         val density = LocalDensity.current
+
+        // --- SCROLL GUARD ---
+        // Prevents unexpected scroll jumps caused by internal Compose mechanisms
+        // (e.g., SelectionContainer/Focus requesting item scroll).
+        var approvedIndex by remember { mutableStateOf(0) }
+        var approvedOffset by remember { mutableStateOf(0) }
+
+        // Increase threshold for accidental jumps: focus jumps usually skip dozens of items or thousands of pixels.
+        // Also: ensure scrollState.isScrollInProgress handles dragging.
+        val safeScrollToItem: suspend (Int, Int) -> Unit = { index, offset ->
+            approvedIndex = index
+            approvedOffset = offset
+            scrollState.scrollToItem(index, offset)
+            kotlinx.coroutines.yield()
+            approvedIndex = scrollState.firstVisibleItemIndex
+            approvedOffset = scrollState.firstVisibleItemScrollOffset
+        }
+
+        LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
+            if (scrollState.isScrollInProgress) {
+                approvedIndex = scrollState.firstVisibleItemIndex
+                approvedOffset = scrollState.firstVisibleItemScrollOffset
+            } else {
+                val jumped = (kotlin.math.abs(scrollState.firstVisibleItemIndex - approvedIndex) > 0) || 
+                             (kotlin.math.abs(scrollState.firstVisibleItemScrollOffset - approvedOffset) > 50)
+                if (jumped) {
+                    android.util.Log.w("ScrollGuard", 
+                        "Unintended jump to ${scrollState.firstVisibleItemIndex}:${scrollState.firstVisibleItemScrollOffset}. " +
+                        "Snapping back to $approvedIndex:$approvedOffset")
+                    scrollState.scrollToItem(approvedIndex, approvedOffset)
+                } else {
+                    // Gradual or small valid updates (e.g. layout shifts) become the new approved state
+                    approvedIndex = scrollState.firstVisibleItemIndex
+                    approvedOffset = scrollState.firstVisibleItemScrollOffset
+                }
+            }
+        }
+        // --------------------
 
         // Scroll the LazyColumn to the highlight when navigating from the Highlights screen.
         // highlightPositionReceived flips to true once the WebView responds with a position
@@ -201,7 +245,7 @@ data class BookmarkViewerScreen(
                             // the Compose layout system before scrolling.
                             delay(300)
                         }
-                        scrollState.scrollToItem(
+                        safeScrollToItem(
                             bookmark.readingScrollIndex,
                             bookmark.readingScrollOffset
                         )
@@ -212,7 +256,7 @@ data class BookmarkViewerScreen(
                                     scrollState.firstVisibleItemScrollOffset >= bookmark.readingScrollOffset / 3
                                 if (scrollState.firstVisibleItemIndex == bookmark.readingScrollIndex && offsetOk) break
                                 delay(250)
-                                scrollState.scrollToItem(
+                                safeScrollToItem(
                                     bookmark.readingScrollIndex,
                                     bookmark.readingScrollOffset
                                 )
@@ -264,6 +308,17 @@ data class BookmarkViewerScreen(
         )
 
         val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
+
+        // Debug: log every scroll position change with context flags.
+        LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
+            android.util.Log.d("ViewerScroll",
+                "scroll → index=${scrollState.firstVisibleItemIndex} " +
+                "offset=${scrollState.firstVisibleItemScrollOffset} " +
+                "hasRestoredScroll=$hasRestoredScroll " +
+                "contentRendered=$contentRendered " +
+                "highlightPositionReceived=$highlightPositionReceived"
+            )
+        }
 
         // Push reading state to the screen model on every scroll change.
         // The screen model debounces DB writes internally (500 ms).
