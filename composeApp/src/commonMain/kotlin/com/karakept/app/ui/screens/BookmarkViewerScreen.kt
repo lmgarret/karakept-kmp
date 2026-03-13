@@ -432,9 +432,7 @@ data class BookmarkViewerScreen(
                         // Only blur when the highlight is actually found and panel will show
                         // Hide content until scroll position is restored to prevent a flash
                         // where the top of the article shows before jumping to the saved position.
-                        // Only needed for WEB mode (WebView) — native renderer restores instantly.
-                        val needsScrollRestore = !isNativeRenderer &&
-                            trackReadingProgress &&
+                        val needsScrollRestore = trackReadingProgress &&
                             !hasRestoredScroll &&
                             loadingState is BookmarkLoadingState.FullyLoaded &&
                             (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0f &&
