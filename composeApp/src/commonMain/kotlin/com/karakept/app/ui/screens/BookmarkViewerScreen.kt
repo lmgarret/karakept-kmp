@@ -175,8 +175,7 @@ data class BookmarkViewerScreen(
                 val jumped = (kotlin.math.abs(scrollState.firstVisibleItemIndex - approvedIndex) > 0) || 
                              (kotlin.math.abs(scrollState.firstVisibleItemScrollOffset - approvedOffset) > 50)
                 if (jumped) {
-                    android.util.Log.w("ScrollGuard", 
-                        "Unintended jump to ${scrollState.firstVisibleItemIndex}:${scrollState.firstVisibleItemScrollOffset}. " +
+                    println("ScrollGuard: Unintended jump to ${scrollState.firstVisibleItemIndex}:${scrollState.firstVisibleItemScrollOffset}. " +
                         "Snapping back to $approvedIndex:$approvedOffset")
                     scrollState.scrollToItem(approvedIndex, approvedOffset)
                 } else {
@@ -311,13 +310,11 @@ data class BookmarkViewerScreen(
 
         // Debug: log every scroll position change with context flags.
         LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
-            android.util.Log.d("ViewerScroll",
-                "scroll → index=${scrollState.firstVisibleItemIndex} " +
+            println("ViewerScroll: scroll → index=${scrollState.firstVisibleItemIndex} " +
                 "offset=${scrollState.firstVisibleItemScrollOffset} " +
                 "hasRestoredScroll=$hasRestoredScroll " +
                 "contentRendered=$contentRendered " +
-                "highlightPositionReceived=$highlightPositionReceived"
-            )
+                "highlightPositionReceived=$highlightPositionReceived")
         }
 
         // Push reading state to the screen model on every scroll change.
