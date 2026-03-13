@@ -86,7 +86,7 @@ fun buildInlineAnnotatedString(
 
             addStyle(
                 SpanStyle(
-                    background = bgColor.copy(alpha = 0.4f),
+                    background = bgColor, // Full opacity
                     color = ReaderThemeData.highlightTextColor
                 ),
                 localStart,
@@ -195,7 +195,7 @@ private fun appendNodeChildren(
                         } else {
                             // Generic <mark> from HTML content
                             builder.addStyle(
-                                SpanStyle(background = Color(0xFFFFEB3B).copy(alpha = 0.4f)),
+                                SpanStyle(background = Color(0xFFFFEB3B)), // Full opacity generic mark
                                 start,
                                 builder.length
                             )

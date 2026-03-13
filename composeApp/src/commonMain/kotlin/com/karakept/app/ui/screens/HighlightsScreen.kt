@@ -44,6 +44,10 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import com.karakept.app.ui.theme.HighlightYellow
+import com.karakept.app.ui.theme.HighlightBlue
+import com.karakept.app.ui.theme.HighlightGreen
+import com.karakept.app.ui.theme.HighlightRed
 
 class HighlightsScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -183,10 +187,10 @@ class HighlightsScreen : Screen {
 
 private fun getColorForHighlight(colorName: String): Color {
     return when (colorName.lowercase()) {
-        "yellow" -> Color(0xFFFFEB3B)
-        "blue" -> Color(0xFF2196F3)
-        "green" -> Color(0xFF4CAF50)
-        "red" -> Color(0xFFF44336)
-        else -> Color(0xFFFFEB3B)
+        "yellow" -> HighlightYellow
+        "blue" -> HighlightBlue
+        "green" -> HighlightGreen
+        "red" -> HighlightRed
+        else -> HighlightYellow
     }
 }

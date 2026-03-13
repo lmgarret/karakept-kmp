@@ -29,6 +29,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.karakept.app.data.model.Highlight
+import com.karakept.app.ui.theme.HighlightYellow
+import com.karakept.app.ui.theme.HighlightBlue
+import com.karakept.app.ui.theme.HighlightGreen
+import com.karakept.app.ui.theme.HighlightRed
 
 /**
  * Floating card that displays highlighted text above the bottom panel.
@@ -120,10 +124,10 @@ data class HighlightPosition(
 @Composable
 private fun getColorForHighlight(colorName: String): Color {
     return when (colorName.lowercase()) {
-        "yellow" -> Color(0xFFFFEB3B)
-        "blue" -> Color(0xFF2196F3)
-        "green" -> Color(0xFF4CAF50)
-        "red" -> Color(0xFFF44336)
-        else -> Color(0xFFFFEB3B)
+        "yellow" -> HighlightYellow
+        "blue" -> HighlightBlue
+        "green" -> HighlightGreen
+        "red" -> HighlightRed
+        else -> HighlightYellow
     }
 }

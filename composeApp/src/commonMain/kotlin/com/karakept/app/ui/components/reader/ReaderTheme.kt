@@ -8,6 +8,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import com.karakept.app.ui.theme.HighlightYellow
+import com.karakept.app.ui.theme.HighlightBlue
+import com.karakept.app.ui.theme.HighlightGreen
+import com.karakept.app.ui.theme.HighlightRed
 
 @Immutable
 data class ReaderThemeData(
@@ -21,10 +25,10 @@ data class ReaderThemeData(
 ) {
     companion object {
         val defaultHighlightColors = mapOf(
-            "yellow" to Color(0xFFFFEB3B),
-            "blue" to Color(0xFF2196F3),
-            "green" to Color(0xFF4CAF50),
-            "red" to Color(0xFFF44336)
+            "yellow" to HighlightYellow,
+            "blue" to HighlightBlue,
+            "green" to HighlightGreen,
+            "red" to HighlightRed
         )
 
         /** Highlight text color — always black for readability on colored backgrounds. */
