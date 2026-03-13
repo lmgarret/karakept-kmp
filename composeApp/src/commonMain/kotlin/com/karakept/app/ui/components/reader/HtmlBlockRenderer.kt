@@ -1,7 +1,10 @@
 package com.karakept.app.ui.components.reader
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -13,26 +16,28 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.buildAnnotatedString
 import coil3.compose.AsyncImage
+import com.karakept.app.ui.components.HighlightPosition
 import com.fleeksoft.ksoup.nodes.Element
 import com.fleeksoft.ksoup.nodes.Node
 import com.fleeksoft.ksoup.nodes.TextNode
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import com.karakept.app.data.model.Highlight
 
 /**
@@ -69,6 +74,7 @@ private fun hasBlockChildren(element: Element): Boolean {
  * @param onLinkClick      Callback when a link is tapped.
  * @param onHighlightClick Callback when a highlight is tapped.
  * @param depth            Nesting depth for indentation.
+ * @param selectedHighlightId The ID of the currently selected highlight, if any.
  */
 @Composable
 fun RenderBlock(
@@ -77,59 +83,78 @@ fun RenderBlock(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    depth: Int = 0
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    depth: Int = 0,
+    selectedHighlightId: String? = null
 ) {
     val theme = LocalReaderTheme.current
     val tag = element.tagName().lowercase()
 
-    when (tag) {
-        "p" -> RenderParagraph(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
-        "div", "section", "article", "header", "footer", "nav", "aside", "main", "address" ->
-            RenderDiv(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth)
-        "h1" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, 1)
-        "h2" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, 2)
-        "h3" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, 3)
-        "h4" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, 4)
-        "h5" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, 5)
-        "h6" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, 6)
-        "blockquote" -> RenderBlockquote(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth)
-        "pre" -> RenderCodeBlock(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
-        "ul" -> RenderUnorderedList(element, highlights, textOffset, onLinkClick, onHighlightClick, depth)
-        "ol" -> RenderOrderedList(element, highlights, textOffset, onLinkClick, onHighlightClick, depth)
-        "li" -> RenderListItem(element, highlights, textOffset, onLinkClick, onHighlightClick, depth, bullet = "\u2022")
-        "figure" -> RenderFigure(element, highlights, textOffset, onLinkClick, onHighlightClick, depth)
-        "figcaption" -> RenderFigcaption(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
-        "img" -> RenderImage(element)
-        "picture" -> RenderPicture(element)
-        "hr" -> {
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider()
-            Spacer(Modifier.height(8.dp))
-        }
-        "table" -> RenderTable(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth)
-        "thead", "tbody" -> RenderTableSection(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth)
-        "tr" -> RenderTableRow(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth)
-        "td", "th" -> RenderTableCell(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth, isHeader = tag == "th")
-        "dl" -> RenderDefinitionList(element, highlights, textOffset, onLinkClick, onHighlightClick, depth)
-        "dt" -> {
-            val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
-            AnnotatedClickableText(
-                text = text,
-                onLinkClick = onLinkClick,
-                onHighlightClick = onHighlightClick,
-                color = theme.textColor,
-                fontSize = theme.fontSize,
-                fontFamily = theme.fontFamily,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
-        "dd" -> {
-            RenderDiv(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth, modifier = Modifier.padding(start = 24.dp))
-        }
-        else -> {
-            // Unknown block element — render children
-            RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+    val selectedHighlight = remember(selectedHighlightId, highlights) {
+        highlights.find { it.id == selectedHighlightId }
+    }
+
+    val blockStart = textOffset.offset
+    // element.text().length is a good estimate for document order text walking
+    val blockEnd = blockStart + element.text().length
+    
+    val isSelectedBlock = selectedHighlight != null && 
+        selectedHighlight.startOffset < blockEnd && 
+        selectedHighlight.endOffset > blockStart
+
+    Box {
+        when (tag) {
+            "p" -> RenderParagraph(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId)
+            "div", "section", "article", "header", "footer", "nav", "aside", "main", "address" ->
+                RenderDiv(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
+            "h1" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, 1, selectedHighlightId)
+            "h2" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, 2, selectedHighlightId)
+            "h3" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, 3, selectedHighlightId)
+            "h4" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, 4, selectedHighlightId)
+            "h5" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, 5, selectedHighlightId)
+            "h6" -> RenderHeading(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, 6, selectedHighlightId)
+            "blockquote" -> RenderBlockquote(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
+            "pre" -> RenderCodeBlock(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId)
+            "ul" -> RenderUnorderedList(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
+            "ol" -> RenderOrderedList(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
+            "li" -> RenderListItem(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, bullet = "\u2022", selectedHighlightId = selectedHighlightId)
+            "figure" -> RenderFigure(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
+            "figcaption" -> RenderFigcaption(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId)
+            "img" -> RenderImage(element)
+            "picture" -> RenderPicture(element)
+            "hr" -> {
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
+            }
+            "table" -> RenderTable(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
+            "thead", "tbody" -> RenderTableSection(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
+            "tr" -> RenderTableRow(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
+            "td", "th" -> RenderTableCell(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, isHeader = tag == "th", selectedHighlightId = selectedHighlightId)
+            "dl" -> RenderDefinitionList(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
+            "dt" -> {
+                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+                AnnotatedClickableText(
+                    text = text,
+                    onLinkClick = onLinkClick,
+                    onHighlightClick = onHighlightClick,
+                    onHighlightPosition = onHighlightPosition,
+                    color = theme.textColor,
+                    fontSize = theme.fontSize,
+                    fontFamily = theme.fontFamily,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp),
+                    selectedHighlightId = selectedHighlightId,
+                    highlights = highlights
+                )
+            }
+            "dd" -> {
+                RenderDiv(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, modifier = Modifier.padding(start = 24.dp), selectedHighlightId = selectedHighlightId)
+            }
+            else -> {
+                // Unknown block element — render children
+                RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
+            }
         }
     }
 }
@@ -144,7 +169,9 @@ fun RenderChildren(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    depth: Int = 0
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    depth: Int = 0,
+    selectedHighlightId: String? = null
 ) {
     val theme = LocalReaderTheme.current
     // Group consecutive inline nodes together, render block elements individually
@@ -157,7 +184,7 @@ fun RenderChildren(
             if (textOffset.offset > 0) {
                 textOffset.advance(1)
             }
-            RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+            RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
             i++
         } else {
             // Collect consecutive inline nodes
@@ -181,7 +208,7 @@ fun RenderChildren(
                 // Create a virtual wrapper element to render inline content together
                 // We'll use buildInlineAnnotatedString directly on the parent but
                 // limit to just these nodes
-                RenderInlineGroup(inlineNodes, element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
+                RenderInlineGroup(inlineNodes, element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId)
             }
         }
     }
@@ -198,22 +225,28 @@ private fun RenderInlineGroup(
     highlights: List<Highlight>,
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
-    onHighlightClick: (String) -> Unit
+    onHighlightClick: (String) -> Unit,
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    selectedHighlightId: String? = null
 ) {
     // Create a temporary element containing just these nodes for the inline renderer
     // Since we can't easily subset, we build the annotated string manually
     val blockStartOffset = textOffset.offset
     val builder = androidx.compose.ui.text.AnnotatedString.Builder()
 
+    var groupTextLength = 0
     for (node in nodes) {
         when (node) {
             is TextNode -> {
                 val text = node.getWholeText()
                 builder.append(text)
                 textOffset.advance(text.length)
+                groupTextLength += text.length
             }
             is Element -> {
+                val start = builder.length
                 appendInlineElement(builder, node, theme, textOffset, onLinkClick)
+                groupTextLength += (builder.length - start)
             }
         }
     }
@@ -225,6 +258,8 @@ private fun RenderInlineGroup(
     val overlapping = highlights.filter { h ->
         h.startOffset < blockEndOffset && h.endOffset > blockStartOffset
     }
+    
+
     if (overlapping.isNotEmpty()) {
         result = buildAnnotatedString {
             append(result)
@@ -232,9 +267,15 @@ private fun RenderInlineGroup(
                 val localStart = (highlight.startOffset - blockStartOffset).coerceIn(0, result.length)
                 val localEnd = (highlight.endOffset - blockStartOffset).coerceIn(0, result.length)
                 if (localStart >= localEnd) continue
-                val bgColor = theme.highlightColors[highlight.color ?: "yellow"]
-                    ?: theme.highlightColors["yellow"]!!
-                addStyle(SpanStyle(background = bgColor.copy(alpha = 0.4f), color = ReaderThemeData.highlightTextColor), localStart, localEnd)
+                val bgColor = theme.highlightColors[highlight.color ?: "yellow"] ?: theme.highlightColors["yellow"]!!
+                addStyle(
+                    SpanStyle(
+                        background = bgColor,
+                        color = ReaderThemeData.highlightTextColor
+                    ), 
+                    localStart, 
+                    localEnd
+                )
                 addStringAnnotation(HIGHLIGHT_ANNOTATION_TAG, highlight.id, localStart, localEnd)
             }
         }
@@ -245,10 +286,13 @@ private fun RenderInlineGroup(
             text = result,
             onLinkClick = onLinkClick,
             onHighlightClick = onHighlightClick,
+            onHighlightPosition = onHighlightPosition,
             color = theme.textColor,
             fontSize = theme.fontSize,
             fontFamily = theme.fontFamily,
-            lineHeight = (theme.fontSize.value * 1.6f).sp
+            lineHeight = (theme.fontSize.value * 1.6f).sp,
+            selectedHighlightId = selectedHighlightId,
+            highlights = highlights
         )
     }
 }
@@ -317,25 +361,30 @@ private fun RenderParagraph(
     highlights: List<Highlight>,
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
-    onHighlightClick: (String) -> Unit
+    onHighlightClick: (String) -> Unit,
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    selectedHighlightId: String? = null
 ) {
     if (hasBlockChildren(element)) {
         // <p> with block children (malformed HTML) — render as div
         Column(modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()) {
-            RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick)
+            RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
         }
     } else {
-        val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
+        val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
         if (text.isNotEmpty()) {
             AnnotatedClickableText(
                 text = text,
                 onLinkClick = onLinkClick,
                 onHighlightClick = onHighlightClick,
+                onHighlightPosition = onHighlightPosition,
                 color = theme.textColor,
                 fontSize = theme.fontSize,
                 fontFamily = theme.fontFamily,
                 lineHeight = (theme.fontSize.value * 1.6f).sp,
-                modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
+                modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(),
+                selectedHighlightId = selectedHighlightId,
+                highlights = highlights
             )
         }
     }
@@ -349,25 +398,30 @@ private fun RenderDiv(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
     depth: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    selectedHighlightId: String? = null
 ) {
     if (hasBlockChildren(element)) {
         Column(modifier = modifier.fillMaxWidth()) {
-            RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+            RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
         }
     } else {
-        val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
+        val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
         if (text.isNotEmpty()) {
             AnnotatedClickableText(
                 text = text,
                 onLinkClick = onLinkClick,
                 onHighlightClick = onHighlightClick,
+                onHighlightPosition = onHighlightPosition,
                 color = theme.textColor,
                 fontSize = theme.fontSize,
                 fontFamily = theme.fontFamily,
                 lineHeight = (theme.fontSize.value * 1.6f).sp,
-                modifier = modifier
+                modifier = modifier,
+                selectedHighlightId = selectedHighlightId,
+                highlights = highlights
             )
         }
     }
@@ -381,7 +435,9 @@ private fun RenderHeading(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    level: Int
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    level: Int,
+    selectedHighlightId: String? = null
 ) {
     val scaleFactor = when (level) {
         1 -> 2.0f
@@ -391,18 +447,21 @@ private fun RenderHeading(
         5 -> 1.0f
         else -> 0.9f
     }
-    val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
+    val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
     if (text.isNotEmpty()) {
         AnnotatedClickableText(
             text = text,
             onLinkClick = onLinkClick,
             onHighlightClick = onHighlightClick,
+            onHighlightPosition = onHighlightPosition,
             color = theme.textColor,
             fontSize = (theme.fontSize.value * scaleFactor).sp,
             fontFamily = theme.fontFamily,
             fontWeight = FontWeight.Bold,
             lineHeight = (theme.fontSize.value * scaleFactor * 1.4f).sp,
-            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp).fillMaxWidth()
+            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp).fillMaxWidth(),
+            selectedHighlightId = selectedHighlightId,
+            highlights = highlights
         )
     }
 }
@@ -415,7 +474,9 @@ private fun RenderBlockquote(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    depth: Int
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    depth: Int,
+    selectedHighlightId: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -437,19 +498,22 @@ private fun RenderBlockquote(
                 .weight(1f)
         ) {
             if (hasBlockChildren(element)) {
-                RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, depth + 1)
+                RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth + 1, selectedHighlightId = selectedHighlightId)
             } else {
-                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
+                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
                 if (text.isNotEmpty()) {
                     AnnotatedClickableText(
                         text = text,
                         onLinkClick = onLinkClick,
                         onHighlightClick = onHighlightClick,
+                        onHighlightPosition = onHighlightPosition,
                         color = theme.textColor,
                         fontSize = theme.fontSize,
                         fontFamily = theme.fontFamily,
                         fontStyle = FontStyle.Italic,
-                        lineHeight = (theme.fontSize.value * 1.6f).sp
+                        lineHeight = (theme.fontSize.value * 1.6f).sp,
+                        selectedHighlightId = selectedHighlightId,
+                        highlights = highlights
                     )
                 }
             }
@@ -464,11 +528,13 @@ private fun RenderCodeBlock(
     highlights: List<Highlight>,
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
-    onHighlightClick: (String) -> Unit
+    onHighlightClick: (String) -> Unit,
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    selectedHighlightId: String? = null
 ) {
     // Pre/code blocks: find the <code> child if it exists
     val codeElement = element.selectFirst("code") ?: element
-    val text = buildInlineAnnotatedString(codeElement, theme, highlights, textOffset, onLinkClick, onHighlightClick)
+    val text = buildInlineAnnotatedString(codeElement, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
     // If the <pre> has a <code> child we already consumed its text.
     // If the <pre> has other children outside <code>, consume them too.
     if (codeElement != element) {
@@ -494,10 +560,13 @@ private fun RenderCodeBlock(
             text = text,
             onLinkClick = onLinkClick,
             onHighlightClick = onHighlightClick,
+            onHighlightPosition = onHighlightPosition,
             color = theme.textColor,
             fontSize = (theme.fontSize.value * 0.875f).sp,
             fontFamily = FontFamily.Monospace,
-            lineHeight = (theme.fontSize.value * 0.875f * 1.4f).sp
+            lineHeight = (theme.fontSize.value * 0.875f * 1.4f).sp,
+            selectedHighlightId = selectedHighlightId,
+            highlights = highlights
         )
     }
 }
@@ -509,14 +578,16 @@ private fun RenderUnorderedList(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    depth: Int
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    depth: Int,
+    selectedHighlightId: String? = null
 ) {
     Column(modifier = Modifier.padding(vertical = 8.dp, horizontal = 0.dp).fillMaxWidth()) {
         for (child in element.children()) {
             if (child.tagName().lowercase() == "li") {
-                RenderListItem(child, highlights, textOffset, onLinkClick, onHighlightClick, depth, bullet = "\u2022")
+                RenderListItem(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, bullet = "\u2022", selectedHighlightId = selectedHighlightId)
             } else {
-                RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+                RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
             }
         }
     }
@@ -529,16 +600,18 @@ private fun RenderOrderedList(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    depth: Int
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    depth: Int,
+    selectedHighlightId: String? = null
 ) {
     Column(modifier = Modifier.padding(vertical = 8.dp, horizontal = 0.dp).fillMaxWidth()) {
         var index = 1
         for (child in element.children()) {
             if (child.tagName().lowercase() == "li") {
-                RenderListItem(child, highlights, textOffset, onLinkClick, onHighlightClick, depth, bullet = "${index}.")
+                RenderListItem(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, bullet = "${index}.", selectedHighlightId = selectedHighlightId)
                 index++
             } else {
-                RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+                RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
             }
         }
     }
@@ -551,8 +624,10 @@ private fun RenderListItem(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
     depth: Int,
-    bullet: String
+    bullet: String,
+    selectedHighlightId: String? = null
 ) {
     val theme = LocalReaderTheme.current
     Row(
@@ -569,17 +644,20 @@ private fun RenderListItem(
         )
         Column(modifier = Modifier.weight(1f)) {
             if (hasBlockChildren(element)) {
-                RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, depth + 1)
+                RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth + 1, selectedHighlightId = selectedHighlightId)
             } else {
-                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
+                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
                 AnnotatedClickableText(
                     text = text,
                     onLinkClick = onLinkClick,
                     onHighlightClick = onHighlightClick,
+                    onHighlightPosition = onHighlightPosition,
                     color = theme.textColor,
                     fontSize = theme.fontSize,
                     fontFamily = theme.fontFamily,
-                    lineHeight = (theme.fontSize.value * 1.6f).sp
+                    lineHeight = (theme.fontSize.value * 1.6f).sp,
+                    selectedHighlightId = selectedHighlightId,
+                    highlights = highlights
                 )
             }
         }
@@ -593,7 +671,9 @@ private fun RenderFigure(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    depth: Int
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    depth: Int,
+    selectedHighlightId: String? = null
 ) {
     Column(
         modifier = Modifier
@@ -601,7 +681,7 @@ private fun RenderFigure(
             .fillMaxWidth()
     ) {
         // Use RenderChildren to handle all nodes (elements + text) without double-counting
-        RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+        RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
     }
 }
 
@@ -612,19 +692,24 @@ private fun RenderFigcaption(
     highlights: List<Highlight>,
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
-    onHighlightClick: (String) -> Unit
+    onHighlightClick: (String) -> Unit,
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    selectedHighlightId: String? = null
 ) {
-    val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
+    val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
     if (text.isNotEmpty()) {
         AnnotatedClickableText(
             text = text,
             onLinkClick = onLinkClick,
             onHighlightClick = onHighlightClick,
+            onHighlightPosition = onHighlightPosition,
             color = theme.textColor.copy(alpha = 0.8f),
             fontSize = (theme.fontSize.value * 0.875f).sp,
             fontFamily = theme.fontFamily,
             fontStyle = FontStyle.Italic,
-            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp).fillMaxWidth()
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp).fillMaxWidth(),
+            selectedHighlightId = selectedHighlightId,
+            highlights = highlights
         )
     }
 }
@@ -665,7 +750,9 @@ private fun RenderTable(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    depth: Int
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    depth: Int,
+    selectedHighlightId: String? = null
 ) {
     Column(
         modifier = Modifier
@@ -676,13 +763,13 @@ private fun RenderTable(
         for (child in element.children()) {
             val tag = child.tagName().lowercase()
             when (tag) {
-                "thead", "tbody", "tfoot" -> RenderTableSection(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth)
-                "tr" -> RenderTableRow(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+                "thead", "tbody", "tfoot" -> RenderTableSection(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
+                "tr" -> RenderTableRow(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
                 "caption" -> {
-                    val text = buildInlineAnnotatedString(child, theme, highlights, textOffset, onLinkClick, onHighlightClick)
-                    AnnotatedClickableText(text = text, onLinkClick = onLinkClick, onHighlightClick = onHighlightClick, color = theme.textColor, fontSize = theme.fontSize, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp))
+                    val text = buildInlineAnnotatedString(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+                    AnnotatedClickableText(text = text, onLinkClick = onLinkClick, onHighlightClick = onHighlightClick, onHighlightPosition = onHighlightPosition, color = theme.textColor, fontSize = theme.fontSize, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp), selectedHighlightId = selectedHighlightId, highlights = highlights)
                 }
-                else -> RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+                else -> RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
             }
         }
     }
@@ -696,11 +783,13 @@ private fun RenderTableSection(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    depth: Int
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    depth: Int,
+    selectedHighlightId: String? = null
 ) {
     for (child in element.children()) {
         if (child.tagName().lowercase() == "tr") {
-            RenderTableRow(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+            RenderTableRow(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
         }
     }
 }
@@ -713,7 +802,9 @@ private fun RenderTableRow(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    depth: Int
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    depth: Int,
+    selectedHighlightId: String? = null
 ) {
     Row(modifier = Modifier.height(IntrinsicSize.Min)) {
         for (child in element.children()) {
@@ -725,7 +816,7 @@ private fun RenderTableRow(
                         .fillMaxHeight()
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    RenderTableCell(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, depth, isHeader = tag == "th")
+                    RenderTableCell(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, isHeader = tag == "th", selectedHighlightId = selectedHighlightId)
                 }
             }
         }
@@ -741,12 +832,14 @@ private fun RenderTableCell(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
     depth: Int,
-    isHeader: Boolean
+    isHeader: Boolean,
+    selectedHighlightId: String? = null
 ) {
     if (hasBlockChildren(element)) {
         Column {
-            RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+            RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
         }
     } else {
         val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
@@ -754,11 +847,14 @@ private fun RenderTableCell(
             text = text,
             onLinkClick = onLinkClick,
             onHighlightClick = onHighlightClick,
+            onHighlightPosition = onHighlightPosition,
             color = theme.textColor,
             fontSize = theme.fontSize,
             fontFamily = theme.fontFamily,
             fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
-            lineHeight = (theme.fontSize.value * 1.4f).sp
+            lineHeight = (theme.fontSize.value * 1.4f).sp,
+            selectedHighlightId = selectedHighlightId,
+            highlights = highlights
         )
     }
 }
@@ -770,11 +866,13 @@ private fun RenderDefinitionList(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    depth: Int
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
+    depth: Int,
+    selectedHighlightId: String? = null
 ) {
     Column(modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()) {
         for (child in element.children()) {
-            RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, depth)
+            RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
         }
     }
 }

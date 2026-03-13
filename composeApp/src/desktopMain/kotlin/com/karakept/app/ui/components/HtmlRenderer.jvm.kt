@@ -28,7 +28,7 @@ actual fun HtmlRenderer(
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit,
     onDeleteHighlight: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    onHighlightPosition: ((String, HighlightPosition?) -> Unit)?,
+    onHighlightPosition: (String, HighlightPosition) -> Unit,
     scrollToHighlightId: String?
 ) {
     // For Desktop, we use the NativeHtmlRenderer for all modes for simplicity and performance,

@@ -70,8 +70,9 @@ fun HtmlContent(
     customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
     localFilePath: String? = null,
     onHighlightClick: ((String) -> Unit)? = null,
-    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null,
-    scrollToHighlightId: String? = null
+    onHighlightPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit = { _, _ -> },
+    scrollToHighlightId: String? = null,
+    selectedHighlightId: String? = null
 ) {
     // Process HTML based on viewer mode asynchronously
     val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
@@ -180,6 +181,7 @@ fun HtmlContent(
                                 onCreateHighlight = onCreateHighlight,
                                 onHighlightPosition = onHighlightPosition,
                                 scrollToHighlightId = scrollToHighlightId,
+                                selectedHighlightId = selectedHighlightId,
                                 onLoaded = {
                                     isContentLoaded = true
                                 }

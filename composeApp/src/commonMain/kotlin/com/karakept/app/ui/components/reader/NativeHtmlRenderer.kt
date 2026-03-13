@@ -20,7 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
@@ -54,8 +56,9 @@ fun NativeHtmlRenderer(
     onLinkClick: (String) -> Unit = {},
     onHighlightClick: (String) -> Unit = {},
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
-    onHighlightPosition: ((String, HighlightPosition?) -> Unit)? = null,
+    onHighlightPosition: (String, HighlightPosition) -> Unit = { _, _ -> },
     scrollToHighlightId: String? = null,
+    selectedHighlightId: String? = null,
     onLoaded: (() -> Unit)? = null
 ) {
     val surfaceColor = MaterialTheme.colorScheme.surface
@@ -155,51 +158,27 @@ fun NativeHtmlRenderer(
                         val blockStartOffset = textOffset.offset
                         val blockTextLength = child.text().length
 
-                        // Check if this block contains the scroll-to highlight
-                        val needsPositionTracking = targetHighlight != null &&
-                            !highlightPositionReported &&
-                            targetHighlight.startOffset >= blockStartOffset &&
-                            targetHighlight.startOffset < blockStartOffset + blockTextLength
-
-                        if (needsPositionTracking && onHighlightPosition != null) {
-                            val highlightId = scrollToHighlightId!!
-                            Box(
-                                modifier = Modifier.onGloballyPositioned { coords ->
-                                    if (!highlightPositionReported) {
-                                        highlightPositionReported = true
-                                        val position = coords.positionInParent()
-                                        onHighlightPosition(
-                                            highlightId,
-                                            HighlightPosition(
-                                                x = position.x,
-                                                y = position.y,
-                                                width = coords.size.width.toFloat(),
-                                                height = coords.size.height.toFloat(),
-                                                scrollX = 0f,
-                                                scrollY = 0f
-                                            )
-                                        )
-                                    }
-                                }
-                            ) {
-                                RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick)
-                            }
-                        } else {
-                            RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick)
-                        }
+                        RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
                         i++
                     } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
                         // Bare text node at body level — skip if whitespace only
                         val text = child.getWholeText()
                         if (text.isNotBlank()) {
                             val currentTheme = LocalReaderTheme.current
+                            val blockStart = textOffset.offset
+                            val blockEnd = blockStart + text.length
                             textOffset.advance(text.length)
-                            androidx.compose.material3.Text(
-                                text = text,
+                            AnnotatedClickableText(
+                                text = AnnotatedString(text),
+                                onLinkClick = onLinkClick,
+                                onHighlightClick = onHighlightClick,
+                                onHighlightPosition = onHighlightPosition,
                                 color = currentTheme.textColor,
                                 fontSize = currentTheme.fontSize,
                                 fontFamily = currentTheme.fontFamily,
-                                lineHeight = (currentTheme.fontSize.value * 1.6f).sp
+                                lineHeight = (currentTheme.fontSize.value * 1.6f).sp,
+                                selectedHighlightId = selectedHighlightId,
+                                highlights = highlights
                             )
                         } else {
                             textOffset.advance(text.length)

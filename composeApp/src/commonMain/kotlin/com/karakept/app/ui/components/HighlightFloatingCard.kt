@@ -28,6 +28,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Offset
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.ui.theme.HighlightYellow
 import com.karakept.app.ui.theme.HighlightBlue
@@ -115,7 +117,9 @@ data class HighlightPosition(
     val width: Float,
     val height: Float,
     val scrollX: Float,
-    val scrollY: Float
+    val scrollY: Float,
+    val path: Path? = null,
+    val rootOffset: Offset = Offset.Zero
 )
 
 /**

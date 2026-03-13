@@ -48,7 +48,8 @@ fun buildInlineAnnotatedString(
     highlights: List<Highlight>,
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
-    onHighlightClick: (String) -> Unit
+    onHighlightClick: (String) -> Unit,
+    selectedHighlightId: String? = null
 ): AnnotatedString {
     // First pass: build the string and collect span info
     val blockStartOffset = textOffset.offset
@@ -81,12 +82,11 @@ fun buildInlineAnnotatedString(
             val localEnd = (highlight.endOffset - blockStartOffset).coerceIn(0, result.length)
             if (localStart >= localEnd) continue
 
-            val bgColor = theme.highlightColors[highlight.color ?: "yellow"]
-                ?: theme.highlightColors["yellow"]!!
+            val bgColor = theme.highlightColors[highlight.color ?: "yellow"] ?: theme.highlightColors["yellow"]!!
 
             addStyle(
                 SpanStyle(
-                    background = bgColor, // Full opacity
+                    background = bgColor,
                     color = ReaderThemeData.highlightTextColor
                 ),
                 localStart,

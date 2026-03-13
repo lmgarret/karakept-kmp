@@ -58,7 +58,7 @@ actual fun HtmlRenderer(
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit,
     onDeleteHighlight: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)?,
+    onHighlightPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit,
     scrollToHighlightId: String?
 ) {
     val lastLoadedHtml = remember { mutableStateOf<String?>(null) }
@@ -612,7 +612,7 @@ actual fun HtmlRenderer(
         private val onDelete: (String) -> Unit,
         private val onClick: (String) -> Unit,
         private val webView: WebView?,
-        private val onPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)?,
+        private val onPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit,
         private val selectionRect: androidx.compose.runtime.MutableState<android.graphics.Rect?>
     ) {
         @JavascriptInterface
@@ -638,13 +638,10 @@ actual fun HtmlRenderer(
                             scrollX = json.getDouble("scrollX").toFloat(),
                             scrollY = json.getDouble("scrollY").toFloat()
                         )
-                        onPosition?.invoke(id, position)
+                        onPosition(id, position)
                     } catch (e: Exception) {
                         e.printStackTrace()
-                        onPosition?.invoke(id, null)
                     }
-                } else {
-                    onPosition?.invoke(id, null)
                 }
             }
         }
@@ -973,12 +970,10 @@ actual fun HtmlRenderer(
                         scrollX = json.getDouble("scrollX").toFloat(),
                         scrollY = json.getDouble("scrollY").toFloat()
                     )
-                    onHighlightPosition?.invoke(id, position)
+                    onHighlightPosition(id, position)
                 } catch (e: Exception) {
-                    onHighlightPosition?.invoke(id, null)
+                    // Position parsing error
                 }
-            } else {
-                onHighlightPosition?.invoke(id, null)
             }
         }
 

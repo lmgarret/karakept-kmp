@@ -281,7 +281,7 @@ internal fun HighlightDetailsPanel(
         onDismiss()
     }
 
-    // Scrim
+    // Scrim (Invisible interceptor for dismissal)
     androidx.compose.animation.AnimatedVisibility(
         visible = visible,
         enter = androidx.compose.animation.fadeIn(),
@@ -290,7 +290,8 @@ internal fun HighlightDetailsPanel(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
+                // Transparent background to remove dimming but keep dismissal on click
+                .background(Color.Transparent)
                 .clickable(
                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                     indication = null
@@ -300,32 +301,14 @@ internal fun HighlightDetailsPanel(
         )
     }
 
-    // Container for floating card and panel - uses imePadding to adjust for keyboard
-    // Use Column with weights so floating card fills available space above the panel
-    Column(
+    // Container for panel - uses imePadding to adjust for keyboard
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
+            .imePadding(),
+        contentAlignment = Alignment.BottomCenter
     ) {
-        // Floating card showing highlighted text (fills available space above panel)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentAlignment = Alignment.Center
-        ) {
-            if (highlight != null) {
-                com.karakept.app.ui.components.HighlightFloatingCard(
-                    highlight = highlight,
-                    visible = visible,
-                    fontFamily = fontFamily,
-                    fontSize = fontSize,
-                    overrideColor = localColor
-                )
-            }
-        }
-
-        // Panel at bottom (always in composition, visibility controlled by BaseBottomPanel's AnimatedVisibility)
+        // Panel at bottom
         HighlightDetailsBottomPanel(
             visible = visible,
             highlight = highlight,

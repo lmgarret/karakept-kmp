@@ -29,12 +29,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialTheme.colorScheme
+import androidx.compose.material3.MaterialTheme.typography
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
@@ -101,7 +112,6 @@ data class BookmarkViewerScreen(
         var showListPicker by remember { mutableStateOf(false) }
         var selectedHighlightId by remember { mutableStateOf<String?>(null) }
         var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
-
         // Track the text of the selected highlight for matching after ID changes (temp -> server ID)
         var selectedHighlightText by remember { mutableStateOf<String?>(null) }
 
@@ -391,7 +401,7 @@ data class BookmarkViewerScreen(
                 }
             }
         ) { padding ->
-            when (val state = displayState) {
+                when (val state = displayState) {
                 is BookmarkLoadingState.Initial -> {
                     BookmarkContentLoader(
                         loadingState = state,
@@ -423,13 +433,9 @@ data class BookmarkViewerScreen(
                     val bannerImageLocalPath by screenModel.bannerImageLocalPath.collectAsState()
                     val screenshotLocalPath by screenModel.screenshotLocalPath.collectAsState()
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pullRefresh(pullRefreshState, enabled = !offlineMode)
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                         // Content List
-                        // Only blur when the highlight is actually found and panel will show
+                        // Global dimming overlay when a highlight is selected
                         // Hide content until scroll position is restored to prevent a flash
                         // where the top of the article shows before jumping to the saved position.
                         val needsScrollRestore = trackReadingProgress &&
@@ -442,7 +448,6 @@ data class BookmarkViewerScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .then(if (needsScrollRestore) Modifier.alpha(0f) else Modifier)
-                                .then(if (selectedHighlightId != null && selectedHighlight != null) Modifier.blur(8.dp) else Modifier)
                         ) {
                             // Hero banner as first item so tag/URL clicks are not blocked by the list
                             item(key = "hero_banner") {
@@ -532,8 +537,43 @@ data class BookmarkViewerScreen(
                                         }
                                     },
                                     onContentReady = { contentRendered = true },
-                                    scrollToHighlightId = scrollToHighlightId
+                                    scrollToHighlightId = scrollToHighlightId,
+                                    selectedHighlightId = selectedHighlightId
                                 )
+                            }
+                        }
+
+                        // Global Dimming Overlay
+                        if (selectedHighlightId != null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(Unit) {
+                                        detectTapGestures { selectedHighlightId = null }
+                                    }
+                            ) {
+                                Canvas(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer(alpha = 0.99f) // Required for BlendMode.Clear
+                                ) {
+                                    // Draw the dimming layer
+                                    drawRect(Color.Black.copy(alpha = 0.6f))
+
+                                    val pos = highlightPosition
+                                    if (pos != null && pos.path != null) {
+                                        // Punch through the dimming layer to reveal the highlight
+                                        withTransform({
+                                            translate(pos.rootOffset.x, pos.rootOffset.y)
+                                        }) {
+                                            drawPath(
+                                                path = pos.path!!,
+                                                color = Color.Transparent,
+                                                blendMode = BlendMode.Clear
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -558,7 +598,7 @@ data class BookmarkViewerScreen(
                             refreshing = isRefreshing,
                             state = pullRefreshState,
                             modifier = Modifier.align(Alignment.TopCenter)
-                                .padding(padding) // Adjust for status bar/top bar if needed, though usually align TopCenter is enough
+                                .padding(padding)
                         )
                     }
                 }
@@ -569,10 +609,10 @@ data class BookmarkViewerScreen(
                             .padding(padding),
                         contentAlignment = Alignment.Center
                     ) {
-                        androidx.compose.material3.Text(
+                        Text(
                             text = "Error: ${state.message}",
-                            style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.error
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
                 }
