@@ -135,9 +135,13 @@ data class BookmarkViewerScreen(
 
         LaunchedEffect(bookmarkId) {
             screenModel.loadBookmark(bookmarkId)
-            // Get the first available server to load lists
-            serverRepository.servers.first().firstOrNull()?.let { server ->
-                screenModel.loadLists(server)
+        }
+
+        LaunchedEffect(showListPicker) {
+            if (showListPicker) {
+                serverRepository.servers.first().firstOrNull()?.let { server ->
+                    screenModel.loadLists(server)
+                }
             }
         }
 
@@ -418,22 +422,6 @@ data class BookmarkViewerScreen(
                     // Local asset paths for offline support
                     val bannerImageLocalPath by screenModel.bannerImageLocalPath.collectAsState()
                     val screenshotLocalPath by screenModel.screenshotLocalPath.collectAsState()
-
-                    // Log which asset is being used for display (bannerImage preferred over imageUrl)
-                    if (bannerImageUrl != null) {
-                        println("📸 VIEWER: Using bannerImage asset for bookmark ${state.bookmark.remoteId}")
-                    } else if (screenshotUrl != null) {
-                        println("📸 VIEWER: Using screenshot asset for bookmark ${state.bookmark.remoteId}")
-                    } else if (imageUrl != null) {
-                        println("📸 VIEWER: No asset available for bookmark ${state.bookmark.remoteId}, imageUrl='$imageUrl' exists but not displayed")
-                    } else {
-                        println("📸 VIEWER: No image available for bookmark ${state.bookmark.remoteId}, showing emoji")
-                    }
-
-                    // Log HTML sanitization
-                    if (hideArticleThumbnails) {
-                        println("🧹 SANITIZER: Will remove first image element from HTML content")
-                    }
 
                     Box(
                         modifier = Modifier

@@ -73,11 +73,8 @@ fun HtmlContent(
     onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null,
     scrollToHighlightId: String? = null
 ) {
-    // Debug output
-    println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode, removeFirstImage=$removeFirstImage")
-
     // Process HTML based on viewer mode asynchronously
-    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, customFontSize, customFontFamily, localFilePath) {
+    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
         if (localFilePath != null) {
             // If we have a local file, we don't need to process HTML string
             // Just return a placeholder to trigger rendering
