@@ -571,6 +571,7 @@ object MainScreen : Screen {
                             screenModel.toggleBookmarkSelection(bookmark)
                         },
                         listState = listState,
+                        isDesktop = isDesktop,
                         pullRefreshState = pullRefreshState,
                         onBookmarkClick = { bookmark ->
                             navigator.push(BookmarkViewerScreen(bookmark.localId))
