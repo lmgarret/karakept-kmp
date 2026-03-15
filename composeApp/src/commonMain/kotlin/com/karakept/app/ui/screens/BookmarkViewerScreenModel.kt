@@ -147,6 +147,7 @@ class BookmarkViewerScreenModel(
             readingStateUpdates
                 .debounce(500)
                 .collect { state ->
+                    println("ReadProgressSync: debounce fired — saving to DB localId=${state.localId} progress=${(state.progress * 100).toInt()}%")
                     bookmarkDao.updateReadingProgress(
                         state.localId, state.progress, state.scrollIndex, state.scrollOffset
                     )
@@ -159,12 +160,17 @@ class BookmarkViewerScreenModel(
                         val currentBookmark =
                             (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark
                         if (currentBookmark != null) {
+                            println("ReadProgressSync: queueing server push remoteId=${state.remoteId} serverId=${currentBookmark.serverId} progress=${(state.progress * 100).toInt()}%")
                             bookmarkActionsRepository.queueReadingProgressUpdate(
                                 bookmarkRemoteId = state.remoteId,
                                 serverId = currentBookmark.serverId,
                                 progressPercent = (state.progress * 100).toInt()
                             )
+                        } else {
+                            println("ReadProgressSync: skipping queue — no FullyLoaded bookmark in state")
                         }
+                    } else {
+                        println("ReadProgressSync: skipping queue — trackReadingProgress is disabled")
                     }
                 }
         }
@@ -177,6 +183,7 @@ class BookmarkViewerScreenModel(
      * it if the user navigates away before the debounce window closes.
      */
     fun onReadingStateChanged(localId: Long, remoteId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
+        println("ReadProgressSync: onReadingStateChanged remoteId=$remoteId progress=${(progress * 100).toInt()}% index=$scrollIndex offset=$scrollOffset")
         val state = PendingReadingState(localId, remoteId, progress, scrollIndex, scrollOffset)
         pendingReadingState = state
         readingStateUpdates.tryEmit(state)
@@ -235,6 +242,13 @@ class BookmarkViewerScreenModel(
                     println("BookmarkViewerScreenModel: Syncing highlights for remoteId=$remoteId")
                     highlightRepository.syncHighlightsForBookmark(server, remoteId)
                     println("BookmarkViewerScreenModel: Highlights synced")
+
+                    // Also pull latest reading progress from server
+                    if (trackReadingProgress.value) {
+                        bookmarkActionsRepository.pullReadingProgressFromServer(
+                            currentState.bookmark.remoteId, currentState.bookmark.serverId
+                        )
+                    }
                 } else {
                     println("BookmarkViewerScreenModel: Server not found for serverId=${currentState.bookmark.serverId}")
                 }
@@ -274,20 +288,23 @@ class BookmarkViewerScreenModel(
                                     println("Error during on-demand highlight sync: ${e.message}")
                                 }
                             }
-                            // Pull reading progress from server if local progress is 0
-                            // (cross-device sync: restore progress from another device).
+                            // Pull reading progress from server (cross-device sync).
+                            // Always check server for the latest progress — if the server
+                            // has a higher value (read further on another device), apply it.
                             // Signal serverProgressChecked=true only AFTER the pull completes so
                             // the composable doesn't finalize hasRestoredScroll before the DB is
                             // updated with the server value.
-                            if (bookmark.readingProgress == 0f && !offlineMode.value) {
+                            if (!offlineMode.value) {
+                                println("ReadProgressSync: pulling from server (remoteId=${bookmark.remoteId}, serverId=${bookmark.serverId}, localProgress=${bookmark.readingProgress})")
                                 screenModelScope.launch {
-                                    bookmarkActionsRepository.pullReadingProgressFromServer(
+                                    val updated = bookmarkActionsRepository.pullReadingProgressFromServer(
                                         bookmark.remoteId, bookmark.serverId
                                     )
+                                    println("ReadProgressSync: pull result=$updated")
                                     _serverProgressChecked.value = true
                                 }
                             } else {
-                                // Local progress already exists, or offline – no pull needed.
+                                println("ReadProgressSync: skipping pull — offline mode")
                                 _serverProgressChecked.value = true
                             }
                         }

@@ -246,6 +246,63 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
     }
 
     // -----------------------------------------------------------------------
+    // Pull with non-zero local progress
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun testPullReadingProgress_updatesWhenServerIsHigherThanNonZeroLocal() = runTest(testDispatcher) {
+        assertTrue(isDockerRunning, "Docker should be running")
+
+        val url = "https://example.com/reading-nonzero-pull-${System.currentTimeMillis()}"
+        val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, url)
+
+        // Seed server with 70%
+        seedReadingProgressViaTrpc(baseUrl, apiKey, remoteId, progressPercent = 70)
+
+        // Insert local bookmark with 30% (user read less on this device)
+        val bookmark = insertLocalBookmark(remoteId, url = url, readingProgress = 0.30f)
+
+        // Pull should update since server (70%) > local (30%)
+        val updated = bookmarkActionsRepository.pullReadingProgressFromServer(
+            bookmark.remoteId, testServer.id
+        )
+
+        assertTrue(updated, "pullReadingProgressFromServer should update when server progress is higher")
+
+        val afterPull = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
+        assertNotNull(afterPull)
+        assertEquals(0.70f, afterPull!!.readingProgress, 0.01f, "Local progress should be updated to 70%")
+    }
+
+    // -----------------------------------------------------------------------
+    // Auto-sync after queue
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun testQueueReadingProgress_triggersAutoSync() = runTest(testDispatcher) {
+        assertTrue(isDockerRunning, "Docker should be running")
+
+        val url = "https://example.com/reading-autosync-${System.currentTimeMillis()}"
+        val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, url)
+        val bookmark = insertLocalBookmark(remoteId, url = url)
+
+        // Queue a reading progress update — triggerAutoSync should push it automatically
+        bookmarkActionsRepository.queueReadingProgressUpdate(
+            bookmarkRemoteId = bookmark.remoteId,
+            serverId = testServer.id,
+            progressPercent = 63
+        )
+
+        // Wait for auto-sync to complete (triggerAutoSync is fire-and-forget)
+        withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
+
+        // Verify the progress reached the server without a manual processPendingActions call
+        val serverPercent = remoteDataSource.getReadingProgress(testServer, remoteId)
+        assertNotNull(serverPercent, "Server should have reading progress after auto-sync")
+        assertEquals(63, serverPercent, "Server reading progress should match queued value after auto-sync")
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 

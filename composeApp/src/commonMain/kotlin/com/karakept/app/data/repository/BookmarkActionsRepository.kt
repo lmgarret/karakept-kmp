@@ -204,6 +204,7 @@ class BookmarkActionsRepository(
         progressPercent: Int
     ) {
         withContext(Dispatchers.IO) {
+            println("ReadProgressSync: queueReadingProgressUpdate remoteId=$bookmarkRemoteId serverId=$serverId percent=$progressPercent")
             // Remove any stale pending update for this bookmark (keep only latest)
             pendingActionDao.deleteActionsForBookmarkByType(
                 bookmarkRemoteId, serverId, PendingActionType.UPDATE_READING_PROGRESS
@@ -214,7 +215,9 @@ class BookmarkActionsRepository(
                 actionType = PendingActionType.UPDATE_READING_PROGRESS,
                 actionData = json.encodeToString(mapOf("progressPercent" to progressPercent.toString()))
             )
+            println("ReadProgressSync: queued pending action successfully")
         }
+        triggerAutoSync(serverId)
     }
 
     /**
@@ -227,14 +230,27 @@ class BookmarkActionsRepository(
     suspend fun pullReadingProgressFromServer(bookmarkRemoteId: Long, serverId: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
+                println("ReadProgressSync: pullReadingProgressFromServer remoteId=$bookmarkRemoteId serverId=$serverId")
                 val servers = serverRepository.servers.first()
-                val server = servers.find { it.id == serverId } ?: return@withContext false
+                val server = servers.find { it.id == serverId }
+                if (server == null) {
+                    println("ReadProgressSync: pull ABORT — server not found for serverId=$serverId")
+                    return@withContext false
+                }
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
-                    ?: return@withContext false
+                if (bookmark == null) {
+                    println("ReadProgressSync: pull ABORT — bookmark not found in DB for remoteId=$bookmarkRemoteId")
+                    return@withContext false
+                }
 
+                println("ReadProgressSync: fetching server progress for originalRemoteId=${bookmark.originalRemoteId}")
                 val serverPercent = remoteDataSource.getReadingProgress(server, bookmark.originalRemoteId)
-                    ?: return@withContext false
+                if (serverPercent == null) {
+                    println("ReadProgressSync: pull — server returned null progress")
+                    return@withContext false
+                }
 
+                println("ReadProgressSync: server has ${serverPercent}%, local has ${(bookmark.readingProgress * 100).toInt()}%")
                 val serverProgress = serverPercent / 100f
                 // Only apply server progress if it's higher than local (avoid overwriting newer local data)
                 if (serverProgress > bookmark.readingProgress) {
@@ -244,9 +260,10 @@ class BookmarkActionsRepository(
                         scrollIndex = 0,
                         scrollOffset = 0
                     )
-                    println("BookmarkActionsRepository: Restored reading progress from server: ${serverPercent}%")
+                    println("ReadProgressSync: restored from server: ${serverPercent}%")
                     true
                 } else {
+                    println("ReadProgressSync: server progress not higher, keeping local")
                     false
                 }
             } catch (e: Exception) {
@@ -850,8 +867,9 @@ class BookmarkActionsRepository(
                 PendingActionType.UPDATE_READING_PROGRESS -> {
                     val data = json.decodeFromString<Map<String, String>>(action.actionData)
                     val progressPercent = data["progressPercent"]?.toIntOrNull() ?: 0
-                    println("BookmarkActionsRepository: Syncing reading progress ${progressPercent}% for bookmark $bookmarkId")
-                    remoteDataSource.updateReadingProgress(server, bookmarkId, progressPercent)
+                    println("ReadProgressSync: executing pending action — pushing ${progressPercent}% for bookmark $bookmarkId to server")
+                    val success = remoteDataSource.updateReadingProgress(server, bookmarkId, progressPercent)
+                    println("ReadProgressSync: push result=$success")
                 }
                 PendingActionType.MOVE_TO_LIST -> {
                     val data = json.decodeFromString<Map<String, String>>(action.actionData)

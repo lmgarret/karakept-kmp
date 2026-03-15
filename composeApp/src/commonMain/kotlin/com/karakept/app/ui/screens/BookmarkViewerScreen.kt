@@ -267,21 +267,39 @@ data class BookmarkViewerScreen(
                             // the Compose layout system before scrolling.
                             delay(300)
                         }
-                        safeScrollToItem(
-                            bookmark.readingScrollIndex,
-                            bookmark.readingScrollOffset
-                        )
+
+                        // Determine scroll target: use saved scroll position if available,
+                        // otherwise estimate from reading progress percentage (e.g. when
+                        // progress was restored from the server which only stores %).
+                        val hasExactPosition = bookmark.readingScrollIndex > 0 || bookmark.readingScrollOffset > 0
+                        val (targetIndex, targetOffset) = if (hasExactPosition) {
+                            bookmark.readingScrollIndex to bookmark.readingScrollOffset
+                        } else {
+                            // Estimate scroll position from progress percentage.
+                            // The LazyColumn has a hero banner (item 0), optional description,
+                            // then the content body. Estimate using total content height.
+                            val layoutInfo = scrollState.layoutInfo
+                            val totalHeight = layoutInfo.visibleItemsInfo.sumOf { it.size }
+                                .coerceAtLeast(layoutInfo.viewportEndOffset)
+                            val viewportSize = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+                            // Estimate total scrollable range from the known viewport and progress
+                            // The content item is the last item — scroll into it by the estimated offset
+                            val contentItemIndex = layoutInfo.totalItemsCount - 1
+                            val contentItem = layoutInfo.visibleItemsInfo.lastOrNull()
+                            val contentHeight = contentItem?.size ?: totalHeight
+                            val estimatedOffset = (contentHeight * bookmark.readingProgress).toInt()
+                            contentItemIndex.coerceAtLeast(0) to estimatedOffset
+                        }
+
+                        safeScrollToItem(targetIndex, targetOffset)
                         if (!isNativeRenderer) {
                             // WebView may not have its full height yet — retry
                             for (attempt in 1..3) {
-                                val offsetOk = bookmark.readingScrollOffset < 200 ||
-                                    scrollState.firstVisibleItemScrollOffset >= bookmark.readingScrollOffset / 3
-                                if (scrollState.firstVisibleItemIndex == bookmark.readingScrollIndex && offsetOk) break
+                                val offsetOk = targetOffset < 200 ||
+                                    scrollState.firstVisibleItemScrollOffset >= targetOffset / 3
+                                if (scrollState.firstVisibleItemIndex == targetIndex && offsetOk) break
                                 delay(250)
-                                safeScrollToItem(
-                                    bookmark.readingScrollIndex,
-                                    bookmark.readingScrollOffset
-                                )
+                                safeScrollToItem(targetIndex, targetOffset)
                             }
                         }
                         hasRestoredScroll = true
@@ -334,15 +352,6 @@ data class BookmarkViewerScreen(
         )
 
         val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
-
-        // Debug: log every scroll position change with context flags.
-        LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
-            println("ViewerScroll: scroll → index=${scrollState.firstVisibleItemIndex} " +
-                "offset=${scrollState.firstVisibleItemScrollOffset} " +
-                "hasRestoredScroll=$hasRestoredScroll " +
-                "contentRendered=$contentRendered " +
-                "highlightPositionReceived=$highlightPositionReceived")
-        }
 
         // Push reading state to the screen model on every scroll change.
         // The screen model debounces DB writes internally (500 ms).
