@@ -15,6 +15,7 @@ import com.karakept.app.data.model.AutoExportInterval
 import com.karakept.app.data.model.BackupSettings
 import com.karakept.app.data.model.CheckboxState
 import com.karakept.app.data.model.CustomSwipeActionConfig
+import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ListSettings
@@ -462,6 +463,9 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val linkOpenMode: Flow<LinkOpenMode> =
         readerSettingsFlow.map { LinkOpenMode.fromString(it.linkOpenMode) }.distinctUntilChanged()
 
+    val showTagsInViewer: Flow<Boolean> =
+        readerSettingsFlow.map { it.showTagsInViewer }.distinctUntilChanged()
+
     // ── Derived flows (swipe) ─────────────────────────────────────────────────
 
     val swipeLeftAction: Flow<SwipeAction> =
@@ -599,6 +603,9 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setLinkOpenMode(mode: LinkOpenMode) =
         updateReaderSettings { copy(linkOpenMode = mode.name) }
+
+    suspend fun setShowTagsInViewer(show: Boolean) =
+        updateReaderSettings { copy(showTagsInViewer = show) }
 
     suspend fun resetReaderAppearance() = updateReaderSettings {
         copy(
@@ -845,6 +852,78 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     private suspend fun updateAppSettings(transform: StoredAppSettings.() -> StoredAppSettings) {
         dataStore.edit { prefs ->
             prefs[APP_SETTINGS_KEY] = settingsJson.encodeToString(prefs.readAppSettings().transform())
+        }
+    }
+
+    // ── Layouts ───────────────────────────────────────────────────────────────
+
+    private val LAYOUTS_KEY = stringPreferencesKey("display_profiles_json")
+    private val DEFAULT_LAYOUT_ID_KEY = stringPreferencesKey("default_profile_id")
+
+    val customLayouts: Flow<List<BookmarkLayout>> = dataStore.data.map { prefs ->
+        runCatching {
+            settingsJson.decodeFromString<List<BookmarkLayout>>(prefs[LAYOUTS_KEY] ?: "[]")
+        }.getOrDefault(emptyList())
+    }.distinctUntilChanged()
+
+    val defaultLayoutId: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[DEFAULT_LAYOUT_ID_KEY]
+    }.distinctUntilChanged()
+
+    suspend fun saveLayout(layout: BookmarkLayout) {
+        dataStore.edit { prefs ->
+            val current: MutableList<BookmarkLayout> = runCatching {
+                settingsJson.decodeFromString<List<BookmarkLayout>>(
+                    prefs[LAYOUTS_KEY] ?: "[]"
+                ).toMutableList()
+            }.getOrDefault(mutableListOf())
+            val index = current.indexOfFirst { it.id == layout.id }
+            if (index >= 0) {
+                current[index] = layout
+            } else {
+                current.add(layout)
+            }
+            prefs[LAYOUTS_KEY] = settingsJson.encodeToString<List<BookmarkLayout>>(current)
+        }
+    }
+
+    suspend fun deleteLayout(id: String) {
+        dataStore.edit { prefs ->
+            val current: MutableList<BookmarkLayout> = runCatching {
+                settingsJson.decodeFromString<List<BookmarkLayout>>(
+                    prefs[LAYOUTS_KEY] ?: "[]"
+                ).toMutableList()
+            }.getOrDefault(mutableListOf())
+            current.removeAll { it.id == id }
+            prefs[LAYOUTS_KEY] = settingsJson.encodeToString<List<BookmarkLayout>>(current)
+            // If deleted layout was the default, clear default
+            if (prefs[DEFAULT_LAYOUT_ID_KEY] == id) {
+                prefs.remove(DEFAULT_LAYOUT_ID_KEY)
+            }
+        }
+    }
+
+    suspend fun setDefaultLayoutId(id: String?) {
+        dataStore.edit { prefs ->
+            if (id != null) {
+                prefs[DEFAULT_LAYOUT_ID_KEY] = id
+            } else {
+                prefs.remove(DEFAULT_LAYOUT_ID_KEY)
+            }
+        }
+    }
+
+    suspend fun setListLayoutId(listId: String, layoutId: String?) {
+        dataStore.edit { prefs ->
+            val current: MutableMap<String, ListSettings> = runCatching {
+                settingsJson.decodeFromString<Map<String, ListSettings>>(
+                    prefs[PER_LIST_SETTINGS_KEY] ?: "{}"
+                ).toMutableMap()
+            }.getOrDefault(mutableMapOf())
+            val existing = current[listId] ?: ListSettings()
+            current[listId] = existing.copy(layoutId = layoutId)
+            prefs[PER_LIST_SETTINGS_KEY] =
+                settingsJson.encodeToString<Map<String, ListSettings>>(current)
         }
     }
 }

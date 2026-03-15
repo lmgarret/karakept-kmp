@@ -14,13 +14,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.SaveAlt
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,12 +37,10 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import com.karakept.app.ui.screens.settings.BackupRestoreScreen
+import com.karakept.app.ui.screens.settings.AppearanceSettingsScreen
 import com.karakept.app.ui.screens.settings.BookmarkListSettingsScreen
 import com.karakept.app.ui.screens.settings.BookmarkViewSettingsScreen
-import com.karakept.app.ui.screens.settings.ServerSettingsScreen
-import com.karakept.app.ui.screens.settings.ThemeSettingsScreen
-
+import com.karakept.app.ui.screens.settings.SyncDataSettingsScreen
 
 class SettingsScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -83,17 +79,17 @@ class SettingsScreen : Screen {
                     verticalArrangement = Arrangement.Top
                 ) {
                     SettingsNavigationItem(
-                        title = "Theme",
-                        description = "Choose the background color and accent",
+                        title = "Appearance",
+                        description = "Theme, accent color, layouts",
                         icon = Icons.Default.Palette,
-                        onClick = { navigator.push(ThemeSettingsScreen()) }
+                        onClick = { navigator.push(AppearanceSettingsScreen()) }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
                     SettingsNavigationItem(
-                        title = "Bookmark List",
-                        description = "Change list/card layout and filter settings",
+                        title = "Behavior",
+                        description = "Layout, gestures, reading speed, notifications",
                         icon = Icons.Default.ViewList,
                         onClick = { navigator.push(BookmarkListSettingsScreen()) }
                     )
@@ -101,8 +97,8 @@ class SettingsScreen : Screen {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     SettingsNavigationItem(
-                        title = "Bookmark View",
-                        description = "Reader and viewer mode settings",
+                        title = "Reader",
+                        description = "Viewer mode, progress, tags, link handling",
                         icon = Icons.Default.Visibility,
                         onClick = { navigator.push(BookmarkViewSettingsScreen()) }
                     )
@@ -110,28 +106,10 @@ class SettingsScreen : Screen {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     SettingsNavigationItem(
-                        title = "Notifications",
-                        description = "Manage notification preferences",
-                        icon = Icons.Default.Notifications,
-                        onClick = { navigator.push(com.karakept.app.ui.screens.settings.NotificationSettingsScreen()) }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    SettingsNavigationItem(
-                        title = "Server",
-                        description = "Manage connected server",
-                        icon = Icons.Default.Dns,
-                        onClick = { navigator.push(ServerSettingsScreen()) }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    SettingsNavigationItem(
-                        title = "Backup & Restore",
-                        description = "Export settings to JSON or restore from a backup",
-                        icon = Icons.Default.SaveAlt,
-                        onClick = { navigator.push(BackupRestoreScreen()) }
+                        title = "Sync & Data",
+                        description = "Offline mode, content sync, server, backup",
+                        icon = Icons.Default.Sync,
+                        onClick = { navigator.push(SyncDataSettingsScreen()) }
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))

@@ -38,8 +38,11 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.SwipeAction
+import com.karakept.app.data.model.ThumbnailSide
 import com.karakept.app.ui.components.BookmarkCardLayout
+import com.karakept.app.ui.components.BookmarkCompactListLayout
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.BookmarkPlaceholderItem
 import com.karakept.app.ui.components.SwipeableBookmarkItem
@@ -68,6 +71,11 @@ internal fun BookmarkListContent(
     showTags: Boolean,
     showDate: Boolean = true,
     dateDisplayMode: DateDisplayMode = DateDisplayMode.ELAPSED,
+    thumbnailSide: ThumbnailSide = ThumbnailSide.LEFT,
+    showFavicon: Boolean = true,
+    thumbnailSize: Int = 80,
+    metadataPosition: MetadataPosition = MetadataPosition.BELOW,
+    tagsScrollable: Boolean = false,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
     isSelectionMode: Boolean = false,
@@ -377,7 +385,8 @@ internal fun BookmarkListContent(
                                 offlineMode = offlineMode,
                                 bannerImageUrl = bannerImageUrl,
                                 screenshotUrl = screenshotUrl,
-                                isSelected = isSelected
+                                isSelected = isSelected,
+                                tagsScrollable = tagsScrollable
                             )
                             LayoutType.LIST -> BookmarkListLayout(
                                 bookmark = bookmark,
@@ -400,7 +409,39 @@ internal fun BookmarkListContent(
                                 offlineMode = offlineMode,
                                 bannerImageUrl = bannerImageUrl,
                                 screenshotUrl = screenshotUrl,
-                                isSelected = isSelected
+                                isSelected = isSelected,
+                                thumbnailSide = thumbnailSide,
+                                showFavicon = showFavicon,
+                                thumbnailSize = thumbnailSize,
+                                metadataPosition = metadataPosition,
+                                tagsScrollable = tagsScrollable
+                            )
+                            LayoutType.COMPACT_LIST -> BookmarkCompactListLayout(
+                                bookmark = bookmark,
+                                onClick = remember(bookmark.localId, isSelectionMode) {
+                                    {
+                                        if (isSelectionMode) onBookmarkSelectionToggle(bookmark)
+                                        else onBookmarkClick(bookmark)
+                                    }
+                                },
+                                onLongClick = remember(bookmark.localId, isSelectionMode) {
+                                    if (isSelectionMode) null else { { onBookmarkLongClick(bookmark) } }
+                                },
+                                showReadingTime = showReadingTimeBadge,
+                                showReadingProgress = showReadingProgress,
+                                showTags = showTags,
+                                showDate = showDate,
+                                dateDisplayMode = dateDisplayMode,
+                                dimRead = dimReadBookmarks,
+                                offlineMode = offlineMode,
+                                bannerImageUrl = bannerImageUrl,
+                                screenshotUrl = screenshotUrl,
+                                isSelected = isSelected,
+                                thumbnailSide = thumbnailSide,
+                                showFavicon = showFavicon,
+                                thumbnailSize = thumbnailSize,
+                                metadataPosition = metadataPosition,
+                                tagsScrollable = tagsScrollable
                             )
                         }
                     }

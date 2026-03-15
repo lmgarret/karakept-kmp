@@ -50,8 +50,10 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.AddBookmarkDialog
 import com.karakept.app.ui.components.FilterBottomPanel
@@ -101,6 +103,25 @@ object MainScreen : Screen {
         val swipeLeftConfigId by screenModel.swipeLeftConfigId.collectAsState()
         val swipeRightConfigId by screenModel.swipeRightConfigId.collectAsState()
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
+        val activeLayout by screenModel.activeLayout.collectAsState()
+        // When a display profile is active, its settings override global settings
+        val effectiveLayoutType = activeLayout?.layoutType
+            ?.let { LayoutType.fromString(it) } ?: layoutType
+        val effectiveDimReadBookmarks = activeLayout?.dimReadBookmarks ?: dimReadBookmarks
+        val effectiveShowReadingTimeBadge = activeLayout?.showReadingTime ?: showReadingTimeBadge
+        val effectiveShowTags = activeLayout?.showTags ?: showTags
+        val effectiveShowDate = activeLayout?.showDate ?: showDateInList
+        val effectiveDateDisplayMode = activeLayout?.dateDisplayMode
+            ?.let { DateDisplayMode.fromString(it) } ?: dateDisplayMode
+        val effectiveThumbnailSide = activeLayout?.thumbnailSide
+            ?.let { com.karakept.app.data.model.ThumbnailSide.fromString(it) }
+            ?: com.karakept.app.data.model.ThumbnailSide.LEFT
+        val effectiveShowFavicon = activeLayout?.showFavicon ?: true
+        val effectiveThumbnailSize = activeLayout?.thumbnailSize ?: 80
+        val effectiveMetadataPosition = activeLayout?.metadataPosition
+            ?.let { com.karakept.app.data.model.MetadataPosition.fromString(it) }
+            ?: com.karakept.app.data.model.MetadataPosition.BELOW
+        val effectiveTagsScrollable = activeLayout?.tagsScrollable ?: false
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
@@ -485,7 +506,7 @@ object MainScreen : Screen {
                         onRefreshClick = { screenModel.syncBookmarks() },
                         onOfflineBadgeClick = {
                             // Navigate to server settings and highlight the offline mode row
-                            navigator.push(com.karakept.app.ui.screens.settings.ServerSettingsScreen(highlightOfflineMode = true))
+                            navigator.push(com.karakept.app.ui.screens.settings.SyncDataSettingsScreen(highlightOfflineMode = true))
                         },
                         isDesktop = isDesktop,
                         hasActiveFilter = hasActiveFilter,
@@ -552,17 +573,22 @@ object MainScreen : Screen {
                         syncProgress = syncProgress,
                         isLoadingMore = if (isSearchActive) false else isLoadingMore,
                         hasMoreItems = if (isSearchActive) true else hasMoreItems,
-                        layoutType = layoutType,
+                        layoutType = effectiveLayoutType,
                         swipeLeftAction = swipeLeftAction,
                         swipeRightAction = swipeRightAction,
                         swipeLeftConfig = customSwipeActionConfigs.find { it.id == swipeLeftConfigId },
                         swipeRightConfig = customSwipeActionConfigs.find { it.id == swipeRightConfigId },
-                        dimReadBookmarks = dimReadBookmarks,
-                        showReadingTimeBadge = showReadingTimeBadge,
+                        dimReadBookmarks = effectiveDimReadBookmarks,
+                        showReadingTimeBadge = effectiveShowReadingTimeBadge,
                         showReadingProgress = trackReadingProgress,
-                        showTags = showTags,
-                        showDate = showDateInList,
-                        dateDisplayMode = dateDisplayMode,
+                        showTags = effectiveShowTags,
+                        showDate = effectiveShowDate,
+                        dateDisplayMode = effectiveDateDisplayMode,
+                        thumbnailSide = effectiveThumbnailSide,
+                        showFavicon = effectiveShowFavicon,
+                        thumbnailSize = effectiveThumbnailSize,
+                        metadataPosition = effectiveMetadataPosition,
+                        tagsScrollable = effectiveTagsScrollable,
                         offlineMode = offlineMode || isAutoOffline,
                         pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                         isSelectionMode = isSelectionMode,

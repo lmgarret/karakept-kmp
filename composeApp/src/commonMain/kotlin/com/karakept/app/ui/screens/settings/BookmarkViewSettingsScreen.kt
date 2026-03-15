@@ -64,7 +64,7 @@ class BookmarkViewSettingsScreen : Screen {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Bookmark View") },
+                    title = { Text("Reader") },
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -235,7 +235,7 @@ class BookmarkViewSettingsScreen : Screen {
                     }
                 }
 
-                val showTags by screenModel.showTags.collectAsState()
+                val showTagsInViewer by screenModel.showTagsInViewer.collectAsState()
 
                 Card(
                     modifier = Modifier
@@ -258,18 +258,18 @@ class BookmarkViewSettingsScreen : Screen {
                                 .weight(1f)
                         ) {
                             Text(
-                                text = "Show Tags",
+                                text = "Show Tags in Viewer",
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                text = "Display bookmark tags in reader mode",
+                                text = "Display bookmark tags in reader/viewer mode",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
-                            checked = showTags,
-                            onCheckedChange = { screenModel.setShowTags(it) }
+                            checked = showTagsInViewer,
+                            onCheckedChange = { screenModel.setShowTagsInViewer(it) }
                         )
                     }
                 }

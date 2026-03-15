@@ -16,10 +16,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -30,6 +32,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -46,6 +49,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.SwipeAction
@@ -53,6 +57,7 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.ui.components.getIcon
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.koin.core.parameter.parametersOf
@@ -68,6 +73,13 @@ class PerListSettingsScreenModel(
     val customSwipeActionConfigs: StateFlow<List<CustomSwipeActionConfig>> =
         settingsRepository.customSwipeActionConfigs
             .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allLayouts: StateFlow<List<BookmarkLayout>> = combine(
+        settingsRepository.customLayouts,
+        settingsRepository.defaultLayoutId
+    ) { custom, _ ->
+        BookmarkLayout.ALL_BUILTIN + custom
+    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), BookmarkLayout.ALL_BUILTIN)
 
     fun setSyncOffline(enabled: Boolean) {
         screenModelScope.launch {
@@ -101,6 +113,12 @@ class PerListSettingsScreenModel(
             settingsRepository.setListSettings(listId, listSettings.value.copy(countOnlyUnread = enabled))
         }
     }
+
+    fun setLayoutId(layoutId: String?) {
+        screenModelScope.launch {
+            settingsRepository.setListLayoutId(listId, layoutId)
+        }
+    }
 }
 
 data class PerListSettingsScreen(
@@ -114,7 +132,75 @@ data class PerListSettingsScreen(
         val screenModel = koinScreenModel<PerListSettingsScreenModel> { parametersOf(listId) }
         val listSettings by screenModel.listSettings.collectAsState()
         val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
+        val allLayouts by screenModel.allLayouts.collectAsState()
         var showScrollActionDialog by remember { mutableStateOf(false) }
+        var showLayoutPickerDialog by remember { mutableStateOf(false) }
+
+        if (showLayoutPickerDialog) {
+            AlertDialog(
+                onDismissRequest = { showLayoutPickerDialog = false },
+                title = { Text("Layout") },
+                text = {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        // "Default" option
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    screenModel.setLayoutId(null)
+                                    showLayoutPickerDialog = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = listSettings.layoutId == null,
+                                onClick = {
+                                    screenModel.setLayoutId(null)
+                                    showLayoutPickerDialog = false
+                                }
+                            )
+                            Column(modifier = Modifier.padding(start = 8.dp)) {
+                                Text("Use default layout", style = MaterialTheme.typography.bodyLarge)
+                                Text("Follows the app-wide default", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        HorizontalDivider()
+                        allLayouts.forEach { layout ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        screenModel.setLayoutId(layout.id)
+                                        showLayoutPickerDialog = false
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = listSettings.layoutId == layout.id,
+                                    onClick = {
+                                        screenModel.setLayoutId(layout.id)
+                                        showLayoutPickerDialog = false
+                                    }
+                                )
+                                Column(modifier = Modifier.padding(start = 8.dp)) {
+                                    Text(layout.name, style = MaterialTheme.typography.bodyLarge)
+                                    if (layout.description != null) {
+                                        Text(layout.description, style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showLayoutPickerDialog = false }) { Text("Close") }
+                }
+            )
+        }
 
         if (showScrollActionDialog) {
             ScrollActionPickerDialog(
@@ -234,6 +320,50 @@ data class PerListSettingsScreen(
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
+
+                // Per-list layout
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showLayoutPickerDialog = true }
+                        .padding(bottom = 16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Layers,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Layout",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            val layoutName = listSettings.layoutId?.let { id ->
+                                if (BookmarkLayout.isBuiltInId(id)) {
+                                    BookmarkLayout.getBuiltIn(id)?.name
+                                } else {
+                                    allLayouts.find { it.id == id }?.name
+                                }
+                            } ?: "Use default layout"
+                            Text(
+                                text = layoutName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Select"
+                        )
+                    }
+                }
 
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Row(
