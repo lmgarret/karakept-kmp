@@ -198,6 +198,12 @@ compose.desktop {
 }
 
 
+configurations.all {
+    resolutionStrategy {
+        force(libs.kotlinx.datetime.get().toString())
+    }
+}
+
 tasks.withType<Test> {
     testLogging {
         events("passed", "skipped", "failed")

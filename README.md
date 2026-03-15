@@ -40,46 +40,24 @@ Install release version:
 ./gradlew installRelease
 ```
 
-### Option 2: Desktop with Wayland/X11 Forwarding
+### Option 2: Desktop App
 
-#### Initial Setup (One-time)
+#### One-time host setup
 
-1. **Update devcontainer configuration** (already done if using this repo):
-   - The `.devcontainer/devcontainer.json` includes Wayland socket mounts
-   - Rebuild the container: Press `F1` → **"Dev Containers: Rebuild Container"**
-
-2. **On your host machine**, allow container access:
-   ```bash
-   xhost +local:
-   ```
-
-#### Running the Desktop App
-
-After the devcontainer is rebuilt:
+**Linux** (X11 or Wayland — required for devcontainer GUI forwarding):
 ```bash
-./gradlew run
+xhost +local:
 ```
 
-#### Troubleshooting Desktop GUI
+**macOS**: Install [XQuartz](https://www.xquartz.org/), enable "Allow connections from network clients" in Preferences > Security, then log out and back in.
 
-**If you get permission errors:**
+#### Running
+
 ```bash
-# On host machine
-xhost +local:docker
+./run_desktop.sh
 ```
 
-**If Wayland socket is not found:**
-
-Check your socket location:
-```bash
-echo $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY
-```
-
-**Alternative: Use X11 fallback:**
-```bash
-export DISPLAY=:0
-./gradlew run
-```
+The script auto-detects your display environment (X11 forwarding, XWayland, or headless via Xvfb) and launches the app.
 
 ### Option 3: Build Distributable Package
 

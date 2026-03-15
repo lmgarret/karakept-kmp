@@ -44,10 +44,8 @@
         "source=${localEnv:HOME}/.var/app/com.bitwarden.desktop/data/.bitwarden-ssh-agent.sock,target=/tmp/ssh-agent.sock,type=bind"
     ],
     "containerEnv": {
-        "DISPLAY": "${localEnv:DISPLAY}",
-        "WAYLAND_DISPLAY": "wayland-0",
+        "DISPLAY": ":0",
         "XDG_RUNTIME_DIR": "/tmp",
-        "QT_QPA_PLATFORM": "wayland",
         "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock"
     }
 }
