@@ -191,6 +191,29 @@ class MainScreenModel(
             configs.find { it.id == configId }
         }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val currentListOpenAction: StateFlow<com.karakept.app.data.model.SwipeAction> =
+        _currentListContext
+            .flatMapLatest { listId ->
+                if (listId != null) {
+                    settingsRepository.getListSettings(listId).map { it.openAction }
+                } else {
+                    flowOf(com.karakept.app.data.model.SwipeAction.NONE)
+                }
+            }
+            .stateIn(
+                screenModelScope, SharingStarted.WhileSubscribed(5000),
+                com.karakept.app.data.model.SwipeAction.NONE
+            )
+
+    val currentListOpenActionConfig: StateFlow<com.karakept.app.data.model.CustomSwipeActionConfig?> =
+        combine(_currentListContext, settingsRepository.allListSettings, customSwipeActionConfigs) {
+            listId, allSettings, configs ->
+            if (listId == null) return@combine null
+            val settings = allSettings[listId] ?: return@combine null
+            val configId = settings.openActionConfigId ?: return@combine null
+            configs.find { it.id == configId }
+        }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     // Two independent bookmark pipelines selected by _searchQuery:
     //  • blank query → paginated view (_pendingBookmarks + _accumulatedBookmarks)
     //  • non-blank   → live DB search (allBookmarks filtered by query)
@@ -911,6 +934,39 @@ class MainScreenModel(
                         _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
                             it.remoteId != bookmark.remoteId
                         }
+                    }
+                }
+                com.karakept.app.data.model.SwipeAction.FAVOURITE -> {
+                    bookmarkActionsRepository.toggleFavourite(
+                        bookmark.remoteId, bookmark.serverId, bookmark.isStarred
+                    )
+                }
+                com.karakept.app.data.model.SwipeAction.ADD_TAG -> {
+                    config?.tagName?.let { addBookmarkTag(bookmark, it) }
+                }
+                com.karakept.app.data.model.SwipeAction.ADD_TO_LIST -> {
+                    config?.listId?.let { moveBookmarkToList(bookmark, it) }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun executeOpenAction(
+        bookmark: BookmarkEntity,
+        action: com.karakept.app.data.model.SwipeAction,
+        config: com.karakept.app.data.model.CustomSwipeActionConfig?
+    ) {
+        screenModelScope.launch {
+            when (action) {
+                com.karakept.app.data.model.SwipeAction.MARK_READ -> {
+                    if (!bookmark.isRead) {
+                        bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
+                    }
+                }
+                com.karakept.app.data.model.SwipeAction.ARCHIVE -> {
+                    if (!bookmark.isArchived) {
+                        bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
                     }
                 }
                 com.karakept.app.data.model.SwipeAction.FAVOURITE -> {

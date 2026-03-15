@@ -90,6 +90,15 @@ class PerListSettingsScreenModel(
         }
     }
 
+    fun setOpenAction(action: SwipeAction, configId: String? = null) {
+        screenModelScope.launch {
+            settingsRepository.setListSettings(
+                listId,
+                listSettings.value.copy(openAction = action, openActionConfigId = configId)
+            )
+        }
+    }
+
     fun setIncludeChildListBookmarks(enabled: Boolean) {
         screenModelScope.launch {
             settingsRepository.setListSettings(listId, listSettings.value.copy(includeChildListBookmarks = enabled))
@@ -115,9 +124,12 @@ data class PerListSettingsScreen(
         val listSettings by screenModel.listSettings.collectAsState()
         val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
         var showScrollActionDialog by remember { mutableStateOf(false) }
+        var showOpenActionDialog by remember { mutableStateOf(false) }
 
         if (showScrollActionDialog) {
-            ScrollActionPickerDialog(
+            ActionPickerDialog(
+                title = "On scroll action",
+                description = "Triggered automatically when a bookmark scrolls off screen",
                 selectedAction = listSettings.scrollAction,
                 selectedConfigId = listSettings.scrollActionConfigId,
                 customConfigs = customConfigs,
@@ -125,6 +137,21 @@ data class PerListSettingsScreen(
                 onActionSelected = { action, configId ->
                     screenModel.setScrollAction(action, configId)
                     showScrollActionDialog = false
+                }
+            )
+        }
+
+        if (showOpenActionDialog) {
+            ActionPickerDialog(
+                title = "On open action",
+                description = "Triggered automatically when you open a bookmark",
+                selectedAction = listSettings.openAction,
+                selectedConfigId = listSettings.openActionConfigId,
+                customConfigs = customConfigs,
+                onDismiss = { showOpenActionDialog = false },
+                onActionSelected = { action, configId ->
+                    screenModel.setOpenAction(action, configId)
+                    showOpenActionDialog = false
                 }
             )
         }
@@ -325,6 +352,49 @@ data class PerListSettingsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
+                    text = "Open Behavior",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showOpenActionDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TouchApp,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "On open action",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = listSettings.openAction.displayName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Select"
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
                     text = "Content",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
@@ -367,7 +437,9 @@ data class PerListSettingsScreen(
 }
 
 @Composable
-private fun ScrollActionPickerDialog(
+private fun ActionPickerDialog(
+    title: String,
+    description: String,
     selectedAction: SwipeAction,
     selectedConfigId: String?,
     customConfigs: List<CustomSwipeActionConfig>,
@@ -390,12 +462,12 @@ private fun ScrollActionPickerDialog(
         ) {
             Column(modifier = Modifier.padding(vertical = 16.dp)) {
                 Text(
-                    text = "On scroll action",
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                 )
                 Text(
-                    text = "Triggered automatically when a bookmark scrolls off screen",
+                    text = description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp)

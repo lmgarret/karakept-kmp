@@ -105,6 +105,8 @@ object MainScreen : Screen {
         val listCounts by screenModel.listCounts.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
         val currentListScrollActionConfig by screenModel.currentListScrollActionConfig.collectAsState()
+        val currentListOpenAction by screenModel.currentListOpenAction.collectAsState()
+        val currentListOpenActionConfig by screenModel.currentListOpenActionConfig.collectAsState()
         val bookmarkListVersion by screenModel.bookmarkListVersion.collectAsState()
 
         val searchQuery by screenModel.searchQuery.collectAsState()
@@ -573,6 +575,7 @@ object MainScreen : Screen {
                         listState = listState,
                         pullRefreshState = pullRefreshState,
                         onBookmarkClick = { bookmark ->
+                            screenModel.executeOpenAction(bookmark, currentListOpenAction, currentListOpenActionConfig)
                             navigator.push(BookmarkViewerScreen(bookmark.localId))
                         },
                         onBookmarkLongClick = { bookmark ->
