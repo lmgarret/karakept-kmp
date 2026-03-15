@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
+import getPlatform
 
 class BookmarkViewerScreenModel(
     private val bookmarkDao: BookmarkDao,
@@ -48,8 +49,13 @@ class BookmarkViewerScreenModel(
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
     val loadingState: StateFlow<BookmarkLoadingState> = _loadingState.asStateFlow()
 
-    val viewerMode: StateFlow<ViewerMode> = settingsRepository.viewerMode
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ViewerMode.READER)
+    val viewerMode: StateFlow<ViewerMode> = if (getPlatform().isDesktop) {
+        // Desktop only supports READER mode (no WebView)
+        MutableStateFlow(ViewerMode.READER)
+    } else {
+        settingsRepository.viewerMode
+            .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ViewerMode.READER)
+    }
 
     val hideArticleThumbnails: StateFlow<Boolean> = settingsRepository.hideArticleThumbnails
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -429,12 +435,23 @@ class BookmarkViewerScreenModel(
     }
 
     fun createHighlight(bookmark: BookmarkEntity, text: String, startOffset: Int, endOffset: Int, note: String? = null, color: String? = null, onCreated: (String) -> Unit = {}) {
+        println("BookmarkViewerScreenModel: createHighlight requested - text='${text.take(30)}...', start=$startOffset, end=$endOffset")
         screenModelScope.launch {
-            val servers = serverRepository.servers.first()
-            val server = servers.find { it.id == bookmark.serverId } ?: return@launch
-            val remoteId = bookmark.originalRemoteId ?: bookmark.remoteId.toString()
-            val highlightId = highlightRepository.createHighlight(server, bookmark.localId, remoteId, text, startOffset, endOffset, note, color)
-            onCreated(highlightId)
+            try {
+                val servers = serverRepository.servers.first()
+                val server = servers.find { it.id == bookmark.serverId } ?: run {
+                    println("BookmarkViewerScreenModel: Server not found for serverId=${bookmark.serverId}")
+                    return@launch
+                }
+                val remoteId = bookmark.originalRemoteId ?: bookmark.remoteId.toString()
+                println("BookmarkViewerScreenModel: Calling highlightRepository.createHighlight for remoteId=$remoteId")
+                val highlightId = highlightRepository.createHighlight(server, bookmark.localId, remoteId, text, startOffset, endOffset, note, color)
+                println("BookmarkViewerScreenModel: Highlight created successfully, id=$highlightId")
+                onCreated(highlightId)
+            } catch (e: Exception) {
+                println("BookmarkViewerScreenModel: FAILED to create highlight: ${e.message}")
+                e.printStackTrace()
+            }
         }
     }
 

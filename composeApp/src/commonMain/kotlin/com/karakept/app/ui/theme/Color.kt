@@ -159,3 +159,9 @@ fun getColorScheme(themeMode: ThemeMode, accentColor: AccentColor, isDarkTheme: 
         }
     }
 }
+
+// Highlight Colors (Used in Reader and Panels)
+val HighlightYellow = Color(0xFFFFEB3B)
+val HighlightBlue = Color(0xFF2196F3)
+val HighlightGreen = Color(0xFF4CAF50)
+val HighlightRed = Color(0xFFF44336)

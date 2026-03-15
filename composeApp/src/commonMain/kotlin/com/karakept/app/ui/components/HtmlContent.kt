@@ -32,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
+import com.karakept.app.ui.components.reader.NativeHtmlRenderer
 import com.karakept.app.utils.HtmlArchiveProcessor
 import com.karakept.app.utils.HtmlCache
 import com.karakept.app.utils.HtmlSanitizer
@@ -69,14 +70,12 @@ fun HtmlContent(
     customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
     localFilePath: String? = null,
     onHighlightClick: ((String) -> Unit)? = null,
-    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null,
-    scrollToHighlightId: String? = null
+    onHighlightPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit = { _, _ -> },
+    scrollToHighlightId: String? = null,
+    selectedHighlightId: String? = null
 ) {
-    // Debug output
-    println("HtmlContent: Input HTML length=${html?.length}, isBlank=${html.isNullOrBlank()}, mode=$viewerMode, removeFirstImage=$removeFirstImage")
-
     // Process HTML based on viewer mode asynchronously
-    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, customFontSize, customFontFamily, localFilePath) {
+    val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
         if (localFilePath != null) {
             // If we have a local file, we don't need to process HTML string
             // Just return a placeholder to trigger rendering
@@ -113,12 +112,10 @@ fun HtmlContent(
         }
     }
 
-    // Notify parent immediately when there's no content to render
-    androidx.compose.runtime.LaunchedEffect(html) {
-        if (html.isNullOrBlank() && onReady != null) {
-            onReady()
-        }
-    }
+    // Note: we intentionally do NOT call onReady() when html is null/blank.
+    // Calling onReady() prematurely would set contentRendered = true in the
+    // viewer screen, causing scroll restoration to fire before actual HTML
+    // content is rendered — breaking resume-reading for on-demand bookmarks.
 
     Box(modifier = modifier) {
         if (html.isNullOrBlank()) {
@@ -157,36 +154,64 @@ fun HtmlContent(
             }
 
             Box(modifier = Modifier.fillMaxWidth()) {
-                // Always render HtmlRenderer if content is processed OR we have a local file
+                // Always render if content is processed OR we have a local file
                 if ((processedHtml != null && processedHtml!!.isNotBlank()) || localFilePath != null) {
-                    // Apply background color directly to HtmlRenderer modifier for READER mode
+                    // Apply background color directly to renderer modifier for READER mode
                     val rendererModifier = if (viewerMode == ViewerMode.READER && customBackgroundColor != null) {
                         Modifier.fillMaxWidth().background(customBackgroundColor)
                     } else {
                         Modifier.fillMaxWidth()
                     }
 
-                    HtmlRenderer(
-                        html = processedHtml ?: "",
-                        viewerMode = viewerMode,
-                        modifier = rendererModifier,
-                        onLinkClick = onLinkClick,
-                        onLoaded = {
-                            isContentLoaded = true
-                        },
-                        customTextColor = customTextColor,
-                        customFontSize = customFontSize,
-                        customFontFamily = customFontFamily,
-                        localFilePath = localFilePath,
-                        highlights = highlights,
-                        onCreateHighlight = onCreateHighlight,
-                        onDeleteHighlight = onDeleteHighlight,
-                        onHighlightClick = { highlightId ->
-                            onHighlightClick?.invoke(highlightId)
-                        },
-                        onHighlightPosition = onHighlightPosition,
-                        scrollToHighlightId = scrollToHighlightId
-                    )
+                    when (viewerMode) {
+                        ViewerMode.READER -> {
+                            // Native Compose renderer — no WebView needed
+                            NativeHtmlRenderer(
+                                html = processedHtml ?: "",
+                                modifier = rendererModifier,
+                                highlights = highlights,
+                                textColor = customTextColor,
+                                backgroundColor = customBackgroundColor,
+                                fontSize = customFontSize,
+                                fontFamily = customFontFamily,
+                                onLinkClick = onLinkClick,
+                                onHighlightClick = { highlightId ->
+                                    onHighlightClick?.invoke(highlightId)
+                                },
+                                onCreateHighlight = onCreateHighlight,
+                                onHighlightPosition = onHighlightPosition,
+                                scrollToHighlightId = scrollToHighlightId,
+                                selectedHighlightId = selectedHighlightId,
+                                onLoaded = {
+                                    isContentLoaded = true
+                                }
+                            )
+                        }
+                        ViewerMode.WEB -> {
+                            // WebView-based renderer (Android only; Desktop overrides to READER)
+                            HtmlRenderer(
+                                html = processedHtml ?: "",
+                                viewerMode = viewerMode,
+                                modifier = rendererModifier,
+                                onLinkClick = onLinkClick,
+                                onLoaded = {
+                                    isContentLoaded = true
+                                },
+                                customTextColor = customTextColor,
+                                customFontSize = customFontSize,
+                                customFontFamily = customFontFamily,
+                                localFilePath = localFilePath,
+                                highlights = highlights,
+                                onCreateHighlight = onCreateHighlight,
+                                onDeleteHighlight = onDeleteHighlight,
+                                onHighlightClick = { highlightId ->
+                                    onHighlightClick?.invoke(highlightId)
+                                },
+                                onHighlightPosition = onHighlightPosition,
+                                scrollToHighlightId = scrollToHighlightId
+                            )
+                        }
+                    }
                 }
 
                 // Show SkeletonLoader until content is fully loaded

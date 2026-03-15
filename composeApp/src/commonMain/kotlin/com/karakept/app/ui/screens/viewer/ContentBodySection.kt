@@ -38,12 +38,19 @@ internal fun ContentBodySection(
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
     onDeleteHighlight: (String) -> Unit = {},
     onHighlightClick: (String) -> Unit = {},
-    onHighlightPosition: ((String, com.karakept.app.ui.components.HighlightPosition?) -> Unit)? = null,
+    onHighlightPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit = { _, _ -> },
     onContentReady: (() -> Unit)? = null,
-    scrollToHighlightId: String? = null
+    scrollToHighlightId: String? = null,
+    selectedHighlightId: String? = null
 ) {
     // Track when HTML content is truly ready (processed + rendered)
     var htmlContentReady by remember { mutableStateOf(false) }
+
+    // Reset when content changes (e.g. null → actual content for on-demand bookmarks)
+    // so the skeleton shows during the transition and contentRendered is accurate.
+    LaunchedEffect(content) {
+        htmlContentReady = false
+    }
 
     // Notify parent when content is fully rendered
     LaunchedEffect(htmlContentReady) {
@@ -84,14 +91,19 @@ internal fun ContentBodySection(
                     onDeleteHighlight = onDeleteHighlight,
                     onHighlightClick = onHighlightClick,
                     onHighlightPosition = onHighlightPosition,
-                    scrollToHighlightId = scrollToHighlightId
+                    scrollToHighlightId = scrollToHighlightId,
+                    selectedHighlightId = selectedHighlightId
                 )
             }
 
-            // Show skeleton on top until content ready (top layer)
+            // Show skeleton on top until content ready (top layer).
+            // Always use Initial state so the shimmer skeleton is visible.
+            // Using the actual loadingState would render nothing for FullyLoaded,
+            // letting the CloudOff placeholder in HtmlContent flash briefly
+            // before the HTML is processed.
             if (!htmlContentReady) {
                 BookmarkContentLoader(
-                    loadingState = loadingState,
+                    loadingState = BookmarkLoadingState.Initial,
                     modifier = Modifier.background(MaterialTheme.colorScheme.background)
                 )
             }

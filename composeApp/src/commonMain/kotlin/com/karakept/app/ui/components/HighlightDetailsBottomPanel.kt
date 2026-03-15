@@ -30,6 +30,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.Highlight
+import com.karakept.app.ui.theme.HighlightYellow
+import com.karakept.app.ui.theme.HighlightBlue
+import com.karakept.app.ui.theme.HighlightGreen
+import com.karakept.app.ui.theme.HighlightRed
 
 @Composable
 fun HighlightDetailsBottomPanel(
@@ -105,10 +109,10 @@ private fun HighlightColorPicker(
     onColorSelected: (String) -> Unit
 ) {
     val colors = listOf(
-        "yellow" to Color(0xFFFFEB3B),
-        "blue" to Color(0xFF2196F3),
-        "green" to Color(0xFF4CAF50),
-        "red" to Color(0xFFF44336)
+        "yellow" to HighlightYellow,
+        "blue" to HighlightBlue,
+        "green" to HighlightGreen,
+        "red" to HighlightRed
     )
 
     LazyRow(
