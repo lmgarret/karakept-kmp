@@ -247,7 +247,11 @@ data class BookmarkViewerScreen(
         LaunchedEffect(loadingState, trackReadingProgress, contentRendered) {
             if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
-                if (bookmark.readingProgress > 0f && !bookmark.content.isNullOrBlank()) {
+                // Treat tiny progress values (< 2%) as "at the top" — the progress
+                // formula can report small non-zero values while still in the hero/
+                // description area due to the startThreshold gap.
+                val hasMeaningfulProgress = bookmark.readingProgress > 0.02f
+                if (hasMeaningfulProgress && !bookmark.content.isNullOrBlank()) {
                     if (contentRendered) {
                         if (isNativeRenderer) {
                             // Native renderer content is composed immediately but
@@ -278,11 +282,11 @@ data class BookmarkViewerScreen(
                         hasRestoredScroll = true
                     }
                     // If !contentRendered, this effect will re-fire when contentRendered changes.
-                } else if (bookmark.readingProgress == 0f) {
-                    // Nothing to restore
+                } else if (!hasMeaningfulProgress) {
+                    // At or near the top — nothing to restore
                     hasRestoredScroll = true
                 }
-                // If readingProgress > 0 but content is still blank, don't mark as
+                // If hasMeaningfulProgress but content is still blank, don't mark as
                 // restored — the LaunchedEffect will re-fire when content loads.
             }
         }
@@ -336,13 +340,27 @@ data class BookmarkViewerScreen(
         LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
             if (trackReadingProgress && hasRestoredScroll && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val currentState = loadingState as BookmarkLoadingState.FullyLoaded
-                if (readingProgress > 0f || scrollState.firstVisibleItemIndex > 0) {
+                // Use a threshold so positions near the top (within the hero/description
+                // area) are treated as "at the top" — the progress formula can produce
+                // small non-zero values (e.g. 0.008) at the description because the
+                // startThreshold is shorter than the hero.
+                val meaningfulProgress = readingProgress > 0.02f
+                if (meaningfulProgress) {
                     screenModel.onReadingStateChanged(
                         localId = currentState.bookmark.localId,
                         remoteId = currentState.bookmark.remoteId,
                         progress = readingProgress,
                         scrollIndex = scrollState.firstVisibleItemIndex,
                         scrollOffset = scrollState.firstVisibleItemScrollOffset
+                    )
+                } else if (scrollState.firstVisibleItemIndex > 0 || scrollState.firstVisibleItemScrollOffset > 0) {
+                    // Near the top — reset saved position so restore goes to the hero
+                    screenModel.onReadingStateChanged(
+                        localId = currentState.bookmark.localId,
+                        remoteId = currentState.bookmark.remoteId,
+                        progress = 0f,
+                        scrollIndex = 0,
+                        scrollOffset = 0
                     )
                 }
             }
@@ -441,7 +459,7 @@ data class BookmarkViewerScreen(
                         val needsScrollRestore = trackReadingProgress &&
                             !hasRestoredScroll &&
                             loadingState is BookmarkLoadingState.FullyLoaded &&
-                            (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0f &&
+                            (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f &&
                             !(loadingState as BookmarkLoadingState.FullyLoaded).bookmark.content.isNullOrBlank()
                         LazyColumn(
                             state = scrollState,

@@ -314,7 +314,13 @@ internal fun HighlightDetailsPanel(
             highlight = highlight,
             selectedColor = localColor,
             selectedNote = localNote,
-            onColorChange = { localColor = it },
+            onColorChange = { newColor ->
+                localColor = newColor
+                // Immediately persist color so the renderer reflects the change
+                if (highlight != null) {
+                    onUpdateHighlight(highlight.id, localNote.ifBlank { null }, newColor)
+                }
+            },
             onNoteChange = { localNote = it },
             onUpdateHighlight = onUpdateHighlight,
             onDeleteHighlight = onDeleteHighlight,
