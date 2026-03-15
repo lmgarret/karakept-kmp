@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.draw.clip
+import com.karakept.app.data.model.DateDisplayMode
+import com.karakept.app.utils.formatBookmarkDate
 
 /**
  * Extracts the domain name from a full URL.
@@ -70,6 +72,8 @@ fun HeroImageBanner(
     readingTimeMinutes: Int = 0,
     scrollProgress: Float = 0f,
     showTags: Boolean = true,
+    createdAt: Long? = null,
+    dateDisplayMode: DateDisplayMode = DateDisplayMode.ELAPSED,
     onUrlClick: (() -> Unit)? = null,
     onTagClick: ((String) -> Unit)? = null,
     onInfoClick: (() -> Unit)? = null,
@@ -166,7 +170,7 @@ fun HeroImageBanner(
                 )
             }
 
-            if (url != null) {
+            if (url != null || createdAt != null) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -175,32 +179,48 @@ fun HeroImageBanner(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier
-                            .then(
-                                if (onUrlClick != null) {
-                                    Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .clickable(onClick = onUrlClick)
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                } else {
-                                    Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                }
-                            )
+                        modifier = Modifier.weight(1f)
                     ) {
-                        AsyncImage(
-                            model = com.karakept.app.utils.FaviconUtils.getFaviconUrl(url),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.5f)),
-                            contentScale = ContentScale.Fit
-                        )
-                        Text(
-                            text = extractDomain(url),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
+                        if (url != null) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier
+                                    .then(
+                                        if (onUrlClick != null) {
+                                            Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .clickable(onClick = onUrlClick)
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        } else {
+                                            Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        }
+                                    )
+                            ) {
+                                AsyncImage(
+                                    model = com.karakept.app.utils.FaviconUtils.getFaviconUrl(url),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.5f)),
+                                    contentScale = ContentScale.Fit
+                                )
+                                Text(
+                                    text = extractDomain(url),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                        if (createdAt != null) {
+                            Text(
+                                text = formatBookmarkDate(createdAt, dateDisplayMode),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
 
                     // Right side: reading time badge + info button

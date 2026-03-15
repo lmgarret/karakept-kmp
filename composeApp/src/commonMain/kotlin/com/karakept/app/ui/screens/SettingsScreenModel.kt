@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.model.AccentColor
+import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ReaderFontFamily
@@ -461,6 +462,30 @@ class SettingsScreenModel(
     fun toggleContentSyncTargetList(listId: String) {
         screenModelScope.launch {
             settingsRepository.toggleContentSyncTargetList(listId)
+        }
+    }
+
+    val showDateInList: StateFlow<Boolean> = settingsRepository.showDateInList.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    val dateDisplayMode: StateFlow<DateDisplayMode> = settingsRepository.dateDisplayMode.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = DateDisplayMode.ELAPSED
+    )
+
+    fun setShowDateInList(show: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setShowDateInList(show)
+        }
+    }
+
+    fun setDateDisplayMode(mode: DateDisplayMode) {
+        screenModelScope.launch {
+            settingsRepository.setDateDisplayMode(mode)
         }
     }
 }

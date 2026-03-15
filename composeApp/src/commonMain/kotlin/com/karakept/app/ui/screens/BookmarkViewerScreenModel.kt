@@ -6,6 +6,7 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.Server
@@ -74,6 +75,9 @@ class BookmarkViewerScreenModel(
 
     val showTags: StateFlow<Boolean> = settingsRepository.showTags
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val dateDisplayMode: StateFlow<DateDisplayMode> = settingsRepository.dateDisplayMode
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), DateDisplayMode.ELAPSED)
 
     val linkOpenMode: StateFlow<LinkOpenMode> = settingsRepository.linkOpenMode
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), LinkOpenMode.CUSTOM_TAB)

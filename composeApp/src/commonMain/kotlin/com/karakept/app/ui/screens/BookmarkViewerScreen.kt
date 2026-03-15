@@ -91,6 +91,7 @@ data class BookmarkViewerScreen(
         val precrawledAssetPath by screenModel.precrawledAssetPath.collectAsState()
         val lists by screenModel.lists.collectAsState()
         val showTags by screenModel.showTags.collectAsState()
+        val dateDisplayMode by screenModel.dateDisplayMode.collectAsState()
         val isRefreshing by screenModel.isRefreshing.collectAsState()
         val offlineMode by screenModel.offlineMode.collectAsState()
         val highlights by screenModel.highlights.collectAsState()
@@ -476,6 +477,8 @@ data class BookmarkViewerScreen(
                                     readingTimeMinutes = readingTimeMinutes,
                                     showTags = showTags,
                                     scrollState = scrollState,
+                                    createdAt = state.bookmark.createdAt,
+                                    dateDisplayMode = dateDisplayMode,
                                     onUrlClick = if (url.isNotEmpty()) {
                                         {
                                             try {
