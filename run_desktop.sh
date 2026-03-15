@@ -4,32 +4,22 @@
 
 set -euo pipefail
 
-# --- Software rendering (safe everywhere, required in containers) ---
-export LIBGL_ALWAYS_SOFTWARE=1
-export GALLIUM_DRIVER=llvmpipe
-export MESA_GL_VERSION_OVERRIDE=3.3
-export MESA_GLSL_VERSION_OVERRIDE=330
-
 # --- Display detection ---
 
 # Helper: test X11 connectivity by opening/closing a connection
 try_x11() {
-    # Use python3 as a lightweight X11 probe (available in most environments)
     python3 -c "
-import socket, struct, os
+import socket, os
 display = os.environ.get('DISPLAY', '')
 if not display:
     exit(1)
-# Parse display number
 num = display.split(':')[-1].split('.')[0]
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 try:
     sock.connect('/tmp/.X11-unix/X' + num)
-    # Send connection setup (little-endian, no auth)
     sock.sendall(b'l\x00\x0b\x00\x00\x00\x00\x00\x00\x00\x00\x00')
     resp = sock.recv(8)
     status = resp[0] if resp else 0
-    # 0=Failed (auth), 1=Success, 2=Authenticate
     exit(0 if status == 1 else 2)
 except Exception:
     exit(1)
@@ -38,14 +28,29 @@ finally:
 " 2>/dev/null
 }
 
+jdk_supports_wayland() {
+    local ver
+    ver=$(java -version 2>&1 | head -1 | sed 's/.*"\([0-9]*\).*/\1/')
+    [[ "$ver" -ge 24 ]] 2>/dev/null
+}
+
 detect_display() {
-    # 1. If DISPLAY is already set, try it
+    # 1. Prefer Wayland if socket is available and JDK has WLToolkit (JDK 24+)
+    if [[ -S "/tmp/wayland-0" ]] && jdk_supports_wayland; then
+        export WAYLAND_DISPLAY=wayland-0
+        export XDG_RUNTIME_DIR=/tmp
+        # Unset DISPLAY so JDK picks Wayland, not X11
+        unset DISPLAY 2>/dev/null || true
+        echo "Using native Wayland display (WLToolkit)"
+        return 0
+    fi
+
+    # 2. If DISPLAY is set, try X11
     if [[ -n "${DISPLAY:-}" ]]; then
         if try_x11; then
             echo "Using X11 display: $DISPLAY"
             return 0
         fi
-        # Socket exists but auth failed
         if [[ -S "/tmp/.X11-unix/X${DISPLAY#:}" ]]; then
             echo "ERROR: X11 connection to $DISPLAY refused (authorization required)."
             echo ""
@@ -56,7 +61,7 @@ detect_display() {
         echo "WARNING: DISPLAY=$DISPLAY but cannot connect. Trying auto-detection..."
     fi
 
-    # 2. Auto-detect from X11 unix sockets
+    # 3. Auto-detect from X11 unix sockets
     for sock in /tmp/.X11-unix/X*; do
         [[ -S "$sock" ]] || continue
         local num="${sock##*/X}"
@@ -65,7 +70,6 @@ detect_display() {
             echo "Auto-detected X11 display: $DISPLAY"
             return 0
         fi
-        # Socket found but auth failed
         echo "ERROR: X11 socket found at $sock but authorization failed."
         echo ""
         echo "  Run on your HOST machine:  xhost +local:"
@@ -73,7 +77,7 @@ detect_display() {
         return 1
     done
 
-    # 3. macOS without DISPLAY — XQuartz instructions
+    # 4. macOS without DISPLAY — XQuartz instructions
     if [[ "$(uname)" == "Darwin" ]]; then
         echo "ERROR: No X11 display found."
         echo ""
@@ -86,7 +90,7 @@ detect_display() {
         return 1
     fi
 
-    # 4. Headless fallback with Xvfb
+    # 5. Headless fallback with Xvfb
     if command -v Xvfb &>/dev/null; then
         echo "No display found. Starting virtual display (headless mode)..."
         echo "  (The app will run but you won't see a window on your screen)"
@@ -98,11 +102,12 @@ detect_display() {
         return 0
     fi
 
-    # 5. Nothing works
+    # 6. Nothing works
     echo "ERROR: No display available."
     echo ""
     echo "  Options:"
-    echo "    - Linux devcontainer: ensure /tmp/.X11-unix is mounted and run 'xhost +local:' on host"
+    echo "    - Linux devcontainer: ensure Wayland or X11 socket is mounted"
+    echo "    - For X11: run 'xhost +local:' on host"
     echo "    - macOS: install XQuartz (see above)"
     echo "    - Headless: install Xvfb (apt install xvfb)"
     echo ""
