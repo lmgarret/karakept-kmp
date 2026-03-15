@@ -76,6 +76,29 @@ data class BookmarkViewerScreen(
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<BookmarkViewerScreenModel>()
         val mainScreenModel = koinInject<MainScreenModel>()
+
+        BookmarkViewerContent(
+            bookmarkId = bookmarkId,
+            scrollToHighlightId = scrollToHighlightId,
+            screenModel = screenModel,
+            onBack = { navigator.pop() },
+            onTagFilterApply = { tag ->
+                mainScreenModel.applyTagFilter(tag, bookmarkId)
+                navigator.pop()
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+@Composable
+fun BookmarkViewerContent(
+    bookmarkId: Long,
+    scrollToHighlightId: String? = null,
+    screenModel: BookmarkViewerScreenModel,
+    onBack: () -> Unit,
+    onTagFilterApply: (tag: String) -> Unit
+) {
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()
         val uriHandler = LocalUriHandler.current
@@ -513,8 +536,7 @@ data class BookmarkViewerScreen(
                                         }
                                     } else null,
                                     onTagClick = { tag ->
-                                        mainScreenModel.applyTagFilter(tag, bookmarkId)
-                                        navigator.pop()
+                                        onTagFilterApply(tag)
                                     },
                                     onInfoClick = { showDetailsPanel = true },
                                     bannerImageUrl = bannerImageUrl,
@@ -627,7 +649,7 @@ data class BookmarkViewerScreen(
                             showMenu = showMenu,
                             toolbarHeight = toolbarHeight,
                             readingProgress = if (trackReadingProgress) readingProgress else 0f,
-                            onBackClick = { navigator.pop() },
+                            onBackClick = onBack,
                             onMenuToggle = { showMenu = it },
                             onAppearanceClick = { showAppearancePanel = true },
                             onViewerModeClick = { showModeDialog = true },
@@ -708,7 +730,7 @@ data class BookmarkViewerScreen(
                 visible = true,
                 onConfirm = {
                     screenModel.deleteBookmark(fullyLoadedState.bookmark) {
-                        navigator.pop()
+                        onBack()
                     }
                     showDeleteConfirmation = false
                 },
@@ -776,7 +798,6 @@ data class BookmarkViewerScreen(
             bookmark = detailsBookmark,
             onDismiss = { showDetailsPanel = false }
         )
-    }
 }
 
 @Composable

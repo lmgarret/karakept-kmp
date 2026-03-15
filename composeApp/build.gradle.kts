@@ -189,6 +189,7 @@ compose.desktop {
     application {
         mainClass = "MainKt"
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
+        jvmArgs += "-Dskiko.renderApi=SOFTWARE_FAST"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.karakept.app"

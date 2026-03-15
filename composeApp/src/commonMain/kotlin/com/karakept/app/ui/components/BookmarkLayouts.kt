@@ -66,12 +66,15 @@ fun BookmarkCardLayout(
     screenshotUrl: String? = null,
     isSelected: Boolean = false,
     tagsScrollable: Boolean = false,
+    isActive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isFullyRead = bookmark.isRead
     val alpha = if (isFullyRead && dimRead) 0.5f else 1f
     val selectionBorderModifier = if (isSelected) {
         Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+    } else if (isActive) {
+        Modifier.border(2.dp, MaterialTheme.colorScheme.tertiary, RoundedCornerShape(12.dp))
     } else {
         Modifier
     }
@@ -91,6 +94,8 @@ fun BookmarkCardLayout(
             ),
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+        } else if (isActive) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f))
         } else {
             CardDefaults.cardColors()
         }
@@ -223,12 +228,15 @@ fun BookmarkListLayout(
     thumbnailSize: Int = 80,
     metadataPosition: MetadataPosition = MetadataPosition.BELOW,
     tagsScrollable: Boolean = false,
+    isActive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isFullyRead = bookmark.isRead
     val alpha = if (isFullyRead && dimRead) 0.5f else 1f
     val selectionBorderModifier = if (isSelected) {
         Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+    } else if (isActive) {
+        Modifier.border(2.dp, MaterialTheme.colorScheme.tertiary, RoundedCornerShape(12.dp))
     } else {
         Modifier
     }
@@ -253,6 +261,8 @@ fun BookmarkListLayout(
             ),
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+        } else if (isActive) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f))
         } else {
             CardDefaults.cardColors()
         }

@@ -60,6 +60,125 @@ import com.karakept.app.ui.utils.listHasChildren
 import com.karakept.api.model.KarakeepList
 
 @Composable
+internal fun DrawerContent(
+    lists: List<KarakeepList>,
+    listCounts: Map<String, Int>,
+    expandedLists: Set<String>,
+    currentFilter: FilterConfig,
+    onFilterApply: (FilterConfig) -> Unit,
+    onClearFilter: () -> Unit,
+    onToggleListExpanded: (String) -> Unit,
+    onMarkAllAsRead: (listId: String) -> Unit,
+    onRenameList: (listId: String, listName: String) -> Unit,
+    onNavigateToListSettings: (listId: String, listName: String) -> Unit,
+    onSetAsDefault: (listId: String) -> Unit,
+    onSetAsDefaultType: (DefaultListType) -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToHighlights: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(Modifier.height(12.dp))
+
+            // Quick Filters Section
+            Text("Quick Filters", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+
+            BuiltinDrawerItem(
+                label = "All Bookmarks",
+                icon = { Icon(Icons.Default.Book, contentDescription = null) },
+                selected = currentFilter == FilterConfig(),
+                onClick = onClearFilter,
+                onSetAsHome = { onSetAsDefaultType(DefaultListType.ALL_BOOKMARKS) }
+            )
+
+            BuiltinDrawerItem(
+                label = "Favorites",
+                icon = { Icon(Icons.Default.Star, contentDescription = null) },
+                selected = currentFilter == FilterConfig(status = FilterStatus.FAVORITES),
+                onClick = { onFilterApply(FilterConfig(status = FilterStatus.FAVORITES)) },
+                onSetAsHome = { onSetAsDefaultType(DefaultListType.FAVORITES) }
+            )
+
+            BuiltinDrawerItem(
+                label = "Archived",
+                icon = { Icon(Icons.Default.Archive, contentDescription = null) },
+                selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
+                onClick = { onFilterApply(FilterConfig(status = FilterStatus.ARCHIVED)) },
+                onSetAsHome = { onSetAsDefaultType(DefaultListType.ARCHIVED) }
+            )
+
+            // Lists Section (Hierarchical)
+            if (lists.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                Text("Lists", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
+
+                val hierarchy = buildListHierarchy(lists)
+                val visibleHierarchy = filterExpandedHierarchy(hierarchy, expandedLists)
+
+                visibleHierarchy.forEach { (list, depth) ->
+                    val listId = list.id ?: ""
+                    key(listId) {
+                        val hasChildLists = listHasChildren(listId, lists)
+                        ListDrawerItem(
+                            list = list,
+                            depth = depth,
+                            count = listCounts[listId],
+                            isSelected = currentFilter.lists.contains(listId),
+                            expandedLists = expandedLists,
+                            hasChildLists = hasChildLists,
+                            onToggleExpanded = { onToggleListExpanded(listId) },
+                            onSelected = {
+                                onFilterApply(
+                                    FilterConfig(
+                                        status = FilterStatus.ALL_INCLUDING_ARCHIVED,
+                                        lists = listOf(listId)
+                                    )
+                                )
+                            },
+                            onMarkAllAsRead = { onMarkAllAsRead(listId) },
+                            onRenameList = { onRenameList(listId, list.name ?: "") },
+                            onListSettings = { onNavigateToListSettings(listId, list.name ?: "") },
+                            onSetAsDefault = { onSetAsDefault(listId) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            NavigationDrawerItem(
+                label = { Text("Highlights") },
+                selected = false,
+                icon = { Icon(Icons.Default.Create, contentDescription = null) },
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary
+                ),
+                onClick = onNavigateToHighlights
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+
+        NavigationDrawerItem(
+            label = { Text("Settings") },
+            selected = false,
+            icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+            colors = NavigationDrawerItemDefaults.colors(
+                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                selectedIconColor = MaterialTheme.colorScheme.primary,
+                selectedTextColor = MaterialTheme.colorScheme.primary
+            ),
+            onClick = onNavigateToSettings
+        )
+    }
+}
+
+@Composable
 internal fun MainScreenDrawer(
     drawerState: DrawerState,
     lists: List<KarakeepList>,
@@ -82,105 +201,22 @@ internal fun MainScreenDrawer(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        Spacer(Modifier.height(12.dp))
-
-                        // Quick Filters Section
-                        Text("Quick Filters", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
-
-                        BuiltinDrawerItem(
-                            label = "All Bookmarks",
-                            icon = { Icon(Icons.Default.Book, contentDescription = null) },
-                            selected = currentFilter == FilterConfig(),
-                            onClick = onClearFilter,
-                            onSetAsHome = { onSetAsDefaultType(DefaultListType.ALL_BOOKMARKS) }
-                        )
-
-                        BuiltinDrawerItem(
-                            label = "Favorites",
-                            icon = { Icon(Icons.Default.Star, contentDescription = null) },
-                            selected = currentFilter == FilterConfig(status = FilterStatus.FAVORITES),
-                            onClick = { onFilterApply(FilterConfig(status = FilterStatus.FAVORITES)) },
-                            onSetAsHome = { onSetAsDefaultType(DefaultListType.FAVORITES) }
-                        )
-
-                        BuiltinDrawerItem(
-                            label = "Archived",
-                            icon = { Icon(Icons.Default.Archive, contentDescription = null) },
-                            selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
-                            onClick = { onFilterApply(FilterConfig(status = FilterStatus.ARCHIVED)) },
-                            onSetAsHome = { onSetAsDefaultType(DefaultListType.ARCHIVED) }
-                        )
-
-                        // Lists Section (Hierarchical)
-                        if (lists.isNotEmpty()) {
-                            Spacer(Modifier.height(16.dp))
-                            Text("Lists", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
-
-                            val hierarchy = buildListHierarchy(lists)
-                            val visibleHierarchy = filterExpandedHierarchy(hierarchy, expandedLists)
-
-                            visibleHierarchy.forEach { (list, depth) ->
-                                val listId = list.id ?: ""
-                                key(listId) {
-                                    val hasChildLists = listHasChildren(listId, lists)
-                                    ListDrawerItem(
-                                        list = list,
-                                        depth = depth,
-                                        count = listCounts[listId],
-                                        isSelected = currentFilter.lists.contains(listId),
-                                        expandedLists = expandedLists,
-                                        hasChildLists = hasChildLists,
-                                        onToggleExpanded = { onToggleListExpanded(listId) },
-                                        onSelected = {
-                                            onFilterApply(
-                                                FilterConfig(
-                                                    status = FilterStatus.ALL_INCLUDING_ARCHIVED,
-                                                    lists = listOf(listId)
-                                                )
-                                            )
-                                        },
-                                        onMarkAllAsRead = { onMarkAllAsRead(listId) },
-                                        onRenameList = { onRenameList(listId, list.name ?: "") },
-                                        onListSettings = { onNavigateToListSettings(listId, list.name ?: "") },
-                                        onSetAsDefault = { onSetAsDefault(listId) }
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-                        NavigationDrawerItem(
-                            label = { Text("Highlights") },
-                            selected = false,
-                            icon = { Icon(Icons.Default.Create, contentDescription = null) },
-                            colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary
-                            ),
-                            onClick = onNavigateToHighlights
-                        )
-                        Spacer(Modifier.height(16.dp))
-                    }
-
-                    NavigationDrawerItem(
-                        label = { Text("Settings") },
-                        selected = false,
-                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                        colors = NavigationDrawerItemDefaults.colors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary
-                        ),
-                        onClick = onNavigateToSettings
-                    )
-                }
+                DrawerContent(
+                    lists = lists,
+                    listCounts = listCounts,
+                    expandedLists = expandedLists,
+                    currentFilter = currentFilter,
+                    onFilterApply = onFilterApply,
+                    onClearFilter = onClearFilter,
+                    onToggleListExpanded = onToggleListExpanded,
+                    onMarkAllAsRead = onMarkAllAsRead,
+                    onRenameList = onRenameList,
+                    onNavigateToListSettings = onNavigateToListSettings,
+                    onSetAsDefault = onSetAsDefault,
+                    onSetAsDefaultType = onSetAsDefaultType,
+                    onNavigateToSettings = onNavigateToSettings,
+                    onNavigateToHighlights = onNavigateToHighlights
+                )
             }
         }
     ) {

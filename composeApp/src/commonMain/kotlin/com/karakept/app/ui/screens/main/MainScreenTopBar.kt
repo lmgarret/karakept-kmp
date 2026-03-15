@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MenuOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -64,6 +65,8 @@ internal fun MainScreenTopBar(
     onRefreshClick: () -> Unit,
     onOfflineBadgeClick: () -> Unit = {},
     isDesktop: Boolean,
+    isExpandedLayout: Boolean = false,
+    isDrawerVisible: Boolean = true,
     hasActiveFilter: Boolean = false,
     isSearchActive: Boolean = false,
     searchQuery: String = "",
@@ -225,7 +228,11 @@ internal fun MainScreenTopBar(
                 }
             } else {
                 IconButton(onClick = onMenuClick) {
-                    Icon(Icons.Default.Menu, contentDescription = "Menu")
+                    Icon(
+                        imageVector = if (isExpandedLayout && isDrawerVisible) Icons.Default.MenuOpen
+                                      else Icons.Default.Menu,
+                        contentDescription = if (isExpandedLayout) "Toggle drawer" else "Menu"
+                    )
                 }
             }
         },

@@ -80,6 +80,7 @@ internal fun BookmarkListContent(
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
     isSelectionMode: Boolean = false,
     selectedBookmarkIds: Set<Long> = emptySet(),
+    activeBookmarkId: Long? = null,
     onBookmarkSelectionToggle: (BookmarkEntity) -> Unit = {},
     listState: LazyListState,
     isDesktop: Boolean = false,
@@ -363,6 +364,7 @@ internal fun BookmarkListContent(
                             println("📸 LIST: No image available for bookmark ${bookmark.remoteId}, showing emoji")
                         }
 
+                        val isActiveBookmark = bookmark.localId == activeBookmarkId
                         when (layoutType) {
                             LayoutType.CARD -> BookmarkCardLayout(
                                 bookmark = bookmark,
@@ -386,7 +388,8 @@ internal fun BookmarkListContent(
                                 bannerImageUrl = bannerImageUrl,
                                 screenshotUrl = screenshotUrl,
                                 isSelected = isSelected,
-                                tagsScrollable = tagsScrollable
+                                tagsScrollable = tagsScrollable,
+                                isActive = isActiveBookmark
                             )
                             LayoutType.LIST -> BookmarkListLayout(
                                 bookmark = bookmark,
@@ -414,7 +417,8 @@ internal fun BookmarkListContent(
                                 showFavicon = showFavicon,
                                 thumbnailSize = thumbnailSize,
                                 metadataPosition = metadataPosition,
-                                tagsScrollable = tagsScrollable
+                                tagsScrollable = tagsScrollable,
+                                isActive = isActiveBookmark
                             )
                             LayoutType.COMPACT_LIST -> BookmarkCompactListLayout(
                                 bookmark = bookmark,
