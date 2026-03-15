@@ -110,4 +110,6 @@ val appModule = module {
     factory { params -> com.karakept.app.ui.screens.settings.PerListSettingsScreenModel(params.get(), get()) }
     factory { ReaderAppearanceScreenModel(get()) }
     factory { com.karakept.app.ui.screens.settings.BackupRestoreScreenModel(get(), get()) }
+    factory { com.karakept.app.ui.screens.settings.LayoutsScreenModel(get()) }
+    factory { com.karakept.app.ui.screens.settings.LayoutEditorScreenModel(get()) }
 }

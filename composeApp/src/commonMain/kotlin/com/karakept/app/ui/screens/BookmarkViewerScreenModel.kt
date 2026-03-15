@@ -79,7 +79,7 @@ class BookmarkViewerScreenModel(
     val htmlFontFamily: StateFlow<ReaderFontFamily> = settingsRepository.htmlFontFamily
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ReaderFontFamily.SYSTEM)
 
-    val showTags: StateFlow<Boolean> = settingsRepository.showTags
+    val showTags: StateFlow<Boolean> = settingsRepository.showTagsInViewer
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val dateDisplayMode: StateFlow<DateDisplayMode> = settingsRepository.dateDisplayMode

@@ -14,17 +14,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Window
-import androidx.compose.material.icons.outlined.MenuBook
-import androidx.compose.material3.Card
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,14 +40,11 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.CustomSwipeActionType
-import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DefaultListType
-import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.components.getIcon
@@ -72,12 +63,8 @@ class BookmarkListSettingsScreen : Screen {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
-        val currentLayoutType by screenModel.layoutType.collectAsState()
-        val showReadingTimeBadge by screenModel.showReadingTimeBadge.collectAsState()
         val readingSpeedWpm by screenModel.readingSpeedWpm.collectAsState()
-        val showTags by screenModel.showTags.collectAsState()
-        val showDateInList by screenModel.showDateInList.collectAsState()
-        val dateDisplayMode by screenModel.dateDisplayMode.collectAsState()
+        val notificationsEnabled by screenModel.notificationsEnabled.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
         val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
@@ -258,107 +245,6 @@ class BookmarkListSettingsScreen : Screen {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Text(
-                    text = "Article Display Layout",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                // Dim read bookmarks toggle
-                val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.VisibilityOff,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Dim Read Bookmarks",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Fade out the title and thumbnail of read articles",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = dimReadBookmarks,
-                            onCheckedChange = { screenModel.setDimReadBookmarks(it) }
-                        )
-                    }
-                }
-
-                // Show Tags toggle
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Label,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Show Tags",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Display tags on bookmark cards",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = showTags,
-                            onCheckedChange = { screenModel.setShowTags(it) }
-                        )
-                    }
-                }
-
-                LayoutOption(
-                    title = "Card Layout",
-                    description = "Display articles with large thumbnails on top and title below",
-                    icon = Icons.Default.Window,
-                    isSelected = currentLayoutType == LayoutType.CARD,
-                    onClick = { screenModel.setLayoutType(LayoutType.CARD) }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                LayoutOption(
-                    title = "List Layout",
-                    description = "Show thumbnails on the left with title and description on the right",
-                    icon = Icons.AutoMirrored.Filled.List,
-                    isSelected = currentLayoutType == LayoutType.LIST,
-                    onClick = { screenModel.setLayoutType(LayoutType.LIST) }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
                 // Gestures Section
                 Text(
                     text = "Gestures",
@@ -430,49 +316,11 @@ class BookmarkListSettingsScreen : Screen {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Reading Time Settings
                 Text(
-                    text = "Reading Time",
+                    text = "Reading Speed",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
-
-                // Show Reading Time Badge Toggle
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.MenuBook,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Show Reading Time",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Display estimated reading time on bookmark cards",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = showReadingTimeBadge,
-                            onCheckedChange = { screenModel.setShowReadingTimeBadge(it) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
 
                 // Reading Speed Setting
                 Card(
@@ -512,104 +360,44 @@ class BookmarkListSettingsScreen : Screen {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Date Display Section
+                // Notifications Section
                 Text(
-                    text = "Date Display",
+                    text = "Notifications",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // Show Date Toggle
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                ) {
+                Card(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.CalendarToday,
+                            imageVector = Icons.Default.Notifications,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 16.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Show Date",
+                                text = "Enable Notifications",
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                text = "Display creation date on bookmark cards",
+                                text = "Show notifications when a bookmark is saved",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
-                            checked = showDateInList,
-                            onCheckedChange = { screenModel.setShowDateInList(it) }
+                            checked = notificationsEnabled,
+                            onCheckedChange = { screenModel.setNotificationsEnabled(it) }
                         )
                     }
                 }
 
-                // Date Format Selection
-                if (showDateInList) {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { screenModel.setDateDisplayMode(DateDisplayMode.ELAPSED) }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = dateDisplayMode == DateDisplayMode.ELAPSED,
-                                    onClick = { screenModel.setDateDisplayMode(DateDisplayMode.ELAPSED) }
-                                )
-                                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                                    Text(
-                                        text = "Relative time",
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                    Text(
-                                        text = "e.g., 33m ago, 2h ago, 3d ago",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            HorizontalDivider()
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { screenModel.setDateDisplayMode(DateDisplayMode.ABSOLUTE) }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = dateDisplayMode == DateDisplayMode.ABSOLUTE,
-                                    onClick = { screenModel.setDateDisplayMode(DateDisplayMode.ABSOLUTE) }
-                                )
-                                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                                    Text(
-                                        text = "Absolute date",
-                                        style = MaterialTheme.typography.bodyLarge
-                                    )
-                                    Text(
-                                        text = "e.g., 2024-01-15",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
     }
@@ -637,63 +425,6 @@ private fun DefaultViewOption(
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(start = 8.dp)
         )
-    }
-}
-
-@Composable
-private fun LayoutOption(
-    title: String,
-    description: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector?,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            RadioButton(
-                selected = isSelected,
-                onClick = onClick
-            )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 12.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
     }
 }
 

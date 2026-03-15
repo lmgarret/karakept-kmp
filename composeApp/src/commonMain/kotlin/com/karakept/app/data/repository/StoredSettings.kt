@@ -56,7 +56,8 @@ internal data class StoredReaderSettings(
     val readingSpeedWpm: Int = 238,
     val trackReadingProgress: Boolean = true,
     val resetProgressOnMarkUnread: Boolean = true,
-    val linkOpenMode: String = LinkOpenMode.CUSTOM_TAB.name
+    val linkOpenMode: String = LinkOpenMode.CUSTOM_TAB.name,
+    val showTagsInViewer: Boolean = true
 )
 
 /** Swipe-action settings: left/right actions and custom swipe configurations. */

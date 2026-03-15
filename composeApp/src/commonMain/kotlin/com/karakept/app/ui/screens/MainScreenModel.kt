@@ -4,6 +4,7 @@ import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.Server
@@ -189,6 +190,26 @@ class MainScreenModel(
             val settings = allSettings[listId] ?: return@combine null
             val configId = settings.scrollActionConfigId ?: return@combine null
             configs.find { it.id == configId }
+        }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /**
+     * The active [BookmarkLayout] for the current view.
+     * Resolution order: per-list layout → default layout → null (fall back to global settings).
+     */
+    val activeLayout: StateFlow<BookmarkLayout?> =
+        combine(
+            _currentListContext,
+            settingsRepository.allListSettings,
+            settingsRepository.defaultLayoutId,
+            settingsRepository.customLayouts
+        ) { listId, allSettings, defaultLayoutId, customLayouts ->
+            val perListLayoutId = if (listId != null) allSettings[listId]?.layoutId else null
+            val resolvedId = perListLayoutId ?: defaultLayoutId ?: return@combine null
+            if (BookmarkLayout.isBuiltInId(resolvedId)) {
+                BookmarkLayout.getBuiltIn(resolvedId)
+            } else {
+                customLayouts.find { it.id == resolvedId }
+            }
         }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Two independent bookmark pipelines selected by _searchQuery:

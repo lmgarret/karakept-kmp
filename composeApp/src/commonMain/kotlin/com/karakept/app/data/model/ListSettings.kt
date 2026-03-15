@@ -1,5 +1,6 @@
 package com.karakept.app.data.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -9,5 +10,7 @@ data class ListSettings(
     val scrollAction: SwipeAction = SwipeAction.NONE,
     val scrollActionConfigId: String? = null,
     val includeChildListBookmarks: Boolean = false,
-    val countOnlyUnread: Boolean = false
+    val countOnlyUnread: Boolean = false,
+    @SerialName("displayProfileId")
+    val layoutId: String? = null
 )

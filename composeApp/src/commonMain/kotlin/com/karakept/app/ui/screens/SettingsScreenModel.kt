@@ -362,6 +362,18 @@ class SettingsScreenModel(
         }
     }
 
+    val showTagsInViewer: StateFlow<Boolean> = settingsRepository.showTagsInViewer.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setShowTagsInViewer(show: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setShowTagsInViewer(show)
+        }
+    }
+
     val notificationsEnabled: StateFlow<Boolean> = settingsRepository.notificationsEnabled.stateIn(
         scope = screenModelScope,
         started = SharingStarted.WhileSubscribed(5000),
