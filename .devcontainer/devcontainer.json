@@ -1,6 +1,6 @@
 {
     "name": "Karakept Development",
-    "image": "mcr.microsoft.com/devcontainers/java:dev-17-bookworm",
+    "image": "mcr.microsoft.com/devcontainers/java:dev-21-bookworm",
     "features": {
         "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
         "ghcr.io/CASL0/devcontainer-features/android-sdk:1": {
@@ -12,7 +12,7 @@
             "installYarnUsingApt": "false"
         },
         "ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
-            "packages": "curl,nano,vim,ninja-build,python3,libgtk-3-dev,libwebkit2gtk-4.1-dev,xvfb,mesa-utils,libxcursor1,libxrandr2,libxi6,libxxf86vm1"
+            "packages": "curl,nano,vim,ninja-build,python3,libgtk-3-dev,libwebkit2gtk-4.1-dev,xvfb,mesa-utils,libxcursor1,libxrandr2,libxi6,libxxf86vm1,fonts-noto-color-emoji"
         }
     },
     "remoteEnv": {
@@ -44,10 +44,8 @@
         "source=${localEnv:HOME}/.var/app/com.bitwarden.desktop/data/.bitwarden-ssh-agent.sock,target=/tmp/ssh-agent.sock,type=bind"
     ],
     "containerEnv": {
-        "DISPLAY": "${localEnv:DISPLAY}",
-        "WAYLAND_DISPLAY": "wayland-0",
+        "DISPLAY": ":0",
         "XDG_RUNTIME_DIR": "/tmp",
-        "QT_QPA_PLATFORM": "wayland",
         "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock"
     }
 }

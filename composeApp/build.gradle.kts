@@ -193,10 +193,19 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.karakept.app"
             packageVersion = "1.0.0"
+            linux {
+                iconFile.set(project.file("src/commonMain/composeResources/drawable/icon.png"))
+            }
         }
     }
 }
 
+
+configurations.all {
+    resolutionStrategy {
+        force(libs.kotlinx.datetime.get().toString())
+    }
+}
 
 tasks.withType<Test> {
     testLogging {

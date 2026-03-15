@@ -74,6 +74,7 @@ internal fun BookmarkListContent(
     selectedBookmarkIds: Set<Long> = emptySet(),
     onBookmarkSelectionToggle: (BookmarkEntity) -> Unit = {},
     listState: LazyListState,
+    isDesktop: Boolean = false,
     pullRefreshState: PullRefreshState,
     onBookmarkClick: (BookmarkEntity) -> Unit,
     onBookmarkLongClick: (BookmarkEntity) -> Unit,
@@ -128,7 +129,7 @@ internal fun BookmarkListContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pullRefresh(pullRefreshState)
+            .then(if (!isDesktop) Modifier.pullRefresh(pullRefreshState) else Modifier)
     ) {
         // Container-level drag selection: the gesture lives here (not per-item) so that
         // edge-scroll auto-scrolling does not recycle the item that owns the gesture detector,
@@ -470,10 +471,12 @@ internal fun BookmarkListContent(
             }
         }
 
-        PullRefreshIndicator(
-            refreshing = isSyncing,
-            state = pullRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
+        if (!isDesktop) {
+            PullRefreshIndicator(
+                refreshing = isSyncing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
     }
 }
