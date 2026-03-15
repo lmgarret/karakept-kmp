@@ -151,7 +151,7 @@ class BookmarkActionsRepository(
     }
 
     /**
-     * Mark bookmark as read (local-only, no server sync).
+     * Mark bookmark as read locally and sync the completed progress (100%) to server.
      * Read status is primarily driven by reading progress reaching 1.0,
      * but this allows manual override.
      */
@@ -161,14 +161,16 @@ class BookmarkActionsRepository(
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
                     bookmarkDao.insertBookmark(it.copy(isRead = true))
+                    queueReadingProgressUpdate(bookmarkRemoteId, serverId, progressPercent = 100)
                 }
                 _bookmarkChangedEvents.emit(bookmarkRemoteId)
+                triggerAutoSync(serverId)
             }
         }
     }
 
     /**
-     * Mark bookmark as unread (local-only, no server sync).
+     * Mark bookmark as unread locally and optionally reset server-side progress to 0%.
      * @param resetProgress If true, also resets reading progress and scroll position to zero.
      */
     suspend fun markAsUnread(bookmarkRemoteId: Long, serverId: String, resetProgress: Boolean = false) {
@@ -182,8 +184,91 @@ class BookmarkActionsRepository(
                         it.copy(isRead = false)
                     }
                     bookmarkDao.insertBookmark(updated)
+                    if (resetProgress) {
+                        queueReadingProgressUpdate(bookmarkRemoteId, serverId, progressPercent = 0)
+                        triggerAutoSync(serverId)
+                    }
                 }
                 _bookmarkChangedEvents.emit(bookmarkRemoteId)
+            }
+        }
+    }
+
+    /**
+     * Queue a reading progress update to be synced to the server.
+     * Only one pending update per bookmark is kept (latest wins), so stale updates are discarded.
+     */
+    suspend fun queueReadingProgressUpdate(
+        bookmarkRemoteId: Long,
+        serverId: String,
+        progressPercent: Int
+    ) {
+        withContext(Dispatchers.IO) {
+            println("ReadProgressSync: queueReadingProgressUpdate remoteId=$bookmarkRemoteId serverId=$serverId percent=$progressPercent")
+            // Remove any stale pending update for this bookmark (keep only latest)
+            pendingActionDao.deleteActionsForBookmarkByType(
+                bookmarkRemoteId, serverId, PendingActionType.UPDATE_READING_PROGRESS
+            )
+            queueAction(
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = serverId,
+                actionType = PendingActionType.UPDATE_READING_PROGRESS,
+                actionData = json.encodeToString(mapOf("progressPercent" to progressPercent.toString()))
+            )
+            println("ReadProgressSync: queued pending action successfully")
+        }
+        triggerAutoSync(serverId)
+    }
+
+    /**
+     * Fetch reading progress from the server and apply it locally if it is higher than the
+     * current local progress. Used when opening a bookmark on a new device to restore
+     * cross-device reading position.
+     *
+     * @return true if local progress was updated from server data, false otherwise.
+     */
+    suspend fun pullReadingProgressFromServer(bookmarkRemoteId: Long, serverId: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                println("ReadProgressSync: pullReadingProgressFromServer remoteId=$bookmarkRemoteId serverId=$serverId")
+                val servers = serverRepository.servers.first()
+                val server = servers.find { it.id == serverId }
+                if (server == null) {
+                    println("ReadProgressSync: pull ABORT — server not found for serverId=$serverId")
+                    return@withContext false
+                }
+                val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+                if (bookmark == null) {
+                    println("ReadProgressSync: pull ABORT — bookmark not found in DB for remoteId=$bookmarkRemoteId")
+                    return@withContext false
+                }
+
+                println("ReadProgressSync: fetching server progress for originalRemoteId=${bookmark.originalRemoteId}")
+                val serverPercent = remoteDataSource.getReadingProgress(server, bookmark.originalRemoteId)
+                if (serverPercent == null) {
+                    println("ReadProgressSync: pull — server returned null progress")
+                    return@withContext false
+                }
+
+                println("ReadProgressSync: server has ${serverPercent}%, local has ${(bookmark.readingProgress * 100).toInt()}%")
+                val serverProgress = serverPercent / 100f
+                // Only apply server progress if it's higher than local (avoid overwriting newer local data)
+                if (serverProgress > bookmark.readingProgress) {
+                    bookmarkDao.updateReadingProgress(
+                        localId = bookmark.localId,
+                        progress = serverProgress,
+                        scrollIndex = 0,
+                        scrollOffset = 0
+                    )
+                    println("ReadProgressSync: restored from server: ${serverPercent}%")
+                    true
+                } else {
+                    println("ReadProgressSync: server progress not higher, keeping local")
+                    false
+                }
+            } catch (e: Exception) {
+                println("BookmarkActionsRepository: Failed to pull reading progress: ${e.message}")
+                false
             }
         }
     }
@@ -776,8 +861,15 @@ class BookmarkActionsRepository(
                     }
                 }
                 PendingActionType.MARK_READ, PendingActionType.MARK_UNREAD -> {
-                    // Read status is now local-only. Skip any legacy pending actions.
+                    // Legacy actions – reading progress is now synced via UPDATE_READING_PROGRESS.
                     println("BookmarkActionsRepository: Skipping legacy ${action.actionType} action")
+                }
+                PendingActionType.UPDATE_READING_PROGRESS -> {
+                    val data = json.decodeFromString<Map<String, String>>(action.actionData)
+                    val progressPercent = data["progressPercent"]?.toIntOrNull() ?: 0
+                    println("ReadProgressSync: executing pending action — pushing ${progressPercent}% for bookmark $bookmarkId to server")
+                    val success = remoteDataSource.updateReadingProgress(server, bookmarkId, progressPercent)
+                    println("ReadProgressSync: push result=$success")
                 }
                 PendingActionType.MOVE_TO_LIST -> {
                     val data = json.decodeFromString<Map<String, String>>(action.actionData)

@@ -98,6 +98,7 @@ data class BookmarkViewerScreen(
         val highlights by screenModel.highlights.collectAsState()
         val linkOpenMode by screenModel.linkOpenMode.collectAsState()
         val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
+        val serverProgressChecked by screenModel.serverProgressChecked.collectAsState()
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isRefreshing,
@@ -244,9 +245,11 @@ data class BookmarkViewerScreen(
         // Restore scroll position once content is fully rendered.
         // For READER mode (native renderer), content renders immediately — no delays needed.
         // For WEB mode (WebView), we must wait for the WebView to measure its height.
+        // serverProgressChecked is included as a key so that when an async server pull completes
+        // and raises a 0→N% transition, this effect re-runs and can do the restoration.
         var hasRestoredScroll by remember { mutableStateOf(false) }
         val isNativeRenderer = viewerMode == ViewerMode.READER
-        LaunchedEffect(loadingState, trackReadingProgress, contentRendered) {
+        LaunchedEffect(loadingState, trackReadingProgress, contentRendered, serverProgressChecked) {
             if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
                 // Treat tiny progress values (< 2%) as "at the top" — the progress
@@ -264,29 +267,51 @@ data class BookmarkViewerScreen(
                             // the Compose layout system before scrolling.
                             delay(300)
                         }
-                        safeScrollToItem(
-                            bookmark.readingScrollIndex,
-                            bookmark.readingScrollOffset
-                        )
+
+                        // Determine scroll target: use saved scroll position if available,
+                        // otherwise estimate from reading progress percentage (e.g. when
+                        // progress was restored from the server which only stores %).
+                        val hasExactPosition = bookmark.readingScrollIndex > 0 || bookmark.readingScrollOffset > 0
+                        val (targetIndex, targetOffset) = if (hasExactPosition) {
+                            bookmark.readingScrollIndex to bookmark.readingScrollOffset
+                        } else {
+                            // Estimate scroll position from progress percentage.
+                            // The LazyColumn has a hero banner (item 0), optional description,
+                            // then the content body. Estimate using total content height.
+                            val layoutInfo = scrollState.layoutInfo
+                            val totalHeight = layoutInfo.visibleItemsInfo.sumOf { it.size }
+                                .coerceAtLeast(layoutInfo.viewportEndOffset)
+                            val viewportSize = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+                            // Estimate total scrollable range from the known viewport and progress
+                            // The content item is the last item — scroll into it by the estimated offset
+                            val contentItemIndex = layoutInfo.totalItemsCount - 1
+                            val contentItem = layoutInfo.visibleItemsInfo.lastOrNull()
+                            val contentHeight = contentItem?.size ?: totalHeight
+                            val estimatedOffset = (contentHeight * bookmark.readingProgress).toInt()
+                            contentItemIndex.coerceAtLeast(0) to estimatedOffset
+                        }
+
+                        safeScrollToItem(targetIndex, targetOffset)
                         if (!isNativeRenderer) {
                             // WebView may not have its full height yet — retry
                             for (attempt in 1..3) {
-                                val offsetOk = bookmark.readingScrollOffset < 200 ||
-                                    scrollState.firstVisibleItemScrollOffset >= bookmark.readingScrollOffset / 3
-                                if (scrollState.firstVisibleItemIndex == bookmark.readingScrollIndex && offsetOk) break
+                                val offsetOk = targetOffset < 200 ||
+                                    scrollState.firstVisibleItemScrollOffset >= targetOffset / 3
+                                if (scrollState.firstVisibleItemIndex == targetIndex && offsetOk) break
                                 delay(250)
-                                safeScrollToItem(
-                                    bookmark.readingScrollIndex,
-                                    bookmark.readingScrollOffset
-                                )
+                                safeScrollToItem(targetIndex, targetOffset)
                             }
                         }
                         hasRestoredScroll = true
                     }
                     // If !contentRendered, this effect will re-fire when contentRendered changes.
                 } else if (!hasMeaningfulProgress) {
-                    // At or near the top — nothing to restore
-                    hasRestoredScroll = true
+                    // At or near the top — nothing to restore, but only finalise once the
+                    // server pull has completed.  If the pull returns > 0%, loadingState will
+                    // update and the readingProgress > 0 branch above will handle restoration.
+                    if (serverProgressChecked) {
+                        hasRestoredScroll = true
+                    }
                 }
                 // If hasMeaningfulProgress but content is still blank, don't mark as
                 // restored — the LaunchedEffect will re-fire when content loads.
@@ -328,17 +353,12 @@ data class BookmarkViewerScreen(
 
         val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
 
-        // Debug: log every scroll position change with context flags.
-        LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
-            println("ViewerScroll: scroll → index=${scrollState.firstVisibleItemIndex} " +
-                "offset=${scrollState.firstVisibleItemScrollOffset} " +
-                "hasRestoredScroll=$hasRestoredScroll " +
-                "contentRendered=$contentRendered " +
-                "highlightPositionReceived=$highlightPositionReceived")
-        }
-
         // Push reading state to the screen model on every scroll change.
         // The screen model debounces DB writes internally (500 ms).
+        // Guard: only record progress when rememberReadingProgress has a real measurement (> 0).
+        // Immediately after scroll restoration the item-height cache is empty so the function
+        // returns 0f even though firstVisibleItemIndex > 0.  Accepting 0f here would queue a
+        // "0%" update and reset the server's stored progress.
         LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
             if (trackReadingProgress && hasRestoredScroll && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val currentState = loadingState as BookmarkLoadingState.FullyLoaded

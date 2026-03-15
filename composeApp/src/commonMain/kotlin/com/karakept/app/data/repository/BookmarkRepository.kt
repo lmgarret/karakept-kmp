@@ -382,6 +382,9 @@ class BookmarkRepository(
             // Phase 5: Content sync (uses entities with correct localIds)
             syncContent(entitiesWithLocalIds)
 
+            // Phase 6: Sync reading progress for in-progress bookmarks
+            syncReadingProgress(entitiesWithLocalIds)
+
             // Emit completion with count before returning to Idle
             if (newCount > 0) {
                 _syncProgress.value = com.karakept.app.data.model.SyncProgress.SyncComplete(newCount)
@@ -713,6 +716,39 @@ class BookmarkRepository(
             }
 
             return Pair(entities, newBookmarksCount)
+        }
+
+        // Phase 6: Sync reading progress from server for all synced bookmarks.
+        // The karakeep server stores reading progress in a separate table, only
+        // accessible via per-bookmark tRPC calls (no batch endpoint). To keep
+        // sync time reasonable we pull concurrently and cap the total count.
+        private suspend fun syncReadingProgress(entities: List<BookmarkEntity>) {
+            if (!settingsRepository.trackReadingProgress.first()) return
+            if (settingsRepository.offlineMode.first()) return
+
+            val candidates = entities.take(50) // Cap to bound API cost
+
+            if (candidates.isEmpty()) return
+            println("ReadProgressSync: pulling reading progress for ${candidates.size} bookmarks")
+
+            // Pull concurrently (up to 5 at a time) to avoid blocking sync too long
+            val semaphore = kotlinx.coroutines.sync.Semaphore(5)
+            kotlinx.coroutines.coroutineScope {
+                for (bookmark in candidates) {
+                    launch {
+                        semaphore.acquire()
+                        try {
+                            bookmarkActionsRepository.pullReadingProgressFromServer(
+                                bookmark.remoteId, config.server.id
+                            )
+                        } catch (e: Exception) {
+                            println("ReadProgressSync: failed to pull for ${bookmark.remoteId}: ${e.message}")
+                        } finally {
+                            semaphore.release()
+                        }
+                    }
+                }
+            }
         }
 
         // Phase 5: Content Sync

@@ -50,4 +50,5 @@ object PendingActionType {
     const val CREATE_HIGHLIGHT = "create_highlight"
     const val UPDATE_HIGHLIGHT = "update_highlight"
     const val DELETE_HIGHLIGHT = "delete_highlight"
+    const val UPDATE_READING_PROGRESS = "update_reading_progress"
 }
