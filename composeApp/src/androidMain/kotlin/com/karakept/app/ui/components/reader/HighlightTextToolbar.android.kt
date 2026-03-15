@@ -105,6 +105,12 @@ internal fun Context.findActivity(): Activity? {
 }
 
 /**
+ * Marker interface to detect callbacks already wrapped by [createHighlightCallback].
+ * Prevents double-wrapping when [onWindowStartingActionMode] is called multiple times.
+ */
+private interface HighlightWrappedCallback
+
+/**
  * Wraps an [ActionMode.Callback] to inject a "Highlight" menu item and
  * delegate all other items to the [original] callback.
  */
@@ -113,10 +119,12 @@ private fun createHighlightCallback(
     onHighlight: (ActionMode, ActionMode.Callback) -> Unit
 ): ActionMode.Callback {
     return if (original is ActionMode.Callback2) {
-        object : ActionMode.Callback2() {
+        object : ActionMode.Callback2(), HighlightWrappedCallback {
             override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
                 val result = original.onCreateActionMode(mode, menu)
-                menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
+                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
+                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
+                }
                 return result
             }
 
@@ -146,10 +154,12 @@ private fun createHighlightCallback(
             ) = original.onGetContentRect(mode, view, outRect)
         }
     } else {
-        object : ActionMode.Callback {
+        object : ActionMode.Callback, HighlightWrappedCallback {
             override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
                 val result = original.onCreateActionMode(mode, menu)
-                menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
+                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
+                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
+                }
                 return result
             }
 
@@ -172,6 +182,58 @@ private fun createHighlightCallback(
             override fun onDestroyActionMode(mode: ActionMode) =
                 original.onDestroyActionMode(mode)
         }
+    }
+}
+
+// ─── Window.Callback wrapper ─────────────────────────────────────────────────
+
+/**
+ * Named wrapper class for the Activity's Window.Callback, used to detect
+ * whether the callback has already been wrapped (prevents stacking).
+ */
+private class HighlightWindowCallback(
+    private val original: Window.Callback,
+    private val latestOnHighlight: androidx.compose.runtime.State<(String) -> Unit>
+) : Window.Callback by original {
+
+    override fun onWindowStartingActionMode(
+        callback: ActionMode.Callback?,
+        type: Int
+    ): ActionMode? {
+        if (callback == null || type != ActionMode.TYPE_FLOATING) {
+            return original.onWindowStartingActionMode(callback, type)
+        }
+
+        try {
+            val field = callback.javaClass.getDeclaredField("mWrapped")
+            field.isAccessible = true
+            val inner = field.get(callback) as ActionMode.Callback
+
+            // Guard: skip if already wrapped by us (prevents double Highlight items)
+            if (inner is HighlightWrappedCallback) {
+                return original.onWindowStartingActionMode(callback, type)
+            }
+
+            val wrapped = createHighlightCallback(inner) { mode, composeCb ->
+                val selectedText = extractSelectedText(composeCb)
+                if (selectedText != null) {
+                    latestOnHighlight.value(selectedText)
+                } else {
+                    Log.e(TAG, "Failed to extract selected text")
+                }
+                mode.finish()
+            }
+
+            field.set(callback, wrapped)
+        } catch (e: Exception) {
+            Log.e(TAG, "ActionMode callback injection failed: $e")
+        }
+
+        return original.onWindowStartingActionMode(callback, type)
+    }
+
+    override fun onWindowStartingActionMode(callback: ActionMode.Callback?): ActionMode? {
+        return original.onWindowStartingActionMode(callback)
     }
 }
 
@@ -203,53 +265,23 @@ actual fun rememberHighlightTextToolbar(
             return@DisposableEffect onDispose {}
         }
 
-        val originalCallback = activity.window.callback ?: run {
+        val currentCallback = activity.window.callback ?: run {
             Log.e(TAG, "No Window.Callback found")
             return@DisposableEffect onDispose {}
         }
 
-        val wrapperCallback = object : Window.Callback by originalCallback {
-            override fun onWindowStartingActionMode(
-                callback: ActionMode.Callback?,
-                type: Int
-            ): ActionMode? {
-                if (callback == null || type != ActionMode.TYPE_FLOATING) {
-                    return originalCallback.onWindowStartingActionMode(callback, type)
-                }
-
-                try {
-                    val field = callback.javaClass.getDeclaredField("mWrapped")
-                    field.isAccessible = true
-                    val original = field.get(callback) as ActionMode.Callback
-
-                    val wrapped = createHighlightCallback(original) { mode, composeCb ->
-                        val selectedText = extractSelectedText(composeCb)
-                        if (selectedText != null) {
-                            latestOnHighlight.value(selectedText)
-                        } else {
-                            Log.e(TAG, "Failed to extract selected text")
-                        }
-                        mode.finish()
-                    }
-
-                    field.set(callback, wrapped)
-                } catch (e: Exception) {
-                    Log.e(TAG, "ActionMode callback injection failed: $e")
-                }
-
-                return originalCallback.onWindowStartingActionMode(callback, type)
-            }
-
-            override fun onWindowStartingActionMode(callback: ActionMode.Callback?): ActionMode? {
-                return originalCallback.onWindowStartingActionMode(callback)
-            }
+        // Guard: don't stack wrappers if already installed
+        if (currentCallback is HighlightWindowCallback) {
+            return@DisposableEffect onDispose {}
         }
+
+        val wrapperCallback = HighlightWindowCallback(currentCallback, latestOnHighlight)
 
         activity.window.callback = wrapperCallback
 
         onDispose {
             if (activity.window.callback === wrapperCallback) {
-                activity.window.callback = originalCallback
+                activity.window.callback = currentCallback
             }
         }
     }
