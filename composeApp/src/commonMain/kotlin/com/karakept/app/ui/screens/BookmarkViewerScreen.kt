@@ -47,6 +47,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
@@ -368,6 +370,10 @@ fun BookmarkViewerContent(
                 safeScrollToItem(contentBodyIndex, 0)
             }
             highlightScrollDone = true
+            // Open the highlight details panel now that we've scrolled to it
+            if (scrollToHighlightId != null) {
+                selectedHighlightId = scrollToHighlightId
+            }
         }
 
         // Keep the last valid FullyLoaded state to prevent error flash during navigation
@@ -653,9 +659,16 @@ fun BookmarkViewerContent(
 
                         // Global Dimming Overlay
                         if (selectedHighlightId != null) {
+                            // Track the overlay's own position in root coordinates so we
+                            // can correctly translate the highlight path (which is also
+                            // reported in root coordinates) into the Canvas's local space.
+                            var overlayRootOffset by remember { mutableStateOf(Offset.Zero) }
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    .onGloballyPositioned { coords ->
+                                        overlayRootOffset = coords.positionInRoot()
+                                    }
                                     .pointerInput(Unit) {
                                         detectTapGestures { selectedHighlightId = null }
                                     }
@@ -670,9 +683,14 @@ fun BookmarkViewerContent(
 
                                     val pos = highlightPosition
                                     if (pos != null && pos.path != null) {
-                                        // Punch through the dimming layer to reveal the highlight
+                                        // Punch through the dimming layer to reveal the highlight.
+                                        // Subtract the overlay's own root offset so root-space
+                                        // coordinates map correctly into the Canvas's local space.
                                         withTransform({
-                                            translate(pos.rootOffset.x, pos.rootOffset.y)
+                                            translate(
+                                                pos.rootOffset.x - overlayRootOffset.x,
+                                                pos.rootOffset.y - overlayRootOffset.y
+                                            )
                                         }) {
                                             drawPath(
                                                 path = pos.path!!,
