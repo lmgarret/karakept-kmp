@@ -350,13 +350,18 @@ fun BookmarkViewerContent(
             }
             val position = highlightPosition
             if (position != null) {
-                val highlightCssPx = position.y + position.scrollY
+                // position.y is in screen pixels (from positionInRoot()).
+                // scrollToItem(contentBodyIndex, offset) needs the offset *within*
+                // the content body item, so subtract the item's own top edge.
+                val layoutInfo = scrollState.layoutInfo
+                val contentBodyItem = layoutInfo.visibleItemsInfo
+                    .find { it.index == contentBodyIndex }
+                val contentBodyTop = contentBodyItem?.offset ?: 0
+                val highlightOffsetInItem = (position.y - contentBodyTop).toInt()
+
                 // Center the highlight vertically in the viewport
-                val viewportHeight = scrollState.layoutInfo.viewportEndOffset -
-                    scrollState.layoutInfo.viewportStartOffset
-                val offsetPx = with(density) {
-                    maxOf(0, highlightCssPx.dp.roundToPx() - viewportHeight / 2)
-                }
+                val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+                val offsetPx = maxOf(0, highlightOffsetInItem - viewportHeight / 2)
                 safeScrollToItem(contentBodyIndex, offsetPx)
             } else {
                 // Highlight position unavailable – scroll to content body at least
