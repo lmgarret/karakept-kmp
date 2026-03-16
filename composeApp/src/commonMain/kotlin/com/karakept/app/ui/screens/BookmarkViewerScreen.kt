@@ -137,7 +137,7 @@ fun BookmarkViewerContent(
         var showDeleteConfirmation by remember { mutableStateOf(false) }
         var showTagEditor by remember { mutableStateOf(false) }
         var showListPicker by remember { mutableStateOf(false) }
-        var selectedHighlightId by remember { mutableStateOf<String?>(scrollToHighlightId) }
+        var selectedHighlightId by remember { mutableStateOf<String?>(null) }
         var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
         // Track the text of the selected highlight for matching after ID changes (temp -> server ID)
         var selectedHighlightText by remember { mutableStateOf<String?>(null) }
@@ -368,11 +368,6 @@ fun BookmarkViewerContent(
                 safeScrollToItem(contentBodyIndex, 0)
             }
             highlightScrollDone = true
-            // Clear the selection so the dimming overlay doesn't show —
-            // selectedHighlightId was only set to trigger position reporting.
-            if (scrollToHighlightId != null) {
-                selectedHighlightId = null
-            }
         }
 
         // Keep the last valid FullyLoaded state to prevent error flash during navigation
@@ -648,14 +643,16 @@ fun BookmarkViewerContent(
                                     },
                                     onContentReady = { contentRendered = true },
                                     scrollToHighlightId = scrollToHighlightId,
-                                    selectedHighlightId = selectedHighlightId
+                                    // Use scrollToHighlightId as the effective selected ID for the
+                                    // renderer so it reports the highlight's position. The real
+                                    // selectedHighlightId stays null until the user taps a highlight.
+                                    selectedHighlightId = selectedHighlightId ?: scrollToHighlightId
                                 )
                             }
                         }
 
-                        // Global Dimming Overlay (only when user taps a highlight in the reader,
-                        // not during scroll-to-highlight navigation which clears selectedHighlightId on completion)
-                        if (selectedHighlightId != null && highlightScrollDone) {
+                        // Global Dimming Overlay
+                        if (selectedHighlightId != null) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
