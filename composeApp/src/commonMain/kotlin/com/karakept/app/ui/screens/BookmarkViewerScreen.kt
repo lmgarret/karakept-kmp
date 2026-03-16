@@ -122,6 +122,7 @@ fun BookmarkViewerContent(
         val linkOpenMode by screenModel.linkOpenMode.collectAsState()
         val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
         val serverProgressChecked by screenModel.serverProgressChecked.collectAsState()
+        val contentFetchAttempted by screenModel.contentFetchAttempted.collectAsState()
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isRefreshing,
@@ -272,7 +273,7 @@ fun BookmarkViewerContent(
         // and raises a 0→N% transition, this effect re-runs and can do the restoration.
         var hasRestoredScroll by remember { mutableStateOf(false) }
         val isNativeRenderer = viewerMode == ViewerMode.READER
-        LaunchedEffect(loadingState, trackReadingProgress, contentRendered, serverProgressChecked) {
+        LaunchedEffect(loadingState, trackReadingProgress, contentRendered, serverProgressChecked, contentFetchAttempted) {
             if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
                 // Treat tiny progress values (< 2%) as "at the top" — the progress
@@ -335,9 +336,13 @@ fun BookmarkViewerContent(
                     if (serverProgressChecked) {
                         hasRestoredScroll = true
                     }
+                } else if (hasMeaningfulProgress && bookmark.content.isNullOrBlank() && contentFetchAttempted) {
+                    // Content fetch completed but no content is available (network error,
+                    // server has no content, etc.) — give up waiting and show what we have.
+                    hasRestoredScroll = true
                 }
-                // If hasMeaningfulProgress but content is still blank, don't mark as
-                // restored — the LaunchedEffect will re-fire when content loads.
+                // If hasMeaningfulProgress and content is still loading (!contentFetchAttempted),
+                // keep waiting — the LaunchedEffect will re-fire when either changes.
             }
         }
 
@@ -500,12 +505,22 @@ fun BookmarkViewerContent(
                         // Content List
                         // Global dimming overlay when a highlight is selected
                         // Hide content until scroll position is restored to prevent a flash
-                        // where the top of the article shows before jumping to the saved position.
+                        // where the top of the article (hero banner) shows before jumping to
+                        // the saved reading position.
+                        // • Also hide while awaiting the server progress check: local DB may have
+                        //   0% progress while the server has meaningful progress.
+                        // • Also hide when content is still being fetched on-demand (null content):
+                        //   without this the hero would be briefly visible before content arrives
+                        //   and the scroll is applied.
+                        // Note: no content.isNullOrBlank() guard here — contentFetchAttempted
+                        // ensures we never stay hidden indefinitely if content is unavailable.
                         val needsScrollRestore = trackReadingProgress &&
                             !hasRestoredScroll &&
                             loadingState is BookmarkLoadingState.FullyLoaded &&
-                            (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f &&
-                            !(loadingState as BookmarkLoadingState.FullyLoaded).bookmark.content.isNullOrBlank()
+                            (
+                                (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f ||
+                                !serverProgressChecked
+                            )
                         LazyColumn(
                             state = scrollState,
                             modifier = Modifier

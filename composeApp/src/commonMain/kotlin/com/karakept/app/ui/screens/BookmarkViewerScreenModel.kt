@@ -56,6 +56,13 @@ class BookmarkViewerScreenModel(
     private val _serverProgressChecked = MutableStateFlow(false)
     val serverProgressChecked: StateFlow<Boolean> = _serverProgressChecked.asStateFlow()
 
+    // Becomes true once the on-demand content fetch has been attempted (success or failure)
+    // or is not needed (content already in DB / offline mode / no applicable strategy).
+    // The composable uses this to avoid hiding the LazyColumn indefinitely when content
+    // cannot be loaded (network error, no content on server, etc.).
+    private val _contentFetchAttempted = MutableStateFlow(false)
+    val contentFetchAttempted: StateFlow<Boolean> = _contentFetchAttempted.asStateFlow()
+
     val viewerMode: StateFlow<ViewerMode> = if (getPlatform().isDesktop) {
         // Desktop only supports READER mode (no WebView)
         MutableStateFlow(ViewerMode.READER)
@@ -301,6 +308,12 @@ class BookmarkViewerScreenModel(
                                         bookmark.remoteId, bookmark.serverId
                                     )
                                     println("ReadProgressSync: pull result=$updated")
+                                    // If the server had newer progress, yield once so the DB
+                                    // update can propagate through observeBookmarkById and
+                                    // update loadingState before we signal serverProgressChecked.
+                                    // This prevents a race where the UI sees serverProgressChecked=true
+                                    // but loadingState still holds the old 0% progress.
+                                    if (updated) kotlinx.coroutines.yield()
                                     _serverProgressChecked.value = true
                                 }
                             } else {
@@ -318,6 +331,7 @@ class BookmarkViewerScreenModel(
                             // reading progress, etc.) is still reflected via bookmark.copy().
                             if (transientContent != null) {
                                 _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark.copy(content = transientContent))
+                                _contentFetchAttempted.value = true
                             } else {
                                 // Show existing with loading indicator if possible, or just the bookmark metadata
                                 _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
@@ -358,10 +372,16 @@ class BookmarkViewerScreenModel(
                                     }
                                 } catch (e: Exception) {
                                     e.printStackTrace()
+                                } finally {
+                                    // Signal that the fetch attempt is done (success, failure, or
+                                    // no content available) so the UI can stop waiting and show
+                                    // whatever is available rather than staying hidden indefinitely.
+                                    _contentFetchAttempted.value = true
                                 }
                             }
                         } else {
                             _loadingState.value = BookmarkLoadingState.FullyLoaded(bookmark)
+                            _contentFetchAttempted.value = true
                         }
 
                         // Load precrawled asset if exists
