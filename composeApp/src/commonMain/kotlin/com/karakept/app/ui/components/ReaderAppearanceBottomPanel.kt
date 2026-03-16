@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.ui.theme.rememberFontFamily
 
 @Composable
 fun ReaderAppearanceBottomPanel(
@@ -205,7 +206,7 @@ private fun FontPreviewCard(
             Text(
                 text = "Abc",
                 fontSize = 32.sp,
-                fontFamily = fontFamily.composeFontFamily,
+                fontFamily = fontFamily.rememberFontFamily(),
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             Text(

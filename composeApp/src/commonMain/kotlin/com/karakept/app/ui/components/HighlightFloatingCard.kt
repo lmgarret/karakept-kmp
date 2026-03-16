@@ -35,6 +35,7 @@ import com.karakept.app.ui.theme.HighlightYellow
 import com.karakept.app.ui.theme.HighlightBlue
 import com.karakept.app.ui.theme.HighlightGreen
 import com.karakept.app.ui.theme.HighlightRed
+import com.karakept.app.ui.theme.rememberFontFamily
 
 /**
  * Floating card that displays highlighted text above the bottom panel.
@@ -96,7 +97,7 @@ fun HighlightFloatingCard(
                 Text(
                     text = "\u201C${highlight.text}\u201D",
                     fontSize = fontSize.sp,
-                    fontFamily = fontFamily.composeFontFamily,
+                    fontFamily = fontFamily.rememberFontFamily(),
                     fontStyle = FontStyle.Italic,
                     color = onSurfaceColor,
                     maxLines = 8,

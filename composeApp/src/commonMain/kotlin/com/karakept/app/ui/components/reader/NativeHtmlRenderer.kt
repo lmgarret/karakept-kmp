@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.fleeksoft.ksoup.Ksoup
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.ui.theme.rememberFontFamily
 import com.karakept.app.ui.components.HighlightPosition
 
 /**
@@ -69,12 +70,14 @@ fun NativeHtmlRenderer(
 
     val resolvedBackgroundColor = backgroundColor ?: surfaceColor
 
-    val theme = remember(resolvedTextColor, resolvedBackgroundColor, fontSize, fontFamily, primaryColor) {
+    val resolvedFont = fontFamily.rememberFontFamily()
+
+    val theme = remember(resolvedTextColor, resolvedBackgroundColor, fontSize, resolvedFont, primaryColor) {
         ReaderThemeData(
             textColor = resolvedTextColor,
             backgroundColor = resolvedBackgroundColor,
             fontSize = fontSize.sp,
-            fontFamily = fontFamily.composeFontFamily,
+            fontFamily = resolvedFont,
             linkColor = primaryColor,
             codeBackgroundColor = if (resolvedBackgroundColor.luminance() > 0.5f) {
                 Color(0x1A7F7F7F) // rgba(127,127,127,0.1) on light

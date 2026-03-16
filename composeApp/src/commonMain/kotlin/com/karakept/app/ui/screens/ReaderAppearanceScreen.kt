@@ -34,6 +34,7 @@ import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.ui.theme.rememberFontFamily
 import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -172,6 +173,7 @@ class ReaderAppearanceScreen : Screen {
     }
 }
 
+@Composable
 private fun getFontFamily(family: ReaderFontFamily): FontFamily {
-    return family.composeFontFamily
+    return family.rememberFontFamily()
 }
