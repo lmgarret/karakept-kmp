@@ -846,6 +846,7 @@ object MainScreen : Screen {
                                 )
                             }
                             DraggableDivider(
+                                backgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
                                 onDrag = { delta ->
                                     drawerWidthDp = (drawerWidthDp + delta).coerceIn(200f, 400f)
                                 }

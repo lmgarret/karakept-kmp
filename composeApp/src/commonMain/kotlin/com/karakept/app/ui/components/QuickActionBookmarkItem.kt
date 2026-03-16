@@ -55,24 +55,13 @@ fun QuickActionBookmarkItem(
         return
     }
 
-    // Overlay the action buttons on top of the card content.
-    // Add padding on the side where buttons appear so text doesn't flow under them.
-    val buttonColumnWidth = 44.dp // 36dp icon button + 8dp padding
+    // Overlay the action buttons on top of the card content, inside the card boundary.
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth().then(
-                if (position == QuickActionPosition.LEFT)
-                    Modifier.padding(start = buttonColumnWidth)
-                else
-                    Modifier.padding(end = buttonColumnWidth)
-            )
-        ) {
-            content()
-        }
+        content()
 
         ActionButtons(
             leftAction = leftAction,
