@@ -732,10 +732,10 @@ object MainScreen : Screen {
                 }
 
                 // Calculate column widths
-                val dividerWidth = 8.dp // DraggableDivider hit target width
+                val dividerWidth = 12.dp // DraggableDivider hit target width (1dp visible line)
                 val drawerWidth = drawerWidthDp.dp
-                val drawerTotalWidth = if (isDrawerVisible) drawerWidth + dividerWidth else 0.dp
-                val remainingWidth = maxWidth - drawerTotalWidth - dividerWidth
+                val drawerTotalWidth = if (isDrawerVisible) drawerWidth else 0.dp
+                val remainingWidth = maxWidth - drawerTotalWidth - dividerWidth - dividerWidth
                 val minListWidth = 250.dp
                 val minReaderWidth = 300.dp
                 val maxListWidth = remainingWidth - minReaderWidth
@@ -749,39 +749,41 @@ object MainScreen : Screen {
                         enter = expandHorizontally(),
                         exit = shrinkHorizontally()
                     ) {
-                        Row {
-                            Surface(
-                                modifier = Modifier.width(drawerWidth).fillMaxHeight(),
-                                color = MaterialTheme.colorScheme.surfaceContainerLow
-                            ) {
-                                DrawerContent(
-                                    lists = lists,
-                                    listCounts = listCounts,
-                                    expandedLists = expandedLists,
-                                    currentFilter = currentFilter,
-                                    onFilterApply = { filter -> screenModel.applyFilter(filter) },
-                                    onClearFilter = { screenModel.clearFilter() },
-                                    onToggleListExpanded = drawerToggleListExpanded,
-                                    onMarkAllAsRead = { listId -> screenModel.markAllBookmarksInListAsRead(listId) },
-                                    onRenameList = { listId, listName ->
-                                        val targetList = lists.find { it.id == listId }
-                                        renameListTarget = Triple(listId, listName, targetList?.icon)
-                                    },
-                                    onNavigateToListSettings = { listId, listName ->
-                                        navigator.push(PerListSettingsScreen(listId, listName))
-                                    },
-                                    onSetAsDefault = { listId -> screenModel.setDefaultList(listId) },
-                                    onSetAsDefaultType = { type -> screenModel.setDefaultListType(type) },
-                                    onNavigateToSettings = { navigator.push(SettingsScreen()) },
-                                    onNavigateToHighlights = { navigator.push(HighlightsScreen()) }
-                                )
-                            }
-                            DraggableDivider(
-                                onDrag = { delta ->
-                                    drawerWidthDp = (drawerWidthDp + delta).coerceIn(200f, 400f)
-                                }
+                        Surface(
+                            modifier = Modifier.width(drawerWidth).fillMaxHeight(),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                        ) {
+                            DrawerContent(
+                                lists = lists,
+                                listCounts = listCounts,
+                                expandedLists = expandedLists,
+                                currentFilter = currentFilter,
+                                onFilterApply = { filter -> screenModel.applyFilter(filter) },
+                                onClearFilter = { screenModel.clearFilter() },
+                                onToggleListExpanded = drawerToggleListExpanded,
+                                onMarkAllAsRead = { listId -> screenModel.markAllBookmarksInListAsRead(listId) },
+                                onRenameList = { listId, listName ->
+                                    val targetList = lists.find { it.id == listId }
+                                    renameListTarget = Triple(listId, listName, targetList?.icon)
+                                },
+                                onNavigateToListSettings = { listId, listName ->
+                                    navigator.push(PerListSettingsScreen(listId, listName))
+                                },
+                                onSetAsDefault = { listId -> screenModel.setDefaultList(listId) },
+                                onSetAsDefaultType = { type -> screenModel.setDefaultListType(type) },
+                                onNavigateToSettings = { navigator.push(SettingsScreen()) },
+                                onNavigateToHighlights = { navigator.push(HighlightsScreen()) }
                             )
                         }
+                    }
+
+                    // Divider between drawer and list (draggable)
+                    if (isDrawerVisible) {
+                        DraggableDivider(
+                            onDrag = { delta ->
+                                drawerWidthDp = (drawerWidthDp + delta).coerceIn(200f, 400f)
+                            }
+                        )
                     }
 
                     // Bookmark list column
@@ -792,17 +794,21 @@ object MainScreen : Screen {
                     // Divider between list and reader (draggable)
                     DraggableDivider(
                         onDrag = { delta ->
-                            val newListWidth = listWidth + delta.dp
-                            val newFraction = (newListWidth / remainingWidth).coerceIn(
-                                minListWidth / remainingWidth,
-                                maxListWidth / remainingWidth
-                            )
-                            listFraction = newFraction
+                            // Compute fraction change directly from delta to avoid stale captures
+                            val remainingDp = remainingWidth.value
+                            if (remainingDp > 0f) {
+                                val minFraction = minListWidth.value / remainingDp
+                                val maxFraction = maxListWidth.value / remainingDp
+                                listFraction = (listFraction + delta / remainingDp).coerceIn(minFraction, maxFraction)
+                            }
                         }
                     )
 
                     // Reader pane column
-                    Box(modifier = Modifier.width(readerWidth).fillMaxHeight()) {
+                    Surface(
+                        modifier = Modifier.width(readerWidth).fillMaxHeight(),
+                        color = MaterialTheme.colorScheme.surface
+                    ) {
                         val currentBookmarkId = selectedBookmarkId
                         if (currentBookmarkId != null) {
                             // Use key() to force fresh composition when bookmark changes
