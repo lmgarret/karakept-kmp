@@ -715,7 +715,13 @@ object MainScreen : Screen {
                             }
                         } else null,
                         onShiftClick = if (isDesktop) { index ->
-                            if (isSelectionMode) {
+                            if (!isSelectionMode) {
+                                // Enter selection mode by selecting just this item first
+                                val bookmark = bookmarks.getOrNull(index)
+                                if (bookmark != null) {
+                                    screenModel.enterSelectionMode(bookmark)
+                                }
+                            } else {
                                 screenModel.selectRange(index)
                             }
                         } else null,
