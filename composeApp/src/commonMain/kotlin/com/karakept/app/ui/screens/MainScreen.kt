@@ -787,8 +787,9 @@ object MainScreen : Screen {
                 // Calculate column widths
                 val dividerWidth = 12.dp // DraggableDivider hit target width (1dp visible line)
                 val drawerWidth = drawerWidthDp.dp
-                val drawerTotalWidth = if (isDrawerVisible) drawerWidth else 0.dp
-                val remainingWidth = maxWidth - drawerTotalWidth - dividerWidth - dividerWidth
+                // Drawer includes its own divider, so only one standalone divider (between list and reader)
+                val drawerTotalWidth = if (isDrawerVisible) drawerWidth + dividerWidth else 0.dp
+                val remainingWidth = maxWidth - drawerTotalWidth - dividerWidth
                 val minListWidth = 250.dp
                 val minReaderWidth = 300.dp
                 val maxListWidth = remainingWidth - minReaderWidth
@@ -796,62 +797,60 @@ object MainScreen : Screen {
                 val readerWidth = remainingWidth - listWidth
 
                 Row(modifier = Modifier.fillMaxSize()) {
-                    // Drawer column (collapsible)
+                    // Drawer column + divider (collapsible as one unit to avoid color gap)
                     AnimatedVisibility(
                         visible = isDrawerVisible,
                         enter = expandHorizontally(),
                         exit = shrinkHorizontally()
                     ) {
-                        Surface(
-                            modifier = Modifier.width(drawerWidth).fillMaxHeight(),
-                            color = MaterialTheme.colorScheme.surfaceContainerLow
-                        ) {
-                            DrawerContent(
-                                lists = lists,
-                                listCounts = listCounts,
-                                expandedLists = expandedLists,
-                                currentFilter = currentFilter,
-                                onFilterApply = { filter ->
-                                    screenModel.applyFilter(filter)
-                                    showHighlights = false
-                                },
-                                onClearFilter = {
-                                    screenModel.clearFilter()
-                                    showHighlights = false
-                                },
-                                onToggleListExpanded = drawerToggleListExpanded,
-                                onMarkAllAsRead = { listId -> screenModel.markAllBookmarksInListAsRead(listId) },
-                                onRenameList = { listId, listName ->
-                                    val targetList = lists.find { it.id == listId }
-                                    renameListTarget = Triple(listId, listName, targetList?.icon)
-                                },
-                                onNavigateToListSettings = { listId, listName ->
-                                    navigator.push(PerListSettingsScreen(listId, listName))
-                                },
-                                onSetAsDefault = { listId -> screenModel.setDefaultList(listId) },
-                                onSetAsDefaultType = { type -> screenModel.setDefaultListType(type) },
-                                onNavigateToSettings = { navigator.push(SettingsScreen()) },
-                                onNavigateToHighlights = {
-                                    showHighlights = true
-                                    selectedBookmarkId = null
-                                    scrollToHighlightId = null
-                                    activeHighlightId = null
-                                },
-                                isHighlightsSelected = showHighlights,
-                                onAddBookmark = if (isDesktop && !offlineMode && !isAutoOffline) {
-                                    { showAddBookmarkDialog = true }
-                                } else null
+                        Row {
+                            Surface(
+                                modifier = Modifier.width(drawerWidth).fillMaxHeight(),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow
+                            ) {
+                                DrawerContent(
+                                    lists = lists,
+                                    listCounts = listCounts,
+                                    expandedLists = expandedLists,
+                                    currentFilter = currentFilter,
+                                    onFilterApply = { filter ->
+                                        screenModel.applyFilter(filter)
+                                        showHighlights = false
+                                    },
+                                    onClearFilter = {
+                                        screenModel.clearFilter()
+                                        showHighlights = false
+                                    },
+                                    onToggleListExpanded = drawerToggleListExpanded,
+                                    onMarkAllAsRead = { listId -> screenModel.markAllBookmarksInListAsRead(listId) },
+                                    onRenameList = { listId, listName ->
+                                        val targetList = lists.find { it.id == listId }
+                                        renameListTarget = Triple(listId, listName, targetList?.icon)
+                                    },
+                                    onNavigateToListSettings = { listId, listName ->
+                                        navigator.push(PerListSettingsScreen(listId, listName))
+                                    },
+                                    onSetAsDefault = { listId -> screenModel.setDefaultList(listId) },
+                                    onSetAsDefaultType = { type -> screenModel.setDefaultListType(type) },
+                                    onNavigateToSettings = { navigator.push(SettingsScreen()) },
+                                    onNavigateToHighlights = {
+                                        showHighlights = true
+                                        selectedBookmarkId = null
+                                        scrollToHighlightId = null
+                                        activeHighlightId = null
+                                    },
+                                    isHighlightsSelected = showHighlights,
+                                    onAddBookmark = if (isDesktop && !offlineMode && !isAutoOffline) {
+                                        { showAddBookmarkDialog = true }
+                                    } else null
+                                )
+                            }
+                            DraggableDivider(
+                                onDrag = { delta ->
+                                    drawerWidthDp = (drawerWidthDp + delta).coerceIn(200f, 400f)
+                                }
                             )
                         }
-                    }
-
-                    // Divider between drawer and list (draggable)
-                    if (isDrawerVisible) {
-                        DraggableDivider(
-                            onDrag = { delta ->
-                                drawerWidthDp = (drawerWidthDp + delta).coerceIn(200f, 400f)
-                            }
-                        )
                     }
 
                     // Middle column: bookmark list or highlights list
