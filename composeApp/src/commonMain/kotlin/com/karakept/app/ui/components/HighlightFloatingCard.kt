@@ -31,10 +31,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.geometry.Offset
 import com.karakept.app.data.model.Highlight
-import com.karakept.app.ui.theme.HighlightYellow
-import com.karakept.app.ui.theme.HighlightBlue
-import com.karakept.app.ui.theme.HighlightGreen
-import com.karakept.app.ui.theme.HighlightRed
 import com.karakept.app.ui.theme.rememberFontFamily
 
 /**
@@ -122,17 +118,3 @@ data class HighlightPosition(
     val path: Path? = null,
     val rootOffset: Offset = Offset.Zero
 )
-
-/**
- * Maps highlight color names to Material color values
- */
-@Composable
-private fun getColorForHighlight(colorName: String): Color {
-    return when (colorName.lowercase()) {
-        "yellow" -> HighlightYellow
-        "blue" -> HighlightBlue
-        "green" -> HighlightGreen
-        "red" -> HighlightRed
-        else -> HighlightYellow
-    }
-}
