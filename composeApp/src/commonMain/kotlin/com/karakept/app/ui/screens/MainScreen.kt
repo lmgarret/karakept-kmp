@@ -713,8 +713,9 @@ object MainScreen : Screen {
                             }
                         } else null,
                         onShiftClick = if (isDesktop) { index ->
-                            if (!isSelectionMode) return@if
-                            screenModel.selectRange(index)
+                            if (isSelectionMode) {
+                                screenModel.selectRange(index)
+                            }
                         } else null
                     )
                 }

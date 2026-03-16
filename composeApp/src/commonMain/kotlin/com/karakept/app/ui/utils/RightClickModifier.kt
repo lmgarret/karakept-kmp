@@ -1,5 +1,6 @@
 package com.karakept.app.ui.utils
 
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -10,6 +11,7 @@ import getPlatform
  * Triggers [onClick] when the user right-clicks (secondary button press) on desktop.
  * On non-desktop platforms this is a no-op.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 fun Modifier.onSecondaryClick(onClick: () -> Unit): Modifier {
     if (!getPlatform().isDesktop) return this
     return this.pointerInput(onClick) {
