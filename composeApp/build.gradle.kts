@@ -189,7 +189,9 @@ compose.desktop {
     application {
         mainClass = "MainKt"
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
-        jvmArgs += "-Dskiko.renderApi=SOFTWARE_FAST"
+        // SOFTWARE_FAST is only supported on Linux; on macOS use the default (Metal).
+        // The actual property is set conditionally in main.kt at runtime.
+        // jvmArgs += "-Dskiko.renderApi=SOFTWARE_FAST"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "com.karakept.app"
