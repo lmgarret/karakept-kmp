@@ -194,10 +194,15 @@ compose.desktop {
         // jvmArgs += "-Dskiko.renderApi=SOFTWARE_FAST"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "com.karakept.app"
-            packageVersion = "1.0.0"
+            packageName = "Karakept"
+            packageVersion = (project.findProperty("versionName") as String?) ?: "1.0.0"
             linux {
                 iconFile.set(project.file("src/commonMain/composeResources/drawable/icon.png"))
+            }
+            macOS {
+                iconFile.set(project.file("src/commonMain/composeResources/drawable/icon.png"))
+                bundleID = "com.karakept.app"
+                appCategory = "public.app-category.productivity"
             }
         }
     }
