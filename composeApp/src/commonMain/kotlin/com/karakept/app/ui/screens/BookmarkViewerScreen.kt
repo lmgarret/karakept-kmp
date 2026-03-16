@@ -244,10 +244,10 @@ fun BookmarkViewerContent(
                 val offsetPx = with(density) {
                     maxOf(0, highlightCssPx.dp.roundToPx() - 120.dp.roundToPx())
                 }
-                scrollState.animateScrollToItem(contentBodyIndex, offsetPx)
+                safeScrollToItem(contentBodyIndex, offsetPx)
             } else {
                 // Highlight position unavailable – scroll to content body at least
-                scrollState.animateScrollToItem(contentBodyIndex, 0)
+                safeScrollToItem(contentBodyIndex, 0)
             }
         }
         val bannerHeight = 320.dp
@@ -274,6 +274,11 @@ fun BookmarkViewerContent(
         var hasRestoredScroll by remember { mutableStateOf(false) }
         val isNativeRenderer = viewerMode == ViewerMode.READER
         LaunchedEffect(loadingState, trackReadingProgress, contentRendered, serverProgressChecked, contentFetchAttempted) {
+            // When navigating to a specific highlight, skip reading position restoration
+            if (scrollToHighlightId != null) {
+                hasRestoredScroll = true
+                return@LaunchedEffect
+            }
             if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
                 // Treat tiny progress values (< 2%) as "at the top" — the progress
