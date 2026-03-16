@@ -39,6 +39,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
@@ -285,20 +286,30 @@ internal fun BookmarkListContent(
                                 Modifier.pointerInput(bookmark.remoteId, itemIndex) {
                                     awaitPointerEventScope {
                                         while (true) {
-                                            val event = awaitPointerEvent()
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
                                             if (event.type == PointerEventType.Press &&
                                                 event.button == PointerButton.Primary
                                             ) {
                                                 val modifiers = event.keyboardModifiers
-                                                when {
+                                                val handled = when {
                                                     modifiers.isShiftPressed && onShiftClick != null -> {
-                                                        event.changes.forEach { it.consume() }
                                                         onShiftClick.invoke(itemIndex)
+                                                        true
                                                     }
                                                     (modifiers.isCtrlPressed || modifiers.isMetaPressed) && onCtrlClick != null -> {
-                                                        event.changes.forEach { it.consume() }
                                                         onCtrlClick.invoke(bookmark)
+                                                        true
                                                     }
+                                                    else -> false
+                                                }
+                                                if (handled) {
+                                                    // Consume all changes to prevent combinedClickable from firing
+                                                    event.changes.forEach { it.consume() }
+                                                    // Also consume the release event
+                                                    do {
+                                                        val releaseEvent = awaitPointerEvent(PointerEventPass.Initial)
+                                                        releaseEvent.changes.forEach { it.consume() }
+                                                    } while (releaseEvent.type != PointerEventType.Release)
                                                 }
                                             }
                                         }

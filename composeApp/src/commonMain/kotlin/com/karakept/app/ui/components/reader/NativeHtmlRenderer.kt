@@ -112,13 +112,16 @@ fun NativeHtmlRenderer(
         if (scrollToHighlightId != null) highlights.find { it.id == scrollToHighlightId } else null
     }
 
-    // Custom text toolbar with "Highlight" action
-    val highlightToolbar = rememberHighlightTextToolbar { selectedText ->
+    // Shared highlight action used by both TextToolbar and ContextMenuDataProvider
+    val highlightAction: (String) -> Unit = { selectedText ->
         val offsets = findTextOffsets(html, selectedText)
         if (offsets != null) {
             onCreateHighlight(offsets.matchedText, offsets.startOffset, offsets.endOffset, null, null)
         }
     }
+
+    // Custom text toolbar with "Highlight" action (for drag-selection on desktop, ActionMode on Android)
+    val highlightToolbar = rememberHighlightTextToolbar(onHighlightRequested = highlightAction)
 
     ReaderThemeProvider(theme = theme) {
         val textToolbar = highlightToolbar ?: LocalTextToolbar.current
@@ -143,6 +146,7 @@ fun NativeHtmlRenderer(
                 })
             ) {
             SelectionContainer {
+            HighlightContextMenuProvider(onHighlightRequested = highlightAction) {
                 Column(
                     modifier = modifier
                         .fillMaxWidth()
@@ -195,7 +199,8 @@ fun NativeHtmlRenderer(
                 // Bottom spacing
                 Spacer(Modifier.height(16.dp))
             }
-            }
+            } // HighlightContextMenuProvider
+            } // SelectionContainer
             } // Box (bringIntoView blocker)
         }
     }

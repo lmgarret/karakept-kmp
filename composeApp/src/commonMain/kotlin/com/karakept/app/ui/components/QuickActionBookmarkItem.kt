@@ -4,6 +4,7 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,7 +28,7 @@ import com.karakept.app.data.model.SwipeAction
  * Desktop replacement for [SwipeableBookmarkItem].
  * Shows inline icon buttons for the configured quick actions
  * on the leading or trailing side of the bookmark item.
- * Buttons sit inside the same visual row as the bookmark content.
+ * Matches the padding of [SwipeableBookmarkItem] so items don't stick together.
  */
 @Composable
 fun QuickActionBookmarkItem(
@@ -45,42 +46,55 @@ fun QuickActionBookmarkItem(
     val hasActions = leftAction != SwipeAction.NONE || rightAction != SwipeAction.NONE
 
     if (!hasActions) {
-        content()
+        // Match SwipeableBookmarkItem padding even when no actions
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            content()
+        }
         return
     }
 
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        if (position == QuickActionPosition.LEFT) {
-            ActionButtons(
-                leftAction = leftAction,
-                rightAction = rightAction,
-                leftIcon = leftIcon,
-                rightIcon = rightIcon,
-                leftIsApplied = leftIsApplied,
-                rightIsApplied = rightIsApplied,
-                onActionTriggered = onActionTriggered,
-                modifier = Modifier.padding(start = 8.dp)
-            )
-        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (position == QuickActionPosition.LEFT) {
+                ActionButtons(
+                    leftAction = leftAction,
+                    rightAction = rightAction,
+                    leftIcon = leftIcon,
+                    rightIcon = rightIcon,
+                    leftIsApplied = leftIsApplied,
+                    rightIsApplied = rightIsApplied,
+                    onActionTriggered = onActionTriggered,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+            }
 
-        Row(modifier = Modifier.weight(1f)) {
-            content()
-        }
+            Box(modifier = Modifier.weight(1f)) {
+                content()
+            }
 
-        if (position == QuickActionPosition.RIGHT) {
-            ActionButtons(
-                leftAction = leftAction,
-                rightAction = rightAction,
-                leftIcon = leftIcon,
-                rightIcon = rightIcon,
-                leftIsApplied = leftIsApplied,
-                rightIsApplied = rightIsApplied,
-                onActionTriggered = onActionTriggered,
-                modifier = Modifier.padding(end = 8.dp)
-            )
+            if (position == QuickActionPosition.RIGHT) {
+                ActionButtons(
+                    leftAction = leftAction,
+                    rightAction = rightAction,
+                    leftIcon = leftIcon,
+                    rightIcon = rightIcon,
+                    leftIsApplied = leftIsApplied,
+                    rightIsApplied = rightIsApplied,
+                    onActionTriggered = onActionTriggered,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
         }
     }
 }

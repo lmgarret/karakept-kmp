@@ -24,8 +24,6 @@ actual fun SyncWindowTheme() {
                 // macOS: set dark/light appearance on the root pane for native title bar
                 if (window is javax.swing.JFrame) {
                     val rootPane = window.rootPane
-                    rootPane?.putClientProperty("apple.awt.transparentTitleBar", true)
-                    rootPane?.putClientProperty("apple.awt.fullWindowContent", true)
                     // JetBrains Runtime dark title bar support
                     rootPane?.putClientProperty("jetbrains.awt.windowDarkAppearance", isAppDark)
                     rootPane?.putClientProperty("apple.awt.windowAppearance", if (isAppDark) "NSAppearanceNameDarkAqua" else "NSAppearanceNameAqua")
