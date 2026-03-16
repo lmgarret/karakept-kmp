@@ -72,6 +72,11 @@ data class BookmarkViewerScreen(
     val bookmarkId: Long,
     val scrollToHighlightId: String? = null
 ) : Screen {
+    // Each bookmark needs its own Voyager key so that koinScreenModel returns a fresh
+    // ScreenModel per bookmark.  Without this, navigating from one viewer to another
+    // (without popping the first) reuses the stale ScreenModel, leaving the screen blank.
+    override val key = "BookmarkViewerScreen-$bookmarkId-${scrollToHighlightId.orEmpty()}"
+
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
     @Composable
     override fun Content() {
