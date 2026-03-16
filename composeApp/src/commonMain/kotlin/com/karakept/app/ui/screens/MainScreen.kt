@@ -76,6 +76,7 @@ import com.karakept.app.ui.components.ListPickerDialog
 import com.karakept.app.ui.components.TagEditorDialog
 import com.karakept.app.ui.screens.main.BookmarkListContent
 import com.karakept.app.ui.screens.main.DrawerContent
+import com.karakept.app.ui.screens.main.HighlightsListContent
 import com.karakept.app.ui.screens.main.MainScreenDrawer
 import com.karakept.app.ui.screens.main.MainScreenTopBar
 import kotlinx.coroutines.launch
@@ -180,6 +181,9 @@ object MainScreen : Screen {
         // Three-column adaptive layout state
         var selectedBookmarkId by remember { mutableStateOf<Long?>(null) }
         var isDrawerVisible by rememberSaveable { mutableStateOf(true) }
+        var showHighlights by remember { mutableStateOf(false) }
+        var scrollToHighlightId by remember { mutableStateOf<String?>(null) }
+        var activeHighlightId by remember { mutableStateOf<String?>(null) }
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isSyncing,
@@ -758,8 +762,14 @@ object MainScreen : Screen {
                                 listCounts = listCounts,
                                 expandedLists = expandedLists,
                                 currentFilter = currentFilter,
-                                onFilterApply = { filter -> screenModel.applyFilter(filter) },
-                                onClearFilter = { screenModel.clearFilter() },
+                                onFilterApply = { filter ->
+                                    screenModel.applyFilter(filter)
+                                    showHighlights = false
+                                },
+                                onClearFilter = {
+                                    screenModel.clearFilter()
+                                    showHighlights = false
+                                },
                                 onToggleListExpanded = drawerToggleListExpanded,
                                 onMarkAllAsRead = { listId -> screenModel.markAllBookmarksInListAsRead(listId) },
                                 onRenameList = { listId, listName ->
@@ -772,7 +782,13 @@ object MainScreen : Screen {
                                 onSetAsDefault = { listId -> screenModel.setDefaultList(listId) },
                                 onSetAsDefaultType = { type -> screenModel.setDefaultListType(type) },
                                 onNavigateToSettings = { navigator.push(SettingsScreen()) },
-                                onNavigateToHighlights = { navigator.push(HighlightsScreen()) }
+                                onNavigateToHighlights = {
+                                    showHighlights = true
+                                    selectedBookmarkId = null
+                                    scrollToHighlightId = null
+                                    activeHighlightId = null
+                                },
+                                isHighlightsSelected = showHighlights
                             )
                         }
                     }
@@ -786,9 +802,42 @@ object MainScreen : Screen {
                         )
                     }
 
-                    // Bookmark list column
+                    // Middle column: bookmark list or highlights list
                     Box(modifier = Modifier.width(listWidth).fillMaxHeight()) {
-                        MainScaffoldContent(isExpandedLayout = true)
+                        if (showHighlights) {
+                            val highlightsScreenModel = koinInject<HighlightsScreenModel>()
+                            val highlightsList by highlightsScreenModel.highlights.collectAsState()
+                            val isHighlightsSyncing by highlightsScreenModel.isSyncing.collectAsState()
+
+                            LaunchedEffect(showHighlights) {
+                                if (showHighlights) highlightsScreenModel.syncHighlights()
+                            }
+
+                            HighlightsListContent(
+                                highlights = highlightsList,
+                                isSyncing = isHighlightsSyncing,
+                                activeHighlightId = activeHighlightId,
+                                onHighlightClick = { highlight ->
+                                    scope.launch {
+                                        val bookmarkLocalId = highlightsScreenModel.getBookmarkLocalIdForHighlight(highlight)
+                                        if (bookmarkLocalId != null) {
+                                            selectedBookmarkId = bookmarkLocalId
+                                            scrollToHighlightId = highlight.id
+                                            activeHighlightId = highlight.id
+                                        }
+                                    }
+                                },
+                                onDeleteHighlight = { highlightsScreenModel.deleteHighlight(it) },
+                                onBack = {
+                                    showHighlights = false
+                                    selectedBookmarkId = null
+                                    scrollToHighlightId = null
+                                    activeHighlightId = null
+                                }
+                            )
+                        } else {
+                            MainScaffoldContent(isExpandedLayout = true)
+                        }
                     }
 
                     // Divider between list and reader (draggable)
@@ -810,20 +859,29 @@ object MainScreen : Screen {
                         color = MaterialTheme.colorScheme.surface
                     ) {
                         val currentBookmarkId = selectedBookmarkId
+                        val currentScrollToHighlightId = scrollToHighlightId
                         if (currentBookmarkId != null) {
-                            // Use key() to force fresh composition when bookmark changes
-                            androidx.compose.runtime.key(currentBookmarkId) {
+                            // Use key() to force fresh composition when bookmark or highlight changes
+                            androidx.compose.runtime.key(currentBookmarkId, currentScrollToHighlightId) {
                                 val viewerScreenModel = koinInject<BookmarkViewerScreenModel>()
                                 DisposableEffect(currentBookmarkId) {
                                     onDispose { viewerScreenModel.onDispose() }
                                 }
                                 BookmarkViewerContent(
                                     bookmarkId = currentBookmarkId,
+                                    scrollToHighlightId = currentScrollToHighlightId,
                                     screenModel = viewerScreenModel,
-                                    onBack = { selectedBookmarkId = null },
+                                    onBack = {
+                                        selectedBookmarkId = null
+                                        scrollToHighlightId = null
+                                        activeHighlightId = null
+                                    },
                                     onTagFilterApply = { tag ->
                                         screenModel.applyTagFilter(tag, currentBookmarkId)
                                         selectedBookmarkId = null
+                                        scrollToHighlightId = null
+                                        activeHighlightId = null
+                                        showHighlights = false
                                     }
                                 )
                             }

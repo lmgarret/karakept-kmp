@@ -50,12 +50,22 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.ui.screens.settings.AppearanceSettingsContent
 import com.karakept.app.ui.screens.settings.AppearanceSettingsScreen
+import com.karakept.app.ui.screens.settings.BackupRestoreContent
+import com.karakept.app.ui.screens.settings.BackupRestoreScreen
 import com.karakept.app.ui.screens.settings.BookmarkListSettingsContent
 import com.karakept.app.ui.screens.settings.BookmarkListSettingsScreen
 import com.karakept.app.ui.screens.settings.BookmarkViewSettingsContent
 import com.karakept.app.ui.screens.settings.BookmarkViewSettingsScreen
+import com.karakept.app.ui.screens.settings.CustomSwipeActionsContent
+import com.karakept.app.ui.screens.settings.CustomSwipeActionsScreen
+import com.karakept.app.ui.screens.settings.LayoutsContent
+import com.karakept.app.ui.screens.settings.LayoutsScreen
+import com.karakept.app.ui.screens.settings.ServerSettingsContent
+import com.karakept.app.ui.screens.settings.ServerSettingsScreen
 import com.karakept.app.ui.screens.settings.SyncDataSettingsContent
 import com.karakept.app.ui.screens.settings.SyncDataSettingsScreen
+import com.karakept.app.ui.screens.settings.BackupRestoreScreenModel
+import org.koin.compose.koinInject
 
 private enum class SettingsSection(
     val title: String,
@@ -77,6 +87,12 @@ class SettingsScreen : Screen {
         val screenModel = koinScreenModel<SettingsScreenModel>()
         var storageInfo by remember { mutableStateOf<com.karakept.app.utils.StorageInfo?>(null) }
         var selectedSection by remember { mutableStateOf(SettingsSection.APPEARANCE) }
+        var selectedSubScreen by remember { mutableStateOf<Screen?>(null) }
+
+        // Clear sub-screen when section changes
+        LaunchedEffect(selectedSection) {
+            selectedSubScreen = null
+        }
 
         LaunchedEffect(Unit) {
             storageInfo = com.karakept.app.utils.FileUtils.getStorageInfo()
@@ -86,11 +102,11 @@ class SettingsScreen : Screen {
             val isExpandedLayout = maxWidth >= 840.dp
 
             if (isExpandedLayout) {
-                // Expanded: settings list on left + selected section on right
+                // Expanded: settings list + section content + sub-screen content
                 Row(modifier = Modifier.fillMaxSize()) {
-                    // Left panel: settings navigation list
+                    // Pane 1: settings navigation list
                     Surface(
-                        modifier = Modifier.width(300.dp).fillMaxHeight()
+                        modifier = Modifier.width(280.dp).fillMaxHeight()
                     ) {
                         Scaffold(
                             topBar = {
@@ -143,37 +159,76 @@ class SettingsScreen : Screen {
 
                     VerticalDivider()
 
-                    // Right panel: selected section content
+                    // Pane 2: selected section content
                     Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                         when (selectedSection) {
                             SettingsSection.APPEARANCE -> AppearanceSettingsContent(
                                 screenModel = screenModel,
                                 onBack = { navigator.pop() },
-                                onNavigate = { navigator.push(it) },
+                                onNavigate = { selectedSubScreen = it },
                                 showBackButton = false
                             )
                             SettingsSection.BEHAVIOR -> BookmarkListSettingsContent(
                                 screenModel = screenModel,
                                 onBack = { navigator.pop() },
-                                onNavigate = { navigator.push(it) },
+                                onNavigate = { selectedSubScreen = it },
                                 showBackButton = false
                             )
                             SettingsSection.READER -> BookmarkViewSettingsContent(
                                 screenModel = screenModel,
                                 onBack = { navigator.pop() },
-                                onNavigate = { navigator.push(it) },
+                                onNavigate = { selectedSubScreen = it },
                                 showBackButton = false
                             )
                             SettingsSection.SYNC_DATA -> SyncDataSettingsContent(
                                 screenModel = screenModel,
                                 onBack = { navigator.pop() },
-                                onNavigate = { navigator.push(it) },
+                                onNavigate = { selectedSubScreen = it },
                                 showBackButton = false
                             )
                             SettingsSection.ABOUT -> AboutContent(
                                 onBack = { navigator.pop() },
                                 showBackButton = false
                             )
+                        }
+                    }
+
+                    // Pane 3: sub-screen content (only when a sub-screen is selected)
+                    val currentSubScreen = selectedSubScreen
+                    if (currentSubScreen != null) {
+                        VerticalDivider()
+                        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            when (currentSubScreen) {
+                                is LayoutsScreen -> LayoutsContent(
+                                    onBack = { selectedSubScreen = null },
+                                    onNavigate = { navigator.push(it) }
+                                )
+                                is CustomSwipeActionsScreen -> CustomSwipeActionsContent(
+                                    onBack = { selectedSubScreen = null }
+                                )
+                                is ReaderAppearanceScreen -> ReaderAppearanceContent(
+                                    onBack = { selectedSubScreen = null }
+                                )
+                                is ServerSettingsScreen -> ServerSettingsContent(
+                                    screenModel = screenModel,
+                                    onBack = { selectedSubScreen = null },
+                                    onNavigate = { navigator.push(it) }
+                                )
+                                is BackupRestoreScreen -> {
+                                    val backupScreenModel = koinInject<BackupRestoreScreenModel>()
+                                    BackupRestoreContent(
+                                        screenModel = backupScreenModel,
+                                        onBack = { selectedSubScreen = null }
+                                    )
+                                }
+                                else -> {
+                                    // Fallback: push as full screen
+                                    LaunchedEffect(currentSubScreen) {
+                                        navigator.push(currentSubScreen)
+                                        selectedSubScreen = null
+                                    }
+                                }
+                            }
                         }
                     }
                 }

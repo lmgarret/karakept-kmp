@@ -75,6 +75,7 @@ internal fun DrawerContent(
     onSetAsDefaultType: (DefaultListType) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToHighlights: () -> Unit,
+    isHighlightsSelected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -152,7 +153,7 @@ internal fun DrawerContent(
             Spacer(Modifier.height(16.dp))
             NavigationDrawerItem(
                 label = { Text("Highlights") },
-                selected = false,
+                selected = isHighlightsSelected,
                 icon = { Icon(Icons.Default.Create, contentDescription = null) },
                 colors = NavigationDrawerItemDefaults.colors(
                     selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
