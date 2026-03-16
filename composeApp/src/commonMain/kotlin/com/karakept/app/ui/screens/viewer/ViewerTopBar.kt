@@ -17,12 +17,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import com.karakept.app.data.local.entity.BookmarkEntity
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -42,6 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.karakept.app.utils.FaviconUtils
+import getPlatform
 
 /**
  * Top bar with back button, sticky title, and dropdown menu
@@ -60,7 +69,15 @@ internal fun ViewerTopBar(
     onViewerModeClick: () -> Unit,
     onMoveToListClick: () -> Unit,
     onEditTagsClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    // Desktop: FAB actions moved to top bar
+    isDesktop: Boolean = false,
+    bookmark: BookmarkEntity? = null,
+    onFavoriteClick: () -> Unit = {},
+    onArchiveClick: () -> Unit = {},
+    onReadClick: () -> Unit = {},
+    onShareClick: () -> Unit = {},
+    onOpenInBrowserClick: () -> Unit = {}
 ) {
     // Status bar background - fades in with top bar for parallax effect
     Box(
@@ -135,8 +152,31 @@ internal fun ViewerTopBar(
             }
         }
 
-        // Menu button
-        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)) {
+        // Action buttons and menu
+        Row(
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Desktop: inline Favorite and Archive buttons
+            if (isDesktop && bookmark != null) {
+                val iconTint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
+                IconButton(onClick = onFavoriteClick) {
+                    Icon(
+                        imageVector = if (bookmark.isStarred) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = if (bookmark.isStarred) "Unfavorite" else "Favorite",
+                        tint = iconTint
+                    )
+                }
+                IconButton(onClick = onArchiveClick) {
+                    Icon(
+                        imageVector = if (bookmark.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
+                        contentDescription = if (bookmark.isArchived) "Unarchive" else "Archive",
+                        tint = iconTint
+                    )
+                }
+            }
+
+            Box {
             IconButton(onClick = { onMenuToggle(true) }) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
@@ -150,6 +190,40 @@ internal fun ViewerTopBar(
                 onDismissRequest = { onMenuToggle(false) },
                 shape = MaterialTheme.shapes.extraSmall
             ) {
+                // Desktop: additional actions from FAB
+                if (isDesktop && bookmark != null) {
+                    DropdownMenuItem(
+                        text = { Text(if (bookmark.isRead) "Mark Unread" else "Mark Read") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (bookmark.isRead) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            onReadClick()
+                            onMenuToggle(false)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Copy Link") },
+                        leadingIcon = { Icon(imageVector = Icons.Default.Link, contentDescription = null) },
+                        onClick = {
+                            onShareClick()
+                            onMenuToggle(false)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Open in Browser") },
+                        leadingIcon = { Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null) },
+                        onClick = {
+                            onOpenInBrowserClick()
+                            onMenuToggle(false)
+                        }
+                    )
+                    HorizontalDivider()
+                }
+
                 DropdownMenuItem(
                     text = { Text("Reader Appearance") },
                     leadingIcon = {
@@ -163,19 +237,21 @@ internal fun ViewerTopBar(
                         onMenuToggle(false)
                     }
                 )
-                DropdownMenuItem(
-                    text = { Text("Viewer Mode") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = null
-                        )
-                    },
-                    onClick = {
-                        onViewerModeClick()
-                        onMenuToggle(false)
-                    }
-                )
+                if (!getPlatform().isDesktop) {
+                    DropdownMenuItem(
+                        text = { Text("Viewer Mode") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            onViewerModeClick()
+                            onMenuToggle(false)
+                        }
+                    )
+                }
 
                 // Divider to separate sections
                 HorizontalDivider()
@@ -229,7 +305,8 @@ internal fun ViewerTopBar(
                     )
                 )
             }
-        }
+            } // end Box wrapping IconButton + DropdownMenu
+        } // end Row wrapping action buttons
     }
 
     // Reading progress bar - thin accent-colored line below the toolbar

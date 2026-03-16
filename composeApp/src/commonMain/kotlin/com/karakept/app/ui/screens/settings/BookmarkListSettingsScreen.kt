@@ -50,6 +50,7 @@ import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.components.getIcon
 import com.karakept.app.ui.screens.SettingsScreenModel
 import com.karakept.app.ui.utils.buildListHierarchy
+import getPlatform
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -262,16 +263,17 @@ fun BookmarkListSettingsContent(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Gestures Section
+                // Gestures / Quick Actions Section
+                val isDesktopPlatform = remember { getPlatform().isDesktop }
                 Text(
-                    text = "Gestures",
+                    text = if (isDesktopPlatform) "Quick Actions" else "Gestures",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
                 SwipeActionSettingItem(
-                    title = "Swipe Right (Left to Right)",
-                    description = "Action when swiping from left to right",
+                    title = if (isDesktopPlatform) "Primary Quick Action" else "Swipe Right (Left to Right)",
+                    description = if (isDesktopPlatform) "Primary quick action button on bookmarks" else "Action when swiping from left to right",
                     selectedAction = swipeRightAction,
                     selectedConfigId = swipeRightConfigId,
                     customConfigs = customConfigs,
@@ -283,8 +285,8 @@ fun BookmarkListSettingsContent(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 SwipeActionSettingItem(
-                    title = "Swipe Left (Right to Left)",
-                    description = "Action when swiping from right to left",
+                    title = if (isDesktopPlatform) "Secondary Quick Action" else "Swipe Left (Right to Left)",
+                    description = if (isDesktopPlatform) "Secondary quick action button on bookmarks" else "Action when swiping from right to left",
                     selectedAction = swipeLeftAction,
                     selectedConfigId = swipeLeftConfigId,
                     customConfigs = customConfigs,

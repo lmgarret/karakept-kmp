@@ -20,8 +20,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Share
+import getPlatform
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Unarchive
@@ -107,8 +109,8 @@ internal fun BookmarkFabMenu(
                 )
 
                 FabMenuItem(
-                    icon = Icons.Default.Share,
-                    label = "Share",
+                    icon = if (getPlatform().isDesktop) Icons.Default.Link else Icons.Default.Share,
+                    label = if (getPlatform().isDesktop) "Copy Link" else "Share",
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     onClick = onShareClick

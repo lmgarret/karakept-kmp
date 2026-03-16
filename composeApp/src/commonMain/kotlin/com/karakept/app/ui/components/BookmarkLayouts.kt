@@ -45,6 +45,7 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.ThumbnailSide
+import com.karakept.app.ui.utils.onSecondaryClick
 import com.karakept.app.utils.FaviconUtils
 import com.karakept.app.utils.formatBookmarkDate
 
@@ -91,7 +92,8 @@ fun BookmarkCardLayout(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = hapticLongClick
-            ),
+            )
+            .onSecondaryClick { onLongClick?.invoke() },
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
         } else if (isActive) {
@@ -258,7 +260,8 @@ fun BookmarkListLayout(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = hapticLongClick
-            ),
+            )
+            .onSecondaryClick { onLongClick?.invoke() },
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
         } else if (isActive) {
@@ -491,7 +494,8 @@ fun BookmarkCompactListLayout(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = hapticLongClick
-            ),
+            )
+            .onSecondaryClick { onLongClick?.invoke() },
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
         } else {

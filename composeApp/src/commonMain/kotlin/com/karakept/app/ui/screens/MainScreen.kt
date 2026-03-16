@@ -142,6 +142,9 @@ object MainScreen : Screen {
             ?.let { com.karakept.app.data.model.MetadataPosition.fromString(it) }
             ?: com.karakept.app.data.model.MetadataPosition.BELOW
         val effectiveTagsScrollable = activeLayout?.tagsScrollable ?: false
+        val effectiveQuickActionPosition = activeLayout?.quickActionPosition
+            ?.let { com.karakept.app.data.model.QuickActionPosition.valueOf(it) }
+            ?: com.karakept.app.data.model.QuickActionPosition.RIGHT
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
@@ -621,7 +624,7 @@ object MainScreen : Screen {
                     )
                 },
                 floatingActionButton = {
-                    if (!offlineMode && !isAutoOffline && !isSelectionMode) {
+                    if (!isDesktop && !offlineMode && !isAutoOffline && !isSelectionMode) {
                         FloatingActionButton(
                             onClick = { showAddBookmarkDialog = true }
                         ) {
@@ -672,6 +675,7 @@ object MainScreen : Screen {
                         thumbnailSize = effectiveThumbnailSize,
                         metadataPosition = effectiveMetadataPosition,
                         tagsScrollable = effectiveTagsScrollable,
+                        quickActionPosition = effectiveQuickActionPosition,
                         offlineMode = offlineMode || isAutoOffline,
                         pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                         isSelectionMode = isSelectionMode,
@@ -700,7 +704,18 @@ object MainScreen : Screen {
                         serverUrl = servers.firstOrNull()?.url,
                         onSwipeAction = handleSwipeAction,
                         onRefresh = { if (!offlineMode) screenModel.syncBookmarks() },
-                        onLoadMore = { screenModel.loadNextPage() }
+                        onLoadMore = { screenModel.loadNextPage() },
+                        onCtrlClick = if (isDesktop) { bookmark ->
+                            if (!isSelectionMode) {
+                                screenModel.enterSelectionMode(bookmark)
+                            } else {
+                                screenModel.toggleBookmarkSelection(bookmark)
+                            }
+                        } else null,
+                        onShiftClick = if (isDesktop) { index ->
+                            if (!isSelectionMode) return@if
+                            screenModel.selectRange(index)
+                        } else null
                     )
                 }
             }
@@ -788,7 +803,10 @@ object MainScreen : Screen {
                                     scrollToHighlightId = null
                                     activeHighlightId = null
                                 },
-                                isHighlightsSelected = showHighlights
+                                isHighlightsSelected = showHighlights,
+                                onAddBookmark = if (isDesktop && !offlineMode && !isAutoOffline) {
+                                    { showAddBookmarkDialog = true }
+                                } else null
                             )
                         }
                     }

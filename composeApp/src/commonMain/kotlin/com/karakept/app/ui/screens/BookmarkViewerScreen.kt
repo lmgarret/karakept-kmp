@@ -458,7 +458,7 @@ fun BookmarkViewerContent(
             },
             floatingActionButton = {
                 AnimatedVisibility(
-                    visible = fabVisible,
+                    visible = fabVisible && !getPlatform().isDesktop,
                     enter = slideInVertically(
                         initialOffsetY = { it },
                         animationSpec = tween(300)
@@ -489,7 +489,7 @@ fun BookmarkViewerContent(
                             onShareClick = {
                                 ShareUtils.shareText(fullyLoadedState.bookmark.url, fullyLoadedState.bookmark.title)
                                 scope.launch {
-                                    snackbarManager.showSnackbar("Shared")
+                                    snackbarManager.showSnackbar(if (getPlatform().isDesktop) "Copied to clipboard" else "Shared")
                                 }
                                 fabExpanded = false
                             },
@@ -744,7 +744,21 @@ fun BookmarkViewerContent(
                             onViewerModeClick = { showModeDialog = true },
                             onMoveToListClick = { showListPicker = true },
                             onEditTagsClick = { showTagEditor = true },
-                            onDeleteClick = { showDeleteConfirmation = true }
+                            onDeleteClick = { showDeleteConfirmation = true },
+                            // Desktop: FAB actions are shown in the top bar
+                            isDesktop = getPlatform().isDesktop,
+                            bookmark = state.bookmark,
+                            onFavoriteClick = { screenModel.toggleBookmarkFavorite(state.bookmark) },
+                            onArchiveClick = { screenModel.toggleBookmarkArchive(state.bookmark) },
+                            onReadClick = { screenModel.toggleBookmarkRead(state.bookmark) },
+                            onShareClick = {
+                                ShareUtils.shareText(state.bookmark.url, state.bookmark.title)
+                                scope.launch { snackbarManager.showSnackbar(if (getPlatform().isDesktop) "Copied to clipboard" else "Shared") }
+                            },
+                            onOpenInBrowserClick = {
+                                uriHandler.openUri(state.bookmark.url)
+                                scope.launch { snackbarManager.showSnackbar("Opening in browser") }
+                            }
                         )
 
                         if (!getPlatform().isDesktop) {

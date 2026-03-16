@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Create
@@ -50,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import com.karakept.app.ui.utils.onSecondaryClick
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
@@ -76,6 +78,7 @@ internal fun DrawerContent(
     onNavigateToSettings: () -> Unit,
     onNavigateToHighlights: () -> Unit,
     isHighlightsSelected: Boolean = false,
+    onAddBookmark: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -85,6 +88,18 @@ internal fun DrawerContent(
                 .verticalScroll(rememberScrollState())
         ) {
             Spacer(Modifier.height(12.dp))
+
+            // Add Bookmark button (desktop: FAB is moved into the drawer)
+            if (onAddBookmark != null) {
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    label = { Text("Add Bookmark") },
+                    selected = false,
+                    onClick = onAddBookmark,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                )
+                Spacer(Modifier.height(4.dp))
+            }
 
             // Quick Filters Section
             Text("Quick Filters", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
@@ -251,6 +266,7 @@ private fun BuiltinDrawerItem(
                     onClick = onClick,
                     onLongClick = { showMenu = true }
                 )
+                .onSecondaryClick { showMenu = true }
                 .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -344,6 +360,7 @@ private fun ListDrawerItem(
                         onClick = onSelected,
                         onLongClick = { showMenu = true }
                     )
+                    .onSecondaryClick { showMenu = true }
                     .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically

@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import getPlatform
 import org.koin.compose.koinInject
 
 class LayoutsScreenModel(
@@ -114,6 +115,17 @@ fun LayoutsContent(
     val screenModel = koinInject<LayoutsScreenModel>()
     val state by screenModel.state.collectAsState()
     var pendingDeleteLayout by remember { mutableStateOf<BookmarkLayout?>(null) }
+    // Desktop: show layout editor as dialog instead of navigating to a 4th screen
+    var editingLayoutId by remember { mutableStateOf<String?>(null) }
+    var showEditorDialog by remember { mutableStateOf(false) }
+    val isDesktop = getPlatform().isDesktop
+
+    if (showEditorDialog && isDesktop) {
+        LayoutEditorDialog(
+            layoutId = editingLayoutId,
+            onDismiss = { showEditorDialog = false }
+        )
+    }
 
     if (pendingDeleteLayout != null) {
         AlertDialog(
@@ -151,7 +163,12 @@ fun LayoutsContent(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = {
-                onNavigate(LayoutEditorScreen(layoutId = null))
+                if (isDesktop) {
+                    editingLayoutId = null
+                    showEditorDialog = true
+                } else {
+                    onNavigate(LayoutEditorScreen(layoutId = null))
+                }
             }) {
                 Icon(Icons.Default.Add, contentDescription = "Create layout")
             }
@@ -223,7 +240,14 @@ fun LayoutsContent(
                     isDefault = state.defaultLayoutId == layout.id,
                     onSelect = { screenModel.setDefaultLayout(layout.id) },
                     onEdit = if (!layout.isBuiltIn) {
-                        { onNavigate(LayoutEditorScreen(layoutId = layout.id)) }
+                        {
+                            if (isDesktop) {
+                                editingLayoutId = layout.id
+                                showEditorDialog = true
+                            } else {
+                                onNavigate(LayoutEditorScreen(layoutId = layout.id))
+                            }
+                        }
                     } else null,
                     onDelete = if (!layout.isBuiltIn) {
                         { pendingDeleteLayout = layout }

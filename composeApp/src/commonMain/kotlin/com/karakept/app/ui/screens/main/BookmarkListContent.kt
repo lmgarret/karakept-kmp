@@ -31,6 +31,8 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerButton
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
@@ -39,12 +41,14 @@ import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.MetadataPosition
+import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.ThumbnailSide
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkCompactListLayout
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.BookmarkPlaceholderItem
+import com.karakept.app.ui.components.QuickActionBookmarkItem
 import com.karakept.app.ui.components.SwipeableBookmarkItem
 import com.karakept.app.ui.components.getEffectiveColor
 import com.karakept.app.utils.FileUtils
@@ -76,6 +80,7 @@ internal fun BookmarkListContent(
     thumbnailSize: Int = 80,
     metadataPosition: MetadataPosition = MetadataPosition.BELOW,
     tagsScrollable: Boolean = false,
+    quickActionPosition: QuickActionPosition = QuickActionPosition.RIGHT,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
     isSelectionMode: Boolean = false,
@@ -90,7 +95,9 @@ internal fun BookmarkListContent(
     onSwipeAction: (BookmarkEntity, SwipeAction, CustomSwipeActionConfig?) -> Unit,
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
-    serverUrl: String? = null
+    serverUrl: String? = null,
+    onCtrlClick: ((BookmarkEntity) -> Unit)? = null,
+    onShiftClick: ((Int) -> Unit)? = null
 ) {
     // Detect when scrolled near end
     LaunchedEffect(listState) {
@@ -252,10 +259,37 @@ internal fun BookmarkListContent(
             modifier = Modifier.fillMaxSize(),
             state = listState
         ) {
-            itemsIndexed(bookmarks, key = { _, bookmark -> bookmark.remoteId }) { _, bookmark ->
+            itemsIndexed(bookmarks, key = { _, bookmark -> bookmark.remoteId }) { itemIndex, bookmark ->
                 Box(
                     modifier = Modifier
                         .animateItem()
+                        .then(
+                            // Desktop: intercept Ctrl+Click and Shift+Click for multi-selection
+                            if (isDesktop && (onCtrlClick != null || onShiftClick != null)) {
+                                Modifier.pointerInput(bookmark.remoteId, itemIndex) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            if (event.type == PointerEventType.Press &&
+                                                event.button == PointerButton.Primary
+                                            ) {
+                                                val modifiers = event.keyboardModifiers
+                                                when {
+                                                    modifiers.isShiftPressed && onShiftClick != null -> {
+                                                        event.changes.forEach { it.consume() }
+                                                        onShiftClick.invoke(itemIndex)
+                                                    }
+                                                    (modifiers.isCtrlPressed || modifiers.isMetaPressed) && onCtrlClick != null -> {
+                                                        event.changes.forEach { it.consume() }
+                                                        onCtrlClick.invoke(bookmark)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else Modifier
+                        )
                 ) {
                     if (bookmark.remoteId in pendingBookmarkRemoteIds) {
                         BookmarkPlaceholderItem(url = bookmark.url, layoutType = layoutType)
@@ -308,26 +342,49 @@ internal fun BookmarkListContent(
                     }
 
                     val isSelected = bookmark.remoteId in selectedBookmarkIds
-                    SwipeableBookmarkItem(
-                        leftSwipeAction = if (isSelectionMode) SwipeAction.NONE else swipeLeftAction,
-                        rightSwipeAction = if (isSelectionMode) SwipeAction.NONE else swipeRightAction,
-                        leftIcon = leftIcon,
-                        rightIcon = rightIcon,
-                        leftColor = swipeLeftConfig.getEffectiveColor(swipeLeftAction).takeIf {
-                            swipeLeftConfig?.colorHex != null
-                        },
-                        rightColor = swipeRightConfig.getEffectiveColor(swipeRightAction).takeIf {
-                            swipeRightConfig?.colorHex != null
-                        },
-                        leftLabel = leftLabel,
-                        rightLabel = rightLabel,
-                        leftIsApplied = leftIsApplied,
-                        rightIsApplied = rightIsApplied,
-                        onActionTriggered = { action, isRightSwipe ->
-                            val config = if (isRightSwipe) swipeRightConfig else swipeLeftConfig
-                            onSwipeAction(bookmark, action, config)
+                    val effectiveLeftAction = if (isSelectionMode) SwipeAction.NONE else swipeLeftAction
+                    val effectiveRightAction = if (isSelectionMode) SwipeAction.NONE else swipeRightAction
+                    val actionTriggered: (SwipeAction, Boolean) -> Unit = { action, isRightSwipe ->
+                        val config = if (isRightSwipe) swipeRightConfig else swipeLeftConfig
+                        onSwipeAction(bookmark, action, config)
+                    }
+
+                    val wrapper: @Composable (@Composable () -> Unit) -> Unit = { innerContent ->
+                        if (isDesktop) {
+                            QuickActionBookmarkItem(
+                                leftAction = effectiveLeftAction,
+                                rightAction = effectiveRightAction,
+                                leftIcon = leftIcon,
+                                rightIcon = rightIcon,
+                                leftIsApplied = leftIsApplied,
+                                rightIsApplied = rightIsApplied,
+                                position = quickActionPosition,
+                                onActionTriggered = actionTriggered,
+                                content = innerContent
+                            )
+                        } else {
+                            SwipeableBookmarkItem(
+                                leftSwipeAction = effectiveLeftAction,
+                                rightSwipeAction = effectiveRightAction,
+                                leftIcon = leftIcon,
+                                rightIcon = rightIcon,
+                                leftColor = swipeLeftConfig.getEffectiveColor(swipeLeftAction).takeIf {
+                                    swipeLeftConfig?.colorHex != null
+                                },
+                                rightColor = swipeRightConfig.getEffectiveColor(swipeRightAction).takeIf {
+                                    swipeRightConfig?.colorHex != null
+                                },
+                                leftLabel = leftLabel,
+                                rightLabel = rightLabel,
+                                leftIsApplied = leftIsApplied,
+                                rightIsApplied = rightIsApplied,
+                                onActionTriggered = actionTriggered,
+                                content = innerContent
+                            )
                         }
-                    ) {
+                    }
+
+                    wrapper {
                         // Construct banner and screenshot URLs if available
                         val bannerImageUrl = if (serverUrl != null && bookmark.bannerImageAssetId != null) {
                             val remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bookmark.bannerImageAssetId)
