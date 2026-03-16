@@ -1,16 +1,24 @@
 package com.karakept.app.ui.components.reader
 
+import androidx.compose.foundation.ContextMenuDataProvider
+import androidx.compose.foundation.ContextMenuItem
+import androidx.compose.foundation.ContextMenuState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.LocalTextContextMenu
+import androidx.compose.foundation.text.TextContextMenu
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -24,9 +32,6 @@ import androidx.compose.ui.window.Popup
 /**
  * Extracts the selected text from Compose's internal `SelectionManager` by
  * navigating the [onCopyRequested] lambda's closure fields via reflection.
- *
- * `SelectionManager` calls `TextToolbar.showMenu(onCopyRequested = { copy() })`,
- * so the lambda captures the manager. We find it and call `getSelectedText$<module>()`.
  */
 private fun extractSelectedTextViaReflection(onCopyRequested: (() -> Unit)?): String? {
     if (onCopyRequested == null) return null
@@ -34,7 +39,7 @@ private fun extractSelectedTextViaReflection(onCopyRequested: (() -> Unit)?): St
         val manager = findSelectionManager(onCopyRequested) ?: return null
         val method = manager.javaClass.methods
             .find { it.name.startsWith("getSelectedText") } ?: return null
-        (method.invoke(manager) as? AnnotatedString)?.text
+        (method.invoke(manager) as? AnnotatedString)?.text?.takeIf { it.isNotEmpty() }
     } catch (_: Exception) {
         null
     }
@@ -74,9 +79,6 @@ private fun findSelectionManager(
 /**
  * Desktop implementation that shows a floating popup with Highlight, Copy, and
  * Select All actions when text is selected in a `SelectionContainer`.
- *
- * When "Highlight" is tapped the selected text is extracted directly from
- * Compose's internal `SelectionManager` via reflection — no clipboard involved.
  */
 @Composable
 actual fun rememberHighlightTextToolbar(
@@ -137,7 +139,7 @@ actual fun rememberHighlightTextToolbar(
             ) {
                 copyCallback = onCopyRequested
                 selectAllCallback = onSelectAllRequested
-                popupOffset = IntOffset(rect.left.toInt(), rect.bottom.toInt())
+                popupOffset = IntOffset(rect.left.toInt(), (rect.top - 48).coerceAtLeast(0f).toInt())
                 showPopup = true
                 _status = TextToolbarStatus.Shown
             }
@@ -147,5 +149,56 @@ actual fun rememberHighlightTextToolbar(
                 _status = TextToolbarStatus.Hidden
             }
         }
+    }
+}
+
+/**
+ * Desktop: provides a custom [TextContextMenu] via [LocalTextContextMenu] that
+ * adds "Highlight" to the right-click context menu inside a [SelectionContainer].
+ *
+ * Uses the new Compose 1.10 [TextContextMenu] API which provides direct access
+ * to the selected text via [TextContextMenu.TextManager.selectedText].
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+actual fun HighlightContextMenuProvider(
+    onHighlightRequested: (selectedText: String) -> Unit,
+    content: @Composable () -> Unit
+) {
+    val latestCallback = rememberUpdatedState(onHighlightRequested)
+    val parentTextMenu = LocalTextContextMenu.current
+
+    val customTextMenu = remember(parentTextMenu) {
+        object : TextContextMenu {
+            @Composable
+            override fun Area(
+                textManager: TextContextMenu.TextManager,
+                state: ContextMenuState,
+                content: @Composable () -> Unit
+            ) {
+                // Add "Highlight" item that reads selected text from textManager
+                ContextMenuDataProvider({
+                    val selectedText = textManager.selectedText.text
+                    if (selectedText.isNotEmpty()) {
+                        listOf(
+                            ContextMenuItem("Highlight") {
+                                latestCallback.value(selectedText)
+                            }
+                        )
+                    } else {
+                        emptyList()
+                    }
+                }) {
+                    // Delegate to the original TextContextMenu for default items (Copy, Select All)
+                    parentTextMenu.Area(textManager, state, content = content)
+                }
+            }
+        }
+    }
+
+    CompositionLocalProvider(
+        LocalTextContextMenu provides customTextMenu
+    ) {
+        content()
     }
 }

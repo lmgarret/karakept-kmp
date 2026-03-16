@@ -142,6 +142,9 @@ object MainScreen : Screen {
             ?.let { com.karakept.app.data.model.MetadataPosition.fromString(it) }
             ?: com.karakept.app.data.model.MetadataPosition.BELOW
         val effectiveTagsScrollable = activeLayout?.tagsScrollable ?: false
+        val effectiveQuickActionPosition = activeLayout?.quickActionPosition
+            ?.let { com.karakept.app.data.model.QuickActionPosition.valueOf(it) }
+            ?: com.karakept.app.data.model.QuickActionPosition.RIGHT
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
@@ -621,7 +624,7 @@ object MainScreen : Screen {
                     )
                 },
                 floatingActionButton = {
-                    if (!offlineMode && !isAutoOffline && !isSelectionMode) {
+                    if (!isDesktop && !offlineMode && !isAutoOffline && !isSelectionMode) {
                         FloatingActionButton(
                             onClick = { showAddBookmarkDialog = true }
                         ) {
@@ -672,6 +675,7 @@ object MainScreen : Screen {
                         thumbnailSize = effectiveThumbnailSize,
                         metadataPosition = effectiveMetadataPosition,
                         tagsScrollable = effectiveTagsScrollable,
+                        quickActionPosition = effectiveQuickActionPosition,
                         offlineMode = offlineMode || isAutoOffline,
                         pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                         isSelectionMode = isSelectionMode,
@@ -684,6 +688,9 @@ object MainScreen : Screen {
                         isDesktop = isDesktop,
                         pullRefreshState = pullRefreshState,
                         onBookmarkClick = { bookmark ->
+                            // Track last clicked index for Shift+Click range selection anchor
+                            val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
+                            if (idx >= 0) screenModel.trackLastClickedIndex(idx)
                             if (isExpandedLayout) {
                                 selectedBookmarkId = bookmark.localId
                             } else {
@@ -693,14 +700,56 @@ object MainScreen : Screen {
                         onBookmarkLongClick = { bookmark ->
                             if (isSelectionMode) {
                                 screenModel.toggleBookmarkSelection(bookmark)
-                            } else {
+                            } else if (!isDesktop) {
+                                // On mobile, long-press shows bottom sheet
+                                // On desktop, right-click context menu is used instead
                                 selectedBookmarkForActions = bookmark
                             }
                         },
                         serverUrl = servers.firstOrNull()?.url,
                         onSwipeAction = handleSwipeAction,
                         onRefresh = { if (!offlineMode) screenModel.syncBookmarks() },
-                        onLoadMore = { screenModel.loadNextPage() }
+                        onLoadMore = { screenModel.loadNextPage() },
+                        onCtrlClick = if (isDesktop) { bookmark ->
+                            if (!isSelectionMode) {
+                                screenModel.enterSelectionMode(bookmark)
+                            } else {
+                                screenModel.toggleBookmarkSelection(bookmark)
+                            }
+                        } else null,
+                        onShiftClick = if (isDesktop) { index ->
+                            if (!isSelectionMode) {
+                                // Enter selection mode with range from the last clicked
+                                // bookmark (tracked outside selection mode) to this one
+                                screenModel.enterSelectionModeWithRange(index)
+                            } else {
+                                screenModel.selectRange(index)
+                            }
+                        } else null,
+                        onContextMenuAction = if (isDesktop) { bookmark, action ->
+                            when (action) {
+                                is BookmarkAction.ToggleArchive -> screenModel.toggleBookmarkArchive(bookmark)
+                                is BookmarkAction.ToggleFavorite -> screenModel.toggleBookmarkFavorite(bookmark)
+                                is BookmarkAction.ToggleRead -> screenModel.toggleBookmarkRead(bookmark)
+                                is BookmarkAction.Delete -> screenModel.deleteBookmark(bookmark)
+                                is BookmarkAction.Share -> {
+                                    com.karakept.app.utils.ShareUtils.shareText(bookmark.url, bookmark.title)
+                                }
+                                is BookmarkAction.OpenInBrowser -> {
+                                    try {
+                                        uriHandler.openUri(bookmark.url)
+                                        scope.launch { snackbarManager.showSnackbar("Opening in browser") }
+                                    } catch (e: Exception) {
+                                        scope.launch { snackbarManager.showSnackbar("Could not open link") }
+                                    }
+                                }
+                                is BookmarkAction.Select -> screenModel.enterSelectionMode(bookmark)
+                                // Move to List and Edit Tags need sub-dialogs — open the bottom sheet
+                                is BookmarkAction.MoveToList, is BookmarkAction.UpdateTags -> {
+                                    selectedBookmarkForActions = bookmark
+                                }
+                            }
+                        } else null
                     )
                 }
             }
@@ -788,14 +837,19 @@ object MainScreen : Screen {
                                     scrollToHighlightId = null
                                     activeHighlightId = null
                                 },
-                                isHighlightsSelected = showHighlights
+                                isHighlightsSelected = showHighlights,
+                                onAddBookmark = if (isDesktop && !offlineMode && !isAutoOffline) {
+                                    { showAddBookmarkDialog = true }
+                                } else null
                             )
                         }
                     }
 
-                    // Divider between drawer and list (draggable)
+                    // Divider between drawer and list (draggable).
+                    // Line aligned to start so it sits flush against the drawer edge.
                     if (isDrawerVisible) {
                         DraggableDivider(
+                            lineAlignment = Alignment.CenterStart,
                             onDrag = { delta ->
                                 drawerWidthDp = (drawerWidthDp + delta).coerceIn(200f, 400f)
                             }
@@ -882,7 +936,8 @@ object MainScreen : Screen {
                                         scrollToHighlightId = null
                                         activeHighlightId = null
                                         showHighlights = false
-                                    }
+                                    },
+                                    isEmbedded = true
                                 )
                             }
                         } else {
@@ -1113,11 +1168,15 @@ object MainScreen : Screen {
 }
 
 @Composable
-fun rememberSnackbarHostState(manager: ActionSnackbarManager): androidx.compose.material3.SnackbarHostState {
+fun rememberSnackbarHostState(
+    manager: ActionSnackbarManager,
+    enabled: Boolean = true
+): androidx.compose.material3.SnackbarHostState {
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(enabled) {
+        if (!enabled) return@LaunchedEffect
         manager.snackbarEvents.collect { event ->
             when (event) {
                 is SnackbarEvent.Message -> {

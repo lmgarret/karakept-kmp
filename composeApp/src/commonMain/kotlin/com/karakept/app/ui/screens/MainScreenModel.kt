@@ -755,8 +755,38 @@ class MainScreenModel(
     // Multi-select & batch operations
     // =========================================================================
 
+    // Index of the last item that was clicked or selected (for Shift+Click range selection).
+    // Tracked even outside selection mode so Shift+Click can use it as a range anchor.
+    private var _lastSelectedIndex: Int = -1
+
+    /** Track the last clicked bookmark index (call on every normal click). */
+    fun trackLastClickedIndex(index: Int) {
+        _lastSelectedIndex = index
+    }
+
     fun enterSelectionMode(bookmark: BookmarkEntity) {
         _selectedBookmarkIds.value = setOf(bookmark.remoteId)
+        _lastSelectedIndex = bookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+    }
+
+    /**
+     * Enters selection mode and immediately selects a range from the last clicked
+     * index (tracked outside selection mode via [trackLastClickedIndex]) to [toIndex].
+     * If no anchor exists, just selects the single item at [toIndex].
+     */
+    fun enterSelectionModeWithRange(toIndex: Int) {
+        val list = bookmarks.value
+        val anchor = _lastSelectedIndex.takeIf { it >= 0 && it <= list.lastIndex }
+        if (anchor != null) {
+            val start = minOf(anchor, toIndex)
+            val end = minOf(maxOf(anchor, toIndex), list.lastIndex)
+            val rangeIds = (start..end).map { list[it].remoteId }.toSet()
+            _selectedBookmarkIds.value = rangeIds
+        } else {
+            val bookmark = list.getOrNull(toIndex) ?: return
+            _selectedBookmarkIds.value = setOf(bookmark.remoteId)
+        }
+        _lastSelectedIndex = toIndex
     }
 
     fun toggleBookmarkSelection(bookmark: BookmarkEntity) {
@@ -766,10 +796,26 @@ class MainScreenModel(
         } else {
             current + bookmark.remoteId
         }
+        _lastSelectedIndex = bookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+    }
+
+    /**
+     * Selects all bookmarks in the range [lastSelectedIndex, toIndex] (inclusive).
+     * Used for Shift+Click range selection on desktop.
+     */
+    fun selectRange(toIndex: Int) {
+        val fromIndex = _lastSelectedIndex.takeIf { it >= 0 } ?: return
+        val list = bookmarks.value
+        val start = minOf(fromIndex, toIndex)
+        val end = minOf(maxOf(fromIndex, toIndex), list.lastIndex)
+        val rangeIds = (start..end).map { list[it].remoteId }.toSet()
+        _selectedBookmarkIds.value = _selectedBookmarkIds.value + rangeIds
+        _lastSelectedIndex = toIndex
     }
 
     fun clearSelection() {
         _selectedBookmarkIds.value = emptySet()
+        _lastSelectedIndex = -1
     }
 
     fun selectAll() {

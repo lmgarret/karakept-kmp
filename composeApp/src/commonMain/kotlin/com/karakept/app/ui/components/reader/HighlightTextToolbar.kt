@@ -18,3 +18,15 @@ import androidx.compose.ui.platform.TextToolbar
 expect fun rememberHighlightTextToolbar(
     onHighlightRequested: (selectedText: String) -> Unit
 ): TextToolbar?
+
+/**
+ * Wraps content with a platform-specific context menu that includes a "Highlight" action.
+ *
+ * On Desktop: uses ContextMenuDataProvider to add "Highlight" to the right-click menu.
+ * On Android: no-op wrapper (Android uses TextToolbar/ActionMode instead).
+ */
+@Composable
+expect fun HighlightContextMenuProvider(
+    onHighlightRequested: (selectedText: String) -> Unit,
+    content: @Composable () -> Unit
+)

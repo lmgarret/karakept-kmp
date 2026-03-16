@@ -9,8 +9,10 @@ import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Share
+import getPlatform
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Unarchive
@@ -135,10 +137,10 @@ fun BookmarkActionsMenu(
 
         // External actions
         DropdownMenuItem(
-            text = { Text("Share") },
+            text = { Text(if (getPlatform().isDesktop) "Copy Link" else "Share") },
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.Share,
+                    imageVector = if (getPlatform().isDesktop) Icons.Default.Link else Icons.Default.Share,
                     contentDescription = null
                 )
             },

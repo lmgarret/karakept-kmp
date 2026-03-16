@@ -98,22 +98,21 @@ fun BookmarkViewSettingsContent(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Top
         ) {
-            Text(
-                text = "Viewer Mode",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            LayoutOption(
-                title = "Reader",
-                description = "Sanitized content with safe HTML only",
-                icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
-                isSelected = currentViewerMode == ViewerMode.READER,
-                onClick = { screenModel.setViewerMode(ViewerMode.READER) }
-            )
-
-            // WEB mode is only available on Android (uses WebView)
             if (!getPlatform().isDesktop) {
+                Text(
+                    text = "Viewer Mode",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                LayoutOption(
+                    title = "Reader",
+                    description = "Sanitized content with safe HTML only",
+                    icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
+                    isSelected = currentViewerMode == ViewerMode.READER,
+                    onClick = { screenModel.setViewerMode(ViewerMode.READER) }
+                )
+
                 Spacer(modifier = Modifier.height(12.dp))
 
                 LayoutOption(
@@ -123,9 +122,9 @@ fun BookmarkViewSettingsContent(
                     isSelected = currentViewerMode == ViewerMode.WEB,
                     onClick = { screenModel.setViewerMode(ViewerMode.WEB) }
                 )
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(24.dp))
+            }
 
             // Reader Mode Settings
             Text(

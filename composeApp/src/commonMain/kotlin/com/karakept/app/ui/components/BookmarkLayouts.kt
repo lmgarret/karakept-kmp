@@ -91,7 +91,8 @@ fun BookmarkCardLayout(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = hapticLongClick
-            ),
+            )
+            ,
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
         } else if (isActive) {
@@ -258,7 +259,8 @@ fun BookmarkListLayout(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = hapticLongClick
-            ),
+            )
+            ,
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
         } else if (isActive) {
@@ -491,7 +493,8 @@ fun BookmarkCompactListLayout(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = hapticLongClick
-            ),
+            )
+            ,
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
         } else {

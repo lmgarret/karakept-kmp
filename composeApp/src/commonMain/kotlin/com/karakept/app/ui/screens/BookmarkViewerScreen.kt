@@ -99,7 +99,8 @@ fun BookmarkViewerContent(
     scrollToHighlightId: String? = null,
     screenModel: BookmarkViewerScreenModel,
     onBack: () -> Unit,
-    onTagFilterApply: (tag: String) -> Unit
+    onTagFilterApply: (tag: String) -> Unit,
+    isEmbedded: Boolean = false
 ) {
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()
@@ -173,10 +174,16 @@ fun BookmarkViewerContent(
             highlightPosition = null
         }
 
-        val snackbarHostState = rememberSnackbarHostStateWithDelay(
-            snackbarManager = snackbarManager,
-            fabExpanded = fabExpanded
-        )
+        // When embedded in the expanded layout, skip snackbar collection —
+        // the parent MainScreen's SnackbarHost handles it to avoid duplicates.
+        val snackbarHostState = if (isEmbedded) {
+            remember { SnackbarHostState() }
+        } else {
+            rememberSnackbarHostStateWithDelay(
+                snackbarManager = snackbarManager,
+                fabExpanded = fabExpanded
+            )
+        }
 
         LaunchedEffect(bookmarkId) {
             screenModel.loadBookmark(bookmarkId)
@@ -235,6 +242,31 @@ fun BookmarkViewerContent(
             }
         }
         // --------------------
+
+        // When a highlight is clicked (not from scroll-to-highlight navigation),
+        // scroll to center it in the visible area above the bottom panel.
+        LaunchedEffect(selectedHighlightId) {
+            val id = selectedHighlightId ?: return@LaunchedEffect
+            // Only adjust for user clicks, not scroll-to-highlight navigation
+            if (id == scrollToHighlightId) return@LaunchedEffect
+            // Wait for the position to be reported
+            kotlinx.coroutines.delay(100)
+            val position = highlightPosition ?: return@LaunchedEffect
+            val state = loadingState as? BookmarkLoadingState.FullyLoaded ?: return@LaunchedEffect
+            val contentBodyIndex = if (!state.bookmark.description.isNullOrBlank()) 2 else 1
+
+            val layoutInfo = scrollState.layoutInfo
+            val contentBodyItem = layoutInfo.visibleItemsInfo.find { it.index == contentBodyIndex }
+            val contentBodyTop = contentBodyItem?.offset ?: 0
+            val highlightOffsetInItem = (position.y - contentBodyTop).toInt()
+
+            // Account for the bottom panel height (~280dp) when centering
+            val panelHeightPx = with(density) { 280.dp.toPx() }.toInt()
+            val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+            val availableHeight = viewportHeight - panelHeightPx
+            val offsetPx = maxOf(0, highlightOffsetInItem - availableHeight / 2)
+            scrollState.animateScrollToItem(contentBodyIndex, offsetPx)
+        }
 
         var highlightPositionReceived by remember { mutableStateOf(false) }
         var highlightScrollDone by remember { mutableStateOf(scrollToHighlightId == null) }
@@ -367,9 +399,11 @@ fun BookmarkViewerContent(
                 val contentBodyTop = contentBodyItem?.offset ?: 0
                 val highlightOffsetInItem = (position.y - contentBodyTop).toInt()
 
-                // Center the highlight vertically in the viewport
+                // Center the highlight in the visible area above the bottom panel
+                val panelHeightPx = with(density) { 280.dp.toPx() }.toInt()
                 val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
-                val offsetPx = maxOf(0, highlightOffsetInItem - viewportHeight / 2)
+                val availableHeight = viewportHeight - panelHeightPx
+                val offsetPx = maxOf(0, highlightOffsetInItem - availableHeight / 2)
                 safeScrollToItem(contentBodyIndex, offsetPx)
             } else {
                 // Highlight position unavailable – scroll to content body at least
@@ -458,7 +492,7 @@ fun BookmarkViewerContent(
             },
             floatingActionButton = {
                 AnimatedVisibility(
-                    visible = fabVisible,
+                    visible = fabVisible && !getPlatform().isDesktop,
                     enter = slideInVertically(
                         initialOffsetY = { it },
                         animationSpec = tween(300)
@@ -489,7 +523,7 @@ fun BookmarkViewerContent(
                             onShareClick = {
                                 ShareUtils.shareText(fullyLoadedState.bookmark.url, fullyLoadedState.bookmark.title)
                                 scope.launch {
-                                    snackbarManager.showSnackbar("Shared")
+                                    snackbarManager.showSnackbar(if (getPlatform().isDesktop) "Copied to clipboard" else "Shared")
                                 }
                                 fabExpanded = false
                             },
@@ -744,7 +778,21 @@ fun BookmarkViewerContent(
                             onViewerModeClick = { showModeDialog = true },
                             onMoveToListClick = { showListPicker = true },
                             onEditTagsClick = { showTagEditor = true },
-                            onDeleteClick = { showDeleteConfirmation = true }
+                            onDeleteClick = { showDeleteConfirmation = true },
+                            // Desktop: FAB actions are shown in the top bar
+                            isDesktop = getPlatform().isDesktop,
+                            bookmark = state.bookmark,
+                            onFavoriteClick = { screenModel.toggleBookmarkFavorite(state.bookmark) },
+                            onArchiveClick = { screenModel.toggleBookmarkArchive(state.bookmark) },
+                            onReadClick = { screenModel.toggleBookmarkRead(state.bookmark) },
+                            onShareClick = {
+                                ShareUtils.shareText(state.bookmark.url, state.bookmark.title)
+                                scope.launch { snackbarManager.showSnackbar(if (getPlatform().isDesktop) "Copied to clipboard" else "Shared") }
+                            },
+                            onOpenInBrowserClick = {
+                                uriHandler.openUri(state.bookmark.url)
+                                scope.launch { snackbarManager.showSnackbar("Opening in browser") }
+                            }
                         )
 
                         if (!getPlatform().isDesktop) {

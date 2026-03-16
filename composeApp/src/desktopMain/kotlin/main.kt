@@ -21,6 +21,23 @@ import java.awt.GraphicsEnvironment
 
 @OptIn(FlowPreview::class)
 fun main() {
+    // macOS: detect system dark mode and set initial appearance for native title bar.
+    // This must be set before AWT initializes for the first window.
+    if (System.getProperty("os.name").lowercase().contains("mac")) {
+        try {
+            // Check if macOS is in dark mode via defaults command
+            val process = ProcessBuilder("defaults", "read", "-g", "AppleInterfaceStyle")
+                .redirectErrorStream(true).start()
+            val result = process.inputStream.bufferedReader().readText().trim()
+            process.waitFor()
+            val isDark = result.equals("Dark", ignoreCase = true)
+            // JetBrains Runtime property for all new windows
+            System.setProperty("apple.awt.application.appearance", if (isDark) "NSAppearanceNameDarkAqua" else "NSAppearanceNameAqua")
+        } catch (_: Exception) {
+            // Best effort — defaults to system appearance
+        }
+    }
+
     // Use software rendering on Linux so the Skia surface always resizes correctly
     // when running via X11 forwarding from a devcontainer / containerized env.
     // GPU-backed backends (GL/Vulkan) can silently fail to resize over X11,
