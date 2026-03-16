@@ -99,7 +99,8 @@ fun BookmarkViewerContent(
     scrollToHighlightId: String? = null,
     screenModel: BookmarkViewerScreenModel,
     onBack: () -> Unit,
-    onTagFilterApply: (tag: String) -> Unit
+    onTagFilterApply: (tag: String) -> Unit,
+    isEmbedded: Boolean = false
 ) {
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()
@@ -173,10 +174,16 @@ fun BookmarkViewerContent(
             highlightPosition = null
         }
 
-        val snackbarHostState = rememberSnackbarHostStateWithDelay(
-            snackbarManager = snackbarManager,
-            fabExpanded = fabExpanded
-        )
+        // When embedded in the expanded layout, skip snackbar collection —
+        // the parent MainScreen's SnackbarHost handles it to avoid duplicates.
+        val snackbarHostState = if (isEmbedded) {
+            remember { SnackbarHostState() }
+        } else {
+            rememberSnackbarHostStateWithDelay(
+                snackbarManager = snackbarManager,
+                fabExpanded = fabExpanded
+            )
+        }
 
         LaunchedEffect(bookmarkId) {
             screenModel.loadBookmark(bookmarkId)

@@ -1,5 +1,8 @@
 package com.karakept.app.ui.components
 
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +14,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -22,6 +27,7 @@ import com.karakept.app.data.model.SwipeAction
  * Desktop replacement for [SwipeableBookmarkItem].
  * Shows inline icon buttons for the configured quick actions
  * on the leading or trailing side of the bookmark item.
+ * Buttons sit inside the same visual row as the bookmark content.
  */
 @Composable
 fun QuickActionBookmarkItem(
@@ -39,21 +45,12 @@ fun QuickActionBookmarkItem(
     val hasActions = leftAction != SwipeAction.NONE || rightAction != SwipeAction.NONE
 
     if (!hasActions) {
-        // No actions configured — just render the content with matching padding
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            content()
-        }
+        content()
         return
     }
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (position == QuickActionPosition.LEFT) {
@@ -64,7 +61,8 @@ fun QuickActionBookmarkItem(
                 rightIcon = rightIcon,
                 leftIsApplied = leftIsApplied,
                 rightIsApplied = rightIsApplied,
-                onActionTriggered = onActionTriggered
+                onActionTriggered = onActionTriggered,
+                modifier = Modifier.padding(start = 8.dp)
             )
         }
 
@@ -80,7 +78,8 @@ fun QuickActionBookmarkItem(
                 rightIcon = rightIcon,
                 leftIsApplied = leftIsApplied,
                 rightIsApplied = rightIsApplied,
-                onActionTriggered = onActionTriggered
+                onActionTriggered = onActionTriggered,
+                modifier = Modifier.padding(end = 8.dp)
             )
         }
     }
@@ -94,9 +93,11 @@ private fun ActionButtons(
     rightIcon: ImageVector?,
     leftIsApplied: Boolean,
     rightIsApplied: Boolean,
-    onActionTriggered: (SwipeAction, Boolean) -> Unit
+    onActionTriggered: (SwipeAction, Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -128,14 +129,23 @@ private fun QuickActionButton(
     isApplied: Boolean,
     onClick: () -> Unit
 ) {
-    val color = action.getColor()
-    val alpha = if (isApplied) 0.4f else 1f
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    // Neutral color by default, action color on hover or when applied
+    val actionColor = action.getColor()
+    val neutralColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val color = when {
+        isApplied -> actionColor.copy(alpha = 0.5f)
+        isHovered -> actionColor
+        else -> neutralColor.copy(alpha = 0.6f)
+    }
 
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(36.dp),
+        modifier = Modifier.size(36.dp).hoverable(interactionSource),
+        interactionSource = interactionSource,
         colors = IconButtonDefaults.iconButtonColors(
-            contentColor = color.copy(alpha = alpha)
+            contentColor = color
         )
     ) {
         Icon(

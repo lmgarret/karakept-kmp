@@ -48,13 +48,16 @@ import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.ThumbnailSide
+import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkCompactListLayout
+import com.karakept.app.ui.components.BookmarkContextMenu
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.BookmarkPlaceholderItem
 import com.karakept.app.ui.components.QuickActionBookmarkItem
 import com.karakept.app.ui.components.SwipeableBookmarkItem
 import com.karakept.app.ui.components.getEffectiveColor
+import com.karakept.app.ui.utils.onSecondaryClickWithPosition
 import com.karakept.app.utils.FileUtils
 import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.utils.AssetUrlUtils
@@ -101,7 +104,8 @@ internal fun BookmarkListContent(
     onLoadMore: () -> Unit,
     serverUrl: String? = null,
     onCtrlClick: ((BookmarkEntity) -> Unit)? = null,
-    onShiftClick: ((Int) -> Unit)? = null
+    onShiftClick: ((Int) -> Unit)? = null,
+    onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null
 ) {
     // Detect when scrolled near end
     LaunchedEffect(listState) {
@@ -122,6 +126,12 @@ internal fun BookmarkListContent(
     val hapticFeedback = LocalHapticFeedback.current
     val updatedBookmarks = rememberUpdatedState(bookmarks)
     val updatedSelectedIds = rememberUpdatedState(selectedBookmarkIds)
+
+    // Desktop context menu state
+    var contextMenuBookmark by remember { mutableStateOf<BookmarkEntity?>(null) }
+    var contextMenuOffset by remember { mutableStateOf(androidx.compose.ui.unit.DpOffset.Zero) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+
     // Tracks whether a drag-selection gesture is currently active (started from long press in selection mode)
     val isDragSelecting = remember { mutableStateOf(false) }
     // Scroll speed (px/frame) applied at the list edges during drag selection.
@@ -294,7 +304,34 @@ internal fun BookmarkListContent(
                                 }
                             } else Modifier
                         )
+                        .then(
+                            // Desktop: right-click shows context menu
+                            if (isDesktop && onContextMenuAction != null) {
+                                Modifier.onSecondaryClickWithPosition { position ->
+                                    contextMenuBookmark = bookmark
+                                    contextMenuOffset = with(density) {
+                                        androidx.compose.ui.unit.DpOffset(
+                                            position.x.toDp(),
+                                            position.y.toDp()
+                                        )
+                                    }
+                                }
+                            } else Modifier
+                        )
                 ) {
+                    // Desktop context menu anchored at right-click position
+                    if (isDesktop && contextMenuBookmark?.remoteId == bookmark.remoteId && onContextMenuAction != null) {
+                        BookmarkContextMenu(
+                            expanded = true,
+                            bookmark = bookmark,
+                            offset = contextMenuOffset,
+                            onAction = { action ->
+                                onContextMenuAction.invoke(bookmark, action)
+                            },
+                            onDismiss = { contextMenuBookmark = null }
+                        )
+                    }
+
                     if (bookmark.remoteId in pendingBookmarkRemoteIds) {
                         BookmarkPlaceholderItem(url = bookmark.url, layoutType = layoutType)
                         return@Box

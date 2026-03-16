@@ -75,6 +75,9 @@ private fun findSelectionManager(
  * Desktop implementation that shows a floating popup with Highlight, Copy, and
  * Select All actions when text is selected in a `SelectionContainer`.
  *
+ * The popup appears both on initial text selection and when the user right-clicks
+ * on already-selected text (via the TextToolbar.showMenu mechanism).
+ *
  * When "Highlight" is tapped the selected text is extracted directly from
  * Compose's internal `SelectionManager` via reflection — no clipboard involved.
  */
@@ -137,7 +140,8 @@ actual fun rememberHighlightTextToolbar(
             ) {
                 copyCallback = onCopyRequested
                 selectAllCallback = onSelectAllRequested
-                popupOffset = IntOffset(rect.left.toInt(), rect.bottom.toInt())
+                // Position the popup above the selection rectangle
+                popupOffset = IntOffset(rect.left.toInt(), (rect.top - 48).coerceAtLeast(0f).toInt())
                 showPopup = true
                 _status = TextToolbarStatus.Shown
             }

@@ -121,11 +121,13 @@ internal fun ViewerTopBar(
         }
 
         // Sticky Title
+        // On desktop, the right side has Favorite + Archive + MoreVert = ~144dp
+        val endPadding = if (isDesktop) 152.dp else 48.dp
         androidx.compose.animation.AnimatedVisibility(
             visible = showStickyTitle,
             enter = androidx.compose.animation.fadeIn(),
             exit = androidx.compose.animation.fadeOut(),
-            modifier = Modifier.align(Alignment.Center).padding(horizontal = 48.dp)
+            modifier = Modifier.align(Alignment.Center).padding(start = 48.dp, end = endPadding)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

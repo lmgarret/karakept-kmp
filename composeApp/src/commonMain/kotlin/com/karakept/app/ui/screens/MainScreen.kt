@@ -697,7 +697,9 @@ object MainScreen : Screen {
                         onBookmarkLongClick = { bookmark ->
                             if (isSelectionMode) {
                                 screenModel.toggleBookmarkSelection(bookmark)
-                            } else {
+                            } else if (!isDesktop) {
+                                // On mobile, long-press shows bottom sheet
+                                // On desktop, right-click context menu is used instead
                                 selectedBookmarkForActions = bookmark
                             }
                         },
@@ -715,6 +717,30 @@ object MainScreen : Screen {
                         onShiftClick = if (isDesktop) { index ->
                             if (isSelectionMode) {
                                 screenModel.selectRange(index)
+                            }
+                        } else null,
+                        onContextMenuAction = if (isDesktop) { bookmark, action ->
+                            when (action) {
+                                is BookmarkAction.ToggleArchive -> screenModel.toggleBookmarkArchive(bookmark)
+                                is BookmarkAction.ToggleFavorite -> screenModel.toggleBookmarkFavorite(bookmark)
+                                is BookmarkAction.ToggleRead -> screenModel.toggleBookmarkRead(bookmark)
+                                is BookmarkAction.Delete -> screenModel.deleteBookmark(bookmark)
+                                is BookmarkAction.Share -> {
+                                    com.karakept.app.utils.ShareUtils.shareText(bookmark.url, bookmark.title)
+                                }
+                                is BookmarkAction.OpenInBrowser -> {
+                                    try {
+                                        uriHandler.openUri(bookmark.url)
+                                        scope.launch { snackbarManager.showSnackbar("Opening in browser") }
+                                    } catch (e: Exception) {
+                                        scope.launch { snackbarManager.showSnackbar("Could not open link") }
+                                    }
+                                }
+                                is BookmarkAction.Select -> screenModel.enterSelectionMode(bookmark)
+                                // Move to List and Edit Tags need sub-dialogs — open the bottom sheet
+                                is BookmarkAction.MoveToList, is BookmarkAction.UpdateTags -> {
+                                    selectedBookmarkForActions = bookmark
+                                }
                             }
                         } else null
                     )
@@ -901,7 +927,8 @@ object MainScreen : Screen {
                                         scrollToHighlightId = null
                                         activeHighlightId = null
                                         showHighlights = false
-                                    }
+                                    },
+                                    isEmbedded = true
                                 )
                             }
                         } else {
@@ -1132,11 +1159,15 @@ object MainScreen : Screen {
 }
 
 @Composable
-fun rememberSnackbarHostState(manager: ActionSnackbarManager): androidx.compose.material3.SnackbarHostState {
+fun rememberSnackbarHostState(
+    manager: ActionSnackbarManager,
+    enabled: Boolean = true
+): androidx.compose.material3.SnackbarHostState {
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(enabled) {
+        if (!enabled) return@LaunchedEffect
         manager.snackbarEvents.collect { event ->
             when (event) {
                 is SnackbarEvent.Message -> {

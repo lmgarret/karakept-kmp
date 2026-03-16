@@ -1,18 +1,19 @@
 package com.karakept.app.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.window.WindowScope
 
 @Composable
 actual fun SyncWindowTheme() {
     val background = MaterialTheme.colorScheme.background
-    // Set AWT window background so the native title-bar / decoration follows the theme
-    LaunchedEffect(background) {
+    val isDark = isSystemInDarkTheme()
+    // Heuristic: if the background luminance is low, we're in dark mode
+    val isAppDark = (background.red * 0.299f + background.green * 0.587f + background.blue * 0.114f) < 0.5f
+
+    LaunchedEffect(background, isAppDark) {
         try {
-            // Access the AWT Window through the Compose window hierarchy.
-            // java.awt.Window.getWindows() returns all open AWT windows.
             val awtColor = java.awt.Color(
                 (background.red * 255).toInt(),
                 (background.green * 255).toInt(),
@@ -20,6 +21,15 @@ actual fun SyncWindowTheme() {
             )
             java.awt.Window.getWindows().forEach { window ->
                 window.background = awtColor
+                // macOS: set dark/light appearance on the root pane for native title bar
+                if (window is javax.swing.JFrame) {
+                    val rootPane = window.rootPane
+                    rootPane?.putClientProperty("apple.awt.transparentTitleBar", true)
+                    rootPane?.putClientProperty("apple.awt.fullWindowContent", true)
+                    // JetBrains Runtime dark title bar support
+                    rootPane?.putClientProperty("jetbrains.awt.windowDarkAppearance", isAppDark)
+                    rootPane?.putClientProperty("apple.awt.windowAppearance", if (isAppDark) "NSAppearanceNameDarkAqua" else "NSAppearanceNameAqua")
+                }
             }
         } catch (_: Exception) {
             // Best-effort — if AWT access fails, just skip.

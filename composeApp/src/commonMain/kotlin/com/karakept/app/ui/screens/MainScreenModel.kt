@@ -760,7 +760,7 @@ class MainScreenModel(
 
     fun enterSelectionMode(bookmark: BookmarkEntity) {
         _selectedBookmarkIds.value = setOf(bookmark.remoteId)
-        _lastSelectedIndex = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+        _lastSelectedIndex = bookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
     }
 
     fun toggleBookmarkSelection(bookmark: BookmarkEntity) {
@@ -770,7 +770,7 @@ class MainScreenModel(
         } else {
             current + bookmark.remoteId
         }
-        _lastSelectedIndex = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+        _lastSelectedIndex = bookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
     }
 
     /**
@@ -779,11 +779,12 @@ class MainScreenModel(
      */
     fun selectRange(toIndex: Int) {
         val fromIndex = _lastSelectedIndex.takeIf { it >= 0 } ?: return
-        val bookmarks = _accumulatedBookmarks.value
+        val list = bookmarks.value
         val start = minOf(fromIndex, toIndex)
-        val end = minOf(maxOf(fromIndex, toIndex), bookmarks.lastIndex)
-        val rangeIds = (start..end).map { bookmarks[it].remoteId }.toSet()
+        val end = minOf(maxOf(fromIndex, toIndex), list.lastIndex)
+        val rangeIds = (start..end).map { list[it].remoteId }.toSet()
         _selectedBookmarkIds.value = _selectedBookmarkIds.value + rangeIds
+        _lastSelectedIndex = toIndex
     }
 
     fun clearSelection() {

@@ -51,7 +51,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import com.karakept.app.ui.utils.onSecondaryClick
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.DpOffset
+import com.karakept.app.ui.utils.onSecondaryClickWithPosition
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
@@ -250,6 +252,8 @@ private fun BuiltinDrawerItem(
     onSetAsHome: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
+    val density = LocalDensity.current
 
     val selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     val selectedTextColor = MaterialTheme.colorScheme.primary
@@ -266,7 +270,10 @@ private fun BuiltinDrawerItem(
                     onClick = onClick,
                     onLongClick = { showMenu = true }
                 )
-                .onSecondaryClick { showMenu = true }
+                .onSecondaryClickWithPosition { position ->
+                    menuOffset = with(density) { DpOffset(position.x.toDp(), position.y.toDp()) }
+                    showMenu = true
+                }
                 .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -286,6 +293,7 @@ private fun BuiltinDrawerItem(
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
+            offset = menuOffset,
             shape = MaterialTheme.shapes.extraSmall
         ) {
             DropdownMenuItem(
@@ -318,6 +326,8 @@ private fun ListDrawerItem(
 ) {
     val listId = list.id ?: ""
     var showMenu by remember { mutableStateOf(false) }
+    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
+    val menuDensity = LocalDensity.current
 
     val selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     val selectedTextColor = MaterialTheme.colorScheme.primary
@@ -360,7 +370,10 @@ private fun ListDrawerItem(
                         onClick = onSelected,
                         onLongClick = { showMenu = true }
                     )
-                    .onSecondaryClick { showMenu = true }
+                    .onSecondaryClickWithPosition { position ->
+                        menuOffset = with(menuDensity) { DpOffset(position.x.toDp(), position.y.toDp()) }
+                        showMenu = true
+                    }
                     .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -382,6 +395,7 @@ private fun ListDrawerItem(
             DropdownMenu(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
+                offset = menuOffset,
                 shape = MaterialTheme.shapes.extraSmall
             ) {
                 DropdownMenuItem(
