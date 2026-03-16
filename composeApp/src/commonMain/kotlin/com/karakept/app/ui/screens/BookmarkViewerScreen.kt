@@ -167,6 +167,12 @@ fun BookmarkViewerContent(
             }
         }
 
+        // Reset merged position when the selected highlight changes so
+        // multi-paragraph paths are freshly accumulated.
+        LaunchedEffect(selectedHighlightId) {
+            highlightPosition = null
+        }
+
         val snackbarHostState = rememberSnackbarHostStateWithDelay(
             snackbarManager = snackbarManager,
             fabExpanded = fabExpanded
@@ -642,7 +648,28 @@ fun BookmarkViewerContent(
                                         selectedHighlightId = id
                                     },
                                     onHighlightPosition = { id, position ->
-                                        highlightPosition = position
+                                        val current = highlightPosition
+                                        if (current != null && current.path != null && position.path != null) {
+                                            // Merge paths from multiple text blocks (multi-paragraph highlights).
+                                            // Paths are already in root coordinates.
+                                            val mergedPath = androidx.compose.ui.graphics.Path().apply {
+                                                addPath(current.path!!)
+                                                addPath(position.path!!)
+                                            }
+                                            val mergedBounds = mergedPath.getBounds()
+                                            highlightPosition = com.karakept.app.ui.components.HighlightPosition(
+                                                x = mergedBounds.left,
+                                                y = mergedBounds.top,
+                                                width = mergedBounds.width,
+                                                height = mergedBounds.height,
+                                                scrollX = 0f,
+                                                scrollY = 0f,
+                                                path = mergedPath,
+                                                rootOffset = androidx.compose.ui.geometry.Offset.Zero
+                                            )
+                                        } else {
+                                            highlightPosition = position
+                                        }
                                         if (id == scrollToHighlightId && !highlightPositionReceived) {
                                             highlightPositionReceived = true
                                         }
