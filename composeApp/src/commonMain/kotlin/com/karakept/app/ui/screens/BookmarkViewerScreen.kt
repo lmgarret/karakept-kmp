@@ -229,6 +229,7 @@ fun BookmarkViewerContent(
         // --------------------
 
         var highlightPositionReceived by remember { mutableStateOf(false) }
+        var highlightScrollDone by remember { mutableStateOf(scrollToHighlightId == null) }
         val bannerHeight = 320.dp
         val toolbarHeight = 56.dp
 
@@ -334,6 +335,8 @@ fun BookmarkViewerContent(
         // highlightPositionReceived flips to true once the renderer responds with a position
         // (via onHighlightPosition), which triggers this scroll effect.
         // We also wait for contentRendered so the LazyColumn item has its full height.
+        // The LazyColumn is hidden (alpha 0) until highlightScrollDone is true, so the
+        // user never sees the content at the top before the scroll completes.
         LaunchedEffect(highlightPositionReceived, contentRendered) {
             if (!highlightPositionReceived) return@LaunchedEffect
             if (!contentRendered) return@LaunchedEffect
@@ -347,17 +350,19 @@ fun BookmarkViewerContent(
             }
             val position = highlightPosition
             if (position != null) {
-                // Convert CSS pixels (from getBoundingClientRect) to screen pixels for LazyList offset.
-                // Subtract 120dp so the highlight is not pinned flush to the top of the screen.
                 val highlightCssPx = position.y + position.scrollY
+                // Center the highlight vertically in the viewport
+                val viewportHeight = scrollState.layoutInfo.viewportEndOffset -
+                    scrollState.layoutInfo.viewportStartOffset
                 val offsetPx = with(density) {
-                    maxOf(0, highlightCssPx.dp.roundToPx() - 120.dp.roundToPx())
+                    maxOf(0, highlightCssPx.dp.roundToPx() - viewportHeight / 2)
                 }
                 safeScrollToItem(contentBodyIndex, offsetPx)
             } else {
                 // Highlight position unavailable – scroll to content body at least
                 safeScrollToItem(contentBodyIndex, 0)
             }
+            highlightScrollDone = true
         }
 
         // Keep the last valid FullyLoaded state to prevent error flash during navigation
@@ -535,11 +540,13 @@ fun BookmarkViewerContent(
                                 (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f ||
                                 !serverProgressChecked
                             )
+                        // Also hide while waiting for the highlight scroll to complete
+                        val needsHighlightScroll = !highlightScrollDone
                         LazyColumn(
                             state = scrollState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(if (needsScrollRestore) Modifier.alpha(0f) else Modifier)
+                                .then(if (needsScrollRestore || needsHighlightScroll) Modifier.alpha(0f) else Modifier)
                         ) {
                             // Hero banner as first item so tag/URL clicks are not blocked by the list
                             item(key = "hero_banner") {
