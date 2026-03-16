@@ -6,6 +6,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -55,32 +56,40 @@ fun QuickActionBookmarkItem(
         return
     }
 
-    // Overlay the action buttons on top of the card content, inside the card boundary.
-    Box(
+    // Place action buttons next to the card in a Row so they don't overlap content.
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        content()
+        if (position == QuickActionPosition.LEFT) {
+            ActionButtons(
+                leftAction = leftAction,
+                rightAction = rightAction,
+                leftIcon = leftIcon,
+                rightIcon = rightIcon,
+                leftIsApplied = leftIsApplied,
+                rightIsApplied = rightIsApplied,
+                onActionTriggered = onActionTriggered
+            )
+        }
 
-        ActionButtons(
-            leftAction = leftAction,
-            rightAction = rightAction,
-            leftIcon = leftIcon,
-            rightIcon = rightIcon,
-            leftIsApplied = leftIsApplied,
-            rightIsApplied = rightIsApplied,
-            onActionTriggered = onActionTriggered,
-            modifier = Modifier
-                .align(
-                    if (position == QuickActionPosition.LEFT) Alignment.CenterStart
-                    else Alignment.CenterEnd
-                )
-                .then(
-                    if (position == QuickActionPosition.LEFT) Modifier.padding(start = 8.dp)
-                    else Modifier.padding(end = 8.dp)
-                )
-        )
+        Box(modifier = Modifier.weight(1f)) {
+            content()
+        }
+
+        if (position == QuickActionPosition.RIGHT) {
+            ActionButtons(
+                leftAction = leftAction,
+                rightAction = rightAction,
+                leftIcon = leftIcon,
+                rightIcon = rightIcon,
+                leftIsApplied = leftIsApplied,
+                rightIsApplied = rightIsApplied,
+                onActionTriggered = onActionTriggered
+            )
+        }
     }
 }
 
