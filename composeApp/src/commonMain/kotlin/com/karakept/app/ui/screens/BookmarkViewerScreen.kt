@@ -137,7 +137,7 @@ fun BookmarkViewerContent(
         var showDeleteConfirmation by remember { mutableStateOf(false) }
         var showTagEditor by remember { mutableStateOf(false) }
         var showListPicker by remember { mutableStateOf(false) }
-        var selectedHighlightId by remember { mutableStateOf<String?>(null) }
+        var selectedHighlightId by remember { mutableStateOf<String?>(scrollToHighlightId) }
         var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
         // Track the text of the selected highlight for matching after ID changes (temp -> server ID)
         var selectedHighlightText by remember { mutableStateOf<String?>(null) }
@@ -228,28 +228,7 @@ fun BookmarkViewerContent(
         }
         // --------------------
 
-        // Scroll the LazyColumn to the highlight when navigating from the Highlights screen.
-        // highlightPositionReceived flips to true once the WebView responds with a position
-        // (via onHighlightPosition), which triggers the scroll LaunchedEffect below.
         var highlightPositionReceived by remember { mutableStateOf(false) }
-        LaunchedEffect(highlightPositionReceived) {
-            if (!highlightPositionReceived) return@LaunchedEffect
-            val state = loadingState as? BookmarkLoadingState.FullyLoaded ?: return@LaunchedEffect
-            val contentBodyIndex = if (!state.bookmark.description.isNullOrBlank()) 2 else 1
-            val position = highlightPosition
-            if (position != null) {
-                // Convert CSS pixels (from getBoundingClientRect) to screen pixels for LazyList offset.
-                // Subtract 120dp so the highlight is not pinned flush to the top of the screen.
-                val highlightCssPx = position.y + position.scrollY
-                val offsetPx = with(density) {
-                    maxOf(0, highlightCssPx.dp.roundToPx() - 120.dp.roundToPx())
-                }
-                safeScrollToItem(contentBodyIndex, offsetPx)
-            } else {
-                // Highlight position unavailable – scroll to content body at least
-                safeScrollToItem(contentBodyIndex, 0)
-            }
-        }
         val bannerHeight = 320.dp
         val toolbarHeight = 56.dp
 
@@ -348,6 +327,36 @@ fun BookmarkViewerContent(
                 }
                 // If hasMeaningfulProgress and content is still loading (!contentFetchAttempted),
                 // keep waiting — the LaunchedEffect will re-fire when either changes.
+            }
+        }
+
+        // Scroll the LazyColumn to the highlight when navigating from the Highlights screen.
+        // highlightPositionReceived flips to true once the renderer responds with a position
+        // (via onHighlightPosition), which triggers this scroll effect.
+        // We also wait for contentRendered so the LazyColumn item has its full height.
+        LaunchedEffect(highlightPositionReceived, contentRendered) {
+            if (!highlightPositionReceived) return@LaunchedEffect
+            if (!contentRendered) return@LaunchedEffect
+            val state = loadingState as? BookmarkLoadingState.FullyLoaded ?: return@LaunchedEffect
+            val contentBodyIndex = if (!state.bookmark.description.isNullOrBlank()) 2 else 1
+            // Wait for layout to settle (same pattern as reading position restoration)
+            if (isNativeRenderer) {
+                kotlinx.coroutines.yield()
+            } else {
+                delay(300)
+            }
+            val position = highlightPosition
+            if (position != null) {
+                // Convert CSS pixels (from getBoundingClientRect) to screen pixels for LazyList offset.
+                // Subtract 120dp so the highlight is not pinned flush to the top of the screen.
+                val highlightCssPx = position.y + position.scrollY
+                val offsetPx = with(density) {
+                    maxOf(0, highlightCssPx.dp.roundToPx() - 120.dp.roundToPx())
+                }
+                safeScrollToItem(contentBodyIndex, offsetPx)
+            } else {
+                // Highlight position unavailable – scroll to content body at least
+                safeScrollToItem(contentBodyIndex, 0)
             }
         }
 
