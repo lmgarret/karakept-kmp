@@ -1,15 +1,19 @@
 package com.karakept.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -19,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.QuickActionPosition
@@ -27,7 +32,7 @@ import com.karakept.app.data.model.SwipeAction
 /**
  * Desktop replacement for [SwipeableBookmarkItem].
  * Overlays inline icon buttons on top of the bookmark card
- * on the leading or trailing edge.
+ * on the leading or trailing edge, visible only when the card is hovered.
  * Matches the padding of [SwipeableBookmarkItem] so items don't stick together.
  */
 @Composable
@@ -56,30 +61,33 @@ fun QuickActionBookmarkItem(
         return
     }
 
-    // Place action buttons next to the card in a Row so they don't overlap content.
-    Row(
+    // Track hover on the entire item to show/hide action buttons
+    val itemInteractionSource = remember { MutableInteractionSource() }
+    val isItemHovered by itemInteractionSource.collectIsHoveredAsState()
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .hoverable(itemInteractionSource)
     ) {
-        if (position == QuickActionPosition.LEFT) {
-            ActionButtons(
-                leftAction = leftAction,
-                rightAction = rightAction,
-                leftIcon = leftIcon,
-                rightIcon = rightIcon,
-                leftIsApplied = leftIsApplied,
-                rightIsApplied = rightIsApplied,
-                onActionTriggered = onActionTriggered
-            )
-        }
+        content()
 
-        Box(modifier = Modifier.weight(1f)) {
-            content()
-        }
-
-        if (position == QuickActionPosition.RIGHT) {
+        // Buttons overlay on top of card, only visible on hover
+        AnimatedVisibility(
+            visible = isItemHovered,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(
+                    if (position == QuickActionPosition.LEFT) Alignment.CenterStart
+                    else Alignment.CenterEnd
+                )
+                .then(
+                    if (position == QuickActionPosition.LEFT) Modifier.padding(start = 8.dp)
+                    else Modifier.padding(end = 8.dp)
+                )
+        ) {
             ActionButtons(
                 leftAction = leftAction,
                 rightAction = rightAction,
@@ -105,7 +113,10 @@ private fun ActionButtons(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f))
+            .padding(2.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -139,13 +150,12 @@ private fun QuickActionButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
-    // Neutral color by default, action color on hover or when applied
     val actionColor = action.getColor()
     val neutralColor = MaterialTheme.colorScheme.onSurfaceVariant
     val color = when {
         isApplied -> actionColor.copy(alpha = 0.5f)
         isHovered -> actionColor
-        else -> neutralColor.copy(alpha = 0.6f)
+        else -> neutralColor.copy(alpha = 0.8f)
     }
 
     IconButton(

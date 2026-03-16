@@ -374,7 +374,7 @@ private fun ListDrawerItem(
                         menuOffset = with(menuDensity) { DpOffset(position.x.toDp(), position.y.toDp()) }
                         showMenu = true
                     }
-                    .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
