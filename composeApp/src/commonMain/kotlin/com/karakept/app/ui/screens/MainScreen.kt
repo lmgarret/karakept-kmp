@@ -688,6 +688,9 @@ object MainScreen : Screen {
                         isDesktop = isDesktop,
                         pullRefreshState = pullRefreshState,
                         onBookmarkClick = { bookmark ->
+                            // Track last clicked index for Shift+Click range selection anchor
+                            val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
+                            if (idx >= 0) screenModel.trackLastClickedIndex(idx)
                             if (isExpandedLayout) {
                                 selectedBookmarkId = bookmark.localId
                             } else {
@@ -716,11 +719,9 @@ object MainScreen : Screen {
                         } else null,
                         onShiftClick = if (isDesktop) { index ->
                             if (!isSelectionMode) {
-                                // Enter selection mode by selecting just this item first
-                                val bookmark = bookmarks.getOrNull(index)
-                                if (bookmark != null) {
-                                    screenModel.enterSelectionMode(bookmark)
-                                }
+                                // Enter selection mode with range from the last clicked
+                                // bookmark (tracked outside selection mode) to this one
+                                screenModel.enterSelectionModeWithRange(index)
                             } else {
                                 screenModel.selectRange(index)
                             }

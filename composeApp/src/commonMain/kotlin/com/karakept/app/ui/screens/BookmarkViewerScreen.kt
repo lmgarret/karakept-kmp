@@ -174,6 +174,31 @@ fun BookmarkViewerContent(
             highlightPosition = null
         }
 
+        // When a highlight is clicked (not from scroll-to-highlight navigation),
+        // scroll to center it in the visible area above the bottom panel.
+        LaunchedEffect(selectedHighlightId) {
+            val id = selectedHighlightId ?: return@LaunchedEffect
+            // Only adjust for user clicks, not scroll-to-highlight navigation
+            if (id == scrollToHighlightId) return@LaunchedEffect
+            // Wait a frame for the position to be reported
+            kotlinx.coroutines.delay(100)
+            val position = highlightPosition ?: return@LaunchedEffect
+            val state = loadingState as? BookmarkLoadingState.FullyLoaded ?: return@LaunchedEffect
+            val contentBodyIndex = if (!state.bookmark.description.isNullOrBlank()) 2 else 1
+
+            val layoutInfo = scrollState.layoutInfo
+            val contentBodyItem = layoutInfo.visibleItemsInfo.find { it.index == contentBodyIndex }
+            val contentBodyTop = contentBodyItem?.offset ?: 0
+            val highlightOffsetInItem = (position.y - contentBodyTop).toInt()
+
+            // Account for the bottom panel height (~280dp) when centering
+            val panelHeightPx = with(density) { 280.dp.toPx() }.toInt()
+            val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+            val availableHeight = viewportHeight - panelHeightPx
+            val offsetPx = maxOf(0, highlightOffsetInItem - availableHeight / 2)
+            scrollState.animateScrollToItem(contentBodyIndex, offsetPx)
+        }
+
         // When embedded in the expanded layout, skip snackbar collection —
         // the parent MainScreen's SnackbarHost handles it to avoid duplicates.
         val snackbarHostState = if (isEmbedded) {
@@ -374,9 +399,11 @@ fun BookmarkViewerContent(
                 val contentBodyTop = contentBodyItem?.offset ?: 0
                 val highlightOffsetInItem = (position.y - contentBodyTop).toInt()
 
-                // Center the highlight vertically in the viewport
+                // Center the highlight in the visible area above the bottom panel
+                val panelHeightPx = with(density) { 280.dp.toPx() }.toInt()
                 val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
-                val offsetPx = maxOf(0, highlightOffsetInItem - viewportHeight / 2)
+                val availableHeight = viewportHeight - panelHeightPx
+                val offsetPx = maxOf(0, highlightOffsetInItem - availableHeight / 2)
                 safeScrollToItem(contentBodyIndex, offsetPx)
             } else {
                 // Highlight position unavailable – scroll to content body at least
