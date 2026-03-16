@@ -368,6 +368,11 @@ fun BookmarkViewerContent(
                 safeScrollToItem(contentBodyIndex, 0)
             }
             highlightScrollDone = true
+            // Clear the selection so the dimming overlay doesn't show —
+            // selectedHighlightId was only set to trigger position reporting.
+            if (scrollToHighlightId != null) {
+                selectedHighlightId = null
+            }
         }
 
         // Keep the last valid FullyLoaded state to prevent error flash during navigation
@@ -648,8 +653,9 @@ fun BookmarkViewerContent(
                             }
                         }
 
-                        // Global Dimming Overlay
-                        if (selectedHighlightId != null) {
+                        // Global Dimming Overlay (only when user taps a highlight in the reader,
+                        // not during scroll-to-highlight navigation which clears selectedHighlightId on completion)
+                        if (selectedHighlightId != null && highlightScrollDone) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
