@@ -2,131 +2,259 @@ package com.karakept.app.ui.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
+import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.karakept.app.ui.screens.settings.AppearanceSettingsContent
 import com.karakept.app.ui.screens.settings.AppearanceSettingsScreen
+import com.karakept.app.ui.screens.settings.BookmarkListSettingsContent
 import com.karakept.app.ui.screens.settings.BookmarkListSettingsScreen
+import com.karakept.app.ui.screens.settings.BookmarkViewSettingsContent
 import com.karakept.app.ui.screens.settings.BookmarkViewSettingsScreen
+import com.karakept.app.ui.screens.settings.SyncDataSettingsContent
 import com.karakept.app.ui.screens.settings.SyncDataSettingsScreen
+
+private enum class SettingsSection(
+    val title: String,
+    val description: String,
+    val icon: ImageVector
+) {
+    APPEARANCE("Appearance", "Theme, accent color, layouts", Icons.Default.Palette),
+    BEHAVIOR("Behavior", "Layout, gestures, reading speed, notifications", Icons.Default.ViewList),
+    READER("Reader", "Viewer mode, progress, tags, link handling", Icons.Default.Visibility),
+    SYNC_DATA("Sync & Data", "Offline mode, content sync, server, backup", Icons.Default.Sync),
+    ABOUT("About", "App version and open source licenses", Icons.Default.Info)
+}
 
 class SettingsScreen : Screen {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        var storageInfo by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.karakept.app.utils.StorageInfo?>(null) }
+        val screenModel = koinScreenModel<SettingsScreenModel>()
+        var storageInfo by remember { mutableStateOf<com.karakept.app.utils.StorageInfo?>(null) }
+        var selectedSection by remember { mutableStateOf(SettingsSection.APPEARANCE) }
 
-        androidx.compose.runtime.LaunchedEffect(Unit) {
+        LaunchedEffect(Unit) {
             storageInfo = com.karakept.app.utils.FileUtils.getStorageInfo()
         }
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Settings") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val isExpandedLayout = maxWidth >= 840.dp
+
+            if (isExpandedLayout) {
+                // Expanded: settings list on left + selected section on right
+                Row(modifier = Modifier.fillMaxSize()) {
+                    // Left panel: settings navigation list
+                    Surface(
+                        modifier = Modifier.width(300.dp).fillMaxHeight()
+                    ) {
+                        Scaffold(
+                            topBar = {
+                                TopAppBar(
+                                    title = { Text("Settings") },
+                                    navigationIcon = {
+                                        IconButton(onClick = { navigator.pop() }) {
+                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                        }
+                                    }
+                                )
+                            }
+                        ) { padding ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(padding)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(12.dp),
+                                    verticalArrangement = Arrangement.Top
+                                ) {
+                                    SettingsSection.entries.forEach { section ->
+                                        SettingsNavigationItem(
+                                            title = section.title,
+                                            description = section.description,
+                                            icon = section.icon,
+                                            isSelected = section == selectedSection,
+                                            onClick = { selectedSection = section }
+                                        )
+                                        if (section != SettingsSection.entries.last()) {
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                        }
+                                    }
+                                }
+
+                                storageInfo?.let {
+                                    com.karakept.app.ui.components.StorageUsageBar(
+                                        storageInfo = it,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                            }
                         }
                     }
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.Top
-                ) {
-                    SettingsNavigationItem(
-                        title = "Appearance",
-                        description = "Theme, accent color, layouts",
-                        icon = Icons.Default.Palette,
-                        onClick = { navigator.push(AppearanceSettingsScreen()) }
-                    )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    VerticalDivider()
 
-                    SettingsNavigationItem(
-                        title = "Behavior",
-                        description = "Layout, gestures, reading speed, notifications",
-                        icon = Icons.Default.ViewList,
-                        onClick = { navigator.push(BookmarkListSettingsScreen()) }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    SettingsNavigationItem(
-                        title = "Reader",
-                        description = "Viewer mode, progress, tags, link handling",
-                        icon = Icons.Default.Visibility,
-                        onClick = { navigator.push(BookmarkViewSettingsScreen()) }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    SettingsNavigationItem(
-                        title = "Sync & Data",
-                        description = "Offline mode, content sync, server, backup",
-                        icon = Icons.Default.Sync,
-                        onClick = { navigator.push(SyncDataSettingsScreen()) }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    SettingsNavigationItem(
-                        title = "About",
-                        description = "App version and open source licenses",
-                        icon = Icons.Default.Info,
-                        onClick = { navigator.push(AboutScreen()) }
-                    )
+                    // Right panel: selected section content
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        when (selectedSection) {
+                            SettingsSection.APPEARANCE -> AppearanceSettingsContent(
+                                screenModel = screenModel,
+                                onBack = { navigator.pop() },
+                                onNavigate = { navigator.push(it) },
+                                showBackButton = false
+                            )
+                            SettingsSection.BEHAVIOR -> BookmarkListSettingsContent(
+                                screenModel = screenModel,
+                                onBack = { navigator.pop() },
+                                onNavigate = { navigator.push(it) },
+                                showBackButton = false
+                            )
+                            SettingsSection.READER -> BookmarkViewSettingsContent(
+                                screenModel = screenModel,
+                                onBack = { navigator.pop() },
+                                onNavigate = { navigator.push(it) },
+                                showBackButton = false
+                            )
+                            SettingsSection.SYNC_DATA -> SyncDataSettingsContent(
+                                screenModel = screenModel,
+                                onBack = { navigator.pop() },
+                                onNavigate = { navigator.push(it) },
+                                showBackButton = false
+                            )
+                            SettingsSection.ABOUT -> AboutContent(
+                                onBack = { navigator.pop() },
+                                showBackButton = false
+                            )
+                        }
+                    }
                 }
+            } else {
+                // Compact: current behavior — push sub-screens
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("Settings") },
+                            navigationIcon = {
+                                IconButton(onClick = { navigator.pop() }) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                }
+                            }
+                        )
+                    }
+                ) { padding ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.Top
+                        ) {
+                            SettingsNavigationItem(
+                                title = "Appearance",
+                                description = "Theme, accent color, layouts",
+                                icon = Icons.Default.Palette,
+                                onClick = { navigator.push(AppearanceSettingsScreen()) }
+                            )
 
-                storageInfo?.let {
-                    com.karakept.app.ui.components.StorageUsageBar(
-                        storageInfo = it,
-                        modifier = Modifier.padding(16.dp)
-                    )
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            SettingsNavigationItem(
+                                title = "Behavior",
+                                description = "Layout, gestures, reading speed, notifications",
+                                icon = Icons.Default.ViewList,
+                                onClick = { navigator.push(BookmarkListSettingsScreen()) }
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            SettingsNavigationItem(
+                                title = "Reader",
+                                description = "Viewer mode, progress, tags, link handling",
+                                icon = Icons.Default.Visibility,
+                                onClick = { navigator.push(BookmarkViewSettingsScreen()) }
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            SettingsNavigationItem(
+                                title = "Sync & Data",
+                                description = "Offline mode, content sync, server, backup",
+                                icon = Icons.Default.Sync,
+                                onClick = { navigator.push(SyncDataSettingsScreen()) }
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            SettingsNavigationItem(
+                                title = "About",
+                                description = "App version and open source licenses",
+                                icon = Icons.Default.Info,
+                                onClick = { navigator.push(AboutScreen()) }
+                            )
+                        }
+
+                        storageInfo?.let {
+                            com.karakept.app.ui.components.StorageUsageBar(
+                                storageInfo = it,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -138,12 +266,20 @@ private fun SettingsNavigationItem(
     title: String,
     description: String,
     icon: ImageVector,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isSelected: Boolean = false
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClick = onClick),
+        colors = if (isSelected) {
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        } else {
+            CardDefaults.cardColors()
+        }
     ) {
         Row(
             modifier = Modifier
@@ -155,23 +291,38 @@ private fun SettingsNavigationItem(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.padding(end = 16.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = if (isSelected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.primary
+                }
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "Open"
-            )
+            if (!isSelected) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Open"
+                )
+            }
         }
     }
 }

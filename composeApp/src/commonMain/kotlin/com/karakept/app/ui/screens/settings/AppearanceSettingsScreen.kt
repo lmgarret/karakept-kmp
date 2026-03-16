@@ -55,133 +55,149 @@ import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.ui.screens.SettingsScreenModel
 
 class AppearanceSettingsScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
-        val currentThemeMode by screenModel.themeMode.collectAsState()
-        val currentAccentColor by screenModel.accentColor.collectAsState()
+        AppearanceSettingsContent(
+            screenModel = screenModel,
+            onBack = { navigator.pop() },
+            onNavigate = { navigator.push(it) }
+        )
+    }
+}
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Appearance") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppearanceSettingsContent(
+    screenModel: SettingsScreenModel,
+    onBack: () -> Unit,
+    onNavigate: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    showBackButton: Boolean = true
+) {
+    val currentThemeMode by screenModel.themeMode.collectAsState()
+    val currentAccentColor by screenModel.accentColor.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Appearance") },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                )
-            }
-        ) { padding ->
-            Column(
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Top
+        ) {
+            // Layouts link
+            Card(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.Top
+                    .fillMaxWidth()
+                    .clickable { onNavigate(LayoutsScreen()) }
             ) {
-                // Layouts link
-                Card(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { navigator.push(LayoutsScreen()) }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Layers,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                    Icon(
+                        imageVector = Icons.Default.Layers,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Layouts",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Layouts",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Custom display layouts for your bookmark lists",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Open"
+                        Text(
+                            text = "Custom display layouts for your bookmark lists",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Open"
+                    )
                 }
-
-                Spacer(modifier = Modifier.height(24.dp))
-                HorizontalDivider(modifier = Modifier.padding(bottom = 24.dp))
-
-                // Theme Mode Section
-                Text(
-                    text = "Theme Mode",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                ThemeModeOption(
-                    title = "Light",
-                    description = "Light theme",
-                    icon = Icons.Default.LightMode,
-                    isSelected = currentThemeMode == ThemeMode.LIGHT,
-                    onClick = { screenModel.setThemeMode(ThemeMode.LIGHT) }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ThemeModeOption(
-                    title = "Dark",
-                    description = "Dark theme",
-                    icon = Icons.Default.DarkMode,
-                    isSelected = currentThemeMode == ThemeMode.DARK,
-                    onClick = { screenModel.setThemeMode(ThemeMode.DARK) }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ThemeModeOption(
-                    title = "AMOLED",
-                    description = "Pure black for AMOLED screens",
-                    icon = Icons.Default.Contrast,
-                    isSelected = currentThemeMode == ThemeMode.AMOLED,
-                    onClick = { screenModel.setThemeMode(ThemeMode.AMOLED) }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ThemeModeOption(
-                    title = "System",
-                    description = "Follow system theme",
-                    icon = Icons.Default.SettingsSystemDaydream,
-                    isSelected = currentThemeMode == ThemeMode.SYSTEM,
-                    onClick = { screenModel.setThemeMode(ThemeMode.SYSTEM) }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Accent Color Section
-                Text(
-                    text = "Accent Color",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                AccentColorPickerCard(
-                    currentAccentColor = currentAccentColor,
-                    onColorSelected = { screenModel.setAccentColor(it) }
-                )
-
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            HorizontalDivider(modifier = Modifier.padding(bottom = 24.dp))
+
+            // Theme Mode Section
+            Text(
+                text = "Theme Mode",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            ThemeModeOption(
+                title = "Light",
+                description = "Light theme",
+                icon = Icons.Default.LightMode,
+                isSelected = currentThemeMode == ThemeMode.LIGHT,
+                onClick = { screenModel.setThemeMode(ThemeMode.LIGHT) }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ThemeModeOption(
+                title = "Dark",
+                description = "Dark theme",
+                icon = Icons.Default.DarkMode,
+                isSelected = currentThemeMode == ThemeMode.DARK,
+                onClick = { screenModel.setThemeMode(ThemeMode.DARK) }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ThemeModeOption(
+                title = "AMOLED",
+                description = "Pure black for AMOLED screens",
+                icon = Icons.Default.Contrast,
+                isSelected = currentThemeMode == ThemeMode.AMOLED,
+                onClick = { screenModel.setThemeMode(ThemeMode.AMOLED) }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ThemeModeOption(
+                title = "System",
+                description = "Follow system theme",
+                icon = Icons.Default.SettingsSystemDaydream,
+                isSelected = currentThemeMode == ThemeMode.SYSTEM,
+                onClick = { screenModel.setThemeMode(ThemeMode.SYSTEM) }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Accent Color Section
+            Text(
+                text = "Accent Color",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            AccentColorPickerCard(
+                currentAccentColor = currentAccentColor,
+                onColorSelected = { screenModel.setAccentColor(it) }
+            )
+
         }
     }
 }

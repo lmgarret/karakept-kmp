@@ -31,64 +31,78 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.ui.screens.SettingsScreenModel
 
 class NotificationSettingsScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
-        val notificationsEnabled by screenModel.notificationsEnabled.collectAsState()
+        NotificationSettingsContent(
+            screenModel = screenModel,
+            onBack = { navigator.pop() }
+        )
+    }
+}
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Notifications") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NotificationSettingsContent(
+    screenModel: SettingsScreenModel,
+    onBack: () -> Unit,
+    showBackButton: Boolean = true
+) {
+    val notificationsEnabled by screenModel.notificationsEnabled.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Notifications") },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.Top
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Top
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Enable Notifications",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Enable Notifications",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Show notifications when a bookmark is saved",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = notificationsEnabled,
-                            onCheckedChange = { screenModel.setNotificationsEnabled(it) }
+                        Text(
+                            text = "Show notifications when a bookmark is saved",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Switch(
+                        checked = notificationsEnabled,
+                        onCheckedChange = { screenModel.setNotificationsEnabled(it) }
+                    )
                 }
             }
         }

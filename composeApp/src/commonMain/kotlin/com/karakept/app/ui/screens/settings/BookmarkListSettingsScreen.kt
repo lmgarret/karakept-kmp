@@ -58,11 +58,26 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 
 class BookmarkListSettingsScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
+        BookmarkListSettingsContent(
+            screenModel = screenModel,
+            onBack = { navigator.pop() },
+            onNavigate = { navigator.push(it) }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BookmarkListSettingsContent(
+    screenModel: SettingsScreenModel,
+    onBack: () -> Unit,
+    onNavigate: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    showBackButton: Boolean = true
+) {
         val readingSpeedWpm by screenModel.readingSpeedWpm.collectAsState()
         val notificationsEnabled by screenModel.notificationsEnabled.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
@@ -151,8 +166,10 @@ class BookmarkListSettingsScreen : Screen {
                 TopAppBar(
                     title = { Text("Bookmark List") },
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        if (showBackButton) {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
                         }
                     }
                 )
@@ -282,7 +299,7 @@ class BookmarkListSettingsScreen : Screen {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { navigator.push(CustomSwipeActionsScreen()) }
+                        .clickable { onNavigate(CustomSwipeActionsScreen()) }
                 ) {
                     Row(
                         modifier = Modifier
@@ -400,7 +417,6 @@ class BookmarkListSettingsScreen : Screen {
 
             }
         }
-    }
 }
 
 @Composable
@@ -598,4 +614,3 @@ private fun SwipeActionSettingItem(
         }
     }
 }
-

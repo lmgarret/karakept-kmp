@@ -52,297 +52,313 @@ import com.karakept.app.ui.screens.SettingsScreenModel
 import getPlatform
 
 class BookmarkViewSettingsScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
-        val currentViewerMode by screenModel.viewerMode.collectAsState()
-        val hideArticleThumbnails by screenModel.hideArticleThumbnails.collectAsState()
-        val currentLinkOpenMode by screenModel.linkOpenMode.collectAsState()
+        BookmarkViewSettingsContent(
+            screenModel = screenModel,
+            onBack = { navigator.pop() },
+            onNavigate = { navigator.push(it) }
+        )
+    }
+}
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Reader") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BookmarkViewSettingsContent(
+    screenModel: SettingsScreenModel,
+    onBack: () -> Unit,
+    onNavigate: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    showBackButton: Boolean = true
+) {
+    val currentViewerMode by screenModel.viewerMode.collectAsState()
+    val hideArticleThumbnails by screenModel.hideArticleThumbnails.collectAsState()
+    val currentLinkOpenMode by screenModel.linkOpenMode.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Reader") },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.Top
-            ) {
-                Text(
-                    text = "Viewer Mode",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                LayoutOption(
-                    title = "Reader",
-                    description = "Sanitized content with safe HTML only",
-                    icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
-                    isSelected = currentViewerMode == ViewerMode.READER,
-                    onClick = { screenModel.setViewerMode(ViewerMode.READER) }
-                )
-
-                // WEB mode is only available on Android (uses WebView)
-                if (!getPlatform().isDesktop) {
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    LayoutOption(
-                        title = "Web",
-                        description = "Web view with original HTML and stylesheets (JavaScript disabled)",
-                        icon = Icons.Default.Public,
-                        isSelected = currentViewerMode == ViewerMode.WEB,
-                        onClick = { screenModel.setViewerMode(ViewerMode.WEB) }
-                    )
                 }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Top
+        ) {
+            Text(
+                text = "Viewer Mode",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
 
-                Spacer(modifier = Modifier.height(24.dp))
+            LayoutOption(
+                title = "Reader",
+                description = "Sanitized content with safe HTML only",
+                icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
+                isSelected = currentViewerMode == ViewerMode.READER,
+                onClick = { screenModel.setViewerMode(ViewerMode.READER) }
+            )
 
-                // Reader Mode Settings
-                Text(
-                    text = "Reader Mode Settings",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Timeline,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Text(
-                                text = "Track Reading Progress",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Save scroll position to resume reading and show progress in bookmark list",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = trackReadingProgress,
-                            onCheckedChange = { screenModel.setTrackReadingProgress(it) }
-                        )
-                    }
-                }
-
-                val resetProgressOnMarkUnread by screenModel.resetProgressOnMarkUnread.collectAsState()
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Replay,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Text(
-                                text = "Reset Progress on Mark Unread",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Reset reading progress to 0% when marking a bookmark as unread",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = resetProgressOnMarkUnread,
-                            onCheckedChange = { screenModel.setResetProgressOnMarkUnread(it) }
-                        )
-                    }
-                }
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ImageNotSupported,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Text(
-                                text = "Hide Article Thumbnails",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Remove first image from article content to avoid duplicates with hero banner",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = hideArticleThumbnails,
-                            onCheckedChange = { screenModel.setHideArticleThumbnails(it) }
-                        )
-                    }
-                }
-
-                val showTagsInViewer by screenModel.showTagsInViewer.collectAsState()
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Label,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                        ) {
-                            Text(
-                                text = "Show Tags in Viewer",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Display bookmark tags in reader/viewer mode",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = showTagsInViewer,
-                            onCheckedChange = { screenModel.setShowTagsInViewer(it) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Link Opening Settings
-                Text(
-                    text = "Link Handling",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                LayoutOption(
-                    title = "Custom Tab",
-                    description = "Open links in a custom tab using the default browser session",
-                    icon = Icons.Default.OpenInNew,
-                    isSelected = currentLinkOpenMode == LinkOpenMode.CUSTOM_TAB,
-                    onClick = { screenModel.setLinkOpenMode(LinkOpenMode.CUSTOM_TAB) }
-                )
-
+            // WEB mode is only available on Android (uses WebView)
+            if (!getPlatform().isDesktop) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 LayoutOption(
-                    title = "External Browser",
-                    description = "Open links in the system default browser",
-                    icon = Icons.Default.OpenInBrowser,
-                    isSelected = currentLinkOpenMode == LinkOpenMode.EXTERNAL_BROWSER,
-                    onClick = { screenModel.setLinkOpenMode(LinkOpenMode.EXTERNAL_BROWSER) }
+                    title = "Web",
+                    description = "Web view with original HTML and stylesheets (JavaScript disabled)",
+                    icon = Icons.Default.Public,
+                    isSelected = currentViewerMode == ViewerMode.WEB,
+                    onClick = { screenModel.setViewerMode(ViewerMode.WEB) }
                 )
+            }
 
-                Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-                // Reader Appearance
-                Text(
-                    text = "Reader Appearance",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+            // Reader Mode Settings
+            Text(
+                text = "Reader Mode Settings",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
 
-                Card(
+            val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { navigator.push(ReaderAppearanceScreen()) }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
+                    Icon(
+                        imageVector = Icons.Default.Timeline,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .weight(1f)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Palette,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                        Text(
+                            text = "Track Reading Progress",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Customize Reader Appearance",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Text color, background, font size, and font family",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Open"
+                        Text(
+                            text = "Save scroll position to resume reading and show progress in bookmark list",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Switch(
+                        checked = trackReadingProgress,
+                        onCheckedChange = { screenModel.setTrackReadingProgress(it) }
+                    )
+                }
+            }
+
+            val resetProgressOnMarkUnread by screenModel.resetProgressOnMarkUnread.collectAsState()
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Replay,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                    ) {
+                        Text(
+                            text = "Reset Progress on Mark Unread",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Reset reading progress to 0% when marking a bookmark as unread",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = resetProgressOnMarkUnread,
+                        onCheckedChange = { screenModel.setResetProgressOnMarkUnread(it) }
+                    )
+                }
+            }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ImageNotSupported,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                    ) {
+                        Text(
+                            text = "Hide Article Thumbnails",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Remove first image from article content to avoid duplicates with hero banner",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = hideArticleThumbnails,
+                        onCheckedChange = { screenModel.setHideArticleThumbnails(it) }
+                    )
+                }
+            }
+
+            val showTagsInViewer by screenModel.showTagsInViewer.collectAsState()
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Label,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                    ) {
+                        Text(
+                            text = "Show Tags in Viewer",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Display bookmark tags in reader/viewer mode",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = showTagsInViewer,
+                        onCheckedChange = { screenModel.setShowTagsInViewer(it) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Link Opening Settings
+            Text(
+                text = "Link Handling",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            LayoutOption(
+                title = "Custom Tab",
+                description = "Open links in a custom tab using the default browser session",
+                icon = Icons.Default.OpenInNew,
+                isSelected = currentLinkOpenMode == LinkOpenMode.CUSTOM_TAB,
+                onClick = { screenModel.setLinkOpenMode(LinkOpenMode.CUSTOM_TAB) }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            LayoutOption(
+                title = "External Browser",
+                description = "Open links in the system default browser",
+                icon = Icons.Default.OpenInBrowser,
+                isSelected = currentLinkOpenMode == LinkOpenMode.EXTERNAL_BROWSER,
+                onClick = { screenModel.setLinkOpenMode(LinkOpenMode.EXTERNAL_BROWSER) }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Reader Appearance
+            Text(
+                text = "Reader Appearance",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigate(ReaderAppearanceScreen()) }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Palette,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Customize Reader Appearance",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Text color, background, font size, and font family",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Open"
+                    )
                 }
             }
         }

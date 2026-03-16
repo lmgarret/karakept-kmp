@@ -37,83 +37,98 @@ import com.karakept.app.ui.screens.LoginScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
 
 class ServerSettingsScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
-        val servers by screenModel.servers.collectAsState()
+        ServerSettingsContent(
+            screenModel = screenModel,
+            onBack = { navigator.pop() },
+            onNavigate = { navigator.push(it) }
+        )
+    }
+}
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Server Connection") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ServerSettingsContent(
+    screenModel: SettingsScreenModel,
+    onBack: () -> Unit,
+    onNavigate: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    showBackButton: Boolean = true
+) {
+    val servers by screenModel.servers.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Server Connection") },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.Top
-            ) {
-                Text(
-                    text = "Connected Server",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Top
+        ) {
+            Text(
+                text = "Connected Server",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
 
-                val server = servers.firstOrNull()
-                if (server != null) {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Dns,
-                                contentDescription = null,
-                                modifier = Modifier.padding(end = 16.dp),
-                                tint = MaterialTheme.colorScheme.primary
+            val server = servers.firstOrNull()
+            if (server != null) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Dns,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = server.label,
+                                style = MaterialTheme.typography.titleMedium
                             )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = server.label,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    text = server.url,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Text(
+                                text = server.url,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
-                Button(
-                    onClick = { navigator.push(LoginScreen(serverUrl = server?.url)) },
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text("Re-authenticate")
-                }
+            Button(
+                onClick = { onNavigate(LoginScreen(serverUrl = server?.url)) },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text("Re-authenticate")
             }
         }
     }
 }
-
