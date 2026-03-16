@@ -2,14 +2,19 @@ package com.karakept.app.ui.components.reader
 
 import androidx.compose.foundation.ContextMenuDataProvider
 import androidx.compose.foundation.ContextMenuItem
+import androidx.compose.foundation.ContextMenuState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.LocalTextContextMenu
+import androidx.compose.foundation.text.TextContextMenu
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,17 +30,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 
 /**
- * Module-level holder for the last captured SelectionManager.
- * Shared between [rememberHighlightTextToolbar] (which captures it)
- * and [HighlightContextMenuProvider] (which reads the selected text from it).
- *
- * This is safe because there is only one SelectionContainer active at a time
- * in the reader view.
- */
-@Volatile
-private var capturedSelectionManager: Any? = null
-
-/**
  * Extracts the selected text from Compose's internal `SelectionManager` by
  * navigating the [onCopyRequested] lambda's closure fields via reflection.
  */
@@ -43,18 +37,6 @@ private fun extractSelectedTextViaReflection(onCopyRequested: (() -> Unit)?): St
     if (onCopyRequested == null) return null
     return try {
         val manager = findSelectionManager(onCopyRequested) ?: return null
-        extractSelectedTextFromManager(manager)
-    } catch (_: Exception) {
-        null
-    }
-}
-
-/**
- * Extracts the selected text directly from a `SelectionManager` instance.
- */
-private fun extractSelectedTextFromManager(manager: Any?): String? {
-    if (manager == null) return null
-    return try {
         val method = manager.javaClass.methods
             .find { it.name.startsWith("getSelectedText") } ?: return null
         (method.invoke(manager) as? AnnotatedString)?.text?.takeIf { it.isNotEmpty() }
@@ -97,9 +79,6 @@ private fun findSelectionManager(
 /**
  * Desktop implementation that shows a floating popup with Highlight, Copy, and
  * Select All actions when text is selected in a `SelectionContainer`.
- *
- * Also captures the SelectionManager reference from the copy callback's closure
- * for use by [HighlightContextMenuProvider] in the right-click context menu.
  */
 @Composable
 actual fun rememberHighlightTextToolbar(
@@ -163,14 +142,6 @@ actual fun rememberHighlightTextToolbar(
                 popupOffset = IntOffset(rect.left.toInt(), (rect.top - 48).coerceAtLeast(0f).toInt())
                 showPopup = true
                 _status = TextToolbarStatus.Shown
-
-                // Capture SelectionManager reference for HighlightContextMenuProvider
-                if (onCopyRequested != null) {
-                    val found = findSelectionManager(onCopyRequested)
-                    if (found != null) {
-                        capturedSelectionManager = found
-                    }
-                }
             }
 
             override fun hide() {
@@ -182,31 +153,51 @@ actual fun rememberHighlightTextToolbar(
 }
 
 /**
- * Desktop: wraps content with a [ContextMenuDataProvider] that adds "Highlight"
- * to the right-click context menu inside a [SelectionContainer].
+ * Desktop: provides a custom [TextContextMenu] via [LocalTextContextMenu] that
+ * adds "Highlight" to the right-click context menu inside a [SelectionContainer].
  *
- * Retrieves the selected text from the [capturedSelectionManager] that was
- * populated by [rememberHighlightTextToolbar] when text was first selected.
+ * Uses the new Compose 1.10 [TextContextMenu] API which provides direct access
+ * to the selected text via [TextContextMenu.TextManager.selectedText].
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 actual fun HighlightContextMenuProvider(
     onHighlightRequested: (selectedText: String) -> Unit,
     content: @Composable () -> Unit
 ) {
     val latestCallback = rememberUpdatedState(onHighlightRequested)
+    val parentTextMenu = LocalTextContextMenu.current
 
-    ContextMenuDataProvider(
-        items = {
-            listOf(
-                ContextMenuItem("Highlight") {
-                    // Get selected text from the SelectionManager captured by the TextToolbar
-                    val text = extractSelectedTextFromManager(capturedSelectionManager)
-                    if (text != null) {
-                        latestCallback.value(text)
+    val customTextMenu = remember(parentTextMenu) {
+        object : TextContextMenu {
+            @Composable
+            override fun Area(
+                textManager: TextContextMenu.TextManager,
+                state: ContextMenuState,
+                content: @Composable () -> Unit
+            ) {
+                // Add "Highlight" item that reads selected text from textManager
+                ContextMenuDataProvider({
+                    val selectedText = textManager.selectedText.text
+                    if (selectedText.isNotEmpty()) {
+                        listOf(
+                            ContextMenuItem("Highlight") {
+                                latestCallback.value(selectedText)
+                            }
+                        )
+                    } else {
+                        emptyList()
                     }
+                }) {
+                    // Delegate to the original TextContextMenu for default items (Copy, Select All)
+                    parentTextMenu.Area(textManager, state, content = content)
                 }
-            )
+            }
         }
+    }
+
+    CompositionLocalProvider(
+        LocalTextContextMenu provides customTextMenu
     ) {
         content()
     }

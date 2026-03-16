@@ -145,8 +145,8 @@ fun NativeHtmlRenderer(
                     }
                 })
             ) {
-            SelectionContainer {
             HighlightContextMenuProvider(onHighlightRequested = highlightAction) {
+            SelectionContainer {
                 Column(
                     modifier = modifier
                         .fillMaxWidth()
@@ -199,8 +199,8 @@ fun NativeHtmlRenderer(
                 // Bottom spacing
                 Spacer(Modifier.height(16.dp))
             }
-            } // HighlightContextMenuProvider
             } // SelectionContainer
+            } // HighlightContextMenuProvider
             } // Box (bringIntoView blocker)
         }
     }
