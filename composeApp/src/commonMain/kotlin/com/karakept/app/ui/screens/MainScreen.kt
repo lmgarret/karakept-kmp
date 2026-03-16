@@ -35,7 +35,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -69,6 +68,7 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.AddBookmarkDialog
+import com.karakept.app.ui.components.DraggableDivider
 import com.karakept.app.ui.components.FilterBottomPanel
 import com.karakept.app.ui.components.BookmarkActionsMenu
 import com.karakept.app.ui.components.BookmarkAction
@@ -79,15 +79,20 @@ import com.karakept.app.ui.screens.main.DrawerContent
 import com.karakept.app.ui.screens.main.MainScreenDrawer
 import com.karakept.app.ui.screens.main.MainScreenTopBar
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.snapshotFlow
+import com.karakept.app.data.repository.SettingsRepository
 import getPlatform
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
 import com.karakept.app.ui.screens.settings.PerListSettingsScreen
 import org.koin.compose.koinInject
 
 object MainScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class, ExperimentalFoundationApi::class, FlowPreview::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -703,6 +708,40 @@ object MainScreen : Screen {
 
             if (isExpandedLayout) {
                 // Expanded: permanent drawer + bookmark list + reader pane
+                // Column width state — persisted via SettingsRepository
+                val layoutSettingsRepository = koinInject<SettingsRepository>()
+                var drawerWidthDp by remember { mutableFloatStateOf(280f) }
+                var listFraction by remember { mutableFloatStateOf(0.4f) }
+
+                // Load persisted column widths once
+                LaunchedEffect(Unit) {
+                    drawerWidthDp = layoutSettingsRepository.drawerWidthDp.first()
+                    listFraction = layoutSettingsRepository.listColumnFraction.first()
+                }
+
+                // Debounced persistence — write 500ms after drag stops
+                LaunchedEffect(Unit) {
+                    snapshotFlow { drawerWidthDp }
+                        .debounce(500)
+                        .collect { layoutSettingsRepository.setDrawerWidthDp(it) }
+                }
+                LaunchedEffect(Unit) {
+                    snapshotFlow { listFraction }
+                        .debounce(500)
+                        .collect { layoutSettingsRepository.setListColumnFraction(it) }
+                }
+
+                // Calculate column widths
+                val dividerWidth = 8.dp // DraggableDivider hit target width
+                val drawerWidth = drawerWidthDp.dp
+                val drawerTotalWidth = if (isDrawerVisible) drawerWidth + dividerWidth else 0.dp
+                val remainingWidth = maxWidth - drawerTotalWidth - dividerWidth
+                val minListWidth = 250.dp
+                val minReaderWidth = 300.dp
+                val maxListWidth = remainingWidth - minReaderWidth
+                val listWidth = (remainingWidth * listFraction).coerceIn(minListWidth, maxListWidth)
+                val readerWidth = remainingWidth - listWidth
+
                 Row(modifier = Modifier.fillMaxSize()) {
                     // Drawer column (collapsible)
                     AnimatedVisibility(
@@ -712,7 +751,7 @@ object MainScreen : Screen {
                     ) {
                         Row {
                             Surface(
-                                modifier = Modifier.width(280.dp).fillMaxHeight(),
+                                modifier = Modifier.width(drawerWidth).fillMaxHeight(),
                                 color = MaterialTheme.colorScheme.surfaceContainerLow
                             ) {
                                 DrawerContent(
@@ -737,18 +776,33 @@ object MainScreen : Screen {
                                     onNavigateToHighlights = { navigator.push(HighlightsScreen()) }
                                 )
                             }
-                            VerticalDivider()
+                            DraggableDivider(
+                                onDrag = { delta ->
+                                    drawerWidthDp = (drawerWidthDp + delta).coerceIn(200f, 400f)
+                                }
+                            )
                         }
                     }
 
                     // Bookmark list column
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    Box(modifier = Modifier.width(listWidth).fillMaxHeight()) {
                         MainScaffoldContent(isExpandedLayout = true)
                     }
 
+                    // Divider between list and reader (draggable)
+                    DraggableDivider(
+                        onDrag = { delta ->
+                            val newListWidth = listWidth + delta.dp
+                            val newFraction = (newListWidth / remainingWidth).coerceIn(
+                                minListWidth / remainingWidth,
+                                maxListWidth / remainingWidth
+                            )
+                            listFraction = newFraction
+                        }
+                    )
+
                     // Reader pane column
-                    VerticalDivider()
-                    Box(modifier = Modifier.weight(1.5f).fillMaxHeight()) {
+                    Box(modifier = Modifier.width(readerWidth).fillMaxHeight()) {
                         val currentBookmarkId = selectedBookmarkId
                         if (currentBookmarkId != null) {
                             // Use key() to force fresh composition when bookmark changes

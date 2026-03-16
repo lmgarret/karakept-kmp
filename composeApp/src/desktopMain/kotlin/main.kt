@@ -1,22 +1,34 @@
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.di.appModule
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.Image
 import org.koin.core.context.startKoin
+import org.koin.java.KoinJavaComponent.getKoin
 import java.awt.GraphicsEnvironment
 
+@OptIn(FlowPreview::class)
 fun main() {
-    // Use software rendering so the Skia surface always resizes correctly
+    // Use software rendering on Linux so the Skia surface always resizes correctly
     // when running via X11 forwarding from a devcontainer / containerized env.
     // GPU-backed backends (GL/Vulkan) can silently fail to resize over X11,
     // leaving content stuck at the initial size with black bars.
-    // Also set as -Dskiko.renderApi=SOFTWARE in build.gradle.kts jvmArgs for reliability.
-    System.setProperty("skiko.renderApi", "SOFTWARE_FAST")
+    // SOFTWARE_FAST is not supported on macOS, so only set it on Linux.
+    if (System.getProperty("os.name").lowercase().contains("linux")) {
+        System.setProperty("skiko.renderApi", "SOFTWARE_FAST")
+    }
 
     // On Linux Wayland, use the native Wayland AWT toolkit (JDK 21+)
     // instead of X11/XWayland — eliminates black bars on resize and improves performance.
@@ -39,18 +51,70 @@ fun main() {
     startKoin {
         modules(appModule)
     }
+
+    // Read persisted window state before entering composition
+    val settingsRepo = getKoin().get<SettingsRepository>()
+    val savedMaximized = runBlocking { settingsRepo.windowMaximized.first() }
+    val savedWidth = runBlocking { settingsRepo.windowWidth.first() }
+    val savedHeight = runBlocking { settingsRepo.windowHeight.first() }
+    val savedX = runBlocking { settingsRepo.windowX.first() }
+    val savedY = runBlocking { settingsRepo.windowY.first() }
+
     application {
-        // Use the maximum usable window bounds (screen minus taskbar/docks) rather than
-        // WindowPlacement.Maximized, which XWayland/some WMs may not honour. Setting an
-        // explicit size means Compose gets the correct constraints on the very first frame.
         val maxBounds = GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+
+        // Validate saved position — ensure it's at least partially visible on some screen
+        val savedPosition = if (savedX != null && savedY != null) {
+            val inBounds = GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.any { device ->
+                val bounds = device.defaultConfiguration.bounds
+                savedX >= bounds.x - 100 && savedX < bounds.x + bounds.width &&
+                    savedY >= bounds.y - 100 && savedY < bounds.y + bounds.height
+            }
+            if (inBounds) WindowPosition(savedX.dp, savedY.dp) else WindowPosition.PlatformDefault
+        } else {
+            WindowPosition.PlatformDefault
+        }
+
         val state = rememberWindowState(
-            placement = WindowPlacement.Maximized,
-            width = maxBounds.width.dp,
-            height = maxBounds.height.dp
+            placement = if (savedMaximized) WindowPlacement.Maximized else WindowPlacement.Floating,
+            width = (savedWidth ?: maxBounds.width.toFloat()).dp,
+            height = (savedHeight ?: maxBounds.height.toFloat()).dp,
+            position = savedPosition
         )
+
+        // Debounced persistence of window state changes
+        LaunchedEffect(Unit) {
+            snapshotFlow {
+                Triple(state.size, state.position, state.placement)
+            }
+                .debounce(1000)
+                .collect { (size, pos, placement) ->
+                    val absPos = pos as? WindowPosition.Absolute
+                    settingsRepo.setWindowState(
+                        width = size.width.value,
+                        height = size.height.value,
+                        x = absPos?.x?.value ?: 0f,
+                        y = absPos?.y?.value ?: 0f,
+                        maximized = placement == WindowPlacement.Maximized
+                    )
+                }
+        }
+
         Window(
-            onCloseRequest = ::exitApplication,
+            onCloseRequest = {
+                // Save final state synchronously on close
+                runBlocking {
+                    val absPos = state.position as? WindowPosition.Absolute
+                    settingsRepo.setWindowState(
+                        width = state.size.width.value,
+                        height = state.size.height.value,
+                        x = absPos?.x?.value ?: 0f,
+                        y = absPos?.y?.value ?: 0f,
+                        maximized = state.placement == WindowPlacement.Maximized
+                    )
+                }
+                exitApplication()
+            },
             title = "Karakept",
             state = state,
             icon = iconImage?.let { BitmapPainter(it) }
