@@ -19,6 +19,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.plugin
 import io.ktor.client.request.header
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 
@@ -83,6 +84,8 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
         androidx.compose.runtime.LaunchedEffect(Unit) {
             try {
                 backupRepository.checkAndRunScheduledExport()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Ignore – backup is best-effort
             }

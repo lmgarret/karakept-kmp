@@ -98,6 +98,13 @@ class BackupRepository(
 
         settingsRepository.restoreSettings(backup.settings)
 
+        // Store the raw PIN used to decrypt so that scheduled auto-exports keep working.
+        // restoreSettings() only restores the PBKDF2 hash; the raw PIN is never in the
+        // backup file, but the user just entered it to decrypt, so we can persist it now.
+        if (backup.settings.backupPinHash != null) {
+            settingsRepository.setBackupPin(pin)
+        }
+
         // Always restore servers — PIN entry acts as explicit trust signal.
         if (backup.servers.isNotEmpty()) {
             serverRepository.deleteAllServers()
