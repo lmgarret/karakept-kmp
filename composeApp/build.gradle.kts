@@ -225,33 +225,31 @@ tasks.withType<Test> {
 }
 
 // Post-process DMG to set volume icon (fixes OpenJDK icon in Finder title bar)
-tasks.register<Exec>("setDmgVolumeIcon") {
+tasks.register("setDmgVolumeIcon") {
     group = "compose desktop"
     description = "Sets the volume icon on the packaged DMG"
     dependsOn("packageDmg")
     onlyIf { org.gradle.internal.os.OperatingSystem.current().isMacOsX }
 
-    val dmgDir = layout.buildDirectory.dir("compose/binaries/main/dmg")
-    val iconFile = project.file("src/desktopMain/resources/icon.icns")
-
-    doFirst {
-        val dmg = dmgDir.get().asFile.listFiles()?.firstOrNull { it.extension == "dmg" }
-            ?: error("No DMG found in ${dmgDir.get()}")
-        val volumeName = "Karakept"
-        val mountPoint = "/Volumes/$volumeName"
-
-        // Convert to read-write, set icon, convert back
+    doLast {
+        val dmgDir = layout.buildDirectory.dir("compose/binaries/main/dmg").get().asFile
+        val iconFile = project.file("src/desktopMain/resources/icon.icns")
+        val dmg = dmgDir.listFiles()?.firstOrNull { it.extension == "dmg" }
+            ?: error("No DMG found in $dmgDir")
         val rwDmg = File(dmg.parentFile, "rw-${dmg.name}")
-        exec { commandLine("hdiutil", "convert", dmg.absolutePath, "-format", "UDRW", "-o", rwDmg.absolutePath) }
-        exec { commandLine("hdiutil", "attach", rwDmg.absolutePath, "-mountpoint", mountPoint) }
+        val mountPoint = "/Volumes/KarakeptVolumeIcon"
+
+        project.exec { commandLine("hdiutil", "convert", dmg.absolutePath, "-format", "UDRW", "-o", rwDmg.absolutePath) }
+        project.exec { commandLine("hdiutil", "attach", rwDmg.absolutePath, "-mountpoint", mountPoint, "-nobrowse") }
         try {
-            copy { from(iconFile); into(mountPoint); rename { ".VolumeIcon.icns" } }
-            exec { commandLine("SetFile", "-a", "C", mountPoint) }
+            iconFile.copyTo(File(mountPoint, ".VolumeIcon.icns"), overwrite = true)
+            project.exec { commandLine("SetFile", "-a", "C", mountPoint) }
         } finally {
-            exec { commandLine("hdiutil", "detach", mountPoint) }
+            project.exec { commandLine("hdiutil", "detach", mountPoint) }
         }
         dmg.delete()
-        exec { commandLine("hdiutil", "convert", rwDmg.absolutePath, "-format", "UDZO", "-o", dmg.absolutePath) }
+        project.exec { commandLine("hdiutil", "convert", rwDmg.absolutePath, "-format", "UDZO", "-o", dmg.absolutePath) }
         rwDmg.delete()
+        println("Volume icon set on ${dmg.name}")
     }
 }
