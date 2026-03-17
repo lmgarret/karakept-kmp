@@ -196,6 +196,7 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "Karakept"
             packageVersion = (project.findProperty("versionName") as String?) ?: "1.0.0"
+            modules("jdk.unsupported")
             linux {
                 iconFile.set(project.file("src/commonMain/composeResources/drawable/icon.png"))
             }
