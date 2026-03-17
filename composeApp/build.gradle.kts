@@ -246,13 +246,17 @@ run {
         group = "compose desktop"
         description = "Runs flatpak-builder to populate the local Flatpak repo (internal)"
         dependsOn("createDistributable")
-        commandLine(
-            "flatpak-builder",
-            "--force-clean",
-            "--repo=${flatpakDir.get().dir("repo").asFile.absolutePath}",
-            flatpakDir.get().dir("build-dir").asFile.absolutePath,
-            manifestFile.absolutePath,
-        )
+        // Pass -Pflatpak.disableSandbox=true when building in CI environments that
+        // don't support user namespaces (e.g. GitHub Actions).
+        val disableSandbox = project.findProperty("flatpak.disableSandbox")?.toString()?.toBoolean() ?: false
+        commandLine(buildList {
+            add("flatpak-builder")
+            if (disableSandbox) add("--disable-sandbox")
+            add("--force-clean")
+            add("--repo=${flatpakDir.get().dir("repo").asFile.absolutePath}")
+            add(flatpakDir.get().dir("build-dir").asFile.absolutePath)
+            add(manifestFile.absolutePath)
+        })
     }
 
     tasks.register<Exec>("packageFlatpak") {

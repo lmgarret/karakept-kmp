@@ -71,6 +71,35 @@ Note: This requires `fakeroot` and other packaging tools. On the host machine:
 sudo apt install fakeroot
 ```
 
+### Option 4: Flatpak (Linux)
+
+**Prerequisites:**
+```bash
+# Install flatpak-builder
+sudo apt install flatpak flatpak-builder   # Debian/Ubuntu
+sudo dnf install flatpak flatpak-builder   # Fedora
+
+# Add Flathub and install the GNOME runtime
+flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user flathub org.gnome.Platform//46 org.gnome.Sdk//46
+```
+
+**Build and install locally:**
+```bash
+./gradlew packageFlatpak
+# Output: composeApp/build/flatpak/Karakept.flatpak
+
+flatpak install --user composeApp/build/flatpak/Karakept.flatpak
+flatpak run com.karakept.app
+```
+
+The `packageFlatpak` task runs `createDistributable` first, then wraps the output using the manifest at `flatpak/com.karakept.app.yml`.
+
+> **Note for CI / containers:** If your environment doesn't support user namespaces, pass `-Pflatpak.disableSandbox=true` to skip the build sandbox:
+> ```bash
+> ./gradlew packageFlatpak -Pflatpak.disableSandbox=true
+> ```
+
 ## 🧪 Testing
 
 Karakept uses a multi-layered testing strategy to ensure reliability across platforms.
