@@ -950,9 +950,13 @@ object MainScreen : Screen {
                                     scrollToHighlightId = currentScrollToHighlightId,
                                     screenModel = viewerScreenModel,
                                     onBack = {
-                                        selectedBookmarkId = null
-                                        scrollToHighlightId = null
-                                        activeHighlightId = null
+                                        if (isReaderFullscreen) {
+                                            isReaderFullscreen = false
+                                        } else {
+                                            selectedBookmarkId = null
+                                            scrollToHighlightId = null
+                                            activeHighlightId = null
+                                        }
                                     },
                                     onTagFilterApply = { tag ->
                                         screenModel.applyTagFilter(tag, currentBookmarkId)

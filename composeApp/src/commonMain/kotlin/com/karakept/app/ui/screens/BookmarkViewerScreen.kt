@@ -579,17 +579,7 @@ fun BookmarkViewerContent(
                     val bannerImageLocalPath by screenModel.bannerImageLocalPath.collectAsState()
                     val screenshotLocalPath by screenModel.screenshotLocalPath.collectAsState()
 
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = if (isFullscreen) Alignment.TopCenter else Alignment.TopStart
-                    ) {
-                    Box(
-                        modifier = if (isFullscreen) {
-                            Modifier.widthIn(max = 900.dp).fillMaxSize()
-                        } else {
-                            Modifier.fillMaxSize()
-                        }
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                         // Content List
                         // Global dimming overlay when a highlight is selected
                         // Hide content until scroll position is restored to prevent a flash
@@ -615,10 +605,15 @@ fun BookmarkViewerContent(
                             state = scrollState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(if (needsScrollRestore || needsHighlightScroll) Modifier.alpha(0f) else Modifier)
+                                .then(if (needsScrollRestore || needsHighlightScroll) Modifier.alpha(0f) else Modifier),
+                            horizontalAlignment = if (isFullscreen) Alignment.CenterHorizontally else Alignment.Start
                         ) {
+                            // In fullscreen, constrain content items to a comfortable reading width
+                            val fullscreenItemModifier = if (isFullscreen) Modifier.widthIn(max = 900.dp) else Modifier
+
                             // Hero banner as first item so tag/URL clicks are not blocked by the list
                             item(key = "hero_banner") {
+                                Box(modifier = fullscreenItemModifier) {
                                 HeroBannerSection(
                                     title = title,
                                     url = url,
@@ -649,11 +644,13 @@ fun BookmarkViewerContent(
                                     bannerImageLocalPath = bannerImageLocalPath,
                                     screenshotLocalPath = screenshotLocalPath
                                 )
+                                }
                             }
 
                             // Description Card
                             if (!description.isNullOrBlank()) {
                                 item(key = "description_card") {
+                                    Box(modifier = fullscreenItemModifier) {
                                     DescriptionCard(
                                         description = description,
                                         htmlBackgroundColor = htmlBackgroundColor,
@@ -661,11 +658,13 @@ fun BookmarkViewerContent(
                                         htmlFontSize = htmlFontSize,
                                         htmlFontFamily = htmlFontFamily
                                     )
+                                    }
                                 }
                             }
 
                             // Content Body
                             item(key = "content_body") {
+                                Box(modifier = fullscreenItemModifier) {
                                 ContentBodySection(
                                     content = state.bookmark.content,
                                     viewerMode = viewerMode,
@@ -733,6 +732,7 @@ fun BookmarkViewerContent(
                                     // selectedHighlightId stays null until the user taps a highlight.
                                     selectedHighlightId = selectedHighlightId ?: scrollToHighlightId
                                 )
+                                }
                             }
                         }
 
@@ -824,7 +824,6 @@ fun BookmarkViewerContent(
                             )
                         }
                     }
-                    } // end outer centering Box
                 }
                 is BookmarkLoadingState.Error -> {
                     Box(
