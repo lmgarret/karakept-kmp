@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -105,7 +106,9 @@ fun BookmarkViewerContent(
     screenModel: BookmarkViewerScreenModel,
     onBack: () -> Unit,
     onTagFilterApply: (tag: String) -> Unit,
-    isEmbedded: Boolean = false
+    isEmbedded: Boolean = false,
+    isFullscreen: Boolean = false,
+    onFullscreenToggle: (() -> Unit)? = null
 ) {
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()
@@ -602,10 +605,19 @@ fun BookmarkViewerContent(
                             state = scrollState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(if (needsScrollRestore || needsHighlightScroll) Modifier.alpha(0f) else Modifier)
+                                .then(if (needsScrollRestore || needsHighlightScroll) Modifier.alpha(0f) else Modifier),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
+                            // Constrain content items to a comfortable reading width.
+                            // In non-fullscreen the reader pane is typically narrower than
+                            // 900dp so this is a no-op; keeping it always-on avoids a visual
+                            // jump when exiting fullscreen (content would otherwise snap to
+                            // the full Surface width before the panes finish animating in).
+                            val contentItemModifier = Modifier.widthIn(max = 900.dp)
+
                             // Hero banner as first item so tag/URL clicks are not blocked by the list
                             item(key = "hero_banner") {
+                                Box(modifier = contentItemModifier) {
                                 HeroBannerSection(
                                     title = title,
                                     url = url,
@@ -636,11 +648,13 @@ fun BookmarkViewerContent(
                                     bannerImageLocalPath = bannerImageLocalPath,
                                     screenshotLocalPath = screenshotLocalPath
                                 )
+                                }
                             }
 
                             // Description Card
                             if (!description.isNullOrBlank()) {
                                 item(key = "description_card") {
+                                    Box(modifier = contentItemModifier) {
                                     DescriptionCard(
                                         description = description,
                                         htmlBackgroundColor = htmlBackgroundColor,
@@ -648,11 +662,13 @@ fun BookmarkViewerContent(
                                         htmlFontSize = htmlFontSize,
                                         htmlFontFamily = htmlFontFamily
                                     )
+                                    }
                                 }
                             }
 
                             // Content Body
                             item(key = "content_body") {
+                                Box(modifier = contentItemModifier) {
                                 ContentBodySection(
                                     content = state.bookmark.content,
                                     viewerMode = viewerMode,
@@ -720,6 +736,7 @@ fun BookmarkViewerContent(
                                     // selectedHighlightId stays null until the user taps a highlight.
                                     selectedHighlightId = selectedHighlightId ?: scrollToHighlightId
                                 )
+                                }
                             }
                         }
 
@@ -797,7 +814,9 @@ fun BookmarkViewerContent(
                             onOpenInBrowserClick = {
                                 uriHandler.openUri(state.bookmark.url)
                                 scope.launch { snackbarManager.showSnackbar("Opening in browser") }
-                            }
+                            },
+                            isFullscreen = isFullscreen,
+                            onFullscreenToggle = onFullscreenToggle
                         )
 
                         if (!getPlatform().isDesktop) {

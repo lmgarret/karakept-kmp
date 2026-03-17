@@ -187,6 +187,7 @@ object MainScreen : Screen {
         var showHighlights by remember { mutableStateOf(false) }
         var scrollToHighlightId by remember { mutableStateOf<String?>(null) }
         var activeHighlightId by remember { mutableStateOf<String?>(null) }
+        var isReaderFullscreen by remember { mutableStateOf(false) }
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isSyncing,
@@ -795,12 +796,16 @@ object MainScreen : Screen {
                 val minReaderWidth = 300.dp
                 val maxListWidth = remainingWidth - minReaderWidth
                 val listWidth = (remainingWidth * listFraction).coerceIn(minListWidth, maxListWidth)
-                val readerWidth = remainingWidth - listWidth
+
+                // Reset fullscreen when bookmark is deselected
+                LaunchedEffect(selectedBookmarkId) {
+                    if (selectedBookmarkId == null) isReaderFullscreen = false
+                }
 
                 Row(modifier = Modifier.fillMaxSize()) {
                     // Drawer column (collapsible)
                     AnimatedVisibility(
-                        visible = isDrawerVisible,
+                        visible = isDrawerVisible && !isReaderFullscreen,
                         enter = expandHorizontally(),
                         exit = shrinkHorizontally()
                     ) {
@@ -853,7 +858,11 @@ object MainScreen : Screen {
 
                     // Divider between drawer and list (draggable).
                     // Line aligned to start so it sits flush against the drawer edge.
-                    if (isDrawerVisible) {
+                    AnimatedVisibility(
+                        visible = isDrawerVisible && !isReaderFullscreen,
+                        enter = expandHorizontally(),
+                        exit = shrinkHorizontally()
+                    ) {
                         DraggableDivider(
                             lineAlignment = Alignment.CenterStart,
                             onDrag = { delta ->
@@ -863,6 +872,11 @@ object MainScreen : Screen {
                     }
 
                     // Middle column: bookmark list or highlights list
+                    AnimatedVisibility(
+                        visible = !isReaderFullscreen,
+                        enter = expandHorizontally(),
+                        exit = shrinkHorizontally()
+                    ) {
                     Box(modifier = Modifier.width(listWidth).fillMaxHeight()) {
                         if (showHighlights) {
                             val highlightsScreenModel = koinInject<HighlightsScreenModel>()
@@ -899,23 +913,32 @@ object MainScreen : Screen {
                             MainScaffoldContent(isExpandedLayout = true)
                         }
                     }
+                    } // end AnimatedVisibility for list
 
                     // Divider between list and reader (draggable)
-                    DraggableDivider(
-                        onDrag = { delta ->
-                            // Compute fraction change directly from delta to avoid stale captures
-                            val remainingDp = remainingWidth.value
-                            if (remainingDp > 0f) {
-                                val minFraction = minListWidth.value / remainingDp
-                                val maxFraction = maxListWidth.value / remainingDp
-                                listFraction = (listFraction + delta / remainingDp).coerceIn(minFraction, maxFraction)
+                    AnimatedVisibility(
+                        visible = !isReaderFullscreen,
+                        enter = expandHorizontally(),
+                        exit = shrinkHorizontally()
+                    ) {
+                        DraggableDivider(
+                            onDrag = { delta ->
+                                // Compute fraction change directly from delta to avoid stale captures
+                                val remainingDp = remainingWidth.value
+                                if (remainingDp > 0f) {
+                                    val minFraction = minListWidth.value / remainingDp
+                                    val maxFraction = maxListWidth.value / remainingDp
+                                    listFraction = (listFraction + delta / remainingDp).coerceIn(minFraction, maxFraction)
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
 
                     // Reader pane column
+                    // Uses weight(1f) to fill remaining Row space, so it smoothly
+                    // resizes as the drawer / list panes animate in or out.
                     Surface(
-                        modifier = Modifier.width(readerWidth).fillMaxHeight(),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                         color = MaterialTheme.colorScheme.surface
                     ) {
                         val currentBookmarkId = selectedBookmarkId
@@ -932,9 +955,13 @@ object MainScreen : Screen {
                                     scrollToHighlightId = currentScrollToHighlightId,
                                     screenModel = viewerScreenModel,
                                     onBack = {
-                                        selectedBookmarkId = null
-                                        scrollToHighlightId = null
-                                        activeHighlightId = null
+                                        if (isReaderFullscreen) {
+                                            isReaderFullscreen = false
+                                        } else {
+                                            selectedBookmarkId = null
+                                            scrollToHighlightId = null
+                                            activeHighlightId = null
+                                        }
                                     },
                                     onTagFilterApply = { tag ->
                                         screenModel.applyTagFilter(tag, currentBookmarkId)
@@ -943,7 +970,9 @@ object MainScreen : Screen {
                                         activeHighlightId = null
                                         showHighlights = false
                                     },
-                                    isEmbedded = true
+                                    isEmbedded = true,
+                                    isFullscreen = isReaderFullscreen,
+                                    onFullscreenToggle = { isReaderFullscreen = !isReaderFullscreen }
                                 )
                             }
                         } else {
@@ -991,6 +1020,11 @@ object MainScreen : Screen {
                     MainScaffoldContent(isExpandedLayout = false)
                 }
             }
+        }
+
+        // Back Handler for fullscreen reader
+        com.karakept.app.ui.components.BackHandler(enabled = isReaderFullscreen) {
+            isReaderFullscreen = false
         }
 
         // Back Handler for selection mode
