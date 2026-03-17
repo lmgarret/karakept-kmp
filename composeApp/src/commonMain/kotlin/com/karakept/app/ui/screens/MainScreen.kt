@@ -910,8 +910,10 @@ object MainScreen : Screen {
                             MainScaffoldContent(isExpandedLayout = true)
                         }
                     }
+                    } // end AnimatedVisibility for list
 
                     // Divider between list and reader (draggable)
+                    if (!isReaderFullscreen) {
                     DraggableDivider(
                         onDrag = { delta ->
                             // Compute fraction change directly from delta to avoid stale captures
@@ -923,7 +925,7 @@ object MainScreen : Screen {
                             }
                         }
                     )
-                    } // end AnimatedVisibility for list + divider
+                    }
 
                     // Reader pane column
                     // In fullscreen mode, take full width with comfortable reading margins
