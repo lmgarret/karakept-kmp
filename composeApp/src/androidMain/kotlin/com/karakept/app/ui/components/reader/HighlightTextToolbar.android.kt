@@ -1,16 +1,20 @@
 package com.karakept.app.ui.components.reader
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.util.Log
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View
+import android.view.Window
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.text.AnnotatedString
@@ -67,17 +71,17 @@ private fun findSelectionManager(
 }
 
 /**
- * Extracts the selected text from Compose's `SelectionManager` by navigating
- * the [onCopyRequested] lambda's closure fields via reflection.
+ * Extracts the currently selected text from Compose's `SelectionManager` by
+ * navigating the [actionModeCallback]'s field tree via reflection.
  *
- * `SelectionManager` calls `TextToolbar.showMenu(onCopyRequested = { copy() })`,
- * so the lambda captures the manager. We find it and call `getSelectedText()`.
+ * The callback is the `FloatingTextActionModeCallback` from Compose's
+ * `contextmenu.internal` package. Its closure graph ultimately references
+ * `SelectionManager`, on which we call `getSelectedText$<module>()`.
  */
-private fun extractSelectedTextViaReflection(onCopyRequested: (() -> Unit)?): String? {
-    if (onCopyRequested == null) return null
+private fun extractSelectedText(actionModeCallback: ActionMode.Callback): String? {
     return try {
-        val manager = findSelectionManager(onCopyRequested) ?: run {
-            Log.w(TAG, "SelectionManager not found in onCopyRequested closure tree")
+        val manager = findSelectionManager(actionModeCallback) ?: run {
+            Log.w(TAG, "SelectionManager not found in callback closure tree")
             return null
         }
         val method = manager.javaClass.methods
@@ -86,37 +90,171 @@ private fun extractSelectedTextViaReflection(onCopyRequested: (() -> Unit)?): St
                 Log.w(TAG, "getSelectedText method not found on ${manager.javaClass.name}")
                 return null
             }
-        (method.invoke(manager) as? AnnotatedString)?.text?.takeIf { it.isNotEmpty() }
+        (method.invoke(manager) as? AnnotatedString)?.text
     } catch (e: Exception) {
         Log.w(TAG, "Failed to extract selected text: $e")
         null
     }
 }
 
-// ─── Custom TextToolbar with Highlight action ────────────────────────────────
+// ─── ActionMode injection ────────────────────────────────────────────────────
+
+internal fun Context.findActivity(): Activity? {
+    var context = this
+    while (context is ContextWrapper) {
+        if (context is Activity) return context
+        context = context.baseContext
+    }
+    return null
+}
 
 /**
- * Custom [TextToolbar] that manages the floating [ActionMode] directly,
- * adding a "Highlight" item alongside the standard Copy and Select All.
- *
- * Key fix: suppresses [showMenu] calls when [onCopyRequested] is null.
- * When text is being deselected, Compose's SelectionContainer briefly calls
- * `showMenu(onCopyRequested = null)` before `hide()`, which would create a
- * ghost ActionMode showing only "Select All | Highlight". By checking for
- * null we prevent that flash entirely.
+ * Marker interface to detect callbacks already wrapped by [createHighlightCallback].
+ * Prevents double-wrapping when [onWindowStartingActionMode] is called multiple times.
  */
-private class HighlightTextToolbarImpl(
-    private val view: View,
-    private val onHighlight: State<(String) -> Unit>
+private interface HighlightWrappedCallback
+
+/**
+ * Wraps an [ActionMode.Callback] to inject a "Highlight" menu item and
+ * delegate all other items to the [original] callback.
+ */
+private fun createHighlightCallback(
+    original: ActionMode.Callback,
+    onHighlight: (ActionMode, ActionMode.Callback) -> Unit
+): ActionMode.Callback {
+    return if (original is ActionMode.Callback2) {
+        object : ActionMode.Callback2(), HighlightWrappedCallback {
+            override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+                val result = original.onCreateActionMode(mode, menu)
+                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
+                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
+                }
+                return result
+            }
+
+            override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
+                val result = original.onPrepareActionMode(mode, menu)
+                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
+                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
+                }
+                return true
+            }
+
+            override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+                if (item.itemId == MENU_ID_HIGHLIGHT) {
+                    onHighlight(mode, original)
+                    return true
+                }
+                return original.onActionItemClicked(mode, item)
+            }
+
+            override fun onDestroyActionMode(mode: ActionMode) =
+                original.onDestroyActionMode(mode)
+
+            override fun onGetContentRect(
+                mode: ActionMode,
+                view: android.view.View,
+                outRect: android.graphics.Rect
+            ) = original.onGetContentRect(mode, view, outRect)
+        }
+    } else {
+        object : ActionMode.Callback, HighlightWrappedCallback {
+            override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+                val result = original.onCreateActionMode(mode, menu)
+                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
+                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
+                }
+                return result
+            }
+
+            override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
+                val result = original.onPrepareActionMode(mode, menu)
+                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
+                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
+                }
+                return true
+            }
+
+            override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+                if (item.itemId == MENU_ID_HIGHLIGHT) {
+                    onHighlight(mode, original)
+                    return true
+                }
+                return original.onActionItemClicked(mode, item)
+            }
+
+            override fun onDestroyActionMode(mode: ActionMode) =
+                original.onDestroyActionMode(mode)
+        }
+    }
+}
+
+// ─── Window.Callback wrapper ─────────────────────────────────────────────────
+
+/**
+ * Named wrapper class for the Activity's Window.Callback, used to detect
+ * whether the callback has already been wrapped (prevents stacking).
+ */
+private class HighlightWindowCallback(
+    private val original: Window.Callback,
+    private val latestOnHighlight: androidx.compose.runtime.State<(String) -> Unit>
+) : Window.Callback by original {
+
+    override fun onWindowStartingActionMode(
+        callback: ActionMode.Callback?,
+        type: Int
+    ): ActionMode? {
+        if (callback == null || type != ActionMode.TYPE_FLOATING) {
+            return original.onWindowStartingActionMode(callback, type)
+        }
+
+        try {
+            val field = callback.javaClass.getDeclaredField("mWrapped")
+            field.isAccessible = true
+            val inner = field.get(callback) as ActionMode.Callback
+
+            // Guard: skip if already wrapped by us (prevents double Highlight items)
+            if (inner is HighlightWrappedCallback) {
+                return original.onWindowStartingActionMode(callback, type)
+            }
+
+            val wrapped = createHighlightCallback(inner) { mode, composeCb ->
+                val selectedText = extractSelectedText(composeCb)
+                if (selectedText != null) {
+                    latestOnHighlight.value(selectedText)
+                } else {
+                    Log.e(TAG, "Failed to extract selected text")
+                }
+                mode.finish()
+            }
+
+            field.set(callback, wrapped)
+        } catch (e: Exception) {
+            Log.e(TAG, "ActionMode callback injection failed: $e")
+        }
+
+        return original.onWindowStartingActionMode(callback, type)
+    }
+
+    override fun onWindowStartingActionMode(callback: ActionMode.Callback?): ActionMode? {
+        return original.onWindowStartingActionMode(callback)
+    }
+}
+
+// ─── Ghost-menu filtering TextToolbar wrapper ────────────────────────────────
+
+/**
+ * Wraps the default [TextToolbar] to suppress [showMenu] calls when
+ * [onCopyRequested] is null. This prevents the ghost ActionMode flash
+ * that Compose's SelectionContainer triggers during deselection:
+ * it briefly calls `showMenu(onCopyRequested=null)` before `hide()`,
+ * creating a transient toolbar showing only "Select All | Highlight".
+ */
+private class FilteringTextToolbar(
+    private val delegate: TextToolbar
 ) : TextToolbar {
 
-    private var actionMode: ActionMode? = null
-    private var currentRect: Rect = Rect.Zero
-    private var currentOnCopy: (() -> Unit)? = null
-    private var currentOnSelectAll: (() -> Unit)? = null
-
-    override val status: TextToolbarStatus
-        get() = if (actionMode != null) TextToolbarStatus.Shown else TextToolbarStatus.Hidden
+    override val status: TextToolbarStatus get() = delegate.status
 
     override fun showMenu(
         rect: Rect,
@@ -125,119 +263,75 @@ private class HighlightTextToolbarImpl(
         onCutRequested: (() -> Unit)?,
         onSelectAllRequested: (() -> Unit)?
     ) {
-        // Don't show the menu if there's no text to copy/highlight.
-        // This prevents the ghost ActionMode that briefly flashes when
-        // the selection is being cleared (SelectionContainer calls
-        // showMenu with onCopyRequested=null right before hide()).
+        // No copy callback → no text selected → nothing to highlight.
+        // Suppress to prevent the ghost menu flash during deselection.
         if (onCopyRequested == null) {
-            hide()
+            delegate.hide()
             return
         }
-
-        currentRect = rect
-        currentOnCopy = onCopyRequested
-        currentOnSelectAll = onSelectAllRequested
-
-        if (actionMode != null) {
-            actionMode?.invalidate()
-            return
-        }
-
-        actionMode = view.startActionMode(
-            HighlightActionModeCallback(),
-            ActionMode.TYPE_FLOATING
-        )
+        delegate.showMenu(rect, onCopyRequested, onPasteRequested, onCutRequested, onSelectAllRequested)
     }
 
     override fun hide() {
-        actionMode?.finish()
-        actionMode = null
-    }
-
-    private inner class HighlightActionModeCallback : ActionMode.Callback2() {
-
-        override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-            if (currentOnCopy != null) {
-                menu.add(Menu.NONE, android.R.id.copy, 0, android.R.string.copy)
-            }
-            menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 1, "Highlight")
-            if (currentOnSelectAll != null) {
-                menu.add(Menu.NONE, android.R.id.selectAll, 2, android.R.string.selectAll)
-            }
-            return true
-        }
-
-        override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean = false
-
-        override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-            when (item.itemId) {
-                android.R.id.copy -> {
-                    currentOnCopy?.invoke()
-                    mode.finish()
-                    return true
-                }
-                MENU_ID_HIGHLIGHT -> {
-                    val selectedText = extractSelectedTextViaReflection(currentOnCopy)
-                    if (selectedText != null) {
-                        onHighlight.value(selectedText)
-                    } else {
-                        Log.e(TAG, "Failed to extract selected text")
-                    }
-                    mode.finish()
-                    return true
-                }
-                android.R.id.selectAll -> {
-                    currentOnSelectAll?.invoke()
-                    return true
-                }
-            }
-            return false
-        }
-
-        override fun onDestroyActionMode(mode: ActionMode) {
-            actionMode = null
-        }
-
-        override fun onGetContentRect(
-            mode: ActionMode,
-            view: View,
-            outRect: android.graphics.Rect
-        ) {
-            val rect = currentRect
-            outRect.set(
-                rect.left.toInt(),
-                rect.top.toInt(),
-                rect.right.toInt(),
-                rect.bottom.toInt()
-            )
-        }
+        delegate.hide()
     }
 }
 
 // ─── Composable entry point ──────────────────────────────────────────────────
 
 /**
- * Android implementation that returns a custom [TextToolbar] with a
- * "Highlight" action in the floating ActionMode.
- *
- * Unlike the previous Window.Callback interception approach, this directly
- * controls the ActionMode lifecycle, which prevents the ghost menu flash
- * that appeared when deselecting text.
+ * Android implementation that:
+ * 1. Intercepts the Activity's `Window.Callback` to inject a "Highlight"
+ *    menu item into the native text-selection ActionMode.
+ * 2. Wraps the default [TextToolbar] to suppress ghost menu flashes that
+ *    occur when Compose's SelectionContainer briefly calls `showMenu`
+ *    with `onCopyRequested=null` during text deselection.
  */
 @Composable
 actual fun rememberHighlightTextToolbar(
     onHighlightRequested: (selectedText: String) -> Unit
 ): TextToolbar? {
-    val view = LocalView.current
+    val context = LocalContext.current
+    val defaultToolbar = LocalTextToolbar.current
     val latestOnHighlight = rememberUpdatedState(onHighlightRequested)
 
-    return remember(view) {
-        HighlightTextToolbarImpl(view, latestOnHighlight)
+    // Install Window.Callback wrapper to inject "Highlight" into ActionMode
+    DisposableEffect(context) {
+        val activity = context.findActivity()
+        if (activity == null) {
+            Log.e(TAG, "No activity found, cannot intercept Window.Callback")
+            return@DisposableEffect onDispose {}
+        }
+
+        val currentCallback = activity.window.callback ?: run {
+            Log.e(TAG, "No Window.Callback found")
+            return@DisposableEffect onDispose {}
+        }
+
+        // Guard: don't stack wrappers if already installed
+        if (currentCallback is HighlightWindowCallback) {
+            return@DisposableEffect onDispose {}
+        }
+
+        val wrapperCallback = HighlightWindowCallback(currentCallback, latestOnHighlight)
+
+        activity.window.callback = wrapperCallback
+
+        onDispose {
+            if (activity.window.callback === wrapperCallback) {
+                activity.window.callback = currentCallback
+            }
+        }
+    }
+
+    // Wrap the default TextToolbar to filter out ghost menu flashes
+    return remember(defaultToolbar) {
+        FilteringTextToolbar(defaultToolbar)
     }
 }
 
 /**
- * Android: no-op wrapper. Android uses the custom TextToolbar (above) instead.
+ * Android: no-op wrapper. Android uses TextToolbar/ActionMode instead.
  */
 @Composable
 actual fun HighlightContextMenuProvider(
