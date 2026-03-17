@@ -225,10 +225,9 @@ tasks.withType<Test> {
 }
 
 // Post-process DMG to set volume icon (fixes OpenJDK icon in Finder title bar)
-tasks.register("setDmgVolumeIcon") {
+val setDmgVolumeIcon = tasks.register("setDmgVolumeIcon") {
     group = "compose desktop"
     description = "Sets the volume icon on the packaged DMG"
-    dependsOn("packageDmg")
     onlyIf { org.gradle.internal.os.OperatingSystem.current().isMacOsX }
 
     doLast {
@@ -252,4 +251,8 @@ tasks.register("setDmgVolumeIcon") {
         rwDmg.delete()
         println("Volume icon set on ${dmg.name}")
     }
+}
+
+tasks.named("packageDmg") {
+    finalizedBy(setDmgVolumeIcon)
 }
