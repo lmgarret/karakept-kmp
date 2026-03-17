@@ -550,7 +550,8 @@ private fun RenderCodeBlock(
     HorizontallyScrollableContainer(
         modifier = Modifier
             .padding(vertical = 8.dp)
-            .fillMaxWidth()
+            .fillMaxWidth(),
+        scrollbarColor = theme.textColor
     ) {
         Box(
             modifier = Modifier
@@ -834,7 +835,8 @@ private fun RenderTable(
     HorizontallyScrollableContainer(
         modifier = Modifier
             .padding(vertical = 8.dp)
-            .fillMaxWidth()
+            .fillMaxWidth(),
+        scrollbarColor = theme.textColor
     ) {
         Column(
             modifier = Modifier
