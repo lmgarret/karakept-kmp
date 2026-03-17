@@ -229,7 +229,6 @@ if (org.gradle.internal.os.OperatingSystem.current().isMacOsX) {
     val setDmgVolumeIcon = tasks.register("setDmgVolumeIcon") {
         group = "compose desktop"
         description = "Sets the volume icon on the packaged DMG"
-        dependsOn("packageDmg")
 
         doLast {
             val dmgDir = layout.buildDirectory.dir("compose/binaries/main/dmg").get().asFile
