@@ -125,23 +125,20 @@ private fun createHighlightCallback(
     return if (original is ActionMode.Callback2) {
         object : ActionMode.Callback2(), HighlightWrappedCallback {
             override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-                val result = original.onCreateActionMode(mode, menu)
-                if (!result) return false
-                // Suppress ghost ActionMode: when Compose's SelectionContainer
-                // briefly triggers an ActionMode during deselection, the menu
-                // has Select All but no Copy (no text selected). Returning false
-                // aborts creation so the ghost toolbar never appears on screen.
-                if (menu.findItem(android.R.id.copy) == null) {
-                    return false
-                }
-                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
-                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
-                }
-                return true
+                // Just delegate — Compose populates menu items in onPrepareActionMode,
+                // so the menu is empty here. Ghost detection happens in onPrepareActionMode.
+                return original.onCreateActionMode(mode, menu)
             }
 
             override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
                 val result = original.onPrepareActionMode(mode, menu)
+                // Ghost ActionMode detection: Compose's SelectionContainer briefly
+                // triggers an ActionMode during deselection with only Select All
+                // (no Copy, because no text is selected). Finish it immediately.
+                if (menu.findItem(android.R.id.copy) == null) {
+                    mode.finish()
+                    return false
+                }
                 if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
                     menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
                 }
@@ -168,19 +165,15 @@ private fun createHighlightCallback(
     } else {
         object : ActionMode.Callback, HighlightWrappedCallback {
             override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-                val result = original.onCreateActionMode(mode, menu)
-                if (!result) return false
-                if (menu.findItem(android.R.id.copy) == null) {
-                    return false
-                }
-                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
-                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
-                }
-                return true
+                return original.onCreateActionMode(mode, menu)
             }
 
             override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
                 val result = original.onPrepareActionMode(mode, menu)
+                if (menu.findItem(android.R.id.copy) == null) {
+                    mode.finish()
+                    return false
+                }
                 if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
                     menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
                 }
