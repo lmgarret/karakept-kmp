@@ -796,7 +796,6 @@ object MainScreen : Screen {
                 val minReaderWidth = 300.dp
                 val maxListWidth = remainingWidth - minReaderWidth
                 val listWidth = (remainingWidth * listFraction).coerceIn(minListWidth, maxListWidth)
-                val readerWidth = remainingWidth - listWidth
 
                 // Reset fullscreen when bookmark is deselected
                 LaunchedEffect(selectedBookmarkId) {
@@ -859,7 +858,11 @@ object MainScreen : Screen {
 
                     // Divider between drawer and list (draggable).
                     // Line aligned to start so it sits flush against the drawer edge.
-                    if (isDrawerVisible && !isReaderFullscreen) {
+                    AnimatedVisibility(
+                        visible = isDrawerVisible && !isReaderFullscreen,
+                        enter = expandHorizontally(),
+                        exit = shrinkHorizontally()
+                    ) {
                         DraggableDivider(
                             lineAlignment = Alignment.CenterStart,
                             onDrag = { delta ->
@@ -913,29 +916,29 @@ object MainScreen : Screen {
                     } // end AnimatedVisibility for list
 
                     // Divider between list and reader (draggable)
-                    if (!isReaderFullscreen) {
-                    DraggableDivider(
-                        onDrag = { delta ->
-                            // Compute fraction change directly from delta to avoid stale captures
-                            val remainingDp = remainingWidth.value
-                            if (remainingDp > 0f) {
-                                val minFraction = minListWidth.value / remainingDp
-                                val maxFraction = maxListWidth.value / remainingDp
-                                listFraction = (listFraction + delta / remainingDp).coerceIn(minFraction, maxFraction)
+                    AnimatedVisibility(
+                        visible = !isReaderFullscreen,
+                        enter = expandHorizontally(),
+                        exit = shrinkHorizontally()
+                    ) {
+                        DraggableDivider(
+                            onDrag = { delta ->
+                                // Compute fraction change directly from delta to avoid stale captures
+                                val remainingDp = remainingWidth.value
+                                if (remainingDp > 0f) {
+                                    val minFraction = minListWidth.value / remainingDp
+                                    val maxFraction = maxListWidth.value / remainingDp
+                                    listFraction = (listFraction + delta / remainingDp).coerceIn(minFraction, maxFraction)
+                                }
                             }
-                        }
-                    )
+                        )
                     }
 
                     // Reader pane column
-                    // In fullscreen mode, take full width with comfortable reading margins
-                    val readerModifier = if (isReaderFullscreen) {
-                        Modifier.fillMaxWidth().fillMaxHeight()
-                    } else {
-                        Modifier.width(readerWidth).fillMaxHeight()
-                    }
+                    // Uses weight(1f) to fill remaining Row space, so it smoothly
+                    // resizes as the drawer / list panes animate in or out.
                     Surface(
-                        modifier = readerModifier,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                         color = MaterialTheme.colorScheme.surface
                     ) {
                         val currentBookmarkId = selectedBookmarkId
