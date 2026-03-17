@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import com.karakept.app.data.local.entity.BookmarkEntity
@@ -77,7 +79,10 @@ internal fun ViewerTopBar(
     onArchiveClick: () -> Unit = {},
     onReadClick: () -> Unit = {},
     onShareClick: () -> Unit = {},
-    onOpenInBrowserClick: () -> Unit = {}
+    onOpenInBrowserClick: () -> Unit = {},
+    // Fullscreen toggle (desktop embedded only)
+    isFullscreen: Boolean = false,
+    onFullscreenToggle: (() -> Unit)? = null
 ) {
     // Status bar background - fades in with top bar for parallax effect
     Box(
@@ -121,8 +126,10 @@ internal fun ViewerTopBar(
         }
 
         // Sticky Title
-        // On desktop, the right side has Favorite + Archive + MoreVert = ~144dp
-        val endPadding = if (isDesktop) 152.dp else 48.dp
+        // On desktop, the right side has Fullscreen? + Favorite + Archive + MoreVert
+        val endPadding = if (isDesktop) {
+            if (onFullscreenToggle != null) 200.dp else 152.dp
+        } else 48.dp
         androidx.compose.animation.AnimatedVisibility(
             visible = showStickyTitle,
             enter = androidx.compose.animation.fadeIn(),
@@ -159,6 +166,18 @@ internal fun ViewerTopBar(
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Fullscreen toggle (desktop embedded only)
+            if (onFullscreenToggle != null) {
+                val iconTint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
+                IconButton(onClick = onFullscreenToggle) {
+                    Icon(
+                        imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                        contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",
+                        tint = iconTint
+                    )
+                }
+            }
+
             // Desktop: inline Favorite and Archive buttons
             if (isDesktop && bookmark != null) {
                 val iconTint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White

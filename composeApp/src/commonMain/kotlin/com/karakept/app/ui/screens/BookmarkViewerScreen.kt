@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -105,7 +106,9 @@ fun BookmarkViewerContent(
     screenModel: BookmarkViewerScreenModel,
     onBack: () -> Unit,
     onTagFilterApply: (tag: String) -> Unit,
-    isEmbedded: Boolean = false
+    isEmbedded: Boolean = false,
+    isFullscreen: Boolean = false,
+    onFullscreenToggle: (() -> Unit)? = null
 ) {
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()
@@ -576,7 +579,17 @@ fun BookmarkViewerContent(
                     val bannerImageLocalPath by screenModel.bannerImageLocalPath.collectAsState()
                     val screenshotLocalPath by screenModel.screenshotLocalPath.collectAsState()
 
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = if (isFullscreen) Alignment.TopCenter else Alignment.TopStart
+                    ) {
+                    Box(
+                        modifier = if (isFullscreen) {
+                            Modifier.widthIn(max = 900.dp).fillMaxSize()
+                        } else {
+                            Modifier.fillMaxSize()
+                        }
+                    ) {
                         // Content List
                         // Global dimming overlay when a highlight is selected
                         // Hide content until scroll position is restored to prevent a flash
@@ -797,7 +810,9 @@ fun BookmarkViewerContent(
                             onOpenInBrowserClick = {
                                 uriHandler.openUri(state.bookmark.url)
                                 scope.launch { snackbarManager.showSnackbar("Opening in browser") }
-                            }
+                            },
+                            isFullscreen = isFullscreen,
+                            onFullscreenToggle = onFullscreenToggle
                         )
 
                         if (!getPlatform().isDesktop) {
@@ -809,6 +824,8 @@ fun BookmarkViewerContent(
                             )
                         }
                     }
+                    } // end inner fullscreen-constrained Box
+                    } // end outer centering Box
                 }
                 is BookmarkLoadingState.Error -> {
                     Box(

@@ -187,6 +187,7 @@ object MainScreen : Screen {
         var showHighlights by remember { mutableStateOf(false) }
         var scrollToHighlightId by remember { mutableStateOf<String?>(null) }
         var activeHighlightId by remember { mutableStateOf<String?>(null) }
+        var isReaderFullscreen by remember { mutableStateOf(false) }
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isSyncing,
@@ -797,10 +798,15 @@ object MainScreen : Screen {
                 val listWidth = (remainingWidth * listFraction).coerceIn(minListWidth, maxListWidth)
                 val readerWidth = remainingWidth - listWidth
 
+                // Reset fullscreen when bookmark is deselected
+                LaunchedEffect(selectedBookmarkId) {
+                    if (selectedBookmarkId == null) isReaderFullscreen = false
+                }
+
                 Row(modifier = Modifier.fillMaxSize()) {
                     // Drawer column (collapsible)
                     AnimatedVisibility(
-                        visible = isDrawerVisible,
+                        visible = isDrawerVisible && !isReaderFullscreen,
                         enter = expandHorizontally(),
                         exit = shrinkHorizontally()
                     ) {
@@ -853,7 +859,7 @@ object MainScreen : Screen {
 
                     // Divider between drawer and list (draggable).
                     // Line aligned to start so it sits flush against the drawer edge.
-                    if (isDrawerVisible) {
+                    if (isDrawerVisible && !isReaderFullscreen) {
                         DraggableDivider(
                             lineAlignment = Alignment.CenterStart,
                             onDrag = { delta ->
@@ -863,6 +869,11 @@ object MainScreen : Screen {
                     }
 
                     // Middle column: bookmark list or highlights list
+                    AnimatedVisibility(
+                        visible = !isReaderFullscreen,
+                        enter = expandHorizontally(),
+                        exit = shrinkHorizontally()
+                    ) {
                     Box(modifier = Modifier.width(listWidth).fillMaxHeight()) {
                         if (showHighlights) {
                             val highlightsScreenModel = koinInject<HighlightsScreenModel>()
@@ -912,10 +923,17 @@ object MainScreen : Screen {
                             }
                         }
                     )
+                    } // end AnimatedVisibility for list + divider
 
                     // Reader pane column
+                    // In fullscreen mode, take full width with comfortable reading margins
+                    val readerModifier = if (isReaderFullscreen) {
+                        Modifier.fillMaxWidth().fillMaxHeight()
+                    } else {
+                        Modifier.width(readerWidth).fillMaxHeight()
+                    }
                     Surface(
-                        modifier = Modifier.width(readerWidth).fillMaxHeight(),
+                        modifier = readerModifier,
                         color = MaterialTheme.colorScheme.surface
                     ) {
                         val currentBookmarkId = selectedBookmarkId
@@ -943,7 +961,9 @@ object MainScreen : Screen {
                                         activeHighlightId = null
                                         showHighlights = false
                                     },
-                                    isEmbedded = true
+                                    isEmbedded = true,
+                                    isFullscreen = isReaderFullscreen,
+                                    onFullscreenToggle = { isReaderFullscreen = !isReaderFullscreen }
                                 )
                             }
                         } else {
@@ -991,6 +1011,11 @@ object MainScreen : Screen {
                     MainScaffoldContent(isExpandedLayout = false)
                 }
             }
+        }
+
+        // Back Handler for fullscreen reader
+        com.karakept.app.ui.components.BackHandler(enabled = isReaderFullscreen) {
+            isReaderFullscreen = false
         }
 
         // Back Handler for selection mode
