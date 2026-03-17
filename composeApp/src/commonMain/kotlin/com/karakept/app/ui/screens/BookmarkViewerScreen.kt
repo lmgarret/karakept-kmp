@@ -606,14 +606,18 @@ fun BookmarkViewerContent(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .then(if (needsScrollRestore || needsHighlightScroll) Modifier.alpha(0f) else Modifier),
-                            horizontalAlignment = if (isFullscreen) Alignment.CenterHorizontally else Alignment.Start
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            // In fullscreen, constrain content items to a comfortable reading width
-                            val fullscreenItemModifier = if (isFullscreen) Modifier.widthIn(max = 900.dp) else Modifier
+                            // Constrain content items to a comfortable reading width.
+                            // In non-fullscreen the reader pane is typically narrower than
+                            // 900dp so this is a no-op; keeping it always-on avoids a visual
+                            // jump when exiting fullscreen (content would otherwise snap to
+                            // the full Surface width before the panes finish animating in).
+                            val contentItemModifier = Modifier.widthIn(max = 900.dp)
 
                             // Hero banner as first item so tag/URL clicks are not blocked by the list
                             item(key = "hero_banner") {
-                                Box(modifier = fullscreenItemModifier) {
+                                Box(modifier = contentItemModifier) {
                                 HeroBannerSection(
                                     title = title,
                                     url = url,
@@ -650,7 +654,7 @@ fun BookmarkViewerContent(
                             // Description Card
                             if (!description.isNullOrBlank()) {
                                 item(key = "description_card") {
-                                    Box(modifier = fullscreenItemModifier) {
+                                    Box(modifier = contentItemModifier) {
                                     DescriptionCard(
                                         description = description,
                                         htmlBackgroundColor = htmlBackgroundColor,
@@ -664,7 +668,7 @@ fun BookmarkViewerContent(
 
                             // Content Body
                             item(key = "content_body") {
-                                Box(modifier = fullscreenItemModifier) {
+                                Box(modifier = contentItemModifier) {
                                 ContentBodySection(
                                     content = state.bookmark.content,
                                     viewerMode = viewerMode,
