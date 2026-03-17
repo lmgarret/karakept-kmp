@@ -154,7 +154,7 @@ jobs:
 
       - name: Build DMG
         run: >
-          ./gradlew :composeApp:packageDmg
+          ./gradlew :composeApp:setDmgVolumeIcon
           -PversionName=${{ needs.resolve-version.outputs.name }}
 
       - name: Rename DMG with version

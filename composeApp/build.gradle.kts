@@ -223,3 +223,35 @@ tasks.withType<Test> {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }
+
+// Post-process DMG to set volume icon (fixes OpenJDK icon in Finder title bar)
+tasks.register<Exec>("setDmgVolumeIcon") {
+    group = "compose desktop"
+    description = "Sets the volume icon on the packaged DMG"
+    dependsOn("packageDmg")
+    onlyIf { org.gradle.internal.os.OperatingSystem.current().isMacOsX }
+
+    val dmgDir = layout.buildDirectory.dir("compose/binaries/main/dmg")
+    val iconFile = project.file("src/desktopMain/resources/icon.icns")
+
+    doFirst {
+        val dmg = dmgDir.get().asFile.listFiles()?.firstOrNull { it.extension == "dmg" }
+            ?: error("No DMG found in ${dmgDir.get()}")
+        val volumeName = "Karakept"
+        val mountPoint = "/Volumes/$volumeName"
+
+        // Convert to read-write, set icon, convert back
+        val rwDmg = File(dmg.parentFile, "rw-${dmg.name}")
+        exec { commandLine("hdiutil", "convert", dmg.absolutePath, "-format", "UDRW", "-o", rwDmg.absolutePath) }
+        exec { commandLine("hdiutil", "attach", rwDmg.absolutePath, "-mountpoint", mountPoint) }
+        try {
+            copy { from(iconFile); into(mountPoint); rename { ".VolumeIcon.icns" } }
+            exec { commandLine("SetFile", "-a", "C", mountPoint) }
+        } finally {
+            exec { commandLine("hdiutil", "detach", mountPoint) }
+        }
+        dmg.delete()
+        exec { commandLine("hdiutil", "convert", rwDmg.absolutePath, "-format", "UDZO", "-o", dmg.absolutePath) }
+        rwDmg.delete()
+    }
+}
