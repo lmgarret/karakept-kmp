@@ -6,6 +6,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -65,6 +66,17 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
      * Never included in the backup file itself; only the derived hash is.
      */
     private val BACKUP_PIN_KEY = stringPreferencesKey("backup_pin")
+
+    // ── Desktop layout (non-backed-up) ──────────────────────────────────────
+    private val DRAWER_WIDTH_DP_KEY = floatPreferencesKey("desktop_drawer_width_dp")
+    private val LIST_COLUMN_FRACTION_KEY = floatPreferencesKey("desktop_list_column_fraction")
+
+    // ── Desktop window state (non-backed-up) ────────────────────────────────
+    private val WINDOW_WIDTH_KEY = floatPreferencesKey("desktop_window_width")
+    private val WINDOW_HEIGHT_KEY = floatPreferencesKey("desktop_window_height")
+    private val WINDOW_X_KEY = floatPreferencesKey("desktop_window_x")
+    private val WINDOW_Y_KEY = floatPreferencesKey("desktop_window_y")
+    private val WINDOW_MAXIMIZED_KEY = booleanPreferencesKey("desktop_window_maximized")
 
     // ── Legacy keys (read-only, migration only) ───────────────────────────────
     // Two generations of legacy storage are supported:
@@ -550,6 +562,22 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val lastAutoExportTime: Flow<Long> =
         dataStore.data.map { it[LAST_AUTO_EXPORT_TIME_KEY] ?: 0L }
 
+    // ── Desktop layout flows (non-backed-up) ─────────────────────────────────
+
+    val drawerWidthDp: Flow<Float> =
+        dataStore.data.map { it[DRAWER_WIDTH_DP_KEY] ?: 280f }
+
+    val listColumnFraction: Flow<Float> =
+        dataStore.data.map { it[LIST_COLUMN_FRACTION_KEY] ?: 0.4f }
+
+    // ── Desktop window state flows (non-backed-up) ───────────────────────────
+
+    val windowWidth: Flow<Float?> = dataStore.data.map { it[WINDOW_WIDTH_KEY] }
+    val windowHeight: Flow<Float?> = dataStore.data.map { it[WINDOW_HEIGHT_KEY] }
+    val windowX: Flow<Float?> = dataStore.data.map { it[WINDOW_X_KEY] }
+    val windowY: Flow<Float?> = dataStore.data.map { it[WINDOW_Y_KEY] }
+    val windowMaximized: Flow<Boolean> = dataStore.data.map { it[WINDOW_MAXIMIZED_KEY] ?: true }
+
     // ── Setters (theme) ───────────────────────────────────────────────────────
 
     suspend fun setThemeMode(mode: ThemeMode) =
@@ -729,6 +757,28 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
      */
     suspend fun clearAutoOfflineDetected() {
         dataStore.edit { it[AUTO_OFFLINE_DETECTED_KEY] = false }
+    }
+
+    // ── Setters (desktop layout, non-backed-up) ────────────────────────────────
+
+    suspend fun setDrawerWidthDp(width: Float) {
+        dataStore.edit { it[DRAWER_WIDTH_DP_KEY] = width }
+    }
+
+    suspend fun setListColumnFraction(fraction: Float) {
+        dataStore.edit { it[LIST_COLUMN_FRACTION_KEY] = fraction }
+    }
+
+    // ── Setters (desktop window state, non-backed-up) ────────────────────────
+
+    suspend fun setWindowState(width: Float, height: Float, x: Float, y: Float, maximized: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[WINDOW_WIDTH_KEY] = width
+            prefs[WINDOW_HEIGHT_KEY] = height
+            prefs[WINDOW_X_KEY] = x
+            prefs[WINDOW_Y_KEY] = y
+            prefs[WINDOW_MAXIMIZED_KEY] = maximized
+        }
     }
 
     // ── Default list settings (non-backed-up individual keys) ────────────────

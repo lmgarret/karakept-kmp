@@ -19,6 +19,7 @@ data class BookmarkLayout(
     val thumbnailSize: Int = 80,
     val metadataPosition: String = MetadataPosition.BELOW.name,
     val tagsScrollable: Boolean = false,
+    val quickActionPosition: String = QuickActionPosition.RIGHT.name,
     val isBuiltIn: Boolean = false
 ) {
     companion object {

@@ -50,6 +50,7 @@ import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.components.getIcon
 import com.karakept.app.ui.screens.SettingsScreenModel
 import com.karakept.app.ui.utils.buildListHierarchy
+import getPlatform
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -58,11 +59,26 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 
 class BookmarkListSettingsScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
+        BookmarkListSettingsContent(
+            screenModel = screenModel,
+            onBack = { navigator.pop() },
+            onNavigate = { navigator.push(it) }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BookmarkListSettingsContent(
+    screenModel: SettingsScreenModel,
+    onBack: () -> Unit,
+    onNavigate: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    showBackButton: Boolean = true
+) {
         val readingSpeedWpm by screenModel.readingSpeedWpm.collectAsState()
         val notificationsEnabled by screenModel.notificationsEnabled.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
@@ -151,8 +167,10 @@ class BookmarkListSettingsScreen : Screen {
                 TopAppBar(
                     title = { Text("Bookmark List") },
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        if (showBackButton) {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
                         }
                     }
                 )
@@ -245,16 +263,17 @@ class BookmarkListSettingsScreen : Screen {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Gestures Section
+                // Gestures / Quick Actions Section
+                val isDesktopPlatform = remember { getPlatform().isDesktop }
                 Text(
-                    text = "Gestures",
+                    text = if (isDesktopPlatform) "Quick Actions" else "Gestures",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
                 SwipeActionSettingItem(
-                    title = "Swipe Right (Left to Right)",
-                    description = "Action when swiping from left to right",
+                    title = if (isDesktopPlatform) "Primary Quick Action" else "Swipe Right (Left to Right)",
+                    description = if (isDesktopPlatform) "Primary quick action button on bookmarks" else "Action when swiping from left to right",
                     selectedAction = swipeRightAction,
                     selectedConfigId = swipeRightConfigId,
                     customConfigs = customConfigs,
@@ -266,8 +285,8 @@ class BookmarkListSettingsScreen : Screen {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 SwipeActionSettingItem(
-                    title = "Swipe Left (Right to Left)",
-                    description = "Action when swiping from right to left",
+                    title = if (isDesktopPlatform) "Secondary Quick Action" else "Swipe Left (Right to Left)",
+                    description = if (isDesktopPlatform) "Secondary quick action button on bookmarks" else "Action when swiping from right to left",
                     selectedAction = swipeLeftAction,
                     selectedConfigId = swipeLeftConfigId,
                     customConfigs = customConfigs,
@@ -282,7 +301,7 @@ class BookmarkListSettingsScreen : Screen {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { navigator.push(CustomSwipeActionsScreen()) }
+                        .clickable { onNavigate(CustomSwipeActionsScreen()) }
                 ) {
                     Row(
                         modifier = Modifier
@@ -400,7 +419,6 @@ class BookmarkListSettingsScreen : Screen {
 
             }
         }
-    }
 }
 
 @Composable
@@ -598,4 +616,3 @@ private fun SwipeActionSettingItem(
         }
     }
 }
-

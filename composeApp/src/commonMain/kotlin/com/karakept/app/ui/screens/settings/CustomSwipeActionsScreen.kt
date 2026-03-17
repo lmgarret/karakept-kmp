@@ -69,6 +69,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
+import org.koin.compose.koinInject
 
 private val PRESET_COLORS = listOf(
     "#009688" to "Teal",
@@ -82,172 +83,184 @@ private val PRESET_COLORS = listOf(
 )
 
 class CustomSwipeActionsScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<SettingsScreenModel>()
-        val configs by screenModel.customSwipeActionConfigs.collectAsState()
-        val availableLists by screenModel.availableLists.collectAsState()
+        CustomSwipeActionsContent(
+            onBack = { navigator.pop() }
+        )
+    }
+}
 
-        LaunchedEffect(Unit) {
-            screenModel.fetchAvailableLists()
-        }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CustomSwipeActionsContent(
+    onBack: () -> Unit,
+    showBackButton: Boolean = true
+) {
+    val screenModel = koinInject<SettingsScreenModel>()
+    val configs by screenModel.customSwipeActionConfigs.collectAsState()
+    val availableLists by screenModel.availableLists.collectAsState()
 
-        var showAddDialog by remember { mutableStateOf(false) }
-        var editingConfig by remember { mutableStateOf<CustomSwipeActionConfig?>(null) }
-        var confirmDeleteConfig by remember { mutableStateOf<CustomSwipeActionConfig?>(null) }
+    LaunchedEffect(Unit) {
+        screenModel.fetchAvailableLists()
+    }
 
-        if (showAddDialog || editingConfig != null) {
-            CustomActionDialog(
-                existing = editingConfig,
-                availableLists = availableLists,
-                onDismiss = {
-                    showAddDialog = false
-                    editingConfig = null
-                },
-                onSave = { config ->
-                    if (editingConfig != null) {
-                        screenModel.updateCustomSwipeActionConfig(config)
-                    } else {
-                        screenModel.addCustomSwipeActionConfig(config)
-                    }
-                    showAddDialog = false
-                    editingConfig = null
+    var showAddDialog by remember { mutableStateOf(false) }
+    var editingConfig by remember { mutableStateOf<CustomSwipeActionConfig?>(null) }
+    var confirmDeleteConfig by remember { mutableStateOf<CustomSwipeActionConfig?>(null) }
+
+    if (showAddDialog || editingConfig != null) {
+        CustomActionDialog(
+            existing = editingConfig,
+            availableLists = availableLists,
+            onDismiss = {
+                showAddDialog = false
+                editingConfig = null
+            },
+            onSave = { config ->
+                if (editingConfig != null) {
+                    screenModel.updateCustomSwipeActionConfig(config)
+                } else {
+                    screenModel.addCustomSwipeActionConfig(config)
                 }
-            )
-        }
+                showAddDialog = false
+                editingConfig = null
+            }
+        )
+    }
 
-        if (confirmDeleteConfig != null) {
-            AlertDialog(
-                onDismissRequest = { confirmDeleteConfig = null },
-                title = { Text("Delete Action") },
-                text = { Text("Remove \"${confirmDeleteConfig!!.getDisplayName()}\"?") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        screenModel.removeCustomSwipeActionConfig(confirmDeleteConfig!!.id)
-                        confirmDeleteConfig = null
-                    }) { Text("Delete") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { confirmDeleteConfig = null }) { Text("Cancel") }
-                }
-            )
-        }
+    if (confirmDeleteConfig != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteConfig = null },
+            title = { Text("Delete Action") },
+            text = { Text("Remove \"${confirmDeleteConfig!!.getDisplayName()}\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    screenModel.removeCustomSwipeActionConfig(confirmDeleteConfig!!.id)
+                    confirmDeleteConfig = null
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteConfig = null }) { Text("Cancel") }
+            }
+        )
+    }
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Custom Swipe Actions") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Custom Swipe Actions") },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                )
-            },
-            floatingActionButton = {
-                FloatingActionButton(onClick = { showAddDialog = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add custom action")
+                }
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAddDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = "Add custom action")
+            }
+        }
+    ) { padding ->
+        if (configs.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "No custom actions yet",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Tap + to create one",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
             }
-        ) { padding ->
-            if (configs.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "No custom actions yet",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "Tap + to create one",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp)
+            ) {
+                item {
+                    Text(
+                        text = "Create multiple custom actions and assign them to swipe directions in Bookmark List settings.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(horizontal = 16.dp)
-                ) {
-                    item {
-                        Text(
-                            text = "Create multiple custom actions and assign them to swipe directions in Bookmark List settings.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 12.dp)
-                        )
-                    }
-                    items(configs) { config ->
-                        Card(
+                items(configs) { config ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 8.dp)
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (config.type == CustomSwipeActionType.ADD_TAG)
-                                        Icons.Default.Label else Icons.AutoMirrored.Filled.List,
-                                    contentDescription = null,
-                                    tint = config.colorHex?.let { parseColor(it) }
-                                        ?: if (config.type == CustomSwipeActionType.ADD_TAG)
-                                            Color(0xFF009688) else Color(0xFF673AB7),
-                                    modifier = Modifier.padding(end = 12.dp)
+                            Icon(
+                                imageVector = if (config.type == CustomSwipeActionType.ADD_TAG)
+                                    Icons.Default.Label else Icons.AutoMirrored.Filled.List,
+                                contentDescription = null,
+                                tint = config.colorHex?.let { parseColor(it) }
+                                    ?: if (config.type == CustomSwipeActionType.ADD_TAG)
+                                        Color(0xFF009688) else Color(0xFF673AB7),
+                                modifier = Modifier.padding(end = 12.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = config.getDisplayName(),
+                                    style = MaterialTheme.typography.titleMedium
                                 )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = config.getDisplayName(),
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    when (config.type) {
-                                        CustomSwipeActionType.ADD_TAG -> {
-                                            val tagName = config.tagName
-                                            if (tagName != null) {
-                                                TagChip(
-                                                    tag = tagName,
-                                                    modifier = Modifier.padding(top = 4.dp)
-                                                )
-                                            } else {
-                                                Text(
-                                                    text = "No tag set",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
+                                when (config.type) {
+                                    CustomSwipeActionType.ADD_TAG -> {
+                                        val tagName = config.tagName
+                                        if (tagName != null) {
+                                            TagChip(
+                                                tag = tagName,
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            )
+                                        } else {
+                                            Text(
+                                                text = "No tag set",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         }
-                                        CustomSwipeActionType.ADD_TO_LIST -> Text(
-                                            text = "Adds to: ${config.listName ?: config.listId ?: "(none)"}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
                                     }
+                                    CustomSwipeActionType.ADD_TO_LIST -> Text(
+                                        text = "Adds to: ${config.listName ?: config.listId ?: "(none)"}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
-                                IconButton(onClick = { editingConfig = config }) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Edit")
-                                }
-                                IconButton(onClick = { confirmDeleteConfig = config }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete")
-                                }
+                            }
+                            IconButton(onClick = { editingConfig = config }) {
+                                Icon(Icons.Default.Edit, contentDescription = "Edit")
+                            }
+                            IconButton(onClick = { confirmDeleteConfig = config }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete")
                             }
                         }
                     }
-                    item { Spacer(modifier = Modifier.height(80.dp)) }
                 }
+                item { Spacer(modifier = Modifier.height(80.dp)) }
             }
         }
     }

@@ -52,93 +52,107 @@ import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.ui.screens.SettingsScreenModel
 
 class ThemeSettingsScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
-        val currentThemeMode by screenModel.themeMode.collectAsState()
-        val currentAccentColor by screenModel.accentColor.collectAsState()
+        ThemeSettingsContent(
+            screenModel = screenModel,
+            onBack = { navigator.pop() }
+        )
+    }
+}
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Theme") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ThemeSettingsContent(
+    screenModel: SettingsScreenModel,
+    onBack: () -> Unit,
+    showBackButton: Boolean = true
+) {
+    val currentThemeMode by screenModel.themeMode.collectAsState()
+    val currentAccentColor by screenModel.accentColor.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Theme") },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.Top
-            ) {
-                // Theme Mode Section
-                Text(
-                    text = "Theme Mode",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Top
+        ) {
+            // Theme Mode Section
+            Text(
+                text = "Theme Mode",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
 
-                LayoutOption(
-                    title = "Light",
-                    description = "Light theme",
-                    icon = Icons.Default.LightMode,
-                    isSelected = currentThemeMode == ThemeMode.LIGHT,
-                    onClick = { screenModel.setThemeMode(ThemeMode.LIGHT) }
-                )
+            LayoutOption(
+                title = "Light",
+                description = "Light theme",
+                icon = Icons.Default.LightMode,
+                isSelected = currentThemeMode == ThemeMode.LIGHT,
+                onClick = { screenModel.setThemeMode(ThemeMode.LIGHT) }
+            )
 
-                Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-                LayoutOption(
-                    title = "Dark",
-                    description = "Dark theme",
-                    icon = Icons.Default.DarkMode,
-                    isSelected = currentThemeMode == ThemeMode.DARK,
-                    onClick = { screenModel.setThemeMode(ThemeMode.DARK) }
-                )
+            LayoutOption(
+                title = "Dark",
+                description = "Dark theme",
+                icon = Icons.Default.DarkMode,
+                isSelected = currentThemeMode == ThemeMode.DARK,
+                onClick = { screenModel.setThemeMode(ThemeMode.DARK) }
+            )
 
-                Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-                LayoutOption(
-                    title = "AMOLED",
-                    description = "Pure black for AMOLED screens",
-                    icon = Icons.Default.Contrast,
-                    isSelected = currentThemeMode == ThemeMode.AMOLED,
-                    onClick = { screenModel.setThemeMode(ThemeMode.AMOLED) }
-                )
+            LayoutOption(
+                title = "AMOLED",
+                description = "Pure black for AMOLED screens",
+                icon = Icons.Default.Contrast,
+                isSelected = currentThemeMode == ThemeMode.AMOLED,
+                onClick = { screenModel.setThemeMode(ThemeMode.AMOLED) }
+            )
 
-                Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-                LayoutOption(
-                    title = "System",
-                    description = "Follow system theme",
-                    icon = Icons.Default.SettingsSystemDaydream,
-                    isSelected = currentThemeMode == ThemeMode.SYSTEM,
-                    onClick = { screenModel.setThemeMode(ThemeMode.SYSTEM) }
-                )
+            LayoutOption(
+                title = "System",
+                description = "Follow system theme",
+                icon = Icons.Default.SettingsSystemDaydream,
+                isSelected = currentThemeMode == ThemeMode.SYSTEM,
+                onClick = { screenModel.setThemeMode(ThemeMode.SYSTEM) }
+            )
 
-                Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-                // Accent Color Section
-                Text(
-                    text = "Accent Color",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+            // Accent Color Section
+            Text(
+                text = "Accent Color",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
 
-                AccentColorPicker(
-                    currentAccentColor = currentAccentColor,
-                    onColorSelected = { screenModel.setAccentColor(it) }
-                )
-            }
+            AccentColorPicker(
+                currentAccentColor = currentAccentColor,
+                onColorSelected = { screenModel.setAccentColor(it) }
+            )
         }
     }
 }

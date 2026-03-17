@@ -49,25 +49,36 @@ data class FossLibrary(
 )
 
 class AboutScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val uriHandler = LocalUriHandler.current
+        AboutContent(onBack = { navigator.pop() })
+    }
+}
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("About") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AboutContent(
+    onBack: () -> Unit,
+    showBackButton: Boolean = true
+) {
+    val uriHandler = LocalUriHandler.current
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("About") },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                )
-            }
-        ) { padding ->
-            LazyColumn(
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
@@ -169,7 +180,6 @@ class AboutScreen : Screen {
             }
         }
     }
-}
 
 @Composable
 fun FossLibraryCard(library: FossLibrary, onClick: () -> Unit) {

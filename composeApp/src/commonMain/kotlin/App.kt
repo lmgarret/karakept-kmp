@@ -92,6 +92,7 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
             themeMode = themeMode,
             accentColor = accentColor
         ) {
+            com.karakept.app.ui.theme.SyncWindowTheme()
             val serverRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.ServerRepository>()
             var initialScreens by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<cafe.adriel.voyager.core.screen.Screen>?>(null) }
 

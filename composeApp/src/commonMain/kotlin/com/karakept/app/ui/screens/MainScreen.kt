@@ -1,32 +1,44 @@
 package com.karakept.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,24 +68,32 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.AddBookmarkDialog
+import com.karakept.app.ui.components.DraggableDivider
 import com.karakept.app.ui.components.FilterBottomPanel
 import com.karakept.app.ui.components.BookmarkActionsMenu
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.ListPickerDialog
 import com.karakept.app.ui.components.TagEditorDialog
 import com.karakept.app.ui.screens.main.BookmarkListContent
+import com.karakept.app.ui.screens.main.DrawerContent
+import com.karakept.app.ui.screens.main.HighlightsListContent
 import com.karakept.app.ui.screens.main.MainScreenDrawer
 import com.karakept.app.ui.screens.main.MainScreenTopBar
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.snapshotFlow
+import com.karakept.app.data.repository.SettingsRepository
 import getPlatform
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
 import com.karakept.app.ui.screens.settings.PerListSettingsScreen
 import org.koin.compose.koinInject
 
 object MainScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class, ExperimentalFoundationApi::class, FlowPreview::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -122,6 +142,9 @@ object MainScreen : Screen {
             ?.let { com.karakept.app.data.model.MetadataPosition.fromString(it) }
             ?: com.karakept.app.data.model.MetadataPosition.BELOW
         val effectiveTagsScrollable = activeLayout?.tagsScrollable ?: false
+        val effectiveQuickActionPosition = activeLayout?.quickActionPosition
+            ?.let { com.karakept.app.data.model.QuickActionPosition.valueOf(it) }
+            ?: com.karakept.app.data.model.QuickActionPosition.RIGHT
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
@@ -157,6 +180,13 @@ object MainScreen : Screen {
         }
         val isDesktop = remember { getPlatform().name.contains("Java") }
         val uriHandler = LocalUriHandler.current
+
+        // Three-column adaptive layout state
+        var selectedBookmarkId by remember { mutableStateOf<Long?>(null) }
+        var isDrawerVisible by rememberSaveable { mutableStateOf(true) }
+        var showHighlights by remember { mutableStateOf(false) }
+        var scrollToHighlightId by remember { mutableStateOf<String?>(null) }
+        var activeHighlightId by remember { mutableStateOf<String?>(null) }
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isSyncing,
@@ -422,66 +452,114 @@ object MainScreen : Screen {
             topTagsFormatted + missingActiveTags
         }
 
-        MainScreenDrawer(
-            drawerState = drawerState,
-            lists = lists,
-            listCounts = listCounts,
-            expandedLists = expandedLists,
-            currentFilter = currentFilter,
-            onFilterApply = { filter ->
-                screenModel.applyFilter(filter)
-                scope.launch { drawerState.close() }
-            },
-            onClearFilter = {
-                screenModel.clearFilter()
-                scope.launch { drawerState.close() }
-            },
-            onToggleListExpanded = { listId ->
-                screenModel.toggleListExpanded(listId)
-            },
-            onMarkAllAsRead = { listId ->
-                screenModel.markAllBookmarksInListAsRead(listId)
-                scope.launch { drawerState.close() }
-            },
-            onRenameList = { listId, listName ->
-                val targetList = lists.find { it.id == listId }
-                renameListTarget = Triple(listId, listName, targetList?.icon)
-                scope.launch { drawerState.close() }
-            },
-            onNavigateToListSettings = { listId, listName ->
-                navigator.push(PerListSettingsScreen(listId, listName))
-                scope.launch { drawerState.close() }
-            },
-            onSetAsDefault = { listId ->
-                screenModel.setDefaultList(listId)
-                scope.launch { drawerState.close() }
-            },
-            onSetAsDefaultType = { type ->
-                screenModel.setDefaultListType(type)
-                scope.launch { drawerState.close() }
-            },
-            onNavigateToSettings = {
-                navigator.push(SettingsScreen())
-                scope.launch { drawerState.close() }
-            },
-            onNavigateToHighlights = {
-                navigator.push(HighlightsScreen())
-                scope.launch { drawerState.close() }
-            }
-        ) {
-            // Rename list dialog
-            renameListTarget?.let { (listId, initialName, initialIcon) ->
-                RenameListDialog(
-                    initialName = initialName,
-                    initialIcon = initialIcon ?: "",
-                    onDismiss = { renameListTarget = null },
-                    onConfirm = { newName, newIcon ->
-                        screenModel.renameList(listId, newName, newIcon.ifBlank { null })
-                        renameListTarget = null
-                    }
-                )
-            }
+        // Drawer callbacks shared between compact and expanded modes
+        val drawerFilterApply: (FilterConfig) -> Unit = { filter ->
+            screenModel.applyFilter(filter)
+            scope.launch { drawerState.close() }
+        }
+        val drawerClearFilter: () -> Unit = {
+            screenModel.clearFilter()
+            scope.launch { drawerState.close() }
+        }
+        val drawerToggleListExpanded: (String) -> Unit = { listId ->
+            screenModel.toggleListExpanded(listId)
+        }
+        val drawerMarkAllAsRead: (String) -> Unit = { listId ->
+            screenModel.markAllBookmarksInListAsRead(listId)
+            scope.launch { drawerState.close() }
+        }
+        val drawerRenameList: (String, String) -> Unit = { listId, listName ->
+            val targetList = lists.find { it.id == listId }
+            renameListTarget = Triple(listId, listName, targetList?.icon)
+            scope.launch { drawerState.close() }
+        }
+        val drawerNavigateToListSettings: (String, String) -> Unit = { listId, listName ->
+            navigator.push(PerListSettingsScreen(listId, listName))
+            scope.launch { drawerState.close() }
+        }
+        val drawerSetAsDefault: (String) -> Unit = { listId ->
+            screenModel.setDefaultList(listId)
+            scope.launch { drawerState.close() }
+        }
+        val drawerSetAsDefaultType: (DefaultListType) -> Unit = { type ->
+            screenModel.setDefaultListType(type)
+            scope.launch { drawerState.close() }
+        }
+        val drawerNavigateToSettings: () -> Unit = {
+            navigator.push(SettingsScreen())
+            scope.launch { drawerState.close() }
+        }
+        val drawerNavigateToHighlights: () -> Unit = {
+            navigator.push(HighlightsScreen())
+            scope.launch { drawerState.close() }
+        }
 
+        // Swipe action handler shared between modes
+        val handleSwipeAction: (com.karakept.app.data.local.entity.BookmarkEntity, SwipeAction, com.karakept.app.data.model.CustomSwipeActionConfig?) -> Unit = { bookmark, action, config ->
+            when (action) {
+                SwipeAction.ARCHIVE -> screenModel.toggleBookmarkArchive(bookmark)
+                SwipeAction.MARK_READ -> screenModel.toggleBookmarkRead(bookmark)
+                SwipeAction.FAVOURITE -> screenModel.toggleBookmarkFavorite(bookmark)
+                SwipeAction.DELETE -> selectedBookmarkForActions = bookmark
+                SwipeAction.SHARE -> {
+                    com.karakept.app.utils.ShareUtils.shareText(bookmark.url, bookmark.title)
+                    scope.launch { snackbarManager.showSnackbar("Shared") }
+                }
+                SwipeAction.OPEN_IN_BROWSER -> {
+                    try {
+                        uriHandler.openUri(bookmark.url)
+                        scope.launch { snackbarManager.showSnackbar("Opening in browser") }
+                    } catch (e: Exception) {
+                        scope.launch { snackbarManager.showSnackbar("Could not open link") }
+                    }
+                }
+                SwipeAction.ADD_TAG -> {
+                    val tagName = config?.tagName
+                    if (tagName != null) {
+                        val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                        if (currentTags.contains(tagName)) {
+                            screenModel.removeBookmarkTag(bookmark, tagName)
+                            scope.launch { snackbarManager.showSnackbar("Removed tag '$tagName'") }
+                        } else {
+                            screenModel.addBookmarkTag(bookmark, tagName)
+                            scope.launch { snackbarManager.showSnackbar("Added tag '$tagName'") }
+                        }
+                    }
+                }
+                SwipeAction.ADD_TO_LIST -> {
+                    val listId = config?.listId
+                    val listName = config?.listName ?: "list"
+                    if (listId != null) {
+                        val bookmarkListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                        if (bookmarkListIds.contains(listId)) {
+                            screenModel.removeBookmarkFromList(bookmark, listId)
+                            scope.launch { snackbarManager.showSnackbar("Removed from '$listName'") }
+                        } else {
+                            screenModel.moveBookmarkToList(bookmark, listId)
+                            scope.launch { snackbarManager.showSnackbar("Added to '$listName'") }
+                        }
+                    }
+                }
+                SwipeAction.NONE -> {}
+            }
+        }
+
+        // Rename list dialog (shared between modes)
+        renameListTarget?.let { (listId, initialName, initialIcon) ->
+            RenameListDialog(
+                initialName = initialName,
+                initialIcon = initialIcon ?: "",
+                onDismiss = { renameListTarget = null },
+                onConfirm = { newName, newIcon ->
+                    screenModel.renameList(listId, newName, newIcon.ifBlank { null })
+                    renameListTarget = null
+                }
+            )
+        }
+
+        // Scaffold content shared between compact and expanded modes
+        @Composable
+        fun MainScaffoldContent(isExpandedLayout: Boolean) {
             Scaffold(
                 modifier = Modifier.fillMaxSize().onKeyEvent { keyEvent ->
                     if (keyEvent.type == KeyEventType.KeyDown && keyEvent.keyboardKey == Key.Escape && isSearchActive) {
@@ -501,7 +579,13 @@ object MainScreen : Screen {
                     MainScreenTopBar(
                         offlineMode = offlineMode,
                         isAutoOffline = isAutoOffline,
-                        onMenuClick = { scope.launch { drawerState.open() } },
+                        onMenuClick = {
+                            if (isExpandedLayout) {
+                                isDrawerVisible = !isDrawerVisible
+                            } else {
+                                scope.launch { drawerState.open() }
+                            }
+                        },
                         onFilterClick = { showFilterDialog = true },
                         onRefreshClick = { screenModel.syncBookmarks() },
                         onOfflineBadgeClick = {
@@ -509,6 +593,8 @@ object MainScreen : Screen {
                             navigator.push(com.karakept.app.ui.screens.settings.SyncDataSettingsScreen(highlightOfflineMode = true))
                         },
                         isDesktop = isDesktop,
+                        isExpandedLayout = isExpandedLayout,
+                        isDrawerVisible = isDrawerVisible,
                         hasActiveFilter = hasActiveFilter,
                         isSearchActive = isSearchActive,
                         searchQuery = searchQuery,
@@ -538,7 +624,7 @@ object MainScreen : Screen {
                     )
                 },
                 floatingActionButton = {
-                    if (!offlineMode && !isAutoOffline && !isSelectionMode) {
+                    if (!isDesktop && !offlineMode && !isAutoOffline && !isSelectionMode) {
                         FloatingActionButton(
                             onClick = { showAddBookmarkDialog = true }
                         ) {
@@ -589,10 +675,12 @@ object MainScreen : Screen {
                         thumbnailSize = effectiveThumbnailSize,
                         metadataPosition = effectiveMetadataPosition,
                         tagsScrollable = effectiveTagsScrollable,
+                        quickActionPosition = effectiveQuickActionPosition,
                         offlineMode = offlineMode || isAutoOffline,
                         pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                         isSelectionMode = isSelectionMode,
                         selectedBookmarkIds = selectedBookmarkIds,
+                        activeBookmarkId = if (isExpandedLayout) selectedBookmarkId else null,
                         onBookmarkSelectionToggle = { bookmark ->
                             screenModel.toggleBookmarkSelection(bookmark)
                         },
@@ -600,87 +688,307 @@ object MainScreen : Screen {
                         isDesktop = isDesktop,
                         pullRefreshState = pullRefreshState,
                         onBookmarkClick = { bookmark ->
-                            navigator.push(BookmarkViewerScreen(bookmark.localId))
+                            // Track last clicked index for Shift+Click range selection anchor
+                            val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
+                            if (idx >= 0) screenModel.trackLastClickedIndex(idx)
+                            if (isExpandedLayout) {
+                                selectedBookmarkId = bookmark.localId
+                                scrollToHighlightId = null
+                                activeHighlightId = null
+                            } else {
+                                navigator.push(BookmarkViewerScreen(bookmark.localId))
+                            }
                         },
                         onBookmarkLongClick = { bookmark ->
                             if (isSelectionMode) {
                                 screenModel.toggleBookmarkSelection(bookmark)
-                            } else {
+                            } else if (!isDesktop) {
+                                // On mobile, long-press shows bottom sheet
+                                // On desktop, right-click context menu is used instead
                                 selectedBookmarkForActions = bookmark
                             }
                         },
                         serverUrl = servers.firstOrNull()?.url,
-                        onSwipeAction = { bookmark, action, config ->
+                        onSwipeAction = handleSwipeAction,
+                        onRefresh = { if (!offlineMode) screenModel.syncBookmarks() },
+                        onLoadMore = { screenModel.loadNextPage() },
+                        onCtrlClick = if (isDesktop) { bookmark ->
+                            if (!isSelectionMode) {
+                                screenModel.enterSelectionMode(bookmark)
+                            } else {
+                                screenModel.toggleBookmarkSelection(bookmark)
+                            }
+                        } else null,
+                        onShiftClick = if (isDesktop) { index ->
+                            if (!isSelectionMode) {
+                                // Enter selection mode with range from the last clicked
+                                // bookmark (tracked outside selection mode) to this one
+                                screenModel.enterSelectionModeWithRange(index)
+                            } else {
+                                screenModel.selectRange(index)
+                            }
+                        } else null,
+                        onContextMenuAction = if (isDesktop) { bookmark, action ->
                             when (action) {
-                                SwipeAction.ARCHIVE -> {
-                                    screenModel.toggleBookmarkArchive(bookmark)
-                                }
-                                SwipeAction.MARK_READ -> {
-                                    screenModel.toggleBookmarkRead(bookmark)
-                                }
-                                SwipeAction.FAVOURITE -> {
-                                    screenModel.toggleBookmarkFavorite(bookmark)
-                                }
-                                SwipeAction.DELETE -> selectedBookmarkForActions = bookmark
-                                SwipeAction.SHARE -> {
+                                is BookmarkAction.ToggleArchive -> screenModel.toggleBookmarkArchive(bookmark)
+                                is BookmarkAction.ToggleFavorite -> screenModel.toggleBookmarkFavorite(bookmark)
+                                is BookmarkAction.ToggleRead -> screenModel.toggleBookmarkRead(bookmark)
+                                is BookmarkAction.Delete -> screenModel.deleteBookmark(bookmark)
+                                is BookmarkAction.Share -> {
                                     com.karakept.app.utils.ShareUtils.shareText(bookmark.url, bookmark.title)
-                                    scope.launch {
-                                        snackbarManager.showSnackbar("Shared")
-                                    }
                                 }
-                                SwipeAction.OPEN_IN_BROWSER -> {
+                                is BookmarkAction.OpenInBrowser -> {
                                     try {
                                         uriHandler.openUri(bookmark.url)
-                                        scope.launch {
-                                            snackbarManager.showSnackbar("Opening in browser")
-                                        }
+                                        scope.launch { snackbarManager.showSnackbar("Opening in browser") }
                                     } catch (e: Exception) {
-                                        scope.launch {
-                                            snackbarManager.showSnackbar("Could not open link")
-                                        }
+                                        scope.launch { snackbarManager.showSnackbar("Could not open link") }
                                     }
                                 }
-                                SwipeAction.ADD_TAG -> {
-                                    val tagName = config?.tagName
-                                    if (tagName != null) {
-                                        val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                                        if (currentTags.contains(tagName)) {
-                                            screenModel.removeBookmarkTag(bookmark, tagName)
-                                            scope.launch {
-                                                snackbarManager.showSnackbar("Removed tag '$tagName'")
-                                            }
-                                        } else {
-                                            screenModel.addBookmarkTag(bookmark, tagName)
-                                            scope.launch {
-                                                snackbarManager.showSnackbar("Added tag '$tagName'")
-                                            }
-                                        }
-                                    }
+                                is BookmarkAction.Select -> screenModel.enterSelectionMode(bookmark)
+                                // Move to List and Edit Tags need sub-dialogs — open the bottom sheet
+                                is BookmarkAction.MoveToList, is BookmarkAction.UpdateTags -> {
+                                    selectedBookmarkForActions = bookmark
                                 }
-                                SwipeAction.ADD_TO_LIST -> {
-                                    val listId = config?.listId
-                                    val listName = config?.listName ?: "list"
-                                    if (listId != null) {
-                                        val bookmarkListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                                        if (bookmarkListIds.contains(listId)) {
-                                            screenModel.removeBookmarkFromList(bookmark, listId)
-                                            scope.launch {
-                                                snackbarManager.showSnackbar("Removed from '$listName'")
-                                            }
-                                        } else {
-                                            screenModel.moveBookmarkToList(bookmark, listId)
-                                            scope.launch {
-                                                snackbarManager.showSnackbar("Added to '$listName'")
-                                            }
-                                        }
-                                    }
-                                }
-                                SwipeAction.NONE -> {}
                             }
-                        },
-                        onRefresh = { if (!offlineMode) screenModel.syncBookmarks() },
-                        onLoadMore = { screenModel.loadNextPage() }
+                        } else null
                     )
+                }
+            }
+        }
+
+        // Adaptive layout: choose between compact (modal drawer) and expanded (3-column) mode
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val isExpandedLayout = maxWidth >= 840.dp
+
+            if (isExpandedLayout) {
+                // Expanded: permanent drawer + bookmark list + reader pane
+                // Column width state — persisted via SettingsRepository
+                val layoutSettingsRepository = koinInject<SettingsRepository>()
+                var drawerWidthDp by remember { mutableFloatStateOf(280f) }
+                var listFraction by remember { mutableFloatStateOf(0.4f) }
+
+                // Load persisted column widths once
+                LaunchedEffect(Unit) {
+                    drawerWidthDp = layoutSettingsRepository.drawerWidthDp.first()
+                    listFraction = layoutSettingsRepository.listColumnFraction.first()
+                }
+
+                // Debounced persistence — write 500ms after drag stops
+                LaunchedEffect(Unit) {
+                    snapshotFlow { drawerWidthDp }
+                        .debounce(500)
+                        .collect { layoutSettingsRepository.setDrawerWidthDp(it) }
+                }
+                LaunchedEffect(Unit) {
+                    snapshotFlow { listFraction }
+                        .debounce(500)
+                        .collect { layoutSettingsRepository.setListColumnFraction(it) }
+                }
+
+                // Calculate column widths
+                val dividerWidth = 12.dp // DraggableDivider hit target width (1dp visible line)
+                val drawerWidth = drawerWidthDp.dp
+                val drawerTotalWidth = if (isDrawerVisible) drawerWidth else 0.dp
+                val remainingWidth = maxWidth - drawerTotalWidth - dividerWidth - dividerWidth
+                val minListWidth = 250.dp
+                val minReaderWidth = 300.dp
+                val maxListWidth = remainingWidth - minReaderWidth
+                val listWidth = (remainingWidth * listFraction).coerceIn(minListWidth, maxListWidth)
+                val readerWidth = remainingWidth - listWidth
+
+                Row(modifier = Modifier.fillMaxSize()) {
+                    // Drawer column (collapsible)
+                    AnimatedVisibility(
+                        visible = isDrawerVisible,
+                        enter = expandHorizontally(),
+                        exit = shrinkHorizontally()
+                    ) {
+                        Surface(
+                            modifier = Modifier.width(drawerWidth).fillMaxHeight(),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                        ) {
+                            DrawerContent(
+                                lists = lists,
+                                listCounts = listCounts,
+                                expandedLists = expandedLists,
+                                currentFilter = currentFilter,
+                                onFilterApply = { filter ->
+                                    screenModel.applyFilter(filter)
+                                    showHighlights = false
+                                    scrollToHighlightId = null
+                                    activeHighlightId = null
+                                },
+                                onClearFilter = {
+                                    screenModel.clearFilter()
+                                    showHighlights = false
+                                    scrollToHighlightId = null
+                                    activeHighlightId = null
+                                },
+                                onToggleListExpanded = drawerToggleListExpanded,
+                                onMarkAllAsRead = { listId -> screenModel.markAllBookmarksInListAsRead(listId) },
+                                onRenameList = { listId, listName ->
+                                    val targetList = lists.find { it.id == listId }
+                                    renameListTarget = Triple(listId, listName, targetList?.icon)
+                                },
+                                onNavigateToListSettings = { listId, listName ->
+                                    navigator.push(PerListSettingsScreen(listId, listName))
+                                },
+                                onSetAsDefault = { listId -> screenModel.setDefaultList(listId) },
+                                onSetAsDefaultType = { type -> screenModel.setDefaultListType(type) },
+                                onNavigateToSettings = { navigator.push(SettingsScreen()) },
+                                onNavigateToHighlights = {
+                                    showHighlights = true
+                                    selectedBookmarkId = null
+                                    scrollToHighlightId = null
+                                    activeHighlightId = null
+                                },
+                                isHighlightsSelected = showHighlights,
+                                onAddBookmark = if (isDesktop && !offlineMode && !isAutoOffline) {
+                                    { showAddBookmarkDialog = true }
+                                } else null
+                            )
+                        }
+                    }
+
+                    // Divider between drawer and list (draggable).
+                    // Line aligned to start so it sits flush against the drawer edge.
+                    if (isDrawerVisible) {
+                        DraggableDivider(
+                            lineAlignment = Alignment.CenterStart,
+                            onDrag = { delta ->
+                                drawerWidthDp = (drawerWidthDp + delta).coerceIn(200f, 400f)
+                            }
+                        )
+                    }
+
+                    // Middle column: bookmark list or highlights list
+                    Box(modifier = Modifier.width(listWidth).fillMaxHeight()) {
+                        if (showHighlights) {
+                            val highlightsScreenModel = koinInject<HighlightsScreenModel>()
+                            val highlightsList by highlightsScreenModel.highlights.collectAsState()
+                            val isHighlightsSyncing by highlightsScreenModel.isSyncing.collectAsState()
+
+                            LaunchedEffect(showHighlights) {
+                                if (showHighlights) highlightsScreenModel.syncHighlights()
+                            }
+
+                            HighlightsListContent(
+                                highlights = highlightsList,
+                                isSyncing = isHighlightsSyncing,
+                                activeHighlightId = activeHighlightId,
+                                onHighlightClick = { highlight ->
+                                    scope.launch {
+                                        val bookmarkLocalId = highlightsScreenModel.getBookmarkLocalIdForHighlight(highlight)
+                                        if (bookmarkLocalId != null) {
+                                            selectedBookmarkId = bookmarkLocalId
+                                            scrollToHighlightId = highlight.id
+                                            activeHighlightId = highlight.id
+                                        }
+                                    }
+                                },
+                                onDeleteHighlight = { highlightsScreenModel.deleteHighlight(it) },
+                                onBack = {
+                                    showHighlights = false
+                                    selectedBookmarkId = null
+                                    scrollToHighlightId = null
+                                    activeHighlightId = null
+                                }
+                            )
+                        } else {
+                            MainScaffoldContent(isExpandedLayout = true)
+                        }
+                    }
+
+                    // Divider between list and reader (draggable)
+                    DraggableDivider(
+                        onDrag = { delta ->
+                            // Compute fraction change directly from delta to avoid stale captures
+                            val remainingDp = remainingWidth.value
+                            if (remainingDp > 0f) {
+                                val minFraction = minListWidth.value / remainingDp
+                                val maxFraction = maxListWidth.value / remainingDp
+                                listFraction = (listFraction + delta / remainingDp).coerceIn(minFraction, maxFraction)
+                            }
+                        }
+                    )
+
+                    // Reader pane column
+                    Surface(
+                        modifier = Modifier.width(readerWidth).fillMaxHeight(),
+                        color = MaterialTheme.colorScheme.surface
+                    ) {
+                        val currentBookmarkId = selectedBookmarkId
+                        val currentScrollToHighlightId = scrollToHighlightId
+                        if (currentBookmarkId != null) {
+                            // Use key() to force fresh composition when bookmark or highlight changes
+                            androidx.compose.runtime.key(currentBookmarkId, currentScrollToHighlightId) {
+                                val viewerScreenModel = koinInject<BookmarkViewerScreenModel>()
+                                DisposableEffect(currentBookmarkId) {
+                                    onDispose { viewerScreenModel.onDispose() }
+                                }
+                                BookmarkViewerContent(
+                                    bookmarkId = currentBookmarkId,
+                                    scrollToHighlightId = currentScrollToHighlightId,
+                                    screenModel = viewerScreenModel,
+                                    onBack = {
+                                        selectedBookmarkId = null
+                                        scrollToHighlightId = null
+                                        activeHighlightId = null
+                                    },
+                                    onTagFilterApply = { tag ->
+                                        screenModel.applyTagFilter(tag, currentBookmarkId)
+                                        selectedBookmarkId = null
+                                        scrollToHighlightId = null
+                                        activeHighlightId = null
+                                        showHighlights = false
+                                    },
+                                    isEmbedded = true
+                                )
+                            }
+                        } else {
+                            // Placeholder
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.BookmarkBorder,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(bottom = 16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = "Select a bookmark to read",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Compact: modal drawer + full-screen navigation
+                MainScreenDrawer(
+                    drawerState = drawerState,
+                    lists = lists,
+                    listCounts = listCounts,
+                    expandedLists = expandedLists,
+                    currentFilter = currentFilter,
+                    onFilterApply = drawerFilterApply,
+                    onClearFilter = drawerClearFilter,
+                    onToggleListExpanded = drawerToggleListExpanded,
+                    onMarkAllAsRead = drawerMarkAllAsRead,
+                    onRenameList = drawerRenameList,
+                    onNavigateToListSettings = drawerNavigateToListSettings,
+                    onSetAsDefault = drawerSetAsDefault,
+                    onSetAsDefaultType = drawerSetAsDefaultType,
+                    onNavigateToSettings = drawerNavigateToSettings,
+                    onNavigateToHighlights = drawerNavigateToHighlights
+                ) {
+                    MainScaffoldContent(isExpandedLayout = false)
                 }
             }
         }
@@ -866,11 +1174,15 @@ object MainScreen : Screen {
 }
 
 @Composable
-fun rememberSnackbarHostState(manager: ActionSnackbarManager): androidx.compose.material3.SnackbarHostState {
+fun rememberSnackbarHostState(
+    manager: ActionSnackbarManager,
+    enabled: Boolean = true
+): androidx.compose.material3.SnackbarHostState {
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(enabled) {
+        if (!enabled) return@LaunchedEffect
         manager.snackbarEvents.collect { event ->
             when (event) {
                 is SnackbarEvent.Message -> {

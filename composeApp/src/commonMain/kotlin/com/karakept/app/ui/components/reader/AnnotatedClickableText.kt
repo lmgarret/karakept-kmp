@@ -91,9 +91,11 @@ fun AnnotatedClickableText(
         // on wrapped lines and includes non-highlighted whitespace.
         val startLine = layout.getLineForOffset(range.start)
         val endLine = layout.getLineForOffset(range.end - 1)
-        val padding = 4f
+        val padding = 2f
         val cornerRadius = 6f
 
+        // Build path in root coordinates so multiple text blocks
+        // (multi-paragraph highlights) can be merged into one path.
         val path = Path().apply {
             for (line in startLine..endLine) {
                 val lineStart = maxOf(range.start, layout.getLineStart(line))
@@ -103,10 +105,10 @@ fun AnnotatedClickableText(
                 val firstBox = layout.getBoundingBox(lineStart)
                 val lastBox = layout.getBoundingBox(lineEnd - 1)
                 val rect = Rect(
-                    left = minOf(firstBox.left, lastBox.left) - padding,
-                    top = firstBox.top - padding,
-                    right = maxOf(firstBox.right, lastBox.right) + padding,
-                    bottom = firstBox.bottom + padding
+                    left = minOf(firstBox.left, lastBox.left) - padding + rootOffset.x,
+                    top = firstBox.top - padding + rootOffset.y,
+                    right = maxOf(firstBox.right, lastBox.right) + padding + rootOffset.x,
+                    bottom = firstBox.bottom + padding + rootOffset.y
                 )
                 addRoundRect(
                     androidx.compose.ui.geometry.RoundRect(
@@ -120,14 +122,14 @@ fun AnnotatedClickableText(
         onHighlightPosition(
             range.item,
             HighlightPosition(
-                x = bounds.left + rootOffset.x,
-                y = bounds.top + rootOffset.y,
+                x = bounds.left,
+                y = bounds.top,
                 width = bounds.width,
                 height = bounds.height,
                 scrollX = 0f,
                 scrollY = 0f,
                 path = path,
-                rootOffset = rootOffset
+                rootOffset = androidx.compose.ui.geometry.Offset.Zero
             )
         )
     }

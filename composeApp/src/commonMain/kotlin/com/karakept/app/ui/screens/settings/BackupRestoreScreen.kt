@@ -62,12 +62,24 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 class BackupRestoreScreen : Screen {
-
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<BackupRestoreScreenModel>()
+        BackupRestoreContent(
+            screenModel = screenModel,
+            onBack = { navigator.pop() }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BackupRestoreContent(
+    screenModel: BackupRestoreScreenModel,
+    onBack: () -> Unit,
+    showBackButton: Boolean = true
+) {
 
         val state by screenModel.state.collectAsState()
         val autoExportInterval by screenModel.autoExportInterval.collectAsState()
@@ -181,8 +193,10 @@ class BackupRestoreScreen : Screen {
                 TopAppBar(
                     title = { Text("Backup & Restore") },
                     navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        if (showBackButton) {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
                         }
                     }
                 )
@@ -468,7 +482,6 @@ class BackupRestoreScreen : Screen {
             }
         }
     }
-}
 
 // ── Reusable PIN dialogs ──────────────────────────────────────────────────────
 

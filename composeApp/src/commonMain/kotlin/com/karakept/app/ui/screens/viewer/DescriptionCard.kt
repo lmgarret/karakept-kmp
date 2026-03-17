@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.ui.theme.rememberFontFamily
 
 @Composable
 internal fun DescriptionCard(
@@ -57,7 +58,7 @@ internal fun DescriptionCard(
                     )
                 ),
                 color = descriptionTextColor,
-                fontFamily = htmlFontFamily.composeFontFamily,
+                fontFamily = htmlFontFamily.rememberFontFamily(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)

@@ -50,197 +50,215 @@ import com.karakept.app.ui.screens.SettingsScreenModel
 import kotlinx.coroutines.delay
 
 class SyncDataSettingsScreen(val highlightOfflineMode: Boolean = false) : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
-        val offlineMode by screenModel.offlineMode.collectAsState()
-        val syncStrategy by screenModel.contentSyncStrategy.collectAsState()
-
-        val defaultCardColor = CardDefaults.cardColors().containerColor
-        var highlightAlpha by remember { mutableStateOf(0f) }
-        val animatedAlpha by androidx.compose.animation.core.animateFloatAsState(
-            targetValue = highlightAlpha,
-            animationSpec = tween(250, easing = LinearEasing),
-            label = "offline_blink"
+        SyncDataSettingsContent(
+            screenModel = screenModel,
+            highlightOfflineMode = highlightOfflineMode,
+            onBack = { navigator.pop() },
+            onNavigate = { navigator.push(it) }
         )
-        LaunchedEffect(Unit) {
-            if (highlightOfflineMode) {
-                repeat(2) {
-                    highlightAlpha = 1f
-                    delay(250)
-                    highlightAlpha = 0f
-                    delay(250)
-                }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SyncDataSettingsContent(
+    screenModel: SettingsScreenModel,
+    highlightOfflineMode: Boolean = false,
+    onBack: () -> Unit,
+    onNavigate: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    showBackButton: Boolean = true
+) {
+    val offlineMode by screenModel.offlineMode.collectAsState()
+    val syncStrategy by screenModel.contentSyncStrategy.collectAsState()
+
+    val defaultCardColor = CardDefaults.cardColors().containerColor
+    var highlightAlpha by remember { mutableStateOf(0f) }
+    val animatedAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = highlightAlpha,
+        animationSpec = tween(250, easing = LinearEasing),
+        label = "offline_blink"
+    )
+    LaunchedEffect(Unit) {
+        if (highlightOfflineMode) {
+            repeat(2) {
+                highlightAlpha = 1f
+                delay(250)
+                highlightAlpha = 0f
+                delay(250)
             }
         }
-        val highlightColor = MaterialTheme.colorScheme.primaryContainer
-        val cardColor = lerp(defaultCardColor, highlightColor, animatedAlpha)
+    }
+    val highlightColor = MaterialTheme.colorScheme.primaryContainer
+    val cardColor = lerp(defaultCardColor, highlightColor, animatedAlpha)
 
-        val strategies = SyncStrategy.values()
-            .filter { it != SyncStrategy.PER_LIST }
+    val strategies = SyncStrategy.values()
+        .filter { it != SyncStrategy.PER_LIST }
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Sync & Data") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Sync & Data") },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.Top
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Top
+        ) {
+            // Offline Mode Toggle
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = cardColor)
             ) {
-                // Offline Mode Toggle
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = cardColor)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudOff,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Offline Mode",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = if (offlineMode) "Sync disabled. Actions are queued locally." else "Auto-sync enabled (after actions and on startup)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = offlineMode,
-                            onCheckedChange = { screenModel.setOfflineMode(it) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Content Sync Mode
-                Text(
-                    text = "Content Sync Mode",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    strategies.forEach { strategy ->
-                        SyncStrategyOptionCard(
-                            strategy = strategy,
-                            isSelected = strategy == syncStrategy,
-                            onClick = { screenModel.setContentSyncStrategy(strategy) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "You can also toggle offline sync per list. Long-press any list in the sidebar and open its settings.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Server Connection link
-                Card(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { navigator.push(ServerSettingsScreen()) }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Dns,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                    Icon(
+                        imageVector = Icons.Default.CloudOff,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Offline Mode",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Server Connection",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Manage connected server and authentication",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Open"
+                        Text(
+                            text = if (offlineMode) "Sync disabled. Actions are queued locally." else "Auto-sync enabled (after actions and on startup)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Switch(
+                        checked = offlineMode,
+                        onCheckedChange = { screenModel.setOfflineMode(it) }
+                    )
                 }
+            }
 
-                Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-                // Backup & Restore link
-                Card(
+            // Content Sync Mode
+            Text(
+                text = "Content Sync Mode",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                strategies.forEach { strategy ->
+                    SyncStrategyOptionCard(
+                        strategy = strategy,
+                        isSelected = strategy == syncStrategy,
+                        onClick = { screenModel.setContentSyncStrategy(strategy) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "You can also toggle offline sync per list. Long-press any list in the sidebar and open its settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Server Connection link
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigate(ServerSettingsScreen()) }
+            ) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { navigator.push(BackupRestoreScreen()) }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SaveAlt,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                    Icon(
+                        imageVector = Icons.Default.Dns,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Server Connection",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Backup & Restore",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Export settings to JSON or restore from a backup",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Open"
+                        Text(
+                            text = "Manage connected server and authentication",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Open"
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Backup & Restore link
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigate(BackupRestoreScreen()) }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SaveAlt,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Backup & Restore",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Export settings to JSON or restore from a backup",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Open"
+                    )
                 }
             }
         }

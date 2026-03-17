@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.fleeksoft.ksoup.Ksoup
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.ui.theme.rememberFontFamily
 import com.karakept.app.ui.components.HighlightPosition
 
 /**
@@ -69,12 +70,14 @@ fun NativeHtmlRenderer(
 
     val resolvedBackgroundColor = backgroundColor ?: surfaceColor
 
-    val theme = remember(resolvedTextColor, resolvedBackgroundColor, fontSize, fontFamily, primaryColor) {
+    val resolvedFont = fontFamily.rememberFontFamily()
+
+    val theme = remember(resolvedTextColor, resolvedBackgroundColor, fontSize, resolvedFont, primaryColor) {
         ReaderThemeData(
             textColor = resolvedTextColor,
             backgroundColor = resolvedBackgroundColor,
             fontSize = fontSize.sp,
-            fontFamily = fontFamily.composeFontFamily,
+            fontFamily = resolvedFont,
             linkColor = primaryColor,
             codeBackgroundColor = if (resolvedBackgroundColor.luminance() > 0.5f) {
                 Color(0x1A7F7F7F) // rgba(127,127,127,0.1) on light
@@ -109,13 +112,16 @@ fun NativeHtmlRenderer(
         if (scrollToHighlightId != null) highlights.find { it.id == scrollToHighlightId } else null
     }
 
-    // Custom text toolbar with "Highlight" action
-    val highlightToolbar = rememberHighlightTextToolbar { selectedText ->
+    // Shared highlight action used by both TextToolbar and ContextMenuDataProvider
+    val highlightAction: (String) -> Unit = { selectedText ->
         val offsets = findTextOffsets(html, selectedText)
         if (offsets != null) {
             onCreateHighlight(offsets.matchedText, offsets.startOffset, offsets.endOffset, null, null)
         }
     }
+
+    // Custom text toolbar with "Highlight" action (for drag-selection on desktop, ActionMode on Android)
+    val highlightToolbar = rememberHighlightTextToolbar(onHighlightRequested = highlightAction)
 
     ReaderThemeProvider(theme = theme) {
         val textToolbar = highlightToolbar ?: LocalTextToolbar.current
@@ -139,6 +145,7 @@ fun NativeHtmlRenderer(
                     }
                 })
             ) {
+            HighlightContextMenuProvider(onHighlightRequested = highlightAction) {
             SelectionContainer {
                 Column(
                     modifier = modifier
@@ -192,7 +199,8 @@ fun NativeHtmlRenderer(
                 // Bottom spacing
                 Spacer(Modifier.height(16.dp))
             }
-            }
+            } // SelectionContainer
+            } // HighlightContextMenuProvider
             } // Box (bringIntoView blocker)
         }
     }

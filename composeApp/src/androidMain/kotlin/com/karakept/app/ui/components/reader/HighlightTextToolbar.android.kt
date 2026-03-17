@@ -256,3 +256,14 @@ actual fun rememberHighlightTextToolbar(
 
     return null
 }
+
+/**
+ * Android: no-op wrapper. Android uses ActionMode interception (above) instead.
+ */
+@Composable
+actual fun HighlightContextMenuProvider(
+    onHighlightRequested: (selectedText: String) -> Unit,
+    content: @Composable () -> Unit
+) {
+    content()
+}

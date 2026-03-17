@@ -47,6 +47,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
@@ -70,12 +72,41 @@ data class BookmarkViewerScreen(
     val bookmarkId: Long,
     val scrollToHighlightId: String? = null
 ) : Screen {
+    // Each bookmark needs its own Voyager key so that koinScreenModel returns a fresh
+    // ScreenModel per bookmark.  Without this, navigating from one viewer to another
+    // (without popping the first) reuses the stale ScreenModel, leaving the screen blank.
+    override val key = "BookmarkViewerScreen-$bookmarkId-${scrollToHighlightId.orEmpty()}"
+
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<BookmarkViewerScreenModel>()
         val mainScreenModel = koinInject<MainScreenModel>()
+
+        BookmarkViewerContent(
+            bookmarkId = bookmarkId,
+            scrollToHighlightId = scrollToHighlightId,
+            screenModel = screenModel,
+            onBack = { navigator.pop() },
+            onTagFilterApply = { tag ->
+                mainScreenModel.applyTagFilter(tag, bookmarkId)
+                navigator.pop()
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+@Composable
+fun BookmarkViewerContent(
+    bookmarkId: Long,
+    scrollToHighlightId: String? = null,
+    screenModel: BookmarkViewerScreenModel,
+    onBack: () -> Unit,
+    onTagFilterApply: (tag: String) -> Unit,
+    isEmbedded: Boolean = false
+) {
         val scope = rememberCoroutineScope()
         val serverRepository = koinInject<ServerRepository>()
         val uriHandler = LocalUriHandler.current
@@ -99,6 +130,7 @@ data class BookmarkViewerScreen(
         val linkOpenMode by screenModel.linkOpenMode.collectAsState()
         val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
         val serverProgressChecked by screenModel.serverProgressChecked.collectAsState()
+        val contentFetchAttempted by screenModel.contentFetchAttempted.collectAsState()
 
         val pullRefreshState = rememberPullRefreshState(
             refreshing = isRefreshing,
@@ -141,10 +173,22 @@ data class BookmarkViewerScreen(
             }
         }
 
-        val snackbarHostState = rememberSnackbarHostStateWithDelay(
-            snackbarManager = snackbarManager,
-            fabExpanded = fabExpanded
-        )
+        // Reset merged position when the selected highlight changes so
+        // multi-paragraph paths are freshly accumulated.
+        LaunchedEffect(selectedHighlightId) {
+            highlightPosition = null
+        }
+
+        // When embedded in the expanded layout, skip snackbar collection —
+        // the parent MainScreen's SnackbarHost handles it to avoid duplicates.
+        val snackbarHostState = if (isEmbedded) {
+            remember { SnackbarHostState() }
+        } else {
+            rememberSnackbarHostStateWithDelay(
+                snackbarManager = snackbarManager,
+                fabExpanded = fabExpanded
+            )
+        }
 
         LaunchedEffect(bookmarkId) {
             screenModel.loadBookmark(bookmarkId)
@@ -204,28 +248,33 @@ data class BookmarkViewerScreen(
         }
         // --------------------
 
-        // Scroll the LazyColumn to the highlight when navigating from the Highlights screen.
-        // highlightPositionReceived flips to true once the WebView responds with a position
-        // (via onHighlightPosition), which triggers the scroll LaunchedEffect below.
-        var highlightPositionReceived by remember { mutableStateOf(false) }
-        LaunchedEffect(highlightPositionReceived) {
-            if (!highlightPositionReceived) return@LaunchedEffect
+        // When a highlight is clicked (not from scroll-to-highlight navigation),
+        // scroll to center it in the visible area above the bottom panel.
+        LaunchedEffect(selectedHighlightId) {
+            val id = selectedHighlightId ?: return@LaunchedEffect
+            // Only adjust for user clicks, not scroll-to-highlight navigation
+            if (id == scrollToHighlightId) return@LaunchedEffect
+            // Wait for the position to be reported
+            kotlinx.coroutines.delay(100)
+            val position = highlightPosition ?: return@LaunchedEffect
             val state = loadingState as? BookmarkLoadingState.FullyLoaded ?: return@LaunchedEffect
             val contentBodyIndex = if (!state.bookmark.description.isNullOrBlank()) 2 else 1
-            val position = highlightPosition
-            if (position != null) {
-                // Convert CSS pixels (from getBoundingClientRect) to screen pixels for LazyList offset.
-                // Subtract 120dp so the highlight is not pinned flush to the top of the screen.
-                val highlightCssPx = position.y + position.scrollY
-                val offsetPx = with(density) {
-                    maxOf(0, highlightCssPx.dp.roundToPx() - 120.dp.roundToPx())
-                }
-                scrollState.animateScrollToItem(contentBodyIndex, offsetPx)
-            } else {
-                // Highlight position unavailable – scroll to content body at least
-                scrollState.animateScrollToItem(contentBodyIndex, 0)
-            }
+
+            val layoutInfo = scrollState.layoutInfo
+            val contentBodyItem = layoutInfo.visibleItemsInfo.find { it.index == contentBodyIndex }
+            val contentBodyTop = contentBodyItem?.offset ?: 0
+            val highlightOffsetInItem = (position.y - contentBodyTop).toInt()
+
+            // Account for the bottom panel height (~280dp) when centering
+            val panelHeightPx = with(density) { 280.dp.toPx() }.toInt()
+            val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+            val availableHeight = viewportHeight - panelHeightPx
+            val offsetPx = maxOf(0, highlightOffsetInItem - availableHeight / 2)
+            scrollState.animateScrollToItem(contentBodyIndex, offsetPx)
         }
+
+        var highlightPositionReceived by remember { mutableStateOf(false) }
+        var highlightScrollDone by remember { mutableStateOf(scrollToHighlightId == null) }
         val bannerHeight = 320.dp
         val toolbarHeight = 56.dp
 
@@ -249,7 +298,12 @@ data class BookmarkViewerScreen(
         // and raises a 0→N% transition, this effect re-runs and can do the restoration.
         var hasRestoredScroll by remember { mutableStateOf(false) }
         val isNativeRenderer = viewerMode == ViewerMode.READER
-        LaunchedEffect(loadingState, trackReadingProgress, contentRendered, serverProgressChecked) {
+        LaunchedEffect(loadingState, trackReadingProgress, contentRendered, serverProgressChecked, contentFetchAttempted) {
+            // When navigating to a specific highlight, skip reading position restoration
+            if (scrollToHighlightId != null) {
+                hasRestoredScroll = true
+                return@LaunchedEffect
+            }
             if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
                 val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
                 // Treat tiny progress values (< 2%) as "at the top" — the progress
@@ -312,9 +366,58 @@ data class BookmarkViewerScreen(
                     if (serverProgressChecked) {
                         hasRestoredScroll = true
                     }
+                } else if (hasMeaningfulProgress && bookmark.content.isNullOrBlank() && contentFetchAttempted) {
+                    // Content fetch completed but no content is available (network error,
+                    // server has no content, etc.) — give up waiting and show what we have.
+                    hasRestoredScroll = true
                 }
-                // If hasMeaningfulProgress but content is still blank, don't mark as
-                // restored — the LaunchedEffect will re-fire when content loads.
+                // If hasMeaningfulProgress and content is still loading (!contentFetchAttempted),
+                // keep waiting — the LaunchedEffect will re-fire when either changes.
+            }
+        }
+
+        // Scroll the LazyColumn to the highlight when navigating from the Highlights screen.
+        // highlightPositionReceived flips to true once the renderer responds with a position
+        // (via onHighlightPosition), which triggers this scroll effect.
+        // We also wait for contentRendered so the LazyColumn item has its full height.
+        // The LazyColumn is hidden (alpha 0) until highlightScrollDone is true, so the
+        // user never sees the content at the top before the scroll completes.
+        LaunchedEffect(highlightPositionReceived, contentRendered) {
+            if (!highlightPositionReceived) return@LaunchedEffect
+            if (!contentRendered) return@LaunchedEffect
+            val state = loadingState as? BookmarkLoadingState.FullyLoaded ?: return@LaunchedEffect
+            val contentBodyIndex = if (!state.bookmark.description.isNullOrBlank()) 2 else 1
+            // Wait for layout to settle (same pattern as reading position restoration)
+            if (isNativeRenderer) {
+                kotlinx.coroutines.yield()
+            } else {
+                delay(300)
+            }
+            val position = highlightPosition
+            if (position != null) {
+                // position.y is in screen pixels (from positionInRoot()).
+                // scrollToItem(contentBodyIndex, offset) needs the offset *within*
+                // the content body item, so subtract the item's own top edge.
+                val layoutInfo = scrollState.layoutInfo
+                val contentBodyItem = layoutInfo.visibleItemsInfo
+                    .find { it.index == contentBodyIndex }
+                val contentBodyTop = contentBodyItem?.offset ?: 0
+                val highlightOffsetInItem = (position.y - contentBodyTop).toInt()
+
+                // Center the highlight in the visible area above the bottom panel
+                val panelHeightPx = with(density) { 280.dp.toPx() }.toInt()
+                val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+                val availableHeight = viewportHeight - panelHeightPx
+                val offsetPx = maxOf(0, highlightOffsetInItem - availableHeight / 2)
+                safeScrollToItem(contentBodyIndex, offsetPx)
+            } else {
+                // Highlight position unavailable – scroll to content body at least
+                safeScrollToItem(contentBodyIndex, 0)
+            }
+            highlightScrollDone = true
+            // Open the highlight details panel now that we've scrolled to it
+            if (scrollToHighlightId != null) {
+                selectedHighlightId = scrollToHighlightId
             }
         }
 
@@ -394,7 +497,7 @@ data class BookmarkViewerScreen(
             },
             floatingActionButton = {
                 AnimatedVisibility(
-                    visible = fabVisible,
+                    visible = fabVisible && !getPlatform().isDesktop,
                     enter = slideInVertically(
                         initialOffsetY = { it },
                         animationSpec = tween(300)
@@ -425,7 +528,7 @@ data class BookmarkViewerScreen(
                             onShareClick = {
                                 ShareUtils.shareText(fullyLoadedState.bookmark.url, fullyLoadedState.bookmark.title)
                                 scope.launch {
-                                    snackbarManager.showSnackbar("Shared")
+                                    snackbarManager.showSnackbar(if (getPlatform().isDesktop) "Copied to clipboard" else "Shared")
                                 }
                                 fabExpanded = false
                             },
@@ -477,17 +580,29 @@ data class BookmarkViewerScreen(
                         // Content List
                         // Global dimming overlay when a highlight is selected
                         // Hide content until scroll position is restored to prevent a flash
-                        // where the top of the article shows before jumping to the saved position.
+                        // where the top of the article (hero banner) shows before jumping to
+                        // the saved reading position.
+                        // • Also hide while awaiting the server progress check: local DB may have
+                        //   0% progress while the server has meaningful progress.
+                        // • Also hide when content is still being fetched on-demand (null content):
+                        //   without this the hero would be briefly visible before content arrives
+                        //   and the scroll is applied.
+                        // Note: no content.isNullOrBlank() guard here — contentFetchAttempted
+                        // ensures we never stay hidden indefinitely if content is unavailable.
                         val needsScrollRestore = trackReadingProgress &&
                             !hasRestoredScroll &&
                             loadingState is BookmarkLoadingState.FullyLoaded &&
-                            (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f &&
-                            !(loadingState as BookmarkLoadingState.FullyLoaded).bookmark.content.isNullOrBlank()
+                            (
+                                (loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f ||
+                                !serverProgressChecked
+                            )
+                        // Also hide while waiting for the highlight scroll to complete
+                        val needsHighlightScroll = !highlightScrollDone
                         LazyColumn(
                             state = scrollState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(if (needsScrollRestore) Modifier.alpha(0f) else Modifier)
+                                .then(if (needsScrollRestore || needsHighlightScroll) Modifier.alpha(0f) else Modifier)
                         ) {
                             // Hero banner as first item so tag/URL clicks are not blocked by the list
                             item(key = "hero_banner") {
@@ -513,8 +628,7 @@ data class BookmarkViewerScreen(
                                         }
                                     } else null,
                                     onTagClick = { tag ->
-                                        mainScreenModel.applyTagFilter(tag, bookmarkId)
-                                        navigator.pop()
+                                        onTagFilterApply(tag)
                                     },
                                     onInfoClick = { showDetailsPanel = true },
                                     bannerImageUrl = bannerImageUrl,
@@ -573,23 +687,54 @@ data class BookmarkViewerScreen(
                                         selectedHighlightId = id
                                     },
                                     onHighlightPosition = { id, position ->
-                                        highlightPosition = position
+                                        val current = highlightPosition
+                                        if (current != null && current.path != null && position.path != null) {
+                                            // Merge paths from multiple text blocks (multi-paragraph highlights).
+                                            // Paths are already in root coordinates.
+                                            val mergedPath = androidx.compose.ui.graphics.Path().apply {
+                                                addPath(current.path!!)
+                                                addPath(position.path!!)
+                                            }
+                                            val mergedBounds = mergedPath.getBounds()
+                                            highlightPosition = com.karakept.app.ui.components.HighlightPosition(
+                                                x = mergedBounds.left,
+                                                y = mergedBounds.top,
+                                                width = mergedBounds.width,
+                                                height = mergedBounds.height,
+                                                scrollX = 0f,
+                                                scrollY = 0f,
+                                                path = mergedPath,
+                                                rootOffset = androidx.compose.ui.geometry.Offset.Zero
+                                            )
+                                        } else {
+                                            highlightPosition = position
+                                        }
                                         if (id == scrollToHighlightId && !highlightPositionReceived) {
                                             highlightPositionReceived = true
                                         }
                                     },
                                     onContentReady = { contentRendered = true },
                                     scrollToHighlightId = scrollToHighlightId,
-                                    selectedHighlightId = selectedHighlightId
+                                    // Use scrollToHighlightId as the effective selected ID for the
+                                    // renderer so it reports the highlight's position. The real
+                                    // selectedHighlightId stays null until the user taps a highlight.
+                                    selectedHighlightId = selectedHighlightId ?: scrollToHighlightId
                                 )
                             }
                         }
 
                         // Global Dimming Overlay
                         if (selectedHighlightId != null) {
+                            // Track the overlay's own position in root coordinates so we
+                            // can correctly translate the highlight path (which is also
+                            // reported in root coordinates) into the Canvas's local space.
+                            var overlayRootOffset by remember { mutableStateOf(Offset.Zero) }
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    .onGloballyPositioned { coords ->
+                                        overlayRootOffset = coords.positionInRoot()
+                                    }
                                     .pointerInput(Unit) {
                                         detectTapGestures { selectedHighlightId = null }
                                     }
@@ -604,9 +749,14 @@ data class BookmarkViewerScreen(
 
                                     val pos = highlightPosition
                                     if (pos != null && pos.path != null) {
-                                        // Punch through the dimming layer to reveal the highlight
+                                        // Punch through the dimming layer to reveal the highlight.
+                                        // Subtract the overlay's own root offset so root-space
+                                        // coordinates map correctly into the Canvas's local space.
                                         withTransform({
-                                            translate(pos.rootOffset.x, pos.rootOffset.y)
+                                            translate(
+                                                pos.rootOffset.x - overlayRootOffset.x,
+                                                pos.rootOffset.y - overlayRootOffset.y
+                                            )
                                         }) {
                                             drawPath(
                                                 path = pos.path!!,
@@ -627,13 +777,27 @@ data class BookmarkViewerScreen(
                             showMenu = showMenu,
                             toolbarHeight = toolbarHeight,
                             readingProgress = if (trackReadingProgress) readingProgress else 0f,
-                            onBackClick = { navigator.pop() },
+                            onBackClick = onBack,
                             onMenuToggle = { showMenu = it },
                             onAppearanceClick = { showAppearancePanel = true },
                             onViewerModeClick = { showModeDialog = true },
                             onMoveToListClick = { showListPicker = true },
                             onEditTagsClick = { showTagEditor = true },
-                            onDeleteClick = { showDeleteConfirmation = true }
+                            onDeleteClick = { showDeleteConfirmation = true },
+                            // Desktop: FAB actions are shown in the top bar
+                            isDesktop = getPlatform().isDesktop,
+                            bookmark = state.bookmark,
+                            onFavoriteClick = { screenModel.toggleBookmarkFavorite(state.bookmark) },
+                            onArchiveClick = { screenModel.toggleBookmarkArchive(state.bookmark) },
+                            onReadClick = { screenModel.toggleBookmarkRead(state.bookmark) },
+                            onShareClick = {
+                                ShareUtils.shareText(state.bookmark.url, state.bookmark.title)
+                                scope.launch { snackbarManager.showSnackbar(if (getPlatform().isDesktop) "Copied to clipboard" else "Shared") }
+                            },
+                            onOpenInBrowserClick = {
+                                uriHandler.openUri(state.bookmark.url)
+                                scope.launch { snackbarManager.showSnackbar("Opening in browser") }
+                            }
                         )
 
                         if (!getPlatform().isDesktop) {
@@ -708,7 +872,7 @@ data class BookmarkViewerScreen(
                 visible = true,
                 onConfirm = {
                     screenModel.deleteBookmark(fullyLoadedState.bookmark) {
-                        navigator.pop()
+                        onBack()
                     }
                     showDeleteConfirmation = false
                 },
@@ -776,7 +940,6 @@ data class BookmarkViewerScreen(
             bookmark = detailsBookmark,
             onDismiss = { showDetailsPanel = false }
         )
-    }
 }
 
 @Composable

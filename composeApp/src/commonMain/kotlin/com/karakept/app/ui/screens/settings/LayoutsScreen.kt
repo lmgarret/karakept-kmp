@@ -59,6 +59,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import getPlatform
+import org.koin.compose.koinInject
 
 class LayoutsScreenModel(
     private val settingsRepository: SettingsRepository
@@ -93,128 +95,165 @@ class LayoutsScreenModel(
 }
 
 class LayoutsScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<LayoutsScreenModel>()
-        val state by screenModel.state.collectAsState()
-        var pendingDeleteLayout by remember { mutableStateOf<BookmarkLayout?>(null) }
+        LayoutsContent(
+            onBack = { navigator.pop() },
+            onNavigate = { navigator.push(it) }
+        )
+    }
+}
 
-        if (pendingDeleteLayout != null) {
-            AlertDialog(
-                onDismissRequest = { pendingDeleteLayout = null },
-                title = { Text("Delete Layout") },
-                text = { Text("Delete \"${pendingDeleteLayout!!.name}\"? This cannot be undone.") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            screenModel.deleteLayout(pendingDeleteLayout!!.id)
-                            pendingDeleteLayout = null
-                        }
-                    ) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LayoutsContent(
+    onBack: () -> Unit,
+    onNavigate: (Screen) -> Unit,
+    showBackButton: Boolean = true
+) {
+    val screenModel = koinInject<LayoutsScreenModel>()
+    val state by screenModel.state.collectAsState()
+    var pendingDeleteLayout by remember { mutableStateOf<BookmarkLayout?>(null) }
+    // Desktop: show layout editor as dialog instead of navigating to a 4th screen
+    var editingLayoutId by remember { mutableStateOf<String?>(null) }
+    var showEditorDialog by remember { mutableStateOf(false) }
+    val isDesktop = getPlatform().isDesktop
+
+    if (showEditorDialog && isDesktop) {
+        LayoutEditorDialog(
+            layoutId = editingLayoutId,
+            onDismiss = { showEditorDialog = false }
+        )
+    }
+
+    if (pendingDeleteLayout != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteLayout = null },
+            title = { Text("Delete Layout") },
+            text = { Text("Delete \"${pendingDeleteLayout!!.name}\"? This cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        screenModel.deleteLayout(pendingDeleteLayout!!.id)
+                        pendingDeleteLayout = null
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = { pendingDeleteLayout = null }) { Text("Cancel") }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
-            )
-        }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteLayout = null }) { Text("Cancel") }
+            }
+        )
+    }
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Layouts") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Layouts") },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                )
-            },
-            floatingActionButton = {
-                FloatingActionButton(onClick = {
-                    navigator.push(LayoutEditorScreen(layoutId = null))
-                }) {
-                    Icon(Icons.Default.Add, contentDescription = "Create layout")
                 }
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = {
+                if (isDesktop) {
+                    editingLayoutId = null
+                    showEditorDialog = true
+                } else {
+                    onNavigate(LayoutEditorScreen(layoutId = null))
+                }
+            }) {
+                Icon(Icons.Default.Add, contentDescription = "Create layout")
             }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.Top
-            ) {
-                Text(
-                    text = "Choose a layout to use by default. You can also assign a layout per list.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Top
+        ) {
+            Text(
+                text = "Choose a layout to use by default. You can also assign a layout per list.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
 
-                // Default display settings (global fallback)
-                Card(
+            // Default display settings (global fallback)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigate(DefaultDisplaySettingsScreen()) }
+            ) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { navigator.push(DefaultDisplaySettingsScreen()) }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Default Display Settings",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Applied when no layout is active",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Edit"
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Default Display Settings",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Applied when no layout is active",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(modifier = Modifier.padding(bottom = 16.dp))
-
-                // "No layout (use global settings)" option
-                LayoutCard(
-                    layout = null,
-                    isDefault = state.defaultLayoutId == null,
-                    onSelect = { screenModel.setDefaultLayout(null) },
-                    onEdit = null,
-                    onDelete = null
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-                state.allLayouts.forEach { layout ->
-                    LayoutCard(
-                        layout = layout,
-                        isDefault = state.defaultLayoutId == layout.id,
-                        onSelect = { screenModel.setDefaultLayout(layout.id) },
-                        onEdit = if (!layout.isBuiltIn) {
-                            { navigator.push(LayoutEditorScreen(layoutId = layout.id)) }
-                        } else null,
-                        onDelete = if (!layout.isBuiltIn) {
-                            { pendingDeleteLayout = layout }
-                        } else null
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Edit"
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(modifier = Modifier.padding(bottom = 16.dp))
+
+            // "No layout (use global settings)" option
+            LayoutCard(
+                layout = null,
+                isDefault = state.defaultLayoutId == null,
+                onSelect = { screenModel.setDefaultLayout(null) },
+                onEdit = null,
+                onDelete = null
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            state.allLayouts.forEach { layout ->
+                LayoutCard(
+                    layout = layout,
+                    isDefault = state.defaultLayoutId == layout.id,
+                    onSelect = { screenModel.setDefaultLayout(layout.id) },
+                    onEdit = if (!layout.isBuiltIn) {
+                        {
+                            if (isDesktop) {
+                                editingLayoutId = layout.id
+                                showEditorDialog = true
+                            } else {
+                                onNavigate(LayoutEditorScreen(layoutId = layout.id))
+                            }
+                        }
+                    } else null,
+                    onDelete = if (!layout.isBuiltIn) {
+                        { pendingDeleteLayout = layout }
+                    } else null
+                )
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }

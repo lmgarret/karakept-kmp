@@ -11,10 +11,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface HighlightDao {
-    @Query("SELECT * FROM highlights WHERE serverId = :serverId")
+    @Query("SELECT * FROM highlights WHERE serverId = :serverId ORDER BY createdAt DESC")
     fun getHighlightsForServer(serverId: String): Flow<List<HighlightEntity>>
 
-    @Query("SELECT * FROM highlights WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId")
+    @Query("SELECT * FROM highlights WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId ORDER BY createdAt DESC")
     fun getHighlightsForBookmark(bookmarkRemoteId: String, serverId: String): Flow<List<HighlightEntity>>
 
     @Query("SELECT * FROM highlights WHERE remoteId = :remoteId")

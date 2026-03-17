@@ -189,12 +189,21 @@ compose.desktop {
     application {
         mainClass = "MainKt"
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
+        // SOFTWARE_FAST is only supported on Linux; on macOS use the default (Metal).
+        // The actual property is set conditionally in main.kt at runtime.
+        // jvmArgs += "-Dskiko.renderApi=SOFTWARE_FAST"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "com.karakept.app"
-            packageVersion = "1.0.0"
+            packageName = "Karakept"
+            packageVersion = (project.findProperty("versionName") as String?) ?: "1.0.0"
+            modules("jdk.unsupported")
             linux {
                 iconFile.set(project.file("src/commonMain/composeResources/drawable/icon.png"))
+            }
+            macOS {
+                iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
+                bundleID = "com.karakept.app"
+                appCategory = "public.app-category.productivity"
             }
         }
     }
@@ -212,5 +221,41 @@ tasks.withType<Test> {
         events("passed", "skipped", "failed")
         showStandardStreams = true
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+}
+
+// Post-process DMG to set volume icon (fixes OpenJDK icon in Finder title bar)
+if (org.gradle.internal.os.OperatingSystem.current().isMacOsX) {
+    val setDmgVolumeIcon = tasks.register("setDmgVolumeIcon") {
+        group = "compose desktop"
+        description = "Sets the volume icon on the packaged DMG"
+
+        doLast {
+            val dmgDir = layout.buildDirectory.dir("compose/binaries/main/dmg").get().asFile
+            val iconFile = project.file("src/desktopMain/resources/icon.icns")
+            val dmg = dmgDir.listFiles()?.firstOrNull { it.extension == "dmg" }
+                ?: error("No DMG found in $dmgDir")
+            val rwDmg = File(dmg.parentFile, "rw-${dmg.name}")
+            val mountPoint = "/Volumes/KarakeptVolumeIcon"
+
+            project.exec { commandLine("hdiutil", "convert", dmg.absolutePath, "-format", "UDRW", "-o", rwDmg.absolutePath) }
+            project.exec { commandLine("hdiutil", "attach", rwDmg.absolutePath, "-mountpoint", mountPoint, "-nobrowse") }
+            try {
+                iconFile.copyTo(File(mountPoint, ".VolumeIcon.icns"), overwrite = true)
+                project.exec { commandLine("SetFile", "-a", "C", mountPoint) }
+            } finally {
+                project.exec { commandLine("hdiutil", "detach", mountPoint) }
+            }
+            dmg.delete()
+            project.exec { commandLine("hdiutil", "convert", rwDmg.absolutePath, "-format", "UDZO", "-o", dmg.absolutePath) }
+            rwDmg.delete()
+            println("Volume icon set on ${dmg.name}")
+        }
+    }
+
+    afterEvaluate {
+        tasks.named("packageDmg") {
+            finalizedBy(setDmgVolumeIcon)
+        }
     }
 }
