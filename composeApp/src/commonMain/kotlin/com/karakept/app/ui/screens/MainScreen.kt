@@ -70,6 +70,7 @@ import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.AddBookmarkDialog
 import com.karakept.app.ui.components.DraggableDivider
 import com.karakept.app.ui.components.FilterBottomPanel
+import com.karakept.app.ui.components.FilterSidePanel
 import com.karakept.app.ui.components.BookmarkActionsMenu
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.ListPickerDialog
@@ -759,8 +760,10 @@ object MainScreen : Screen {
         }
 
         // Adaptive layout: choose between compact (modal drawer) and expanded (3-column) mode
+        // Hoisted so scrim/filter overlay can check it outside BoxWithConstraints
+        var isExpandedLayout by remember { mutableStateOf(false) }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val isExpandedLayout = maxWidth >= 840.dp
+            isExpandedLayout = maxWidth >= 840.dp
 
             if (isExpandedLayout) {
                 // Expanded: permanent drawer + bookmark list + reader pane
@@ -934,65 +937,81 @@ object MainScreen : Screen {
                         )
                     }
 
-                    // Reader pane column
+                    // Reader pane column — shows filter side panel when active on desktop
                     // Uses weight(1f) to fill remaining Row space, so it smoothly
                     // resizes as the drawer / list panes animate in or out.
                     Surface(
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                         color = MaterialTheme.colorScheme.surface
                     ) {
-                        val currentBookmarkId = selectedBookmarkId
-                        val currentScrollToHighlightId = scrollToHighlightId
-                        if (currentBookmarkId != null) {
-                            // Use key() to force fresh composition when bookmark or highlight changes
-                            androidx.compose.runtime.key(currentBookmarkId, currentScrollToHighlightId) {
-                                val viewerScreenModel = koinInject<BookmarkViewerScreenModel>()
-                                DisposableEffect(currentBookmarkId) {
-                                    onDispose { viewerScreenModel.onDispose() }
+                        if (showFilterDialog) {
+                            FilterSidePanel(
+                                currentFilter = currentFilter,
+                                availableTags = topTagsWithCounts,
+                                allTags = allAvailableTags,
+                                availableLists = lists,
+                                onDismiss = { showFilterDialog = false },
+                                onFilterChange = { filter ->
+                                    screenModel.applyFilter(filter)
+                                },
+                                onReset = {
+                                    screenModel.applyFilter(FilterConfig())
                                 }
-                                BookmarkViewerContent(
-                                    bookmarkId = currentBookmarkId,
-                                    scrollToHighlightId = currentScrollToHighlightId,
-                                    screenModel = viewerScreenModel,
-                                    onBack = {
-                                        if (isReaderFullscreen) {
-                                            isReaderFullscreen = false
-                                        } else {
+                            )
+                        } else {
+                            val currentBookmarkId = selectedBookmarkId
+                            val currentScrollToHighlightId = scrollToHighlightId
+                            if (currentBookmarkId != null) {
+                                // Use key() to force fresh composition when bookmark or highlight changes
+                                androidx.compose.runtime.key(currentBookmarkId, currentScrollToHighlightId) {
+                                    val viewerScreenModel = koinInject<BookmarkViewerScreenModel>()
+                                    DisposableEffect(currentBookmarkId) {
+                                        onDispose { viewerScreenModel.onDispose() }
+                                    }
+                                    BookmarkViewerContent(
+                                        bookmarkId = currentBookmarkId,
+                                        scrollToHighlightId = currentScrollToHighlightId,
+                                        screenModel = viewerScreenModel,
+                                        onBack = {
+                                            if (isReaderFullscreen) {
+                                                isReaderFullscreen = false
+                                            } else {
+                                                selectedBookmarkId = null
+                                                scrollToHighlightId = null
+                                                activeHighlightId = null
+                                            }
+                                        },
+                                        onTagFilterApply = { tag ->
+                                            screenModel.applyTagFilter(tag, currentBookmarkId)
                                             selectedBookmarkId = null
                                             scrollToHighlightId = null
                                             activeHighlightId = null
-                                        }
-                                    },
-                                    onTagFilterApply = { tag ->
-                                        screenModel.applyTagFilter(tag, currentBookmarkId)
-                                        selectedBookmarkId = null
-                                        scrollToHighlightId = null
-                                        activeHighlightId = null
-                                        showHighlights = false
-                                    },
-                                    isEmbedded = true,
-                                    isFullscreen = isReaderFullscreen,
-                                    onFullscreenToggle = { isReaderFullscreen = !isReaderFullscreen }
-                                )
-                            }
-                        } else {
-                            // Placeholder
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.BookmarkBorder,
-                                        contentDescription = null,
-                                        modifier = Modifier.padding(bottom = 16.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                            showHighlights = false
+                                        },
+                                        isEmbedded = true,
+                                        isFullscreen = isReaderFullscreen,
+                                        onFullscreenToggle = { isReaderFullscreen = !isReaderFullscreen }
                                     )
-                                    Text(
-                                        text = "Select a bookmark to read",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
+                                }
+                            } else {
+                                // Placeholder
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.BookmarkBorder,
+                                            contentDescription = null,
+                                            modifier = Modifier.padding(bottom = 16.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                        )
+                                        Text(
+                                            text = "Select a bookmark to read",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1055,44 +1074,46 @@ object MainScreen : Screen {
             }
         }
 
-        // Scrim for Filter Panel
-        // Scrim for Filter Panel
-        androidx.compose.animation.AnimatedVisibility(
-            visible = showFilterDialog,
-            enter = androidx.compose.animation.fadeIn(),
-            exit = androidx.compose.animation.fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f))
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        showFilterDialog = false
-                    }
-            )
-        }
-
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            FilterBottomPanel(
+        // Scrim + bottom panel for filter — only on compact (mobile) layout.
+        // On expanded (desktop) layout, the filter renders in the reader pane column instead.
+        if (!isExpandedLayout) {
+            androidx.compose.animation.AnimatedVisibility(
                 visible = showFilterDialog,
-                currentFilter = currentFilter,
-                availableTags = topTagsWithCounts,
-                allTags = allAvailableTags,
-                availableLists = lists,
-                onDismiss = { showFilterDialog = false },
-                onFilterChange = { filter ->
-                    screenModel.applyFilter(filter)
-                },
-                onReset = {
-                    screenModel.applyFilter(FilterConfig())
-                }
-            )
+                enter = androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f))
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            showFilterDialog = false
+                        }
+                )
+            }
+
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                FilterBottomPanel(
+                    visible = showFilterDialog,
+                    currentFilter = currentFilter,
+                    availableTags = topTagsWithCounts,
+                    allTags = allAvailableTags,
+                    availableLists = lists,
+                    onDismiss = { showFilterDialog = false },
+                    onFilterChange = { filter ->
+                        screenModel.applyFilter(filter)
+                    },
+                    onReset = {
+                        screenModel.applyFilter(FilterConfig())
+                    }
+                )
+            }
         }
 
         // Bookmark Actions Menu (ModalBottomSheet provides its own scrim)
