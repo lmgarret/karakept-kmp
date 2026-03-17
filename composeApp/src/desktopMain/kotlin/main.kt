@@ -65,6 +65,18 @@ fun main(args: Array<String> = emptyArray()) {
         System.setProperty("apple.awt.application.appearance", "system")
     }
 
+    // On Linux, default to the OpenGL backend explicitly so Skiko doesn't
+    // silently fall back to software rendering if GL context creation stumbles
+    // on the first attempt. OPENGL is already the Skiko default, but being
+    // explicit ensures env-var overrides (SKIKO_RENDER_API) still take effect
+    // while guarding against any future default change.
+    if (System.getProperty("os.name").lowercase().contains("linux") &&
+        System.getenv("SKIKO_RENDER_API") == null &&
+        System.getProperty("skiko.renderApi") == null
+    ) {
+        System.setProperty("skiko.renderApi", "OPENGL")
+    }
+
     // On Linux, tell AWT to use "Karakept" as the WM_CLASS so KDE/GNOME can
     // match the window to the .desktop file's StartupWMClass=Karakept entry.
     // Without this the JVM reports the main class name (e.g. "MainKt") and the

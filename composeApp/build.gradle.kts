@@ -193,6 +193,12 @@ compose.desktop {
     application {
         mainClass = "MainKt"
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
+        // ZGC reduces GC pause times to <1ms, eliminating the stutters/jank
+        // that G1GC (the default) causes in interactive Compose Desktop apps.
+        // -XX:+ZGenerational enables the generational mode added in JDK 21,
+        // which improves throughput without sacrificing low-latency guarantees.
+        jvmArgs += "-XX:+UseZGC"
+        jvmArgs += "-XX:+ZGenerational"
         // SOFTWARE_FAST is only supported on Linux; on macOS use the default (Metal).
         // The actual property is set conditionally in main.kt at runtime.
         // jvmArgs += "-Dskiko.renderApi=SOFTWARE_FAST"
