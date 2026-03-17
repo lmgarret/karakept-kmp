@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.v2.ScrollbarAdapter
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
@@ -21,7 +21,7 @@ actual fun HorizontallyScrollableContainer(
             content()
         }
         HorizontalScrollbar(
-            adapter = ScrollbarAdapter(scrollState),
+            adapter = rememberScrollbarAdapter(scrollState),
             modifier = Modifier.fillMaxWidth()
         )
     }
