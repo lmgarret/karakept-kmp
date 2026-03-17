@@ -65,6 +65,14 @@ fun main(args: Array<String> = emptyArray()) {
         System.setProperty("apple.awt.application.appearance", "system")
     }
 
+    // On Linux, tell AWT to use "Karakept" as the WM_CLASS so KDE/GNOME can
+    // match the window to the .desktop file's StartupWMClass=Karakept entry.
+    // Without this the JVM reports the main class name (e.g. "MainKt") and the
+    // desktop environment shows two taskbar entries on launch.
+    if (System.getProperty("os.name").lowercase().contains("linux")) {
+        System.setProperty("sun.awt.wmclass", "Karakept")
+    }
+
     // On Linux Wayland, use the native Wayland AWT toolkit (JDK 21+)
     // instead of X11/XWayland — eliminates black bars on resize and improves performance.
     // Falls back to X11 automatically if Wayland socket is not available.
