@@ -188,20 +188,22 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Install flatpak-builder
-        run: sudo apt-get install -y flatpak flatpak-builder
-
-      - name: Build Flatpak bundle
+      - name: Build distributable
         run: >
-          ./gradlew :composeApp:packageFlatpak
+          ./gradlew :composeApp:createDistributable
           -PversionName=${{ needs.resolve-version.outputs.name }}
-          -Pflatpak.disableSandbox=true
 
-      - name: Upload Flatpak artifact
-        uses: actions/upload-artifact@v4
+      - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: Karakept.flatpak
+          manifest-path: flatpak/com.karakept.app.yml
+          cache-key: gnome-46
+          upload-artifact: false
+
+      - uses: actions/upload-artifact@v4
         with:
           name: flatpak-release
-          path: composeApp/build/flatpak/Karakept.flatpak
+          path: Karakept.flatpak
 
   create-release:
     name: Create GitHub Release
@@ -212,13 +214,6 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-
-      - name: Download Flatpak artifact
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/download-artifact@v4
-        with:
-          name: flatpak-release
-          path: flatpak-release
 
       - name: Create versioned release
         if: github.event_name == 'workflow_dispatch'

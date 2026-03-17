@@ -11,8 +11,10 @@ sudo chown -R $(whoami) $ANDROID_HOME
 sudo chown -R $(whoami) $HOME/.android
 sudo chown -R $(whoami) $HOME/.gemini
 
-# Set up Flatpak for building and running the Linux desktop app
+# Set up Flatpak for building and running the Linux desktop app.
+# remote-add doesn't need dbus, but install does — use dbus-run-session.
+sudo service dbus start 2>/dev/null || true
 flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-flatpak install --user -y --noninteractive flathub org.gnome.Platform//46 org.gnome.Sdk//46
+dbus-run-session -- flatpak install --user -y --noninteractive flathub org.gnome.Platform//46 org.gnome.Sdk//46
 
 echo "Setup complete!"
