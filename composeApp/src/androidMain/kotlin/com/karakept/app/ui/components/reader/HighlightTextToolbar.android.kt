@@ -7,6 +7,8 @@ import android.util.Log
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
+import android.os.Handler
+import android.os.Looper
 import android.view.Window
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -134,9 +136,11 @@ private fun createHighlightCallback(
                 val result = original.onPrepareActionMode(mode, menu)
                 // Ghost ActionMode detection: Compose's SelectionContainer briefly
                 // triggers an ActionMode during deselection with only Select All
-                // (no Copy, because no text is selected). Finish it immediately.
+                // (no Copy, because no text is selected). Post finish() to avoid
+                // re-entrant crash, and clear the menu so nothing flashes.
                 if (menu.findItem(android.R.id.copy) == null) {
-                    mode.finish()
+                    menu.clear()
+                    Handler(Looper.getMainLooper()).post { mode.finish() }
                     return false
                 }
                 if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
@@ -171,7 +175,8 @@ private fun createHighlightCallback(
             override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
                 val result = original.onPrepareActionMode(mode, menu)
                 if (menu.findItem(android.R.id.copy) == null) {
-                    mode.finish()
+                    menu.clear()
+                    Handler(Looper.getMainLooper()).post { mode.finish() }
                     return false
                 }
                 if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
