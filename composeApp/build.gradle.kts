@@ -253,7 +253,9 @@ if (org.gradle.internal.os.OperatingSystem.current().isMacOsX) {
         }
     }
 
-    tasks.named("packageDmg") {
-        finalizedBy(setDmgVolumeIcon)
+    afterEvaluate {
+        tasks.named("packageDmg") {
+            finalizedBy(setDmgVolumeIcon)
+        }
     }
 }
