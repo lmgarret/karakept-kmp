@@ -163,7 +163,9 @@ jobs:
           DMG_FILE=$(find composeApp/build/compose/binaries/main/dmg -name "*.dmg" | head -1)
           VERSION="${{ needs.resolve-version.outputs.name }}"
           DEST="composeApp/build/compose/binaries/main/dmg/Karakept-${VERSION}.dmg"
-          cp "$DMG_FILE" "$DEST"
+          if [ "$DMG_FILE" != "$DEST" ]; then
+            mv "$DMG_FILE" "$DEST"
+          fi
           echo "path=$DEST" >> "$GITHUB_OUTPUT"
           SHA=$(shasum -a 256 "$DEST" | awk '{print $1}')
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
