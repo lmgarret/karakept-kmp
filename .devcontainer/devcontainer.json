@@ -12,7 +12,7 @@
             "installYarnUsingApt": "false"
         },
         "ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
-            "packages": "curl,nano,vim,ninja-build,python3,libgtk-3-dev,libwebkit2gtk-4.1-dev,xvfb,mesa-utils,libxcursor1,libxrandr2,libxi6,libxxf86vm1,fonts-noto-color-emoji,flatpak,flatpak-builder,dbus-x11"
+            "packages": "curl,nano,vim,ninja-build,python3,libgtk-3-dev,libwebkit2gtk-4.1-dev,xvfb,mesa-utils,libxcursor1,libxrandr2,libxi6,libxxf86vm1,fonts-noto-color-emoji,flatpak,flatpak-builder,dbus-x11,elfutils"
         }
     },
     "remoteEnv": {
