@@ -235,6 +235,44 @@ configurations.all {
     }
 }
 
+// Flatpak packaging — requires flatpak-builder and org.gnome.Platform//46 installed on the host.
+// Usage: ./gradlew packageFlatpak
+// Output: composeApp/build/flatpak/Karakept.flatpak
+run {
+    val flatpakDir = layout.buildDirectory.dir("flatpak")
+    val manifestFile = rootProject.file("flatpak/com.karakept.app.yml")
+
+    val flatpakBuild = tasks.register<Exec>("flatpakBuild") {
+        group = "compose desktop"
+        description = "Runs flatpak-builder to populate the local Flatpak repo (internal)"
+        dependsOn("createDistributable")
+        commandLine(
+            "flatpak-builder",
+            "--force-clean",
+            "--repo=${flatpakDir.get().dir("repo").asFile.absolutePath}",
+            flatpakDir.get().dir("build-dir").asFile.absolutePath,
+            manifestFile.absolutePath,
+        )
+    }
+
+    tasks.register<Exec>("packageFlatpak") {
+        group = "compose desktop"
+        description = "Creates a distributable Flatpak bundle (.flatpak) — requires flatpak-builder and org.gnome.Platform//46"
+        dependsOn(flatpakBuild)
+        val bundleFile = flatpakDir.get().file("Karakept.flatpak").asFile
+        commandLine(
+            "flatpak",
+            "build-bundle",
+            flatpakDir.get().dir("repo").asFile.absolutePath,
+            bundleFile.absolutePath,
+            "com.karakept.app",
+        )
+        doLast {
+            println("Flatpak bundle: ${bundleFile.absolutePath}")
+        }
+    }
+}
+
 tasks.withType<Test> {
     testLogging {
         events("passed", "skipped", "failed")

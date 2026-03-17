@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Karakept
+Comment=Bookmark manager
+Exec=Karakept
+Icon=com.karakept.app
+Terminal=false
+Type=Application
+Categories=Network;Utility;
+StartupWMClass=Karakept

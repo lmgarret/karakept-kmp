@@ -1,0 +1,32 @@
+app-id: com.karakept.app
+runtime: org.gnome.Platform
+runtime-version: '46'
+sdk: org.gnome.Sdk
+command: Karakept
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=home
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  - name: karakept
+    buildsystem: simple
+    build-commands:
+      - cp -r Karakept /app/karakept
+      - mkdir -p /app/bin
+      - ln -s /app/karakept/bin/Karakept /app/bin/Karakept
+      - install -Dm644 icon.png /app/share/icons/hicolor/512x512/apps/com.karakept.app.png
+      - install -Dm644 com.karakept.app.desktop /app/share/applications/com.karakept.app.desktop
+    sources:
+      - type: dir
+        path: ../composeApp/build/compose/binaries/main/app/Karakept
+        dest: Karakept
+      - type: file
+        path: ../composeApp/src/commonMain/composeResources/drawable/icon.png
+      - type: file
+        path: com.karakept.app.desktop
