@@ -693,6 +693,8 @@ object MainScreen : Screen {
                             if (idx >= 0) screenModel.trackLastClickedIndex(idx)
                             if (isExpandedLayout) {
                                 selectedBookmarkId = bookmark.localId
+                                scrollToHighlightId = null
+                                activeHighlightId = null
                             } else {
                                 navigator.push(BookmarkViewerScreen(bookmark.localId))
                             }
@@ -814,10 +816,14 @@ object MainScreen : Screen {
                                 onFilterApply = { filter ->
                                     screenModel.applyFilter(filter)
                                     showHighlights = false
+                                    scrollToHighlightId = null
+                                    activeHighlightId = null
                                 },
                                 onClearFilter = {
                                     screenModel.clearFilter()
                                     showHighlights = false
+                                    scrollToHighlightId = null
+                                    activeHighlightId = null
                                 },
                                 onToggleListExpanded = drawerToggleListExpanded,
                                 onMarkAllAsRead = { listId -> screenModel.markAllBookmarksInListAsRead(listId) },
