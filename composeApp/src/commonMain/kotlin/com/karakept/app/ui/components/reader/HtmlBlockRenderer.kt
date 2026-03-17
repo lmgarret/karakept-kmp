@@ -4,8 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -549,27 +547,31 @@ private fun RenderCodeBlock(
         }
     }
 
-    Box(
+    HorizontallyScrollableContainer(
         modifier = Modifier
             .padding(vertical = 8.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(4.dp))
-            .background(theme.codeBackgroundColor)
-            .horizontalScroll(rememberScrollState())
-            .padding(8.dp)
     ) {
-        AnnotatedClickableText(
-            text = text,
-            onLinkClick = onLinkClick,
-            onHighlightClick = onHighlightClick,
-            onHighlightPosition = onHighlightPosition,
-            color = theme.textColor,
-            fontSize = (theme.fontSize.value * 0.875f).sp,
-            fontFamily = FontFamily.Monospace,
-            lineHeight = (theme.fontSize.value * 0.875f * 1.4f).sp,
-            selectedHighlightId = selectedHighlightId,
-            highlights = highlights
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(4.dp))
+                .background(theme.codeBackgroundColor)
+                .padding(8.dp)
+        ) {
+            AnnotatedClickableText(
+                text = text,
+                onLinkClick = onLinkClick,
+                onHighlightClick = onHighlightClick,
+                onHighlightPosition = onHighlightPosition,
+                color = theme.textColor,
+                fontSize = (theme.fontSize.value * 0.875f).sp,
+                fontFamily = FontFamily.Monospace,
+                lineHeight = (theme.fontSize.value * 0.875f * 1.4f).sp,
+                selectedHighlightId = selectedHighlightId,
+                highlights = highlights
+            )
+        }
     }
 }
 
@@ -829,15 +831,16 @@ private fun RenderTable(
     val borderColor = theme.textColor.copy(alpha = 0.2f)
     val headerBgColor = theme.textColor.copy(alpha = 0.08f)
 
-    Box(
+    HorizontallyScrollableContainer(
         modifier = Modifier
             .padding(vertical = 8.dp)
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .border(0.5.dp, borderColor, RoundedCornerShape(4.dp))
-            .clip(RoundedCornerShape(4.dp))
     ) {
-        Column {
+        Column(
+            modifier = Modifier
+                .border(0.5.dp, borderColor, RoundedCornerShape(4.dp))
+                .clip(RoundedCornerShape(4.dp))
+        ) {
             allRows.forEachIndexed { rowIndex, row ->
                 val isHeader = isHeaderRow(row)
                 Row(
