@@ -243,24 +243,14 @@ run {
     val manifestFile = rootProject.file("flatpak/com.karakept.app.yml")
 
     // Resize the app icon to 512x512 (Flatpak rejects icons larger than 512x512).
-    val flatpakResizeIcon = tasks.register("flatpakResizeIcon") {
+    // Uses ImageMagick's `convert`, pre-installed on ubuntu-latest and in the devcontainer.
+    val flatpakResizeIcon = tasks.register<Exec>("flatpakResizeIcon") {
         val srcIcon = file("src/commonMain/composeResources/drawable/icon.png")
         val destIcon = flatpakDir.get().file("icon-512.png").asFile
         inputs.file(srcIcon)
         outputs.file(destIcon)
-        doLast {
-            destIcon.parentFile.mkdirs()
-            val src = javax.imageio.ImageIO.read(srcIcon)
-            val scaled = java.awt.image.BufferedImage(512, 512, java.awt.image.BufferedImage.TYPE_INT_ARGB)
-            val g = scaled.createGraphics()
-            g.setRenderingHint(
-                java.awt.RenderingHints.KEY_INTERPOLATION,
-                java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC,
-            )
-            g.drawImage(src, 0, 0, 512, 512, null)
-            g.dispose()
-            javax.imageio.ImageIO.write(scaled, "PNG", destIcon)
-        }
+        doFirst { destIcon.parentFile.mkdirs() }
+        commandLine("convert", srcIcon.absolutePath, "-resize", "512x512", destIcon.absolutePath)
     }
 
     val flatpakBuild = tasks.register<Exec>("flatpakBuild") {
