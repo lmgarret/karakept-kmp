@@ -197,7 +197,7 @@ jobs:
         with:
           bundle: Karakept.flatpak
           manifest-path: flatpak/com.karakept.app.yml
-          cache-key: gnome-46
+          cache-key: gnome-48
           upload-artifact: false
 
       - uses: actions/upload-artifact@v4

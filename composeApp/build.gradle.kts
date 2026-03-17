@@ -235,7 +235,7 @@ configurations.all {
     }
 }
 
-// Flatpak packaging — requires flatpak-builder and org.gnome.Platform//46 installed on the host.
+// Flatpak packaging — requires flatpak-builder and org.gnome.Platform//48 installed on the host.
 // Usage: ./gradlew packageFlatpak
 // Output: composeApp/build/flatpak/Karakept.flatpak
 run {
@@ -272,7 +272,7 @@ run {
 
     tasks.register<Exec>("packageFlatpak") {
         group = "compose desktop"
-        description = "Creates a distributable Flatpak bundle (.flatpak) — requires flatpak-builder and org.gnome.Platform//46"
+        description = "Creates a distributable Flatpak bundle (.flatpak) — requires flatpak-builder and org.gnome.Platform//48"
         dependsOn(flatpakBuild)
         val bundleFile = flatpakDir.get().file("Karakept.flatpak").asFile
         commandLine(

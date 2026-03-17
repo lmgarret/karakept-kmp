@@ -65,15 +65,6 @@ fun main(args: Array<String> = emptyArray()) {
         System.setProperty("apple.awt.application.appearance", "system")
     }
 
-    // Use software rendering on Linux so the Skia surface always resizes correctly
-    // when running via X11 forwarding from a devcontainer / containerized env.
-    // GPU-backed backends (GL/Vulkan) can silently fail to resize over X11,
-    // leaving content stuck at the initial size with black bars.
-    // SOFTWARE_FAST is not supported on macOS, so only set it on Linux.
-    if (System.getProperty("os.name").lowercase().contains("linux")) {
-        System.setProperty("skiko.renderApi", "SOFTWARE_FAST")
-    }
-
     // On Linux Wayland, use the native Wayland AWT toolkit (JDK 21+)
     // instead of X11/XWayland — eliminates black bars on resize and improves performance.
     // Falls back to X11 automatically if Wayland socket is not available.
