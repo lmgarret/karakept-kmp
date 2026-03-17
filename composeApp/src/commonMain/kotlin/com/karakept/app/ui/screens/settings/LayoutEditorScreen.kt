@@ -67,11 +67,13 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkCompactListLayout
 import com.karakept.app.ui.components.BookmarkListLayout
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class LayoutEditorScreenModel(
     private val settingsRepository: SettingsRepository
@@ -112,7 +114,11 @@ class LayoutEditorScreenModel(
 
     fun save() {
         screenModelScope.launch {
-            settingsRepository.saveLayout(_layout.value)
+            // Use NonCancellable so the DataStore write survives scope cancellation
+            // when Voyager disposes the ScreenModel immediately after navigator.pop().
+            withContext(NonCancellable) {
+                settingsRepository.saveLayout(_layout.value)
+            }
         }
     }
 
