@@ -242,10 +242,31 @@ run {
     val flatpakDir = layout.buildDirectory.dir("flatpak")
     val manifestFile = rootProject.file("flatpak/com.karakept.app.yml")
 
+    // Resize the app icon to 512x512 (Flatpak rejects icons larger than 512x512).
+    val flatpakResizeIcon = tasks.register("flatpakResizeIcon") {
+        val srcIcon = file("src/commonMain/composeResources/drawable/icon.png")
+        val destIcon = flatpakDir.get().file("icon-512.png").asFile
+        inputs.file(srcIcon)
+        outputs.file(destIcon)
+        doLast {
+            destIcon.parentFile.mkdirs()
+            val src = javax.imageio.ImageIO.read(srcIcon)
+            val scaled = java.awt.image.BufferedImage(512, 512, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+            val g = scaled.createGraphics()
+            g.setRenderingHint(
+                java.awt.RenderingHints.KEY_INTERPOLATION,
+                java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC,
+            )
+            g.drawImage(src, 0, 0, 512, 512, null)
+            g.dispose()
+            javax.imageio.ImageIO.write(scaled, "PNG", destIcon)
+        }
+    }
+
     val flatpakBuild = tasks.register<Exec>("flatpakBuild") {
         group = "compose desktop"
         description = "Runs flatpak-builder to populate the local Flatpak repo (internal)"
-        dependsOn("createDistributable")
+        dependsOn("createDistributable", flatpakResizeIcon)
         // Pass -Pflatpak.disableSandbox=true when building in CI environments that
         // don't support user namespaces (e.g. GitHub Actions).
         val disableSandbox = project.findProperty("flatpak.disableSandbox")?.toString()?.toBoolean() ?: false

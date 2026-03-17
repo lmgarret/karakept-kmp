@@ -27,6 +27,7 @@ modules:
         path: ../composeApp/build/compose/binaries/main/app/Karakept
         dest: Karakept
       - type: file
-        path: ../composeApp/src/commonMain/composeResources/drawable/icon.png
+        path: ../composeApp/build/flatpak/icon-512.png
+        dest-filename: icon.png
       - type: file
         path: com.karakept.app.desktop
