@@ -157,17 +157,12 @@ jobs:
           ./gradlew :composeApp:packageDmg
           -PversionName=${{ needs.resolve-version.outputs.name }}
 
-      - name: Rename DMG with version
+      - name: Resolve DMG path
         id: dmg
         run: |
           DMG_FILE=$(find composeApp/build/compose/binaries/main/dmg -name "*.dmg" | head -1)
-          VERSION="${{ needs.resolve-version.outputs.name }}"
-          DEST="composeApp/build/compose/binaries/main/dmg/Karakept-${VERSION}.dmg"
-          if [ "$DMG_FILE" != "$DEST" ]; then
-            mv "$DMG_FILE" "$DEST"
-          fi
-          echo "path=$DEST" >> "$GITHUB_OUTPUT"
-          SHA=$(shasum -a 256 "$DEST" | awk '{print $1}')
+          echo "path=$DMG_FILE" >> "$GITHUB_OUTPUT"
+          SHA=$(shasum -a 256 "$DMG_FILE" | awk '{print $1}')
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
 
       - name: Upload DMG artifact
