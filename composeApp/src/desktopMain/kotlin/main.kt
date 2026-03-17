@@ -59,10 +59,23 @@ fun main() {
         }
     }
 
-    // Load icon before entering composition (non-composable)
-    val iconImage = Thread.currentThread().contextClassLoader
-        .getResourceAsStream("composeResources/karakept.composeapp.generated.resources/drawable/icon.png")
+    // Set macOS dock icon before AWT initializes to prevent OpenJDK icon flash
+    val iconBytes = Thread.currentThread().contextClassLoader
+        .getResourceAsStream("macos-icon.png")
         ?.readBytes()
+    if (iconBytes != null) {
+        try {
+            val awtImage = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(iconBytes))
+            if (awtImage != null && java.awt.Taskbar.isTaskbarSupported()) {
+                java.awt.Taskbar.getTaskbar().iconImage = awtImage
+            }
+        } catch (_: UnsupportedOperationException) {
+            // Taskbar icon not supported on this platform
+        }
+    }
+
+    // Load icon before entering composition (non-composable)
+    val iconImage = iconBytes
         ?.let { Image.makeFromEncoded(it).toComposeImageBitmap() }
 
     startKoin {
