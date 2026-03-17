@@ -824,7 +824,6 @@ fun BookmarkViewerContent(
                             )
                         }
                     }
-                    } // end inner fullscreen-constrained Box
                     } // end outer centering Box
                 }
                 is BookmarkLoadingState.Error -> {
