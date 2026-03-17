@@ -200,7 +200,7 @@ compose.desktop {
                 iconFile.set(project.file("src/commonMain/composeResources/drawable/icon.png"))
             }
             macOS {
-                iconFile.set(project.file("src/commonMain/composeResources/drawable/icon.png"))
+                iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
                 bundleID = "com.karakept.app"
                 appCategory = "public.app-category.productivity"
             }
