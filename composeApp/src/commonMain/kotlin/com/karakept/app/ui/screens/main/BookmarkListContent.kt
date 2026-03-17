@@ -33,13 +33,6 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.input.pointer.PointerButton
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.isCtrlPressed
-import androidx.compose.ui.input.pointer.isMetaPressed
-import androidx.compose.ui.input.pointer.isShiftPressed
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
@@ -60,13 +53,14 @@ import com.karakept.app.ui.components.BookmarkPlaceholderItem
 import com.karakept.app.ui.components.QuickActionBookmarkItem
 import com.karakept.app.ui.components.SwipeableBookmarkItem
 import com.karakept.app.ui.components.getEffectiveColor
+import com.karakept.app.ui.utils.onDesktopModifiedClick
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
 import com.karakept.app.utils.FileUtils
 import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.utils.AssetUrlUtils
 import com.karakept.app.utils.fileExists
 
-@OptIn(ExperimentalMaterialApi::class, ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
 @Composable
 internal fun BookmarkListContent(
     bookmarks: List<BookmarkEntity>,
@@ -283,38 +277,12 @@ internal fun BookmarkListContent(
                         .then(
                             // Desktop: intercept Ctrl+Click and Shift+Click for multi-selection
                             if (isDesktop && (onCtrlClick != null || onShiftClick != null)) {
-                                Modifier.pointerInput(bookmark.remoteId, itemIndex) {
-                                    awaitPointerEventScope {
-                                        while (true) {
-                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                            if (event.type == PointerEventType.Press &&
-                                                event.button == PointerButton.Primary
-                                            ) {
-                                                val modifiers = event.keyboardModifiers
-                                                val handled = when {
-                                                    modifiers.isShiftPressed && onShiftClick != null -> {
-                                                        onShiftClick.invoke(itemIndex)
-                                                        true
-                                                    }
-                                                    (modifiers.isCtrlPressed || modifiers.isMetaPressed) && onCtrlClick != null -> {
-                                                        onCtrlClick.invoke(bookmark)
-                                                        true
-                                                    }
-                                                    else -> false
-                                                }
-                                                if (handled) {
-                                                    // Consume all changes to prevent combinedClickable from firing
-                                                    event.changes.forEach { it.consume() }
-                                                    // Also consume the release event
-                                                    do {
-                                                        val releaseEvent = awaitPointerEvent(PointerEventPass.Initial)
-                                                        releaseEvent.changes.forEach { it.consume() }
-                                                    } while (releaseEvent.type != PointerEventType.Release)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                Modifier.onDesktopModifiedClick(
+                                    key1 = bookmark.remoteId,
+                                    key2 = itemIndex,
+                                    onCtrlClick = onCtrlClick?.let { { it.invoke(bookmark) } },
+                                    onShiftClick = onShiftClick?.let { { it.invoke(itemIndex) } }
+                                )
                             } else Modifier
                         )
                         .then(
