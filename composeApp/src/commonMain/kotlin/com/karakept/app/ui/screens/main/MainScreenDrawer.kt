@@ -130,6 +130,14 @@ internal fun DrawerContent(
                 onSetAsHome = { onSetAsDefaultType(DefaultListType.ARCHIVED) }
             )
 
+            BuiltinDrawerItem(
+                label = "Highlights",
+                icon = { Icon(Icons.Default.Create, contentDescription = null) },
+                selected = isHighlightsSelected,
+                onClick = onNavigateToHighlights,
+                onSetAsHome = null
+            )
+
             // Lists Section (Hierarchical)
             if (lists.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
@@ -168,18 +176,6 @@ internal fun DrawerContent(
             }
 
             Spacer(Modifier.height(16.dp))
-            NavigationDrawerItem(
-                label = { Text("Highlights") },
-                selected = isHighlightsSelected,
-                icon = { Icon(Icons.Default.Create, contentDescription = null) },
-                colors = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary
-                ),
-                onClick = onNavigateToHighlights
-            )
-            Spacer(Modifier.height(16.dp))
         }
 
         NavigationDrawerItem(
@@ -191,7 +187,8 @@ internal fun DrawerContent(
                 selectedIconColor = MaterialTheme.colorScheme.primary,
                 selectedTextColor = MaterialTheme.colorScheme.primary
             ),
-            onClick = onNavigateToSettings
+            onClick = onNavigateToSettings,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
         )
     }
 }
@@ -249,7 +246,7 @@ private fun BuiltinDrawerItem(
     icon: @Composable () -> Unit,
     selected: Boolean,
     onClick: () -> Unit,
-    onSetAsHome: () -> Unit
+    onSetAsHome: (() -> Unit)? = null
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
@@ -266,15 +263,22 @@ private fun BuiltinDrawerItem(
                 .padding(horizontal = 12.dp, vertical = 2.dp)
                 .clip(RoundedCornerShape(50))
                 .background(if (selected) selectedContainerColor else Color.Transparent)
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = { showMenu = true }
+                .then(
+                    if (onSetAsHome != null) {
+                        Modifier
+                            .combinedClickable(
+                                onClick = onClick,
+                                onLongClick = { showMenu = true }
+                            )
+                            .onSecondaryClickWithPosition { position ->
+                                menuOffset = with(density) { DpOffset(position.x.toDp(), position.y.toDp()) }
+                                showMenu = true
+                            }
+                    } else {
+                        Modifier.combinedClickable(onClick = onClick)
+                    }
                 )
-                .onSecondaryClickWithPosition { position ->
-                    menuOffset = with(density) { DpOffset(position.x.toDp(), position.y.toDp()) }
-                    showMenu = true
-                }
-                .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -290,20 +294,22 @@ private fun BuiltinDrawerItem(
                 color = if (selected) selectedTextColor else normalTextColor
             )
         }
-        DropdownMenu(
-            expanded = showMenu,
-            onDismissRequest = { showMenu = false },
-            offset = menuOffset,
-            shape = MaterialTheme.shapes.extraSmall
-        ) {
-            DropdownMenuItem(
-                text = { Text("Set as home") },
-                leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
-                onClick = {
-                    showMenu = false
-                    onSetAsHome()
-                }
-            )
+        if (onSetAsHome != null) {
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+                offset = menuOffset,
+                shape = MaterialTheme.shapes.extraSmall
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Set as home") },
+                    leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                    onClick = {
+                        showMenu = false
+                        onSetAsHome()
+                    }
+                )
+            }
         }
     }
 }
