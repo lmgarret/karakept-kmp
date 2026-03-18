@@ -1,4 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.awt.RenderingHints
+import java.awt.geom.RoundRectangle2D
+import java.awt.image.BufferedImage as AwtBufferedImage
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -263,12 +266,12 @@ run {
             // adaptive icons, so the baked-in rounding aligns with the desktop shell.
             val arcSize = (size * 0.32).toInt() // arcWidth/arcHeight for RoundRectangle2D
             val src = javax.imageio.ImageIO.read(srcIcon)
-            val out = java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+            val out = AwtBufferedImage(size, size, AwtBufferedImage.TYPE_INT_ARGB)
             val g2 = out.createGraphics()
-            g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
-            g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
-            g2.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY)
-            g2.clip = java.awt.geom.RoundRectangle2D.Float(0f, 0f, size.toFloat(), size.toFloat(), arcSize.toFloat(), arcSize.toFloat())
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+            g2.setClip(RoundRectangle2D.Float(0f, 0f, size.toFloat(), size.toFloat(), arcSize.toFloat(), arcSize.toFloat()))
             g2.drawImage(src, 0, 0, size, size, null)
             g2.dispose()
             javax.imageio.ImageIO.write(out, "PNG", destIcon)
