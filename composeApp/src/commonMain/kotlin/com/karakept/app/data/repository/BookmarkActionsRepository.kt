@@ -160,7 +160,7 @@ class BookmarkActionsRepository(
             withContext(Dispatchers.IO) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
-                    bookmarkDao.insertBookmark(it.copy(isRead = true))
+                    bookmarkDao.insertBookmark(it.copy(isRead = true, readingProgress = 1f))
                     queueReadingProgressUpdate(bookmarkRemoteId, serverId, progressPercent = 100)
                 }
                 _bookmarkChangedEvents.emit(bookmarkRemoteId)
@@ -450,9 +450,13 @@ class BookmarkActionsRepository(
         withContext(Dispatchers.IO) {
             bookmarks.forEach { bookmark ->
                 val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
-                current?.let { bookmarkDao.insertBookmark(it.copy(isRead = true)) }
+                current?.let {
+                    bookmarkDao.insertBookmark(it.copy(isRead = true, readingProgress = 1f))
+                    queueReadingProgressUpdate(bookmark.remoteId, bookmark.serverId, progressPercent = 100)
+                }
                 _bookmarkChangedEvents.emit(bookmark.remoteId)
             }
+            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
         }
     }
 
