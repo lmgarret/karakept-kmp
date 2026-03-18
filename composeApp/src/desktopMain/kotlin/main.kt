@@ -88,14 +88,15 @@ fun main(args: Array<String> = emptyArray()) {
     // On Linux Wayland, use the native Wayland AWT toolkit (JDK 21+)
     // instead of X11/XWayland — eliminates black bars on resize and improves performance.
     // Falls back to X11 automatically if Wayland socket is not available.
-    if (System.getenv("WAYLAND_DISPLAY") != null || java.io.File("/tmp/wayland-0").exists()) {
-        try {
-            Class.forName("sun.awt.wl.WLToolkit")
-            System.setProperty("awt.toolkit.name", "WLToolkit")
-        } catch (_: ClassNotFoundException) {
-            // JDK < 24: WLToolkit not available, fall back to X11
-        }
-    }
+    // NOTE: disabled — WLToolkit causes "layout state is not idle before measure starts"
+    // errors on JBR 21 when --socket=wayland is granted. The app runs correctly via
+    // XWayland without it.
+    // if (System.getenv("WAYLAND_DISPLAY") != null || java.io.File("/tmp/wayland-0").exists()) {
+    //     try {
+    //         Class.forName("sun.awt.wl.WLToolkit")
+    //         System.setProperty("awt.toolkit.name", "WLToolkit")
+    //     } catch (_: ClassNotFoundException) { }
+    // }
 
     val isMac = System.getProperty("os.name").lowercase().contains("mac")
 

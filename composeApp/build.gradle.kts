@@ -258,6 +258,9 @@ run {
         val srcIcon = file("src/commonMain/composeResources/drawable/icon.png")
         val destIcon = flatpakDir.get().file("icon-512.png").asFile
         inputs.file(srcIcon)
+        // Changing this value invalidates Gradle's up-to-date check and forces
+        // re-generation even when the source file itself hasn't changed.
+        inputs.property("arcFraction", 0.32)
         outputs.file(destIcon)
         doLast {
             destIcon.parentFile.mkdirs()
