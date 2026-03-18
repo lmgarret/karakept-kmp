@@ -805,7 +805,7 @@ object MainScreen : Screen {
                     if (selectedBookmarkId == null) isReaderFullscreen = false
                 }
 
-                Row(modifier = Modifier.fillMaxSize()) {
+                Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
                     // Drawer column (collapsible)
                     AnimatedVisibility(
                         visible = isDrawerVisible && !isReaderFullscreen,
