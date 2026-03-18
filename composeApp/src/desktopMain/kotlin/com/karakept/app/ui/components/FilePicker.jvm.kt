@@ -7,7 +7,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tv.wunderbox.nfd.FileDialog
 import tv.wunderbox.nfd.FileDialogResult
-import tv.wunderbox.nfd.NfdFileDialog
+import tv.wunderbox.nfd.nfd.NfdFileDialog
 
 /**
  * Uses the system-native file picker via nativefiledialog-extended:
@@ -44,7 +44,7 @@ private fun openNativeJsonFilePicker(): String? {
         filters = listOf(FileDialog.Filter("JSON backup files", listOf("json"))),
     )
     return when (result) {
-        is FileDialogResult.Success -> runCatching { result.value.readText() }.getOrNull()
+        is FileDialogResult.Success<*> -> runCatching { (result.value as java.io.File).readText() }.getOrNull()
         else -> null
     }
 }
@@ -52,7 +52,7 @@ private fun openNativeJsonFilePicker(): String? {
 private fun openNativeDirectoryPicker(): String? {
     val result = NfdFileDialog().pickDirectory()
     return when (result) {
-        is FileDialogResult.Success -> result.value.absolutePath
+        is FileDialogResult.Success<*> -> (result.value as java.io.File).absolutePath
         else -> null
     }
 }
