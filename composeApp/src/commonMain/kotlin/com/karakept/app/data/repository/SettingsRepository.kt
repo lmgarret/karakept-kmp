@@ -347,6 +347,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             perListSettings = listSettingsMap,
             defaultListType = prefs[DEFAULT_LIST_TYPE_KEY] ?: DefaultListType.ALL_BOOKMARKS.name,
             defaultListId = prefs[DEFAULT_LIST_ID_KEY],
+            customLayoutsJson = prefs[LAYOUTS_KEY] ?: "[]",
+            defaultLayoutId = prefs[DEFAULT_LAYOUT_ID_KEY],
             backupPinHash = app.backupPinHash
         )
     }
@@ -417,6 +419,13 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                 prefs[DEFAULT_LIST_ID_KEY] = s.defaultListId
             } else {
                 prefs.remove(DEFAULT_LIST_ID_KEY)
+            }
+            // Restore custom layouts
+            prefs[LAYOUTS_KEY] = s.customLayoutsJson
+            if (s.defaultLayoutId != null) {
+                prefs[DEFAULT_LAYOUT_ID_KEY] = s.defaultLayoutId
+            } else {
+                prefs.remove(DEFAULT_LAYOUT_ID_KEY)
             }
         }
     }

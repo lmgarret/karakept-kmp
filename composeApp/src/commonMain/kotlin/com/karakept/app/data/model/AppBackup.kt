@@ -108,6 +108,13 @@ data class BackupSettings(
     val defaultListType: String = DefaultListType.ALL_BOOKMARKS.name,
     val defaultListId: String? = null,
 
+    // Custom bookmark layouts (JSON-serialised list of BookmarkLayout objects).
+    // Empty JSON array = no custom layouts.
+    val customLayoutsJson: String = "[]",
+
+    // Default layout id (null = use the built-in default for the current layoutType).
+    val defaultLayoutId: String? = null,
+
     // Backup-PIN hash (PBKDF2, format "<base64salt>:<base64hash>").
     // null = no PIN was configured on the exporting device.
     // Restored together with all other settings so that the importing device preserves
