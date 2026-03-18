@@ -13,12 +13,17 @@ plugins {
 }
 
 kotlin {
+    // Opt in to ExperimentalStdlibApi globally (enum.entries, etc.)
+    compilerOptions {
+        optIn.add("kotlin.ExperimentalStdlibApi")
+    }
+
     androidTarget {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
         }
     }
-    
+
     jvm("desktop")
     
     sourceSets {
