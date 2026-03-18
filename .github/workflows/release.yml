@@ -207,7 +207,7 @@ jobs:
           make_latest: false
 
       - name: Update Homebrew cask
-        if: github.event_name == 'workflow_dispatch'
+        if: false
         env:
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
