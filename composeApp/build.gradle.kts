@@ -107,6 +107,8 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
                 // System Tray (native menus with icons, HiDPI support)
                 implementation(libs.compose.native.tray)
+                // Native file picker (GTK on Linux, NSOpenPanel on macOS)
+                implementation(libs.nativefiledialog)
             }
         }
         val desktopTest by getting {
