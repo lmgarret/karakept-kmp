@@ -12,7 +12,7 @@ actual fun Modifier.horizontalResizeCursor(): Modifier {
     // "EW Resize" requests XC_sb_h_double_arrow (the correct bidirectional cursor)
     // via the system cursor table. Falls back to E_RESIZE_CURSOR if unavailable.
     val cursor = try {
-        Cursor.getSystemCustomCursor("EW Resize")
+        Cursor.getSystemCustomCursor("EW Resize") ?: Cursor(Cursor.E_RESIZE_CURSOR)
     } catch (_: Exception) {
         Cursor(Cursor.E_RESIZE_CURSOR)
     }
