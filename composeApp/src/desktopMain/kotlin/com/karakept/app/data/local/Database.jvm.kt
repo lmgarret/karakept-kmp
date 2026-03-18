@@ -11,7 +11,7 @@ import com.karakept.app.data.local.migrations.MIGRATION_7_8
 import java.io.File
 
 actual fun getDatabaseBuilder(): RoomDatabase.Builder<AppDatabase> {
-    val dbFile = File(System.getProperty("user.home"), ".karakept/karakept.db")
+    val dbFile = File(appDataDir(), "karakept.db")
     return Room.databaseBuilder<AppDatabase>(
         name = dbFile.absolutePath,
     )
