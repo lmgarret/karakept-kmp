@@ -9,6 +9,10 @@ finish-args:
   - --share=ipc
   - --socket=x11
   - --device=dri
+  # Allow reading/writing the Downloads and Documents folders so users can
+  # import backup files from these standard locations without full home access.
+  - --filesystem=xdg-download
+  - --filesystem=xdg-documents
 
 modules:
   - name: karakept
@@ -19,6 +23,9 @@ modules:
       - ln -s /app/karakept/bin/Karakept /app/bin/Karakept
       - install -Dm644 icon.png /app/share/icons/hicolor/512x512/apps/com.karakept.app.png
       - install -Dm644 com.karakept.app.desktop /app/share/applications/com.karakept.app.desktop
+      # Rebuild the hicolor icon-theme cache so the desktop shell picks up the
+      # new icon immediately without requiring a logout/login cycle.
+      - gtk-update-icon-cache -qtf /app/share/icons/hicolor
     sources:
       - type: dir
         path: ../composeApp/build/compose/binaries/main/app/Karakept

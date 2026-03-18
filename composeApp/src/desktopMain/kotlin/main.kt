@@ -77,6 +77,20 @@ fun main(args: Array<String> = emptyArray()) {
         System.setProperty("skiko.renderApi", "OPENGL")
     }
 
+    // On Linux, set the GTK Look-and-Feel for Swing dialogs (JFileChooser, etc.)
+    // so they render as native GTK3 dialogs themed by KDE's GTK integration,
+    // rather than the default Swing Metal/Nimbus appearance.
+    // Compose Desktop's own rendering is unaffected (it uses Skiko, not Swing).
+    if (System.getProperty("os.name").lowercase().contains("linux")) {
+        try {
+            javax.swing.UIManager.setLookAndFeel(
+                "com.sun.java.swing.plaf.gtk.GTKLookAndFeel"
+            )
+        } catch (_: Exception) {
+            // GTK L&F unavailable in this JVM; keep default Swing appearance
+        }
+    }
+
     // On Linux, tell AWT to use "Karakept" as the WM_CLASS so KDE/GNOME can
     // match the window to the .desktop file's StartupWMClass=Karakept entry.
     // Without this the JVM reports the main class name (e.g. "MainKt") and the

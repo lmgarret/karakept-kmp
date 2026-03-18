@@ -1,4 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.awt.AlphaComposite
+import java.awt.Color
 import java.awt.RenderingHints
 import java.awt.geom.RoundRectangle2D
 import java.awt.image.BufferedImage as AwtBufferedImage
@@ -260,21 +262,27 @@ run {
         inputs.file(srcIcon)
         // Changing this value invalidates Gradle's up-to-date check and forces
         // re-generation even when the source file itself hasn't changed.
-        inputs.property("arcFraction", 0.32)
+        inputs.property("arcFraction", 0.32) // v2: switched to AlphaComposite.SRC_IN
         outputs.file(destIcon)
         doLast {
             destIcon.parentFile.mkdirs()
             val size = 512
-            // Corner radius ~16% of size — matches the rounding KDE/GNOME apply to
-            // adaptive icons, so the baked-in rounding aligns with the desktop shell.
-            val arcSize = (size * 0.32).toInt() // arcWidth/arcHeight for RoundRectangle2D
+            // Corner radius ~16% of size. arcWidth/arcHeight for RoundRectangle2D = 2*radius.
+            val arcSize = (size * 0.32).toInt()
             val src = javax.imageio.ImageIO.read(srcIcon)
             val out = AwtBufferedImage(size, size, AwtBufferedImage.TYPE_INT_ARGB)
             val g2 = out.createGraphics()
+            // Step 1: paint an antialiased rounded-rectangle mask in opaque white.
+            // setClip() is unreliable in Gradle's headless JVM; AlphaComposite.SRC_IN
+            // achieves the same mask effect and works correctly without a display.
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
             g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
-            g2.setClip(RoundRectangle2D.Float(0f, 0f, size.toFloat(), size.toFloat(), arcSize.toFloat(), arcSize.toFloat()))
+            g2.setColor(Color.WHITE)
+            g2.fill(RoundRectangle2D.Float(0f, 0f, size.toFloat(), size.toFloat(), arcSize.toFloat(), arcSize.toFloat()))
+            // Step 2: draw the source image with SRC_IN — pixels are kept only where
+            // the destination (the white mask above) is opaque, giving rounded corners.
+            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_IN))
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
             g2.drawImage(src, 0, 0, size, size, null)
             g2.dispose()
             javax.imageio.ImageIO.write(out, "PNG", destIcon)
