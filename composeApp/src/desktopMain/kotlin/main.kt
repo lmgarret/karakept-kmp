@@ -97,24 +97,30 @@ fun main(args: Array<String> = emptyArray()) {
         }
     }
 
-    // Set macOS dock icon before AWT initializes to prevent OpenJDK icon flash
-    val iconBytes = Thread.currentThread().contextClassLoader
-        .getResourceAsStream("macos-icon.png")
-        ?.readBytes()
-    if (iconBytes != null) {
-        try {
-            val awtImage = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(iconBytes))
-            if (awtImage != null && java.awt.Taskbar.isTaskbarSupported()) {
-                java.awt.Taskbar.getTaskbar().iconImage = awtImage
-            }
-        } catch (_: UnsupportedOperationException) {
-            // Taskbar icon not supported on this platform
-        }
-    }
+    val isMac = System.getProperty("os.name").lowercase().contains("mac")
 
-    // Load icon before entering composition (non-composable)
-    val iconImage = iconBytes
-        ?.let { Image.makeFromEncoded(it).toComposeImageBitmap() }
+    // Load the window icon before entering composition (non-composable).
+    // macOS: use the macOS-styled icon and also push it to the Dock early so the
+    //   default Java coffee-cup doesn't flash while the window is opening.
+    // Linux: KDE/GNOME resolve the app icon from the hicolor theme via the .desktop
+    //   file's Icon= entry, so Window(icon = null) is correct — no _NET_WM_ICON needed.
+    //   Critically, we must NOT call Taskbar.getTaskbar() here on Linux: that call
+    //   initialises AWT before application {} runs, which can surface a hidden AWT
+    //   frame with the wrong WM_CLASS and briefly appear as a second taskbar entry.
+    val iconImage = if (isMac) {
+        Thread.currentThread().contextClassLoader
+            .getResourceAsStream("macos-icon.png")
+            ?.readBytes()
+            ?.also { bytes ->
+                try {
+                    val awtImage = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(bytes))
+                    if (awtImage != null && java.awt.Taskbar.isTaskbarSupported()) {
+                        java.awt.Taskbar.getTaskbar().iconImage = awtImage
+                    }
+                } catch (_: UnsupportedOperationException) { }
+            }
+            ?.let { Image.makeFromEncoded(it).toComposeImageBitmap() }
+    } else null
 
     // Load monochrome tray icon: trim adaptive-icon padding so the silhouette
     // fills the menu-bar slot. ComposeNativeTray's Painter overload handles
