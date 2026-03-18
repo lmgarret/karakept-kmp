@@ -107,20 +107,23 @@ fun main(args: Array<String> = emptyArray()) {
     //   Critically, we must NOT call Taskbar.getTaskbar() here on Linux: that call
     //   initialises AWT before application {} runs, which can surface a hidden AWT
     //   frame with the wrong WM_CLASS and briefly appear as a second taskbar entry.
-    val iconImage = if (isMac) {
-        Thread.currentThread().contextClassLoader
-            .getResourceAsStream("macos-icon.png")
-            ?.readBytes()
-            ?.also { bytes ->
-                try {
-                    val awtImage = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(bytes))
-                    if (awtImage != null && java.awt.Taskbar.isTaskbarSupported()) {
-                        java.awt.Taskbar.getTaskbar().iconImage = awtImage
-                    }
-                } catch (_: UnsupportedOperationException) { }
+    // macOS: also push the icon to the Dock early so the default Java coffee-cup
+    // doesn't flash. Must happen before application {} (before AWT init).
+    // Linux: load the icon for Window(icon = ...) but do NOT call Taskbar.getTaskbar()
+    // here — that call initialises AWT before application {} and can surface a hidden
+    // frame with the wrong WM_CLASS, briefly appearing as a second taskbar entry.
+    val iconBytes = Thread.currentThread().contextClassLoader
+        .getResourceAsStream("macos-icon.png")
+        ?.readBytes()
+    if (isMac && iconBytes != null) {
+        try {
+            val awtImage = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(iconBytes))
+            if (awtImage != null && java.awt.Taskbar.isTaskbarSupported()) {
+                java.awt.Taskbar.getTaskbar().iconImage = awtImage
             }
-            ?.let { Image.makeFromEncoded(it).toComposeImageBitmap() }
-    } else null
+        } catch (_: UnsupportedOperationException) { }
+    }
+    val iconImage = iconBytes?.let { Image.makeFromEncoded(it).toComposeImageBitmap() }
 
     // Load monochrome tray icon: trim adaptive-icon padding so the silhouette
     // fills the menu-bar slot. ComposeNativeTray's Painter overload handles

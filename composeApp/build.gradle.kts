@@ -248,15 +248,31 @@ run {
     val flatpakDir = layout.buildDirectory.dir("flatpak")
     val manifestFile = rootProject.file("flatpak/com.karakept.app.yml")
 
-    // Resize the app icon to 512x512 (Flatpak rejects icons larger than 512x512).
-    // Uses ImageMagick's `convert`, pre-installed on ubuntu-latest and in the devcontainer.
-    val flatpakResizeIcon = tasks.register<Exec>("flatpakResizeIcon") {
+    // Resize the app icon to 512x512 and apply rounded corners matching the
+    // freedesktop hicolor icon convention used by KDE and GNOME.
+    // Uses Java2D (no external tools required).
+    val flatpakResizeIcon = tasks.register("flatpakResizeIcon") {
         val srcIcon = file("src/commonMain/composeResources/drawable/icon.png")
         val destIcon = flatpakDir.get().file("icon-512.png").asFile
         inputs.file(srcIcon)
         outputs.file(destIcon)
-        doFirst { destIcon.parentFile.mkdirs() }
-        commandLine("convert", srcIcon.absolutePath, "-resize", "512x512", destIcon.absolutePath)
+        doLast {
+            destIcon.parentFile.mkdirs()
+            val size = 512
+            // Corner radius ~16% of size — matches the rounding KDE/GNOME apply to
+            // adaptive icons, so the baked-in rounding aligns with the desktop shell.
+            val arcSize = (size * 0.32).toInt() // arcWidth/arcHeight for RoundRectangle2D
+            val src = javax.imageio.ImageIO.read(srcIcon)
+            val out = java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+            val g2 = out.createGraphics()
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY)
+            g2.clip = java.awt.geom.RoundRectangle2D.Float(0f, 0f, size.toFloat(), size.toFloat(), arcSize.toFloat(), arcSize.toFloat())
+            g2.drawImage(src, 0, 0, size, size, null)
+            g2.dispose()
+            javax.imageio.ImageIO.write(out, "PNG", destIcon)
+        }
     }
 
     val flatpakBuild = tasks.register<Exec>("flatpakBuild") {
