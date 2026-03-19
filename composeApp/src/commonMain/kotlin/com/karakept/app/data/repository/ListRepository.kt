@@ -5,6 +5,7 @@ import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.api.model.KarakeepList
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -104,6 +105,8 @@ class ListRepository(
             listDao.insertLists(listOf(entity))
             loadListsFromDatabase(server.id)
             Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             // Update locally for immediate feedback even when remote fails
