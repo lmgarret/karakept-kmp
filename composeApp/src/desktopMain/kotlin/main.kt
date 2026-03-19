@@ -262,7 +262,12 @@ fun main(args: Array<String> = emptyArray()) {
             sceneWidth = 64, sceneHeight = 64,
             targetWidth = 32, targetHeight = 32
         )
-        if (trayIconImage != null) {
+        // On Linux, skip the system tray if there is no D-Bus session — the
+        // energye/systray native bridge panics with a nil-pointer dereference
+        // when DBus is unavailable (e.g. devcontainer, CI, headless servers).
+        val hasDBus = !System.getProperty("os.name").lowercase().contains("linux") ||
+            System.getenv("DBUS_SESSION_BUS_ADDRESS") != null
+        if (trayIconImage != null && hasDBus) {
             Tray(
                 iconContent = {
                     Image(
