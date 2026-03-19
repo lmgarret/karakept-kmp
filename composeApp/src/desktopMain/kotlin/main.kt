@@ -57,9 +57,10 @@ fun main(args: Array<String> = emptyArray()) {
         // Set app name so notifications show "Karakept" instead of "java"
         System.setProperty("apple.awt.application.name", "Karakept")
 
-        // Let AWT/JBR follow the OS appearance automatically so that both
-        // the Compose window chrome AND the native NSMenu from the tray
-        // inherit the correct light/dark theme without manual detection.
+        // Let AWT/JBR follow the OS appearance automatically so the Compose
+        // window chrome (title bar, toolbar) matches the current system theme.
+        // Note: this does NOT affect the native NSMenu from ComposeNativeTray —
+        // the library's Swift code controls menu appearance independently.
         System.setProperty("apple.awt.application.appearance", "system")
     }
 
