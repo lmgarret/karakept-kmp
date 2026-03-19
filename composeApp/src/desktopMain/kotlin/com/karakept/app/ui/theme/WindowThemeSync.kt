@@ -29,12 +29,10 @@ actual fun SyncWindowTheme() {
                     )
                 }
             }
-            // Also update the system-level property for any new windows
-            if (System.getProperty("os.name").lowercase().contains("mac")) {
-                System.setProperty("apple.awt.application.appearance",
-                    if (isAppDark) "NSAppearanceNameDarkAqua" else "NSAppearanceNameAqua"
-                )
-            }
+            // Note: we intentionally do NOT override the system-level
+            // apple.awt.application.appearance property here — main.kt sets it
+            // to "system" so JBR tracks the OS appearance automatically.
+            // Per-window client properties above are sufficient for window chrome.
         } catch (_: Exception) {
             // Best-effort — if AWT access fails, just skip.
         }
