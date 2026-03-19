@@ -252,6 +252,7 @@ fun main(args: Array<String> = emptyArray()) {
                     )
                 },
                 tooltip = "Karakept",
+                primaryAction = { isWindowVisible = !isWindowVisible },
                 menuContent = {
                     // Server status (informational, disabled)
                     Item(
