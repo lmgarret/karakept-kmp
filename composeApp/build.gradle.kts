@@ -74,6 +74,9 @@ kotlin {
                 // HTML Parsing (KMP)
                 implementation(libs.ksoup)
 
+                // Notifications (KMP — Android + Desktop)
+                implementation(libs.kmpnotifier)
+
                 // Native WebView (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
                 implementation(libs.compose.webview)
             }
@@ -100,7 +103,8 @@ kotlin {
                 implementation(libs.ktor.client.okhttp)
                 // Coroutines Swing dispatcher for desktop Main dispatcher
                 implementation(libs.kotlinx.coroutines.swing)
-                
+                // System Tray (native menus with icons, HiDPI support)
+                implementation(libs.compose.native.tray)
             }
         }
         val desktopTest by getting {
@@ -204,6 +208,21 @@ compose.desktop {
                 iconFile.set(project.file("src/desktopMain/resources/icon.icns"))
                 bundleID = "com.karakept.app"
                 appCategory = "public.app-category.productivity"
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>CFBundleURLTypes</key>
+                        <array>
+                            <dict>
+                                <key>CFBundleURLName</key>
+                                <string>com.karakept.app</string>
+                                <key>CFBundleURLSchemes</key>
+                                <array>
+                                    <string>karakept</string>
+                                </array>
+                            </dict>
+                        </array>
+                    """
+                }
             }
         }
     }

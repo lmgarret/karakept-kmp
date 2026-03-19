@@ -23,6 +23,8 @@ kotlinx-datetime = "0.6.2"
 datastore = "1.1.1"
 ksoup = "0.2.1"
 compose-webview = "1.0.0-beta-01"
+compose-native-tray = "0.9.3"
+kmpnotifier = "1.6.1"
 testcontainers = "1.20.1"
 mockk = "1.13.12"
 
@@ -85,6 +87,12 @@ ksoup = { module = "com.fleeksoft.ksoup:ksoup", version.ref = "ksoup" }
 
 # Native WebView (Desktop: WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
 compose-webview = { module = "io.github.kdroidfilter:composewebview", version.ref = "compose-webview" }
+
+# System Tray (Desktop)
+compose-native-tray = { module = "io.github.kdroidfilter:composenativetray", version.ref = "compose-native-tray" }
+
+# Notifications (KMP)
+kmpnotifier = { module = "io.github.mirzemehdi:kmpnotifier", version.ref = "kmpnotifier" }
 
 # WorkManager
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version = "2.9.0" }
