@@ -29,6 +29,7 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.di.appModule
 import com.kdroid.composetray.tray.api.Tray
+import com.kdroid.composetray.utils.IconRenderProperties
 import com.mmk.kmpnotifier.notification.Notifier
 import com.mmk.kmpnotifier.notification.NotifierManager
 import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
@@ -234,6 +235,12 @@ fun main(args: Array<String> = emptyArray()) {
         // (~18 pt within the 22 pt slot) to match native macOS status-bar icons.
         val isDarkMenuBar = isMenuBarInDarkMode()
         val trayIconTint = if (isDarkMenuBar) Color.White else Color.Black
+        // Render menu-item icons at 32×32 px so Retina displays get a crisp
+        // @2x representation (the Swift side sets NSSize 16×16 pt).
+        val retinaMenuIcon = IconRenderProperties(
+            sceneWidth = 64, sceneHeight = 64,
+            targetWidth = 32, targetHeight = 32
+        )
         if (trayIconImage != null) {
             Tray(
                 iconContent = {
@@ -255,6 +262,7 @@ fun main(args: Array<String> = emptyArray()) {
                     Item(
                         label = "Save Bookmark from Clipboard",
                         icon = Icons.Default.ContentPaste,
+                        iconRenderProperties = retinaMenuIcon,
                         isEnabled = hasServer,
                         onClick = {
                             coroutineScope.launch {
@@ -284,6 +292,7 @@ fun main(args: Array<String> = emptyArray()) {
                     Item(
                         label = "Open in Browser",
                         icon = Icons.Default.OpenInBrowser,
+                        iconRenderProperties = retinaMenuIcon,
                         isEnabled = hasServer,
                         onClick = {
                             if (serverUrl.isNotEmpty()) {
