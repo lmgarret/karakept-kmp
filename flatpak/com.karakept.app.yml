@@ -7,8 +7,13 @@ command: Karakept
 finish-args:
   - --share=network
   - --share=ipc
-  - --socket=x11
+  - --socket=fallback-x11
+  - --socket=wayland
   - --device=dri
+  # XDG Desktop Portal — required for native file/folder picker dialogs
+  # (nativefiledialog-extended uses the portal when running inside Flatpak)
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.FileChooser
   # Allow reading/writing the Downloads and Documents folders so users can
   # import backup files from these standard locations without full home access.
   - --filesystem=xdg-download
