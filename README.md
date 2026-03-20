@@ -5,7 +5,7 @@
 <h1 align="center">Karakept</h1>
 
 <p align="center">
-  A Kotlin Multiplatform client for <a href="https://github.com/karakeep-app/karakeep">Karakeep</a> — manage your bookmarks on Android and Linux Desktop.
+  A Kotlin Multiplatform client for <a href="https://github.com/karakeep-app/karakeep">Karakeep</a> — manage your bookmarks on Android, MacOS and Linux Desktop.
 </p>
 
 <p align="center">
