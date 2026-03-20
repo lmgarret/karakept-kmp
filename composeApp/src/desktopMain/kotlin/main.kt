@@ -65,45 +65,66 @@ fun main(args: Array<String> = emptyArray()) {
         System.setProperty("apple.awt.application.appearance", "system")
     }
 
-    // Use software rendering on Linux so the Skia surface always resizes correctly
-    // when running via X11 forwarding from a devcontainer / containerized env.
-    // GPU-backed backends (GL/Vulkan) can silently fail to resize over X11,
-    // leaving content stuck at the initial size with black bars.
-    // SOFTWARE_FAST is not supported on macOS, so only set it on Linux.
+    // On Linux, default to the OpenGL backend explicitly so Skiko doesn't
+    // silently fall back to software rendering if GL context creation stumbles
+    // on the first attempt. OPENGL is already the Skiko default, but being
+    // explicit ensures env-var overrides (SKIKO_RENDER_API) still take effect
+    // while guarding against any future default change.
+    if (System.getProperty("os.name").lowercase().contains("linux") &&
+        System.getenv("SKIKO_RENDER_API") == null &&
+        System.getProperty("skiko.renderApi") == null
+    ) {
+        System.setProperty("skiko.renderApi", "OPENGL")
+    }
+
+    // On Linux, tell AWT to use "Karakept" as the WM_CLASS so KDE/GNOME can
+    // match the window to the .desktop file's StartupWMClass=Karakept entry.
+    // Without this the JVM reports the main class name (e.g. "MainKt") and the
+    // desktop environment shows two taskbar entries on launch.
     if (System.getProperty("os.name").lowercase().contains("linux")) {
-        System.setProperty("skiko.renderApi", "SOFTWARE_FAST")
+        System.setProperty("sun.awt.wmclass", "Karakept")
     }
 
     // On Linux Wayland, use the native Wayland AWT toolkit (JDK 21+)
     // instead of X11/XWayland — eliminates black bars on resize and improves performance.
     // Falls back to X11 automatically if Wayland socket is not available.
-    if (System.getenv("WAYLAND_DISPLAY") != null || java.io.File("/tmp/wayland-0").exists()) {
-        try {
-            Class.forName("sun.awt.wl.WLToolkit")
-            System.setProperty("awt.toolkit.name", "WLToolkit")
-        } catch (_: ClassNotFoundException) {
-            // JDK < 24: WLToolkit not available, fall back to X11
-        }
-    }
+    // NOTE: disabled — WLToolkit causes "layout state is not idle before measure starts"
+    // errors on JBR 21 when --socket=wayland is granted. The app runs correctly via
+    // XWayland without it.
+    // if (System.getenv("WAYLAND_DISPLAY") != null || java.io.File("/tmp/wayland-0").exists()) {
+    //     try {
+    //         Class.forName("sun.awt.wl.WLToolkit")
+    //         System.setProperty("awt.toolkit.name", "WLToolkit")
+    //     } catch (_: ClassNotFoundException) { }
+    // }
 
-    // Set macOS dock icon before AWT initializes to prevent OpenJDK icon flash
+    val isMac = System.getProperty("os.name").lowercase().contains("mac")
+
+    // Load the window icon before entering composition (non-composable).
+    // macOS: use the macOS-styled icon and also push it to the Dock early so the
+    //   default Java coffee-cup doesn't flash while the window is opening.
+    // Linux: KDE/GNOME resolve the app icon from the hicolor theme via the .desktop
+    //   file's Icon= entry, so Window(icon = null) is correct — no _NET_WM_ICON needed.
+    //   Critically, we must NOT call Taskbar.getTaskbar() here on Linux: that call
+    //   initialises AWT before application {} runs, which can surface a hidden AWT
+    //   frame with the wrong WM_CLASS and briefly appear as a second taskbar entry.
+    // macOS: also push the icon to the Dock early so the default Java coffee-cup
+    // doesn't flash. Must happen before application {} (before AWT init).
+    // Linux: load the icon for Window(icon = ...) but do NOT call Taskbar.getTaskbar()
+    // here — that call initialises AWT before application {} and can surface a hidden
+    // frame with the wrong WM_CLASS, briefly appearing as a second taskbar entry.
     val iconBytes = Thread.currentThread().contextClassLoader
         .getResourceAsStream("macos-icon.png")
         ?.readBytes()
-    if (iconBytes != null) {
+    if (isMac && iconBytes != null) {
         try {
             val awtImage = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(iconBytes))
             if (awtImage != null && java.awt.Taskbar.isTaskbarSupported()) {
                 java.awt.Taskbar.getTaskbar().iconImage = awtImage
             }
-        } catch (_: UnsupportedOperationException) {
-            // Taskbar icon not supported on this platform
-        }
+        } catch (_: UnsupportedOperationException) { }
     }
-
-    // Load icon before entering composition (non-composable)
-    val iconImage = iconBytes
-        ?.let { Image.makeFromEncoded(it).toComposeImageBitmap() }
+    val iconImage = iconBytes?.let { Image.makeFromEncoded(it).toComposeImageBitmap() }
 
     // Load monochrome tray icon: trim adaptive-icon padding so the silhouette
     // fills the menu-bar slot. ComposeNativeTray's Painter overload handles
@@ -241,7 +262,12 @@ fun main(args: Array<String> = emptyArray()) {
             sceneWidth = 64, sceneHeight = 64,
             targetWidth = 32, targetHeight = 32
         )
-        if (trayIconImage != null) {
+        // On Linux, skip the system tray if there is no D-Bus session — the
+        // energye/systray native bridge panics with a nil-pointer dereference
+        // when DBus is unavailable (e.g. devcontainer, CI, headless servers).
+        val hasDBus = !System.getProperty("os.name").lowercase().contains("linux") ||
+            System.getenv("DBUS_SESSION_BUS_ADDRESS") != null
+        if (trayIconImage != null && hasDBus) {
             Tray(
                 iconContent = {
                     Image(

@@ -3,24 +3,38 @@ package com.karakept.app.utils
 import java.awt.Desktop
 import java.io.File
 
-actual object FileUtils {
-    actual fun getAssetsDirectory(): String {
-        val userHome = System.getProperty("user.home")
-        val dir = File(userHome, ".karakept/assets")
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
-        return dir.absolutePath
+/** Root data directory, respecting XDG on Linux / Flatpak (see AppDirs.kt for rationale). */
+private fun appDataDir(): File = File(
+    when {
+        System.getenv("FLATPAK_ID") != null ->
+            System.getenv("XDG_DATA_HOME")
+                ?: "${System.getProperty("user.home")}/.var/app/${System.getenv("FLATPAK_ID")}/data"
+        System.getProperty("os.name").lowercase().contains("linux") ->
+            "${System.getenv("XDG_DATA_HOME") ?: "${System.getProperty("user.home")}/.local/share"}/karakept"
+        else ->
+            "${System.getProperty("user.home")}/.karakept"
     }
+).also { it.mkdirs() }
 
-    actual fun getImageCacheDirectory(): String {
-        val userHome = System.getProperty("user.home")
-        val dir = File(userHome, ".karakept/image_cache")
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
-        return dir.absolutePath
+/** Cache directory for ephemeral data (image cache, etc.). */
+private fun appCacheDir(): File = File(
+    when {
+        System.getenv("FLATPAK_ID") != null ->
+            System.getenv("XDG_CACHE_HOME")
+                ?: "${System.getProperty("user.home")}/.var/app/${System.getenv("FLATPAK_ID")}/cache"
+        System.getProperty("os.name").lowercase().contains("linux") ->
+            "${System.getenv("XDG_CACHE_HOME") ?: "${System.getProperty("user.home")}/.cache"}/karakept"
+        else ->
+            "${System.getProperty("user.home")}/.karakept"
     }
+).also { it.mkdirs() }
+
+actual object FileUtils {
+    actual fun getAssetsDirectory(): String =
+        File(appDataDir(), "assets").also { it.mkdirs() }.absolutePath
+
+    actual fun getImageCacheDirectory(): String =
+        File(appCacheDir(), "image_cache").also { it.mkdirs() }.absolutePath
 
     actual fun saveFile(path: String, fileName: String, content: ByteArray): String {
         val dir = File(path)
@@ -33,31 +47,16 @@ actual object FileUtils {
     }
 
     actual fun getStorageInfo(): StorageInfo {
-        val userHome = System.getProperty("user.home")
-        val appDir = File(userHome, ".karakept")
-        if (!appDir.exists()) {
-            appDir.mkdirs()
-        }
-        
-        val totalSpace = appDir.totalSpace
-        val freeSpace = appDir.freeSpace
-        val usedByApp = getFolderSize(appDir)
-
+        val appDir = appDataDir()
         return StorageInfo(
-            usedBytes = usedByApp,
-            freeBytes = freeSpace,
-            totalBytes = totalSpace
+            usedBytes = getFolderSize(appDir),
+            freeBytes = appDir.freeSpace,
+            totalBytes = appDir.totalSpace
         )
     }
 
-    actual fun getBackupDirectory(): String {
-        val userHome = System.getProperty("user.home")
-        val dir = File(userHome, ".karakept/backups")
-        if (!dir.exists()) {
-            dir.mkdirs()
-        }
-        return dir.absolutePath
-    }
+    actual fun getBackupDirectory(): String =
+        File(appDataDir(), "backups").also { it.mkdirs() }.absolutePath
 
     actual fun saveFileToDirectory(directoryPath: String, fileName: String, content: ByteArray): String =
         saveFile(directoryPath, fileName, content)

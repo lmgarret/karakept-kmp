@@ -126,13 +126,15 @@ class BatchOperationsTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun batchMarkRead_doesNotQueuePendingActions() = runTest(testDispatcher) {
+    fun batchMarkRead_queuesReadingProgressPendingAction() = runTest(testDispatcher) {
         val b1 = makeBookmark(remoteId = 1L, isRead = false)
         coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
 
         repository.batchMarkRead(listOf(b1))
 
-        coVerify(exactly = 0) { pendingActionDao.insertAction(any()) }
+        val slot = slot<PendingActionEntity>()
+        coVerify(exactly = 1) { pendingActionDao.insertAction(capture(slot)) }
+        assertEquals(PendingActionType.UPDATE_READING_PROGRESS, slot.captured.actionType)
     }
 
     // ──────────────────────────────────────────────────────────

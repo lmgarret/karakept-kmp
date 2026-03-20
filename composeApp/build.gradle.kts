@@ -1,4 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage as AwtBufferedImage
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -11,12 +13,17 @@ plugins {
 }
 
 kotlin {
+    // Opt in to ExperimentalStdlibApi globally (enum.entries, etc.)
+    compilerOptions {
+        optIn.add("kotlin.ExperimentalStdlibApi")
+    }
+
     androidTarget {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
         }
     }
-    
+
     jvm("desktop")
     
     sourceSets {
@@ -105,6 +112,8 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
                 // System Tray (native menus with icons, HiDPI support)
                 implementation(libs.compose.native.tray)
+                // Native file picker (GTK on Linux, NSOpenPanel on macOS)
+                implementation(libs.nativefiledialog)
             }
         }
         val desktopTest by getting {
@@ -193,6 +202,12 @@ compose.desktop {
     application {
         mainClass = "MainKt"
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
+        // ZGC reduces GC pause times to <1ms, eliminating the stutters/jank
+        // that G1GC (the default) causes in interactive Compose Desktop apps.
+        // -XX:+ZGenerational enables the generational mode added in JDK 21,
+        // which improves throughput without sacrificing low-latency guarantees.
+        jvmArgs += "-XX:+UseZGC"
+        jvmArgs += "-XX:+ZGenerational"
         // SOFTWARE_FAST is only supported on Linux; on macOS use the default (Metal).
         // The actual property is set conditionally in main.kt at runtime.
         // jvmArgs += "-Dskiko.renderApi=SOFTWARE_FAST"
@@ -232,6 +247,72 @@ compose.desktop {
 configurations.all {
     resolutionStrategy {
         force(libs.kotlinx.datetime.get().toString())
+    }
+}
+
+// Flatpak packaging — requires flatpak-builder and org.gnome.Platform//48 installed on the host.
+// Usage: ./gradlew packageFlatpak
+// Output: composeApp/build/flatpak/Karakept.flatpak
+run {
+    val flatpakDir = layout.buildDirectory.dir("flatpak")
+    val manifestFile = rootProject.file("flatpak/com.karakept.app.yml")
+
+    // Resize the macOS app icon to 512x512 for the Flatpak hicolor icon theme.
+    // macos-icon.png already has rounded corners, so no masking is needed.
+    val flatpakResizeIcon = tasks.register("flatpakResizeIcon") {
+        // Use the macOS icon which already has properly rounded corners.
+        val srcIcon = file("src/desktopMain/resources/macos-icon.png")
+        val destIcon = flatpakDir.get().file("icon-512.png").asFile
+        inputs.file(srcIcon)
+        inputs.property("iconVersion", 3) // bump to bust Gradle up-to-date cache
+        outputs.file(destIcon)
+        doLast {
+            destIcon.parentFile.mkdirs()
+            val size = 512
+            val src = javax.imageio.ImageIO.read(srcIcon)
+            val out = AwtBufferedImage(size, size, AwtBufferedImage.TYPE_INT_ARGB)
+            val g2 = out.createGraphics()
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.drawImage(src, 0, 0, size, size, null)
+            g2.dispose()
+            javax.imageio.ImageIO.write(out, "PNG", destIcon)
+        }
+    }
+
+    val flatpakBuild = tasks.register<Exec>("flatpakBuild") {
+        group = "compose desktop"
+        description = "Runs flatpak-builder to populate the local Flatpak repo (internal)"
+        dependsOn("createDistributable", flatpakResizeIcon)
+        // Pass -Pflatpak.disableSandbox=true when building in CI environments that
+        // don't support user namespaces (e.g. GitHub Actions).
+        val disableSandbox = project.findProperty("flatpak.disableSandbox")?.toString()?.toBoolean() ?: false
+        commandLine(buildList {
+            add("flatpak-builder")
+            if (disableSandbox) add("--disable-sandbox")
+            add("--force-clean")
+            add("--repo=${flatpakDir.get().dir("repo").asFile.absolutePath}")
+            add(flatpakDir.get().dir("build-dir").asFile.absolutePath)
+            add(manifestFile.absolutePath)
+        })
+    }
+
+    tasks.register<Exec>("packageFlatpak") {
+        group = "compose desktop"
+        description = "Creates a distributable Flatpak bundle (.flatpak) — requires flatpak-builder and org.gnome.Platform//48"
+        dependsOn(flatpakBuild)
+        val bundleFile = flatpakDir.get().file("Karakept.flatpak").asFile
+        commandLine(
+            "flatpak",
+            "build-bundle",
+            flatpakDir.get().dir("repo").asFile.absolutePath,
+            bundleFile.absolutePath,
+            "com.karakept.app",
+        )
+        doLast {
+            println("Flatpak bundle: ${bundleFile.absolutePath}")
+        }
     }
 }
 

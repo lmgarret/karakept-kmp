@@ -171,9 +171,43 @@ jobs:
           name: dmg-release
           path: composeApp/build/compose/binaries/main/dmg/Karakept-*.dmg
 
+  build-linux-flatpak:
+    name: Build Linux Flatpak
+    needs: resolve-version
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build distributable and prepare Flatpak sources
+        run: >
+          ./gradlew :composeApp:createDistributable :composeApp:flatpakResizeIcon
+          -PversionName=${{ needs.resolve-version.outputs.name }}
+
+      - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: Karakept.flatpak
+          manifest-path: flatpak/com.karakept.app.yml
+          cache-key: gnome-48
+          upload-artifact: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-release
+          path: Karakept.flatpak
+
   create-release:
     name: Create GitHub Release
-    needs: [resolve-version, build-android, build-macos]
+    needs: [resolve-version, build-android, build-macos, build-linux-flatpak]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -190,6 +224,7 @@ jobs:
           files: |
             apk-release/*.apk
             dmg-release/*.dmg
+            flatpak-release/Karakept.flatpak
           body: ${{ needs.resolve-version.outputs.body }}
           generate_release_notes: false
 

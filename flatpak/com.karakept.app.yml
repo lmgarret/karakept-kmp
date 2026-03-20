@@ -1,0 +1,41 @@
+app-id: com.karakept.app
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+command: Karakept
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=x11
+  - --device=dri
+  # XDG Desktop Portal — required for native file/folder picker dialogs
+  # (nativefiledialog-extended uses the portal when running inside Flatpak)
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.FileChooser
+  # Allow reading/writing the Downloads and Documents folders so users can
+  # import backup files from these standard locations without full home access.
+  - --filesystem=xdg-download
+  - --filesystem=xdg-documents
+
+modules:
+  - name: karakept
+    buildsystem: simple
+    build-commands:
+      - cp -r Karakept /app/karakept
+      - mkdir -p /app/bin
+      - ln -s /app/karakept/bin/Karakept /app/bin/Karakept
+      - install -Dm644 icon.png /app/share/icons/hicolor/512x512/apps/com.karakept.app.png
+      - install -Dm644 com.karakept.app.desktop /app/share/applications/com.karakept.app.desktop
+      # Rebuild the hicolor icon-theme cache so the desktop shell picks up the
+      # new icon immediately without requiring a logout/login cycle.
+      - gtk-update-icon-cache -qtf /app/share/icons/hicolor
+    sources:
+      - type: dir
+        path: ../composeApp/build/compose/binaries/main/app/Karakept
+        dest: Karakept
+      - type: file
+        path: ../composeApp/build/flatpak/icon-512.png
+        dest-filename: icon.png
+      - type: file
+        path: com.karakept.app.desktop

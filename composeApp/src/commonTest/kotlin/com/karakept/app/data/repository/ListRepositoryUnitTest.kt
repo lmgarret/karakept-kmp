@@ -60,7 +60,7 @@ class ListRepositoryUnitTest : BaseRepositoryTest() {
 
         coEvery {
             remoteDataSource.updateList(testServer, listId, newName, newIcon)
-        } throws ApiException("Network error")
+        } answers { throw ApiException("Network error") }
         coEvery { listDao.getListsForServerOnce(testServer.id) } returns emptyList()
 
         val result = repository.renameList(testServer, listId, newName, newIcon)
