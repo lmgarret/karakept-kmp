@@ -1,173 +1,157 @@
-# Karakept - Kotlin Multiplatform Bookmark Manager
+<p align="center">
+  <img src="composeApp/src/commonMain/composeResources/drawable/icon.png" alt="Karakept" width="128" height="128" />
+</p>
 
-A Kotlin Multiplatform application for managing bookmarks with support for Android and Desktop (JVM).
+<h1 align="center">Karakept</h1>
 
-## 🚀 Running the Application
+<p align="center">
+  A Kotlin Multiplatform client for <a href="https://github.com/karakeep-app/karakeep">Karakeep</a> — manage your bookmarks on Android and Linux Desktop.
+</p>
+
+<p align="center">
+  <strong>Compose Multiplatform</strong> &bull; <strong>Material Design 3</strong> &bull; <strong>Offline-first</strong>
+</p>
+
+---
+
+## Screenshots
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/screenshot_android_bookmark_list.png" alt="Android — Bookmark list" width="200" />
+      <br /><em>Android — Bookmark list</em>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/screenshot_android_bookmark_reader.png" alt="Android — Reader view" width="200" />
+      <br /><em>Android — Reader view</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="docs/screenshots/screenshot_linux_bookmark_list_and_reader.png" alt="Linux Desktop — Navigation, bookmark list, and reader" width="480" />
+      <br /><em>Linux Desktop — Navigation drawer, bookmark list, and reader</em>
+    </td>
+  </tr>
+</table>
+
+## Features
+
+- Browse, search, and filter bookmarks synced from your Karakeep server
+- Customizable bookmark list layout (grid/list, density, sorting)
+- Built-in reader view with customizable appearance
+- Highlight support for saved articles
+- Tag management and filtering
+- Hierarchical list/folder navigation
+- Offline access with local database
+- System tray on Linux and macOS with quick bookmark creation from clipboard
+- Dark theme with Material 3 dynamic colors
+
+## Tech Stack
+
+| | |
+|---|---|
+| **Language** | Kotlin 2.2.0 |
+| **UI** | Compose Multiplatform 1.10.0 (Material 3) |
+| **Navigation** | Voyager 1.1.0-beta03 |
+| **Networking** | Ktor 3.3.2 |
+| **Database** | Room 2.7.0-alpha11 |
+| **DI** | Koin 4.0.0 |
+| **Image loading** | Coil 3.0.0 |
+| **HTML parsing** | KSoup 0.2.1 |
+
+**Platforms:** Android (minSdk 24) and Desktop (JVM) on Linux, macOS, and Windows.
+
+## Getting Started
 
 ### Prerequisites
 
-- The project uses Gradle wrapper, so no need to install Gradle separately
-- For Android: Android SDK (automatically configured in devcontainer)
-- For Desktop: X11 or Wayland display (see GUI forwarding setup below)
+- Java 17 or later (bundled in devcontainer)
+- For Android: Android SDK
+- For Desktop: X11 or Wayland display
 
-### Option 1: Android (Recommended for Devcontainer)
+### Android
 
-#### Debug Build (Development)
-Build the Android APK:
 ```bash
+# Debug build
 ./gradlew assembleDebug
-```
+# APK at: composeApp/build/outputs/apk/debug/composeApp-debug.apk
 
-The APK will be located at: `composeApp/build/outputs/apk/debug/composeApp-debug.apk`
-
-Install on a connected device or emulator:
-```bash
+# Install on connected device
 ./gradlew installDebug
 ```
 
-#### Release Build (Optimized)
-Build the release APK:
+For a release build:
 ```bash
 ./gradlew assembleRelease
-```
-
-The APK will be located at: `composeApp/build/outputs/apk/release/composeApp-release.apk`
-
-> **Note**: The release build uses debug signing for convenience. For production deployment, configure proper release signing in `composeApp/build.gradle.kts`.
-
-Install release version:
-```bash
 ./gradlew installRelease
 ```
 
-### Option 2: Desktop App
+> The release build uses debug signing. For production, configure proper release signing in `composeApp/build.gradle.kts`.
 
-#### One-time host setup
+### Desktop
 
-**Linux** (X11 or Wayland — required for devcontainer GUI forwarding):
+```bash
+./run_desktop.sh
+```
+
+The script auto-detects your display environment (X11, XWayland, Wayland, or headless via Xvfb) and launches the app. It also sets up D-Bus for system tray support.
+
+**Linux host setup** (for devcontainer GUI forwarding):
 ```bash
 xhost +local:
 ```
 
 **macOS**: Install [XQuartz](https://www.xquartz.org/), enable "Allow connections from network clients" in Preferences > Security, then log out and back in.
 
-#### Running
+### Flatpak (Linux)
 
 ```bash
-./run_desktop.sh
-```
-
-The script auto-detects your display environment (X11 forwarding, XWayland, or headless via Xvfb) and launches the app.
-
-### Option 3: Build Distributable Package
-
-To create a distributable package (requires additional dependencies):
-```bash
-./gradlew packageDistributionForCurrentOS
-```
-
-Note: This requires `fakeroot` and other packaging tools. On the host machine:
-```bash
-sudo apt install fakeroot
-```
-
-### Option 4: Flatpak (Linux)
-
-**Prerequisites:**
-```bash
-# Install flatpak-builder
-sudo apt install flatpak flatpak-builder   # Debian/Ubuntu
-sudo dnf install flatpak flatpak-builder   # Fedora
-
-# Add Flathub and install the GNOME runtime
+# Prerequisites
 flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 flatpak install --user flathub org.gnome.Platform//46 org.gnome.Sdk//46
-```
 
-**Build and install locally:**
-```bash
+# Build and install
 ./gradlew packageFlatpak
-# Output: composeApp/build/flatpak/Karakept.flatpak
-
 flatpak install --user composeApp/build/flatpak/Karakept.flatpak
 flatpak run com.karakept.app
 ```
 
-The `packageFlatpak` task runs `createDistributable` first, then wraps the output using the manifest at `flatpak/com.karakept.app.yml`.
+### Distributable Package
 
-> **Note for CI / containers:** If your environment doesn't support user namespaces, pass `-Pflatpak.disableSandbox=true` to skip the build sandbox:
-> ```bash
-> ./gradlew packageFlatpak -Pflatpak.disableSandbox=true
-> ```
+```bash
+./gradlew packageDistributionForCurrentOS
+```
 
-## 🧪 Testing
+Produces platform-specific packages (DEB on Linux, DMG on macOS, MSI on Windows).
 
-Karakept uses a multi-layered testing strategy to ensure reliability across platforms.
+## Testing
 
-### 1. Fast Unit Tests (`commonTest`)
-These tests run without any external dependencies (mocked) and provide sub-second feedback for core business logic.
+### Unit Tests
+
 ```bash
 ./gradlew :composeApp:test
 ```
 
-### 2. Integration Tests (`desktopTest`)
-These tests orchestrate a local Karakeep environment using Docker Compose to verify full end-to-end flows.
-*   **Requirements**: Docker and `docker-compose` must be installed.
-*   **Authentication**: The test automatically registers a unique test user and provisions an API key via tRPC.
+### Integration Tests
 
-Run integration tests:
+Requires Docker. Spins up a local Karakeep environment and runs end-to-end flows:
+
 ```bash
 ./gradlew :composeApp:desktopTest
 ```
 
-### 3. Tips for Testing
-*   **Incremental Builds**: Gradle marks tests as `UP-TO-DATE` if nothing changed. To force a fresh run, use:
-    ```bash
-    ./gradlew desktopTest --rerun-tasks
-    ```
-*   **Detailed Output**: To see registration steps and Docker logs in the terminal:
-    ```bash
-    ./gradlew desktopTest --info
-    ```
-*   **HTML Reports**: View detailed reports in your browser:
-    `composeApp/build/reports/tests/desktopTest/index.html`
+HTML reports: `composeApp/build/reports/tests/desktopTest/index.html`
 
-## 📋 Other Useful Commands
+## Development Setup
 
-```bash
-# List all available tasks
-./gradlew tasks
+### Devcontainer (Recommended)
 
-# Build without running
-./gradlew build
+Open the project in VS Code or any devcontainer-compatible editor and select **"Reopen in Container"**. The devcontainer includes Java 17, Android SDK with NDK, and all required tools.
 
-# Clean build
-./gradlew clean
+### Manual
 
-# Run tests (alias for all targets)
-./gradlew test
-
-# Stop Gradle daemon
-./gradlew --stop
-```
-
-## 🛠️ Development Setup
-
-### Using Devcontainer (Recommended)
-
-This project includes a complete devcontainer configuration with:
-- Java 17
-- Android SDK with NDK
-- Gradle 8.9
-- All required development tools
-
-Simply open the project in VS Code and select **"Reopen in Container"**.
-
-### Manual Setup
-
-If not using devcontainer:
-
-1. Install Java 17 or later
+1. Install Java 17+
 2. Install Android SDK
 3. Set environment variables:
    ```bash
@@ -175,69 +159,22 @@ If not using devcontainer:
    export ANDROID_SDK_ROOT=$ANDROID_HOME
    ```
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 karakept-kmp/
-├── composeApp/          # Main application module
-│   ├── src/
-│   │   ├── commonMain/  # Shared code
-│   │   ├── androidMain/ # Android-specific code
-│   │   └── desktopMain/ # Desktop-specific code
-│   └── build.gradle.kts
-├── .devcontainer/       # Devcontainer configuration
-└── gradle/              # Gradle wrapper and version catalog
+├── composeApp/
+│   └── src/
+│       ├── commonMain/     # Shared UI, data layer, and business logic
+│       ├── androidMain/    # Android platform implementations
+│       └── desktopMain/    # Desktop platform implementations
+├── assets/                 # App icons (SVG launchers, iOS icons)
+├── docs/                   # Documentation and screenshots
+├── flatpak/                # Flatpak build manifest
+├── .devcontainer/          # Devcontainer configuration
+└── gradle/                 # Gradle wrapper and version catalog
 ```
 
-## 📦 Dependencies
+## License
 
-- **Kotlin Multiplatform**: 2.1.0
-- **Compose Multiplatform**: 1.7.0
-- **Ktor**: 3.3.2 (HTTP client)
-- **Room**: 2.7.0-alpha11 (Database)
-- **Voyager**: 1.1.0-beta03 (Navigation)
-- **Koin**: 4.0.0 (Dependency injection)
-- **Coil**: 3.3.0 (Image loading)
-
-## 🐛 Known Issues
-
-- **Desktop app in devcontainer**: Requires GUI forwarding setup (see above)
-- **compileSdk warning**: Using compileSdk 35 with AGP 8.5.2 (warning can be suppressed)
-
-## Roadmap
-
-### Native macOS Build
-
-Goal: ship Karakept as a native macOS app (Kotlin/Native, no JVM dependency).
-
-**Library migrations required:**
-
-| Library | Current (JVM) | KMP Replacement | Status |
-|---------|--------------|-----------------|--------|
-| HTML parsing | JSoup | [Ksoup](https://github.com/fleeksoft/ksoup) | Done |
-| Database | Room (alpha KMP) | SQLDelight | Planned |
-| HTTP engine | OkHttp | Ktor Darwin engine | Planned |
-| HTML rendering | JavaFX WebView | WKWebView (Kotlin/Native interop) | Planned |
-| DataStore | AndroidX DataStore | File-based / NSUserDefaults | Planned |
-| File I/O | `java.io.File` | Kotlin/Native Foundation APIs | Planned |
-
-**Platform implementations needed (expect/actual):**
-- Database builder (`Database.kt`)
-- Preferences storage (`DataStoreFactory.kt`)
-- Platform detection & cache dir (`Platform.kt`)
-- File operations (`FileUtils.kt`)
-- Share functionality (`ShareUtils.kt`)
-- Haptic feedback (`HapticUtils.kt`)
-- HTML display (`HtmlRenderer.kt`)
-- Back navigation (`BackHandler.kt`)
-- URL opening (`CustomTabOpener.kt`)
-- Dynamic theme colors (`PlatformTheme.kt`)
-- Notification permissions (`NotificationPermissionRequest.kt`)
-
-## 📄 License
-
-[Add your license here]
-
-## 🤝 Contributing
-
-[Add contribution guidelines here]
+This project is licensed under the [MIT License](LICENSE).
