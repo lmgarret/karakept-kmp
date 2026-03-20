@@ -76,30 +76,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ERR-01 | — | Pending |
-| ERR-02 | — | Pending |
-| ERR-03 | — | Pending |
-| ERR-04 | — | Pending |
-| NULL-01 | — | Pending |
-| SPLIT-01 | — | Pending |
-| SPLIT-02 | — | Pending |
-| SPLIT-03 | — | Pending |
-| SPLIT-04 | — | Pending |
-| CONC-01 | — | Pending |
-| CONC-02 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
-| SEC-01 | — | Pending |
-| SEC-02 | — | Pending |
-| PERF-01 | — | Pending |
-| PERF-02 | — | Pending |
+| ERR-01 | Phase 1 | Pending |
+| ERR-02 | Phase 1 | Pending |
+| ERR-03 | Phase 1 | Pending |
+| ERR-04 | Phase 1 | Pending |
+| NULL-01 | Phase 1 | Pending |
+| CONC-01 | Phase 2 | Pending |
+| CONC-02 | Phase 2 | Pending |
+| SPLIT-01 | Phase 3 | Pending |
+| SPLIT-02 | Phase 3 | Pending |
+| SPLIT-03 | Phase 3 | Pending |
+| SPLIT-04 | Phase 3 | Pending |
+| TEST-01 | Phase 4 | Pending |
+| TEST-02 | Phase 4 | Pending |
+| TEST-03 | Phase 4 | Pending |
+| SEC-01 | Phase 5 | Pending |
+| SEC-02 | Phase 5 | Pending |
+| PERF-01 | Phase 6 | Pending |
+| PERF-02 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-21*
-*Last updated: 2026-03-21 after initial definition*
+*Last updated: 2026-03-21 after roadmap creation*
