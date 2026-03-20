@@ -39,3 +39,6 @@ build/
 # Signing keystores
 *.keystore
 *.jks
+
+# Flatpak builder files
+.flatpak-builder

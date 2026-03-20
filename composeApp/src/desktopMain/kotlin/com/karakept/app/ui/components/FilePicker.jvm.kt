@@ -5,24 +5,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import tv.wunderbox.nfd.FileDialog
-import tv.wunderbox.nfd.FileDialogResult
-import tv.wunderbox.nfd.nfd.NfdFileDialog
+import javax.swing.JFileChooser
+import javax.swing.filechooser.FileNameExtensionFilter
 
 /**
- * Uses the system-native file picker via nativefiledialog-extended:
+ * Uses the system-native file picker via nativefiledialog-extended when available:
  *   - Linux: GTK file chooser (follows the desktop theme, works inside Flatpak)
  *   - macOS: NSOpenPanel
  *   - Windows: IFileOpenDialog
  *
- * No AWT/Swing dialogs are shown; no GTK L&F is required.
+ * Falls back to Swing [JFileChooser] when nativefiledialog is not on the classpath
+ * (e.g. during `./gradlew run` in a devcontainer, where the nativefiledialog JAR
+ * is excluded to avoid a kotlin-stdlib class-shadowing conflict with Skiko).
  */
 @Composable
 actual fun rememberJsonFilePicker(onContent: (String?) -> Unit): () -> Unit {
     val scope = rememberCoroutineScope()
     return {
         scope.launch(Dispatchers.IO) {
-            val content = openNativeJsonFilePicker()
+            val content = pickJsonFile()
             withContext(Dispatchers.Main) { onContent(content) }
         }
     }
@@ -33,26 +34,48 @@ actual fun rememberDirectoryPicker(onDirectorySelected: (String?) -> Unit): () -
     val scope = rememberCoroutineScope()
     return {
         scope.launch(Dispatchers.IO) {
-            val path = openNativeDirectoryPicker()
+            val path = pickDirectory()
             withContext(Dispatchers.Main) { onDirectorySelected(path) }
         }
     }
 }
 
-private fun openNativeJsonFilePicker(): String? {
-    val result = NfdFileDialog().pickFile(
-        filters = listOf(FileDialog.Filter("JSON backup files", listOf("json"))),
-    )
-    return when (result) {
-        is FileDialogResult.Success<*> -> runCatching { (result.value as java.io.File).readText() }.getOrNull()
-        else -> null
+private fun pickJsonFile(): String? {
+    return try {
+        NfdFilePicker.pickJsonFile()
+    } catch (_: Throwable) {
+        swingPickJsonFile()
     }
 }
 
-private fun openNativeDirectoryPicker(): String? {
-    val result = NfdFileDialog().pickDirectory()
-    return when (result) {
-        is FileDialogResult.Success<*> -> (result.value as java.io.File).absolutePath
-        else -> null
+private fun pickDirectory(): String? {
+    return try {
+        NfdFilePicker.pickDirectory()
+    } catch (_: Throwable) {
+        swingPickDirectory()
     }
+}
+
+private fun swingPickJsonFile(): String? {
+    var content: String? = null
+    java.awt.EventQueue.invokeAndWait {
+        val chooser = JFileChooser()
+        chooser.fileFilter = FileNameExtensionFilter("JSON backup files", "json")
+        if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+            content = chooser.selectedFile.readText()
+        }
+    }
+    return content
+}
+
+private fun swingPickDirectory(): String? {
+    var path: String? = null
+    java.awt.EventQueue.invokeAndWait {
+        val chooser = JFileChooser()
+        chooser.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+        if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+            path = chooser.selectedFile.absolutePath
+        }
+    }
+    return path
 }

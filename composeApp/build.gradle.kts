@@ -250,6 +250,17 @@ configurations.all {
     }
 }
 
+// The nativefiledialog JAR bundles kotlin-stdlib classes that shadow the project's
+// kotlin-stdlib on a flat classpath. This causes NoSuchMethodError in Skiko at startup.
+// Distributions (DMG/Flatpak) use jlink which handles this correctly, so only the
+// `run` task (plain java -cp) is affected.  Exclude it from `run`; FilePicker.jvm.kt
+// falls back to Swing JFileChooser when nativefiledialog classes aren't available.
+afterEvaluate {
+    tasks.named("run", JavaExec::class.java) {
+        classpath = classpath.filter { "nativefiledialog" !in it.name }
+    }
+}
+
 // Flatpak packaging — requires flatpak-builder and org.gnome.Platform//48 installed on the host.
 // Usage: ./gradlew packageFlatpak
 // Output: composeApp/build/flatpak/Karakept.flatpak
