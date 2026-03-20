@@ -24,7 +24,7 @@ datastore = "1.1.1"
 ksoup = "0.2.1"
 compose-webview = "1.0.0-beta-01"
 compose-native-tray = "1.1.0"
-kmpnotifier = "1.6.1"
+knotify = "0.4.3"
 nativefiledialog = "1.0.3"
 testcontainers = "1.20.1"
 mockk = "1.13.12"
@@ -92,8 +92,8 @@ compose-webview = { module = "io.github.kdroidfilter:composewebview", version.re
 # System Tray (Desktop)
 compose-native-tray = { module = "io.github.kdroidfilter:composenativetray", version.ref = "compose-native-tray" }
 
-# Notifications (KMP)
-kmpnotifier = { module = "io.github.mirzemehdi:kmpnotifier", version.ref = "kmpnotifier" }
+# Notifications (Desktop — native D-Bus on Linux, Notification Centre on macOS)
+knotify = { module = "io.github.kdroidfilter:knotify", version.ref = "knotify" }
 
 # Native file picker (GTK on Linux, NSOpenPanel on macOS, IFileOpenDialog on Windows)
 nativefiledialog = { module = "tv.wunderbox:nativefiledialog", version.ref = "nativefiledialog" }

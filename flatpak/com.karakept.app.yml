@@ -17,6 +17,14 @@ finish-args:
   # import backup files from these standard locations without full home access.
   - --filesystem=xdg-download
   - --filesystem=xdg-documents
+  # Native desktop notifications via the freedesktop Notifications interface.
+  - --talk-name=org.freedesktop.Notifications
+  # System tray icon via the StatusNotifierItem (SNI) protocol.
+  # The app registers an SNI object on the session bus and announces it to the
+  # watcher; the desktop shell (GNOME Shell with AppIndicator extension, KDE
+  # Plasma, etc.) then picks it up and renders the icon in the status bar.
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=org.kde.StatusNotifierItem.*
 
 modules:
   - name: karakept
