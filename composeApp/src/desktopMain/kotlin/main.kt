@@ -28,6 +28,7 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setWindowState
 import com.karakept.app.di.appModule
+import com.karakept.app.services.BackgroundSyncScheduler
 import com.kdroid.composetray.tray.api.Tray
 import com.kdroid.composetray.utils.IconRenderProperties
 import com.kdroid.composetray.utils.isMenuBarInDarkMode
@@ -35,8 +36,14 @@ import io.github.kdroidfilter.knotify.builder.AppConfig
 import io.github.kdroidfilter.knotify.builder.ExperimentalNotificationsApi
 import io.github.kdroidfilter.knotify.builder.NotificationInitializer
 import io.github.kdroidfilter.knotify.builder.notification
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -174,6 +181,33 @@ fun main(args: Array<String> = emptyArray()) {
 
     startKoin {
         modules(appModule)
+    }
+
+    // Initialize background sync — mirrors KarakeptApp.initializeBackgroundSync() on Android.
+    // Uses a long-lived scope that outlives individual Compose compositions.
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val bgSyncSettingsRepo = getKoin().get<SettingsRepository>()
+    val bgSyncBookmarkRepo = getKoin().get<BookmarkRepository>()
+    val bgSyncServerRepo = getKoin().get<ServerRepository>()
+    appScope.launch {
+        combine(
+            bgSyncSettingsRepo.backgroundSyncEnabled,
+            bgSyncSettingsRepo.backgroundSyncFrequencyMinutes
+        ) { enabled, frequency -> enabled to frequency }
+            .distinctUntilChanged()
+            .collect { (enabled, frequency) ->
+                if (enabled) {
+                    BackgroundSyncScheduler.schedule(
+                        scope = appScope,
+                        settingsRepository = bgSyncSettingsRepo,
+                        bookmarkRepository = bgSyncBookmarkRepo,
+                        serverRepository = bgSyncServerRepo,
+                        frequencyMinutes = frequency
+                    )
+                } else {
+                    BackgroundSyncScheduler.cancel()
+                }
+            }
     }
 
     // Initialize KNotify for native desktop notifications (D-Bus on Linux, NSUserNotification on macOS).
@@ -376,6 +410,7 @@ fun main(args: Array<String> = emptyArray()) {
                                     maximized = state.placement == WindowPlacement.Maximized
                                 )
                             }
+                            appScope.cancel()
                             exitApplication()
                         }
                     )
