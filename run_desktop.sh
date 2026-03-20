@@ -118,5 +118,39 @@ if ! detect_display; then
     exit 1
 fi
 
+# --- D-Bus session setup ---
+# The Linux system tray (energye/systray via ComposeNativeTray) requires a
+# D-Bus session bus **with a StatusNotifierHost** (e.g. GNOME Shell, KDE Plasma).
+# Without DBUS_SESSION_BUS_ADDRESS the native bridge panics with a nil-pointer
+# dereference, so we always need a bus.
+#
+# In a devcontainer the host's D-Bus is not forwarded by default. We try to
+# locate the host's D-Bus socket at common paths before falling back to
+# dbus-launch (which starts an empty bus with no StatusNotifierHost).
+if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+    host_dbus_found=false
+    # Try standard XDG runtime dir locations (host socket may be bind-mounted)
+    for uid_dir in /run/user/*; do
+        if [[ -S "$uid_dir/bus" ]]; then
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=$uid_dir/bus"
+            echo "Using host D-Bus session at $uid_dir/bus"
+            host_dbus_found=true
+            break
+        fi
+    done
+    if [[ "$host_dbus_found" == "false" ]]; then
+        if command -v dbus-launch &>/dev/null; then
+            eval "$(dbus-launch --sh-syntax)"
+            echo "Started D-Bus session for system tray support"
+            echo "  Note: tray icon requires a StatusNotifierHost (desktop panel)."
+            echo "  In a devcontainer, mount the host D-Bus socket for tray support:"
+            echo "    docker run -v /run/user/\$(id -u)/bus:/run/user/\$(id -u)/bus ..."
+        else
+            echo "INFO: dbus-launch not found; system tray icon will be disabled."
+            echo "      Install with: sudo apt-get install -y dbus"
+        fi
+    fi
+fi
+
 echo "Launching desktop app..."
 exec ./gradlew run

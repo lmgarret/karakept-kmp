@@ -12,7 +12,7 @@
             "installYarnUsingApt": "false"
         },
         "ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
-            "packages": "curl,nano,vim,ninja-build,python3,libgtk-3-dev,libwebkit2gtk-4.1-dev,xvfb,mesa-utils,libxcursor1,libxrandr2,libxi6,libxxf86vm1,fonts-noto-color-emoji,flatpak,flatpak-builder,dbus-x11,elfutils,imagemagick"
+            "packages": "curl,nano,vim,ninja-build,python3,libgtk-3-dev,libwebkit2gtk-4.1-dev,xvfb,mesa-utils,libxcursor1,libxrandr2,libxi6,libxxf86vm1,fonts-noto-color-emoji,flatpak,flatpak-builder,dbus-x11,elfutils,imagemagick,libnotify-dev"
         }
     },
     "remoteEnv": {
@@ -40,6 +40,7 @@
     "mounts": [
         "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind",
         "source=${localEnv:XDG_RUNTIME_DIR}/${localEnv:WAYLAND_DISPLAY},target=/tmp/wayland-0,type=bind",
+        "source=${localEnv:XDG_RUNTIME_DIR}/bus,target=/tmp/host-dbus.sock,type=bind",
         "source=karakept-android-home,target=/home/vscode/.android,type=volume",
         "source=karakept-gemini-home,target=/home/vscode/.gemini,type=volume",
         "source=${localEnv:HOME}/.var/app/com.bitwarden.desktop/data/.bitwarden-ssh-agent.sock,target=/tmp/ssh-agent.sock,type=bind",
@@ -48,6 +49,7 @@
     "containerEnv": {
         "DISPLAY": ":0",
         "XDG_RUNTIME_DIR": "/tmp",
-        "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock"
+        "SSH_AUTH_SOCK": "/tmp/ssh-agent.sock",
+        "DBUS_SESSION_BUS_ADDRESS": "unix:path=/tmp/host-dbus.sock"
     }
 }

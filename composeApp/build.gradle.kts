@@ -81,9 +81,6 @@ kotlin {
                 // HTML Parsing (KMP)
                 implementation(libs.ksoup)
 
-                // Notifications (KMP — Android + Desktop)
-                implementation(libs.kmpnotifier)
-
                 // Native WebView (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
                 implementation(libs.compose.webview)
             }
@@ -112,6 +109,8 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
                 // System Tray (native menus with icons, HiDPI support)
                 implementation(libs.compose.native.tray)
+                // Notifications (native D-Bus on Linux, Notification Centre on macOS)
+                implementation(libs.knotify)
                 // Native file picker (GTK on Linux, NSOpenPanel on macOS)
                 implementation(libs.nativefiledialog)
             }

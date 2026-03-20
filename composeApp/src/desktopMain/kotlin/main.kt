@@ -23,16 +23,17 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import com.kdroid.composetray.utils.isMenuBarInDarkMode
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.di.appModule
 import com.kdroid.composetray.tray.api.Tray
 import com.kdroid.composetray.utils.IconRenderProperties
-import com.mmk.kmpnotifier.notification.Notifier
-import com.mmk.kmpnotifier.notification.NotifierManager
-import com.mmk.kmpnotifier.notification.configuration.NotificationPlatformConfiguration
+import com.kdroid.composetray.utils.isMenuBarInDarkMode
+import io.github.kdroidfilter.knotify.builder.AppConfig
+import io.github.kdroidfilter.knotify.builder.ExperimentalNotificationsApi
+import io.github.kdroidfilter.knotify.builder.NotificationInitializer
+import io.github.kdroidfilter.knotify.builder.notification
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
@@ -99,6 +100,7 @@ fun main(args: Array<String> = emptyArray()) {
     // }
 
     val isMac = System.getProperty("os.name").lowercase().contains("mac")
+    val isLinux = System.getProperty("os.name").lowercase().contains("linux")
 
     // Load the window icon before entering composition (non-composable).
     // macOS: use the macOS-styled icon and also push it to the Dock early so the
@@ -173,13 +175,15 @@ fun main(args: Array<String> = emptyArray()) {
         modules(appModule)
     }
 
-    // Initialize KMPNotifier for desktop notifications
-    NotifierManager.initialize(
-        NotificationPlatformConfiguration.Desktop(
-            showPushNotification = true,
-            notificationIconPath = null
-        )
-    )
+    // Initialize KNotify for native desktop notifications (D-Bus on Linux, NSUserNotification on macOS).
+    // The app-level smallIcon is extracted from the JAR to a temp file automatically by KNotify.
+    try {
+        val iconUri = Thread.currentThread().contextClassLoader
+            .getResource("macos-icon.png")?.toString()
+        NotificationInitializer.configure(AppConfig(appName = "Karakept", smallIcon = iconUri))
+    } catch (_: UnsatisfiedLinkError) {
+        // libnotify.so not available — notifications will be silently skipped
+    }
 
     // Read persisted window state before entering composition
     val settingsRepo = getKoin().get<SettingsRepository>()
@@ -195,8 +199,6 @@ fun main(args: Array<String> = emptyArray()) {
         val coroutineScope = rememberCoroutineScope()
         val bookmarkRepo = remember { getKoin().get<BookmarkRepository>() }
         val serverRepo = remember { getKoin().get<ServerRepository>() }
-        val notifier: Notifier = remember { NotifierManager.getLocalNotifier() }
-
         // Observe server connection status for tray menu
         var hasServer by remember { mutableStateOf(false) }
         var serverLabel by remember { mutableStateOf("") }
@@ -248,12 +250,16 @@ fun main(args: Array<String> = emptyArray()) {
         }
 
         // System tray icon with native menu (ComposeNativeTray).
-        // The iconContent overload renders the composable via ImageComposeScene and
-        // re-renders when isMenuBarInDarkMode() changes, so the icon adapts to
-        // light/dark theme. We tint the bitmap to a monochrome silhouette (black
-        // for light menu bar, white for dark) like a native macOS template image.
-        // Padding keeps the icon slightly smaller than the full menu-bar height
-        // (~18 pt within the 22 pt slot) to match native macOS status-bar icons.
+        //
+        // macOS: render the monochrome tray-icon.png as a template-image style silhouette,
+        //   tinted white in dark menu bar and black in light menu bar. padding(16.dp) keeps
+        //   the icon slightly smaller than the 22 pt slot (~18 pt), matching native icons.
+        //
+        // Linux: render the full-colour app icon. Linux DEs (GNOME, KDE…) display coloured
+        //   tray icons and do not apply automatic template-image inversion.
+        //
+        // Dark mode: isMenuBarInDarkMode() handles detection on all platforms
+        //   (macOS wallpaper-based, KDE theme-based, GNOME/XFCE/CINNAMON always dark).
         val isDarkMenuBar = isMenuBarInDarkMode()
         val trayIconTint = if (isDarkMenuBar) Color.White else Color.Black
         // Render menu-item icons at 32×32 px so Retina displays get a crisp
@@ -262,20 +268,38 @@ fun main(args: Array<String> = emptyArray()) {
             sceneWidth = 64, sceneHeight = 64,
             targetWidth = 32, targetHeight = 32
         )
+        // Linux tray icon: render at 128×128 so the icon stays crisp on HiDPI panels.
+        // The DE downscales to its preferred slot size. Without this, the library default
+        // is 192 scene → 24 target on Linux which looks blurry on modern displays.
+        val linuxTrayIconProps = IconRenderProperties.withoutScalingAndAliasing(
+            sceneWidth = 128, sceneHeight = 128
+        )
         // On Linux, skip the system tray if there is no D-Bus session — the
         // energye/systray native bridge panics with a nil-pointer dereference
         // when DBus is unavailable (e.g. devcontainer, CI, headless servers).
-        val hasDBus = !System.getProperty("os.name").lowercase().contains("linux") ||
+        val hasDBus = !isLinux ||
             System.getenv("DBUS_SESSION_BUS_ADDRESS") != null
         if (trayIconImage != null && hasDBus) {
             Tray(
+                iconRenderProperties = if (!isMac) linuxTrayIconProps else IconRenderProperties.forCurrentOperatingSystem(),
                 iconContent = {
-                    Image(
-                        bitmap = trayIconImage,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize().padding(16.dp),
-                        colorFilter = ColorFilter.tint(trayIconTint)
-                    )
+                    if (isMac) {
+                        // macOS: monochrome silhouette, adaptive tint
+                        Image(
+                            bitmap = trayIconImage,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            colorFilter = ColorFilter.tint(trayIconTint)
+                        )
+                    } else if (iconImage != null) {
+                        // Linux: full-colour app icon, no padding — the 128×128
+                        // scene gives plenty of resolution for crisp rendering.
+                        Image(
+                            bitmap = iconImage,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 },
                 tooltip = "Karakept",
                 primaryAction = { isWindowVisible = !isWindowVisible },
@@ -295,23 +319,23 @@ fun main(args: Array<String> = emptyArray()) {
                             coroutineScope.launch {
                                 val url = readUrlFromClipboard()
                                 if (url == null) {
-                                    notifier.notify(title = "Karakept", body = "No URL found in clipboard")
+                                    notify(title = "Karakept", message = "No URL found in clipboard")
                                     return@launch
                                 }
-                                notifier.notify(title = "Karakept", body = "Saving bookmark...")
+                                notify(title = "Karakept", message = "Saving bookmark...")
                                 try {
                                     val result = bookmarkRepo.createBookmark(url)
                                     if (result.isSuccess) {
                                         val bookmark = result.getOrThrow()
-                                        notifier.notify(title = "Bookmark Saved", body = bookmark.title)
+                                        notify(title = "Bookmark Saved", message = bookmark.title)
                                     } else {
-                                        notifier.notify(
+                                        notify(
                                             title = "Save Failed",
-                                            body = result.exceptionOrNull()?.message ?: "Unknown error"
+                                            message = result.exceptionOrNull()?.message ?: "Unknown error"
                                         )
                                     }
                                 } catch (e: Exception) {
-                                    notifier.notify(title = "Save Failed", body = e.message ?: "Unknown error")
+                                    notify(title = "Save Failed", message = e.message ?: "Unknown error")
                                 }
                             }
                         }
@@ -372,6 +396,16 @@ fun main(args: Array<String> = emptyArray()) {
                 App(sharedUrl = pendingShareUrl)
             }
         }
+    }
+}
+
+/** Send a native desktop notification, silently ignoring if libnotify is unavailable. */
+@OptIn(ExperimentalNotificationsApi::class)
+private fun notify(title: String, message: String) {
+    try {
+        notification(title = title, message = message).send()
+    } catch (_: UnsatisfiedLinkError) {
+        // libnotify.so not available (e.g. devcontainer without libnotify-dev)
     }
 }
 
