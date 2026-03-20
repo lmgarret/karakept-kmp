@@ -1,0 +1,221 @@
+# Technology Stack
+
+**Analysis Date:** 2026-03-20
+
+## Languages
+
+**Primary:**
+- Kotlin 2.2.0 - Core application logic, multiplatform targets (Android, JVM Desktop)
+- JavaScript/TypeScript - Upstream monorepo (Node.js services and tooling)
+
+**Secondary:**
+- XML - Android manifest and resource definitions
+- JSON - Configuration and OpenAPI specifications
+
+## Runtime
+
+**Environment:**
+- JVM 1.8+ (Android targets JVM 8, compiled down to Android bytecode)
+- Android Runtime (ART) - Android 6.0+ (API 24)
+- Java Desktop (JVM via Gradle Compose Desktop)
+
+**Package Manager:**
+- Gradle 8.x with Kotlin DSL
+- Gradle Wrapper (local versioning)
+- npm/pnpm 9.15.9 (for upstream monorepo)
+
+## Frameworks
+
+**Core UI:**
+- Jetbrains Compose Multiplatform 1.10.0 - Cross-platform UI framework
+- Material Design 3 (androidx.compose.material3) - Material components and theme system
+- Compose Material 1.x (androidx.compose.material) - Base Material components
+
+**Navigation:**
+- Voyager 1.1.0-beta03 - Navigator with screen models for KMP
+  - voyager-navigator: Core navigation
+  - voyager-screenModel: ViewModel alternative for Compose
+  - voyager-transitions: Navigation animations
+  - voyager-koin: Koin dependency injection integration
+
+**Networking:**
+- Ktor Client 3.3.2 - HTTP client with multiplatform support
+  - ktor-client-core: Core HTTP client
+  - ktor-client-okhttp: OkHttp engine for JVM (Android + Desktop)
+  - ktor-client-content-negotiation: Content type negotiation
+  - ktor-serialization-kotlinx-json: JSON serialization plugin
+  - ktor-client-auth: Authentication plugin
+  - ktor-client-logging: Request/response logging
+
+**Database:**
+- Room 2.7.0-alpha11 - Local SQLite ORM with KMP support
+  - androidx-room-runtime: Runtime database support
+  - androidx-room-compiler: Code generation via KSP
+- SQLite 2.5.0-alpha11 (bundled) - Embedded database
+  - androidx-sqlite-bundled: Bundled SQLite driver for consistent behavior
+
+**State Management:**
+- Koin 4.0.0 - Dependency injection
+  - koin-core: Core DI container
+  - koin-compose: Compose integration
+  - koin-android: Android-specific support
+  - koin-androidx-workmanager: WorkManager task scheduling
+
+**Serialization:**
+- kotlinx-serialization 1.7.3 - Multiplatform serialization
+  - kotlinx-serialization-json: JSON codec
+- kotlinx-datetime 0.6.2 - Multiplatform date/time handling
+
+**Image Loading:**
+- Coil 3.0.0 - Image loading and caching
+  - coil-compose: Compose integration with Image() composable
+  - coil-network-ktor: Ktor HTTP client engine for image loading
+
+**Local Preferences:**
+- DataStore 1.1.1 - Type-safe key-value store (successor to SharedPreferences)
+  - androidx-datastore-preferences-core: Core library
+  - androidx-datastore-preferences-android: Android-specific implementation
+
+**Async Programming:**
+- kotlinx-coroutines 1.9.0 - Async and concurrency primitives
+  - kotlinx-coroutines-core: Core coroutine runtime
+  - kotlinx-coroutines-android: Android dispatcher integration
+  - kotlinx-coroutines-swing: Swing dispatcher for desktop UI thread
+  - kotlinx-coroutines-test: Testing utilities
+
+**HTML Parsing:**
+- ksoup 0.2.1 - HTML/XML parsing library (KMP-compatible)
+- Used for metadata extraction from bookmarked web content
+
+**Notifications:**
+- KMP Notifier 1.6.1 - Multiplatform local notifications
+  - Android: Native notifications via NotificationManager
+  - Desktop: System notifications
+
+**Desktop-Specific:**
+- Compose Native Tray 1.1.0 - System tray integration
+  - macOS: Native NSStatusBar
+  - Windows: Native taskbar
+  - Linux: D-Bus interface (via DBus-x11)
+- Native File Dialog 1.0.3 - File picker dialogs
+  - Linux: GTK file chooser
+  - macOS: NSOpenPanel
+  - Windows: IFileOpenDialog
+
+**WebView:**
+- Compose WebView 1.0.0-beta-01 - Web content rendering
+  - macOS: WKWebView
+  - Windows: WebView2
+  - Linux: WebKitGTK
+
+**Android Integration:**
+- androidx-activity-compose 1.9.3 - Activity + Compose integration
+- androidx-browser 1.8.0 - Custom Chrome tabs for opening web content
+- androidx-core-splashscreen 1.0.1 - Splash screen API
+- androidx-lifecycle 2.8.4 - Lifecycle-aware components
+- androidx-work-runtime-ktx 2.9.0 - Background task scheduling
+
+## Build & Code Generation
+
+**Build System:**
+- Gradle 8.10.0 (AGP - Android Gradle Plugin)
+
+**Code Generation:**
+- KSP 2.2.0-2.0.2 (Kotlin Symbol Processing) - Annotation processor
+- OpenAPI Generator 7.10.0 - Generate API client from OpenAPI spec
+  - Generates Kotlin multiplatform client to `com.karakept.api.*`
+  - Located at: `api-client/` module
+  - Source spec: `/karakeep-upstream/packages/open-api/karakeep-openapi-spec.json`
+
+**Kotlin Compiler Plugin:**
+- compose-compiler (bundled with kotlin-plugin-compose) - Compose IR compiler
+
+## Key Dependencies
+
+**Critical Infrastructure:**
+- Room ORM - Single source of truth for local data
+- Ktor HttpClient - All remote API communication
+- Koin - Application dependency graph and lifecycle management
+- kotlinx-coroutines - Structured concurrency for all async operations
+
+**Serialization Pipeline:**
+- OpenAPI Generator → Kotlin models (api-client module)
+- kotlinx-serialization JSON codec ↔ API models
+- Room Entity mappers ↔ Database models
+
+## Testing & Development
+
+**Testing:**
+- JUnit 4.13.2 - Unit test framework
+- mockk 1.13.12 - Kotlin mocking library
+- kotlinx-coroutines-test - Coroutine testing utilities
+- Testcontainers 1.20.1 - Integration test containers (database isolation)
+
+**Kotlin Test Framework:**
+- kotlin-test - Standard library test assertions
+
+## Configuration
+
+**Environment:**
+- `.devcontainer/devcontainer.json` - VS Code devcontainer for development
+  - Java 21 base image (bookworm)
+  - Android SDK 36 with NDK 26.1
+  - Node.js LTS
+  - Desktop build dependencies (Ninja, GTK, WebKit)
+  - D-Bus for system tray on Linux
+  - Includes build/bundle script at `setup.sh`
+
+**Build Properties:**
+- `gradle.properties`:
+  - JVM args: `-Xmx2048m` max heap
+  - Kotlin code style: official
+  - Android/Compose settings for Gradle plugin behavior
+  - File encoding: UTF-8
+
+**Android Configuration:**
+- Min SDK: 24 (Android 7.0)
+- Target SDK: 35 (Android 14)
+- Compile SDK: 36 (Android 15)
+- Application ID: `com.karakept.app`
+- Build variants: debug, release, devRelease (staging)
+
+**Desktop Application:**
+- Runs on JVM via Compose Desktop
+- macOS, Windows, Linux support
+- Native menu bar integration via compose-native-tray
+- File picker via GTK/native dialogs
+
+**CI/CD:**
+- GitHub Actions workflow (`.github/workflows/`)
+  - `release.yml` - Version resolution, build, and release
+  - `pr-build.yml` - Pull request validation
+  - `ci.yml` - Continuous integration
+  - Uses LLM for changelog generation (mistral/mistral-large-latest)
+  - Signing configured via environment variables (KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)
+
+## Platform Requirements
+
+**Development:**
+- JDK 11+ (devcontainer ships JDK 21)
+- Android SDK 36
+- Android NDK 26.1+ (for native libraries if needed)
+- Node.js LTS (for upstream monorepo tooling)
+- GTK development libraries (Linux desktop development)
+- WebKit development libraries (Linux desktop development)
+- D-Bus (for system tray on Linux desktop)
+
+**Android Runtime:**
+- Android 6.0+ (API 24+)
+- Minimum 2GB RAM recommended
+- Vibration permission required
+- POST_NOTIFICATIONS permission (Android 13+)
+
+**Desktop Runtime:**
+- JVM 8+ compatible
+- Linux: GTK 3+, WebKit2GTK 4.1+, D-Bus
+- macOS: 10.13+, native runtime environment
+- Windows: WebView2 runtime
+
+---
+
+*Stack analysis: 2026-03-20*
