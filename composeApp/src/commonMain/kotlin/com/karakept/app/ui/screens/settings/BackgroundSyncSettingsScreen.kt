@@ -53,37 +53,110 @@ private val FREQUENCY_OPTIONS = listOf(
 )
 
 class BackgroundSyncSettingsScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinScreenModel<SettingsScreenModel>()
+        BackgroundSyncSettingsContent(
+            screenModel = screenModel,
+            onBack = { navigator.pop() }
+        )
+    }
+}
 
-        val backgroundSyncEnabled by screenModel.backgroundSyncEnabled.collectAsState()
-        val frequencyMinutes by screenModel.backgroundSyncFrequencyMinutes.collectAsState()
-        val digestEnabled by screenModel.backgroundSyncDigestNotification.collectAsState()
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BackgroundSyncSettingsContent(
+    screenModel: SettingsScreenModel,
+    onBack: () -> Unit,
+    showBackButton: Boolean = true
+) {
+    val backgroundSyncEnabled by screenModel.backgroundSyncEnabled.collectAsState()
+    val frequencyMinutes by screenModel.backgroundSyncFrequencyMinutes.collectAsState()
+    val digestEnabled by screenModel.backgroundSyncDigestNotification.collectAsState()
 
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Background Sync") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Background Sync") },
+                navigationIcon = {
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
-                )
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Enable background sync toggle
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Sync,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Enable Background Sync",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Automatically sync bookmarks while the app is in the background",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = backgroundSyncEnabled,
+                        onCheckedChange = { screenModel.setBackgroundSyncEnabled(it) }
+                    )
+                }
             }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Enable background sync toggle
+
+            // Frequency picker — only visible when sync is enabled
+            if (backgroundSyncEnabled) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Sync Frequency",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "How often bookmarks should be synced in the background",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        FrequencyDropdown(
+                            selectedMinutes = frequencyMinutes,
+                            onSelect = { screenModel.setBackgroundSyncFrequencyMinutes(it) }
+                        )
+                    }
+                }
+
+                // Digest notification toggle
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
@@ -93,86 +166,26 @@ class BackgroundSyncSettingsScreen : Screen {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Sync,
+                            imageVector = Icons.Default.Notifications,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 16.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Enable Background Sync",
+                                text = "Sync Digest Notification",
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                text = "Automatically sync bookmarks while the app is in the background",
+                                text = "Show a notification after each background sync completes",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
-                            checked = backgroundSyncEnabled,
-                            onCheckedChange = { screenModel.setBackgroundSyncEnabled(it) }
+                            checked = digestEnabled,
+                            onCheckedChange = { screenModel.setBackgroundSyncDigestNotification(it) }
                         )
-                    }
-                }
-
-                // Frequency picker — only visible when sync is enabled
-                if (backgroundSyncEnabled) {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        ) {
-                            Text(
-                                text = "Sync Frequency",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "How often bookmarks should be synced in the background",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            FrequencyDropdown(
-                                selectedMinutes = frequencyMinutes,
-                                onSelect = { screenModel.setBackgroundSyncFrequencyMinutes(it) }
-                            )
-                        }
-                    }
-
-                    // Digest notification toggle
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = null,
-                                modifier = Modifier.padding(end = 16.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Sync Digest Notification",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    text = "Show a notification after each background sync completes",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Switch(
-                                checked = digestEnabled,
-                                onCheckedChange = { screenModel.setBackgroundSyncDigestNotification(it) }
-                            )
-                        }
                     }
                 }
             }
