@@ -1,0 +1,200 @@
+# Architecture
+
+**Analysis Date:** 2026-03-20
+
+## Pattern Overview
+
+**Overall:** Clean Architecture with MVVM (ScreenModel) for presentation layer, Repository pattern for data layer, and a Domain layer for business logic and actions.
+
+**Key Characteristics:**
+- Multiplatform Kotlin (Compose Multiplatform targeting Android)
+- Clear separation between UI (Voyager screens), Data (repositories + local/remote sources), and Domain (business logic)
+- State management through Kotlin coroutines Flows with Voyager's ScreenModel
+- Centralized action dispatch through BookmarkActionController with automatic undo support
+- Offline-first approach with sync strategies (full, filtered, per-list)
+- Generated API client for Remote interactions
+
+## Layers
+
+**UI Layer (Presentation):**
+- Purpose: Compose Multiplatform screens and reusable components, state management via ScreenModel
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/` and `composeApp/src/androidMain/kotlin/com/karakept/app/ui/`
+- Contains: Screen composables (MainScreen, BookmarkViewerScreen, LoginScreen, SettingsScreen), reusable components (TagChip, BookmarkTagsDisplay, FilterBottomPanel, TagEditorDialog), theme configuration
+- Depends on: Data layer (repositories), Domain layer (business logic utilities, action events)
+- Used by: App.kt entry point and Voyager navigator
+
+**Domain Layer (Business Logic):**
+- Purpose: Encapsulate business rules, filtering logic, and centralized action handling
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/domain/`
+- Contains: BookmarkActionController (with undo support), BookmarkActionEvent sealed class hierarchy, ActionSnackbarManager, filter utilities (BookmarkFilterUtils), list hierarchy utilities
+- Depends on: Data layer (repositories, DAOs)
+- Used by: ScreenModels and repositories
+
+**Data Layer (Repositories):**
+- Purpose: Abstract data sources (local DB and remote API), provide unified interfaces for data access
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/`
+- Contains: BookmarkRepository, ListRepository, ServerRepository, SettingsRepository, HighlightRepository, BookmarkActionsRepository, BackupRepository
+- Depends on: Local data source (DAOs, SQLDelight DB), Remote data source (Ktor client with generated API)
+- Used by: ScreenModels and domain layer (BookmarkActionController)
+
+**Local Data Source:**
+- Purpose: Persistent storage via Room/SQLDelight, offline state, pending actions queue
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/local/`
+- Contains: AppDatabase (Room), DAOs (BookmarkDao, ListDao, ServerDao, etc.), entities (BookmarkEntity, ListEntity, PendingActionEntity, HighlightEntity)
+- Platform-specific: `composeApp/src/androidMain/kotlin/com/karakept/app/data/local/` handles database builder and DataStore initialization
+
+**Remote Data Source:**
+- Purpose: HTTP communication with Karakept server, API abstraction, offline mode guard
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/remote/`
+- Contains: RemoteDataSource (wraps generated API clients), KtorClient (HTTP setup), API client instances (BookmarksApi, ListsApi, TagsApi, HighlightsApi, UsersApi)
+- Uses: Ktor HttpClient with authentication interceptor, generated API clients
+
+## Data Flow
+
+**Bookmark Sync Flow:**
+
+1. ScreenModel (MainScreenModel) triggers `syncBookmarks(server)` on user action
+2. BookmarkRepository.executeSyncPipeline(SyncConfiguration) called
+3. RemoteDataSource guards against offline mode and fetches from API
+4. Bookmarks mapped from API model → BookmarkEntity and persisted to Room DB
+5. Flow<List<BookmarkEntity>> emitted back to UI
+6. ScreenModel collects and updates UI state
+
+**Bookmark Action Flow (with Undo):**
+
+1. User triggers action in UI (delete, archive, favorite, etc.)
+2. ScreenModel emits BookmarkActionEvent to BookmarkActionController
+3. BookmarkActionController.executeAction():
+   - Captures undo state (original bookmark + position)
+   - Routes to BookmarkActionsRepository for backend sync
+   - Caches action in undo map (5-second window)
+   - Immediately updates local DB
+   - Emits ActionSnackbarManager event
+4. ActionSnackbarManager displays snackbar with undo button
+5. User can undo: BookmarkActionController reads from undo cache and reverses operation
+6. Pending actions queued in PendingActionDao for sync when online
+
+**Tag Filtering Flow:**
+
+1. MainScreenModel.currentFilter updated with tag filter
+2. BookmarkFilterUtils.filterBookmarks() applied to bookmark stream
+3. Filtered list emitted to BookmarkList composable
+4. TagEditorDialog (with canCreateNew=false) for filter mode
+
+**List Hierarchy Display:**
+
+1. ListRepository.lists emits List<KarakeepList>
+2. ListHierarchyUtils.buildListHierarchy() sorts alphabetically at each level, parents before children
+3. filterExpandedHierarchy() applied if collapsible UI (navigation drawer)
+4. NavigationDrawerItem rendered for each hierarchy node
+
+**State Management:**
+
+- StateFlow used for UI state (selectedServer, isSyncing, currentFilter, expandedLists)
+- SharedFlow used for events (scrollToTopTrigger, createBookmarkResult, undoCompletedEvents)
+- screenModelScope from Voyager cancels flows when screen is disposed
+- Coroutines.flow for cold flows (database queries wrapped in flow { emitAll(...) })
+
+## Key Abstractions
+
+**BookmarkActionEvent (Sealed Class):**
+- Purpose: Type-safe representation of all possible bookmark mutations
+- Examples: Archive, Unarchive, MarkRead, MarkUnread, ToggleFavorite, Delete, UpdateTags, MoveToList, RemoveFromList
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/domain/action/BookmarkActionEvent.kt`
+- Pattern: Sealed class hierarchy with discriminator field `requiresUndo` to determine if undo support applies
+
+**Server (Data Model):**
+- Purpose: Represents authenticated connection to a Karakept server
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/model/Server.kt`
+- Contains: id, url, apiKey, userId, username
+- Used by: All repositories to route requests to correct server
+
+**SyncConfiguration (Internal to BookmarkRepository):**
+- Purpose: Describes what bookmarks to sync and how to handle deletions
+- Variants: Full (fetch all, delete removed), Filtered (archived/favorited only, upsert only), ForList (specific list)
+- Pattern: Sealed class with abstract properties controlling sync behavior
+
+**FilterConfig:**
+- Purpose: Encapsulates all active filters (tags, lists, archived, favorited, search query)
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/model/FilterConfig.kt`
+- Used by: MainScreenModel and BookmarkFilterUtils
+
+**ScreenModel (from Voyager):**
+- Purpose: Lifecycle-scoped state holder for a screen, survives configuration changes
+- Pattern: Each screen has a corresponding ScreenModel factory (LoginScreenModel, MainScreenModel, BookmarkViewerScreenModel, etc.)
+- Dependencies injected via Koin
+
+## Entry Points
+
+**App Composable:**
+- Location: `composeApp/src/commonMain/kotlin/App.kt`
+- Triggers: LaunchedEffect on compose startup
+- Responsibilities:
+  - Initialize Koin DI (via KoinApplication wrapper)
+  - Set up image loader with authentication for asset URLs
+  - Route to initial screen based on app state (OnboardingScreen, LoginScreen, MainScreen, ShareBookmarkScreen, BookmarkViewerScreen)
+  - Apply theme (AppTheme with Material3 colors and accent color)
+  - Initialize Voyager Navigator with SlideTransition
+
+**MainScreen / MainScreenModel:**
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreen.kt`
+- Triggers: After login/onboarding, when servers exist
+- Responsibilities:
+  - Display list of bookmarks with filters, search, sorting
+  - Manage list hierarchy (navigation drawer)
+  - Coordinate bookmark sync, delete, edit, and tag operations
+  - Track pagination state (page size 20)
+  - Show sync progress and pending bookmark indicators
+  - Route to BookmarkViewerScreen for detail view
+
+**BookmarkViewerScreen / BookmarkViewerScreenModel:**
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreen.kt`
+- Triggers: User taps bookmark from MainScreen or via deep link
+- Responsibilities:
+  - Render full bookmark details with hero image, HTML content, highlights
+  - Display and manage highlights (create, delete, sync)
+  - Show reader mode (with font/theme/size customization)
+  - Handle tag editing and bookmark actions (favorite, archive, move to list)
+
+## Error Handling
+
+**Strategy:** Try-catch with Result<T> for operations that can fail, OfflineModeException for network requests in offline mode.
+
+**Patterns:**
+
+- RemoteDataSource.guardedCall() blocks all network requests if offline mode enabled → throws OfflineModeException
+- BookmarkActionController.executeAction() returns BookmarkActionResult (Success or Error sealed class)
+- Repositories catch exceptions and emit empty lists or null on failure (best-effort)
+- ScreenModels catch exceptions in LaunchedEffect and emit failure to UI via SharedFlow (e.g., _createBookmarkResult)
+- UI displays snackbars via ActionSnackbarManager when actions complete
+- Backup/restore operations wrapped in try-catch (best-effort, logged but not fatal)
+
+## Cross-Cutting Concerns
+
+**Logging:**
+- println() debug statements throughout (e.g., "🖼️ Coil loading image", "🔐 Adding auth header")
+- No centralized logging framework; production should upgrade to proper logger
+
+**Validation:**
+- Server URL normalization in RemoteDataSource (strip trailing slash, ensure /api/v1 suffix)
+- Bookmark parsing: title sanitization in remote sync, HTML content validation
+- Tag filtering: empty tag lists filtered out in BookmarkFilterUtils
+
+**Authentication:**
+- Bearer token attached by RemoteDataSource to all generated API client calls
+- Asset URLs (Coil images) require Authorization header intercepted in App.kt
+- Server credentials stored in Room DB (ServerEntity), sensitive data protected by device encryption
+
+**Synchronization (Offline-First):**
+- Pending actions queued in PendingActionDao before network attempt
+- BookmarkActionsRepository handles sync retry on network recovery
+- Sync mutex in BookmarkRepository prevents concurrent syncs
+- SettingsRepository.effectiveOfflineMode flow checked before remote calls
+
+**Dependency Injection:**
+- Koin module configured in AppModule.kt (single instances for repositories, factories for ScreenModels)
+- Circular dependency between BookmarkActionsRepository and BookmarkRepository resolved manually in AppModule via setBookmarkRepository()
+
+---
+
+*Architecture analysis: 2026-03-20*
