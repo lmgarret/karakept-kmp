@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fleeksoft.ksoup.Ksoup
+import com.fleeksoft.ksoup.nodes.Document
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.ui.theme.rememberFontFamily
@@ -60,7 +61,8 @@ fun NativeHtmlRenderer(
     onHighlightPosition: (String, HighlightPosition) -> Unit = { _, _ -> },
     scrollToHighlightId: String? = null,
     selectedHighlightId: String? = null,
-    onLoaded: (() -> Unit)? = null
+    onLoaded: (() -> Unit)? = null,
+    parseDocument: ((String) -> Document?)? = null
 ) {
     val surfaceColor = MaterialTheme.colorScheme.surface
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -89,7 +91,7 @@ fun NativeHtmlRenderer(
 
     // Parse HTML once and cache
     val document = remember(html) {
-        try {
+        parseDocument?.invoke(html) ?: try {
             Ksoup.parse(html)
         } catch (e: Exception) {
             null

@@ -37,6 +37,7 @@ import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.HtmlArchiveProcessor
 import com.karakept.app.utils.HtmlCache
 import com.karakept.app.utils.HtmlSanitizer
+import com.fleeksoft.ksoup.nodes.Document
 
 /**
  * Composable wrapper for rendering HTML content safely.
@@ -73,7 +74,8 @@ fun HtmlContent(
     onHighlightClick: ((String) -> Unit)? = null,
     onHighlightPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit = { _, _ -> },
     scrollToHighlightId: String? = null,
-    selectedHighlightId: String? = null
+    selectedHighlightId: String? = null,
+    parseDocument: ((String) -> Document?)? = null
 ) {
     // Process HTML based on viewer mode asynchronously
     val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
@@ -184,7 +186,8 @@ fun HtmlContent(
                                 selectedHighlightId = selectedHighlightId,
                                 onLoaded = {
                                     isContentLoaded = true
-                                }
+                                },
+                                parseDocument = parseDocument
                             )
                         }
                         ViewerMode.WEB -> {
