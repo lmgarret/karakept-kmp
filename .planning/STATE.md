@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Phase 03 mid-execution — partial splits committed, 5 files still over 500 lines
-last_updated: "2026-03-21T08:33:02.863Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-21T09:36:59.100Z"
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 6
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-21)
 ## Current Position
 
 Phase: 03 (code-splitting) — EXECUTING
-Plan: 1 of 3
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Plan: 1 of 3
 
 *Updated after each plan completion*
 | Phase 02 P01 | 4min | 2 tasks | 2 files |
+| Phase 03 P02 | 1min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ Recent decisions affecting current work:
 - [Phase 02]: Uniform Mutex for all mutation sites rather than mixing synchronization strategies
 - [Phase 02]: Mutex over MutableStateFlow.update{} for mutations spanning suspension points
 - [Phase 02]: Uniform Mutex for all 26 mutation sites rather than mixing synchronization strategies
+- [Phase 03]: Extension functions over subclassing for ScreenModel concern separation
 
 ### Pending Todos
 
@@ -77,18 +79,20 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21
-Stopped at: Phase 03 mid-execution — partial splits committed, 5 files still over 500 lines
+Last session: 2026-03-21T09:36:59.096Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
 
 ### Phase 03 Resume Details
 
 Committed work (03-01 T1, 03-02 T1 already committed by subagents):
+
 - `ebfd878` 03-01 T1: BookmarkSyncPipeline extracted from BookmarkRepository (454 lines ✓)
 - `e4e3162` 03-02 T1: Pagination extracted, internal visibility changes applied
 - `00b4c89` Partial: BAR batch removed, MSM actions+batch extracted, MS dialogs/scroll/expanded extracted
 
 Remaining work to complete Phase 03:
+
 1. **03-01 T2** (SPLIT-04): BookmarkActionsRepository 831→<500 (extract sync processing ~270 lines to BookmarkActionsRepositorySync.kt)
 2. **03-01 T2** (SPLIT-04): SettingsRepository 988→<500 (extract mutations to SettingsRepositoryMutations.kt)
 3. **03-02 T2** (SPLIT-02): MainScreenModel 508→<500 (trim ~10 lines — nearly done)
