@@ -120,15 +120,16 @@ Plans:
   3. No `println` calls remain in `BookmarkViewerScreenModel.kt` or `App.kt` — replaced with `AppLogger` or removed
   4. `BookmarkSyncPipeline.kt` is under 500 lines
   5. `SettingsRepositoryMutations.kt` is under 500 lines
-**Plans**: 0 plans
+**Plans**: 2 plans
 
 Plans:
-- (none yet — run `/gsd:plan-phase 7`)
+- [ ] 07-01-PLAN.md — Wire ParsedDocumentCache into NativeHtmlRenderer composable chain
+- [ ] 07-02-PLAN.md — Wire triggerMigration into App.kt startup and replace all println with AppLogger
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -138,4 +139,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 4. Test Coverage | 0/2 | Not started | - |
 | 5. Security Hardening | 1/2 | In Progress|  |
 | 6. Performance Optimization | 0/2 | Not started | - |
-| 7. Integration Wiring & Cleanup | 0/0 | Not started | - |
+| 7. Integration Wiring & Cleanup | 0/2 | Not started | - |
