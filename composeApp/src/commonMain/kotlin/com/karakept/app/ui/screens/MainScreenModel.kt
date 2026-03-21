@@ -37,12 +37,12 @@ import com.karakept.app.domain.ListHierarchyUtils
 
 class MainScreenModel(
     private val serverRepository: ServerRepository,
-    private val bookmarkRepository: BookmarkRepository,
-    private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository,
-    private val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
-    private val listRepository: com.karakept.app.data.repository.ListRepository,
-    private val bookmarkActionController: BookmarkActionController,
-    private val snackbarManager: ActionSnackbarManager
+    internal val bookmarkRepository: BookmarkRepository,
+    internal val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository,
+    internal val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
+    internal val listRepository: com.karakept.app.data.repository.ListRepository,
+    internal val bookmarkActionController: BookmarkActionController,
+    internal val snackbarManager: ActionSnackbarManager
 ) : ScreenModel {
 
     private val defaultFilterResolver = DefaultFilterResolver(settingsRepository)
@@ -50,13 +50,13 @@ class MainScreenModel(
     val servers = serverRepository.servers
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _selectedServer = MutableStateFlow<Server?>(null)
+    internal val _selectedServer = MutableStateFlow<Server?>(null)
     val selectedServer: StateFlow<Server?> = _selectedServer
 
-    private val _isSyncing = MutableStateFlow(false)
+    internal val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing
 
-    private val _currentFilter = MutableStateFlow(FilterConfig())
+    internal val _currentFilter = MutableStateFlow(FilterConfig())
     val currentFilter: StateFlow<FilterConfig> = _currentFilter
 
     private val _tagFilterSourceBookmarkId = MutableStateFlow<Long?>(null)
@@ -68,21 +68,21 @@ class MainScreenModel(
     val expandedLists: StateFlow<Set<String>> = _expandedLists
 
     // Track the current active list filter (if any)
-    private val _currentListContext = MutableStateFlow<String?>(null)
+    internal val _currentListContext = MutableStateFlow<String?>(null)
     val currentListContext: StateFlow<String?> = _currentListContext
 
     // Pagination state
-    private val pageSize = 20
-    private val _isLoadingMore = MutableStateFlow(false)
+    internal val pageSize = 20
+    internal val _isLoadingMore = MutableStateFlow(false)
     val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
 
-    private val _hasMoreItems = MutableStateFlow(true)
+    internal val _hasMoreItems = MutableStateFlow(true)
     val hasMoreItems: StateFlow<Boolean> = _hasMoreItems
 
-    private val _currentPage = MutableStateFlow(0)
-    private val _accumulatedBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
+    internal val _currentPage = MutableStateFlow(0)
+    internal val _accumulatedBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
 
-    private val bookmarksMutex = Mutex()
+    internal val bookmarksMutex = Mutex()
 
     /**
      * Thread-safe mutation of _accumulatedBookmarks.
@@ -90,7 +90,7 @@ class MainScreenModel(
      * Uses Mutex (not MutableStateFlow.update{}) because some callers need to hold
      * the lock across suspension points (e.g., bookmarkChangedEvents DB lookup).
      */
-    private suspend fun updateAccumulatedBookmarks(
+    internal suspend fun updateAccumulatedBookmarks(
         transform: (List<BookmarkEntity>) -> List<BookmarkEntity>
     ) {
         bookmarksMutex.withLock {
@@ -98,25 +98,25 @@ class MainScreenModel(
         }
     }
 
-    private val _bookmarkListVersion = MutableStateFlow(0)
+    internal val _bookmarkListVersion = MutableStateFlow(0)
     val bookmarkListVersion: StateFlow<Int> = _bookmarkListVersion
 
-    private val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    internal val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
-    private val _createBookmarkResult = MutableSharedFlow<Result<Unit>>(extraBufferCapacity = 1)
+    internal val _createBookmarkResult = MutableSharedFlow<Result<Unit>>(extraBufferCapacity = 1)
     val createBookmarkResult: SharedFlow<Result<Unit>> = _createBookmarkResult
 
-    private val _pendingBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
+    internal val _pendingBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
     val pendingBookmarkRemoteIds: StateFlow<Set<Long>> = _pendingBookmarks
         .map { list -> list.map { it.remoteId }.toSet() }
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
-    private val _searchQuery = MutableStateFlow("")
+    internal val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
     // Multi-select state
-    private val _selectedBookmarkIds = MutableStateFlow<Set<Long>>(emptySet())
+    internal val _selectedBookmarkIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedBookmarkIds: StateFlow<Set<Long>> = _selectedBookmarkIds
     val isSelectionMode: StateFlow<Boolean> = _selectedBookmarkIds
         .map { it.isNotEmpty() }
@@ -357,126 +357,8 @@ class MainScreenModel(
     }
 
     // =========================================================================
-    // Pagination
+    // Pagination — see MainScreenModelPagination.kt
     // =========================================================================
-
-    /**
-     * Loads a single DB page and applies client-side filters.
-     *
-     * @return Pair(filteredItems, rawDbRowCount). The raw count is used to
-     *   detect true DB exhaustion: rawCount < pageSize means no more pages.
-     */
-    private suspend fun loadBookmarksPage(
-        server: Server,
-        filter: FilterConfig,
-        page: Int
-    ): Pair<List<BookmarkEntity>, Int> {
-        val offset = page * pageSize
-
-        // Expand filter lists to include children for lists with
-        // includeChildListBookmarks enabled.
-        val expandedFilter = if (filter.lists.isNotEmpty()) {
-            val expandedLists = expandListsWithChildren(filter.lists)
-            if (expandedLists != filter.lists) filter.copy(lists = expandedLists) else filter
-        } else {
-            filter
-        }
-
-        val singleListId = if (expandedFilter.lists.size == 1) expandedFilter.lists.first() else null
-
-        val pagedBookmarks = bookmarkRepository.getBookmarksPaged(
-            server = server,
-            status = expandedFilter.status,
-            offset = offset,
-            limit = pageSize,
-            listId = singleListId
-        )
-
-        val rawCount = pagedBookmarks.size
-        val filtered = BookmarkFilterUtils.applyClientSideFilters(
-            pagedBookmarks, expandedFilter, skipListFilter = singleListId != null
-        )
-        val sorted = BookmarkFilterUtils.applySorting(filtered, expandedFilter.sort)
-
-        return Pair(sorted, rawCount)
-    }
-
-    /**
-     * Advances through consecutive DB pages starting at [startPage] until
-     * at least one item survives the client-side filter, or the DB is truly
-     * exhausted. Delegates to [advancePagesUntilItemsFound] so the algorithm
-     * is unit-testable independently.
-     */
-    internal suspend fun findPageWithItems(
-        server: Server,
-        filter: FilterConfig,
-        startPage: Int
-    ): Triple<List<BookmarkEntity>, Int, Boolean> =
-        advancePagesUntilItemsFound(startPage, pageSize) { page ->
-            loadBookmarksPage(server, filter, page)
-        }
-
-    private suspend fun expandListsWithChildren(listIds: List<String>): List<String> {
-        val result = listIds.toMutableList()
-        val allLists = lists.value
-        for (listId in listIds) {
-            val settings = settingsRepository.getListSettings(listId).first()
-            if (settings.includeChildListBookmarks) {
-                val childIds = ListHierarchyUtils.getAllDescendantIds(listId, allLists)
-                childIds.forEach { if (!result.contains(it)) result.add(it) }
-            }
-        }
-        return result
-    }
-
-    fun loadNextPage() {
-        if (_isLoadingMore.value || !_hasMoreItems.value || _searchQuery.value.isNotBlank()) return
-
-        screenModelScope.launch {
-            try {
-                _isLoadingMore.value = true
-
-                val server = _selectedServer.value ?: return@launch
-                val filter = _currentFilter.value
-                val nextPage = _currentPage.value + 1
-
-                val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, nextPage)
-
-                if (newItems.isNotEmpty()) {
-                    updateAccumulatedBookmarks { it + newItems }
-                    _currentPage.value = lastPage
-                }
-                if (dbExhausted) {
-                    _hasMoreItems.value = false
-                }
-            } catch (e: Exception) {
-                AppLogger.e("MainScreenModel", "Failed to load bookmarks: ${e.message}", e)
-                snackbarManager.showErrorWithRetry("Couldn't load bookmarks") {
-                    loadNextPage()
-                }
-            } finally {
-                _isLoadingMore.value = false
-            }
-        }
-    }
-
-    /**
-     * Clears accumulated bookmarks and loads the first page for [filter].
-     * This is the single entry-point for "start displaying a filter".
-     */
-    private suspend fun resetPaginationAndLoad(server: Server, filter: FilterConfig) {
-        _currentPage.value = 0
-        _hasMoreItems.value = true
-
-        // Load items first, then swap atomically to avoid a blank flash.
-        val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
-        updateAccumulatedBookmarks { newItems }
-        _bookmarkListVersion.value++
-        _currentPage.value = lastPage
-        if (dbExhausted) {
-            _hasMoreItems.value = false
-        }
-    }
 
     // =========================================================================
     // Sync
