@@ -76,7 +76,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ERR-01 | Phase 1, Phase 7 | Pending |
+| ERR-01 | Phase 1, Phase 7 | Complete |
 | ERR-02 | Phase 1 | Complete |
 | ERR-03 | Phase 1 | Complete |
 | ERR-04 | Phase 1 | Complete |
@@ -91,7 +91,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-02 | Phase 4 | Complete |
 | TEST-03 | Phase 4 | Complete |
 | SEC-01 | Phase 5 | Complete |
-| SEC-02 | Phase 5, Phase 7 | Pending |
+| SEC-02 | Phase 5, Phase 7 | Complete |
 | PERF-01 | Phase 6 | Complete |
 | PERF-02 | Phase 6, Phase 7 | Complete |
 
