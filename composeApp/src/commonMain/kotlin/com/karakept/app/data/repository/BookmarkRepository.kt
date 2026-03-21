@@ -93,10 +93,10 @@ class BookmarkRepository(
                 try {
                     dto = remoteDataSource.fetchBookmark(server, dto.id ?: "")
                 } catch (e: Exception) {
-                    println("Polling fetch failed: ${e.message}")
+                    AppLogger.e("BookmarkRepository", "Polling fetch failed: ${e.message}")
                 }
                 attempts++
-                println("Polling for bookmark parsing: attempt $attempts, title='${dto.title}', content.title='${dto.content?.title}'")
+                AppLogger.d("BookmarkRepository", "Polling for bookmark parsing: attempt $attempts, title='${dto.title}', content.title='${dto.content?.title}'")
             }
 
             onStatusChange?.invoke("Finalizing bookmark...")
@@ -135,7 +135,7 @@ class BookmarkRepository(
                 try {
                     syncSingleBookmark(inserted.remoteId, server.id)
                 } catch (e: Exception) {
-                    println("Background sync failed for new bookmark: ${e.message}")
+                    AppLogger.e("BookmarkRepository", "Background sync failed for new bookmark: ${e.message}")
                 }
             }
 
@@ -217,7 +217,7 @@ class BookmarkRepository(
                         val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id ?: "")
                         finalContent = assetBytes.decodeToString()
                     } catch (e: Exception) {
-                        println("Failed to download content asset ${contentAsset.id}: ${e.message}")
+                        AppLogger.e("BookmarkRepository", "Failed to download content asset ${contentAsset.id}: ${e.message}")
                     }
                 }
             }
@@ -231,7 +231,7 @@ class BookmarkRepository(
                 val cachedContent = try {
                     imageCacheManager.cacheImagesInHtml(finalContent)
                 } catch (e: Exception) {
-                    println("Failed to cache images in HTML: ${e.message}")
+                    AppLogger.e("BookmarkRepository", "Failed to cache images in HTML: ${e.message}")
                     finalContent
                 }
                 val readingTime = ReadingTimeCalculator.calculateReadingTime(cachedContent)
@@ -258,7 +258,7 @@ class BookmarkRepository(
     ): List<BookmarkEntity> {
         val result = if (listId != null) {
             // When filtering by list, use the list-specific query
-            println("getBookmarksPaged: Using list-filtered query for listId=$listId")
+            AppLogger.d("BookmarkRepository", "getBookmarksPaged: Using list-filtered query for listId=$listId")
             bookmarkDao.getBookmarksForListPaged(server.id, listId, limit, offset)
         } else {
             when (status) {
@@ -274,10 +274,7 @@ class BookmarkRepository(
                     bookmarkDao.getArchivedPagedForServer(server.id, limit, offset)
             }
         }
-        println("getBookmarksPaged: status=$status, listId=$listId, limit=$limit, offset=$offset -> returned ${result.size} bookmarks")
-        result.forEach { bookmark ->
-            println("  - ${bookmark.originalRemoteId} (${bookmark.title}) listIds='${bookmark.listIds}' createdAt=${bookmark.createdAt}")
-        }
+        AppLogger.d("BookmarkRepository", "getBookmarksPaged: status=$status, listId=$listId, limit=$limit, offset=$offset -> returned ${result.size} bookmarks")
         return result
     }
 
@@ -321,12 +318,12 @@ class BookmarkRepository(
                 val contentAsset = fullBookmark.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT }
                 if (contentAsset != null) {
                     try {
-                        println("CONTENT: Downloading content from asset ${contentAsset.id}")
+                        AppLogger.d("BookmarkRepository", "Downloading content from asset ${contentAsset.id}")
                         val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id ?: "")
                         content = assetBytes.decodeToString()
-                        println("CONTENT: Downloaded ${content.length} chars from asset")
+                        AppLogger.d("BookmarkRepository", "Downloaded ${content.length} chars from asset")
                     } catch (e: Exception) {
-                        println("Failed to download content asset ${contentAsset.id}: ${e.message}")
+                        AppLogger.e("BookmarkRepository", "Failed to download content asset ${contentAsset.id}: ${e.message}")
                     }
                 }
             }
@@ -335,13 +332,13 @@ class BookmarkRepository(
             if (content.isNullOrBlank()) {
                 content = fullBookmark.note ?: fullBookmark.content?.text
                 if (!content.isNullOrBlank()) {
-                     println("CONTENT: Using note/text content (${content.length} chars)")
+                     AppLogger.d("BookmarkRepository", "Using note/text content (${content.length} chars)")
                 }
             }
 
             return content
         } catch (e: Exception) {
-            println("CONTENT: ERROR fetching remote content - ${e.message}")
+            AppLogger.e("BookmarkRepository", "Error fetching remote content: ${e.message}")
             throw e
         }
     }
@@ -414,10 +411,10 @@ class BookmarkRepository(
                             localPath = localPath
                         ))
                     )
-                    println("Cached banner image for bookmark $bookmarkRemoteId: $localPath")
+                    AppLogger.d("BookmarkRepository", "Cached banner image for bookmark $bookmarkRemoteId: $localPath")
                 }
             } catch (e: Exception) {
-                println("Failed to cache banner image: ${e.message}")
+                AppLogger.e("BookmarkRepository", "Failed to cache banner image: ${e.message}")
             }
         }
 
@@ -444,10 +441,10 @@ class BookmarkRepository(
                             localPath = localPath
                         ))
                     )
-                    println("Cached screenshot for bookmark $bookmarkRemoteId: $localPath")
+                    AppLogger.d("BookmarkRepository", "Cached screenshot for bookmark $bookmarkRemoteId: $localPath")
                 }
             } catch (e: Exception) {
-                println("Failed to cache screenshot: ${e.message}")
+                AppLogger.e("BookmarkRepository", "Failed to cache screenshot: ${e.message}")
             }
         }
     }

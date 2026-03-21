@@ -31,7 +31,7 @@ class HighlightRepository(
         // Full sync of all highlights - used for periodic background sync or All Highlights screen
         try {
             val remoteHighlights = remoteDataSource.fetchAllHighlights(server)
-            println("HighlightRepository: syncHighlights received ${remoteHighlights.size} highlights from server")
+            AppLogger.d("HighlightRepository", "syncHighlights received ${remoteHighlights.size} highlights from server")
 
             // Get remote IDs (excluding empty strings from null IDs)
             val remoteIds = remoteHighlights.mapNotNull { it.id }.filter { it.isNotEmpty() }
@@ -41,11 +41,11 @@ class HighlightRepository(
             if (remoteIds.isEmpty()) {
                 // If server returns empty list, delete all non-temp highlights for this server
                 highlightDao.deleteAllNonTempHighlightsForServer(server.id)
-                println("HighlightRepository: Deleted all non-pending highlights for server (server returned empty)")
+                AppLogger.d("HighlightRepository", "Deleted all non-pending highlights for server (server returned empty)")
             } else {
                 // Delete highlights not in the remote list (but keep temp IDs)
                 highlightDao.deleteHighlightsNotInList(server.id, remoteIds)
-                println("HighlightRepository: Deleted local highlights not in remote list")
+                AppLogger.d("HighlightRepository", "Deleted local highlights not in remote list")
             }
 
             val entities = remoteHighlights.map { highlight ->
@@ -64,17 +64,17 @@ class HighlightRepository(
                 )
             }
             highlightDao.insertHighlights(entities)
-            println("HighlightRepository: Inserted ${entities.size} highlights into local DB")
+            AppLogger.d("HighlightRepository", "Inserted ${entities.size} highlights into local DB")
         } catch (e: Exception) {
-            println("Error syncing highlights: ${e.message}")
+            AppLogger.e("HighlightRepository", "Error syncing highlights: ${e.message}")
         }
     }
 
     suspend fun syncHighlightsForBookmark(server: Server, bookmarkRemoteId: String) {
         try {
-            println("HighlightRepository: Fetching highlights for bookmark $bookmarkRemoteId")
+            AppLogger.d("HighlightRepository", "Fetching highlights for bookmark $bookmarkRemoteId")
             val remoteHighlights = remoteDataSource.fetchHighlightsForBookmark(server, bookmarkRemoteId)
-            println("HighlightRepository: Received ${remoteHighlights.size} highlights from server")
+            AppLogger.d("HighlightRepository", "Received ${remoteHighlights.size} highlights from server")
 
             // Get remote IDs (excluding empty strings from null IDs)
             val remoteIds = remoteHighlights.mapNotNull { it.id }.filter { it.isNotEmpty() }
@@ -84,11 +84,11 @@ class HighlightRepository(
             if (remoteIds.isEmpty()) {
                 // If server returns empty list, delete all non-temp highlights for this bookmark
                 highlightDao.deleteAllHighlightsForBookmark(bookmarkRemoteId, server.id)
-                println("HighlightRepository: Deleted all non-pending highlights for bookmark (server returned empty)")
+                AppLogger.d("HighlightRepository", "Deleted all non-pending highlights for bookmark (server returned empty)")
             } else {
                 // Delete highlights not in the remote list (but keep temp IDs)
                 highlightDao.deleteHighlightsNotIn(bookmarkRemoteId, server.id, remoteIds)
-                println("HighlightRepository: Deleted local highlights not in remote list: $remoteIds")
+                AppLogger.d("HighlightRepository", "Deleted local highlights not in remote list: $remoteIds")
             }
 
             val entities = remoteHighlights.map { highlight ->
@@ -107,9 +107,9 @@ class HighlightRepository(
                 )
             }
             highlightDao.insertHighlights(entities)
-            println("HighlightRepository: Inserted ${entities.size} highlights into local DB")
+            AppLogger.d("HighlightRepository", "Inserted ${entities.size} highlights into local DB")
         } catch (e: Exception) {
-            AppLogger.e("HighlightRepo", "Failed to sync highlights: ${e.message}", e)
+            AppLogger.e("HighlightRepository", "Failed to sync highlights: ${e.message}", e)
         }
     }
 
@@ -153,18 +153,18 @@ class HighlightRepository(
     }
 
     suspend fun updateHighlight(server: Server, bookmarkLocalId: Long, highlightRemoteId: String, note: String? = null, color: String? = null) {
-        println("HighlightRepository: updateHighlight called - highlightRemoteId=$highlightRemoteId, note=$note, color=$color")
+        AppLogger.d("HighlightRepository", "updateHighlight called - highlightRemoteId=$highlightRemoteId, note=$note, color=$color")
         bookmarkActionsRepository.queueUpdateHighlight(server, bookmarkLocalId, highlightRemoteId, note, color)
 
         // Optimistically update local DB
         val existing = highlightDao.getHighlightByRemoteId(highlightRemoteId)
-        println("HighlightRepository: updateHighlight - existing highlight found: ${existing != null}")
+        AppLogger.d("HighlightRepository", "updateHighlight - existing highlight found: ${existing != null}")
         existing?.let {
             highlightDao.updateHighlight(it.copy(
                 note = note,  // Allow null to clear the note
                 color = color  // Allow null to reset to default
             ))
-            println("HighlightRepository: updateHighlight - local DB updated")
+            AppLogger.d("HighlightRepository", "updateHighlight - local DB updated")
         }
     }
 
