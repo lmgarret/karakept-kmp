@@ -10,13 +10,13 @@ Requirements for this milestone. Each maps to roadmap phases.
 ### Error Handling
 
 - [x] **ERR-01**: Replace all `printStackTrace()` calls with structured logging across repository and UI files
-- [ ] **ERR-02**: Propagate errors to UI layer via error flows so users see failures
+- [x] **ERR-02**: Propagate errors to UI layer via error flows so users see failures
 - [x] **ERR-03**: Fix debug println in RemoteDataSource with proper error handling
 - [x] **ERR-04**: Remove noisy reading progress logs in the reader
 
 ### Null Safety
 
-- [ ] **NULL-01**: Replace all 20 `!!` operators with safe null handling (`?.let`, guards, sealed state)
+- [x] **NULL-01**: Replace all 20 `!!` operators with safe null handling (`?.let`, guards, sealed state)
 
 ### Code Complexity
 
@@ -77,10 +77,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ERR-01 | Phase 1 | Complete |
-| ERR-02 | Phase 1 | Pending |
+| ERR-02 | Phase 1 | Complete |
 | ERR-03 | Phase 1 | Complete |
 | ERR-04 | Phase 1 | Complete |
-| NULL-01 | Phase 1 | Pending |
+| NULL-01 | Phase 1 | Complete |
 | CONC-01 | Phase 2 | Pending |
 | CONC-02 | Phase 2 | Pending |
 | SPLIT-01 | Phase 3 | Pending |
