@@ -377,7 +377,10 @@ fun BookmarkViewerContent(
                                     },
                                     onContentReady = { scrollRestoration.onContentRendered() },
                                     scrollToHighlightId = scrollToHighlightId,
-                                    selectedHighlightId = selectedHighlightId ?: scrollToHighlightId
+                                    selectedHighlightId = selectedHighlightId ?: scrollToHighlightId,
+                                    parseDocument = { sanitizedHtml ->
+                                        screenModel.getCachedOrParseDocument(bookmarkId, sanitizedHtml)
+                                    }
                                 )
                             }
                         }
