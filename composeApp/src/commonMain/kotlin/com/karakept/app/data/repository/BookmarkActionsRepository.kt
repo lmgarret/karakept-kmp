@@ -15,6 +15,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import com.karakept.app.utils.AppLogger
 
 /**
  * Repository for handling bookmark actions with offline-first approach.
@@ -199,7 +200,7 @@ class BookmarkActionsRepository(
         progressPercent: Int
     ) {
         withContext(Dispatchers.IO) {
-            println("ReadProgressSync: queueReadingProgressUpdate remoteId=$bookmarkRemoteId serverId=$serverId percent=$progressPercent")
+            AppLogger.d("ReadProgressSync", "queueReadingProgressUpdate remoteId=$bookmarkRemoteId serverId=$serverId percent=$progressPercent")
             // Remove any stale pending update for this bookmark (keep only latest)
             pendingActionDao.deleteActionsForBookmarkByType(
                 bookmarkRemoteId, serverId, PendingActionType.UPDATE_READING_PROGRESS
@@ -210,7 +211,7 @@ class BookmarkActionsRepository(
                 actionType = PendingActionType.UPDATE_READING_PROGRESS,
                 actionData = jsonSerializer.encodeToString(mapOf("progressPercent" to progressPercent.toString()))
             )
-            println("ReadProgressSync: queued pending action successfully")
+            AppLogger.d("ReadProgressSync", "queued pending action successfully")
         }
         triggerAutoSync(serverId)
     }
@@ -408,21 +409,21 @@ class BookmarkActionsRepository(
         note: String? = null,
         color: String? = null
     ) {
-        println("BookmarkActionsRepository: queueUpdateHighlight called - highlightRemoteId=$highlightRemoteId, note=$note, color=$color")
+        AppLogger.d("BookmarkActionsRepository", "queueUpdateHighlight called - highlightRemoteId=$highlightRemoteId, note=$note, color=$color")
         withContext(Dispatchers.IO) {
             val actionData = jsonSerializer.encodeToString(mapOf(
                 "highlightId" to highlightRemoteId,
                 "note" to note,
                 "color" to color
             ))
-            println("BookmarkActionsRepository: queueUpdateHighlight - actionData=$actionData")
+            AppLogger.d("BookmarkActionsRepository", "queueUpdateHighlight - actionData=$actionData")
             queueAction(
                 bookmarkRemoteId = bookmarkLocalId,
                 serverId = server.id,
                 actionType = PendingActionType.UPDATE_HIGHLIGHT,
                 actionData = actionData
             )
-            println("BookmarkActionsRepository: queueUpdateHighlight - action queued, triggering sync")
+            AppLogger.d("BookmarkActionsRepository", "queueUpdateHighlight - action queued, triggering sync")
             triggerAutoSync(server.id)
         }
     }
@@ -473,12 +474,12 @@ class BookmarkActionsRepository(
                     val server = servers.find { it.id == serverId }
                     server?.let {
                         // Start processing pending actions immediately (Push only)
-                        println("BookmarkActionsRepository: Triggering push-only sync for server ${server.id}")
+                        AppLogger.d("BookmarkActionsRepository", "Triggering push-only sync for server ${server.id}")
                         processPendingActions(it)
                     }
                 }
             } catch (e: Exception) {
-                println("BookmarkActionsRepository: Error in auto-sync: ${e.message}")
+                AppLogger.e("BookmarkActionsRepository", "Error in auto-sync: ${e.message}")
                 // Don't propagate error - auto-sync is a best-effort operation
             }
         }
