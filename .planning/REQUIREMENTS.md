@@ -17,12 +17,12 @@
 
 ### Code Size
 
-- [ ] **SIZE-01**: Reduce `BookmarkSyncPipeline.kt` to under 500 lines (currently 545)
-- [ ] **SIZE-02**: Reduce `SettingsRepositoryMutations.kt` to under 500 lines (currently 511)
+- [x] **SIZE-01**: Reduce `BookmarkSyncPipeline.kt` to under 500 lines (currently 545)
+- [x] **SIZE-02**: Reduce `SettingsRepositoryMutations.kt` to under 500 lines (currently 511)
 
 ### Code Quality
 
-- [ ] **QUAL-01**: Remove redundant `koinInject<ServerRepository>()` call in `App.kt`
+- [x] **QUAL-01**: Remove redundant `koinInject<ServerRepository>()` call in `App.kt`
 
 ## Out of Scope
 
@@ -37,9 +37,9 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | LOG-01 | Phase 1 | Complete |
-| SIZE-01 | Phase 2 | Pending |
-| SIZE-02 | Phase 2 | Pending |
-| QUAL-01 | Phase 2 | Pending |
+| SIZE-01 | Phase 2 | Complete |
+| SIZE-02 | Phase 2 | Complete |
+| QUAL-01 | Phase 2 | Complete |
 
 **Coverage:**
 - v1.7.0 requirements: 4 total

@@ -37,7 +37,7 @@ Plans:
   3. `App.kt` has exactly one `koinInject<ServerRepository>()` call
 
 Plans:
-- [ ] 02-01-PLAN.md — Remove redundant koinInject in App.kt and verify file size targets
+- [x] 02-01-PLAN.md — Remove redundant koinInject in App.kt and verify file size targets
 
 ## Progress
 
