@@ -1,9 +1,9 @@
 ---
 phase: 6
 slug: performance-optimization
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-21
 ---
 
@@ -38,10 +38,10 @@ created: 2026-03-21
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 06-01-01 | 01 | 1 | PERF-01 | manual | User scroll testing | N/A | ⬜ pending |
-| 06-01-02 | 01 | 1 | PERF-01 | unit | `grep -c "contentType" BookmarkListContent.kt` | ❌ W0 | ⬜ pending |
-| 06-02-01 | 02 | 1 | PERF-02 | unit | `grep -c "LruCache\|lruCache" HtmlContentRenderer.kt` | ❌ W0 | ⬜ pending |
-| 06-02-02 | 02 | 1 | PERF-02 | manual | User article load testing | N/A | ⬜ pending |
+| 06-01-01 | 01 | 1 | PERF-01 | manual | User scroll testing (perceptual) | N/A | ⬜ manual-only |
+| 06-01-02 | 01 | 1 | PERF-01 | static | `grep -c "contentType" BookmarkListContent.kt` (expect 3) | N/A | ✅ green |
+| 06-02-01 | 02 | 1 | PERF-02 | unit | `./gradlew :composeApp:desktopTest --tests "*.ParsedDocumentCacheTest"` | ✅ | ✅ green |
+| 06-02-02 | 02 | 1 | PERF-02 | manual | User article load testing (perceptual) | N/A | ⬜ manual-only |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -72,4 +72,16 @@ created: 2026-03-21
 - [ ] Feedback latency < 30s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved
+
+---
+
+## Validation Audit 2026-03-21
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+PERF-01 is structural (contentType + println removal, verifiable by grep). PERF-02 has 6 unit tests (ParsedDocumentCacheTest). Runtime performance behaviors (scroll jank, progressive loading) are inherently manual-only.
