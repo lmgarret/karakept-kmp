@@ -12,6 +12,8 @@ on:
       - 'gradle.properties'
       - 'gradlew'
       - 'gradlew.bat'
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -74,8 +76,12 @@ jobs:
       - name: Resolve release version
         id: version
         run: |
-          RAW="${{ inputs.version || steps.changelog.outputs.next_version || 'nightly' }}"
-          VERSION="${RAW#v}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            RAW="${{ inputs.version || steps.changelog.outputs.next_version || 'nightly' }}"
+            VERSION="${RAW#v}"
+          fi
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
           echo "name=${VERSION}" >> "$GITHUB_OUTPUT"
 
@@ -174,7 +180,7 @@ jobs:
   build-linux-flatpak:
     name: Build Linux Flatpak
     needs: resolve-version
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -216,7 +222,7 @@ jobs:
         uses: actions/download-artifact@v4
 
       - name: Create versioned release
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.resolve-version.outputs.tag }}
@@ -229,7 +235,7 @@ jobs:
           generate_release_notes: false
 
       - name: Update nightly pre-release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: nightly
