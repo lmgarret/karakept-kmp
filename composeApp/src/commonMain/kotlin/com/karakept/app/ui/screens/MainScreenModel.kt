@@ -234,7 +234,24 @@ class MainScreenModel(
         }
         .stateIn(screenModelScope, SharingStarted.Lazily, emptyList())
 
+    private sealed class InitState {
+        data object Idle : InitState()
+        data object ResolvingFilter : InitState()
+        data class WaitingForServer(val filter: FilterConfig) : InitState()
+        data class LoadingInitialPage(val server: Server, val filter: FilterConfig) : InitState()
+        data object Ready : InitState()
+    }
+
+    private val _initState = MutableStateFlow<InitState>(InitState.Idle)
+
     init {
+        // Log init state transitions for auditability.
+        screenModelScope.launch {
+            _initState.collect { state ->
+                AppLogger.d("MainScreenModel", "Init state: ${state::class.simpleName}")
+            }
+        }
+
         // Coroutine A: keep _selectedServer in sync with the server list.
         screenModelScope.launch {
             servers.collect { serverList ->
@@ -247,34 +264,30 @@ class MainScreenModel(
             }
         }
 
-        // Coroutine B: sequential startup — eliminates race conditions.
-        //
-        // Steps:
-        //  1. Read the persisted default filter (atomic combine read).
-        //  2. Wait for a server.
-        //  3. Perform ONE initial DB load with the correct filter.
-        //  4. Start observing user-driven filter changes (drop(1) skips the
-        //     value already loaded in step 3).
-        //  5. Start observing server switches.
-        //  6. Kick off the background auto-sync.
+        // Coroutine B: explicit state machine for sequential startup.
         screenModelScope.launch {
+            _initState.value = InitState.ResolvingFilter
             val defaultFilter = defaultFilterResolver.resolve()
             _currentFilter.value = defaultFilter
             if (defaultFilter.lists.size == 1) {
                 _currentListContext.value = defaultFilter.lists.first()
             }
 
+            _initState.value = InitState.WaitingForServer(defaultFilter)
             val server = selectedServer.first { it != null } ?: return@launch
 
+            _initState.value = InitState.LoadingInitialPage(server, defaultFilter)
             resetPaginationAndLoad(server, defaultFilter)
 
+            _initState.value = InitState.Ready
+
+            // Start observers (unchanged from original code)
             launch {
                 _currentFilter.drop(1).collectLatest { filter ->
                     val currentServer = _selectedServer.value ?: return@collectLatest
                     resetPaginationAndLoad(currentServer, filter)
                 }
             }
-
             launch {
                 _selectedServer.drop(1).collectLatest { newServer ->
                     if (newServer != null) {
