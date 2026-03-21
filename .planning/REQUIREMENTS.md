@@ -7,7 +7,7 @@
 
 ### Logging Cleanup
 
-- [ ] **LOG-01**: Replace all remaining `println` debug calls (~97) with `AppLogger` calls or remove them
+- [x] **LOG-01**: Replace all remaining `println` debug calls (~97) with `AppLogger` calls or remove them
   - `BookmarkActionsRepositorySync.kt`: ~53 calls
   - `BookmarkRepository.kt`: ~17 calls
   - `HighlightRepository.kt`: ~13 calls
@@ -36,7 +36,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOG-01 | Phase 1 | Pending |
+| LOG-01 | Phase 1 | Complete |
 | SIZE-01 | Phase 2 | Pending |
 | SIZE-02 | Phase 2 | Pending |
 | QUAL-01 | Phase 2 | Pending |

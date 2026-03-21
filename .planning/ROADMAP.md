@@ -6,7 +6,7 @@ This milestone cleans up tech debt identified during the code-health milestone a
 
 ## Phases
 
-- [ ] **Phase 1: Println Cleanup** — Replace all remaining println debug calls with AppLogger or remove them
+- [x] **Phase 1: Println Cleanup** — Replace all remaining println debug calls with AppLogger or remove them (completed 2026-03-21)
 - [ ] **Phase 2: File Trimming & Quality** — Trim oversized files below 500 lines and remove redundant koinInject
 
 ## Phase Details
@@ -15,15 +15,15 @@ This milestone cleans up tech debt identified during the code-health milestone a
 **Goal**: All production debug output uses AppLogger — no raw println remains
 **Depends on**: Nothing
 **Requirements**: LOG-01
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 **Success Criteria** (what must be TRUE):
   1. Zero `println` calls remain in production source files (test files excluded)
   2. Replacement calls use appropriate `AppLogger` severity levels (`.d` for debug, `.e` for errors, `.w` for warnings)
   3. Hot-path logging (called per-item in loops) is removed entirely rather than replaced, per code-health Phase 6 decision
 
 Plans:
-- [ ] 01-01-PLAN.md — Replace println in BookmarkActionsRepositorySync (consolidated) and BookmarkActionsRepository
-- [ ] 01-02-PLAN.md — Replace println in BookmarkRepository, HighlightRepository, ImageCacheManager, HtmlRenderer, ViewerScrollRestoration
+- [x] 01-01-PLAN.md — Replace println in BookmarkActionsRepositorySync (consolidated) and BookmarkActionsRepository
+- [x] 01-02-PLAN.md — Replace println in BookmarkRepository, HighlightRepository, ImageCacheManager, HtmlRenderer, ViewerScrollRestoration
 
 ### Phase 2: File Trimming & Quality
 **Goal**: All production files are under 500 lines and no redundant DI calls exist
@@ -41,5 +41,5 @@ Phases execute in numeric order: 1 -> 2
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Println Cleanup | 0/2 | Planned | - |
+| 1. Println Cleanup | 2/2 | Complete   | 2026-03-21 |
 | 2. File Trimming & Quality | 0/0 | Not started | - |
