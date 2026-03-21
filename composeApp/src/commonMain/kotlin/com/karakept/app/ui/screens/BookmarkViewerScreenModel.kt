@@ -167,7 +167,7 @@ class BookmarkViewerScreenModel(
             readingStateUpdates
                 .debounce(500)
                 .collect { state ->
-                    println("ReadProgressSync: debounce fired — saving to DB localId=${state.localId} progress=${(state.progress * 100).toInt()}%")
+                    // Debounce fired — save to DB
                     bookmarkDao.updateReadingProgress(
                         state.localId, state.progress, state.scrollIndex, state.scrollOffset
                     )
@@ -180,17 +180,17 @@ class BookmarkViewerScreenModel(
                         val currentBookmark =
                             (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark
                         if (currentBookmark != null) {
-                            println("ReadProgressSync: queueing server push remoteId=${state.remoteId} serverId=${currentBookmark.serverId} progress=${(state.progress * 100).toInt()}%")
+                            // Queue server push for next sync cycle
                             bookmarkActionsRepository.queueReadingProgressUpdate(
                                 bookmarkRemoteId = state.remoteId,
                                 serverId = currentBookmark.serverId,
                                 progressPercent = (state.progress * 100).toInt()
                             )
                         } else {
-                            println("ReadProgressSync: skipping queue — no FullyLoaded bookmark in state")
+                            // No FullyLoaded bookmark — skip queue
                         }
                     } else {
-                        println("ReadProgressSync: skipping queue — trackReadingProgress is disabled")
+                        // trackReadingProgress is disabled — skip queue
                     }
                 }
         }
@@ -203,7 +203,7 @@ class BookmarkViewerScreenModel(
      * it if the user navigates away before the debounce window closes.
      */
     fun onReadingStateChanged(localId: Long, remoteId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
-        println("ReadProgressSync: onReadingStateChanged remoteId=$remoteId progress=${(progress * 100).toInt()}% index=$scrollIndex offset=$scrollOffset")
+        // Update pending state and emit for debounced persistence
         val state = PendingReadingState(localId, remoteId, progress, scrollIndex, scrollOffset)
         pendingReadingState = state
         readingStateUpdates.tryEmit(state)
@@ -251,17 +251,17 @@ class BookmarkViewerScreenModel(
     fun refreshBookmark(id: Long) {
         val currentState = _loadingState.value
         if (currentState !is BookmarkLoadingState.FullyLoaded) {
-            println("BookmarkViewerScreenModel: refreshBookmark called but state is not FullyLoaded")
+            AppLogger.d("ViewerModel", "refreshBookmark called but state is not FullyLoaded")
             return
         }
 
         screenModelScope.launch {
             if (offlineMode.value) {
-                println("BookmarkViewerScreenModel: refreshBookmark skipped - offline mode")
+                AppLogger.d("ViewerModel", "refreshBookmark skipped - offline mode")
                 return@launch
             }
 
-            println("BookmarkViewerScreenModel: Starting refresh for bookmark ${currentState.bookmark.remoteId}")
+            AppLogger.d("ViewerModel", "Starting refresh for bookmark ${currentState.bookmark.remoteId}")
             _isRefreshing.value = true
             try {
                 // Sync bookmark content
@@ -269,16 +269,16 @@ class BookmarkViewerScreenModel(
                     currentState.bookmark.remoteId,
                     currentState.bookmark.serverId
                 )
-                println("BookmarkViewerScreenModel: Bookmark content synced")
+                AppLogger.d("ViewerModel", "Bookmark content synced")
 
                 // Also sync highlights for this bookmark
                 val servers = serverRepository.servers.first()
                 val server = servers.find { it.id == currentState.bookmark.serverId }
                 if (server != null) {
                     val remoteId = currentState.bookmark.originalRemoteId ?: currentState.bookmark.remoteId.toString()
-                    println("BookmarkViewerScreenModel: Syncing highlights for remoteId=$remoteId")
+                    AppLogger.d("ViewerModel", "Syncing highlights for remoteId=$remoteId")
                     highlightRepository.syncHighlightsForBookmark(server, remoteId)
-                    println("BookmarkViewerScreenModel: Highlights synced")
+                    AppLogger.d("ViewerModel", "Highlights synced")
 
                     // Also pull latest reading progress from server
                     if (trackReadingProgress.value) {
@@ -287,7 +287,7 @@ class BookmarkViewerScreenModel(
                         )
                     }
                 } else {
-                    println("BookmarkViewerScreenModel: Server not found for serverId=${currentState.bookmark.serverId}")
+                    AppLogger.w("ViewerModel", "Server not found for serverId=${currentState.bookmark.serverId}")
                 }
             } catch (e: Exception) {
                 AppLogger.e("ViewerModel", "Failed to load bookmark content: ${e.message}", e)
@@ -296,7 +296,7 @@ class BookmarkViewerScreenModel(
                 }
             } finally {
                 _isRefreshing.value = false
-                println("BookmarkViewerScreenModel: Refresh complete")
+                AppLogger.d("ViewerModel", "Refresh complete")
             }
         }
     }
@@ -335,12 +335,12 @@ class BookmarkViewerScreenModel(
                             // the composable doesn't finalize hasRestoredScroll before the DB is
                             // updated with the server value.
                             if (!offlineMode.value) {
-                                println("ReadProgressSync: pulling from server (remoteId=${bookmark.remoteId}, serverId=${bookmark.serverId}, localProgress=${bookmark.readingProgress})")
+                                // Pull reading progress from server for cross-device sync
                                 screenModelScope.launch {
                                     val updated = bookmarkActionsRepository.pullReadingProgressFromServer(
                                         bookmark.remoteId, bookmark.serverId
                                     )
-                                    println("ReadProgressSync: pull result=$updated")
+                                    // If server had newer progress, yield for DB propagation
                                     // If the server had newer progress, yield once so the DB
                                     // update can propagate through observeBookmarkById and
                                     // update loadingState before we signal serverProgressChecked.
@@ -350,7 +350,7 @@ class BookmarkViewerScreenModel(
                                     _serverProgressChecked.value = true
                                 }
                             } else {
-                                println("ReadProgressSync: skipping pull — offline mode")
+                                // Offline mode — skip server pull
                                 _serverProgressChecked.value = true
                             }
                         }
@@ -559,18 +559,18 @@ class BookmarkViewerScreenModel(
     }
 
     fun createHighlight(bookmark: BookmarkEntity, text: String, startOffset: Int, endOffset: Int, note: String? = null, color: String? = null, onCreated: (String) -> Unit = {}) {
-        println("BookmarkViewerScreenModel: createHighlight requested - text='${text.take(30)}...', start=$startOffset, end=$endOffset")
+        AppLogger.d("ViewerModel", "createHighlight requested - text='${text.take(30)}...', start=$startOffset, end=$endOffset")
         screenModelScope.launch {
             try {
                 val servers = serverRepository.servers.first()
                 val server = servers.find { it.id == bookmark.serverId } ?: run {
-                    println("BookmarkViewerScreenModel: Server not found for serverId=${bookmark.serverId}")
+                    AppLogger.w("ViewerModel", "Server not found for serverId=${bookmark.serverId}")
                     return@launch
                 }
                 val remoteId = bookmark.originalRemoteId ?: bookmark.remoteId.toString()
-                println("BookmarkViewerScreenModel: Calling highlightRepository.createHighlight for remoteId=$remoteId")
+                AppLogger.d("ViewerModel", "Calling highlightRepository.createHighlight for remoteId=$remoteId")
                 val highlightId = highlightRepository.createHighlight(server, bookmark.localId, remoteId, text, startOffset, endOffset, note, color)
-                println("BookmarkViewerScreenModel: Highlight created successfully, id=$highlightId")
+                AppLogger.d("ViewerModel", "Highlight created successfully, id=$highlightId")
                 onCreated(highlightId)
             } catch (e: Exception) {
                 AppLogger.e("ViewerModel", "Failed to save reading progress: ${e.message}", e)
