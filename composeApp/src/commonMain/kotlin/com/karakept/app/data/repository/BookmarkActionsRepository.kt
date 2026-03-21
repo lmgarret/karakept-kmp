@@ -29,13 +29,13 @@ import kotlinx.coroutines.flow.SharedFlow
  * Actions are queued locally and synced when online.
  */
 class BookmarkActionsRepository(
-    private val bookmarkDao: BookmarkDao,
-    private val pendingActionDao: PendingActionDao,
-    private val remoteDataSource: RemoteDataSource,
+    internal val bookmarkDao: BookmarkDao,
+    internal val pendingActionDao: PendingActionDao,
+    internal val remoteDataSource: RemoteDataSource,
     private val serverRepository: com.karakept.app.data.repository.ServerRepository,
     private val settingsRepository: com.karakept.app.data.repository.SettingsRepository
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    internal val jsonSerializer = Json { ignoreUnknownKeys = true }
 
     // Lazy injection to break circular dependency
     private var _bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository? = null
@@ -215,7 +215,7 @@ class BookmarkActionsRepository(
                 bookmarkRemoteId = bookmarkRemoteId,
                 serverId = serverId,
                 actionType = PendingActionType.UPDATE_READING_PROGRESS,
-                actionData = json.encodeToString(mapOf("progressPercent" to progressPercent.toString()))
+                actionData = jsonSerializer.encodeToString(mapOf("progressPercent" to progressPercent.toString()))
             )
             println("ReadProgressSync: queued pending action successfully")
         }
@@ -295,7 +295,7 @@ class BookmarkActionsRepository(
                     bookmarkRemoteId = bookmarkRemoteId,
                     serverId = serverId,
                     actionType = PendingActionType.DELETE,
-                    actionData = json.encodeToString(mapOf("originalRemoteId" to originalRemoteId))
+                    actionData = jsonSerializer.encodeToString(mapOf("originalRemoteId" to originalRemoteId))
                 )
 
                 _bookmarkChangedEvents.emit(bookmarkRemoteId)
@@ -327,7 +327,7 @@ class BookmarkActionsRepository(
                 bookmarkRemoteId = bookmarkRemoteId,
                 serverId = serverId,
                 actionType = PendingActionType.UPDATE_TAGS,
-                actionData = json.encodeToString(mapOf("tags" to newTags))
+                actionData = jsonSerializer.encodeToString(mapOf("tags" to newTags))
             )
 
             // Auto-sync if not in offline mode
@@ -359,7 +359,7 @@ class BookmarkActionsRepository(
                 bookmarkRemoteId = bookmarkRemoteId,
                 serverId = serverId,
                 actionType = PendingActionType.MOVE_TO_LIST,
-                actionData = json.encodeToString(mapOf("listId" to listId))
+                actionData = jsonSerializer.encodeToString(mapOf("listId" to listId))
             )
 
             _bookmarkChangedEvents.emit(bookmarkRemoteId)
@@ -391,182 +391,13 @@ class BookmarkActionsRepository(
                 bookmarkRemoteId = bookmarkRemoteId,
                 serverId = serverId,
                 actionType = PendingActionType.REMOVE_FROM_LIST,
-                actionData = json.encodeToString(mapOf("listId" to listId))
+                actionData = jsonSerializer.encodeToString(mapOf("listId" to listId))
             )
 
             _bookmarkChangedEvents.emit(bookmarkRemoteId)
 
             // Auto-sync if not in offline mode
             triggerAutoSync(serverId)
-        }
-    }
-
-    // =========================================================================
-    // Batch operations (no snackbar — callers handle UI feedback)
-    // =========================================================================
-
-    /**
-     * Archive a list of bookmarks without showing individual snackbars.
-     */
-    suspend fun batchArchive(bookmarks: List<BookmarkEntity>) {
-        withContext(Dispatchers.IO) {
-            bookmarks.forEach { bookmark ->
-                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
-                current?.let { bookmarkDao.insertBookmark(it.copy(isArchived = true)) }
-                queueAction(
-                    bookmarkRemoteId = bookmark.remoteId,
-                    serverId = bookmark.serverId,
-                    actionType = PendingActionType.ARCHIVE,
-                    actionData = "{}"
-                )
-                _bookmarkChangedEvents.emit(bookmark.remoteId)
-            }
-            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
-        }
-    }
-
-    /**
-     * Unarchive a list of bookmarks without showing individual snackbars.
-     */
-    suspend fun batchUnarchive(bookmarks: List<BookmarkEntity>) {
-        withContext(Dispatchers.IO) {
-            bookmarks.forEach { bookmark ->
-                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
-                current?.let { bookmarkDao.insertBookmark(it.copy(isArchived = false)) }
-                queueAction(
-                    bookmarkRemoteId = bookmark.remoteId,
-                    serverId = bookmark.serverId,
-                    actionType = PendingActionType.UNARCHIVE,
-                    actionData = "{}"
-                )
-                _bookmarkChangedEvents.emit(bookmark.remoteId)
-            }
-            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
-        }
-    }
-
-    /**
-     * Mark a list of bookmarks as read without showing individual snackbars.
-     */
-    suspend fun batchMarkRead(bookmarks: List<BookmarkEntity>) {
-        withContext(Dispatchers.IO) {
-            bookmarks.forEach { bookmark ->
-                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
-                current?.let {
-                    bookmarkDao.insertBookmark(it.copy(isRead = true, readingProgress = 1f))
-                    queueReadingProgressUpdate(bookmark.remoteId, bookmark.serverId, progressPercent = 100)
-                }
-                _bookmarkChangedEvents.emit(bookmark.remoteId)
-            }
-            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
-        }
-    }
-
-    /**
-     * Mark a list of bookmarks as unread without showing individual snackbars.
-     */
-    suspend fun batchMarkUnread(bookmarks: List<BookmarkEntity>, resetProgress: Boolean = false) {
-        withContext(Dispatchers.IO) {
-            bookmarks.forEach { bookmark ->
-                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
-                current?.let {
-                    val updated = if (resetProgress) {
-                        it.copy(isRead = false, readingProgress = 0f, readingScrollIndex = 0, readingScrollOffset = 0)
-                    } else {
-                        it.copy(isRead = false)
-                    }
-                    bookmarkDao.insertBookmark(updated)
-                }
-                _bookmarkChangedEvents.emit(bookmark.remoteId)
-            }
-        }
-    }
-
-    /**
-     * Set favourite status for a list of bookmarks without showing individual snackbars.
-     */
-    suspend fun batchSetFavourite(bookmarks: List<BookmarkEntity>, makeFavourite: Boolean) {
-        withContext(Dispatchers.IO) {
-            bookmarks.forEach { bookmark ->
-                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
-                current?.let { bookmarkDao.insertBookmark(it.copy(isStarred = makeFavourite)) }
-                queueAction(
-                    bookmarkRemoteId = bookmark.remoteId,
-                    serverId = bookmark.serverId,
-                    actionType = if (makeFavourite) PendingActionType.FAVOURITE else PendingActionType.UNFAVOURITE,
-                    actionData = "{}"
-                )
-                _bookmarkChangedEvents.emit(bookmark.remoteId)
-            }
-            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
-        }
-    }
-
-    /**
-     * Delete a list of bookmarks without showing individual snackbars.
-     */
-    suspend fun batchDelete(bookmarks: List<BookmarkEntity>) {
-        withContext(Dispatchers.IO) {
-            bookmarks.forEach { bookmark ->
-                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
-                if (current != null) {
-                    val originalRemoteId = current.originalRemoteId
-                    bookmarkDao.deleteBookmark(current)
-                    queueAction(
-                        bookmarkRemoteId = bookmark.remoteId,
-                        serverId = bookmark.serverId,
-                        actionType = PendingActionType.DELETE,
-                        actionData = json.encodeToString(mapOf("originalRemoteId" to originalRemoteId))
-                    )
-                    _bookmarkChangedEvents.emit(bookmark.remoteId)
-                }
-            }
-            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
-        }
-    }
-
-    /**
-     * Set the same tag list on all selected bookmarks without showing individual snackbars.
-     */
-    suspend fun batchUpdateTags(bookmarks: List<BookmarkEntity>, newTags: List<String>) {
-        withContext(Dispatchers.IO) {
-            bookmarks.forEach { bookmark ->
-                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
-                current?.let { bookmarkDao.insertBookmark(it.copy(tags = newTags.joinToString(","))) }
-                queueAction(
-                    bookmarkRemoteId = bookmark.remoteId,
-                    serverId = bookmark.serverId,
-                    actionType = PendingActionType.UPDATE_TAGS,
-                    actionData = json.encodeToString(mapOf("tags" to newTags))
-                )
-                _bookmarkChangedEvents.emit(bookmark.remoteId)
-            }
-            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
-        }
-    }
-
-    /**
-     * Add a list of bookmarks to a list without showing individual snackbars.
-     */
-    suspend fun batchMoveToList(bookmarks: List<BookmarkEntity>, listId: String) {
-        withContext(Dispatchers.IO) {
-            bookmarks.forEach { bookmark ->
-                val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
-                current?.let {
-                    val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
-                    if (!currentListIds.contains(listId)) {
-                        bookmarkDao.insertBookmark(it.copy(listIds = (currentListIds + listId).joinToString(",")))
-                    }
-                }
-                queueAction(
-                    bookmarkRemoteId = bookmark.remoteId,
-                    serverId = bookmark.serverId,
-                    actionType = PendingActionType.MOVE_TO_LIST,
-                    actionData = json.encodeToString(mapOf("listId" to listId))
-                )
-                _bookmarkChangedEvents.emit(bookmark.remoteId)
-            }
-            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
         }
     }
 
@@ -589,7 +420,7 @@ class BookmarkActionsRepository(
                 bookmarkRemoteId = bookmarkLocalId,
                 serverId = server.id,
                 actionType = PendingActionType.CREATE_HIGHLIGHT,
-                actionData = json.encodeToString(mapOf(
+                actionData = jsonSerializer.encodeToString(mapOf(
                     "originalRemoteId" to bookmarkRemoteId,
                     "bookmarkRemoteId" to bookmarkRemoteId,
                     "text" to text,
@@ -619,7 +450,7 @@ class BookmarkActionsRepository(
                 bookmarkRemoteId = bookmarkLocalId,
                 serverId = server.id,
                 actionType = PendingActionType.DELETE_HIGHLIGHT,
-                actionData = json.encodeToString(mapOf(
+                actionData = jsonSerializer.encodeToString(mapOf(
                     "highlightId" to highlightRemoteId
                 ))
             )
@@ -639,7 +470,7 @@ class BookmarkActionsRepository(
     ) {
         println("BookmarkActionsRepository: queueUpdateHighlight called - highlightRemoteId=$highlightRemoteId, note=$note, color=$color")
         withContext(Dispatchers.IO) {
-            val actionData = json.encodeToString(mapOf(
+            val actionData = jsonSerializer.encodeToString(mapOf(
                 "highlightId" to highlightRemoteId,
                 "note" to note,
                 "color" to color
@@ -671,7 +502,7 @@ class BookmarkActionsRepository(
     /**
      * Queue an action for later sync.
      */
-    private suspend fun queueAction(
+    internal suspend fun queueAction(
         bookmarkRemoteId: Long,
         serverId: String,
         actionType: String,
@@ -692,7 +523,7 @@ class BookmarkActionsRepository(
      * Trigger auto-sync if not in offline mode.
      * Called after every action to sync changes to server automatically.
      */
-    private suspend fun triggerAutoSync(serverId: String) {
+    internal suspend fun triggerAutoSync(serverId: String) {
         repositoryScope.launch {
             try {
                 // Check if offline mode is enabled
@@ -779,7 +610,7 @@ class BookmarkActionsRepository(
             val highlightActions = listOf(PendingActionType.DELETE_HIGHLIGHT, PendingActionType.UPDATE_HIGHLIGHT)
             val bookmarkId: String = if (action.actionType == PendingActionType.DELETE || action.actionType == PendingActionType.CREATE_HIGHLIGHT) {
                 // For DELETE and CREATE_HIGHLIGHT, get originalRemoteId from actionData
-                val data = json.decodeFromString<Map<String, String?>>(action.actionData)
+                val data = jsonSerializer.decodeFromString<Map<String, String?>>(action.actionData)
                 val id = data["originalRemoteId"]
                 if (id == null) {
                     println("BookmarkActionsRepository: ${action.actionType} action missing originalRemoteId in actionData")
@@ -828,7 +659,7 @@ class BookmarkActionsRepository(
                     remoteDataSource.deleteBookmark(server, bookmarkId)
                 }
                 PendingActionType.UPDATE_TAGS -> {
-                    val data = json.decodeFromString<Map<String, List<String>>>(action.actionData)
+                    val data = jsonSerializer.decodeFromString<Map<String, List<String>>>(action.actionData)
                     val newTags = data["tags"] ?: emptyList()
                     println("BookmarkActionsRepository: UPDATE_TAGS - Replacing tags with ${newTags.size} tags: $newTags")
 
@@ -871,26 +702,26 @@ class BookmarkActionsRepository(
                     println("BookmarkActionsRepository: Skipping legacy ${action.actionType} action")
                 }
                 PendingActionType.UPDATE_READING_PROGRESS -> {
-                    val data = json.decodeFromString<Map<String, String>>(action.actionData)
+                    val data = jsonSerializer.decodeFromString<Map<String, String>>(action.actionData)
                     val progressPercent = data["progressPercent"]?.toIntOrNull() ?: 0
                     println("ReadProgressSync: executing pending action — pushing ${progressPercent}% for bookmark $bookmarkId to server")
                     val success = remoteDataSource.updateReadingProgress(server, bookmarkId, progressPercent)
                     println("ReadProgressSync: push result=$success")
                 }
                 PendingActionType.MOVE_TO_LIST -> {
-                    val data = json.decodeFromString<Map<String, String>>(action.actionData)
+                    val data = jsonSerializer.decodeFromString<Map<String, String>>(action.actionData)
                     val listId = data["listId"] ?: return
                     println("BookmarkActionsRepository: Calling addBookmarkToList")
                     remoteDataSource.addBookmarkToList(server, listId, bookmarkId)
                 }
                 PendingActionType.REMOVE_FROM_LIST -> {
-                    val data = json.decodeFromString<Map<String, String>>(action.actionData)
+                    val data = jsonSerializer.decodeFromString<Map<String, String>>(action.actionData)
                     val listId = data["listId"] ?: return
                     println("BookmarkActionsRepository: Calling removeBookmarkFromList")
                     remoteDataSource.removeBookmarkFromList(server, listId, bookmarkId)
                 }
                 PendingActionType.CREATE_HIGHLIGHT -> {
-                    val data = json.decodeFromString<Map<String, String?>>(action.actionData)
+                    val data = jsonSerializer.decodeFromString<Map<String, String?>>(action.actionData)
                     val bId = data["bookmarkRemoteId"] ?: return
                     val text = data["text"] ?: return
                     val startOffset = data["startOffset"]?.toInt() ?: 0
@@ -933,7 +764,7 @@ class BookmarkActionsRepository(
                 }
                 PendingActionType.DELETE_HIGHLIGHT -> {
                     println("BookmarkActionsRepository: DELETE_HIGHLIGHT actionData=${action.actionData}")
-                    val data = json.decodeFromString<Map<String, String>>(action.actionData)
+                    val data = jsonSerializer.decodeFromString<Map<String, String>>(action.actionData)
                     println("BookmarkActionsRepository: DELETE_HIGHLIGHT parsed data=$data")
                     val hId = data["highlightId"]
                     if (hId == null) {
@@ -965,7 +796,7 @@ class BookmarkActionsRepository(
                     }
                 }
                 PendingActionType.UPDATE_HIGHLIGHT -> {
-                    val data = json.decodeFromString<Map<String, String?>>(action.actionData)
+                    val data = jsonSerializer.decodeFromString<Map<String, String?>>(action.actionData)
                     val hId = data["highlightId"] ?: return
                     val note = data["note"]
                     val color = data["color"]

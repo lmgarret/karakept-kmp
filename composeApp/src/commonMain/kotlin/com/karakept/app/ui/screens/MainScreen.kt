@@ -1,44 +1,27 @@
 package com.karakept.app.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.key.Key
@@ -67,34 +49,30 @@ import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.ui.components.AddBookmarkDialog
-import com.karakept.app.ui.components.DraggableDivider
-import com.karakept.app.ui.components.FilterBottomPanel
-import com.karakept.app.ui.components.FilterSidePanel
-import com.karakept.app.ui.components.BookmarkActionsMenu
 import com.karakept.app.ui.components.BookmarkAction
-import com.karakept.app.ui.components.ListPickerDialog
-import com.karakept.app.ui.components.TagEditorDialog
+import com.karakept.app.ui.screens.main.BatchDeleteConfirmDialog
+import com.karakept.app.ui.screens.main.BatchListPickerDialog
+import com.karakept.app.ui.screens.main.BatchTagEditorDialog
 import com.karakept.app.ui.screens.main.BookmarkListContent
 import com.karakept.app.ui.screens.main.DrawerContent
 import com.karakept.app.ui.screens.main.HighlightsListContent
+import com.karakept.app.ui.screens.main.MainScreenBookmarkActionsMenu
 import com.karakept.app.ui.screens.main.MainScreenDrawer
+import com.karakept.app.ui.screens.main.MainScreenExpandedLayout
+import com.karakept.app.ui.screens.main.MainScreenFilterOverlay
+import com.karakept.app.ui.screens.main.MainScreenScrollAction
 import com.karakept.app.ui.screens.main.MainScreenTopBar
+import com.karakept.app.ui.screens.main.RenameListDialog
+import com.karakept.app.ui.screens.main.MainScreenAddBookmarkDialog
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.snapshotFlow
-import com.karakept.app.data.repository.SettingsRepository
-import getPlatform
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.first
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
 import com.karakept.app.ui.screens.settings.PerListSettingsScreen
+import getPlatform
 import org.koin.compose.koinInject
 
 object MainScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class, ExperimentalFoundationApi::class, FlowPreview::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -162,7 +140,6 @@ object MainScreen : Screen {
 
         var showFilterDialog by remember { mutableStateOf(false) }
         var showAddBookmarkDialog by remember { mutableStateOf(false) }
-        // Rename list dialog state: Triple(listId, listName, currentIcon)
         var renameListTarget by remember { mutableStateOf<Triple<String, String, String?>?>(null) }
         val pendingBookmarkRemoteIds by screenModel.pendingBookmarkRemoteIds.collectAsState()
         var isSearchActive by remember { mutableStateOf(false) }
@@ -203,18 +180,15 @@ object MainScreen : Screen {
             screenModel.syncProgress.collect { progress ->
                 if (progress is com.karakept.app.data.model.SyncProgress.SyncComplete &&
                     progress.newBookmarksCount > 0) {
-
                     val count = progress.newBookmarksCount
                     val message = "$count new bookmark${if (count > 1) "s" else ""}"
-
                     scope.launch {
                         val result = snackbarHostState.showSnackbar(
                             message = message,
                             actionLabel = "View",
-                            duration = androidx.compose.material3.SnackbarDuration.Short
+                            duration = SnackbarDuration.Short
                         )
-
-                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                        if (result == SnackbarResult.ActionPerformed) {
                             screenModel.scrollToTop()
                         }
                     }
@@ -229,194 +203,15 @@ object MainScreen : Screen {
             }
         }
 
-        // Scroll-triggered action: apply the active list's scroll action silently (no snackbar)
-        // when bookmarks scroll off the top, or when reaching the bottom of the list.
-        //
-        // How we distinguish real scrolling from list mutations:
-        // LazyList uses stable keys (bookmark remoteIds). When items are prepended above the
-        // viewport, Compose adjusts firstVisibleItemIndex so the same item stays on screen —
-        // the key at the current position is unchanged, only the index grows. When the user
-        // actually scrolls down, a new item becomes first-visible (different key). We track
-        // the "anchor" (key + index of the first visible item) and compare it on each emission.
-        //
-        // Prepend at absolute top (firstVisibleItemIndex stays 0):
-        // When the user is at index 0 with no scroll offset, Compose does NOT shift the index
-        // on prepend — the new items appear above and the key at index 0 changes. We detect this
-        // by searching the full bookmarks list for the old anchor key: if it moved to a higher
-        // index, N items were prepended. We record this as newItemsUntil so the fire loop skips
-        // those slots until the user explicitly scrolls past them.
-        //
-        // List replacement (sync / filter change):
-        // MainScreenModel increments bookmarkListVersion on every resetPaginationAndLoad. When
-        // the version changes we run the same old-anchor search so newly inserted items are
-        // protected by newItemsUntil — preventing them from being bulk-fired before the user
-        // has scrolled past them individually. processedIds persists across replacements to
-        // avoid double-firing on bookmarks that survive the swap.
-        LaunchedEffect(currentListScrollAction, currentListScrollActionConfig) {
-            if (currentListScrollAction != SwipeAction.NONE) {
-                var anchorKey: Any? = null   // key of the first visible item we're tracking
-                var anchorIndex = 0          // current index of that anchor item
-                var bottomReached = false
-                var wasScrolling = false
-                // Indices [0, newItemsUntil) contain items that appeared via prepend/sync.
-                // The fire loop skips those slots so the action isn't triggered on bookmarks
-                // the user hasn't explicitly scrolled past.
-                var newItemsUntil = 0
-                var lastSeenListVersion = bookmarkListVersion
-                // Guard against double-firing: tracks remoteIds we've already acted on.
-                // Cleared for items that become visible again when the user scrolls back up,
-                // so a manually-unread bookmark can be re-triggered on the next scroll-down.
-                // Kept across list replacements so surviving bookmarks are not re-fired by sync.
-                val processedIds = mutableSetOf<Long>()
-
-                data class ScrollSnapshot(
-                    val firstIndex: Int,
-                    val firstKey: Any?,
-                    val lastVisibleIndex: Int,
-                    val currentBookmarks: List<com.karakept.app.data.local.entity.BookmarkEntity>,
-                    val isScrolling: Boolean,
-                    val listVersion: Int
-                )
-
-                snapshotFlow {
-                    ScrollSnapshot(
-                        firstIndex = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0,
-                        firstKey = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key,
-                        lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
-                        currentBookmarks = bookmarks,
-                        isScrolling = listState.isScrollInProgress,
-                        listVersion = bookmarkListVersion
-                    )
-                }.collect { snapshot ->
-                    val currentBookmarks = snapshot.currentBookmarks
-                    val totalBookmarks = currentBookmarks.size
-                    val newFirstIndex = snapshot.firstIndex
-                    val newFirstKey = snapshot.firstKey
-                    val isScrolling = snapshot.isScrolling
-
-                    // scrollJustStopped is used only for the short-list bottom case below.
-                    val scrollJustStopped = wasScrolling && !isScrolling
-                    wasScrolling = isScrolling
-
-                    // List replacement detection: bookmarkListVersion is incremented on every
-                    // resetPaginationAndLoad (sync, filter change, server switch). When it
-                    // changes we must re-initialize the anchor AND apply the same prepend-
-                    // detection logic used in the else branch below: if the old anchor survived
-                    // in the new list at a higher index, new items were inserted above it and
-                    // must be protected by newItemsUntil so they aren't bulk-fired before the
-                    // user has scrolled past each one individually. processedIds is kept intact
-                    // so bookmarks that survived the swap are never acted on twice.
-                    if (snapshot.listVersion != lastSeenListVersion) {
-                        lastSeenListVersion = snapshot.listVersion
-                        val oldAnchorNewIndex = if (anchorKey != null) {
-                            currentBookmarks.indexOfFirst { it.remoteId == anchorKey }
-                        } else -1
-                        if (oldAnchorNewIndex > anchorIndex) {
-                            // Items were inserted above the old anchor — protect the new slots.
-                            newItemsUntil = maxOf(newItemsUntil, oldAnchorNewIndex)
-                        } else {
-                            // Full replacement or anchor not found — reset all guards.
-                            newItemsUntil = 0
-                        }
-                        anchorKey = newFirstKey
-                        anchorIndex = newFirstIndex
-                        bottomReached = false
-                        return@collect
-                    }
-
-                    if (anchorKey == null) {
-                        // First emission: initialise anchor without firing any actions.
-                        anchorKey = newFirstKey
-                        anchorIndex = newFirstIndex
-                        return@collect
-                    }
-
-                    when {
-                        newFirstIndex > anchorIndex -> {
-                            if (newFirstKey == anchorKey) {
-                                // Same item at a higher index: Compose shifted the index because
-                                // items were prepended above the viewport. Protect those new slots.
-                                newItemsUntil = maxOf(newItemsUntil, newFirstIndex)
-                                anchorIndex = newFirstIndex
-                            } else {
-                                // A different item is now first-visible — the user actually
-                                // scrolled down. Items [anchorIndex, newFirstIndex) left the top.
-                                for (i in anchorIndex until newFirstIndex) {
-                                    if (i < newItemsUntil) continue  // skip newly prepended items
-                                    val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
-                                    if (scrolledBookmark.remoteId in processedIds) continue
-                                    processedIds.add(scrolledBookmark.remoteId)
-                                    screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
-                                }
-                                anchorIndex = newFirstIndex
-                                anchorKey = newFirstKey
-                                bottomReached = false
-                                if (anchorIndex >= newItemsUntil) newItemsUntil = 0
-                            }
-                        }
-                        newFirstIndex < anchorIndex -> {
-                            // Scrolled back up. Items [newFirstIndex, anchorIndex) are now
-                            // visible again — remove them from processedIds so a bookmark that
-                            // was manually marked as unread can be re-triggered on the next
-                            // scroll-down.
-                            for (i in newFirstIndex until anchorIndex) {
-                                val bookmark = currentBookmarks.getOrNull(i) ?: continue
-                                processedIds.remove(bookmark.remoteId)
-                            }
-                            anchorIndex = newFirstIndex
-                            anchorKey = newFirstKey ?: anchorKey
-                            bottomReached = false
-                        }
-                        else -> {
-                            // firstVisibleItemIndex is unchanged. The key may have changed if
-                            // items were prepended while the user was at the absolute top
-                            // (index 0, zero scroll offset): Compose keeps the index at 0 and
-                            // the new items slide in above, making a different key appear at 0.
-                            if (newFirstKey != null && newFirstKey != anchorKey) {
-                                // Search the FULL bookmarks list for the old anchor — not just
-                                // visible items — so we catch prepends larger than the viewport.
-                                val oldAnchorNewIndex = currentBookmarks.indexOfFirst {
-                                    it.remoteId == anchorKey
-                                }
-                                if (oldAnchorNewIndex > anchorIndex) {
-                                    // Old anchor moved down: N items were prepended. Protect
-                                    // those new slots so they are skipped until intentionally
-                                    // scrolled past.
-                                    newItemsUntil = maxOf(newItemsUntil, oldAnchorNewIndex)
-                                } else {
-                                    // Old anchor not found or unchanged — unexpected state;
-                                    // reset the skip guard conservatively.
-                                    newItemsUntil = 0
-                                }
-                                anchorKey = newFirstKey
-                            }
-                        }
-                    }
-
-                    // When the last visible item is the last bookmark, apply the action to all
-                    // remaining visible items that haven't been processed yet.
-                    // For long lists: anchorIndex > 0 means the user has scrolled at least one
-                    // item off the top in the current direction. This naturally resets to false
-                    // when the user scrolls back to the top (anchorIndex returns to 0), preventing
-                    // newly prepended items from being fired when the user hasn't scrolled.
-                    // For short lists where no item ever leaves the top: fires when the user
-                    // finishes a scroll gesture at the bottom (scrollJustStopped).
-                    val atBottom = totalBookmarks > 0 && snapshot.lastVisibleIndex >= totalBookmarks - 1
-                    if (!bottomReached && atBottom && (anchorIndex > 0 || scrollJustStopped)) {
-                        for (i in anchorIndex until totalBookmarks) {
-                            if (i < newItemsUntil) continue
-                            val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
-                            if (scrolledBookmark.remoteId in processedIds) continue
-                            processedIds.add(scrolledBookmark.remoteId)
-                            screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
-                        }
-                        anchorIndex = totalBookmarks
-                        bottomReached = true
-                        if (anchorIndex >= newItemsUntil) newItemsUntil = 0
-                    }
-                }
-            }
-        }
+        // Scroll-triggered action (extracted to MainScreenScrollAction)
+        MainScreenScrollAction(
+            listState = listState,
+            bookmarks = bookmarks,
+            bookmarkListVersion = bookmarkListVersion,
+            currentListScrollAction = currentListScrollAction,
+            currentListScrollActionConfig = currentListScrollActionConfig,
+            screenModel = screenModel
+        )
 
         // Listen for create bookmark result (only handle failure snackbar; success is shown upfront)
         LaunchedEffect(Unit) {
@@ -591,7 +386,6 @@ object MainScreen : Screen {
                         onFilterClick = { showFilterDialog = true },
                         onRefreshClick = { screenModel.syncBookmarks() },
                         onOfflineBadgeClick = {
-                            // Navigate to server settings and highlight the offline mode row
                             navigator.push(com.karakept.app.ui.screens.settings.SyncDataSettingsScreen(highlightOfflineMode = true))
                         },
                         isDesktop = isDesktop,
@@ -690,7 +484,6 @@ object MainScreen : Screen {
                         isDesktop = isDesktop,
                         pullRefreshState = pullRefreshState,
                         onBookmarkClick = { bookmark ->
-                            // Track last clicked index for Shift+Click range selection anchor
                             val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
                             if (idx >= 0) screenModel.trackLastClickedIndex(idx)
                             if (isExpandedLayout) {
@@ -705,8 +498,6 @@ object MainScreen : Screen {
                             if (isSelectionMode) {
                                 screenModel.toggleBookmarkSelection(bookmark)
                             } else if (!isDesktop) {
-                                // On mobile, long-press shows bottom sheet
-                                // On desktop, right-click context menu is used instead
                                 selectedBookmarkForActions = bookmark
                             }
                         },
@@ -723,8 +514,6 @@ object MainScreen : Screen {
                         } else null,
                         onShiftClick = if (isDesktop) { index ->
                             if (!isSelectionMode) {
-                                // Enter selection mode with range from the last clicked
-                                // bookmark (tracked outside selection mode) to this one
                                 screenModel.enterSelectionModeWithRange(index)
                             } else {
                                 screenModel.selectRange(index)
@@ -748,7 +537,6 @@ object MainScreen : Screen {
                                     }
                                 }
                                 is BookmarkAction.Select -> screenModel.enterSelectionMode(bookmark)
-                                // Move to List and Edit Tags need sub-dialogs — open the bottom sheet
                                 is BookmarkAction.MoveToList, is BookmarkAction.UpdateTags -> {
                                     selectedBookmarkForActions = bookmark
                                 }
@@ -760,263 +548,44 @@ object MainScreen : Screen {
         }
 
         // Adaptive layout: choose between compact (modal drawer) and expanded (3-column) mode
-        // Hoisted so scrim/filter overlay can check it outside BoxWithConstraints
         var isExpandedLayout by remember { mutableStateOf(false) }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             isExpandedLayout = maxWidth >= 840.dp
 
             if (isExpandedLayout) {
-                // Expanded: permanent drawer + bookmark list + reader pane
-                // Column width state — persisted via SettingsRepository
-                val layoutSettingsRepository = koinInject<SettingsRepository>()
-                var drawerWidthDp by remember { mutableFloatStateOf(280f) }
-                var listFraction by remember { mutableFloatStateOf(0.4f) }
-
-                // Load persisted column widths once
-                LaunchedEffect(Unit) {
-                    drawerWidthDp = layoutSettingsRepository.drawerWidthDp.first()
-                    listFraction = layoutSettingsRepository.listColumnFraction.first()
-                }
-
-                // Debounced persistence — write 500ms after drag stops
-                LaunchedEffect(Unit) {
-                    snapshotFlow { drawerWidthDp }
-                        .debounce(500)
-                        .collect { layoutSettingsRepository.setDrawerWidthDp(it) }
-                }
-                LaunchedEffect(Unit) {
-                    snapshotFlow { listFraction }
-                        .debounce(500)
-                        .collect { layoutSettingsRepository.setListColumnFraction(it) }
-                }
-
-                // Calculate column widths
-                val dividerWidth = 12.dp // DraggableDivider hit target width (1dp visible line)
-                val drawerWidth = drawerWidthDp.dp
-                val drawerTotalWidth = if (isDrawerVisible) drawerWidth else 0.dp
-                val remainingWidth = maxWidth - drawerTotalWidth - dividerWidth - dividerWidth
-                val minListWidth = 250.dp
-                val minReaderWidth = 300.dp
-                val maxListWidth = remainingWidth - minReaderWidth
-                val listWidth = (remainingWidth * listFraction).coerceIn(minListWidth, maxListWidth)
-
-                // Reset fullscreen when bookmark is deselected
-                LaunchedEffect(selectedBookmarkId) {
-                    if (selectedBookmarkId == null) isReaderFullscreen = false
-                }
-
-                Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
-                    // Drawer column (collapsible)
-                    AnimatedVisibility(
-                        visible = isDrawerVisible && !isReaderFullscreen,
-                        enter = expandHorizontally(),
-                        exit = shrinkHorizontally()
-                    ) {
-                        Surface(
-                            modifier = Modifier.width(drawerWidth).fillMaxHeight(),
-                            color = MaterialTheme.colorScheme.surfaceContainerLow
-                        ) {
-                            DrawerContent(
-                                lists = lists,
-                                listCounts = listCounts,
-                                expandedLists = expandedLists,
-                                currentFilter = currentFilter,
-                                onFilterApply = { filter ->
-                                    screenModel.applyFilter(filter)
-                                    showHighlights = false
-                                    scrollToHighlightId = null
-                                    activeHighlightId = null
-                                },
-                                onClearFilter = {
-                                    screenModel.clearFilter()
-                                    showHighlights = false
-                                    scrollToHighlightId = null
-                                    activeHighlightId = null
-                                },
-                                onToggleListExpanded = drawerToggleListExpanded,
-                                onMarkAllAsRead = { listId -> screenModel.markAllBookmarksInListAsRead(listId) },
-                                onRenameList = { listId, listName ->
-                                    val targetList = lists.find { it.id == listId }
-                                    renameListTarget = Triple(listId, listName, targetList?.icon)
-                                },
-                                onNavigateToListSettings = { listId, listName ->
-                                    navigator.push(PerListSettingsScreen(listId, listName))
-                                },
-                                onSetAsDefault = { listId -> screenModel.setDefaultList(listId) },
-                                onSetAsDefaultType = { type -> screenModel.setDefaultListType(type) },
-                                onNavigateToSettings = { navigator.push(SettingsScreen()) },
-                                onNavigateToHighlights = {
-                                    showHighlights = true
-                                    selectedBookmarkId = null
-                                    scrollToHighlightId = null
-                                    activeHighlightId = null
-                                },
-                                isHighlightsSelected = showHighlights,
-                                onAddBookmark = if (isDesktop && !offlineMode && !isAutoOffline) {
-                                    { showAddBookmarkDialog = true }
-                                } else null
-                            )
-                        }
-                    }
-
-                    // Divider between drawer and list (draggable).
-                    // Line aligned to start so it sits flush against the drawer edge.
-                    AnimatedVisibility(
-                        visible = isDrawerVisible && !isReaderFullscreen,
-                        enter = expandHorizontally(),
-                        exit = shrinkHorizontally()
-                    ) {
-                        DraggableDivider(
-                            lineAlignment = Alignment.CenterStart,
-                            onDrag = { delta ->
-                                drawerWidthDp = (drawerWidthDp + delta).coerceIn(200f, 400f)
-                            }
-                        )
-                    }
-
-                    // Middle column: bookmark list or highlights list
-                    AnimatedVisibility(
-                        visible = !isReaderFullscreen,
-                        enter = expandHorizontally(),
-                        exit = shrinkHorizontally()
-                    ) {
-                    Box(modifier = Modifier.width(listWidth).fillMaxHeight()) {
-                        if (showHighlights) {
-                            val highlightsScreenModel = koinInject<HighlightsScreenModel>()
-                            val highlightsList by highlightsScreenModel.highlights.collectAsState()
-                            val isHighlightsSyncing by highlightsScreenModel.isSyncing.collectAsState()
-
-                            LaunchedEffect(showHighlights) {
-                                if (showHighlights) highlightsScreenModel.syncHighlights()
-                            }
-
-                            HighlightsListContent(
-                                highlights = highlightsList,
-                                isSyncing = isHighlightsSyncing,
-                                activeHighlightId = activeHighlightId,
-                                onHighlightClick = { highlight ->
-                                    scope.launch {
-                                        val bookmarkLocalId = highlightsScreenModel.getBookmarkLocalIdForHighlight(highlight)
-                                        if (bookmarkLocalId != null) {
-                                            selectedBookmarkId = bookmarkLocalId
-                                            scrollToHighlightId = highlight.id
-                                            activeHighlightId = highlight.id
-                                        }
-                                    }
-                                },
-                                onDeleteHighlight = { highlightsScreenModel.deleteHighlight(it) },
-                                onBack = {
-                                    showHighlights = false
-                                    selectedBookmarkId = null
-                                    scrollToHighlightId = null
-                                    activeHighlightId = null
-                                }
-                            )
-                        } else {
-                            MainScaffoldContent(isExpandedLayout = true)
-                        }
-                    }
-                    } // end AnimatedVisibility for list
-
-                    // Divider between list and reader (draggable)
-                    AnimatedVisibility(
-                        visible = !isReaderFullscreen,
-                        enter = expandHorizontally(),
-                        exit = shrinkHorizontally()
-                    ) {
-                        DraggableDivider(
-                            onDrag = { delta ->
-                                // Compute fraction change directly from delta to avoid stale captures
-                                val remainingDp = remainingWidth.value
-                                if (remainingDp > 0f) {
-                                    val minFraction = minListWidth.value / remainingDp
-                                    val maxFraction = maxListWidth.value / remainingDp
-                                    listFraction = (listFraction + delta / remainingDp).coerceIn(minFraction, maxFraction)
-                                }
-                            }
-                        )
-                    }
-
-                    // Reader pane column — shows filter side panel when active on desktop
-                    // Uses weight(1f) to fill remaining Row space, so it smoothly
-                    // resizes as the drawer / list panes animate in or out.
-                    Surface(
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                        color = MaterialTheme.colorScheme.surface
-                    ) {
-                        if (showFilterDialog) {
-                            FilterSidePanel(
-                                currentFilter = currentFilter,
-                                availableTags = topTagsWithCounts,
-                                allTags = allAvailableTags,
-                                availableLists = lists,
-                                onDismiss = { showFilterDialog = false },
-                                onFilterChange = { filter ->
-                                    screenModel.applyFilter(filter)
-                                },
-                                onReset = {
-                                    screenModel.applyFilter(FilterConfig())
-                                }
-                            )
-                        } else {
-                            val currentBookmarkId = selectedBookmarkId
-                            val currentScrollToHighlightId = scrollToHighlightId
-                            if (currentBookmarkId != null) {
-                                // Use key() to force fresh composition when bookmark or highlight changes
-                                androidx.compose.runtime.key(currentBookmarkId, currentScrollToHighlightId) {
-                                    val viewerScreenModel = koinInject<BookmarkViewerScreenModel>()
-                                    DisposableEffect(currentBookmarkId) {
-                                        onDispose { viewerScreenModel.onDispose() }
-                                    }
-                                    BookmarkViewerContent(
-                                        bookmarkId = currentBookmarkId,
-                                        scrollToHighlightId = currentScrollToHighlightId,
-                                        screenModel = viewerScreenModel,
-                                        onBack = {
-                                            if (isReaderFullscreen) {
-                                                isReaderFullscreen = false
-                                            } else {
-                                                selectedBookmarkId = null
-                                                scrollToHighlightId = null
-                                                activeHighlightId = null
-                                            }
-                                        },
-                                        onTagFilterApply = { tag ->
-                                            screenModel.applyTagFilter(tag, currentBookmarkId)
-                                            selectedBookmarkId = null
-                                            scrollToHighlightId = null
-                                            activeHighlightId = null
-                                            showHighlights = false
-                                        },
-                                        isEmbedded = true,
-                                        isFullscreen = isReaderFullscreen,
-                                        onFullscreenToggle = { isReaderFullscreen = !isReaderFullscreen }
-                                    )
-                                }
-                            } else {
-                                // Placeholder
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.BookmarkBorder,
-                                            contentDescription = null,
-                                            modifier = Modifier.padding(bottom = 16.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                        )
-                                        Text(
-                                            text = "Select a bookmark to read",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                MainScreenExpandedLayout(
+                    maxWidth = maxWidth,
+                    lists = lists,
+                    listCounts = listCounts,
+                    expandedLists = expandedLists,
+                    currentFilter = currentFilter,
+                    topTagsWithCounts = topTagsWithCounts,
+                    allAvailableTags = allAvailableTags,
+                    offlineMode = offlineMode,
+                    isAutoOffline = isAutoOffline,
+                    isDrawerVisible = isDrawerVisible,
+                    onDrawerVisibilityChanged = { isDrawerVisible = it },
+                    isReaderFullscreen = isReaderFullscreen,
+                    onReaderFullscreenChanged = { isReaderFullscreen = it },
+                    selectedBookmarkId = selectedBookmarkId,
+                    onSelectedBookmarkIdChanged = { selectedBookmarkId = it },
+                    showHighlights = showHighlights,
+                    onShowHighlightsChanged = { showHighlights = it },
+                    scrollToHighlightId = scrollToHighlightId,
+                    onScrollToHighlightIdChanged = { scrollToHighlightId = it },
+                    activeHighlightId = activeHighlightId,
+                    onActiveHighlightIdChanged = { activeHighlightId = it },
+                    showFilterDialog = showFilterDialog,
+                    onShowFilterDialogChanged = { showFilterDialog = it },
+                    showAddBookmarkDialog = showAddBookmarkDialog,
+                    onShowAddBookmarkDialogChanged = { showAddBookmarkDialog = it },
+                    renameListTarget = renameListTarget,
+                    onRenameListTargetChanged = { renameListTarget = it },
+                    screenModel = screenModel,
+                    navigateTo = { screen -> navigator.push(screen) },
+                    isDesktop = isDesktop,
+                    scaffoldContent = { isExpanded -> MainScaffoldContent(isExpanded) }
+                )
             } else {
                 // Compact: modal drawer + full-screen navigation
                 MainScreenDrawer(
@@ -1041,29 +610,20 @@ object MainScreen : Screen {
             }
         }
 
-        // Back Handler for fullscreen reader
+        // Back Handlers
         com.karakept.app.ui.components.BackHandler(enabled = isReaderFullscreen) {
             isReaderFullscreen = false
         }
-
-        // Back Handler for selection mode
         com.karakept.app.ui.components.BackHandler(enabled = isSelectionMode) {
             screenModel.clearSelection()
         }
-
-        // Back Handler for search
         com.karakept.app.ui.components.BackHandler(enabled = isSearchActive) {
             isSearchActive = false
             screenModel.clearSearch()
         }
-
-        // Back Handler for filter panel
         com.karakept.app.ui.components.BackHandler(enabled = showFilterDialog) {
             showFilterDialog = false
         }
-
-        // Back Handler: when we arrived here from a tag click in a BookmarkViewerScreen,
-        // pressing back returns to that viewer (and clears the tag filter).
         com.karakept.app.ui.components.BackHandler(
             enabled = tagFilterSourceBookmarkId != null && !showFilterDialog
         ) {
@@ -1074,121 +634,59 @@ object MainScreen : Screen {
             }
         }
 
-        // Scrim + bottom panel for filter — only on compact (mobile) layout.
-        // On expanded (desktop) layout, the filter renders in the reader pane column instead.
+        // Filter overlay (compact layout only)
         if (!isExpandedLayout) {
-            androidx.compose.animation.AnimatedVisibility(
-                visible = showFilterDialog,
-                enter = androidx.compose.animation.fadeIn(),
-                exit = androidx.compose.animation.fadeOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f))
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            showFilterDialog = false
-                        }
-                )
-            }
-
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                FilterBottomPanel(
-                    visible = showFilterDialog,
-                    currentFilter = currentFilter,
-                    availableTags = topTagsWithCounts,
-                    allTags = allAvailableTags,
-                    availableLists = lists,
-                    onDismiss = { showFilterDialog = false },
-                    onFilterChange = { filter ->
-                        screenModel.applyFilter(filter)
-                    },
-                    onReset = {
-                        screenModel.applyFilter(FilterConfig())
-                    }
-                )
-            }
-        }
-
-        // Bookmark Actions Menu (ModalBottomSheet provides its own scrim)
-        selectedBookmarkForActions?.let { bookmark ->
-            BookmarkActionsMenu(
-                bookmark = bookmark,
-                availableLists = lists,
-                availableTags = allAvailableTags,
-                onAction = { action ->
-                    when (action) {
-                        is BookmarkAction.ToggleArchive -> screenModel.toggleBookmarkArchive(bookmark)
-                        is BookmarkAction.ToggleFavorite -> screenModel.toggleBookmarkFavorite(bookmark)
-                        is BookmarkAction.ToggleRead -> screenModel.toggleBookmarkRead(bookmark)
-                        is BookmarkAction.MoveToList -> screenModel.moveBookmarkToList(bookmark, action.listId)
-                        is BookmarkAction.UpdateTags -> screenModel.updateBookmarkTags(bookmark, action.tags)
-                        is BookmarkAction.Delete -> screenModel.deleteBookmark(bookmark)
-                        is BookmarkAction.Share -> {
-                            com.karakept.app.utils.ShareUtils.shareText(bookmark.url, bookmark.title)
-                        }
-                        is BookmarkAction.OpenInBrowser -> {
-                            try {
-                                uriHandler.openUri(bookmark.url)
-                                scope.launch { snackbarManager.showSnackbar("Opening in browser") }
-                            } catch (e: Exception) {
-                                scope.launch { snackbarManager.showSnackbar("Could not open link") }
-                            }
-                        }
-                        is BookmarkAction.Select -> screenModel.enterSelectionMode(bookmark)
-                    }
-                },
-                onDismiss = { selectedBookmarkForActions = null }
+            MainScreenFilterOverlay(
+                showFilterDialog = showFilterDialog,
+                onDismissFilter = { showFilterDialog = false },
+                currentFilter = currentFilter,
+                topTagsWithCounts = topTagsWithCounts,
+                allAvailableTags = allAvailableTags,
+                lists = lists,
+                onFilterChange = { filter -> screenModel.applyFilter(filter) },
+                onFilterReset = { screenModel.applyFilter(FilterConfig()) }
             )
         }
 
+        // Bookmark Actions Menu
+        MainScreenBookmarkActionsMenu(
+            bookmark = selectedBookmarkForActions,
+            lists = lists,
+            allAvailableTags = allAvailableTags,
+            screenModel = screenModel,
+            snackbarManager = snackbarManager,
+            scope = scope,
+            uriHandler = uriHandler,
+            onDismiss = { selectedBookmarkForActions = null }
+        )
+
         // Add Bookmark Dialog
         if (showAddBookmarkDialog) {
-            AddBookmarkDialog(
+            MainScreenAddBookmarkDialog(
                 onConfirm = { url ->
                     showAddBookmarkDialog = false
                     screenModel.createBookmark(url)
-                    scope.launch { snackbarManager.showSnackbar("Adding bookmark…") }
+                    scope.launch { snackbarManager.showSnackbar("Adding bookmark...") }
                 },
                 onDismiss = { showAddBookmarkDialog = false }
             )
         }
 
-        // Batch delete confirmation
+        // Batch dialogs
         if (showBatchDeleteConfirm) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showBatchDeleteConfirm = false },
-                title = { androidx.compose.material3.Text("Delete ${selectedBookmarkIds.size} bookmark${if (selectedBookmarkIds.size > 1) "s" else ""}?") },
-                text = { androidx.compose.material3.Text("This action cannot be undone. The selected bookmarks will be permanently deleted from the server.") },
-                confirmButton = {
-                    androidx.compose.material3.TextButton(
-                        onClick = {
-                            screenModel.batchDelete()
-                            showBatchDeleteConfirm = false
-                        }
-                    ) {
-                        androidx.compose.material3.Text("Delete", color = androidx.compose.material3.MaterialTheme.colorScheme.error)
-                    }
+            BatchDeleteConfirmDialog(
+                selectedCount = selectedBookmarkIds.size,
+                onConfirm = {
+                    screenModel.batchDelete()
+                    showBatchDeleteConfirm = false
                 },
-                dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { showBatchDeleteConfirm = false }) {
-                        androidx.compose.material3.Text("Cancel")
-                    }
-                }
+                onDismiss = { showBatchDeleteConfirm = false }
             )
         }
 
-        // Batch move-to-list picker
         if (showBatchListPicker) {
-            ListPickerDialog(
+            BatchListPickerDialog(
                 lists = lists,
-                currentListIds = emptyList(),
                 onListSelected = { listId ->
                     screenModel.batchMoveToList(listId)
                     showBatchListPicker = false
@@ -1197,27 +695,11 @@ object MainScreen : Screen {
             )
         }
 
-        // Batch set-tags dialog
         if (showBatchTagEditor) {
-            // Pre-populate with tags shared by ALL selected bookmarks (intersection)
-            val selectedBookmarks = remember(selectedBookmarkIds, bookmarks) {
-                bookmarks.filter { it.remoteId in selectedBookmarkIds }
-            }
-            val commonTags = remember(selectedBookmarks) {
-                if (selectedBookmarks.isEmpty()) emptyList()
-                else {
-                    val first = selectedBookmarks.first().tags.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
-                    selectedBookmarks.drop(1).fold(first) { acc, bm ->
-                        val bmTags = bm.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
-                        acc intersect bmTags
-                    }.toList()
-                }
-            }
-            TagEditorDialog(
-                currentTags = commonTags,
-                availableTags = allAvailableTags,
-                title = "Set Tags (${selectedBookmarkIds.size} bookmarks)",
-                confirmLabel = "Apply",
+            BatchTagEditorDialog(
+                selectedBookmarkIds = selectedBookmarkIds,
+                bookmarks = bookmarks,
+                allAvailableTags = allAvailableTags,
                 onTagsUpdated = { newTags ->
                     screenModel.batchSetTags(newTags)
                     showBatchTagEditor = false
@@ -1232,8 +714,8 @@ object MainScreen : Screen {
 fun rememberSnackbarHostState(
     manager: ActionSnackbarManager,
     enabled: Boolean = true
-): androidx.compose.material3.SnackbarHostState {
-    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+): SnackbarHostState {
+    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(enabled) {
@@ -1252,7 +734,7 @@ fun rememberSnackbarHostState(
                         actionLabel = "Undo",
                         duration = event.duration
                     )
-                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                    if (result == SnackbarResult.ActionPerformed) {
                         scope.launch { event.onUndo() }
                     }
                 }
@@ -1262,7 +744,7 @@ fun rememberSnackbarHostState(
                         actionLabel = event.actionLabel,
                         duration = event.duration
                     )
-                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                    if (result == SnackbarResult.ActionPerformed) {
                         scope.launch { event.onAction() }
                     }
                 }
@@ -1271,51 +753,4 @@ fun rememberSnackbarHostState(
     }
 
     return snackbarHostState
-}
-
-@Composable
-private fun RenameListDialog(
-    initialName: String,
-    initialIcon: String,
-    onDismiss: () -> Unit,
-    onConfirm: (name: String, icon: String) -> Unit
-) {
-    var name by remember { mutableStateOf(initialName) }
-    var icon by remember { mutableStateOf(initialIcon) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { androidx.compose.material3.Text("Rename list") },
-        text = {
-            Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { androidx.compose.material3.Text("List name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = icon,
-                    onValueChange = { icon = it },
-                    label = { androidx.compose.material3.Text("Icon (emoji)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(name.trim(), icon.trim()) },
-                enabled = name.isNotBlank()
-            ) {
-                androidx.compose.material3.Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                androidx.compose.material3.Text("Cancel")
-            }
-        }
-    )
 }
