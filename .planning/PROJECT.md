@@ -1,46 +1,51 @@
-# Karakept KMP — v1.7.0 Tech Debt Cleanup
+# Karakept KMP
 
 ## What This Is
 
-A focused tech debt cleanup milestone addressing items identified during the code-health milestone audit. All functional requirements are already met — this milestone cleans up remaining cosmetic and maintainability issues.
+A Kotlin Multiplatform bookmark manager built with Compose Multiplatform, targeting Android and Desktop. Uses Material Design 3, Voyager navigation, Koin DI, and SQLDelight for local storage.
 
 ## Core Value
 
-Production code should use structured logging, stay within size targets, and avoid redundant operations.
+A reliable, well-structured bookmark management app with clean code practices.
 
 ## Requirements
 
+### Validated
+
+- ✓ Replace ~97 `println` debug calls with `AppLogger` or remove them — v1.7.0
+- ✓ Trim `BookmarkSyncPipeline.kt` below 500 lines — v1.7.0 (493 lines after println cleanup)
+- ✓ Trim `SettingsRepositoryMutations.kt` below 500 lines — v1.7.0 (478 lines after println cleanup)
+- ✓ Remove redundant `koinInject<ServerRepository>()` in `App.kt` — v1.7.0
+
 ### Active
 
-- [ ] Replace ~97 remaining `println` debug calls with `AppLogger` or remove them
-- [ ] Trim `BookmarkSyncPipeline.kt` below 500 lines (currently 545)
-- [ ] Trim `SettingsRepositoryMutations.kt` below 500 lines (currently 511)
-- [ ] Remove redundant `koinInject<ServerRepository>()` call in `App.kt`
+(None — next milestone TBD)
 
 ### Out of Scope
 
-- New features — this is strictly cleanup
-- Dependency upgrades (tracked in v2 requirements)
+- Dependency upgrades (tracked separately)
 - Platform-specific improvements
 
 ## Context
 
+- v1.7.0 shipped 2026-03-21: tech debt cleanup (logging, file sizes, redundant DI)
 - Code-health milestone completed 2026-03-21, archived in `.planning/archive/code-health/`
-- AppLogger infrastructure already in place (built in code-health Phase 1)
-- All files were split in code-health Phase 3; two are marginally over the 500-line target
-- The app is functional and in active use — changes must not regress behavior
+- AppLogger infrastructure in place with `.d()`, `.i()`, `.w()`, `.e()` severity levels
+- All production files under 500 lines
+- The app is functional and in active use
 
 ## Constraints
 
 - **Stability**: No regressions — all changes are internal refactoring
 - **Build**: Build/test commands run externally by the user, not in this session
-- **Scope**: Only address the 4 identified tech debt items
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Aligned milestone versioning to git tags | Previous "v1.0" milestone didn't match repo's actual v1.x.x tags | v1.7.0 follows v1.6.0 |
+| Aligned milestone versioning to git tags | Previous "v1.0" milestone didn't match repo's actual v1.x.x tags | v1.7.0 follows v1.6.0 ✓ |
+| Hot-path logging removed, not replaced | Per-item loop logging adds noise without debug value | Zero hot-path println calls ✓ |
+| Consolidated sync action logging | 53 verbose step traces → ~15 targeted start/success/error logs | Cleaner BookmarkActionsRepositorySync ✓ |
 
 ---
-*Created: 2026-03-21*
+*Last updated: 2026-03-21 after v1.7.0 milestone*
