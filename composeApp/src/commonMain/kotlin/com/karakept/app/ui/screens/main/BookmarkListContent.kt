@@ -270,7 +270,11 @@ internal fun BookmarkListContent(
             modifier = Modifier.fillMaxSize(),
             state = listState
         ) {
-            itemsIndexed(bookmarks, key = { _, bookmark -> bookmark.remoteId }) { itemIndex, bookmark ->
+            itemsIndexed(
+                bookmarks,
+                key = { _, bookmark -> bookmark.remoteId },
+                contentType = { _, _ -> "bookmark" }
+            ) { itemIndex, bookmark ->
                 Box(
                     modifier = Modifier
                         .animateItem()
@@ -522,7 +526,7 @@ internal fun BookmarkListContent(
 
             // Loading indicator at bottom
             if (isLoadingMore) {
-                item {
+                item(contentType = "loading") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -536,7 +540,7 @@ internal fun BookmarkListContent(
 
             // End of list indicator
             if (!hasMoreItems && bookmarks.isNotEmpty()) {
-                item {
+                item(contentType = "end") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
