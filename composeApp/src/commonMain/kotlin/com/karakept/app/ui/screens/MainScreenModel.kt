@@ -355,13 +355,7 @@ class MainScreenModel(
         }
     }
 
-    // =========================================================================
     // Pagination — see MainScreenModelPagination.kt
-    // =========================================================================
-
-    // =========================================================================
-    // Sync
-    // =========================================================================
 
     fun syncBookmarks() {
         screenModelScope.launch {
@@ -410,9 +404,7 @@ class MainScreenModel(
         }
     }
 
-    // =========================================================================
     // Filter management
-    // =========================================================================
 
     fun applyFilter(filter: FilterConfig) {
         _currentFilter.value = filter
@@ -493,13 +485,8 @@ class MainScreenModel(
         }
     }
 
-    // =========================================================================
     // Bookmark actions — see MainScreenModelActions.kt
-    // =========================================================================
-
-    // =========================================================================
     // Multi-select & batch operations — see MainScreenModelBatch.kt
-    // =========================================================================
 
     // Index of the last item that was clicked or selected (for Shift+Click range selection).
     // Tracked even outside selection mode so Shift+Click can use it as a range anchor.
