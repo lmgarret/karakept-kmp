@@ -8,6 +8,7 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.screens.MainScreenModel
+import com.karakept.app.ui.screens.executeScrollAction
 
 /**
  * Scroll-triggered action: apply the active list's scroll action silently (no snackbar)

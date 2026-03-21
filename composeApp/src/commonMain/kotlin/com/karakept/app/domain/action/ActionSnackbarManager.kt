@@ -48,8 +48,8 @@ class ActionSnackbarManager {
 
     suspend fun showErrorWithRetry(
         message: String,
-        onRetry: suspend () -> Unit,
-        duration: SnackbarDuration = SnackbarDuration.Short
+        duration: SnackbarDuration = SnackbarDuration.Short,
+        onRetry: suspend () -> Unit
     ) {
         _snackbarEvents.emit(SnackbarEvent.MessageWithAction(message, "Retry", onRetry, duration))
     }

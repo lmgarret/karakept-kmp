@@ -5,6 +5,14 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.entity.BookmarkEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.karakept.app.data.repository.batchArchive
+import com.karakept.app.data.repository.batchUnarchive
+import com.karakept.app.data.repository.batchMarkRead
+import com.karakept.app.data.repository.batchMarkUnread
+import com.karakept.app.data.repository.batchSetFavourite
+import com.karakept.app.data.repository.batchDelete
+import com.karakept.app.data.repository.batchUpdateTags
+import com.karakept.app.data.repository.batchMoveToList
 
 /** Track the last clicked bookmark index (call on every normal click). */
 fun MainScreenModel.trackLastClickedIndex(index: Int) {
