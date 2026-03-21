@@ -88,11 +88,11 @@ Plans:
   1. HTML rendered in the reader/WebView is sanitized before display — script tags, event handlers, and dangerous attributes are stripped
   2. API credentials are stored in platform keychain (Android Keystore / desktop secure storage) instead of cleartext in the Room database
   3. Existing server connections continue to work after credential migration (no re-login required)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Sanitize HTML in reader view
-- [ ] 05-02: Migrate credentials to platform keychain/keystore
+- [ ] 05-01-PLAN.md — Harden HtmlArchiveProcessor to strip iframes, objects, embeds, applets, forms; fix misleading JS comment
+- [ ] 05-02-PLAN.md — Create SecureCredentialStore (expect/actual), migrate ServerRepository to encrypted storage with DB fallback
 
 ### Phase 6: Performance Optimization
 **Goal**: The app remains responsive with large bookmark collections and long articles
