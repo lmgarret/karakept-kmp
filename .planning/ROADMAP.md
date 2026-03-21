@@ -59,12 +59,12 @@ Plans:
   3. BookmarkViewerScreen.kt is split into viewer sub-components — reader, highlights, and actions are separate files
   4. Repository files (BookmarkRepository, BookmarkActionsRepository, SettingsRepository) are split by concern — read vs write, sync vs local
   5. The app compiles and all existing functionality works identically after splitting (no regressions)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: Split MainScreen.kt and MainScreenModel.kt
-- [ ] 03-02: Split BookmarkViewerScreen.kt
-- [ ] 03-03: Split repository files by concern
+- [ ] 03-01-PLAN.md — Split repository files (BookmarkRepository, BookmarkActionsRepository, SettingsRepository) by concern
+- [ ] 03-02-PLAN.md — Split MainScreenModel.kt into extension function files (actions, batch, pagination)
+- [ ] 03-03-PLAN.md — Split MainScreen.kt and BookmarkViewerScreen.kt into focused composable files
 
 ### Phase 4: Test Coverage
 **Goal**: The highest-risk untested code paths have automated tests that catch regressions
