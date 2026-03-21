@@ -44,8 +44,14 @@ None yet.
 
 - Build/test commands run externally by the user, not in this session
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260322-0jj | Update GitHub Actions release workflow to trigger on pushed tags | 2026-03-21 | 2e43d87 | [260322-0jj-update-github-actions-release-workflow-t](./quick/260322-0jj-update-github-actions-release-workflow-t/) |
+
 ## Session Continuity
 
-Last session: 2026-03-21T23:02:57.036Z
+Last activity: 2026-03-21 - Completed quick task 260322-0jj: Update GitHub Actions release workflow to trigger on pushed tags
 Stopped at: Completed 02-01-PLAN.md
 Resume file: None
