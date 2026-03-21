@@ -44,7 +44,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 ### Performance
 
 - [x] **PERF-01**: Verify and optimize LazyColumn rendering for 1000+ bookmarks
-- [ ] **PERF-02**: Cache parsed HTML and lazy-load sections for large articles
+- [x] **PERF-02**: Cache parsed HTML and lazy-load sections for large articles
 
 ## v2 Requirements
 
@@ -93,7 +93,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEC-01 | Phase 5 | Complete |
 | SEC-02 | Phase 5 | Complete |
 | PERF-01 | Phase 6 | Complete |
-| PERF-02 | Phase 6 | Pending |
+| PERF-02 | Phase 6 | Complete |
 
 **Coverage:**
 - v1 requirements: 18 total
