@@ -1,9 +1,9 @@
 ---
 phase: 2
 slug: concurrency-hardening
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-21
 ---
 
@@ -38,9 +38,8 @@ created: 2026-03-21
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 02-01-01 | 01 | 1 | CONC-01 | code audit | `grep -c "sealed.*InitState\|is InitState" MainScreenModel.kt` | ❌ W0 | ⬜ pending |
-| 02-01-02 | 01 | 1 | CONC-01 | code audit | `grep -c "updateAccumulatedBookmarks\|mutex" MainScreenModel.kt` | ❌ W0 | ⬜ pending |
-| 02-01-03 | 01 | 1 | CONC-02 | code audit | `grep -c "Mutex\|withLock" BookmarkActionsRepository.kt` | ❌ W0 | ⬜ pending |
+| 02-01-T1 | 01 | 1 | CONC-01 | code audit | `grep -c "sealed class InitState\|is InitState" MainScreenModel.kt` | N/A (code audit) | ⬜ pending |
+| 02-01-T2 | 01 | 1 | CONC-01, CONC-02 | code audit | `grep -c "updateAccumulatedBookmarks" MainScreenModel.kt` | N/A (code audit) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -63,11 +62,11 @@ created: 2026-03-21
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (none — code audit only)
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-03-21
