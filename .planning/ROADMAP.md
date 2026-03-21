@@ -74,11 +74,11 @@ Plans:
   1. Offline-first action queue has tests covering: ordering, conflict resolution, timeout handling, and server rejection scenarios
   2. FilterConfig has exhaustive combination tests covering all boolean flag combinations, including the previously-crashing multi-list case
   3. Reading progress race condition has a test covering rapid UI changes followed by sync, verifying the serverProgressChecked flag
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: Add offline-first action queue tests
-- [ ] 04-02: Add filter combination and reading progress race tests
+- [ ] 04-01-PLAN.md — Add offline-first action queue tests (TEST-01)
+- [ ] 04-02-PLAN.md — Add FilterConfig combination tests and reading progress race tests (TEST-02, TEST-03)
 
 ### Phase 5: Security Hardening
 **Goal**: Untrusted content cannot execute in the app, and credentials are protected at rest
