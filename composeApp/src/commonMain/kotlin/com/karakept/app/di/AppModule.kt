@@ -16,6 +16,7 @@ import com.karakept.app.data.repository.ListRepository
 import com.karakept.api.infrastructure.ApiClient
 import com.karakept.api.client.*
 import com.karakept.app.data.repository.BackupRepository
+import com.karakept.app.data.secure.SecureCredentialStore
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.OnboardingScreenModel
@@ -73,7 +74,8 @@ val appModule = module {
 
     single { createDataStore() }
 
-    single { ServerRepository(get()) }
+    single { SecureCredentialStore() }
+    single { ServerRepository(get(), get()) }
     single { SettingsRepository(get()) }
     single { ListRepository(get(), get(), get()) }  // RemoteDataSource, ListDao, SettingsRepository
 
