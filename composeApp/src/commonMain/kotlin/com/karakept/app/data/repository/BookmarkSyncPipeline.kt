@@ -10,6 +10,7 @@ import com.karakept.app.utils.ReadingTimeCalculator
 import com.karakept.app.utils.ImageCacheManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 
@@ -152,12 +153,7 @@ internal class BookmarkSyncPipeline(
     private suspend fun fetchListMembership(
         remoteBookmarks: List<com.karakept.api.model.Bookmark>
     ): Map<String, List<String>> {
-        if (!config.shouldFetchLists) {
-            println("fetchListMembership: Skipping list fetch (shouldFetchLists=false)")
-            return emptyMap() // Filtered syncs skip this
-        }
-
-        println("fetchListMembership: Config type = ${config::class.simpleName}, fetching lists for ${remoteBookmarks.size} bookmarks")
+        if (!config.shouldFetchLists) return emptyMap()
 
         return when (config) {
             is SyncConfiguration.Full -> fetchAllListMembership()
@@ -188,9 +184,7 @@ internal class BookmarkSyncPipeline(
         remoteBookmarks: List<com.karakept.api.model.Bookmark>,
         listId: String
     ): Map<String, List<String>> {
-        val map = remoteBookmarks.associate { (it.id ?: "") to listOf(listId) }
-        println("buildSingleListMap: Created map for list $listId with ${map.size} entries")
-        return map
+        return remoteBookmarks.associate { (it.id ?: "") to listOf(listId) }
     }
 
     // Phase 4: Map to Entities & Differential Sync
@@ -236,15 +230,11 @@ internal class BookmarkSyncPipeline(
         val title = dto.title ?: dto.content?.title ?: "Untitled"
         val incomingContent = dto.content?.htmlContent ?: dto.content?.text
 
-        // CRITICAL FIX: Determine listIds - preserve from DB for filtered syncs
         val listIds = when {
             bookmarkListMap.isNotEmpty() -> {
                 val ids = bookmarkListMap[dto.id ?: ""]?.joinToString(",") ?: ""
-                println("mapDtoToEntity: Bookmark ${dto.id} (${dto.title}) -> listIds: '$ids'")
                 if (config is SyncConfiguration.ForList && existing != null && existing.listIds.isNotEmpty()) {
-                    // For ForList sync, MERGE new list membership with existing ones.
-                    // Simply overwriting would strip the bookmark from any other lists it belongs to,
-                    // causing those list counts to drop and the UI to blink on next reload.
+                    // ForList sync: merge list membership to avoid stripping other lists
                     val existingIds = existing.listIds.split(",").filter { it.isNotEmpty() }.toMutableSet()
                     existingIds.addAll(ids.split(",").filter { it.isNotEmpty() })
                     existingIds.joinToString(",")
@@ -256,12 +246,10 @@ internal class BookmarkSyncPipeline(
             else -> ""
         }
 
-        // Apply content strategy
         val newContent = when (syncStrategy) {
             com.karakept.app.data.model.SyncStrategy.NEVER,
             com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> null
             com.karakept.app.data.model.SyncStrategy.PER_LIST -> {
-                // Use listIds from either API or existing entity
                 val entityListIds = listIds.split(",").filter { it.isNotEmpty() }.toSet()
                 val syncConfig = settingsRepository.contentSyncConfig.first()
                 val targetLists = syncConfig.selectedLists.toSet()
@@ -270,44 +258,20 @@ internal class BookmarkSyncPipeline(
             com.karakept.app.data.model.SyncStrategy.ALL -> incomingContent
         }
 
-        // Determine if existing bookmark has content (content field will be "HAS_CONTENT" or "")
         val existingHasContent = existing?.content == "HAS_CONTENT"
         val existingReadingTime = existing?.readingTimeMinutes ?: 0
-
-        // Decide final content and reading time based on strategy
         val (finalContent, finalReadingTime) = when {
-            // If we have new content from metadata sync, use it
-            !newContent.isNullOrBlank() -> {
-                val time = ReadingTimeCalculator.calculateReadingTime(newContent)
-                Pair(newContent, time)
-            }
-            // If existing has content, preserve it (don't overwrite with empty)
-            existingHasContent -> {
-                // Keep empty string as placeholder, but preserve reading time
-                // Content will remain in DB, we just don't load it during metadata sync
-                Pair("", existingReadingTime)
-            }
-            // No content at all
+            !newContent.isNullOrBlank() -> Pair(newContent, ReadingTimeCalculator.calculateReadingTime(newContent))
+            existingHasContent -> Pair("", existingReadingTime) // preserve existing content in DB
             else -> Pair("", 0)
         }
 
-        // Extract banner and screenshot asset IDs for fallback image display
-        println("Bookmark ${dto.id} imageUrl='${dto.content?.imageUrl}' has ${dto.assets?.size ?: 0} assets: ${dto.assets?.map { "${it.assetType}:${it.id}" }}")
         val bannerImageAssetId = dto.assets
             ?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.BANNER_IMAGE }
             ?.id
         val screenshotAssetId = dto.assets
             ?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.SCREENSHOT }
             ?.id
-        if (bannerImageAssetId != null) {
-            println("Found bannerImage asset: $bannerImageAssetId for bookmark ${dto.id}")
-        }
-        if (screenshotAssetId != null) {
-            println("Found screenshot asset: $screenshotAssetId for bookmark ${dto.id}")
-        }
-        if (bannerImageAssetId == null && screenshotAssetId == null) {
-            println("No banner or screenshot assets found for bookmark ${dto.id}")
-        }
 
         return BookmarkEntity(
             localId = existing?.localId ?: 0L,
@@ -351,18 +315,10 @@ internal class BookmarkSyncPipeline(
             incoming.copy(localId = localId)
         }
 
-        // Update bookmarks - use metadata-only update when content is empty (preserving existing content)
-        // Use full update when we have new content from metadata sync
-        if (toUpdate.isNotEmpty()) {
-            println("performDifferentialSync: Updating ${toUpdate.size} bookmarks")
-        }
         toUpdate.forEach { bookmark ->
-            println("  - UPDATE: ${bookmark.originalRemoteId} (${bookmark.title}) listIds='${bookmark.listIds}' archived=${bookmark.isArchived}")
             if (!bookmark.content.isNullOrEmpty()) {
-                // We have new content, do full update
                 bookmarkDao.updateBookmarks(listOf(bookmark))
             } else {
-                // No content in this update, preserve existing content with metadata-only update
                 bookmarkDao.updateBookmarkMetadata(
                     localId = bookmark.localId,
                     title = bookmark.title,
@@ -389,8 +345,6 @@ internal class BookmarkSyncPipeline(
         val newBookmarksCount = toInsert.size
 
         if (toInsert.isNotEmpty()) {
-            println("performDifferentialSync: Inserting ${toInsert.size} bookmarks")
-            toInsert.forEach { println("  - INSERT: ${it.originalRemoteId} (${it.title}) listIds='${it.listIds}' archived=${it.isArchived}") }
             bookmarkDao.insertBookmarks(toInsert)
 
             // IMPORTANT: Re-query to get the generated localIds for newly inserted bookmarks
@@ -435,18 +389,17 @@ internal class BookmarkSyncPipeline(
     // sync time reasonable we pull concurrently and cap the total count.
     private suspend fun syncReadingProgress(entities: List<BookmarkEntity>) {
         val trackProgress = kotlinx.coroutines.withTimeoutOrNull(1000) {
-            settingsRepository.trackReadingProgress.first()
+            settingsRepository.trackReadingProgress.firstOrNull()
         } ?: true
         if (!trackProgress) return
         val isOffline = kotlinx.coroutines.withTimeoutOrNull(1000) {
-            settingsRepository.offlineMode.first()
+            settingsRepository.offlineMode.firstOrNull()
         } ?: false
         if (isOffline) return
 
         val candidates = entities.take(50) // Cap to bound API cost
 
         if (candidates.isEmpty()) return
-        println("ReadProgressSync: pulling reading progress for ${candidates.size} bookmarks")
 
         // Pull concurrently (up to 5 at a time) to avoid blocking sync too long
         val semaphore = kotlinx.coroutines.sync.Semaphore(5)
@@ -458,8 +411,7 @@ internal class BookmarkSyncPipeline(
                         bookmarkActionsRepository.pullReadingProgressFromServer(
                             bookmark.remoteId, config.server.id
                         )
-                    } catch (e: Exception) {
-                        println("ReadProgressSync: failed to pull for ${bookmark.remoteId}: ${e.message}")
+                    } catch (_: Exception) {
                     } finally {
                         semaphore.release()
                     }
@@ -521,10 +473,7 @@ internal class BookmarkSyncPipeline(
                     // Cache images in HTML for offline reading
                     val cachedContent = try {
                         imageCacheManager.cacheImagesInHtml(content)
-                    } catch (e: Exception) {
-                        println("Failed to cache images in HTML: ${e.message}")
-                        content
-                    }
+                    } catch (_: Exception) { content }
                     val readingTime = ReadingTimeCalculator.calculateReadingTime(cachedContent)
                     bookmarkDao.updateContent(entity.localId, cachedContent, readingTime)
                 }

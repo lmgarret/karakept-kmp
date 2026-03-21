@@ -26,12 +26,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 
-/**
- * All set* mutation methods, update helpers, backup API, and layout CRUD
- * for SettingsRepository. Extracted to reduce SettingsRepository file size.
- */
-
-// ── Per-category update helpers ───────────────────────────────────────────
+/** All set* mutation methods, update helpers, backup API, and layout CRUD for SettingsRepository. */
 
 internal suspend fun SettingsRepository.updateThemeSettings(transform: StoredThemeSettings.() -> StoredThemeSettings) {
     dataStore.edit { prefs ->
@@ -68,8 +63,6 @@ internal suspend fun SettingsRepository.updateAppSettings(transform: StoredAppSe
         prefs[APP_SETTINGS_KEY] = settingsJson.encodeToString(prefs.readAppSettings().transform())
     }
 }
-
-// ── Backup API ────────────────────────────────────────────────────────────
 
 /**
  * Returns a one-shot snapshot of all backed-up settings as a flat [BackupSettings].
@@ -203,15 +196,11 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
     }
 }
 
-// ── Setters (theme) ───────────────────────────────────────────────────────
-
 suspend fun SettingsRepository.setThemeMode(mode: ThemeMode) =
     updateThemeSettings { copy(themeMode = mode.name) }
 
 suspend fun SettingsRepository.setAccentColor(color: AccentColor) =
     updateThemeSettings { copy(accentColor = color.name) }
-
-// ── Setters (display) ─────────────────────────────────────────────────────
 
 suspend fun SettingsRepository.setLayoutType(layoutType: LayoutType) =
     updateDisplaySettings { copy(layoutType = layoutType.name) }
@@ -227,8 +216,6 @@ suspend fun SettingsRepository.setShowTags(show: Boolean) =
 
 suspend fun SettingsRepository.setDimReadBookmarks(dim: Boolean) =
     updateDisplaySettings { copy(dimReadBookmarks = dim) }
-
-// ── Setters (reader) ──────────────────────────────────────────────────────
 
 suspend fun SettingsRepository.setViewerMode(mode: ViewerMode) =
     updateReaderSettings { copy(viewerMode = mode.name) }
@@ -269,8 +256,6 @@ suspend fun SettingsRepository.resetReaderAppearance() = updateReaderSettings {
     )
 }
 
-// ── Setters (swipe) ───────────────────────────────────────────────────────
-
 suspend fun SettingsRepository.setSwipeLeftAction(action: SwipeAction) =
     updateSwipeSettings { copy(swipeLeftAction = action.name) }
 
@@ -285,8 +270,6 @@ suspend fun SettingsRepository.setSwipeLeftConfigId(id: String?) =
 
 suspend fun SettingsRepository.setSwipeRightConfigId(id: String?) =
     updateSwipeSettings { copy(swipeRightConfigId = id) }
-
-// ── Setters (sync) ────────────────────────────────────────────────────────
 
 suspend fun SettingsRepository.setContentSyncStrategy(strategy: SyncStrategy) =
     updateSyncSettings { copy(contentSyncStrategy = strategy.name) }
@@ -327,8 +310,6 @@ suspend fun SettingsRepository.setContentSyncConfig(config: ListSyncConfig) = up
     )
 }
 
-// ── Setters (app) ─────────────────────────────────────────────────────────
-
 suspend fun SettingsRepository.setNotificationsEnabled(enabled: Boolean) =
     updateAppSettings { copy(notificationsEnabled = enabled) }
 
@@ -362,8 +343,6 @@ suspend fun SettingsRepository.setBackupPin(pin: String?) {
     }
 }
 
-// ── Setters (non-backed-up individual keys) ───────────────────────────────
-
 suspend fun SettingsRepository.setActiveServerId(id: String) {
     dataStore.edit { it[ACTIVE_SERVER_ID_KEY] = id }
 }
@@ -384,8 +363,6 @@ suspend fun SettingsRepository.clearAutoOfflineDetected() {
     dataStore.edit { it[AUTO_OFFLINE_DETECTED_KEY] = false }
 }
 
-// ── Setters (desktop layout, non-backed-up) ────────────────────────────────
-
 suspend fun SettingsRepository.setDrawerWidthDp(width: Float) {
     dataStore.edit { it[DRAWER_WIDTH_DP_KEY] = width }
 }
@@ -393,8 +370,6 @@ suspend fun SettingsRepository.setDrawerWidthDp(width: Float) {
 suspend fun SettingsRepository.setListColumnFraction(fraction: Float) {
     dataStore.edit { it[LIST_COLUMN_FRACTION_KEY] = fraction }
 }
-
-// ── Setters (desktop window state, non-backed-up) ────────────────────────
 
 suspend fun SettingsRepository.setWindowState(width: Float, height: Float, x: Float, y: Float, maximized: Boolean) {
     dataStore.edit { prefs ->
@@ -405,8 +380,6 @@ suspend fun SettingsRepository.setWindowState(width: Float, height: Float, x: Fl
         prefs[WINDOW_MAXIMIZED_KEY] = maximized
     }
 }
-
-// ── Default list setters ──────────────────────────────────────────────────
 
 suspend fun SettingsRepository.setDefaultListType(type: DefaultListType) {
     dataStore.edit { it[DEFAULT_LIST_TYPE_KEY] = type.name }
@@ -426,8 +399,6 @@ suspend fun SettingsRepository.setLastAutoExportTime(timestamp: Long) {
     dataStore.edit { it[LAST_AUTO_EXPORT_TIME_KEY] = timestamp }
 }
 
-// ── Date display setters ──────────────────────────────────────────────────
-
 suspend fun SettingsRepository.setShowDateInList(show: Boolean) {
     dataStore.edit { it[SHOW_DATE_IN_LIST_KEY] = show }
 }
@@ -435,8 +406,6 @@ suspend fun SettingsRepository.setShowDateInList(show: Boolean) {
 suspend fun SettingsRepository.setDateDisplayMode(mode: DateDisplayMode) {
     dataStore.edit { it[DATE_DISPLAY_MODE_KEY] = mode.name }
 }
-
-// ── Per-list settings setter ──────────────────────────────────────────────
 
 suspend fun SettingsRepository.setListSettings(listId: String, settings: ListSettings) {
     dataStore.edit { prefs ->
@@ -450,8 +419,6 @@ suspend fun SettingsRepository.setListSettings(listId: String, settings: ListSet
             settingsJson.encodeToString<Map<String, ListSettings>>(current)
     }
 }
-
-// ── Layout CRUD ───────────────────────────────────────────────────────────
 
 suspend fun SettingsRepository.saveLayout(layout: BookmarkLayout) {
     dataStore.edit { prefs ->
