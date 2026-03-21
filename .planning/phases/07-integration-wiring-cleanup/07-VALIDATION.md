@@ -1,9 +1,9 @@
 ---
 phase: 7
 slug: integration-wiring-cleanup
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-21
 ---
 
@@ -38,11 +38,11 @@ created: 2026-03-21
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 07-01-01 | 01 | 1 | PERF-02 | grep | `grep -c getCachedOrParseDocument composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerContent.kt` | N/A | ⬜ pending |
-| 07-01-02 | 01 | 1 | PERF-02 | grep | `grep -c parseDocument composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/NativeHtmlRenderer.kt` | N/A | ⬜ pending |
-| 07-02-01 | 02 | 1 | SEC-02 | grep | `grep -c triggerMigration composeApp/src/commonMain/kotlin/com/karakept/app/App.kt` | N/A | ⬜ pending |
-| 07-03-01 | 03 | 1 | ERR-01 | grep | `grep -c println composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreenModel.kt` = 0 | N/A | ⬜ pending |
-| 07-03-02 | 03 | 1 | ERR-01 | grep | `grep -c println composeApp/src/commonMain/kotlin/com/karakept/app/App.kt` = 0 | N/A | ⬜ pending |
+| 07-01-01 | 01 | 1 | PERF-02 | grep | `grep -c parseDocument composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/reader/NativeHtmlRenderer.kt` | N/A | ✅ green |
+| 07-01-02 | 01 | 1 | PERF-02 | grep | `grep -c getCachedOrParseDocument composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerContent.kt` | N/A | ✅ green |
+| 07-02-01 | 02 | 1 | SEC-02 | grep | `grep -c triggerMigration composeApp/src/commonMain/kotlin/App.kt` | N/A | ✅ green |
+| 07-02-02 | 02 | 1 | ERR-01 | grep | `grep -c println composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreenModel.kt` = 0 | N/A | ✅ green |
+| 07-02-03 | 02 | 1 | ERR-01 | grep | `grep -c println composeApp/src/commonMain/kotlin/App.kt` = 0 | N/A | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -50,7 +50,7 @@ created: 2026-03-21
 
 ## Wave 0 Requirements
 
-Existing infrastructure covers all phase requirements. No new test files needed. Existing `ParsedDocumentCacheTest.kt` and `ServerRepositoryMigrationTest.kt` already cover the underlying functionality. Phase 7 just wires call sites.
+Existing infrastructure covers all phase requirements. No new test files needed. Existing `ParsedDocumentCacheTest.kt` and `ServerRepositoryMigrationTest.kt` already cover the underlying functionality. Phase 7 wires call sites — verified by grep commands.
 
 ---
 
@@ -65,11 +65,26 @@ Existing infrastructure covers all phase requirements. No new test files needed.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 10s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 10s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-03-21
+
+---
+
+## Validation Audit 2026-03-21
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+**Cross-reference results:**
+- PERF-02: `ParsedDocumentCacheTest.kt` covers cache logic; grep confirms `getCachedOrParseDocument` wired in BookmarkViewerContent.kt (1 match) and `parseDocument` in NativeHtmlRenderer.kt (2 matches)
+- SEC-02: `ServerRepositoryMigrationTest.kt` covers migration logic; grep confirms `triggerMigration` wired in App.kt (1 match)
+- ERR-01: grep confirms 0 `println` in both BookmarkViewerScreenModel.kt and App.kt
