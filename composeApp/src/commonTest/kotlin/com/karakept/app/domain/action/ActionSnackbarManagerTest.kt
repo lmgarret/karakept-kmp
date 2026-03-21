@@ -46,7 +46,7 @@ class ActionSnackbarManagerTest {
         val job = launch { manager.snackbarEvents.collect { collected.add(it) } }
 
         var undoCalled = false
-        manager.showSnackbarWithUndo("Item deleted") { undoCalled = true }
+        manager.showSnackbarWithUndo("Item deleted", onUndo = { undoCalled = true })
         job.cancel()
 
         assertEquals(1, collected.size)
