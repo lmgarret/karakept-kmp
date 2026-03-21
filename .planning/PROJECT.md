@@ -32,8 +32,8 @@ Silent failures must become visible failures — errors that are swallowed today
 - ✓ Fix read/unread toggling race condition — Validated in Phase 02: Concurrency Hardening (vestigial — no actual race exists)
 - ✓ Add tests for offline-first action queue edge cases — Validated in Phase 04: Test Coverage
 - ✓ Add tests for filter combination edge cases — Validated in Phase 04: Test Coverage
-- [ ] Sanitize HTML in reader view (XSS prevention)
-- [ ] Move credentials to platform keychain/keystore
+- ✓ Sanitize HTML in reader view (XSS prevention) — Validated in Phase 05: Security Hardening
+- ✓ Move credentials to platform keychain/keystore — Validated in Phase 05: Security Hardening
 - [ ] Optimize rendering for large bookmark collections (1000+)
 - [ ] Optimize HTML block rendering with caching/lazy loading
 
@@ -68,4 +68,4 @@ Silent failures must become visible failures — errors that are swallowed today
 | Incremental completion target | App is functional; perfection not required, meaningful improvement is | — Pending |
 
 ---
-*Last updated: 2026-03-21 — Phase 04 (Test Coverage) complete*
+*Last updated: 2026-03-21 — Phase 05 (Security Hardening) complete*
