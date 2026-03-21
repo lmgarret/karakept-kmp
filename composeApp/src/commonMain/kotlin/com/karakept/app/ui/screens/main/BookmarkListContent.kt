@@ -432,17 +432,6 @@ internal fun BookmarkListContent(
                             }
                         } else null
 
-                        // Log which asset is being used for display (bannerImage preferred over imageUrl)
-                        if (bannerImageUrl != null) {
-                            println("📸 LIST: Using bannerImage for bookmark ${bookmark.remoteId}")
-                        } else if (screenshotUrl != null) {
-                            println("📸 LIST: Using screenshot for bookmark ${bookmark.remoteId}")
-                        } else if (bookmark.imageUrl != null) {
-                            println("📸 LIST: No asset available for bookmark ${bookmark.remoteId}, imageUrl='${bookmark.imageUrl}' exists but not displayed")
-                        } else {
-                            println("📸 LIST: No image available for bookmark ${bookmark.remoteId}, showing emoji")
-                        }
-
                         val isActiveBookmark = bookmark.localId == activeBookmarkId
                         when (layoutType) {
                             LayoutType.CARD -> BookmarkCardLayout(

@@ -33,6 +33,7 @@ import kotlinx.coroutines.withContext
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.reader.NativeHtmlRenderer
+import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.HtmlArchiveProcessor
 import com.karakept.app.utils.HtmlCache
 import com.karakept.app.utils.HtmlSanitizer
@@ -94,10 +95,9 @@ fun HtmlContent(
                     ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = removeFirstImage)
                     ViewerMode.WEB -> HtmlArchiveProcessor.processForArchive(html)
                 }
-                println("HtmlContent: Processed HTML length=${result.length}, isBlank=${result.isBlank()}")
                 result
             } catch (e: Exception) {
-                println("HtmlContent: Processing failed: ${e.message}")
+                AppLogger.e("HtmlContent", "Processing failed: ${e.message}", e)
                 null // Processing failed
             }
         }
