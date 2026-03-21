@@ -130,14 +130,14 @@ fun CustomSwipeActionsContent(
         )
     }
 
-    if (confirmDeleteConfig != null) {
+    confirmDeleteConfig?.let { config ->
         AlertDialog(
             onDismissRequest = { confirmDeleteConfig = null },
             title = { Text("Delete Action") },
-            text = { Text("Remove \"${confirmDeleteConfig!!.getDisplayName()}\"?") },
+            text = { Text("Remove \"${config.getDisplayName()}\"?") },
             confirmButton = {
                 TextButton(onClick = {
-                    screenModel.removeCustomSwipeActionConfig(confirmDeleteConfig!!.id)
+                    screenModel.removeCustomSwipeActionConfig(config.id)
                     confirmDeleteConfig = null
                 }) { Text("Delete") }
             },

@@ -155,7 +155,7 @@ fun HtmlContent(
 
             Box(modifier = Modifier.fillMaxWidth()) {
                 // Always render if content is processed OR we have a local file
-                if ((processedHtml != null && processedHtml!!.isNotBlank()) || localFilePath != null) {
+                if (!processedHtml.isNullOrBlank() || localFilePath != null) {
                     // Apply background color directly to renderer modifier for READER mode
                     val rendererModifier = if (viewerMode == ViewerMode.READER && customBackgroundColor != null) {
                         Modifier.fillMaxWidth().background(customBackgroundColor)

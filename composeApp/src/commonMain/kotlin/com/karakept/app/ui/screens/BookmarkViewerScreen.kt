@@ -705,12 +705,14 @@ fun BookmarkViewerContent(
                                     },
                                     onHighlightPosition = { id, position ->
                                         val current = highlightPosition
-                                        if (current != null && current.path != null && position.path != null) {
+                                        val currentPath = current?.path
+                                        val positionPath = position.path
+                                        if (currentPath != null && positionPath != null) {
                                             // Merge paths from multiple text blocks (multi-paragraph highlights).
                                             // Paths are already in root coordinates.
                                             val mergedPath = androidx.compose.ui.graphics.Path().apply {
-                                                addPath(current.path!!)
-                                                addPath(position.path!!)
+                                                addPath(currentPath)
+                                                addPath(positionPath)
                                             }
                                             val mergedBounds = mergedPath.getBounds()
                                             highlightPosition = com.karakept.app.ui.components.HighlightPosition(
@@ -766,7 +768,8 @@ fun BookmarkViewerContent(
                                     drawRect(Color.Black.copy(alpha = 0.6f))
 
                                     val pos = highlightPosition
-                                    if (pos != null && pos.path != null) {
+                                    val posPath = pos?.path
+                                    if (posPath != null) {
                                         // Punch through the dimming layer to reveal the highlight.
                                         // Subtract the overlay's own root offset so root-space
                                         // coordinates map correctly into the Canvas's local space.
@@ -777,7 +780,7 @@ fun BookmarkViewerContent(
                                             )
                                         }) {
                                             drawPath(
-                                                path = pos.path!!,
+                                                path = posPath,
                                                 color = Color.Transparent,
                                                 blendMode = BlendMode.Clear
                                             )
@@ -986,9 +989,10 @@ fun rememberSnackbarHostStateWithDelay(
 
     // Show pending event when FAB closes
     LaunchedEffect(fabExpanded, pendingEvent) {
-        if (!fabExpanded && pendingEvent != null) {
+        val event = pendingEvent
+        if (!fabExpanded && event != null) {
             delay(400) // Wait for FAB animation
-            showSnackbarEvent(snackbarHostState, pendingEvent!!, scope)
+            showSnackbarEvent(snackbarHostState, event, scope)
             pendingEvent = null
         }
     }

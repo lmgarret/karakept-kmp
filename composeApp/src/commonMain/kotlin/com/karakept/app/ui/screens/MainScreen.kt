@@ -1117,31 +1117,31 @@ object MainScreen : Screen {
         }
 
         // Bookmark Actions Menu (ModalBottomSheet provides its own scrim)
-        if (selectedBookmarkForActions != null) {
+        selectedBookmarkForActions?.let { bookmark ->
             BookmarkActionsMenu(
-                bookmark = selectedBookmarkForActions!!,
+                bookmark = bookmark,
                 availableLists = lists,
                 availableTags = allAvailableTags,
                 onAction = { action ->
                     when (action) {
-                        is BookmarkAction.ToggleArchive -> screenModel.toggleBookmarkArchive(selectedBookmarkForActions!!)
-                        is BookmarkAction.ToggleFavorite -> screenModel.toggleBookmarkFavorite(selectedBookmarkForActions!!)
-                        is BookmarkAction.ToggleRead -> screenModel.toggleBookmarkRead(selectedBookmarkForActions!!)
-                        is BookmarkAction.MoveToList -> screenModel.moveBookmarkToList(selectedBookmarkForActions!!, action.listId)
-                        is BookmarkAction.UpdateTags -> screenModel.updateBookmarkTags(selectedBookmarkForActions!!, action.tags)
-                        is BookmarkAction.Delete -> screenModel.deleteBookmark(selectedBookmarkForActions!!)
+                        is BookmarkAction.ToggleArchive -> screenModel.toggleBookmarkArchive(bookmark)
+                        is BookmarkAction.ToggleFavorite -> screenModel.toggleBookmarkFavorite(bookmark)
+                        is BookmarkAction.ToggleRead -> screenModel.toggleBookmarkRead(bookmark)
+                        is BookmarkAction.MoveToList -> screenModel.moveBookmarkToList(bookmark, action.listId)
+                        is BookmarkAction.UpdateTags -> screenModel.updateBookmarkTags(bookmark, action.tags)
+                        is BookmarkAction.Delete -> screenModel.deleteBookmark(bookmark)
                         is BookmarkAction.Share -> {
-                            com.karakept.app.utils.ShareUtils.shareText(selectedBookmarkForActions!!.url, selectedBookmarkForActions!!.title)
+                            com.karakept.app.utils.ShareUtils.shareText(bookmark.url, bookmark.title)
                         }
                         is BookmarkAction.OpenInBrowser -> {
                             try {
-                                uriHandler.openUri(selectedBookmarkForActions!!.url)
+                                uriHandler.openUri(bookmark.url)
                                 scope.launch { snackbarManager.showSnackbar("Opening in browser") }
                             } catch (e: Exception) {
                                 scope.launch { snackbarManager.showSnackbar("Could not open link") }
                             }
                         }
-                        is BookmarkAction.Select -> screenModel.enterSelectionMode(selectedBookmarkForActions!!)
+                        is BookmarkAction.Select -> screenModel.enterSelectionMode(bookmark)
                     }
                 },
                 onDismiss = { selectedBookmarkForActions = null }

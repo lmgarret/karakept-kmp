@@ -131,8 +131,8 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
                 }
             }
 
-            if (initialScreens != null) {
-                Navigator(initialScreens!!) { navigator ->
+            initialScreens?.let { screens ->
+                Navigator(screens) { navigator ->
                     SlideTransition(navigator)
                 }
             }

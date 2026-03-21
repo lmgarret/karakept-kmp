@@ -86,7 +86,7 @@ data class ShareBookmarkScreen(val url: String) : Screen {
                     )
 
                     Text(
-                        text = error!!,
+                        text = error ?: "",
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center
                     )

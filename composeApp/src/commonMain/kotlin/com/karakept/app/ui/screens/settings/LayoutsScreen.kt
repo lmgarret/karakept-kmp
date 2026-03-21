@@ -127,15 +127,15 @@ fun LayoutsContent(
         )
     }
 
-    if (pendingDeleteLayout != null) {
+    pendingDeleteLayout?.let { layout ->
         AlertDialog(
             onDismissRequest = { pendingDeleteLayout = null },
             title = { Text("Delete Layout") },
-            text = { Text("Delete \"${pendingDeleteLayout!!.name}\"? This cannot be undone.") },
+            text = { Text("Delete \"${layout.name}\"? This cannot be undone.") },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        screenModel.deleteLayout(pendingDeleteLayout!!.id)
+                        screenModel.deleteLayout(layout.id)
                         pendingDeleteLayout = null
                     }
                 ) {

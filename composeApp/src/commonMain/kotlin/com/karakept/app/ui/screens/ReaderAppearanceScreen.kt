@@ -90,13 +90,7 @@ fun ReaderAppearanceContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(
-                        if (backgroundColor != null) {
-                            Modifier.background(backgroundColor!!)
-                        } else {
-                            Modifier.background(MaterialTheme.colorScheme.surface)
-                        }
-                    )
+                    .background(backgroundColor ?: MaterialTheme.colorScheme.surface)
                     .padding(16.dp)
                     .verticalScroll(rememberScrollState())
             ) {
