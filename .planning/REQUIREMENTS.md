@@ -38,7 +38,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Security
 
-- [ ] **SEC-01**: Sanitize HTML before rendering in WebView/reader
+- [x] **SEC-01**: Sanitize HTML before rendering in WebView/reader
 - [ ] **SEC-02**: Move API credentials from cleartext DB to platform keychain/keystore
 
 ### Performance
@@ -90,7 +90,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-01 | Phase 4 | Complete |
 | TEST-02 | Phase 4 | Complete |
 | TEST-03 | Phase 4 | Complete |
-| SEC-01 | Phase 5 | Pending |
+| SEC-01 | Phase 5 | Complete |
 | SEC-02 | Phase 5 | Pending |
 | PERF-01 | Phase 6 | Pending |
 | PERF-02 | Phase 6 | Pending |
