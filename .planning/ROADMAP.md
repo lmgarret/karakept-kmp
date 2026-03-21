@@ -29,10 +29,15 @@ Plans:
 **Goal**: All production files are under 500 lines and no redundant DI calls exist
 **Depends on**: Phase 1 (println removal may reduce file sizes)
 **Requirements**: SIZE-01, SIZE-02, QUAL-01
+**Plans:** 1 plan
+
 **Success Criteria** (what must be TRUE):
   1. `BookmarkSyncPipeline.kt` is under 500 lines
   2. `SettingsRepositoryMutations.kt` is under 500 lines
   3. `App.kt` has exactly one `koinInject<ServerRepository>()` call
+
+Plans:
+- [ ] 02-01-PLAN.md — Remove redundant koinInject in App.kt and verify file size targets
 
 ## Progress
 
@@ -42,4 +47,4 @@ Phases execute in numeric order: 1 -> 2
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Println Cleanup | 2/2 | Complete   | 2026-03-21 |
-| 2. File Trimming & Quality | 0/0 | Not started | - |
+| 2. File Trimming & Quality | 0/1 | Not started | - |
