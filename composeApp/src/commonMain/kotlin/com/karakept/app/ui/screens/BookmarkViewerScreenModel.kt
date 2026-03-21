@@ -334,7 +334,7 @@ class BookmarkViewerScreenModel(
                             // Signal serverProgressChecked=true only AFTER the pull completes so
                             // the composable doesn't finalize hasRestoredScroll before the DB is
                             // updated with the server value.
-                            if (!offlineMode.value) {
+                            if (!settingsRepository.offlineMode.first()) {
                                 // Pull reading progress from server for cross-device sync
                                 screenModelScope.launch {
                                     val updated = bookmarkActionsRepository.pullReadingProgressFromServer(
