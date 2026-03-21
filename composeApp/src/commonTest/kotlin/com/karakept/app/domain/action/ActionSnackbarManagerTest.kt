@@ -1,6 +1,7 @@
 package com.karakept.app.domain.action
 
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -24,14 +25,17 @@ class ActionSnackbarManagerTest {
         val manager = manager()
         val collected = mutableListOf<SnackbarEvent>()
 
-        val job = launch { manager.snackbarEvents.collect { collected.add(it) } }
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            manager.snackbarEvents.collect { collected.add(it) }
+        }
 
         manager.showSnackbar("Something happened")
-        job.cancel()
 
         assertEquals(1, collected.size)
         val event = assertIs<SnackbarEvent.Message>(collected.first())
         assertEquals("Something happened", event.text)
+
+        job.cancel()
     }
 
     // ------------------------------------------------------------------
@@ -43,18 +47,20 @@ class ActionSnackbarManagerTest {
         val manager = manager()
         val collected = mutableListOf<SnackbarEvent>()
 
-        val job = launch { manager.snackbarEvents.collect { collected.add(it) } }
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            manager.snackbarEvents.collect { collected.add(it) }
+        }
 
         var undoCalled = false
         manager.showSnackbarWithUndo("Item deleted", onUndo = { undoCalled = true })
-        job.cancel()
 
         assertEquals(1, collected.size)
         val event = assertIs<SnackbarEvent.MessageWithUndo>(collected.first())
         assertEquals("Item deleted", event.text)
-        // Verify the onUndo callback is the one we passed
         event.onUndo()
         assertTrue(undoCalled, "onUndo lambda must invoke the caller-provided callback")
+
+        job.cancel()
     }
 
     // ------------------------------------------------------------------
@@ -66,15 +72,18 @@ class ActionSnackbarManagerTest {
         val manager = manager()
         val collected = mutableListOf<SnackbarEvent>()
 
-        val job = launch { manager.snackbarEvents.collect { collected.add(it) } }
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            manager.snackbarEvents.collect { collected.add(it) }
+        }
 
         manager.showErrorWithRetry("Couldn't sync bookmarks") { /* retry */ }
-        job.cancel()
 
         assertEquals(1, collected.size)
         val event = assertIs<SnackbarEvent.MessageWithAction>(collected.first())
         assertEquals("Couldn't sync bookmarks", event.text)
         assertEquals("Retry", event.actionLabel)
+
+        job.cancel()
     }
 
     @Test
@@ -82,14 +91,17 @@ class ActionSnackbarManagerTest {
         val manager = manager()
         val collected = mutableListOf<SnackbarEvent>()
 
-        val job = launch { manager.snackbarEvents.collect { collected.add(it) } }
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            manager.snackbarEvents.collect { collected.add(it) }
+        }
 
         var retryCalled = false
         manager.showErrorWithRetry("Couldn't load bookmarks") { retryCalled = true }
-        job.cancel()
 
         val event = assertIs<SnackbarEvent.MessageWithAction>(collected.first())
         event.onAction()
         assertTrue(retryCalled, "onAction must invoke the retry lambda provided to showErrorWithRetry")
+
+        job.cancel()
     }
 }
