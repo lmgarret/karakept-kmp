@@ -1025,6 +1025,16 @@ private fun showSnackbarEvent(
                     event.onUndo()
                 }
             }
+            is SnackbarEvent.MessageWithAction -> {
+                val result = snackbarHostState.showSnackbar(
+                    message = event.text,
+                    actionLabel = event.actionLabel,
+                    duration = event.duration
+                )
+                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                    event.onAction()
+                }
+            }
         }
     }
 }

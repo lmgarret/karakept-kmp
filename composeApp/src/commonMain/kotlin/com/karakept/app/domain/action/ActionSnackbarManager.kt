@@ -18,6 +18,13 @@ sealed class SnackbarEvent {
         val onUndo: suspend () -> Unit,
         val duration: SnackbarDuration = SnackbarDuration.Short
     ) : SnackbarEvent()
+
+    data class MessageWithAction(
+        val text: String,
+        val actionLabel: String,
+        val onAction: suspend () -> Unit,
+        val duration: SnackbarDuration = SnackbarDuration.Short
+    ) : SnackbarEvent()
 }
 
 /**
@@ -37,5 +44,13 @@ class ActionSnackbarManager {
         duration: SnackbarDuration = SnackbarDuration.Short
     ) {
         _snackbarEvents.emit(SnackbarEvent.MessageWithUndo(message, onUndo, duration))
+    }
+
+    suspend fun showErrorWithRetry(
+        message: String,
+        onRetry: suspend () -> Unit,
+        duration: SnackbarDuration = SnackbarDuration.Short
+    ) {
+        _snackbarEvents.emit(SnackbarEvent.MessageWithAction(message, "Retry", onRetry, duration))
     }
 }

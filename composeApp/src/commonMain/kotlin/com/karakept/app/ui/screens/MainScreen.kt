@@ -1256,6 +1256,16 @@ fun rememberSnackbarHostState(
                         scope.launch { event.onUndo() }
                     }
                 }
+                is SnackbarEvent.MessageWithAction -> {
+                    val result = snackbarHostState.showSnackbar(
+                        message = event.text,
+                        actionLabel = event.actionLabel,
+                        duration = event.duration
+                    )
+                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                        scope.launch { event.onAction() }
+                    }
+                }
             }
         }
     }
