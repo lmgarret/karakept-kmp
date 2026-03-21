@@ -1,4 +1,4 @@
-# Roadmap: Karakept KMP â Code Health
+# Roadmap: Karakept KMP — Code Health
 
 ## Overview
 
@@ -22,13 +22,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Error Visibility
-**Goal**: Developers and users see failures instead of silent corruption â no more swallowed exceptions or null crashes
+**Goal**: Developers and users see failures instead of silent corruption — no more swallowed exceptions or null crashes
 **Depends on**: Nothing (foundation for all other phases)
 **Requirements**: ERR-01, ERR-02, ERR-03, ERR-04, NULL-01
 **Success Criteria** (what must be TRUE):
-  1. No `printStackTrace()` calls remain in the codebase â all exceptions use structured logging
+  1. No `printStackTrace()` calls remain in the codebase — all exceptions use structured logging
   2. When a sync or data operation fails, the user sees an error message (snackbar or error state) instead of silent failure
-  3. No `!!` operators remain â all nullable access uses safe patterns (`?.let`, guards, sealed state)
+  3. No `!!` operators remain — all nullable access uses safe patterns (`?.let`, guards, sealed state)
   4. Debug println statements in RemoteDataSource and reader are replaced with proper logging or removed
 **Plans**: 2 plans
 
@@ -44,20 +44,20 @@ Plans:
   1. MainScreenModel initialization uses an explicit state machine (or equivalent ordered construct) instead of implicit coroutine sequencing
   2. The read/unread tag cache race condition is documented, verified, and protected with a mutex if the audit finds it necessary
   3. No duplicate bookmark loads occur during startup (verifiable by log output or test)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 02-01: Refactor MainScreenModel initialization and harden read/unread toggling
+- [ ] 02-01-PLAN.md — Add InitState state machine to init, mutex-protect all _accumulatedBookmarks mutations, document vestigial tag cache
 
 ### Phase 3: Code Splitting
 **Goal**: Large files are decomposed into focused modules that can be understood and tested independently
 **Depends on**: Phase 2 (concurrency fixes should land before code moves)
 **Requirements**: SPLIT-01, SPLIT-02, SPLIT-03, SPLIT-04
 **Success Criteria** (what must be TRUE):
-  1. MainScreen.kt is split into focused composable files â no single file exceeds 500 lines
-  2. MainScreenModel.kt is split into focused state management classes â pagination, filtering, selection, and sync are separate concerns
-  3. BookmarkViewerScreen.kt is split into viewer sub-components â reader, highlights, and actions are separate files
-  4. Repository files (BookmarkRepository, BookmarkActionsRepository, SettingsRepository) are split by concern â read vs write, sync vs local
+  1. MainScreen.kt is split into focused composable files — no single file exceeds 500 lines
+  2. MainScreenModel.kt is split into focused state management classes — pagination, filtering, selection, and sync are separate concerns
+  3. BookmarkViewerScreen.kt is split into viewer sub-components — reader, highlights, and actions are separate files
+  4. Repository files (BookmarkRepository, BookmarkActionsRepository, SettingsRepository) are split by concern — read vs write, sync vs local
   5. The app compiles and all existing functionality works identically after splitting (no regressions)
 **Plans**: TBD
 
@@ -85,7 +85,7 @@ Plans:
 **Depends on**: Phase 1 (error handling patterns needed for credential migration errors)
 **Requirements**: SEC-01, SEC-02
 **Success Criteria** (what must be TRUE):
-  1. HTML rendered in the reader/WebView is sanitized before display â script tags, event handlers, and dangerous attributes are stripped
+  1. HTML rendered in the reader/WebView is sanitized before display — script tags, event handlers, and dangerous attributes are stripped
   2. API credentials are stored in platform keychain (Android Keystore / desktop secure storage) instead of cleartext in the Room database
   3. Existing server connections continue to work after credential migration (no re-login required)
 **Plans**: TBD
@@ -100,7 +100,7 @@ Plans:
 **Requirements**: PERF-01, PERF-02
 **Success Criteria** (what must be TRUE):
   1. Scrolling through 1000+ bookmarks in LazyColumn shows no visible jank (verified by user testing or profiling)
-  2. Opening a long HTML article in the reader does not block the UI â content loads progressively or from cache
+  2. Opening a long HTML article in the reader does not block the UI — content loads progressively or from cache
   3. Memory usage remains stable when scrolling through large collections (no unbounded growth)
 **Plans**: TBD
 
