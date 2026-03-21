@@ -30,8 +30,8 @@ Silent failures must become visible failures — errors that are swallowed today
 - [ ] Split large files (7 files over 1000 lines) into focused modules
 - ✓ Address race conditions in MainScreenModel initialization — Validated in Phase 02: Concurrency Hardening
 - ✓ Fix read/unread toggling race condition — Validated in Phase 02: Concurrency Hardening (vestigial — no actual race exists)
-- [ ] Add tests for offline-first action queue edge cases
-- [ ] Add tests for filter combination edge cases
+- ✓ Add tests for offline-first action queue edge cases — Validated in Phase 04: Test Coverage
+- ✓ Add tests for filter combination edge cases — Validated in Phase 04: Test Coverage
 - [ ] Sanitize HTML in reader view (XSS prevention)
 - [ ] Move credentials to platform keychain/keystore
 - [ ] Optimize rendering for large bookmark collections (1000+)
@@ -68,4 +68,4 @@ Silent failures must become visible failures — errors that are swallowed today
 | Incremental completion target | App is functional; perfection not required, meaningful improvement is | — Pending |
 
 ---
-*Last updated: 2026-03-21 — Phase 02 (Concurrency Hardening) complete*
+*Last updated: 2026-03-21 — Phase 04 (Test Coverage) complete*
