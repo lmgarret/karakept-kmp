@@ -34,8 +34,8 @@ Silent failures must become visible failures — errors that are swallowed today
 - ✓ Add tests for filter combination edge cases — Validated in Phase 04: Test Coverage
 - ✓ Sanitize HTML in reader view (XSS prevention) — Validated in Phase 05: Security Hardening
 - ✓ Move credentials to platform keychain/keystore — Validated in Phase 05: Security Hardening
-- [ ] Optimize rendering for large bookmark collections (1000+)
-- [ ] Optimize HTML block rendering with caching/lazy loading
+- ✓ Optimize rendering for large bookmark collections (1000+) — Validated in Phase 06: Performance Optimization
+- ✓ Optimize HTML block rendering with caching/lazy loading — Validated in Phase 06: Performance Optimization
 
 ### Out of Scope
 
@@ -68,4 +68,4 @@ Silent failures must become visible failures — errors that are swallowed today
 | Incremental completion target | App is functional; perfection not required, meaningful improvement is | — Pending |
 
 ---
-*Last updated: 2026-03-21 — Phase 05 (Security Hardening) complete*
+*Last updated: 2026-03-21 — Phase 06 (Performance Optimization) complete — all milestone phases done*
