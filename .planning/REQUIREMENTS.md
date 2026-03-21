@@ -27,8 +27,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Concurrency
 
-- [ ] **CONC-01**: Refactor MainScreenModel initialization sequence to explicit state machine
-- [ ] **CONC-02**: Document and verify read/unread tag cache race condition, add mutex if needed
+- [x] **CONC-01**: Refactor MainScreenModel initialization sequence to explicit state machine
+- [x] **CONC-02**: Document and verify read/unread tag cache race condition, add mutex if needed
 
 ### Test Coverage
 
@@ -81,8 +81,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ERR-03 | Phase 1 | Complete |
 | ERR-04 | Phase 1 | Complete |
 | NULL-01 | Phase 1 | Complete |
-| CONC-01 | Phase 2 | Pending |
-| CONC-02 | Phase 2 | Pending |
+| CONC-01 | Phase 2 | Complete |
+| CONC-02 | Phase 2 | Complete |
 | SPLIT-01 | Phase 3 | Pending |
 | SPLIT-02 | Phase 3 | Pending |
 | SPLIT-03 | Phase 3 | Pending |

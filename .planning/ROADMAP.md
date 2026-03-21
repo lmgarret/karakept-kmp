@@ -13,7 +13,7 @@ This milestone transforms Karakept from a functional-but-fragile app into one wh
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Error Visibility** - Replace silent failures with structured error handling and safe null patterns
-- [ ] **Phase 2: Concurrency Hardening** - Eliminate race conditions in initialization and read/unread toggling
+- [x] **Phase 2: Concurrency Hardening** - Eliminate race conditions in initialization and read/unread toggling (completed 2026-03-21)
 - [ ] **Phase 3: Code Splitting** - Break oversized files into focused, single-responsibility modules
 - [ ] **Phase 4: Test Coverage** - Add tests for highest-risk untested paths (action queue, filters, reading progress)
 - [ ] **Phase 5: Security Hardening** - Sanitize untrusted HTML and protect stored credentials
@@ -116,7 +116,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Error Visibility | 0/2 | Not started | - |
-| 2. Concurrency Hardening | 0/1 | Not started | - |
+| 2. Concurrency Hardening | 1/1 | Complete   | 2026-03-21 |
 | 3. Code Splitting | 0/3 | Not started | - |
 | 4. Test Coverage | 0/2 | Not started | - |
 | 5. Security Hardening | 0/2 | Not started | - |
