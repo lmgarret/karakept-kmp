@@ -93,7 +93,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEC-01 | Phase 5 | Complete |
 | SEC-02 | Phase 5, Phase 7 | Pending |
 | PERF-01 | Phase 6 | Complete |
-| PERF-02 | Phase 6, Phase 7 | Pending |
+| PERF-02 | Phase 6, Phase 7 | Complete |
 
 **Coverage:**
 - v1 requirements: 18 total
