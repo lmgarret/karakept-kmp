@@ -156,43 +156,63 @@ fun NativeHtmlRenderer(
                 // Reset offset at start of rendering
                 textOffset.offset = 0
 
-                // Render body children, wrapping blocks that might contain the scroll target
-                val bodyChildren = body.childNodes()
-                var i = 0
-                while (i < bodyChildren.size) {
-                    val child = bodyChildren[i]
-                    if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
-                        val blockStartOffset = textOffset.offset
-                        val blockTextLength = child.text().length
-
-                        RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
-                        i++
-                    } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
-                        // Bare text node at body level — skip if whitespace only
-                        val text = child.getWholeText()
-                        if (text.isNotBlank()) {
-                            val currentTheme = LocalReaderTheme.current
-                            val blockStart = textOffset.offset
-                            val blockEnd = blockStart + text.length
-                            textOffset.advance(text.length)
-                            AnnotatedClickableText(
-                                text = AnnotatedString(text),
-                                onLinkClick = onLinkClick,
-                                onHighlightClick = onHighlightClick,
-                                onHighlightPosition = onHighlightPosition,
-                                color = currentTheme.textColor,
-                                fontSize = currentTheme.fontSize,
-                                fontFamily = currentTheme.fontFamily,
-                                lineHeight = (currentTheme.fontSize.value * 1.6f).sp,
-                                selectedHighlightId = selectedHighlightId,
-                                highlights = highlights
-                            )
-                        } else {
-                            textOffset.advance(text.length)
+                // Build list of renderable children once
+                val renderableChildren = remember(html) {
+                    val result = mutableListOf<com.fleeksoft.ksoup.nodes.Node>()
+                    for (child in body.childNodes()) {
+                        if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
+                            result.add(child)
+                        } else if (child is com.fleeksoft.ksoup.nodes.TextNode && child.getWholeText().isNotBlank()) {
+                            result.add(child)
                         }
-                        i++
-                    } else {
-                        i++
+                    }
+                    result
+                }
+
+                // Progressive rendering: show first 20 blocks immediately, reveal rest in batches
+                val initialChunkSize = 20
+                var visibleCount by remember(html) { mutableStateOf(minOf(initialChunkSize, renderableChildren.size)) }
+
+                if (visibleCount < renderableChildren.size) {
+                    LaunchedEffect(html, renderableChildren.size) {
+                        while (visibleCount < renderableChildren.size) {
+                            kotlinx.coroutines.delay(16) // ~1 frame at 60fps
+                            visibleCount = minOf(visibleCount + 10, renderableChildren.size)
+                        }
+                    }
+                }
+
+                // Render visible children
+                for (child in renderableChildren.take(visibleCount)) {
+                    if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
+                        RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
+                    } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
+                        val text = child.getWholeText()
+                        val currentTheme = LocalReaderTheme.current
+                        val blockStart = textOffset.offset
+                        textOffset.advance(text.length)
+                        AnnotatedClickableText(
+                            text = AnnotatedString(text),
+                            onLinkClick = onLinkClick,
+                            onHighlightClick = onHighlightClick,
+                            onHighlightPosition = onHighlightPosition,
+                            color = currentTheme.textColor,
+                            fontSize = currentTheme.fontSize,
+                            fontFamily = currentTheme.fontFamily,
+                            lineHeight = (currentTheme.fontSize.value * 1.6f).sp,
+                            selectedHighlightId = selectedHighlightId,
+                            highlights = highlights
+                        )
+                    }
+                }
+
+                // Advance text offset for not-yet-visible nodes to keep highlight
+                // offsets consistent once they become visible in subsequent frames
+                for (child in renderableChildren.drop(visibleCount)) {
+                    if (child is com.fleeksoft.ksoup.nodes.TextNode) {
+                        textOffset.advance(child.getWholeText().length)
+                    } else if (child is com.fleeksoft.ksoup.nodes.Element) {
+                        textOffset.advance(child.text().length)
                     }
                 }
 

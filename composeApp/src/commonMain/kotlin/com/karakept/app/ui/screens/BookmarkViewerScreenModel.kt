@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
+import com.karakept.app.ui.utils.ParsedDocumentCache
 import getPlatform
 
 class BookmarkViewerScreenModel(
@@ -57,6 +58,8 @@ class BookmarkViewerScreenModel(
     private val highlightRepository: com.karakept.app.data.repository.HighlightRepository,
     private val snackbarManager: ActionSnackbarManager
 ) : ScreenModel {
+    private val parsedDocumentCache = ParsedDocumentCache(maxSize = 5)
+
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
     val loadingState: StateFlow<BookmarkLoadingState> = _loadingState.asStateFlow()
 
@@ -208,6 +211,7 @@ class BookmarkViewerScreenModel(
 
     @OptIn(DelicateCoroutinesApi::class)
     override fun onDispose() {
+        parsedDocumentCache.clear()
         val state = pendingReadingState ?: return
         val serverId = (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark?.serverId
         // screenModelScope is being cancelled, so use GlobalScope for this
@@ -225,6 +229,22 @@ class BookmarkViewerScreenModel(
                     progressPercent = (state.progress * 100).toInt()
                 )
             }
+        }
+    }
+
+    /**
+     * Returns a cached parsed Document for the given bookmark, or parses [html]
+     * and caches the result.  This avoids re-parsing on back-navigation when
+     * the ScreenModel is still alive.
+     */
+    fun getCachedOrParseDocument(bookmarkId: Long, html: String): com.fleeksoft.ksoup.nodes.Document? {
+        parsedDocumentCache.get(bookmarkId)?.let { return it }
+        return try {
+            com.fleeksoft.ksoup.Ksoup.parse(html).also {
+                parsedDocumentCache.put(bookmarkId, it)
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 
