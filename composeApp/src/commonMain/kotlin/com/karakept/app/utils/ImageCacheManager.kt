@@ -83,7 +83,7 @@ class ImageCacheManager(
                         img.attr("src", "file://$localPath")
                     }
                 } catch (e: Exception) {
-                    println("$TAG: Failed to cache image '$src': ${e.message}")
+                    AppLogger.e(TAG, "Failed to cache image '$src': ${e.message}")
                     // Leave original URL — image won't load offline but won't break anything
                 }
             }
@@ -92,7 +92,7 @@ class ImageCacheManager(
             doc.outputSettings().prettyPrint(false)
             doc.body().html()
         } catch (e: Exception) {
-            println("$TAG: Failed to process HTML for image caching: ${e.message}")
+            AppLogger.e(TAG, "Failed to process HTML for image caching: ${e.message}")
             html // Return original on failure
         }
     }
@@ -123,7 +123,7 @@ class ImageCacheManager(
         }
 
         if (!response.status.isSuccess()) {
-            println("$TAG: HTTP ${response.status} for image: $url")
+            AppLogger.w(TAG, "HTTP ${response.status} for image: $url")
             return null
         }
 
@@ -131,14 +131,14 @@ class ImageCacheManager(
 
         // Skip excessively large images
         if (bytes.size > MAX_IMAGE_SIZE_BYTES) {
-            println("$TAG: Skipping oversized image (${bytes.size} bytes): $url")
+            AppLogger.w(TAG, "Skipping oversized image (${bytes.size} bytes): $url")
             return null
         }
 
         return try {
             FileUtils.saveFile(cacheDir, fileName, bytes)
         } catch (e: Exception) {
-            println("$TAG: Failed to save image to disk: ${e.message}")
+            AppLogger.e(TAG, "Failed to save image to disk: ${e.message}")
             null
         }
     }

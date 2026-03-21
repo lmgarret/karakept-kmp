@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.karakept.app.data.model.ViewerMode
+import com.karakept.app.utils.AppLogger
 import com.karakept.app.ui.screens.BookmarkLoadingState
 import kotlinx.coroutines.delay
 
@@ -60,7 +61,7 @@ fun rememberScrollRestoration(
             val jumped = (kotlin.math.abs(scrollState.firstVisibleItemIndex - approvedIndex) > 0) ||
                          (kotlin.math.abs(scrollState.firstVisibleItemScrollOffset - approvedOffset) > 50)
             if (jumped) {
-                println("ScrollGuard: Unintended jump to ${scrollState.firstVisibleItemIndex}:${scrollState.firstVisibleItemScrollOffset}. " +
+                AppLogger.w("ViewerScrollRestoration", "Unintended jump to ${scrollState.firstVisibleItemIndex}:${scrollState.firstVisibleItemScrollOffset}. " +
                     "Snapping back to $approvedIndex:$approvedOffset")
                 scrollState.scrollToItem(approvedIndex, approvedOffset)
             } else {

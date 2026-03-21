@@ -670,7 +670,7 @@ actual fun HtmlRenderer(
 
         @JavascriptInterface
         fun onLog(message: String) {
-            println("WebView Log: $message")
+            AppLogger.d("HtmlRenderer", "WebView Log: $message")
         }
     }
 
