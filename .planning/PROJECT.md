@@ -1,74 +1,46 @@
-# Karakept KMP — Code Health Milestone
+# Karakept KMP — v1.7.0 Tech Debt Cleanup
 
 ## What This Is
 
-A systematic code health improvement milestone for Karakept, a Kotlin Multiplatform bookmark manager built with Compose Multiplatform. This milestone addresses concerns surfaced during codebase mapping: silent error handling, null safety risks, race conditions, oversized files, missing test coverage, security gaps, and performance concerns.
+A focused tech debt cleanup milestone addressing items identified during the code-health milestone audit. All functional requirements are already met — this milestone cleans up remaining cosmetic and maintainability issues.
 
 ## Core Value
 
-Silent failures must become visible failures — errors that are swallowed today (via `printStackTrace()`) must surface to developers and users so the app doesn't silently corrupt state or lose data.
+Production code should use structured logging, stay within size targets, and avoid redundant operations.
 
 ## Requirements
 
-### Validated
-
-- ✓ Bookmark CRUD with offline-first sync — existing
-- ✓ Multi-server support with authentication — existing
-- ✓ List and tag management with hierarchy — existing
-- ✓ Full-text search and filtering — existing
-- ✓ Reader view with highlights and reading progress — existing
-- ✓ Background sync (Android + Desktop) — existing
-- ✓ Material Design 3 theming — existing
-- ✓ Android and Desktop (Linux/macOS) targets — existing
-- ✓ Backup/restore functionality — existing
-- ✓ Replace all `printStackTrace()` calls with structured error handling — Validated in Phase 01: Error Visibility
-- ✓ Propagate errors to UI layer via error flows — Validated in Phase 01: Error Visibility
-- ✓ Eliminate `!!` operators in favor of safe null handling — Validated in Phase 01: Error Visibility
-
 ### Active
 
-- [ ] Split large files (7 files over 1000 lines) into focused modules
-- ✓ Address race conditions in MainScreenModel initialization — Validated in Phase 02: Concurrency Hardening
-- ✓ Fix read/unread toggling race condition — Validated in Phase 02: Concurrency Hardening (vestigial — no actual race exists)
-- ✓ Add tests for offline-first action queue edge cases — Validated in Phase 04: Test Coverage
-- ✓ Add tests for filter combination edge cases — Validated in Phase 04: Test Coverage
-- ✓ Sanitize HTML in reader view (XSS prevention) — Validated in Phase 05: Security Hardening
-- ✓ Move credentials to platform keychain/keystore — Validated in Phase 05: Security Hardening
-- ✓ Optimize rendering for large bookmark collections (1000+) — Validated in Phase 06: Performance Optimization
-- ✓ Optimize HTML block rendering with caching/lazy loading — Validated in Phase 06: Performance Optimization
-- ✓ Wire ParsedDocumentCache into rendering chain — Validated in Phase 07: Integration Wiring & Cleanup
-- ✓ Wire triggerMigration into app startup — Validated in Phase 07: Integration Wiring & Cleanup
-- ✓ Replace println calls with AppLogger — Validated in Phase 07: Integration Wiring & Cleanup
+- [ ] Replace ~97 remaining `println` debug calls with `AppLogger` or remove them
+- [ ] Trim `BookmarkSyncPipeline.kt` below 500 lines (currently 545)
+- [ ] Trim `SettingsRepositoryMutations.kt` below 500 lines (currently 511)
+- [ ] Remove redundant `koinInject<ServerRepository>()` call in `App.kt`
 
 ### Out of Scope
 
-- Rewriting the Voyager navigation layer — mitigated, not broken
-- Upgrading alpha/beta dependencies (Room, Voyager) — monitor only, act when stable releases ship
-- Linux D-Bus/tray icon improvements — platform-specific, separate effort
-- Already-FIXED items (action mode crash, skiko version, compose DSL deprecations, taskbar duplication)
+- New features — this is strictly cleanup
+- Dependency upgrades (tracked in v2 requirements)
+- Platform-specific improvements
 
 ## Context
 
-- Codebase mapping completed 2026-03-20, documented in `.planning/codebase/`
-- CONCERNS.md is the primary input — all active requirements derive from it
-- The app is functional and in use — changes must not regress existing behavior
-- No build environment available in this session — user runs builds externally
-- Silent failures (error handling) is the top pain point
+- Code-health milestone completed 2026-03-21, archived in `.planning/archive/code-health/`
+- AppLogger infrastructure already in place (built in code-health Phase 1)
+- All files were split in code-health Phase 3; two are marginally over the 500-line target
+- The app is functional and in active use — changes must not regress behavior
 
 ## Constraints
 
-- **Stability**: All changes must be backwards-compatible — no regressions to existing functionality
-- **Incremental**: Meaningful progress across all areas, not 100% completion required
-- **Tech stack**: Kotlin Multiplatform, Compose Multiplatform, existing dependency set
+- **Stability**: No regressions — all changes are internal refactoring
 - **Build**: Build/test commands run externally by the user, not in this session
+- **Scope**: Only address the 4 identified tech debt items
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Tackle all concern areas | User wants broad incremental progress, not deep-dive on one area | — Pending |
-| Prioritize error handling first | Silent failures are the top pain point — fix visibility before fixing logic | — Pending |
-| Incremental completion target | App is functional; perfection not required, meaningful improvement is | — Pending |
+| Aligned milestone versioning to git tags | Previous "v1.0" milestone didn't match repo's actual v1.x.x tags | v1.7.0 follows v1.6.0 |
 
 ---
-*Last updated: 2026-03-21 — Phase 07 (Integration Wiring & Cleanup) complete — all milestone phases done, gap closure complete*
+*Created: 2026-03-21*
