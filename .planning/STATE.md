@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 02-01-PLAN.md (Phase 02 complete)
-last_updated: "2026-03-21T08:12:56.244Z"
+stopped_at: Phase 03 mid-execution — partial splits committed, 5 files still over 500 lines
+last_updated: "2026-03-21T08:33:02.863Z"
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 3
+  total_plans: 6
   completed_plans: 3
 ---
 
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** Silent failures must become visible failures — errors surface to developers and users
-**Current focus:** Phase 02 — concurrency-hardening
+**Current focus:** Phase 03 — code-splitting
 
 ## Current Position
 
-Phase: 02 (concurrency-hardening) — COMPLETE
-Plan: 1 of 1 (done)
+Phase: 03 (code-splitting) — EXECUTING
+Plan: 1 of 3
 
 ## Performance Metrics
 
@@ -77,6 +77,22 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T08:10:34.981Z
-Stopped at: Completed 02-01-PLAN.md (Phase 02 complete)
+Last session: 2026-03-21
+Stopped at: Phase 03 mid-execution — partial splits committed, 5 files still over 500 lines
 Resume file: None
+
+### Phase 03 Resume Details
+
+Committed work (03-01 T1, 03-02 T1 already committed by subagents):
+- `ebfd878` 03-01 T1: BookmarkSyncPipeline extracted from BookmarkRepository (454 lines ✓)
+- `e4e3162` 03-02 T1: Pagination extracted, internal visibility changes applied
+- `00b4c89` Partial: BAR batch removed, MSM actions+batch extracted, MS dialogs/scroll/expanded extracted
+
+Remaining work to complete Phase 03:
+1. **03-01 T2** (SPLIT-04): BookmarkActionsRepository 831→<500 (extract sync processing ~270 lines to BookmarkActionsRepositorySync.kt)
+2. **03-01 T2** (SPLIT-04): SettingsRepository 988→<500 (extract mutations to SettingsRepositoryMutations.kt)
+3. **03-02 T2** (SPLIT-02): MainScreenModel 508→<500 (trim ~10 lines — nearly done)
+4. **03-03 T1** (SPLIT-01): MainScreen 756→<500 (need more composable extraction ~260 lines)
+5. **03-03 T2** (SPLIT-03): BookmarkViewerScreen 1045→<500 (extract BookmarkViewerContent + ViewerSnackbar)
+
+All plans and research already exist in `.planning/phases/03-code-splitting/`. Run `/gsd:autonomous --from 3` to resume.
