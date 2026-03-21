@@ -32,7 +32,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Test Coverage
 
-- [ ] **TEST-01**: Add tests for offline-first action queue (ordering, conflicts, timeouts, rejections)
+- [x] **TEST-01**: Add tests for offline-first action queue (ordering, conflicts, timeouts, rejections)
 - [ ] **TEST-02**: Add exhaustive FilterConfig combination tests
 - [ ] **TEST-03**: Add test for reading progress race (rapid UI changes + sync)
 
@@ -87,7 +87,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SPLIT-02 | Phase 3 | Complete |
 | SPLIT-03 | Phase 3 | Complete |
 | SPLIT-04 | Phase 3 | Complete |
-| TEST-01 | Phase 4 | Pending |
+| TEST-01 | Phase 4 | Complete |
 | TEST-02 | Phase 4 | Pending |
 | TEST-03 | Phase 4 | Pending |
 | SEC-01 | Phase 5 | Pending |
