@@ -44,6 +44,7 @@ import com.karakept.app.data.repository.setDefaultListId
 import com.karakept.app.data.repository.setShowDateInList
 import com.karakept.app.data.repository.setDateDisplayMode
 import com.karakept.app.data.repository.clearAutoOfflineDetected
+import com.karakept.app.data.repository.toggleContentSyncTargetList
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
