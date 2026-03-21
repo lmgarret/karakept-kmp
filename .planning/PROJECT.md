@@ -21,12 +21,12 @@ Silent failures must become visible failures — errors that are swallowed today
 - ✓ Material Design 3 theming — existing
 - ✓ Android and Desktop (Linux/macOS) targets — existing
 - ✓ Backup/restore functionality — existing
+- ✓ Replace all `printStackTrace()` calls with structured error handling — Validated in Phase 01: Error Visibility
+- ✓ Propagate errors to UI layer via error flows — Validated in Phase 01: Error Visibility
+- ✓ Eliminate `!!` operators in favor of safe null handling — Validated in Phase 01: Error Visibility
 
 ### Active
 
-- [ ] Replace all `printStackTrace()` calls with structured error handling
-- [ ] Propagate errors to UI layer via error flows
-- [ ] Eliminate `!!` operators in favor of safe null handling
 - [ ] Split large files (7 files over 1000 lines) into focused modules
 - [ ] Address race conditions in MainScreenModel initialization
 - [ ] Fix read/unread toggling race condition
@@ -68,4 +68,4 @@ Silent failures must become visible failures — errors that are swallowed today
 | Incremental completion target | App is functional; perfection not required, meaningful improvement is | — Pending |
 
 ---
-*Last updated: 2026-03-21 after initialization*
+*Last updated: 2026-03-21 — Phase 01 (Error Visibility) complete*
