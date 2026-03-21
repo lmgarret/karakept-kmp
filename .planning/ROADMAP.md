@@ -102,11 +102,11 @@ Plans:
   1. Scrolling through 1000+ bookmarks in LazyColumn shows no visible jank (verified by user testing or profiling)
   2. Opening a long HTML article in the reader does not block the UI — content loads progressively or from cache
   3. Memory usage remains stable when scrolling through large collections (no unbounded growth)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 06-01: Optimize LazyColumn rendering for large bookmark lists
-- [ ] 06-02: Cache and lazy-load HTML content in reader
+- [ ] 06-01-PLAN.md — Remove hot-path println logging and add contentType to LazyColumn items
+- [ ] 06-02-PLAN.md — Create ParsedDocumentCache with LRU eviction and add progressive HTML block rendering
 
 ## Progress
 
