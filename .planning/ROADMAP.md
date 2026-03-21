@@ -18,6 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Test Coverage** - Add tests for highest-risk untested paths (action queue, filters, reading progress)
 - [ ] **Phase 5: Security Hardening** - Sanitize untrusted HTML and protect stored credentials
 - [ ] **Phase 6: Performance Optimization** - Verify and optimize rendering for large collections and long articles
+- [ ] **Phase 7: Integration Wiring & Cleanup** - Close audit gaps: wire unused cache/migration, remove residual println, trim oversized files
 
 ## Phase Details
 
@@ -108,6 +109,22 @@ Plans:
 - [ ] 06-01-PLAN.md — Remove hot-path println logging and add contentType to LazyColumn items
 - [ ] 06-02-PLAN.md — Create ParsedDocumentCache with LRU eviction and add progressive HTML block rendering
 
+### Phase 7: Integration Wiring & Cleanup
+**Goal**: Close all non-critical integration gaps from the v1.0 milestone audit and reduce accumulated tech debt
+**Depends on**: Phase 6 (gap closure phase — runs after all original phases)
+**Requirements**: PERF-02, SEC-02, ERR-01 (integration gap closure)
+**Gap Closure:** Closes gaps from v1.0-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. `ParsedDocumentCache.getCachedOrParseDocument()` is called from composables — cache hits occur on repeated navigation
+  2. `ServerRepository.triggerMigration()` is called on app startup — existing DB credentials are promoted to `SecureCredentialStore`
+  3. No `println` calls remain in `BookmarkViewerScreenModel.kt` or `App.kt` — replaced with `AppLogger` or removed
+  4. `BookmarkSyncPipeline.kt` is under 500 lines
+  5. `SettingsRepositoryMutations.kt` is under 500 lines
+**Plans**: 0 plans
+
+Plans:
+- (none yet — run `/gsd:plan-phase 7`)
+
 ## Progress
 
 **Execution Order:**
@@ -121,3 +138,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 4. Test Coverage | 0/2 | Not started | - |
 | 5. Security Hardening | 1/2 | In Progress|  |
 | 6. Performance Optimization | 0/2 | Not started | - |
+| 7. Integration Wiring & Cleanup | 0/0 | Not started | - |
