@@ -434,8 +434,14 @@ internal class BookmarkSyncPipeline(
     // accessible via per-bookmark tRPC calls (no batch endpoint). To keep
     // sync time reasonable we pull concurrently and cap the total count.
     private suspend fun syncReadingProgress(entities: List<BookmarkEntity>) {
-        if (!settingsRepository.trackReadingProgress.first()) return
-        if (settingsRepository.offlineMode.first()) return
+        val trackProgress = kotlinx.coroutines.withTimeoutOrNull(1000) {
+            settingsRepository.trackReadingProgress.first()
+        } ?: true
+        if (!trackProgress) return
+        val isOffline = kotlinx.coroutines.withTimeoutOrNull(1000) {
+            settingsRepository.offlineMode.first()
+        } ?: false
+        if (isOffline) return
 
         val candidates = entities.take(50) // Cap to bound API cost
 
