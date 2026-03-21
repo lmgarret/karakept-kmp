@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
@@ -79,6 +81,22 @@ class MainScreenModel(
 
     private val _currentPage = MutableStateFlow(0)
     private val _accumulatedBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
+
+    private val bookmarksMutex = Mutex()
+
+    /**
+     * Thread-safe mutation of _accumulatedBookmarks.
+     * All code that reads-then-writes _accumulatedBookmarks MUST use this helper.
+     * Uses Mutex (not MutableStateFlow.update{}) because some callers need to hold
+     * the lock across suspension points (e.g., bookmarkChangedEvents DB lookup).
+     */
+    private suspend fun updateAccumulatedBookmarks(
+        transform: (List<BookmarkEntity>) -> List<BookmarkEntity>
+    ) {
+        bookmarksMutex.withLock {
+            _accumulatedBookmarks.value = transform(_accumulatedBookmarks.value)
+        }
+    }
 
     private val _bookmarkListVersion = MutableStateFlow(0)
     val bookmarkListVersion: StateFlow<Int> = _bookmarkListVersion
@@ -307,10 +325,12 @@ class MainScreenModel(
             bookmarkActionsRepository.bookmarkChangedEvents.collect { remoteId ->
                 val serverId = _selectedServer.value?.id ?: return@collect
                 val updated = bookmarkRepository.getBookmarkByRemoteId(remoteId, serverId)
-                _accumulatedBookmarks.value = if (updated != null) {
-                    _accumulatedBookmarks.value.map { if (it.remoteId == remoteId) updated else it }
-                } else {
-                    _accumulatedBookmarks.value.filter { it.remoteId != remoteId }
+                updateAccumulatedBookmarks { current ->
+                    if (updated != null) {
+                        current.map { if (it.remoteId == remoteId) updated else it }
+                    } else {
+                        current.filter { it.remoteId != remoteId }
+                    }
                 }
             }
         }
@@ -318,19 +338,19 @@ class MainScreenModel(
         // Restore bookmarks on undo.
         screenModelScope.launch {
             bookmarkActionController.undoCompletedEvents.collect { event ->
-                val current = _accumulatedBookmarks.value.toMutableList()
-                val existingIndex = current.indexOfFirst { it.remoteId == event.restoredBookmark.remoteId }
-
-                if (existingIndex >= 0) {
-                    current[existingIndex] = event.restoredBookmark
-                    _accumulatedBookmarks.value = current
-                } else {
-                    if (event.originalPosition >= 0 && event.originalPosition <= current.size) {
-                        current.add(event.originalPosition, event.restoredBookmark)
+                updateAccumulatedBookmarks { current ->
+                    val mutable = current.toMutableList()
+                    val existingIndex = mutable.indexOfFirst { it.remoteId == event.restoredBookmark.remoteId }
+                    if (existingIndex >= 0) {
+                        mutable[existingIndex] = event.restoredBookmark
                     } else {
-                        current.add(0, event.restoredBookmark)
+                        if (event.originalPosition >= 0 && event.originalPosition <= mutable.size) {
+                            mutable.add(event.originalPosition, event.restoredBookmark)
+                        } else {
+                            mutable.add(0, event.restoredBookmark)
+                        }
                     }
-                    _accumulatedBookmarks.value = current
+                    mutable
                 }
             }
         }
@@ -423,7 +443,7 @@ class MainScreenModel(
                 val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, nextPage)
 
                 if (newItems.isNotEmpty()) {
-                    _accumulatedBookmarks.value = _accumulatedBookmarks.value + newItems
+                    updateAccumulatedBookmarks { it + newItems }
                     _currentPage.value = lastPage
                 }
                 if (dbExhausted) {
@@ -450,7 +470,7 @@ class MainScreenModel(
 
         // Load items first, then swap atomically to avoid a blank flash.
         val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
-        _accumulatedBookmarks.value = newItems
+        updateAccumulatedBookmarks { newItems }
         _bookmarkListVersion.value++
         _currentPage.value = lastPage
         if (dbExhausted) {
@@ -605,9 +625,7 @@ class MainScreenModel(
                 BookmarkActionEvent.Archive(bookmark)
             }
             bookmarkActionController.executeAction(event, originalPosition = position)
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
-                it.remoteId != bookmark.remoteId
-            }
+            updateAccumulatedBookmarks { it.filter { b -> b.remoteId != bookmark.remoteId } }
         }
     }
 
@@ -619,9 +637,7 @@ class MainScreenModel(
                 originalPosition = position
             )
             if (bookmark.isStarred && _currentFilter.value.status == FilterStatus.FAVORITES) {
-                _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
-                    it.remoteId != bookmark.remoteId
-                }
+                updateAccumulatedBookmarks { it.filter { b -> b.remoteId != bookmark.remoteId } }
             }
         }
     }
@@ -637,20 +653,22 @@ class MainScreenModel(
             bookmarkActionController.executeAction(event)
 
             val resetProgress = markingUnread && settingsRepository.resetProgressOnMarkUnread.first()
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                if (it.remoteId == bookmark.remoteId) {
-                    if (resetProgress) {
-                        it.copy(
-                            isRead = false,
-                            readingProgress = 0f,
-                            readingScrollIndex = 0,
-                            readingScrollOffset = 0
-                        )
+            updateAccumulatedBookmarks { list ->
+                list.map {
+                    if (it.remoteId == bookmark.remoteId) {
+                        if (resetProgress) {
+                            it.copy(
+                                isRead = false,
+                                readingProgress = 0f,
+                                readingScrollIndex = 0,
+                                readingScrollOffset = 0
+                            )
+                        } else {
+                            it.copy(isRead = !bookmark.isRead)
+                        }
                     } else {
-                        it.copy(isRead = !bookmark.isRead)
+                        it
                     }
-                } else {
-                    it
                 }
             }
         }
@@ -663,9 +681,7 @@ class MainScreenModel(
                 BookmarkActionEvent.Delete(bookmark),
                 originalPosition = position
             )
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
-                it.remoteId != bookmark.remoteId
-            }
+            updateAccumulatedBookmarks { it.filter { b -> b.remoteId != bookmark.remoteId } }
         }
     }
 
@@ -684,19 +700,21 @@ class MainScreenModel(
             bookmarkActionsRepository.moveToList(
                 bookmark.remoteId, bookmark.serverId, listId, isOnline
             )
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                if (it.remoteId == bookmark.remoteId) {
-                    val currentListIds = it.listIds
-                        .split(",")
-                        .map { id -> id.trim() }
-                        .filter { id -> id.isNotBlank() }
-                    if (!currentListIds.contains(listId)) {
-                        it.copy(listIds = (currentListIds + listId).joinToString(","))
+            updateAccumulatedBookmarks { list ->
+                list.map {
+                    if (it.remoteId == bookmark.remoteId) {
+                        val currentListIds = it.listIds
+                            .split(",")
+                            .map { id -> id.trim() }
+                            .filter { id -> id.isNotBlank() }
+                        if (!currentListIds.contains(listId)) {
+                            it.copy(listIds = (currentListIds + listId).joinToString(","))
+                        } else {
+                            it
+                        }
                     } else {
                         it
                     }
-                } else {
-                    it
                 }
             }
         }
@@ -711,9 +729,11 @@ class MainScreenModel(
                 bookmarkActionsRepository.updateTags(
                     bookmark.remoteId, bookmark.serverId, newTags, isOnline
                 )
-                _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                    if (it.remoteId == bookmark.remoteId) it.copy(tags = newTags.joinToString(","))
-                    else it
+                updateAccumulatedBookmarks { list ->
+                    list.map {
+                        if (it.remoteId == bookmark.remoteId) it.copy(tags = newTags.joinToString(","))
+                        else it
+                    }
                 }
             }
         }
@@ -728,9 +748,11 @@ class MainScreenModel(
                 bookmarkActionsRepository.updateTags(
                     bookmark.remoteId, bookmark.serverId, newTags, isOnline
                 )
-                _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                    if (it.remoteId == bookmark.remoteId) it.copy(tags = newTags.joinToString(","))
-                    else it
+                updateAccumulatedBookmarks { list ->
+                    list.map {
+                        if (it.remoteId == bookmark.remoteId) it.copy(tags = newTags.joinToString(","))
+                        else it
+                    }
                 }
             }
         }
@@ -742,15 +764,17 @@ class MainScreenModel(
             bookmarkActionsRepository.removeFromList(
                 bookmark.remoteId, bookmark.serverId, listId, isOnline
             )
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                if (it.remoteId == bookmark.remoteId) {
-                    val newListIds = it.listIds
-                        .split(",")
-                        .map { id -> id.trim() }
-                        .filter { id -> id.isNotBlank() && id != listId }
-                    it.copy(listIds = newListIds.joinToString(","))
-                } else {
-                    it
+            updateAccumulatedBookmarks { list ->
+                list.map {
+                    if (it.remoteId == bookmark.remoteId) {
+                        val newListIds = it.listIds
+                            .split(",")
+                            .map { id -> id.trim() }
+                            .filter { id -> id.isNotBlank() && id != listId }
+                        it.copy(listIds = newListIds.joinToString(","))
+                    } else {
+                        it
+                    }
                 }
             }
         }
@@ -766,9 +790,11 @@ class MainScreenModel(
             unreadInList.forEach { bookmark ->
                 bookmarkActionsRepository.markAsRead(bookmark.remoteId, serverId)
             }
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                val bookmarkLists = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotEmpty() }
-                if (bookmarkLists.contains(listId)) it.copy(isRead = true) else it
+            updateAccumulatedBookmarks { list ->
+                list.map {
+                    val bookmarkLists = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotEmpty() }
+                    if (bookmarkLists.contains(listId)) it.copy(isRead = true) else it
+                }
             }
         }
     }
@@ -854,9 +880,8 @@ class MainScreenModel(
         if (bookmarks.isEmpty()) { clearSelection(); return }
         screenModelScope.launch {
             bookmarkActionsRepository.batchArchive(bookmarks)
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
-                it.remoteId !in bookmarks.map { b -> b.remoteId }
-            }
+            val remoteIds = bookmarks.map { it.remoteId }.toSet()
+            updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
             clearSelection()
         }
     }
@@ -866,9 +891,8 @@ class MainScreenModel(
         if (bookmarks.isEmpty()) { clearSelection(); return }
         screenModelScope.launch {
             bookmarkActionsRepository.batchUnarchive(bookmarks)
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
-                it.remoteId !in bookmarks.map { b -> b.remoteId }
-            }
+            val remoteIds = bookmarks.map { it.remoteId }.toSet()
+            updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
             clearSelection()
         }
     }
@@ -879,8 +903,8 @@ class MainScreenModel(
         screenModelScope.launch {
             bookmarkActionsRepository.batchMarkRead(bookmarks)
             val ids = bookmarks.map { it.remoteId }.toSet()
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                if (it.remoteId in ids) it.copy(isRead = true) else it
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isRead = true) else it }
             }
             clearSelection()
         }
@@ -893,11 +917,13 @@ class MainScreenModel(
             val resetProgress = settingsRepository.resetProgressOnMarkUnread.first()
             bookmarkActionsRepository.batchMarkUnread(bookmarks, resetProgress)
             val ids = bookmarks.map { it.remoteId }.toSet()
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                if (it.remoteId in ids) {
-                    if (resetProgress) it.copy(isRead = false, readingProgress = 0f, readingScrollIndex = 0, readingScrollOffset = 0)
-                    else it.copy(isRead = false)
-                } else it
+            updateAccumulatedBookmarks { list ->
+                list.map {
+                    if (it.remoteId in ids) {
+                        if (resetProgress) it.copy(isRead = false, readingProgress = 0f, readingScrollIndex = 0, readingScrollOffset = 0)
+                        else it.copy(isRead = false)
+                    } else it
+                }
             }
             clearSelection()
         }
@@ -909,8 +935,8 @@ class MainScreenModel(
         screenModelScope.launch {
             bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = true)
             val ids = bookmarks.map { it.remoteId }.toSet()
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                if (it.remoteId in ids) it.copy(isStarred = true) else it
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isStarred = true) else it }
             }
             clearSelection()
         }
@@ -922,8 +948,8 @@ class MainScreenModel(
         screenModelScope.launch {
             bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = false)
             val ids = bookmarks.map { it.remoteId }.toSet()
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                if (it.remoteId in ids) it.copy(isStarred = false) else it
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isStarred = false) else it }
             }
             clearSelection()
         }
@@ -935,7 +961,7 @@ class MainScreenModel(
         screenModelScope.launch {
             bookmarkActionsRepository.batchDelete(bookmarks)
             val ids = bookmarks.map { it.remoteId }.toSet()
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter { it.remoteId !in ids }
+            updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in ids } }
             clearSelection()
         }
     }
@@ -947,8 +973,10 @@ class MainScreenModel(
             bookmarkActionsRepository.batchUpdateTags(bookmarks, newTags)
             val ids = bookmarks.map { it.remoteId }.toSet()
             val tagString = newTags.joinToString(",")
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map { bookmark ->
-                if (bookmark.remoteId in ids) bookmark.copy(tags = tagString) else bookmark
+            updateAccumulatedBookmarks { list ->
+                list.map { bookmark ->
+                    if (bookmark.remoteId in ids) bookmark.copy(tags = tagString) else bookmark
+                }
             }
             clearSelection()
         }
@@ -960,13 +988,15 @@ class MainScreenModel(
         screenModelScope.launch {
             bookmarkActionsRepository.batchMoveToList(bookmarks, listId)
             val ids = bookmarks.map { it.remoteId }.toSet()
-            _accumulatedBookmarks.value = _accumulatedBookmarks.value.map { bookmark ->
-                if (bookmark.remoteId in ids) {
-                    val currentListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                    if (!currentListIds.contains(listId)) {
-                        bookmark.copy(listIds = (currentListIds + listId).joinToString(","))
+            updateAccumulatedBookmarks { list ->
+                list.map { bookmark ->
+                    if (bookmark.remoteId in ids) {
+                        val currentListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                        if (!currentListIds.contains(listId)) {
+                            bookmark.copy(listIds = (currentListIds + listId).joinToString(","))
+                        } else bookmark
                     } else bookmark
-                } else bookmark
+                }
             }
             clearSelection()
         }
@@ -989,17 +1019,15 @@ class MainScreenModel(
                 com.karakept.app.data.model.SwipeAction.MARK_READ -> {
                     if (!bookmark.isRead) {
                         bookmarkActionsRepository.markAsRead(bookmark.remoteId, bookmark.serverId)
-                        _accumulatedBookmarks.value = _accumulatedBookmarks.value.map {
-                            if (it.remoteId == bookmark.remoteId) it.copy(isRead = true) else it
+                        updateAccumulatedBookmarks { list ->
+                            list.map { if (it.remoteId == bookmark.remoteId) it.copy(isRead = true) else it }
                         }
                     }
                 }
                 com.karakept.app.data.model.SwipeAction.ARCHIVE -> {
                     if (!bookmark.isArchived) {
                         bookmarkActionsRepository.archiveBookmark(bookmark.remoteId, bookmark.serverId)
-                        _accumulatedBookmarks.value = _accumulatedBookmarks.value.filter {
-                            it.remoteId != bookmark.remoteId
-                        }
+                        updateAccumulatedBookmarks { it.filter { b -> b.remoteId != bookmark.remoteId } }
                     }
                 }
                 com.karakept.app.data.model.SwipeAction.FAVOURITE -> {
@@ -1044,7 +1072,7 @@ class MainScreenModel(
             val result = bookmarkRepository.createBookmark(url)
 
             result.onSuccess { bookmark ->
-                _accumulatedBookmarks.value = listOf(bookmark) + _accumulatedBookmarks.value
+                updateAccumulatedBookmarks { listOf(bookmark) + it }
                 _pendingBookmarks.value = _pendingBookmarks.value.filter { it.remoteId != tempRemoteId }
                 _createBookmarkResult.emit(Result.success(Unit))
             }.onFailure { e ->

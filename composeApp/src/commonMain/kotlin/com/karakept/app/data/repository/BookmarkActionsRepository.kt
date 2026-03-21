@@ -54,7 +54,8 @@ class BookmarkActionsRepository(
         _bookmarkChangedEvents.tryEmit(remoteId)
     }
     
-    // Cache for tag IDs to handle read/unread toggling race conditions
+    // Audit (Phase 02): No tag cache exists -- markAsRead/markAsUnread use direct DB writes.
+    // The originally-feared read/unread race condition does not apply to the current implementation.
     
     fun setBookmarkRepository(repository: com.karakept.app.data.repository.BookmarkRepository) {
         _bookmarkRepository = repository
