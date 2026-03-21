@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
 import com.karakept.app.domain.BookmarkFilterUtils
@@ -38,7 +39,8 @@ class MainScreenModel(
     private val bookmarkActionsRepository: com.karakept.app.data.repository.BookmarkActionsRepository,
     private val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
     private val listRepository: com.karakept.app.data.repository.ListRepository,
-    private val bookmarkActionController: BookmarkActionController
+    private val bookmarkActionController: BookmarkActionController,
+    private val snackbarManager: ActionSnackbarManager
 ) : ScreenModel {
 
     private val defaultFilterResolver = DefaultFilterResolver(settingsRepository)
@@ -416,6 +418,9 @@ class MainScreenModel(
                 }
             } catch (e: Exception) {
                 AppLogger.e("MainScreenModel", "Failed to load bookmarks: ${e.message}", e)
+                snackbarManager.showErrorWithRetry("Couldn't load bookmarks") {
+                    loadNextPage()
+                }
             } finally {
                 _isLoadingMore.value = false
             }
@@ -482,6 +487,9 @@ class MainScreenModel(
                 }
             } catch (e: Exception) {
                 AppLogger.e("MainScreenModel", "Failed to toggle bookmark state: ${e.message}", e)
+                snackbarManager.showErrorWithRetry("Couldn't sync bookmarks") {
+                    syncBookmarks()
+                }
             } finally {
                 _isSyncing.value = false
             }

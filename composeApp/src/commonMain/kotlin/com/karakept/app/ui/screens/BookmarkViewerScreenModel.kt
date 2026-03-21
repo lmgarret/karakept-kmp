@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
 import getPlatform
@@ -46,7 +47,8 @@ class BookmarkViewerScreenModel(
     private val serverRepository: ServerRepository,
     private val bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository,
     private val bookmarkActionController: BookmarkActionController,
-    private val highlightRepository: com.karakept.app.data.repository.HighlightRepository
+    private val highlightRepository: com.karakept.app.data.repository.HighlightRepository,
+    private val snackbarManager: ActionSnackbarManager
 ) : ScreenModel {
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
     val loadingState: StateFlow<BookmarkLoadingState> = _loadingState.asStateFlow()
@@ -262,6 +264,9 @@ class BookmarkViewerScreenModel(
                 }
             } catch (e: Exception) {
                 AppLogger.e("ViewerModel", "Failed to load bookmark content: ${e.message}", e)
+                snackbarManager.showErrorWithRetry("Couldn't refresh bookmark") {
+                    refreshBookmark(id)
+                }
             } finally {
                 _isRefreshing.value = false
                 println("BookmarkViewerScreenModel: Refresh complete")
@@ -292,7 +297,8 @@ class BookmarkViewerScreenModel(
                                         highlightRepository.syncHighlightsForBookmark(server, bookmark.originalRemoteId ?: bookmark.remoteId.toString())
                                     }
                                 } catch (e: Exception) {
-                                    println("Error during on-demand highlight sync: ${e.message}")
+                                    AppLogger.e("ViewerModel", "Failed to sync highlights: ${e.message}", e)
+                                    snackbarManager.showSnackbar("Couldn't sync highlights")
                                 }
                             }
                             // Pull reading progress from server (cross-device sync).
@@ -372,6 +378,9 @@ class BookmarkViewerScreenModel(
                                     }
                                 } catch (e: Exception) {
                                     AppLogger.e("ViewerModel", "Failed to update highlight: ${e.message}", e)
+                                    snackbarManager.showErrorWithRetry("Couldn't load bookmark content") {
+                                        loadBookmark(id)
+                                    }
                                 } finally {
                                     // Signal that the fetch attempt is done (success, failure, or
                                     // no content available) so the UI can stop waiting and show
@@ -450,6 +459,9 @@ class BookmarkViewerScreenModel(
                 _lists.value = fetchedLists
             } catch (e: Exception) {
                 AppLogger.e("ViewerModel", "Failed to load highlights: ${e.message}", e)
+                snackbarManager.showErrorWithRetry("Couldn't load lists") {
+                    loadLists(server)
+                }
             }
         }
     }
@@ -535,6 +547,7 @@ class BookmarkViewerScreenModel(
                 onCreated(highlightId)
             } catch (e: Exception) {
                 AppLogger.e("ViewerModel", "Failed to save reading progress: ${e.message}", e)
+                snackbarManager.showSnackbar("Couldn't save highlight")
             }
         }
     }
