@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.setDrawerWidthDp
+import com.karakept.app.data.repository.setListColumnFraction
 import com.karakept.app.ui.components.DraggableDivider
 import com.karakept.app.ui.components.FilterSidePanel
 import com.karakept.app.ui.screens.BookmarkViewerContent

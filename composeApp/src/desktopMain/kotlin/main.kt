@@ -26,6 +26,7 @@ import androidx.compose.ui.window.rememberWindowState
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.setWindowState
 import com.karakept.app.di.appModule
 import com.kdroid.composetray.tray.api.Tray
 import com.kdroid.composetray.utils.IconRenderProperties

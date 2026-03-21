@@ -1,6 +1,9 @@
 package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import com.karakept.app.data.model.Highlight
+import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.ui.screens.BookmarkLoadingState
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
 import kotlinx.coroutines.CoroutineScope
@@ -15,10 +18,10 @@ import kotlinx.coroutines.launch
 fun ViewerContentPanels(
     loadingState: BookmarkLoadingState,
     viewerMode: com.karakept.app.data.model.ViewerMode,
-    htmlTextColor: String,
-    htmlBackgroundColor: String,
+    htmlTextColor: Color?,
+    htmlBackgroundColor: Color?,
     htmlFontSize: Int,
-    htmlFontFamily: String,
+    htmlFontFamily: ReaderFontFamily,
     lists: List<com.karakept.api.model.KarakeepList>,
     showModeDialog: Boolean,
     onShowModeDialogChanged: (Boolean) -> Unit,
@@ -36,7 +39,7 @@ fun ViewerContentPanels(
     onSelectedHighlightIdChanged: (String?) -> Unit,
     selectedHighlightText: String?,
     onSelectedHighlightTextChanged: (String?) -> Unit,
-    selectedHighlight: com.karakept.app.data.local.entity.HighlightEntity?,
+    selectedHighlight: Highlight?,
     screenModel: BookmarkViewerScreenModel,
     scope: CoroutineScope,
     onBack: () -> Unit

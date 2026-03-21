@@ -5,6 +5,11 @@ import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.setHtmlTextColor
+import com.karakept.app.data.repository.setHtmlBackgroundColor
+import com.karakept.app.data.repository.setHtmlFontSize
+import com.karakept.app.data.repository.setHtmlFontFamily
+import com.karakept.app.data.repository.resetReaderAppearance
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn

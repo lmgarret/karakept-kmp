@@ -1,5 +1,6 @@
 package com.karakept.app.data.integration
 
+import com.karakept.app.data.repository.pullReadingProgressFromServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext

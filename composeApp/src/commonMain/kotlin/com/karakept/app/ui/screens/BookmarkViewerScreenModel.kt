@@ -17,6 +17,13 @@ import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.pullReadingProgressFromServer
+import com.karakept.app.data.repository.setViewerMode
+import com.karakept.app.data.repository.setHtmlTextColor
+import com.karakept.app.data.repository.setHtmlBackgroundColor
+import com.karakept.app.data.repository.setHtmlFontSize
+import com.karakept.app.data.repository.setHtmlFontFamily
+import com.karakept.app.data.repository.resetReaderAppearance
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview

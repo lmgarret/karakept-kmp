@@ -52,6 +52,7 @@ import com.karakept.app.data.model.SyncStrategy
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.updateListSyncState
 import com.karakept.app.ui.utils.buildListHierarchy
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
