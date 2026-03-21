@@ -19,6 +19,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.plugin
 import io.ktor.client.request.header
+import com.karakept.app.utils.AppLogger
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
@@ -38,17 +39,13 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
             }.apply {
                 plugin(HttpSend).intercept { request ->
                     val url = request.url.toString()
-                    println("🖼️ Coil loading image: $url")
 
                     // Only add auth header for asset URLs
                     if (url.contains("/api/v1/assets/")) {
                         val servers = runBlocking { serverRepository.servers.first() }
                         val server = servers.firstOrNull()
                         if (server != null) {
-                            println("🔐 Adding auth header for asset URL")
                             request.header("Authorization", "Bearer ${server.apiKey}")
-                        } else {
-                            println("⚠️ No server found for authentication")
                         }
                     }
                     execute(request)
@@ -91,6 +88,17 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
             }
         }
 
+        // Migrate credentials from DB to SecureCredentialStore (best-effort, idempotent)
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            try {
+                serverRepository.triggerMigration()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Migration is best-effort — existing creds work via DB fallback
+            }
+        }
+
         com.karakept.app.ui.theme.AppTheme(
             themeMode = themeMode,
             accentColor = accentColor
@@ -100,32 +108,32 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
             var initialScreens by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<cafe.adriel.voyager.core.screen.Screen>?>(null) }
 
             androidx.compose.runtime.LaunchedEffect(sharedUrl, openBookmarkId) {
-                println("📱 App LaunchedEffect. sharedUrl=$sharedUrl, openBookmarkId=$openBookmarkId")
+                AppLogger.d("App", "LaunchedEffect. sharedUrl=$sharedUrl, openBookmarkId=$openBookmarkId")
                 if (sharedUrl != null) {
-                    println("   Showing ShareBookmarkScreen")
+                    AppLogger.d("App", "Showing ShareBookmarkScreen")
                     initialScreens = listOf(com.karakept.app.ui.screens.ShareBookmarkScreen(sharedUrl))
                 } else if (serverRepository.hasServers()) {
                     val screens = mutableListOf<cafe.adriel.voyager.core.screen.Screen>(com.karakept.app.ui.screens.MainScreen)
                     if (openBookmarkId != null) {
                         try {
                            val bookmarkIdLong = openBookmarkId.toLong()
-                           println("   Parsing bookmark ID $bookmarkIdLong. Adding BookmarkViewerScreen.")
+                           AppLogger.d("App", "Parsing bookmark ID $bookmarkIdLong. Adding BookmarkViewerScreen.")
                            // BookmarkViewerScreen only needs bookmarkId (Long). It handles server resolution internally.
                            screens.add(com.karakept.app.ui.screens.BookmarkViewerScreen(bookmarkIdLong))
                         } catch (e: Exception) {
-                            println("   Error parsing openBookmarkId: ${e.message}")
+                            AppLogger.w("App", "Error parsing openBookmarkId: ${e.message}")
                         }
                     } else {
-                        println("   No bookmark ID, showing only MainScreen")
+                        AppLogger.d("App", "No bookmark ID, showing only MainScreen")
                     }
                     initialScreens = screens
                 } else {
                     val onboardingCompleted = settingsRepository.onboardingCompleted.first()
                     if (!onboardingCompleted) {
-                        println("   First launch, showing OnboardingScreen")
+                        AppLogger.d("App", "First launch, showing OnboardingScreen")
                         initialScreens = listOf(com.karakept.app.ui.screens.OnboardingScreen())
                     } else {
-                        println("   No servers, showing LoginScreen")
+                        AppLogger.d("App", "No servers, showing LoginScreen")
                         initialScreens = listOf(com.karakept.app.ui.screens.LoginScreen())
                     }
                 }
