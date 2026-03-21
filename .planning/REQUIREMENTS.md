@@ -20,9 +20,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Code Complexity
 
-- [ ] **SPLIT-01**: Split MainScreen.kt (1311 lines) into focused composable files
+- [x] **SPLIT-01**: Split MainScreen.kt (1311 lines) into focused composable files
 - [x] **SPLIT-02**: Split MainScreenModel.kt (1034 lines) into focused state management classes
-- [ ] **SPLIT-03**: Split BookmarkViewerScreen.kt (1030 lines) into viewer sub-components
+- [x] **SPLIT-03**: Split BookmarkViewerScreen.kt (1030 lines) into viewer sub-components
 - [x] **SPLIT-04**: Split repository files (~1000 lines each) by concern
 
 ### Concurrency
@@ -83,9 +83,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NULL-01 | Phase 1 | Complete |
 | CONC-01 | Phase 2 | Complete |
 | CONC-02 | Phase 2 | Complete |
-| SPLIT-01 | Phase 3 | Pending |
+| SPLIT-01 | Phase 3 | Complete |
 | SPLIT-02 | Phase 3 | Complete |
-| SPLIT-03 | Phase 3 | Pending |
+| SPLIT-03 | Phase 3 | Complete |
 | SPLIT-04 | Phase 3 | Complete |
 | TEST-01 | Phase 4 | Pending |
 | TEST-02 | Phase 4 | Pending |

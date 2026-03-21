@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_plan: 2 of 3
-status: unknown
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-03-21T09:47:07.141Z"
+current_plan: 3 of 3
+status: phase-complete
+stopped_at: Completed 03-03-PLAN.md (Phase 03 plan 3 of 3)
+last_updated: "2026-03-21T09:52:22.767Z"
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-21)
 ## Current Position
 
 Phase: 03 (code-splitting) — EXECUTING
-Current Plan: 2 of 3
+Current Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -71,6 +71,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Uniform Mutex for all 26 mutation sites rather than mixing synchronization strategies
 - [Phase 03]: Extension functions over subclassing for ScreenModel concern separation
 - [Phase 03]: Extension function extraction pattern: fun ClassName.methodName() in separate file, same package, with private->internal visibility changes
+- [Phase 03]: MainScreenDisplayConfig data class to bundle 12 effective layout overrides, reducing parameter sprawl
+- [Phase 03]: State holder composable pattern (rememberScrollRestoration) for encapsulating complex stateful scroll logic
 
 ### Pending Todos
 
@@ -82,24 +84,16 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-21T09:47:07.137Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-03-21
+Stopped at: Completed 03-03-PLAN.md (Phase 03 plan 3 of 3)
 Resume file: None
 
-### Phase 03 Resume Details
+### Phase 03 Completed Work
 
-Committed work (03-01 T1, 03-02 T1 already committed by subagents):
-
-- `ebfd878` 03-01 T1: BookmarkSyncPipeline extracted from BookmarkRepository (454 lines ✓)
+- `ebfd878` 03-01 T1: BookmarkSyncPipeline extracted from BookmarkRepository
 - `e4e3162` 03-02 T1: Pagination extracted, internal visibility changes applied
 - `00b4c89` Partial: BAR batch removed, MSM actions+batch extracted, MS dialogs/scroll/expanded extracted
-
-Remaining work to complete Phase 03:
-
-1. **03-01 T2** (SPLIT-04): BookmarkActionsRepository 831→<500 (extract sync processing ~270 lines to BookmarkActionsRepositorySync.kt)
-2. **03-01 T2** (SPLIT-04): SettingsRepository 988→<500 (extract mutations to SettingsRepositoryMutations.kt)
-3. **03-02 T2** (SPLIT-02): MainScreenModel 508→<500 (trim ~10 lines — nearly done)
-4. **03-03 T1** (SPLIT-01): MainScreen 756→<500 (need more composable extraction ~260 lines)
-5. **03-03 T2** (SPLIT-03): BookmarkViewerScreen 1045→<500 (extract BookmarkViewerContent + ViewerSnackbar)
+- `b893c9c` 03-03 T1: MainScreen scaffold content extracted (757->415 lines)
+- `23acbc2` 03-03 T2: BookmarkViewerScreen content, panels, scroll, snackbar extracted (1045->39 lines)
 
 All plans and research already exist in `.planning/phases/03-code-splitting/`. Run `/gsd:autonomous --from 3` to resume.
