@@ -51,7 +51,7 @@ actual object FileUtils {
             val applicationInfo = packageManager.getApplicationInfo(context.packageName, 0)
             usedByApp += File(applicationInfo.sourceDir).length()
         } catch (e: Exception) {
-            e.printStackTrace()
+            AppLogger.e("FileUtils", "Failed to get directory display name: ${e.message}", e)
         }
 
         // 2. User data: Internal files directory

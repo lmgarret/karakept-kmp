@@ -27,6 +27,12 @@ object HtmlArchiveProcessor {
             // Remove ALL script tags
             doc.select("script").remove()
 
+            // Remove dangerous embedding elements that can load external content/JS
+            doc.select("iframe, object, embed, applet").remove()
+
+            // Remove forms to prevent phishing attacks
+            doc.select("form").remove()
+
             // Remove inline event handlers (defense in depth)
             // Optimize: Select only elements with these attributes instead of iterating all elements
             val eventHandlers = listOf(
@@ -71,7 +77,7 @@ object HtmlArchiveProcessor {
 
             doc.html()
         } catch (e: Exception) {
-            println("HtmlArchiveProcessor: Error processing HTML: ${e.message}")
+            AppLogger.e("HtmlArchiveProcessor", "Error processing HTML: ${e.message}", e)
             "" // Fail safe
         }
     }

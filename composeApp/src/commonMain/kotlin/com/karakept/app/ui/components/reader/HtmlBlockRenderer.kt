@@ -267,7 +267,7 @@ private fun RenderInlineGroup(
                 val localStart = (highlight.startOffset - blockStartOffset).coerceIn(0, result.length)
                 val localEnd = (highlight.endOffset - blockStartOffset).coerceIn(0, result.length)
                 if (localStart >= localEnd) continue
-                val bgColor = theme.highlightColors[highlight.color ?: "yellow"] ?: theme.highlightColors["yellow"]!!
+                val bgColor = theme.highlightColors[highlight.color ?: "yellow"] ?: theme.highlightColors["yellow"] ?: Color.Yellow
                 addStyle(
                     SpanStyle(
                         background = bgColor,

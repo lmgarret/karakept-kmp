@@ -64,6 +64,7 @@ import com.karakept.app.data.model.ThumbnailSide
 import getPlatform
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.saveLayout
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkCompactListLayout
 import com.karakept.app.ui.components.BookmarkListLayout

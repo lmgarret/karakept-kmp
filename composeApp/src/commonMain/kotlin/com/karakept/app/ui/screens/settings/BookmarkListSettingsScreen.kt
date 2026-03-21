@@ -465,9 +465,10 @@ private fun SwipeActionSettingItem(
     val selectedConfig = customConfigs.find { it.id == selectedConfigId }
 
     // Step 2 sheet: pick a custom config for the pending action type
-    if (pendingAction != null) {
+    val currentPendingAction = pendingAction
+    if (currentPendingAction != null) {
         val filteredConfigs = customConfigs.filter { config ->
-            when (pendingAction) {
+            when (currentPendingAction) {
                 SwipeAction.ADD_TAG -> config.type == CustomSwipeActionType.ADD_TAG
                 SwipeAction.ADD_TO_LIST -> config.type == CustomSwipeActionType.ADD_TO_LIST
                 else -> false
@@ -505,7 +506,7 @@ private fun SwipeActionSettingItem(
                                 RadioButton(
                                     selected = config.id == selectedConfigId,
                                     onClick = {
-                                        onActionSelected(pendingAction!!)
+                                        onActionSelected(currentPendingAction)
                                         onConfigSelected(config.id)
                                         pendingAction = null
                                         showDialog = false
@@ -513,7 +514,7 @@ private fun SwipeActionSettingItem(
                                 )
                             },
                             modifier = Modifier.clickable {
-                                onActionSelected(pendingAction!!)
+                                onActionSelected(currentPendingAction)
                                 onConfigSelected(config.id)
                                 pendingAction = null
                                 showDialog = false

@@ -1,6 +1,7 @@
 package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.ListDao
+import com.karakept.app.utils.AppLogger
 import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
@@ -55,7 +56,7 @@ class ListRepository(
                     listDao.deleteRemovedLists(server.id, remoteIds)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                AppLogger.e("ListRepo", "Failed to sync lists: ${e.message}", e)
                 // Continue to load from local database on error
             }
         }
@@ -73,7 +74,7 @@ class ListRepository(
             val entities = listDao.getListsForServerOnce(serverId)
             _lists.value = entities.map { it.toKarakeepList() }
         } catch (e: Exception) {
-            e.printStackTrace()
+            AppLogger.e("ListRepo", "Failed to create list: ${e.message}", e)
         }
     }
 
@@ -108,7 +109,7 @@ class ListRepository(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            e.printStackTrace()
+            AppLogger.e("ListRepo", "Failed to update list: ${e.message}", e)
             // Update locally for immediate feedback even when remote fails
             listDao.updateListNameAndIcon(listId, server.id, newName, newIcon, System.currentTimeMillis())
             loadListsFromDatabase(server.id)

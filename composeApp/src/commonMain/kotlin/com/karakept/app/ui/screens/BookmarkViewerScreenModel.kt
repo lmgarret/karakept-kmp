@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens
 
 import androidx.compose.ui.graphics.Color
+import com.karakept.app.utils.AppLogger
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
@@ -16,6 +17,13 @@ import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.pullReadingProgressFromServer
+import com.karakept.app.data.repository.setViewerMode
+import com.karakept.app.data.repository.setHtmlTextColor
+import com.karakept.app.data.repository.setHtmlBackgroundColor
+import com.karakept.app.data.repository.setHtmlFontSize
+import com.karakept.app.data.repository.setHtmlFontFamily
+import com.karakept.app.data.repository.resetReaderAppearance
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -32,8 +40,10 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
+import com.karakept.app.ui.utils.ParsedDocumentCache
 import getPlatform
 
 class BookmarkViewerScreenModel(
@@ -45,8 +55,11 @@ class BookmarkViewerScreenModel(
     private val serverRepository: ServerRepository,
     private val bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository,
     private val bookmarkActionController: BookmarkActionController,
-    private val highlightRepository: com.karakept.app.data.repository.HighlightRepository
+    private val highlightRepository: com.karakept.app.data.repository.HighlightRepository,
+    private val snackbarManager: ActionSnackbarManager
 ) : ScreenModel {
+    private val parsedDocumentCache = ParsedDocumentCache(maxSize = 5)
+
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
     val loadingState: StateFlow<BookmarkLoadingState> = _loadingState.asStateFlow()
 
@@ -154,7 +167,7 @@ class BookmarkViewerScreenModel(
             readingStateUpdates
                 .debounce(500)
                 .collect { state ->
-                    println("ReadProgressSync: debounce fired — saving to DB localId=${state.localId} progress=${(state.progress * 100).toInt()}%")
+                    // Debounce fired — save to DB
                     bookmarkDao.updateReadingProgress(
                         state.localId, state.progress, state.scrollIndex, state.scrollOffset
                     )
@@ -167,17 +180,17 @@ class BookmarkViewerScreenModel(
                         val currentBookmark =
                             (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark
                         if (currentBookmark != null) {
-                            println("ReadProgressSync: queueing server push remoteId=${state.remoteId} serverId=${currentBookmark.serverId} progress=${(state.progress * 100).toInt()}%")
+                            // Queue server push for next sync cycle
                             bookmarkActionsRepository.queueReadingProgressUpdate(
                                 bookmarkRemoteId = state.remoteId,
                                 serverId = currentBookmark.serverId,
                                 progressPercent = (state.progress * 100).toInt()
                             )
                         } else {
-                            println("ReadProgressSync: skipping queue — no FullyLoaded bookmark in state")
+                            // No FullyLoaded bookmark — skip queue
                         }
                     } else {
-                        println("ReadProgressSync: skipping queue — trackReadingProgress is disabled")
+                        // trackReadingProgress is disabled — skip queue
                     }
                 }
         }
@@ -190,7 +203,7 @@ class BookmarkViewerScreenModel(
      * it if the user navigates away before the debounce window closes.
      */
     fun onReadingStateChanged(localId: Long, remoteId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
-        println("ReadProgressSync: onReadingStateChanged remoteId=$remoteId progress=${(progress * 100).toInt()}% index=$scrollIndex offset=$scrollOffset")
+        // Update pending state and emit for debounced persistence
         val state = PendingReadingState(localId, remoteId, progress, scrollIndex, scrollOffset)
         pendingReadingState = state
         readingStateUpdates.tryEmit(state)
@@ -198,6 +211,7 @@ class BookmarkViewerScreenModel(
 
     @OptIn(DelicateCoroutinesApi::class)
     override fun onDispose() {
+        parsedDocumentCache.clear()
         val state = pendingReadingState ?: return
         val serverId = (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark?.serverId
         // screenModelScope is being cancelled, so use GlobalScope for this
@@ -218,20 +232,36 @@ class BookmarkViewerScreenModel(
         }
     }
 
+    /**
+     * Returns a cached parsed Document for the given bookmark, or parses [html]
+     * and caches the result.  This avoids re-parsing on back-navigation when
+     * the ScreenModel is still alive.
+     */
+    fun getCachedOrParseDocument(bookmarkId: Long, html: String): com.fleeksoft.ksoup.nodes.Document? {
+        parsedDocumentCache.get(bookmarkId)?.let { return it }
+        return try {
+            com.fleeksoft.ksoup.Ksoup.parse(html).also {
+                parsedDocumentCache.put(bookmarkId, it)
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     fun refreshBookmark(id: Long) {
         val currentState = _loadingState.value
         if (currentState !is BookmarkLoadingState.FullyLoaded) {
-            println("BookmarkViewerScreenModel: refreshBookmark called but state is not FullyLoaded")
+            AppLogger.d("ViewerModel", "refreshBookmark called but state is not FullyLoaded")
             return
         }
 
         screenModelScope.launch {
             if (offlineMode.value) {
-                println("BookmarkViewerScreenModel: refreshBookmark skipped - offline mode")
+                AppLogger.d("ViewerModel", "refreshBookmark skipped - offline mode")
                 return@launch
             }
 
-            println("BookmarkViewerScreenModel: Starting refresh for bookmark ${currentState.bookmark.remoteId}")
+            AppLogger.d("ViewerModel", "Starting refresh for bookmark ${currentState.bookmark.remoteId}")
             _isRefreshing.value = true
             try {
                 // Sync bookmark content
@@ -239,16 +269,16 @@ class BookmarkViewerScreenModel(
                     currentState.bookmark.remoteId,
                     currentState.bookmark.serverId
                 )
-                println("BookmarkViewerScreenModel: Bookmark content synced")
+                AppLogger.d("ViewerModel", "Bookmark content synced")
 
                 // Also sync highlights for this bookmark
                 val servers = serverRepository.servers.first()
                 val server = servers.find { it.id == currentState.bookmark.serverId }
                 if (server != null) {
                     val remoteId = currentState.bookmark.originalRemoteId ?: currentState.bookmark.remoteId.toString()
-                    println("BookmarkViewerScreenModel: Syncing highlights for remoteId=$remoteId")
+                    AppLogger.d("ViewerModel", "Syncing highlights for remoteId=$remoteId")
                     highlightRepository.syncHighlightsForBookmark(server, remoteId)
-                    println("BookmarkViewerScreenModel: Highlights synced")
+                    AppLogger.d("ViewerModel", "Highlights synced")
 
                     // Also pull latest reading progress from server
                     if (trackReadingProgress.value) {
@@ -257,14 +287,16 @@ class BookmarkViewerScreenModel(
                         )
                     }
                 } else {
-                    println("BookmarkViewerScreenModel: Server not found for serverId=${currentState.bookmark.serverId}")
+                    AppLogger.w("ViewerModel", "Server not found for serverId=${currentState.bookmark.serverId}")
                 }
             } catch (e: Exception) {
-                println("BookmarkViewerScreenModel: Error during refresh: ${e.message}")
-                e.printStackTrace()
+                AppLogger.e("ViewerModel", "Failed to load bookmark content: ${e.message}", e)
+                snackbarManager.showErrorWithRetry("Couldn't refresh bookmark") {
+                    refreshBookmark(id)
+                }
             } finally {
                 _isRefreshing.value = false
-                println("BookmarkViewerScreenModel: Refresh complete")
+                AppLogger.d("ViewerModel", "Refresh complete")
             }
         }
     }
@@ -292,7 +324,8 @@ class BookmarkViewerScreenModel(
                                         highlightRepository.syncHighlightsForBookmark(server, bookmark.originalRemoteId ?: bookmark.remoteId.toString())
                                     }
                                 } catch (e: Exception) {
-                                    println("Error during on-demand highlight sync: ${e.message}")
+                                    AppLogger.e("ViewerModel", "Failed to sync highlights: ${e.message}", e)
+                                    snackbarManager.showSnackbar("Couldn't sync highlights")
                                 }
                             }
                             // Pull reading progress from server (cross-device sync).
@@ -301,13 +334,13 @@ class BookmarkViewerScreenModel(
                             // Signal serverProgressChecked=true only AFTER the pull completes so
                             // the composable doesn't finalize hasRestoredScroll before the DB is
                             // updated with the server value.
-                            if (!offlineMode.value) {
-                                println("ReadProgressSync: pulling from server (remoteId=${bookmark.remoteId}, serverId=${bookmark.serverId}, localProgress=${bookmark.readingProgress})")
+                            if (!settingsRepository.offlineMode.first()) {
+                                // Pull reading progress from server for cross-device sync
                                 screenModelScope.launch {
                                     val updated = bookmarkActionsRepository.pullReadingProgressFromServer(
                                         bookmark.remoteId, bookmark.serverId
                                     )
-                                    println("ReadProgressSync: pull result=$updated")
+                                    // If server had newer progress, yield for DB propagation
                                     // If the server had newer progress, yield once so the DB
                                     // update can propagate through observeBookmarkById and
                                     // update loadingState before we signal serverProgressChecked.
@@ -317,7 +350,7 @@ class BookmarkViewerScreenModel(
                                     _serverProgressChecked.value = true
                                 }
                             } else {
-                                println("ReadProgressSync: skipping pull — offline mode")
+                                // Offline mode — skip server pull
                                 _serverProgressChecked.value = true
                             }
                         }
@@ -371,7 +404,10 @@ class BookmarkViewerScreenModel(
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    e.printStackTrace()
+                                    AppLogger.e("ViewerModel", "Failed to update highlight: ${e.message}", e)
+                                    snackbarManager.showErrorWithRetry("Couldn't load bookmark content") {
+                                        loadBookmark(id)
+                                    }
                                 } finally {
                                     // Signal that the fetch attempt is done (success, failure, or
                                     // no content available) so the UI can stop waiting and show
@@ -449,8 +485,10 @@ class BookmarkViewerScreenModel(
                 val fetchedLists = remoteDataSource.fetchLists(server)
                 _lists.value = fetchedLists
             } catch (e: Exception) {
-                // Handle error silently or log
-                e.printStackTrace()
+                AppLogger.e("ViewerModel", "Failed to load highlights: ${e.message}", e)
+                snackbarManager.showErrorWithRetry("Couldn't load lists") {
+                    loadLists(server)
+                }
             }
         }
     }
@@ -521,22 +559,22 @@ class BookmarkViewerScreenModel(
     }
 
     fun createHighlight(bookmark: BookmarkEntity, text: String, startOffset: Int, endOffset: Int, note: String? = null, color: String? = null, onCreated: (String) -> Unit = {}) {
-        println("BookmarkViewerScreenModel: createHighlight requested - text='${text.take(30)}...', start=$startOffset, end=$endOffset")
+        AppLogger.d("ViewerModel", "createHighlight requested - text='${text.take(30)}...', start=$startOffset, end=$endOffset")
         screenModelScope.launch {
             try {
                 val servers = serverRepository.servers.first()
                 val server = servers.find { it.id == bookmark.serverId } ?: run {
-                    println("BookmarkViewerScreenModel: Server not found for serverId=${bookmark.serverId}")
+                    AppLogger.w("ViewerModel", "Server not found for serverId=${bookmark.serverId}")
                     return@launch
                 }
                 val remoteId = bookmark.originalRemoteId ?: bookmark.remoteId.toString()
-                println("BookmarkViewerScreenModel: Calling highlightRepository.createHighlight for remoteId=$remoteId")
+                AppLogger.d("ViewerModel", "Calling highlightRepository.createHighlight for remoteId=$remoteId")
                 val highlightId = highlightRepository.createHighlight(server, bookmark.localId, remoteId, text, startOffset, endOffset, note, color)
-                println("BookmarkViewerScreenModel: Highlight created successfully, id=$highlightId")
+                AppLogger.d("ViewerModel", "Highlight created successfully, id=$highlightId")
                 onCreated(highlightId)
             } catch (e: Exception) {
-                println("BookmarkViewerScreenModel: FAILED to create highlight: ${e.message}")
-                e.printStackTrace()
+                AppLogger.e("ViewerModel", "Failed to save reading progress: ${e.message}", e)
+                snackbarManager.showSnackbar("Couldn't save highlight")
             }
         }
     }

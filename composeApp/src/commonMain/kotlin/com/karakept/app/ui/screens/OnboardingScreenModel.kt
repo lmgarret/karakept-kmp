@@ -6,6 +6,8 @@ import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.setOnboardingCompleted
+import com.karakept.app.data.repository.setActiveServerId
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 

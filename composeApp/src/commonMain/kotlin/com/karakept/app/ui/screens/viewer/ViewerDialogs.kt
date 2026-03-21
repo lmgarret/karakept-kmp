@@ -273,10 +273,13 @@ internal fun HighlightDetailsPanel(
     // Helper function to handle dismiss with save (used by both scrim and panel)
     val handleDismissWithSave: () -> Unit = {
         // Save changes before dismissing if anything changed
-        val noteChanged = highlight != null && localNote != (highlight.note ?: "")
-        val colorChanged = highlight != null && localColor != (highlight.color ?: "yellow")
-        if (noteChanged || colorChanged) {
-            onUpdateHighlight(highlight!!.id, localNote.ifBlank { null }, localColor)
+        val h = highlight
+        if (h != null) {
+            val noteChanged = localNote != (h.note ?: "")
+            val colorChanged = localColor != (h.color ?: "yellow")
+            if (noteChanged || colorChanged) {
+                onUpdateHighlight(h.id, localNote.ifBlank { null }, localColor)
+            }
         }
         onDismiss()
     }

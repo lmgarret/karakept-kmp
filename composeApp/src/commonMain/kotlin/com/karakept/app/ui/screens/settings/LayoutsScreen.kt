@@ -54,6 +54,8 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.setDefaultLayoutId
+import com.karakept.app.data.repository.deleteLayout
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -127,15 +129,15 @@ fun LayoutsContent(
         )
     }
 
-    if (pendingDeleteLayout != null) {
+    pendingDeleteLayout?.let { layout ->
         AlertDialog(
             onDismissRequest = { pendingDeleteLayout = null },
             title = { Text("Delete Layout") },
-            text = { Text("Delete \"${pendingDeleteLayout!!.name}\"? This cannot be undone.") },
+            text = { Text("Delete \"${layout.name}\"? This cannot be undone.") },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        screenModel.deleteLayout(pendingDeleteLayout!!.id)
+                        screenModel.deleteLayout(layout.id)
                         pendingDeleteLayout = null
                     }
                 ) {

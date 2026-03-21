@@ -1,0 +1,210 @@
+/** Selection and batch operation extension functions for MainScreenModel. */
+package com.karakept.app.ui.screens
+
+import cafe.adriel.voyager.core.model.screenModelScope
+import com.karakept.app.data.local.entity.BookmarkEntity
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import com.karakept.app.data.repository.batchArchive
+import com.karakept.app.data.repository.batchUnarchive
+import com.karakept.app.data.repository.batchMarkRead
+import com.karakept.app.data.repository.batchMarkUnread
+import com.karakept.app.data.repository.batchSetFavourite
+import com.karakept.app.data.repository.batchDelete
+import com.karakept.app.data.repository.batchUpdateTags
+import com.karakept.app.data.repository.batchMoveToList
+
+/** Track the last clicked bookmark index (call on every normal click). */
+fun MainScreenModel.trackLastClickedIndex(index: Int) {
+    _lastSelectedIndex = index
+}
+
+fun MainScreenModel.enterSelectionMode(bookmark: BookmarkEntity) {
+    _selectedBookmarkIds.value = setOf(bookmark.remoteId)
+    _lastSelectedIndex = bookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+}
+
+/**
+ * Enters selection mode and immediately selects a range from the last clicked
+ * index (tracked outside selection mode via [trackLastClickedIndex]) to [toIndex].
+ * If no anchor exists, just selects the single item at [toIndex].
+ */
+fun MainScreenModel.enterSelectionModeWithRange(toIndex: Int) {
+    val list = bookmarks.value
+    val anchor = _lastSelectedIndex.takeIf { it >= 0 && it <= list.lastIndex }
+    if (anchor != null) {
+        val start = minOf(anchor, toIndex)
+        val end = minOf(maxOf(anchor, toIndex), list.lastIndex)
+        val rangeIds = (start..end).map { list[it].remoteId }.toSet()
+        _selectedBookmarkIds.value = rangeIds
+    } else {
+        val bookmark = list.getOrNull(toIndex) ?: return
+        _selectedBookmarkIds.value = setOf(bookmark.remoteId)
+    }
+    _lastSelectedIndex = toIndex
+}
+
+fun MainScreenModel.toggleBookmarkSelection(bookmark: BookmarkEntity) {
+    val current = _selectedBookmarkIds.value
+    _selectedBookmarkIds.value = if (bookmark.remoteId in current) {
+        current - bookmark.remoteId
+    } else {
+        current + bookmark.remoteId
+    }
+    _lastSelectedIndex = bookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+}
+
+/**
+ * Selects all bookmarks in the range [lastSelectedIndex, toIndex] (inclusive).
+ * Used for Shift+Click range selection on desktop.
+ */
+fun MainScreenModel.selectRange(toIndex: Int) {
+    val fromIndex = _lastSelectedIndex.takeIf { it >= 0 } ?: return
+    val list = bookmarks.value
+    val start = minOf(fromIndex, toIndex)
+    val end = minOf(maxOf(fromIndex, toIndex), list.lastIndex)
+    val rangeIds = (start..end).map { list[it].remoteId }.toSet()
+    _selectedBookmarkIds.value = _selectedBookmarkIds.value + rangeIds
+    _lastSelectedIndex = toIndex
+}
+
+fun MainScreenModel.clearSelection() {
+    _selectedBookmarkIds.value = emptySet()
+    _lastSelectedIndex = -1
+}
+
+fun MainScreenModel.selectAll() {
+    _selectedBookmarkIds.value = _accumulatedBookmarks.value.map { it.remoteId }.toSet()
+}
+
+internal fun MainScreenModel.getSelectedBookmarks(): List<BookmarkEntity> {
+    val ids = _selectedBookmarkIds.value
+    return _accumulatedBookmarks.value.filter { it.remoteId in ids }
+}
+
+fun MainScreenModel.batchArchive() {
+    val bookmarks = getSelectedBookmarks().filter { !it.isArchived }
+    if (bookmarks.isEmpty()) { clearSelection(); return }
+    screenModelScope.launch {
+        bookmarkActionsRepository.batchArchive(bookmarks)
+        val remoteIds = bookmarks.map { it.remoteId }.toSet()
+        updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
+        clearSelection()
+    }
+}
+
+fun MainScreenModel.batchUnarchive() {
+    val bookmarks = getSelectedBookmarks().filter { it.isArchived }
+    if (bookmarks.isEmpty()) { clearSelection(); return }
+    screenModelScope.launch {
+        bookmarkActionsRepository.batchUnarchive(bookmarks)
+        val remoteIds = bookmarks.map { it.remoteId }.toSet()
+        updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
+        clearSelection()
+    }
+}
+
+fun MainScreenModel.batchMarkRead() {
+    val bookmarks = getSelectedBookmarks().filter { !it.isRead }
+    if (bookmarks.isEmpty()) { clearSelection(); return }
+    screenModelScope.launch {
+        bookmarkActionsRepository.batchMarkRead(bookmarks)
+        val ids = bookmarks.map { it.remoteId }.toSet()
+        updateAccumulatedBookmarks { list ->
+            list.map { if (it.remoteId in ids) it.copy(isRead = true) else it }
+        }
+        clearSelection()
+    }
+}
+
+fun MainScreenModel.batchMarkUnread() {
+    val bookmarks = getSelectedBookmarks().filter { it.isRead }
+    if (bookmarks.isEmpty()) { clearSelection(); return }
+    screenModelScope.launch {
+        val resetProgress = settingsRepository.resetProgressOnMarkUnread.first()
+        bookmarkActionsRepository.batchMarkUnread(bookmarks, resetProgress)
+        val ids = bookmarks.map { it.remoteId }.toSet()
+        updateAccumulatedBookmarks { list ->
+            list.map {
+                if (it.remoteId in ids) {
+                    if (resetProgress) it.copy(isRead = false, readingProgress = 0f, readingScrollIndex = 0, readingScrollOffset = 0)
+                    else it.copy(isRead = false)
+                } else it
+            }
+        }
+        clearSelection()
+    }
+}
+
+fun MainScreenModel.batchFavourite() {
+    val bookmarks = getSelectedBookmarks().filter { !it.isStarred }
+    if (bookmarks.isEmpty()) { clearSelection(); return }
+    screenModelScope.launch {
+        bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = true)
+        val ids = bookmarks.map { it.remoteId }.toSet()
+        updateAccumulatedBookmarks { list ->
+            list.map { if (it.remoteId in ids) it.copy(isStarred = true) else it }
+        }
+        clearSelection()
+    }
+}
+
+fun MainScreenModel.batchUnfavourite() {
+    val bookmarks = getSelectedBookmarks().filter { it.isStarred }
+    if (bookmarks.isEmpty()) { clearSelection(); return }
+    screenModelScope.launch {
+        bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = false)
+        val ids = bookmarks.map { it.remoteId }.toSet()
+        updateAccumulatedBookmarks { list ->
+            list.map { if (it.remoteId in ids) it.copy(isStarred = false) else it }
+        }
+        clearSelection()
+    }
+}
+
+fun MainScreenModel.batchDelete() {
+    val bookmarks = getSelectedBookmarks()
+    if (bookmarks.isEmpty()) { clearSelection(); return }
+    screenModelScope.launch {
+        bookmarkActionsRepository.batchDelete(bookmarks)
+        val ids = bookmarks.map { it.remoteId }.toSet()
+        updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in ids } }
+        clearSelection()
+    }
+}
+
+fun MainScreenModel.batchSetTags(newTags: List<String>) {
+    val bookmarks = getSelectedBookmarks()
+    if (bookmarks.isEmpty()) { clearSelection(); return }
+    screenModelScope.launch {
+        bookmarkActionsRepository.batchUpdateTags(bookmarks, newTags)
+        val ids = bookmarks.map { it.remoteId }.toSet()
+        val tagString = newTags.joinToString(",")
+        updateAccumulatedBookmarks { list ->
+            list.map { bookmark ->
+                if (bookmark.remoteId in ids) bookmark.copy(tags = tagString) else bookmark
+            }
+        }
+        clearSelection()
+    }
+}
+
+fun MainScreenModel.batchMoveToList(listId: String) {
+    val bookmarks = getSelectedBookmarks()
+    if (bookmarks.isEmpty()) { clearSelection(); return }
+    screenModelScope.launch {
+        bookmarkActionsRepository.batchMoveToList(bookmarks, listId)
+        val ids = bookmarks.map { it.remoteId }.toSet()
+        updateAccumulatedBookmarks { list ->
+            list.map { bookmark ->
+                if (bookmark.remoteId in ids) {
+                    val currentListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                    if (!currentListIds.contains(listId)) {
+                        bookmark.copy(listIds = (currentListIds + listId).joinToString(","))
+                    } else bookmark
+                } else bookmark
+            }
+        }
+        clearSelection()
+    }
+}

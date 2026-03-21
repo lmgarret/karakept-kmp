@@ -33,9 +33,11 @@ import kotlinx.coroutines.withContext
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.reader.NativeHtmlRenderer
+import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.HtmlArchiveProcessor
 import com.karakept.app.utils.HtmlCache
 import com.karakept.app.utils.HtmlSanitizer
+import com.fleeksoft.ksoup.nodes.Document
 
 /**
  * Composable wrapper for rendering HTML content safely.
@@ -72,7 +74,8 @@ fun HtmlContent(
     onHighlightClick: ((String) -> Unit)? = null,
     onHighlightPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit = { _, _ -> },
     scrollToHighlightId: String? = null,
-    selectedHighlightId: String? = null
+    selectedHighlightId: String? = null,
+    parseDocument: ((String) -> Document?)? = null
 ) {
     // Process HTML based on viewer mode asynchronously
     val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
@@ -94,10 +97,9 @@ fun HtmlContent(
                     ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = removeFirstImage)
                     ViewerMode.WEB -> HtmlArchiveProcessor.processForArchive(html)
                 }
-                println("HtmlContent: Processed HTML length=${result.length}, isBlank=${result.isBlank()}")
                 result
             } catch (e: Exception) {
-                println("HtmlContent: Processing failed: ${e.message}")
+                AppLogger.e("HtmlContent", "Processing failed: ${e.message}", e)
                 null // Processing failed
             }
         }
@@ -155,7 +157,7 @@ fun HtmlContent(
 
             Box(modifier = Modifier.fillMaxWidth()) {
                 // Always render if content is processed OR we have a local file
-                if ((processedHtml != null && processedHtml!!.isNotBlank()) || localFilePath != null) {
+                if (!processedHtml.isNullOrBlank() || localFilePath != null) {
                     // Apply background color directly to renderer modifier for READER mode
                     val rendererModifier = if (viewerMode == ViewerMode.READER && customBackgroundColor != null) {
                         Modifier.fillMaxWidth().background(customBackgroundColor)
@@ -184,7 +186,8 @@ fun HtmlContent(
                                 selectedHighlightId = selectedHighlightId,
                                 onLoaded = {
                                     isContentLoaded = true
-                                }
+                                },
+                                parseDocument = parseDocument
                             )
                         }
                         ViewerMode.WEB -> {

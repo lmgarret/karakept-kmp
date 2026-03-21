@@ -54,6 +54,8 @@ import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.setListSettings
+import com.karakept.app.data.repository.setListLayoutId
 import com.karakept.app.ui.components.getIcon
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow

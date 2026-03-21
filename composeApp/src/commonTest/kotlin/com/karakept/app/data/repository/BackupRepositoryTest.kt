@@ -10,10 +10,14 @@ import com.karakept.app.utils.BackupCrypto
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -27,6 +31,18 @@ class BackupRepositoryTest : BaseRepositoryTest() {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private val repository = BackupRepository(settingsRepository, serverRepository)
+
+    @BeforeTest
+    override fun setup() {
+        super.setup()
+        mockkStatic("com.karakept.app.data.repository.SettingsRepositoryMutationsKt")
+    }
+
+    @AfterTest
+    override fun tearDown() {
+        unmockkStatic("com.karakept.app.data.repository.SettingsRepositoryMutationsKt")
+        super.tearDown()
+    }
 
     // ── buildBackup ───────────────────────────────────────────────────────────
 

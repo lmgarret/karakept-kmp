@@ -1,6 +1,7 @@
 package com.karakept.app.ui.components
 
 import androidx.compose.runtime.Composable
+import com.karakept.app.utils.AppLogger
 import java.awt.Desktop
 import java.net.URI
 
@@ -10,7 +11,7 @@ actual fun rememberCustomTabOpener(): (String) -> Unit {
         try {
             Desktop.getDesktop().browse(URI(url))
         } catch (e: Exception) {
-            e.printStackTrace()
+            AppLogger.e("CustomTabOpener", "Failed to open URL in browser: ${e.message}", e)
         }
     }
 }

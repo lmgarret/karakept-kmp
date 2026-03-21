@@ -5,6 +5,9 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.model.AutoExportInterval
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.setBackupPin
+import com.karakept.app.data.repository.setAutoExportInterval
+import com.karakept.app.data.repository.setBackupExportDirectory
 import com.karakept.app.utils.BackupCrypto
 import com.karakept.app.utils.FileUtils
 import kotlinx.coroutines.flow.MutableStateFlow

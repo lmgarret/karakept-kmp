@@ -303,10 +303,10 @@ private fun WelcomeStep(
                 Text("Restore from backup")
             }
         }
-        if (restoreError != null) {
+        restoreError?.let { errorText ->
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = restoreError!!,
+                text = errorText,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center

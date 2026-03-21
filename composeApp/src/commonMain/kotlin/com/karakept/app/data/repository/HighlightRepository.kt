@@ -1,6 +1,7 @@
 package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.HighlightDao
+import com.karakept.app.utils.AppLogger
 import com.karakept.app.data.local.entity.HighlightEntity
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.Server
@@ -108,8 +109,7 @@ class HighlightRepository(
             highlightDao.insertHighlights(entities)
             println("HighlightRepository: Inserted ${entities.size} highlights into local DB")
         } catch (e: Exception) {
-            println("Error syncing highlights for bookmark $bookmarkRemoteId: ${e.message}")
-            e.printStackTrace()
+            AppLogger.e("HighlightRepo", "Failed to sync highlights: ${e.message}", e)
         }
     }
 

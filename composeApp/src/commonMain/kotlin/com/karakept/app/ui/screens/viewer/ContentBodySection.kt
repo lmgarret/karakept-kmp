@@ -20,6 +20,7 @@ import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.HtmlContent
 import com.karakept.app.ui.components.WebModeBadge
+import com.fleeksoft.ksoup.nodes.Document
 import com.karakept.app.ui.screens.BookmarkLoadingState
 
 @Composable
@@ -41,7 +42,8 @@ internal fun ContentBodySection(
     onHighlightPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit = { _, _ -> },
     onContentReady: (() -> Unit)? = null,
     scrollToHighlightId: String? = null,
-    selectedHighlightId: String? = null
+    selectedHighlightId: String? = null,
+    parseDocument: ((String) -> Document?)? = null
 ) {
     // Track when HTML content is truly ready (processed + rendered)
     var htmlContentReady by remember { mutableStateOf(false) }
@@ -92,7 +94,8 @@ internal fun ContentBodySection(
                     onHighlightClick = onHighlightClick,
                     onHighlightPosition = onHighlightPosition,
                     scrollToHighlightId = scrollToHighlightId,
-                    selectedHighlightId = selectedHighlightId
+                    selectedHighlightId = selectedHighlightId,
+                    parseDocument = parseDocument
                 )
             }
 
