@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens
 
 import androidx.compose.ui.graphics.Color
+import com.karakept.app.utils.AppLogger
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
@@ -260,8 +261,7 @@ class BookmarkViewerScreenModel(
                     println("BookmarkViewerScreenModel: Server not found for serverId=${currentState.bookmark.serverId}")
                 }
             } catch (e: Exception) {
-                println("BookmarkViewerScreenModel: Error during refresh: ${e.message}")
-                e.printStackTrace()
+                AppLogger.e("ViewerModel", "Failed to load bookmark content: ${e.message}", e)
             } finally {
                 _isRefreshing.value = false
                 println("BookmarkViewerScreenModel: Refresh complete")
@@ -371,7 +371,7 @@ class BookmarkViewerScreenModel(
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    e.printStackTrace()
+                                    AppLogger.e("ViewerModel", "Failed to update highlight: ${e.message}", e)
                                 } finally {
                                     // Signal that the fetch attempt is done (success, failure, or
                                     // no content available) so the UI can stop waiting and show
@@ -449,8 +449,7 @@ class BookmarkViewerScreenModel(
                 val fetchedLists = remoteDataSource.fetchLists(server)
                 _lists.value = fetchedLists
             } catch (e: Exception) {
-                // Handle error silently or log
-                e.printStackTrace()
+                AppLogger.e("ViewerModel", "Failed to load highlights: ${e.message}", e)
             }
         }
     }
@@ -535,8 +534,7 @@ class BookmarkViewerScreenModel(
                 println("BookmarkViewerScreenModel: Highlight created successfully, id=$highlightId")
                 onCreated(highlightId)
             } catch (e: Exception) {
-                println("BookmarkViewerScreenModel: FAILED to create highlight: ${e.message}")
-                e.printStackTrace()
+                AppLogger.e("ViewerModel", "Failed to save reading progress: ${e.message}", e)
             }
         }
     }

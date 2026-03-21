@@ -7,6 +7,7 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.model.ListSyncConfig
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.ReadingTimeCalculator
 import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.data.local.entity.AssetEntity
@@ -198,8 +199,7 @@ class BookmarkRepository(
         return try {
             fetchRemoteContent(server, bookmark.originalRemoteId)
         } catch (e: Exception) {
-            println("📖 CONTENT: ERROR - ${e.message}")
-            e.printStackTrace()
+            AppLogger.e("BookmarkRepo", "Failed to fetch content: ${e.message}", e)
             null
         }
     }
@@ -399,8 +399,7 @@ class BookmarkRepository(
                 val ids = bookmarkActionsRepository.processPendingActions(config.server)
                 ids.toSet()
             } catch (e: Exception) {
-                println("Error processing pending actions: ${e.message}")
-                e.printStackTrace()
+                AppLogger.e("BookmarkRepo", "Sync pipeline failed: ${e.message}", e)
                 emptySet()
             }
         }
@@ -496,7 +495,7 @@ class BookmarkRepository(
                 try {
                     mapDtoToEntity(dto, bookmarkListMap, existingBookmarks, syncStrategy)
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    AppLogger.e("BookmarkRepo", "Failed to parse bookmark: ${e.message}", e)
                     null
                 }
             }
@@ -818,7 +817,7 @@ class BookmarkRepository(
                         entity.bannerImageAssetId, entity.screenshotAssetId
                     )
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    AppLogger.e("BookmarkRepo", "Failed to sync bookmark: ${e.message}", e)
                 }
                 current++
                 _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingContent(current, total)
@@ -877,7 +876,7 @@ class BookmarkRepository(
                 val pipeline = BookmarkSyncPipeline(config)
                 pipeline.execute()
             } catch (e: Exception) {
-                e.printStackTrace()
+                AppLogger.e("BookmarkRepo", "Failed to fetch bookmarks: ${e.message}", e)
                 _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
                 throw e
             } finally {

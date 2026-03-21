@@ -89,7 +89,7 @@ object ReadingTimeCalculator {
             }
         } catch (e: Exception) {
             // If parsing fails, return 0
-            e.printStackTrace()
+            AppLogger.e("ReadingTime", "Failed to calculate reading time: ${e.message}", e)
             0
         }
     }

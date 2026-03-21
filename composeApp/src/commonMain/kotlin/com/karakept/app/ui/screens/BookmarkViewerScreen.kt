@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import com.karakept.app.utils.AppLogger
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -635,7 +636,7 @@ fun BookmarkViewerContent(
                                                     LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(url)
                                                 }
                                             } catch (e: Exception) {
-                                                e.printStackTrace()
+                                                AppLogger.e("ViewerScreen", "Failed to handle reader action: ${e.message}", e)
                                             }
                                         }
                                     } else null,
@@ -687,7 +688,7 @@ fun BookmarkViewerContent(
                                                 LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(linkUrl)
                                             }
                                         } catch (e: Exception) {
-                                            e.printStackTrace()
+                                            AppLogger.e("ViewerScreen", "Failed to process highlight: ${e.message}", e)
                                         }
                                     },
                                     onCreateHighlight = { text, start, end, note, color ->

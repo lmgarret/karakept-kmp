@@ -3,6 +3,7 @@ package com.karakept.app.services
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import com.karakept.app.utils.AppLogger
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -83,7 +84,7 @@ class BookmarkSaveService : Service() {
                             val javaUrl = java.net.URL(imageUrl)
                             bitmap = android.graphics.BitmapFactory.decodeStream(javaUrl.openStream())
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            AppLogger.e("BookmarkSaveService", "Failed to save bookmark from share intent: ${e.message}", e)
                         }
                     }
 

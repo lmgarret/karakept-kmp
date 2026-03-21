@@ -2,6 +2,7 @@ package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
+import com.karakept.app.utils.AppLogger
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.entity.PendingActionType
@@ -978,8 +979,7 @@ class BookmarkActionsRepository(
             println("BookmarkActionsRepository: Action deleted successfully")
             
         } catch (e: Exception) {
-            println("BookmarkActionsRepository: ERROR in executeAction: ${e.message}")
-            e.printStackTrace()
+            AppLogger.e("BookmarkActionsRepo", "Failed to execute pending action: ${e.message}", e)
             // Update retry count and error message
             pendingActionDao.updateAction(
                 action.copy(

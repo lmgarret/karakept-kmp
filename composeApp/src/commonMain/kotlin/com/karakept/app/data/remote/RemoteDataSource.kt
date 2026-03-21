@@ -4,6 +4,7 @@ import com.karakept.api.client.*
 import com.karakept.api.model.*
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.Server
+import com.karakept.app.utils.AppLogger
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
@@ -403,15 +404,12 @@ class RemoteDataSource(
             val trpcBase = getTrpcBaseUrl(server)
             val url = "$trpcBase/api/trpc/bookmarks.updateReadingProgress?batch=1"
             val body = """{"0":{"json":{"bookmarkId":"$bookmarkId","readingProgressOffset":0,"readingProgressAnchor":null,"readingProgressPercent":$progressPercent}}}"""
-            println("ReadProgressSync: POST $url bookmarkId=$bookmarkId percent=$progressPercent")
-
             val response: HttpResponse = client.post(url) {
                 header("Authorization", getAuth(server))
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
 
-            println("ReadProgressSync: POST response status=${response.status.value}")
             // 200 = success, 400 = non-link bookmark (expected, not an error for us)
             response.status.value == 200
         } catch (e: Exception) {
@@ -440,7 +438,6 @@ class RemoteDataSource(
         try {
             val trpcBase = getTrpcBaseUrl(server)
             val url = "$trpcBase/api/trpc/bookmarks.getReadingProgress"
-            println("ReadProgressSync: GET $url bookmarkId=$bookmarkId")
             val response: HttpResponse = client.get(url) {
                 header("Authorization", getAuth(server))
                 parameter("batch", "1")
@@ -448,12 +445,10 @@ class RemoteDataSource(
             }
 
             if (!response.status.isSuccess()) {
-                println("ReadProgressSync: GET failed status=${response.status.value}")
                 return@guardedCall null
             }
 
             val responseText = response.bodyAsText()
-            println("ReadProgressSync: GET response=$responseText")
             // tRPC batch response: [{"result":{"data":{"json":{...}}}}]
             val element = trpcJson.parseToJsonElement(responseText)
             val data = element.jsonArray
@@ -463,10 +458,9 @@ class RemoteDataSource(
                 ?.jsonObject?.get("json")
                 ?.jsonObject
             val result = data?.get("readingProgressPercent")?.jsonPrimitive?.intOrNull
-            println("ReadProgressSync: parsed progress=$result%")
             result
         } catch (e: Exception) {
-            println("ReadProgressSync: GET exception: ${e.message}")
+            AppLogger.e("RemoteDataSource", "Read progress sync failed: ${e.message}", e)
             // Non-critical – return null if fetch fails
             null
         }

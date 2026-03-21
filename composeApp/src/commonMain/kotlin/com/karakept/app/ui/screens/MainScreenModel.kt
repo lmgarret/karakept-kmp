@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens
 
 import cafe.adriel.voyager.core.model.ScreenModel
+import com.karakept.app.utils.AppLogger
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DefaultListType
@@ -414,7 +415,7 @@ class MainScreenModel(
                     _hasMoreItems.value = false
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                AppLogger.e("MainScreenModel", "Failed to load bookmarks: ${e.message}", e)
             } finally {
                 _isLoadingMore.value = false
             }
@@ -480,7 +481,7 @@ class MainScreenModel(
                     resetPaginationAndLoad(server, capturedFilter)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                AppLogger.e("MainScreenModel", "Failed to toggle bookmark state: ${e.message}", e)
             } finally {
                 _isSyncing.value = false
             }

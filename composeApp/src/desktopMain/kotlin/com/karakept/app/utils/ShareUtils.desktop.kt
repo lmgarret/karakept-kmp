@@ -10,9 +10,9 @@ actual object ShareUtils {
             val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
             val stringSelection = java.awt.datatransfer.StringSelection(text)
             clipboard.setContents(stringSelection, null)
-            println("Copied to clipboard: $text")
+            AppLogger.i("ShareUtils", "Copied to clipboard")
         } catch (e: Exception) {
-            e.printStackTrace()
+            AppLogger.e("ShareUtils", "Failed to copy to clipboard: ${e.message}", e)
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.karakept.app.ui.components
 
 import android.graphics.Color
+import com.karakept.app.utils.AppLogger
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
@@ -640,12 +641,12 @@ actual fun HtmlRenderer(
                         )
                         onPosition(id, position)
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        AppLogger.e("HtmlRenderer", "Failed to load HTML content: ${e.message}", e)
                     }
                 }
             }
         }
-        
+
         @JavascriptInterface
         fun onTextSelected(selectionJson: String) {
             // This could be called from a native menu
@@ -765,8 +766,8 @@ actual fun HtmlRenderer(
                                             null,
                                             "yellow"
                                         )
-                                    } catch (e: Exception) { 
-                                        e.printStackTrace()
+                                    } catch (e: Exception) {
+                                        AppLogger.e("HtmlRenderer", "Failed to inject CSS: ${e.message}", e)
                                         android.widget.Toast.makeText(context, "Selection error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 } else {
