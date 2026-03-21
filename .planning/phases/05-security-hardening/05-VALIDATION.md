@@ -1,9 +1,9 @@
 ---
 phase: 05
 slug: security-hardening
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-21
 ---
 
@@ -38,9 +38,9 @@ created: 2026-03-21
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 05-01-01 | 01 | 1 | SEC-01 | unit | `./gradlew :composeApp:desktopTest --tests "*.HtmlSanitizerTest"` | ❌ W0 | ⬜ pending |
-| 05-02-01 | 02 | 1 | SEC-02 | unit | `./gradlew :composeApp:desktopTest --tests "*.SecureCredentialStoreTest"` | ❌ W0 | ⬜ pending |
-| 05-02-02 | 02 | 1 | SEC-02 | integration | `./gradlew :composeApp:desktopTest --tests "*.ServerRepositoryMigrationTest"` | ❌ W0 | ⬜ pending |
+| 05-01-01 | 01 | 1 | SEC-01 | unit | `./gradlew :composeApp:desktopTest --tests "*.HtmlArchiveProcessorTest"` | ✅ | ✅ green |
+| 05-02-01 | 02 | 1 | SEC-02 | unit | `./gradlew :composeApp:desktopTest --tests "*.SecureCredentialStoreTest"` | ✅ | ✅ green |
+| 05-02-02 | 02 | 1 | SEC-02 | integration | `./gradlew :composeApp:desktopTest --tests "*.ServerRepositoryMigrationTest"` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -48,11 +48,11 @@ created: 2026-03-21
 
 ## Wave 0 Requirements
 
-- [ ] `composeApp/src/desktopTest/kotlin/.../HtmlSanitizerTest.kt` — stubs for SEC-01
-- [ ] `composeApp/src/desktopTest/kotlin/.../SecureCredentialStoreTest.kt` — stubs for SEC-02
-- [ ] `composeApp/src/desktopTest/kotlin/.../ServerRepositoryMigrationTest.kt` — migration verification
+- [x] `composeApp/src/commonTest/kotlin/com/karakept/app/utils/HtmlArchiveProcessorTest.kt` — 10 tests for SEC-01 (dangerous element stripping)
+- [x] `composeApp/src/desktopTest/kotlin/com/karakept/app/data/secure/SecureCredentialStoreTest.kt` — 5 tests for SEC-02 (PKCS12 roundtrip)
+- [x] `composeApp/src/desktopTest/kotlin/com/karakept/app/data/repository/ServerRepositoryMigrationTest.kt` — 6 tests for SEC-02 (migration flow)
 
-*Existing test infrastructure (kotlin.test + MockK) covers framework requirements.*
+*All test files created during phase execution.*
 
 ---
 
@@ -74,4 +74,16 @@ created: 2026-03-21
 - [ ] Feedback latency < 30s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved
+
+---
+
+## Validation Audit 2026-03-21
+
+| Metric | Count |
+|--------|-------|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
+
+All 3 test files already exist from phase execution (10 + 5 + 6 = 21 tests). Fixed stale test class name in verification map (HtmlSanitizerTest → HtmlArchiveProcessorTest).
