@@ -36,6 +36,9 @@ Silent failures must become visible failures — errors that are swallowed today
 - ✓ Move credentials to platform keychain/keystore — Validated in Phase 05: Security Hardening
 - ✓ Optimize rendering for large bookmark collections (1000+) — Validated in Phase 06: Performance Optimization
 - ✓ Optimize HTML block rendering with caching/lazy loading — Validated in Phase 06: Performance Optimization
+- ✓ Wire ParsedDocumentCache into rendering chain — Validated in Phase 07: Integration Wiring & Cleanup
+- ✓ Wire triggerMigration into app startup — Validated in Phase 07: Integration Wiring & Cleanup
+- ✓ Replace println calls with AppLogger — Validated in Phase 07: Integration Wiring & Cleanup
 
 ### Out of Scope
 
@@ -68,4 +71,4 @@ Silent failures must become visible failures — errors that are swallowed today
 | Incremental completion target | App is functional; perfection not required, meaningful improvement is | — Pending |
 
 ---
-*Last updated: 2026-03-21 — Phase 06 (Performance Optimization) complete — all milestone phases done*
+*Last updated: 2026-03-21 — Phase 07 (Integration Wiring & Cleanup) complete — all milestone phases done, gap closure complete*
