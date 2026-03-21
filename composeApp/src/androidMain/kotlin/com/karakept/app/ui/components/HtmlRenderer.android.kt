@@ -38,7 +38,7 @@ import org.json.JSONObject
  * Android implementation of HtmlRenderer using WebView.
  *
  * Security measures:
- * - JavaScript disabled (always, in both modes)
+ * - JavaScript enabled (required for highlight functionality and JS bridge)
  * - File access disabled
  * - Content access disabled
  * - Mixed content blocked
