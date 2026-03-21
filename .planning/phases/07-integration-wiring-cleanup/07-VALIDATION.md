@@ -39,7 +39,7 @@ created: 2026-03-21
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
 | 07-01-01 | 01 | 1 | PERF-02 | grep | `grep -c getCachedOrParseDocument composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerContent.kt` | N/A | ⬜ pending |
-| 07-01-02 | 01 | 1 | PERF-02 | grep | `grep -c preParsedDocument composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/NativeHtmlRenderer.kt` | N/A | ⬜ pending |
+| 07-01-02 | 01 | 1 | PERF-02 | grep | `grep -c parseDocument composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/NativeHtmlRenderer.kt` | N/A | ⬜ pending |
 | 07-02-01 | 02 | 1 | SEC-02 | grep | `grep -c triggerMigration composeApp/src/commonMain/kotlin/com/karakept/app/App.kt` | N/A | ⬜ pending |
 | 07-03-01 | 03 | 1 | ERR-01 | grep | `grep -c println composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreenModel.kt` = 0 | N/A | ⬜ pending |
 | 07-03-02 | 03 | 1 | ERR-01 | grep | `grep -c println composeApp/src/commonMain/kotlin/com/karakept/app/App.kt` = 0 | N/A | ⬜ pending |
