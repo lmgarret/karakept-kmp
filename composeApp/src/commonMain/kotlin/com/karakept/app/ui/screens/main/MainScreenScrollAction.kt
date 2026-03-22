@@ -3,6 +3,7 @@ package com.karakept.app.ui.screens.main
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -44,6 +45,12 @@ fun MainScreenScrollAction(
     currentListScrollActionConfig: CustomSwipeActionConfig?,
     screenModel: MainScreenModel
 ) {
+    // Wrap plain parameters as Compose State so snapshotFlow can detect changes.
+    // Without this, the snapshotFlow lambda captures the initial parameter values and
+    // never sees updates (bookmarks would stay empty, listVersion would stay at 0).
+    val currentBookmarksState = rememberUpdatedState(bookmarks)
+    val currentListVersionState = rememberUpdatedState(bookmarkListVersion)
+
     LaunchedEffect(currentListScrollAction, currentListScrollActionConfig) {
         if (currentListScrollAction != SwipeAction.NONE) {
             var anchorKey: Any? = null   // key of the first visible item we're tracking
@@ -75,9 +82,9 @@ fun MainScreenScrollAction(
                     firstIndex = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0,
                     firstKey = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key,
                     lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
-                    currentBookmarks = bookmarks,
+                    currentBookmarks = currentBookmarksState.value,
                     isScrolling = listState.isScrollInProgress,
-                    listVersion = bookmarkListVersion
+                    listVersion = currentListVersionState.value
                 )
             }.collect { snapshot ->
                 val currentBookmarks = snapshot.currentBookmarks
