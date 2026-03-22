@@ -110,6 +110,7 @@ object MainScreen : Screen {
 
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
+        val currentListId by screenModel.currentListContext.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
         val currentListScrollActionConfig by screenModel.currentListScrollActionConfig.collectAsState()
         val bookmarkListVersion by screenModel.bookmarkListVersion.collectAsState()
@@ -176,6 +177,7 @@ object MainScreen : Screen {
         // Scroll-triggered action
         MainScreenScrollAction(
             listState = listState, bookmarks = bookmarks, bookmarkListVersion = bookmarkListVersion,
+            currentListId = currentListId,
             currentListScrollAction = currentListScrollAction, currentListScrollActionConfig = currentListScrollActionConfig,
             screenModel = screenModel
         )
