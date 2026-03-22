@@ -26,18 +26,25 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -63,8 +70,9 @@ import com.karakept.app.ui.components.rememberJsonFilePicker
 
 private const val STEP_WELCOME = 0
 private const val STEP_PERMISSIONS = 1
-private const val STEP_SERVER = 2
-private const val TOTAL_STEPS = 3
+private const val STEP_BACKGROUND_SYNC = 2
+private const val STEP_SERVER = 3
+private const val TOTAL_STEPS = 4
 
 class OnboardingScreen : Screen {
     @Composable
@@ -75,9 +83,11 @@ class OnboardingScreen : Screen {
         var currentStep by remember { mutableStateOf(STEP_WELCOME) }
         var permissionGranted by remember { mutableStateOf(false) }
         var restoreMessage by remember { mutableStateOf<String?>(null) }
+        var backgroundSyncEnabled by remember { mutableStateOf(false) }
+        var backgroundSyncFrequency by remember { mutableStateOf(60) }
 
         val onFinish = {
-            screenModel.completeOnboarding {
+            screenModel.completeOnboarding(backgroundSyncEnabled, backgroundSyncFrequency) {
                 navigator.replaceAll(MainScreen)
             }
         }
@@ -128,6 +138,12 @@ class OnboardingScreen : Screen {
                             permissionGranted = permissionGranted,
                             onPermissionResult = { granted -> permissionGranted = granted }
                         )
+                        STEP_BACKGROUND_SYNC -> BackgroundSyncStep(
+                            enabled = backgroundSyncEnabled,
+                            onEnabledChange = { backgroundSyncEnabled = it },
+                            frequencyMinutes = backgroundSyncFrequency,
+                            onFrequencyChange = { backgroundSyncFrequency = it }
+                        )
                         STEP_SERVER -> ServerConnectionStep(
                             screenModel = screenModel,
                             restoreMessage = restoreMessage,
@@ -157,7 +173,7 @@ class OnboardingScreen : Screen {
                             currentStep++
                         }
                     },
-                    showSkip = currentStep == STEP_PERMISSIONS,
+                    showSkip = currentStep == STEP_PERMISSIONS || currentStep == STEP_BACKGROUND_SYNC,
                     showNext = currentStep < STEP_SERVER,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -344,6 +360,118 @@ private fun FeatureRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+private val ONBOARDING_FREQUENCY_OPTIONS = listOf(
+    15 to "Every 15 minutes",
+    30 to "Every 30 minutes",
+    60 to "Every hour",
+    120 to "Every 2 hours",
+    240 to "Every 4 hours",
+    480 to "Every 8 hours"
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BackgroundSyncStep(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    frequencyMinutes: Int,
+    onFrequencyChange: (Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 32.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Sync,
+            contentDescription = null,
+            modifier = Modifier.size(72.dp),
+            tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+        Text(
+            text = "Background Sync",
+            style = MaterialTheme.typography.headlineMedium,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Keep your bookmarks up to date automatically. Karakept can sync in the background so your reading list is always fresh.",
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "This is off by default and can be changed at any time in Settings.",
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Enable background sync",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChange
+            )
+        }
+
+        if (enabled) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Sync frequency",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            var expanded by remember { mutableStateOf(false) }
+            val selectedLabel = ONBOARDING_FREQUENCY_OPTIONS.find { it.first == frequencyMinutes }?.second
+                ?: "${frequencyMinutes}m"
+
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = it }
+            ) {
+                OutlinedTextField(
+                    value = selectedLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    ONBOARDING_FREQUENCY_OPTIONS.forEach { (minutes, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                onFrequencyChange(minutes)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
