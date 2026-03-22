@@ -211,6 +211,8 @@ fun MainScreenExpandedLayout(
                     val highlightsScreenModel = koinInject<HighlightsScreenModel>()
                     val highlightsList by highlightsScreenModel.highlights.collectAsState()
                     val isHighlightsSyncing by highlightsScreenModel.isSyncing.collectAsState()
+                    val isHighlightsLoadingMore by highlightsScreenModel.isLoadingMore.collectAsState()
+                    val hasMoreHighlights by highlightsScreenModel.hasMoreItems.collectAsState()
 
                     LaunchedEffect(showHighlights) {
                         if (showHighlights) highlightsScreenModel.syncHighlights()
@@ -219,6 +221,8 @@ fun MainScreenExpandedLayout(
                     HighlightsListContent(
                         highlights = highlightsList,
                         isSyncing = isHighlightsSyncing,
+                        isLoadingMore = isHighlightsLoadingMore,
+                        hasMoreItems = hasMoreHighlights,
                         activeHighlightId = activeHighlightId,
                         onHighlightClick = { highlight ->
                             scope.launch {
@@ -231,6 +235,7 @@ fun MainScreenExpandedLayout(
                             }
                         },
                         onDeleteHighlight = { highlightsScreenModel.deleteHighlight(it) },
+                        onLoadMore = { highlightsScreenModel.loadNextPage() },
                         onBack = {
                             onShowHighlightsChanged(false)
                             onSelectedBookmarkIdChanged(null)
