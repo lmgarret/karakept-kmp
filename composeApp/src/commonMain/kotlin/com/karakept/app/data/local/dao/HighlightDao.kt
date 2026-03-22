@@ -14,6 +14,9 @@ interface HighlightDao {
     @Query("SELECT * FROM highlights WHERE serverId = :serverId ORDER BY createdAt DESC")
     fun getHighlightsForServer(serverId: String): Flow<List<HighlightEntity>>
 
+    @Query("SELECT * FROM highlights WHERE serverId = :serverId ORDER BY createdAt DESC LIMIT :limit OFFSET :offset")
+    suspend fun getHighlightsPagedForServer(serverId: String, limit: Int, offset: Int): List<HighlightEntity>
+
     @Query("SELECT * FROM highlights WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId ORDER BY createdAt DESC")
     fun getHighlightsForBookmark(bookmarkRemoteId: String, serverId: String): Flow<List<HighlightEntity>>
 
