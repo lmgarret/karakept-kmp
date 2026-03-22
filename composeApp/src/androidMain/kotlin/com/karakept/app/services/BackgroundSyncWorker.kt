@@ -1,13 +1,17 @@
 package com.karakept.app.services
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.karakept.app.R
+import com.karakept.app.data.model.SyncProgress
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -37,10 +41,13 @@ class BackgroundSyncWorker(
         return try {
             bookmarkRepository.syncBookmarks(server)
 
+            val syncResult = bookmarkRepository.syncProgress.value
+            val newCount = (syncResult as? SyncProgress.SyncComplete)?.newBookmarksCount ?: 0
+
             val digestEnabled = settingsRepository.backgroundSyncDigestNotification.first()
             val notificationsEnabled = settingsRepository.notificationsEnabled.first()
-            if (digestEnabled && notificationsEnabled) {
-                showDigestNotification()
+            if (digestEnabled && notificationsEnabled && hasNotificationPermission()) {
+                showDigestNotification(newCount)
             }
 
             Result.success()
@@ -49,14 +56,24 @@ class BackgroundSyncWorker(
         }
     }
 
-    private fun showDigestNotification() {
+    private fun hasNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                applicationContext,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    private fun showDigestNotification(newBookmarksCount: Int) {
         val notificationManager =
             applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = CHANNEL_ID
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                channelId,
+                CHANNEL_ID,
                 "Background Sync",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
@@ -65,15 +82,25 @@ class BackgroundSyncWorker(
             notificationManager.createNotificationChannel(channel)
         }
 
-        val notification = NotificationCompat.Builder(applicationContext, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
+        val contentText = if (newBookmarksCount > 0) {
+            "$newBookmarksCount new bookmark${if (newBookmarksCount > 1) "s" else ""} synced"
+        } else {
+            "Bookmarks are up to date"
+        }
+
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Bookmarks synced")
-            .setContentText("Your bookmarks have been synced in the background.")
+            .setContentText(contentText)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        try {
+            notificationManager.notify(NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {
+            // Permission revoked between check and post
+        }
     }
 
     companion object {
