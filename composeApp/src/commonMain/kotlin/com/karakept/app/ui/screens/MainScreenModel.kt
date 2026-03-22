@@ -415,6 +415,7 @@ class MainScreenModel(
             _expandedLists.value = _expandedLists.value +
                 ListHierarchyUtils.getAncestorIds(filter.lists.first(), lists.value)
         }
+        scrollToTop()
     }
 
     fun applyTagFilter(tag: String, sourceBookmarkId: Long) {
@@ -432,6 +433,7 @@ class MainScreenModel(
         _currentFilter.value = FilterConfig()
         _currentListContext.value = null
         _tagFilterSourceBookmarkId.value = null
+        scrollToTop()
     }
 
     fun setDefaultList(listId: String) {
