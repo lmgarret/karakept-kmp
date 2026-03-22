@@ -223,8 +223,8 @@ jobs:
           name: dmg-release
           path: composeApp/build/compose/binaries/main/dmg/Karakept-*.dmg
 
-  build-linux-flatpak:
-    name: Build Linux Flatpak
+  build-linux-dist:
+    name: Build Linux distributable
     needs: [resolve-version, build-shared]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -251,7 +251,33 @@ jobs:
           ./gradlew :composeApp:createDistributable :composeApp:flatpakResizeIcon
           -PversionName=${{ needs.resolve-version.outputs.name }}
 
-      - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v6
+      - name: Upload Linux distributable
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-dist-for-flatpak
+          path: |
+            composeApp/build/compose/binaries/main/app/Karakept/
+            composeApp/build/flatpak/icon-512.png
+
+  build-linux-flatpak:
+    name: Build Linux Flatpak
+    needs: [build-linux-dist]
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Download Linux distributable
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-dist-for-flatpak
+          path: .
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: Karakept.flatpak
           manifest-path: flatpak/com.karakept.app.yml
