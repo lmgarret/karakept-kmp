@@ -115,7 +115,18 @@ class RemoteDataSource(
 
     suspend fun fetchBookmarksForList(server: Server, listId: String, includeContent: Boolean = false): List<Bookmark> = guardedCall {
         try {
-            listsApi(server).listsListIdBookmarksGet(listId, includeContent = includeContent).body().bookmarks ?: emptyList()
+            val allBookmarks = mutableListOf<Bookmark>()
+            var cursor: String? = null
+            do {
+                val response = listsApi(server).listsListIdBookmarksGet(
+                    listId,
+                    includeContent = includeContent,
+                    cursor = cursor
+                ).body()
+                allBookmarks.addAll(response.bookmarks ?: emptyList())
+                cursor = response.nextCursor
+            } while (cursor != null)
+            allBookmarks
         } catch (e: Exception) {
             throw ApiException("Error fetching bookmarks for list $listId: ${e.message}", e)
         }

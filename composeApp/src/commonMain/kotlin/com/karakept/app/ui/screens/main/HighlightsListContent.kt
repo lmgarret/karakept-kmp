@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,6 +22,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,11 +37,31 @@ import com.karakept.app.ui.components.HighlightCard
 fun HighlightsListContent(
     highlights: List<Highlight>,
     isSyncing: Boolean,
+    isLoadingMore: Boolean,
+    hasMoreItems: Boolean,
     activeHighlightId: String?,
     onHighlightClick: (Highlight) -> Unit,
     onDeleteHighlight: (Highlight) -> Unit,
+    onLoadMore: () -> Unit,
     onBack: () -> Unit
 ) {
+    val listState = remember { LazyListState() }
+
+    // Detect when scrolled near end
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo }
+            .collect { layoutInfo ->
+                val totalItems = layoutInfo.totalItemsCount
+                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
+                if (lastVisibleItem != null && totalItems > 0) {
+                    val threshold = totalItems - 5
+                    if (lastVisibleItem.index >= threshold && hasMoreItems && !isLoadingMore) {
+                        onLoadMore()
+                    }
+                }
+            }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -62,6 +87,7 @@ fun HighlightsListContent(
             }
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize().padding(paddingValues),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -84,6 +110,34 @@ fun HighlightsListContent(
                             Modifier
                         }
                     )
+                }
+
+                // Loading indicator at bottom
+                if (isLoadingMore) {
+                    item(contentType = "loading") {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
+
+                // End of list indicator
+                if (!hasMoreItems && highlights.isNotEmpty()) {
+                    item(contentType = "end") {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No more highlights",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -27,6 +27,10 @@ class HighlightRepository(
         }
     }
 
+    suspend fun getHighlightsPaged(serverId: String, limit: Int, offset: Int): List<Highlight> {
+        return highlightDao.getHighlightsPagedForServer(serverId, limit, offset).map { it.toDomain() }
+    }
+
     suspend fun syncHighlights(server: Server) {
         // Full sync of all highlights - used for periodic background sync or All Highlights screen
         try {
