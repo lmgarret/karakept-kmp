@@ -29,7 +29,12 @@ import com.karakept.app.ui.screens.executeScrollAction
  * index, N items were prepended. We record this as newItemsUntil so the fire loop skips
  * those slots until the user explicitly scrolls past them.
  *
- * List replacement (sync / filter change):
+ * List switch:
+ * The LaunchedEffect is keyed on currentListId so it restarts whenever the user
+ * navigates to a different list. This guarantees a fresh processedIds set and anchor
+ * state, preventing the scroll action from leaking across lists.
+ *
+ * List replacement (sync / filter change within the same list):
  * MainScreenModel increments bookmarkListVersion on every resetPaginationAndLoad. When
  * the version changes we run the same old-anchor search so newly inserted items are
  * protected by newItemsUntil -- preventing them from being bulk-fired before the user
@@ -41,6 +46,7 @@ fun MainScreenScrollAction(
     listState: LazyListState,
     bookmarks: List<BookmarkEntity>,
     bookmarkListVersion: Int,
+    currentListId: String?,
     currentListScrollAction: SwipeAction,
     currentListScrollActionConfig: CustomSwipeActionConfig?,
     screenModel: MainScreenModel
@@ -51,7 +57,7 @@ fun MainScreenScrollAction(
     val currentBookmarksState = rememberUpdatedState(bookmarks)
     val currentListVersionState = rememberUpdatedState(bookmarkListVersion)
 
-    LaunchedEffect(currentListScrollAction, currentListScrollActionConfig) {
+    LaunchedEffect(currentListId, currentListScrollAction, currentListScrollActionConfig) {
         if (currentListScrollAction != SwipeAction.NONE) {
             var anchorKey: Any? = null   // key of the first visible item we're tracking
             var anchorIndex = 0          // current index of that anchor item
