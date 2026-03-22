@@ -105,8 +105,8 @@ jobs:
             echo "BODY_EOF"
           } >> "$GITHUB_OUTPUT"
 
-  build-android:
-    name: Build Android APK
+  build-shared:
+    name: Compile shared Kotlin sources
     needs: resolve-version
     runs-on: ubuntu-latest
     steps:
@@ -118,6 +118,46 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compile Kotlin for all targets
+        run: >
+          ./gradlew
+          :api-client:compileCommonMainKotlinMetadata
+          :api-client:compileKotlinAndroid
+          :api-client:compileKotlinDesktop
+          :composeApp:compileCommonMainKotlinMetadata
+          :composeApp:compileKotlinAndroid
+          :composeApp:compileKotlinDesktop
+          -PversionName=${{ needs.resolve-version.outputs.name }}
+          -PversionCode=${{ github.run_number }}
+
+      - name: Save Gradle build cache
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.gradle/caches/build-cache-*
+          key: gradle-build-cache-${{ github.sha }}
+
+  build-android:
+    name: Build Android APK
+    needs: [resolve-version, build-shared]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Restore shared Gradle build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.gradle/caches/build-cache-*
+          key: gradle-build-cache-${{ github.sha }}
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -144,7 +184,7 @@ jobs:
 
   build-macos:
     name: Build macOS DMG
-    needs: resolve-version
+    needs: [resolve-version, build-shared]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -155,6 +195,12 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+
+      - name: Restore shared Gradle build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.gradle/caches/build-cache-*
+          key: gradle-build-cache-${{ github.sha }}
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -179,7 +225,7 @@ jobs:
 
   build-linux-flatpak:
     name: Build Linux Flatpak
-    needs: resolve-version
+    needs: [resolve-version, build-shared]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -191,6 +237,12 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+
+      - name: Restore shared Gradle build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.gradle/caches/build-cache-*
+          key: gradle-build-cache-${{ github.sha }}
 
       - uses: gradle/actions/setup-gradle@v4
 
