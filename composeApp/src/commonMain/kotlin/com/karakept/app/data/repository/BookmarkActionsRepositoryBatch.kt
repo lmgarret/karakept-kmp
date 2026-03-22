@@ -84,8 +84,14 @@ suspend fun BookmarkActionsRepository.batchMarkUnread(bookmarks: List<BookmarkEn
                     it.copy(isRead = false)
                 }
                 bookmarkDao.insertBookmark(updated)
+                if (resetProgress) {
+                    queueReadingProgressUpdate(bookmark.remoteId, bookmark.serverId, progressPercent = 0)
+                }
             }
             notifyBookmarkChanged(bookmark.remoteId)
+        }
+        if (resetProgress) {
+            bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
         }
     }
 }
