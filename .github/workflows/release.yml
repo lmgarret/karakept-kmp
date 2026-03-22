@@ -149,11 +149,16 @@ jobs:
           -PversionName=${{ needs.resolve-version.outputs.name }}
           -PversionCode=${{ github.run_number }}
 
+      - name: Rename APK
+        run: |
+          APK=$(find composeApp/build/outputs/apk/release -name "*.apk" | head -1)
+          mv "$APK" "composeApp/build/outputs/apk/release/Karakept-${{ needs.resolve-version.outputs.name }}.apk"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: apk-release
-          path: composeApp/build/outputs/apk/release/*.apk
+          path: composeApp/build/outputs/apk/release/Karakept-*.apk
 
   build-macos:
     name: Build macOS DMG
@@ -222,7 +227,7 @@ jobs:
 
   build-linux-flatpak:
     name: Build Linux Flatpak
-    needs: [build-linux-dist]
+    needs: [resolve-version, build-linux-dist]
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
@@ -245,10 +250,13 @@ jobs:
           cache-key: gnome-48
           upload-artifact: false
 
+      - name: Rename Flatpak
+        run: mv Karakept.flatpak "Karakept-${{ needs.resolve-version.outputs.name }}.flatpak"
+
       - uses: actions/upload-artifact@v4
         with:
           name: flatpak-release
-          path: Karakept.flatpak
+          path: Karakept-*.flatpak
 
   create-release:
     name: Create GitHub Release
@@ -269,7 +277,7 @@ jobs:
           files: |
             apk-release/*.apk
             dmg-release/*.dmg
-            flatpak-release/Karakept.flatpak
+            flatpak-release/*.flatpak
           body: ${{ needs.resolve-version.outputs.body }}
           generate_release_notes: false
 
