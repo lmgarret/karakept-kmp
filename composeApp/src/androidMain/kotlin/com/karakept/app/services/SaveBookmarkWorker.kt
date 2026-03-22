@@ -1,13 +1,16 @@
 package com.karakept.app.services
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import coil3.ImageLoader
@@ -19,6 +22,7 @@ import com.karakept.app.MainActivity
 import com.karakept.app.R
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.utils.AppLogger
 import kotlinx.coroutines.flow.first
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -33,45 +37,76 @@ class SaveBookmarkWorker(
 
     override suspend fun doWork(): Result {
         val url = inputData.getString(KEY_URL) ?: return Result.failure()
-        
-        // Show initial notification if needed, or just rely on the final one.
-        // Requirement: "display a toast saying 'Saving bookmark...' then ... display a notification"
-        // The toast is done in Activity. Here we just do the work and final notification.
 
         return try {
             val result = bookmarkRepository.createBookmark(url)
-            
+
             if (result.isSuccess) {
                 val bookmark = result.getOrNull()
-                val notificationsEnabled = settingsRepository.notificationsEnabled.first()
-                
-                if (notificationsEnabled && bookmark != null) {
-                    showSuccessNotification(bookmark.localId.toString(), bookmark.title, bookmark.imageUrl)
+                if (bookmark != null) {
+                    postNotificationSafely {
+                        showSuccessNotification(bookmark.localId.toString(), bookmark.title, bookmark.imageUrl)
+                    }
                 }
                 Result.success()
             } else {
-                val notificationsEnabled = settingsRepository.notificationsEnabled.first()
-                if (notificationsEnabled) {
+                postNotificationSafely {
                     showErrorNotification(result.exceptionOrNull()?.message ?: "Unknown error")
                 }
                 Result.failure()
             }
         } catch (e: Exception) {
-            val notificationsEnabled = settingsRepository.notificationsEnabled.first()
-            if (notificationsEnabled) {
+            AppLogger.e(TAG, "Failed to save bookmark: ${e.message}", e)
+            postNotificationSafely {
                 showErrorNotification(e.message ?: "Unknown error")
             }
             Result.failure()
         }
     }
 
-    private suspend fun showSuccessNotification(bookmarkId: String, title: String, imageUrl: String?) {
-        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = "bookmark_save_channel"
+    /**
+     * Checks whether the app can post notifications:
+     * 1. The in-app notification toggle must be enabled.
+     * 2. On Android 13+ (API 33), the POST_NOTIFICATIONS runtime permission must be granted.
+     *
+     * If both conditions are met, executes [block]. Any exception thrown by [block]
+     * is caught and logged so that a notification failure never crashes the worker.
+     */
+    private suspend fun postNotificationSafely(block: suspend () -> Unit) {
+        try {
+            val notificationsEnabled = settingsRepository.notificationsEnabled.first()
+            if (!notificationsEnabled) {
+                AppLogger.d(TAG, "Notifications disabled in app settings, skipping")
+                return
+            }
 
+            if (!hasNotificationPermission()) {
+                AppLogger.w(TAG, "POST_NOTIFICATIONS permission not granted, skipping notification")
+                return
+            }
+
+            block()
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Failed to post notification: ${e.message}", e)
+        }
+    }
+
+    private fun hasNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                applicationContext,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true // Pre-Android 13: notifications are allowed by default
+        }
+    }
+
+    private fun ensureNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             val channel = NotificationChannel(
-                channelId,
+                CHANNEL_ID,
                 "Bookmark Saves",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
@@ -79,6 +114,12 @@ class SaveBookmarkWorker(
             }
             notificationManager.createNotificationChannel(channel)
         }
+    }
+
+    private suspend fun showSuccessNotification(bookmarkId: String, title: String, imageUrl: String?) {
+        ensureNotificationChannel()
+
+        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // Fetch image if present
         var largeIcon: Bitmap? = null
@@ -89,29 +130,27 @@ class SaveBookmarkWorker(
                     .data(imageUrl)
                     .allowHardware(false) // Bitmap for notification must strictly be software
                     .build()
-                
+
                 val result = imageLoader.execute(request)
                 if (result is SuccessResult) {
                     largeIcon = result.image.toBitmap()
                 }
             } catch (e: Exception) {
-                // Ignore image load failure
+                AppLogger.d(TAG, "Failed to load notification image: ${e.message}")
             }
         }
 
-        android.util.Log.d("DebuggingCtx", "👷 Creating notification for bookmarkId=$bookmarkId")
         val intent = Intent(applicationContext, MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra("bookmark_id", bookmarkId)
         }
-        android.util.Log.d("DebuggingCtx", "👷 Notification Intent extras: ${intent.extras}")
 
         val pendingIntent: PendingIntent = PendingIntent.getActivity(
             applicationContext, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val builder = NotificationCompat.Builder(applicationContext, channelId)
+        val builder = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Bookmark Saved")
             .setContentText(title)
@@ -130,21 +169,11 @@ class SaveBookmarkWorker(
     }
 
     private fun showErrorNotification(error: String) {
-        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = "bookmark_save_channel"
-        
-        // Channel creation duplicated for safety, or move to init
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            /* ... same channel init ... */
-             val channel = NotificationChannel(
-                channelId,
-                "Bookmark Saves",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
+        ensureNotificationChannel()
 
-        val builder = NotificationCompat.Builder(applicationContext, channelId)
+        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val builder = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Save Failed")
             .setContentText(error)
@@ -156,5 +185,7 @@ class SaveBookmarkWorker(
 
     companion object {
         const val KEY_URL = "key_url"
+        private const val TAG = "SaveBookmarkWorker"
+        private const val CHANNEL_ID = "bookmark_save_channel"
     }
 }
