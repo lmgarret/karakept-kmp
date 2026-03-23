@@ -428,7 +428,7 @@ class MainScreenModel(
             _expandedLists.value = _expandedLists.value +
                 ListHierarchyUtils.getAncestorIds(filter.lists.first(), lists.value)
         }
-        scrollToTop()
+        // scrollToTop() removed — resetPaginationAndLoad emits it after the new data is ready
     }
 
     fun applyTagFilter(tag: String, sourceBookmarkId: Long) {
@@ -446,7 +446,7 @@ class MainScreenModel(
         _currentFilter.value = FilterConfig()
         _currentListContext.value = null
         _tagFilterSourceBookmarkId.value = null
-        scrollToTop()
+        // scrollToTop() removed — resetPaginationAndLoad emits it after the new data is ready
     }
 
     fun setDefaultList(listId: String) {
