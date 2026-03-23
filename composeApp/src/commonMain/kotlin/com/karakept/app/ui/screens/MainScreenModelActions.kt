@@ -150,28 +150,52 @@ fun MainScreenModel.removeBookmarkTag(bookmark: BookmarkEntity, tagName: String)
     }
 }
 
+/**
+ * Pure function implementing the conditional bookmark removal transform for LIST-01.
+ *
+ * When the user is viewing the target list (currentListContext == listId),
+ * the bookmark is filtered out entirely (D-01).
+ * When viewing a different context, the bookmark stays but its listIds are updated (D-02).
+ *
+ * Extracted as a top-level function so both production code and unit tests
+ * exercise the same logic path.
+ */
+fun applyRemoveBookmarkTransform(
+    currentListContext: String?,
+    listId: String,
+    bookmarks: List<BookmarkEntity>,
+    bookmark: BookmarkEntity
+): List<BookmarkEntity> {
+    return if (currentListContext == listId) {
+        bookmarks.filter { it.remoteId != bookmark.remoteId }
+    } else {
+        bookmarks.map {
+            if (it.remoteId == bookmark.remoteId) {
+                val newListIds = it.listIds
+                    .split(",")
+                    .map { id -> id.trim() }
+                    .filter { id -> id.isNotBlank() && id != listId }
+                it.copy(listIds = newListIds.joinToString(","))
+            } else {
+                it
+            }
+        }
+    }
+}
+
 fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: String) {
     screenModelScope.launch {
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.removeFromList(
             bookmark.remoteId, bookmark.serverId, listId, isOnline
         )
-        if (_currentListContext.value == listId) {
-            updateAccumulatedBookmarks { it.filter { b -> b.remoteId != bookmark.remoteId } }
-        } else {
-            updateAccumulatedBookmarks { list ->
-                list.map {
-                    if (it.remoteId == bookmark.remoteId) {
-                        val newListIds = it.listIds
-                            .split(",")
-                            .map { id -> id.trim() }
-                            .filter { id -> id.isNotBlank() && id != listId }
-                        it.copy(listIds = newListIds.joinToString(","))
-                    } else {
-                        it
-                    }
-                }
-            }
+        updateAccumulatedBookmarks { currentBookmarks ->
+            applyRemoveBookmarkTransform(
+                currentListContext = _currentListContext.value,
+                listId = listId,
+                bookmarks = currentBookmarks,
+                bookmark = bookmark
+            )
         }
     }
 }
