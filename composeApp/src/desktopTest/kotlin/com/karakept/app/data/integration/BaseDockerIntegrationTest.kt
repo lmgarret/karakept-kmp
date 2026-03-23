@@ -398,7 +398,8 @@ abstract class BaseDockerIntegrationTest {
             settingsRepository = settingsRepository,
             serverRepository = serverRepository,
             highlightRepository = highlightRepository,
-            imageCacheManager = imageCacheManager
+            imageCacheManager = imageCacheManager,
+            listDao = db.listDao()
         )
         bookmarkActionsRepository.setBookmarkRepository(bookmarkRepository)
 
