@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.8.0
 milestone_name: Bug Fixes & UX Improvements
-status: Ready to execute
-stopped_at: Completed 05-00-PLAN.md
-last_updated: "2026-03-23T19:08:34.485Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-23T19:12:37.671Z"
 last_activity: 2026-03-23
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -48,6 +48,8 @@ Plan: 2 of 2
 - [Phase 04]: Kept sharedUrl param in App.kt for desktop deep link compatibility (desktop has no Activity equivalent)
 - [Phase 04]: Used key(intentKey) pattern to force full Compose tree destruction on onNewIntent for fresh Navigator state
 - [Phase 05]: Test transformation logic as pure functions to avoid Voyager/Koin instantiation overhead
+- [Phase 05]: No new DB columns or migrations needed for offline sync -- readingTimeMinutes==0 used as needs-content check
+- [Phase 05]: Offline sync runs on every sync type (Full, Filtered, ForList) with alreadySyncedIds to avoid double-fetching
 
 ### Roadmap Evolution
 
@@ -71,9 +73,10 @@ None yet.
 | Phase 03 P02 | 45min | 3 tasks | 10 files |
 | Phase 04 P01 | 3min | 2 tasks | 5 files |
 | Phase 05 P00 | 4min | 2 tasks | 2 files |
+| Phase 05 P01 | 2min | 2 tasks | 4 files |
 
 ## Session Continuity
 
 Last activity: 2026-03-23
-Stopped at: Completed 05-00-PLAN.md
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None
