@@ -64,10 +64,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. User shares a URL from another app to Karakept, saves the bookmark, and can navigate back to the bookmark list without being stuck
   2. User shares a second URL from a different app immediately after saving the first, and the saving activity shows a fresh state with no data from the previous save
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md -- Replace ShareActivity with self-contained BookmarkSavingActivity, add retry/close error handling, fix back stack navigation
 
 ### Phase 05: List & Sync
 **Goal**: List views stay current after user actions and per-list offline sync downloads content as configured
@@ -104,7 +104,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 | 01. Println Cleanup | v1.7.0 | 2/2 | Complete | 2026-03-21 |
 | 02. File Trimming & Quality | v1.7.0 | 1/1 | Complete | 2026-03-21 |
 | 03. Reader UX | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
-| 04. Bookmark Saving Activity | v1.8.0 | 0/? | Not started | - |
+| 04. Bookmark Saving Activity | v1.8.0 | 0/1 | Not started | - |
 | 05. List & Sync | v1.8.0 | 0/? | Not started | - |
 | 06. Selection & Filtering | v1.8.0 | 0/? | Not started | - |
 
