@@ -19,12 +19,31 @@ A reliable, well-structured bookmark management app with clean code practices.
 
 ### Active
 
-(None — next milestone TBD)
+- [ ] Fix reader closing scrolling list to top (#152)
+- [ ] Fix select-all only selecting 20 entries (#153)
+- [ ] Quick actions not reflected in viewed list (#154)
+- [ ] Per-list offline sync not working (#155)
+- [ ] Add counters to Quick Filters in drawer (#156)
+- [ ] Pull-to-refresh for Highlights (#157)
+- [ ] Cannot go back to bookmark list after share-save (#158)
+- [ ] State leak between bookmark saving activities (#159)
+- [ ] Reader info button should move to menu on scroll (#160)
+- [ ] Scroll-to-top button in reader (#161)
 
 ### Out of Scope
 
 - Dependency upgrades (tracked separately)
 - Platform-specific improvements
+
+## Current Milestone: v1.8.0 Bug Fixes & UX Improvements
+
+**Goal:** Fix 6 bugs and deliver 4 UX improvements across reader, bookmark saving, list sync, and filtering.
+
+**Target features:**
+- Reader UX: restore scroll position, info button in overflow menu, scroll-to-top button
+- Bookmark saving activity: fix navigation and state leak on Android share target
+- List & sync: quick action list refresh, per-list offline sync
+- Selection & filtering: select-all beyond pagination, quick filter counters, pull-to-refresh highlights
 
 ## Context
 
@@ -33,11 +52,13 @@ A reliable, well-structured bookmark management app with clean code practices.
 - AppLogger infrastructure in place with `.d()`, `.i()`, `.w()`, `.e()` severity levels
 - All production files under 500 lines
 - The app is functional and in active use
+- 10 open issues filed 2026-03-22/23 covering bugs and UX improvements
 
 ## Constraints
 
-- **Stability**: No regressions — all changes are internal refactoring
+- **Stability**: No regressions in existing bookmark management functionality
 - **Build**: Build/test commands run externally by the user, not in this session
+- **Platform**: Bookmark saving activity issues (#158, #159) are Android-specific
 
 ## Key Decisions
 
@@ -47,5 +68,22 @@ A reliable, well-structured bookmark management app with clean code practices.
 | Hot-path logging removed, not replaced | Per-item loop logging adds noise without debug value | Zero hot-path println calls ✓ |
 | Consolidated sync action logging | 53 verbose step traces → ~15 targeted start/success/error logs | Cleaner BookmarkActionsRepositorySync ✓ |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd:transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-03-21 after v1.7.0 milestone*
+*Last updated: 2026-03-23 after v1.8.0 milestone start*
