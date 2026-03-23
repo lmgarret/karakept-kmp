@@ -109,7 +109,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 | 03. Reader UX | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
 | 04. Bookmark Saving Activity | v1.8.0 | 1/1 | Complete    | 2026-03-23 |
 | 05. List & Sync | v1.8.0 | 2/3 | Complete    | 2026-03-23 |
-| 06. Selection & Filtering | v1.8.0 | 2/2 | Complete   | 2026-03-23 |
+| 06. Selection & Filtering | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
 
 ### Phase 7: UI Tests — Add Compose UI test infrastructure and instrumented tests for reader UX, bookmark saving, list sync, and selection/filtering scenarios introduced in v1.8.0
 
