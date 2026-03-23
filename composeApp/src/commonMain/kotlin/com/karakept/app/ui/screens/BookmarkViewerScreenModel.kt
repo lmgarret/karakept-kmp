@@ -24,6 +24,7 @@ import com.karakept.app.data.repository.setHtmlBackgroundColor
 import com.karakept.app.data.repository.setHtmlFontSize
 import com.karakept.app.data.repository.setHtmlFontFamily
 import com.karakept.app.data.repository.resetReaderAppearance
+import com.karakept.app.data.repository.setScrollToTopEnabled
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -480,6 +481,10 @@ class BookmarkViewerScreenModel(
 
     suspend fun resetReaderAppearance() {
         settingsRepository.resetReaderAppearance()
+    }
+
+    fun setScrollToTopEnabled(enabled: Boolean) {
+        screenModelScope.launch { settingsRepository.setScrollToTopEnabled(enabled) }
     }
 
     fun loadLists(server: Server) {
