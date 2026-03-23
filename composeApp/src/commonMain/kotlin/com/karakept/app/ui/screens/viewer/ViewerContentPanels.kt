@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.karakept.app.ui.screens.BookmarkLoadingState
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
 import kotlinx.coroutines.CoroutineScope
@@ -66,6 +68,7 @@ fun ViewerContentPanels(
     )
 
     // Reader appearance panel
+    val scrollToTopEnabled by screenModel.scrollToTopEnabled.collectAsState()
     ReaderAppearancePanel(
         visible = showAppearancePanel,
         textColor = htmlTextColor,
@@ -77,7 +80,9 @@ fun ViewerContentPanels(
         onFontSizeChange = { screenModel.setHtmlFontSize(it) },
         onFontFamilyChange = { screenModel.setHtmlFontFamily(it) },
         onReset = { scope.launch { screenModel.resetReaderAppearance() } },
-        onDismiss = { onShowAppearancePanelChanged(false) }
+        onDismiss = { onShowAppearancePanelChanged(false) },
+        scrollToTopEnabled = scrollToTopEnabled,
+        onScrollToTopToggle = { screenModel.setScrollToTopEnabled(it) }
     )
 
     // Delete Confirmation Dialog

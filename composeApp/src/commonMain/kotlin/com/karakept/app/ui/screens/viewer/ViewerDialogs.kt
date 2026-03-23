@@ -141,7 +141,9 @@ internal fun ReaderAppearancePanel(
     onFontSizeChange: (Int) -> Unit,
     onFontFamilyChange: (ReaderFontFamily) -> Unit,
     onReset: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    scrollToTopEnabled: Boolean = true,
+    onScrollToTopToggle: (Boolean) -> Unit = {}
 ) {
     // Scrim
     androidx.compose.animation.AnimatedVisibility(
@@ -178,7 +180,9 @@ internal fun ReaderAppearancePanel(
             onFontSizeChange = onFontSizeChange,
             onFontFamilyChange = onFontFamilyChange,
             onReset = onReset,
-            onDismiss = onDismiss
+            onDismiss = onDismiss,
+            scrollToTopEnabled = scrollToTopEnabled,
+            onScrollToTopToggle = onScrollToTopToggle
         )
     }
 }

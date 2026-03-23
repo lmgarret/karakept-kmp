@@ -28,7 +28,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -60,7 +62,9 @@ fun ReaderAppearanceBottomPanel(
     onFontFamilyChange: (ReaderFontFamily) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit,
-    allowDismiss: Boolean = true
+    allowDismiss: Boolean = true,
+    scrollToTopEnabled: Boolean = true,
+    onScrollToTopToggle: (Boolean) -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     var showResetDialog by remember { mutableStateOf(false) }
@@ -117,6 +121,23 @@ fun ReaderAppearanceBottomPanel(
                 3 -> BackgroundColorTab(backgroundColor, onBackgroundColorChange)
                 4 -> ResetTab(onReset = { showResetDialog = true })
             }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Scroll-to-top button",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Switch(
+                checked = scrollToTopEnabled,
+                onCheckedChange = onScrollToTopToggle
+            )
         }
     }
 
