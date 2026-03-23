@@ -130,4 +130,7 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     if (dbExhausted) {
         _hasMoreItems.value = false
     }
+    // Scroll to top after data is ready, so plain back-navigation from the viewer
+    // (which doesn't call resetPaginationAndLoad) never triggers an unwanted scroll.
+    scrollToTop()
 }
