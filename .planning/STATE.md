@@ -44,6 +44,10 @@ Progress: [░░░░░░░░░░] 0%
 - Milestone versioning aligned to git tags (v1.7.0 follows v1.6.0, v1.8.0 follows v1.7.0)
 - All four v1.8.0 phases are independent (no inter-phase dependencies) -- can be reordered if needed
 
+### Roadmap Evolution
+
+- Phase 7 added: UI Tests — Compose UI test infrastructure and instrumented tests for v1.8.0 scenarios (reader UX, bookmark saving, list sync, selection/filtering)
+
 ### Pending Todos
 
 None yet.
