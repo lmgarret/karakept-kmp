@@ -231,7 +231,6 @@ fun BookmarkViewerContent(
     val fabVisible = rememberFabVisibilityState(scrollState = scrollState, fabExpanded = fabExpanded)
     val scrollToTopEnabled by screenModel.scrollToTopEnabled.collectAsState()
     val scrollToTopVisible = rememberScrollToTopVisibility(scrollState = scrollState, fabVisible = fabVisible)
-    val isHeroVisible by remember { androidx.compose.runtime.derivedStateOf { scrollState.firstVisibleItemIndex == 0 } }
     val showStickyTitle = rememberStickyTitleVisibility(scrollState = scrollState, bannerHeight = bannerHeight, toolbarHeight = toolbarHeight)
     val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
 
@@ -457,7 +456,6 @@ fun BookmarkViewerContent(
                             scope.launch { snackbarManager.showSnackbar("Opening in browser") }
                         },
                         isFullscreen = isFullscreen, onFullscreenToggle = onFullscreenToggle,
-                        isHeroVisible = isHeroVisible,
                         onDetailsClick = { showDetailsPanel = true }
                     )
 
