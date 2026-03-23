@@ -103,7 +103,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 |-------|-----------|----------------|--------|-----------|
 | 01. Println Cleanup | v1.7.0 | 2/2 | Complete | 2026-03-21 |
 | 02. File Trimming & Quality | v1.7.0 | 1/1 | Complete | 2026-03-21 |
-| 03. Reader UX | v1.8.0 | 2/2 | Complete   | 2026-03-23 |
+| 03. Reader UX | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
 | 04. Bookmark Saving Activity | v1.8.0 | 0/? | Not started | - |
 | 05. List & Sync | v1.8.0 | 0/? | Not started | - |
 | 06. Selection & Filtering | v1.8.0 | 0/? | Not started | - |
