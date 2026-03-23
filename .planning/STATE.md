@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.8.0
 milestone_name: Bug Fixes & UX Improvements
-status: ready-to-plan
-stopped_at: null
-last_updated: "2026-03-23"
+status: unknown
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-03-23T13:18:17.288Z"
+last_activity: 2026-03-23
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
 ---
 
 # Project State
@@ -19,20 +20,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** A reliable, well-structured bookmark management app with clean code practices
-**Current focus:** Phase 03 - Reader UX
+**Current focus:** Phase 03 — reader-ux
 
 ## Current Position
 
-Phase: 03 of 06 (Reader UX)
-Plan: --
-Status: Ready to plan
-Last activity: 2026-03-23 -- Roadmap created for v1.8.0
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 03 (reader-ux) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: --
 - Total execution time: --
@@ -43,6 +41,8 @@ Progress: [░░░░░░░░░░] 0%
 
 - Milestone versioning aligned to git tags (v1.7.0 follows v1.6.0, v1.8.0 follows v1.7.0)
 - All four v1.8.0 phases are independent (no inter-phase dependencies) -- can be reordered if needed
+- [Phase 03]: Hoisted scroll position into MainScreenModel (Koin singleton) for cross-navigation persistence
+- [Phase 03]: scrollToTopEnabled defaults to true, not included in BackupSettings (same pattern as showTagsInViewer)
 
 ### Roadmap Evolution
 
@@ -62,9 +62,10 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260322-0jj | Update GitHub Actions release workflow to trigger on pushed tags | 2026-03-21 | 2e43d87 | [260322-0jj-update-github-actions-release-workflow-t](./quick/260322-0jj-update-github-actions-release-workflow-t/) |
+| Phase 03 P01 | 29min | 2 tasks | 7 files |
 
 ## Session Continuity
 
-Last activity: 2026-03-23 -- Roadmap created for v1.8.0
-Stopped at: Roadmap written, ready to plan Phase 03
+Last activity: 2026-03-23
+Stopped at: Completed 03-01-PLAN.md
 Resume file: None
