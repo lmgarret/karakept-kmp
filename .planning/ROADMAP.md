@@ -51,11 +51,11 @@ Plans:
   2. When the user scrolls past the hero section in the reader, the info button disappears from the hero area and appears as an item in the three-dots overflow menu
   3. User can tap a floating scroll-to-top button in the reader to jump back to the beginning of the article
   4. User can toggle the scroll-to-top button on/off in reader settings, and the preference persists across sessions
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md -- Add scrollToTopEnabled setting plumbing and fix bookmark list scroll restore bug
+- [ ] 03-02-PLAN.md -- Add Details overflow menu item, scroll-to-top button, and appearance panel toggle
 
 ### Phase 04: Bookmark Saving Activity
 **Goal**: Android share-target bookmark saving works reliably without trapping the user or leaking state
@@ -103,7 +103,17 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 |-------|-----------|----------------|--------|-----------|
 | 01. Println Cleanup | v1.7.0 | 2/2 | Complete | 2026-03-21 |
 | 02. File Trimming & Quality | v1.7.0 | 1/1 | Complete | 2026-03-21 |
-| 03. Reader UX | v1.8.0 | 0/? | Not started | - |
+| 03. Reader UX | v1.8.0 | 0/2 | Not started | - |
 | 04. Bookmark Saving Activity | v1.8.0 | 0/? | Not started | - |
 | 05. List & Sync | v1.8.0 | 0/? | Not started | - |
 | 06. Selection & Filtering | v1.8.0 | 0/? | Not started | - |
+
+### Phase 7: UI Tests — Add Compose UI test infrastructure and instrumented tests for reader UX, bookmark saving, list sync, and selection/filtering scenarios introduced in v1.8.0
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 6
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 7 to break down)
