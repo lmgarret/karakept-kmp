@@ -1,4 +1,4 @@
-# Requirements: Karakept KMP — v1.8.0 Bug Fixes & UX Improvements
+# Requirements: Karakept KMP -- v1.8.0 Bug Fixes & UX Improvements
 
 **Defined:** 2026-03-23
 **Core Value:** A reliable, well-structured bookmark management app with clean code practices
@@ -44,28 +44,29 @@
 | Feature | Reason |
 |---------|--------|
 | Dependency upgrades | Tracked separately |
-| New major features (#5, #9, #14, #18, #61, #113) | Deferred to future milestones — this milestone focuses on fixes and polish |
+| New major features (#5, #9, #14, #18, #61, #113) | Deferred to future milestones -- this milestone focuses on fixes and polish |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| READER-01 | — | Pending |
-| READER-02 | — | Pending |
-| READER-03 | — | Pending |
-| READER-04 | — | Pending |
-| SAVE-01 | — | Pending |
-| SAVE-02 | — | Pending |
-| LIST-01 | — | Pending |
-| LIST-02 | — | Pending |
-| FILT-01 | — | Pending |
-| FILT-02 | — | Pending |
-| FILT-03 | — | Pending |
+| READER-01 | Phase 03 | Pending |
+| READER-02 | Phase 03 | Pending |
+| READER-03 | Phase 03 | Pending |
+| READER-04 | Phase 03 | Pending |
+| SAVE-01 | Phase 04 | Pending |
+| SAVE-02 | Phase 04 | Pending |
+| LIST-01 | Phase 05 | Pending |
+| LIST-02 | Phase 05 | Pending |
+| FILT-01 | Phase 06 | Pending |
+| FILT-02 | Phase 06 | Pending |
+| FILT-03 | Phase 06 | Pending |
 
 **Coverage:**
 - v1.8.0 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11 ⚠️
+- Mapped to phases: 11
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-23*
+*Traceability updated: 2026-03-23*
