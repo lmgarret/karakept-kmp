@@ -81,7 +81,7 @@ Plans:
 Plans:
 - [x] 05-00-PLAN.md -- Wave 0: Create unit test scaffolds for LIST-01 and LIST-02
 - [x] 05-01-PLAN.md -- Fix list removal optimistic update and wire per-list offline sync with child list expansion
-- [ ] 05-02-PLAN.md -- Gap closure: Extract transform as pure function, rewrite tests to call production code
+- [x] 05-02-PLAN.md -- Gap closure: Extract transform as pure function, rewrite tests to call production code
 
 ### Phase 06: Selection & Filtering
 **Goal**: Users can effectively select, filter, and refresh their bookmark collections at any scale

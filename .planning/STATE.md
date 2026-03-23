@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.8.0
 milestone_name: Bug Fixes & UX Improvements
-status: Phase complete — ready for verification
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-03-23T19:12:37.671Z"
+status: Ready to execute
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-03-23T19:38:59.122Z"
 last_activity: 2026-03-23
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 6
+  completed_plans: 6
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 ## Current Position
 
 Phase: 05 (list-sync) — EXECUTING
-Plan: 2 of 2
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -50,6 +50,8 @@ Plan: 2 of 2
 - [Phase 05]: Test transformation logic as pure functions to avoid Voyager/Koin instantiation overhead
 - [Phase 05]: No new DB columns or migrations needed for offline sync -- readingTimeMinutes==0 used as needs-content check
 - [Phase 05]: Offline sync runs on every sync type (Full, Filtered, ForList) with alreadySyncedIds to avoid double-fetching
+- [Phase 05-list-sync]: Extracted applyRemoveBookmarkTransform as top-level pure function enabling direct unit test import without Voyager/Koin
+- [Phase 05-list-sync]: Deleted hardcoded test stubs — RemoveBookmarkFromListTest now calls production code, valid regression gate for LIST-01
 
 ### Roadmap Evolution
 
@@ -74,9 +76,10 @@ None yet.
 | Phase 04 P01 | 3min | 2 tasks | 5 files |
 | Phase 05 P00 | 4min | 2 tasks | 2 files |
 | Phase 05 P01 | 2min | 2 tasks | 4 files |
+| Phase 05-list-sync P02 | 8 | 2 tasks | 2 files |
 
 ## Session Continuity
 
 Last activity: 2026-03-23
-Stopped at: Completed 05-01-PLAN.md
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
