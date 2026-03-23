@@ -38,7 +38,7 @@ Plans:
 - [x] **Phase 03: Reader UX** - Restore scroll position, move info button to overflow menu, add scroll-to-top button (completed 2026-03-23)
 - [x] **Phase 04: Bookmark Saving Activity** - Fix Android share-target navigation and state leak (completed 2026-03-23)
 - [x] **Phase 05: List & Sync** - Fix quick action list refresh and per-list offline sync (gap closure in progress) (completed 2026-03-23)
-- [ ] **Phase 06: Selection & Filtering** - Fix select-all pagination, add quick filter counters, add pull-to-refresh for Highlights
+- [x] **Phase 06: Selection & Filtering** - Fix select-all pagination, add quick filter counters, add pull-to-refresh for Highlights (completed 2026-03-23)
 
 ## Phase Details
 
@@ -95,7 +95,7 @@ Plans:
 
 Plans:
 - [x] 06-01-PLAN.md -- Fix select-all to fetch all matching entities when more pages exist (FILT-01)
-- [ ] 06-02-PLAN.md -- Add quick filter counters to drawer and pull-to-refresh on Highlights (FILT-02, FILT-03)
+- [x] 06-02-PLAN.md -- Add quick filter counters to drawer and pull-to-refresh on Highlights (FILT-02, FILT-03)
 
 ## Progress
 
@@ -109,14 +109,14 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 | 03. Reader UX | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
 | 04. Bookmark Saving Activity | v1.8.0 | 1/1 | Complete    | 2026-03-23 |
 | 05. List & Sync | v1.8.0 | 2/3 | Complete    | 2026-03-23 |
-| 06. Selection & Filtering | v1.8.0 | 0/2 | Not started | - |
+| 06. Selection & Filtering | v1.8.0 | 2/2 | Complete   | 2026-03-23 |
 
 ### Phase 7: UI Tests — Add Compose UI test infrastructure and instrumented tests for reader UX, bookmark saving, list sync, and selection/filtering scenarios introduced in v1.8.0
 
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 6
-**Plans:** 3/3 plans complete
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 7 to break down)
