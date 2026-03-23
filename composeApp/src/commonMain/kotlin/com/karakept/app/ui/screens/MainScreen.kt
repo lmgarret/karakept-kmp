@@ -31,6 +31,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.screens.main.BatchDeleteConfirmDialog
@@ -111,6 +112,8 @@ object MainScreen : Screen {
 
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
+        val quickFilterCounts by screenModel.quickFilterCounts.collectAsState()
+        val highlightsCount by screenModel.highlightsCount.collectAsState()
         val currentListId by screenModel.currentListContext.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
         val currentListScrollActionConfig by screenModel.currentListScrollActionConfig.collectAsState()
@@ -318,6 +321,7 @@ object MainScreen : Screen {
                     showAddBookmarkDialog = showAddBookmarkDialog, onShowAddBookmarkDialogChanged = { showAddBookmarkDialog = it },
                     renameListTarget = renameListTarget, onRenameListTargetChanged = { renameListTarget = it },
                     screenModel = screenModel, navigateTo = { screen -> navigator.push(screen) }, isDesktop = isDesktop,
+                    quickFilterCounts = quickFilterCounts, highlightsCount = highlightsCount,
                     scaffoldContent = { isExpanded ->
                         scaffoldContent(isExpanded, selectedBookmarkId, { bookmark ->
                             val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
@@ -339,7 +343,9 @@ object MainScreen : Screen {
                     onSetAsDefault = { screenModel.setDefaultList(it); scope.launch { drawerState.close() } },
                     onSetAsDefaultType = { screenModel.setDefaultListType(it); scope.launch { drawerState.close() } },
                     onNavigateToSettings = { navigator.push(SettingsScreen()); scope.launch { drawerState.close() } },
-                    onNavigateToHighlights = { navigator.push(HighlightsScreen()); scope.launch { drawerState.close() } }
+                    onNavigateToHighlights = { navigator.push(HighlightsScreen()); scope.launch { drawerState.close() } },
+                    quickFilterCounts = quickFilterCounts,
+                    highlightsCount = highlightsCount
                 ) {
                     scaffoldContent(false, null, { bookmark ->
                         val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }

@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.ui.utils.buildListHierarchy
 import com.karakept.app.ui.utils.filterExpandedHierarchy
 import com.karakept.app.ui.utils.listHasChildren
@@ -81,6 +82,8 @@ internal fun DrawerContent(
     onNavigateToHighlights: () -> Unit,
     isHighlightsSelected: Boolean = false,
     onAddBookmark: (() -> Unit)? = null,
+    quickFilterCounts: QuickFilterCounts = QuickFilterCounts(),
+    highlightsCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -111,7 +114,8 @@ internal fun DrawerContent(
                 icon = { Icon(Icons.Default.Book, contentDescription = null) },
                 selected = currentFilter == FilterConfig(),
                 onClick = onClearFilter,
-                onSetAsHome = { onSetAsDefaultType(DefaultListType.ALL_BOOKMARKS) }
+                onSetAsHome = { onSetAsDefaultType(DefaultListType.ALL_BOOKMARKS) },
+                count = quickFilterCounts.all
             )
 
             BuiltinDrawerItem(
@@ -119,7 +123,8 @@ internal fun DrawerContent(
                 icon = { Icon(Icons.Default.Star, contentDescription = null) },
                 selected = currentFilter == FilterConfig(status = FilterStatus.FAVORITES),
                 onClick = { onFilterApply(FilterConfig(status = FilterStatus.FAVORITES)) },
-                onSetAsHome = { onSetAsDefaultType(DefaultListType.FAVORITES) }
+                onSetAsHome = { onSetAsDefaultType(DefaultListType.FAVORITES) },
+                count = quickFilterCounts.favorites
             )
 
             BuiltinDrawerItem(
@@ -127,7 +132,8 @@ internal fun DrawerContent(
                 icon = { Icon(Icons.Default.Archive, contentDescription = null) },
                 selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
                 onClick = { onFilterApply(FilterConfig(status = FilterStatus.ARCHIVED)) },
-                onSetAsHome = { onSetAsDefaultType(DefaultListType.ARCHIVED) }
+                onSetAsHome = { onSetAsDefaultType(DefaultListType.ARCHIVED) },
+                count = quickFilterCounts.archived
             )
 
             BuiltinDrawerItem(
@@ -135,7 +141,8 @@ internal fun DrawerContent(
                 icon = { Icon(Icons.Default.Create, contentDescription = null) },
                 selected = isHighlightsSelected,
                 onClick = onNavigateToHighlights,
-                onSetAsHome = null
+                onSetAsHome = null,
+                count = highlightsCount
             )
 
             // Lists Section (Hierarchical)
@@ -210,6 +217,8 @@ internal fun MainScreenDrawer(
     onSetAsDefaultType: (DefaultListType) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToHighlights: () -> Unit,
+    quickFilterCounts: QuickFilterCounts = QuickFilterCounts(),
+    highlightsCount: Int = 0,
     content: @Composable () -> Unit
 ) {
     ModalNavigationDrawer(
@@ -230,7 +239,9 @@ internal fun MainScreenDrawer(
                     onSetAsDefault = onSetAsDefault,
                     onSetAsDefaultType = onSetAsDefaultType,
                     onNavigateToSettings = onNavigateToSettings,
-                    onNavigateToHighlights = onNavigateToHighlights
+                    onNavigateToHighlights = onNavigateToHighlights,
+                    quickFilterCounts = quickFilterCounts,
+                    highlightsCount = highlightsCount
                 )
             }
         }
@@ -246,7 +257,8 @@ private fun BuiltinDrawerItem(
     icon: @Composable () -> Unit,
     selected: Boolean,
     onClick: () -> Unit,
-    onSetAsHome: (() -> Unit)? = null
+    onSetAsHome: (() -> Unit)? = null,
+    count: Int? = null
 ) {
     var showMenu by remember { mutableStateOf(false) }
     var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
@@ -291,8 +303,17 @@ private fun BuiltinDrawerItem(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
-                color = if (selected) selectedTextColor else normalTextColor
+                color = if (selected) selectedTextColor else normalTextColor,
+                modifier = Modifier.weight(1f)
             )
+            count?.let {
+                Text(
+                    text = it.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = (if (selected) selectedTextColor else MaterialTheme.colorScheme.onSurfaceVariant)
+                        .copy(alpha = 0.6f)
+                )
+            }
         }
         if (onSetAsHome != null) {
             DropdownMenu(
