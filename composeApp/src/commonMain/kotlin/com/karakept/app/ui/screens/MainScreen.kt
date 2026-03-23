@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalUriHandler
@@ -134,7 +135,25 @@ object MainScreen : Screen {
         val snackbarManager = koinInject<ActionSnackbarManager>()
         val snackbarHostState = rememberSnackbarHostState(snackbarManager)
 
-        val listState = rememberSaveable(key = "main_screen_list_state", saver = LazyListState.Saver) { LazyListState() }
+        // Initialise LazyListState from the hoisted position stored in the ScreenModel.
+        // This survives Voyager push/pop even when rememberSaveable state is lost (e.g.
+        // object Screen singletons) or when background sync replaces the bookmarks list
+        // while the reader is open.
+        val listState = rememberSaveable(key = "main_screen_list_state", saver = LazyListState.Saver) {
+            LazyListState(
+                firstVisibleItemIndex = screenModel.savedScrollIndex,
+                firstVisibleItemScrollOffset = screenModel.savedScrollOffset
+            )
+        }
+
+        // Persist scroll position into the ScreenModel so it survives navigation.
+        LaunchedEffect(listState) {
+            snapshotFlow {
+                listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+            }.collect { (index, offset) ->
+                screenModel.saveScrollPosition(index, offset)
+            }
+        }
         val isDesktop = remember { getPlatform().name.contains("Java") }
         val uriHandler = LocalUriHandler.current
 
