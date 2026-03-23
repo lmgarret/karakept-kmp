@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.8.0
 milestone_name: Bug Fixes & UX Improvements
 status: unknown
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-03-23T13:18:17.288Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-23T14:31:27.199Z"
 last_activity: 2026-03-23
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -43,6 +43,8 @@ Plan: 2 of 2
 - All four v1.8.0 phases are independent (no inter-phase dependencies) -- can be reordered if needed
 - [Phase 03]: Hoisted scroll position into MainScreenModel (Koin singleton) for cross-navigation persistence
 - [Phase 03]: scrollToTopEnabled defaults to true, not included in BackupSettings (same pattern as showTagsInViewer)
+- [Phase 03]: Details menu item always shown (not conditional on hero visibility) -- simpler and more discoverable
+- [Phase 03]: Scroll-to-top toggle in dedicated Behaviour tab (Tune icon) rather than always-visible below tabs
 
 ### Roadmap Evolution
 
@@ -63,9 +65,10 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 260322-0jj | Update GitHub Actions release workflow to trigger on pushed tags | 2026-03-21 | 2e43d87 | [260322-0jj-update-github-actions-release-workflow-t](./quick/260322-0jj-update-github-actions-release-workflow-t/) |
 | Phase 03 P01 | 29min | 2 tasks | 7 files |
+| Phase 03 P02 | 45min | 3 tasks | 10 files |
 
 ## Session Continuity
 
 Last activity: 2026-03-23
-Stopped at: Completed 03-01-PLAN.md
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None

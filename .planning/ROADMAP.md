@@ -35,7 +35,7 @@ Plans:
 
 **Milestone Goal:** Fix 6 bugs and deliver 4 UX improvements across reader, bookmark saving, list sync, and filtering.
 
-- [ ] **Phase 03: Reader UX** - Restore scroll position, move info button to overflow menu, add scroll-to-top button
+- [x] **Phase 03: Reader UX** - Restore scroll position, move info button to overflow menu, add scroll-to-top button (completed 2026-03-23)
 - [ ] **Phase 04: Bookmark Saving Activity** - Fix Android share-target navigation and state leak
 - [ ] **Phase 05: List & Sync** - Fix quick action list refresh and per-list offline sync
 - [ ] **Phase 06: Selection & Filtering** - Fix select-all pagination, add quick filter counters, add pull-to-refresh for Highlights
@@ -55,7 +55,7 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md -- Add scrollToTopEnabled setting plumbing and fix bookmark list scroll restore bug
-- [ ] 03-02-PLAN.md -- Add Details overflow menu item, scroll-to-top button, and appearance panel toggle
+- [x] 03-02-PLAN.md -- Add Details overflow menu item, scroll-to-top button, and appearance panel toggle
 
 ### Phase 04: Bookmark Saving Activity
 **Goal**: Android share-target bookmark saving works reliably without trapping the user or leaking state
@@ -103,7 +103,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 |-------|-----------|----------------|--------|-----------|
 | 01. Println Cleanup | v1.7.0 | 2/2 | Complete | 2026-03-21 |
 | 02. File Trimming & Quality | v1.7.0 | 1/1 | Complete | 2026-03-21 |
-| 03. Reader UX | v1.8.0 | 1/2 | In Progress|  |
+| 03. Reader UX | v1.8.0 | 2/2 | Complete   | 2026-03-23 |
 | 04. Bookmark Saving Activity | v1.8.0 | 0/? | Not started | - |
 | 05. List & Sync | v1.8.0 | 0/? | Not started | - |
 | 06. Selection & Filtering | v1.8.0 | 0/? | Not started | - |
@@ -113,7 +113,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 6
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 7 to break down)
