@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -75,63 +76,72 @@ class HighlightsScreen : Screen {
                 )
             }
         ) { paddingValues ->
-            if (highlights.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isSyncing) {
-                        CircularProgressIndicator()
-                    } else {
+            PullToRefreshBox(
+                isRefreshing = isSyncing,
+                onRefresh = { screenModel.syncHighlights() },
+                modifier = Modifier.fillMaxSize().padding(paddingValues)
+            ) {
+                if (highlights.isEmpty() && !isSyncing) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text("No highlights yet", style = MaterialTheme.typography.bodyLarge)
                     }
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(highlights, key = { it.id }) { highlight ->
-                        HighlightCard(
-                            highlight = highlight,
-                            onClick = {
-                                scope.launch {
-                                    val bookmarkLocalId = screenModel.getBookmarkLocalIdForHighlight(highlight)
-                                    if (bookmarkLocalId != null) {
-                                        navigator.push(BookmarkViewerScreen(bookmarkLocalId, highlight.id))
-                                    }
-                                }
-                            },
-                            onDelete = { screenModel.deleteHighlight(highlight) }
-                        )
+                } else if (highlights.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
                     }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(highlights, key = { it.id }) { highlight ->
+                            HighlightCard(
+                                highlight = highlight,
+                                onClick = {
+                                    scope.launch {
+                                        val bookmarkLocalId = screenModel.getBookmarkLocalIdForHighlight(highlight)
+                                        if (bookmarkLocalId != null) {
+                                            navigator.push(BookmarkViewerScreen(bookmarkLocalId, highlight.id))
+                                        }
+                                    }
+                                },
+                                onDelete = { screenModel.deleteHighlight(highlight) }
+                            )
+                        }
 
-                    // Loading indicator at bottom
-                    if (isLoadingMore) {
-                        item(contentType = "loading") {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator()
+                        // Loading indicator at bottom
+                        if (isLoadingMore) {
+                            item(contentType = "loading") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
                             }
                         }
-                    }
 
-                    // End of list indicator
-                    if (!hasMoreItems && highlights.isNotEmpty()) {
-                        item(contentType = "end") {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "No more highlights",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                        // End of list indicator
+                        if (!hasMoreItems && highlights.isNotEmpty()) {
+                            item(contentType = "end") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No more highlights",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
