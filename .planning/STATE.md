@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.8.0
 milestone_name: Bug Fixes & UX Improvements
-status: Ready to plan
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-03-23T20:21:53.034Z"
+status: Ready to execute
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-23T21:17:17.732Z"
 last_activity: 2026-03-23
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** A reliable, well-structured bookmark management app with clean code practices
-**Current focus:** Phase 05 — list-sync
+**Current focus:** Phase 06 — selection-filtering
 
 ## Current Position
 
-Phase: 06
-Plan: Not started
+Phase: 06 (selection-filtering) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Plan: Not started
 - [Phase 05]: Offline sync runs on every sync type (Full, Filtered, ForList) with alreadySyncedIds to avoid double-fetching
 - [Phase 05-list-sync]: Extracted applyRemoveBookmarkTransform as top-level pure function enabling direct unit test import without Voyager/Koin
 - [Phase 05-list-sync]: Deleted hardcoded test stubs — RemoveBookmarkFromListTest now calls production code, valid regression gate for LIST-01
+- [Phase 06-selection-filtering]: selectAll() early-returns when hasMoreItems is false; fetches all DB rows in one query when more pages exist, applies client-side filters, updates accumulated list for consistency
 
 ### Roadmap Evolution
 
@@ -77,9 +78,10 @@ None yet.
 | Phase 05 P00 | 4min | 2 tasks | 2 files |
 | Phase 05 P01 | 2min | 2 tasks | 4 files |
 | Phase 05-list-sync P02 | 8 | 2 tasks | 2 files |
+| Phase 06-selection-filtering P01 | 8 | 2 tasks | 3 files |
 
 ## Session Continuity
 
 Last activity: 2026-03-23
-Stopped at: Completed 05-02-PLAN.md
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None
