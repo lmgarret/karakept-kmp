@@ -54,7 +54,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md -- Add scrollToTopEnabled setting plumbing and fix bookmark list scroll restore bug
+- [x] 03-01-PLAN.md -- Add scrollToTopEnabled setting plumbing and fix bookmark list scroll restore bug
 - [ ] 03-02-PLAN.md -- Add Details overflow menu item, scroll-to-top button, and appearance panel toggle
 
 ### Phase 04: Bookmark Saving Activity
@@ -103,7 +103,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 |-------|-----------|----------------|--------|-----------|
 | 01. Println Cleanup | v1.7.0 | 2/2 | Complete | 2026-03-21 |
 | 02. File Trimming & Quality | v1.7.0 | 1/1 | Complete | 2026-03-21 |
-| 03. Reader UX | v1.8.0 | 0/2 | Not started | - |
+| 03. Reader UX | v1.8.0 | 1/2 | In Progress|  |
 | 04. Bookmark Saving Activity | v1.8.0 | 0/? | Not started | - |
 | 05. List & Sync | v1.8.0 | 0/? | Not started | - |
 | 06. Selection & Filtering | v1.8.0 | 0/? | Not started | - |
@@ -113,7 +113,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 6
-**Plans:** 0 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 7 to break down)

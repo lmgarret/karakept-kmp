@@ -7,10 +7,10 @@
 
 ### Reader UX
 
-- [ ] **READER-01**: Closing the reader view restores the user's scroll position in the bookmark list (#152)
+- [x] **READER-01**: Closing the reader view restores the user's scroll position in the bookmark list (#152)
 - [ ] **READER-02**: Reader info button moves to the three-dots overflow menu when the hero section scrolls out of view (#160)
 - [ ] **READER-03**: User can tap a scroll-to-top button in the reader to return to the beginning of the article (#161)
-- [ ] **READER-04**: User can toggle the scroll-to-top button visibility in reader settings (#161)
+- [x] **READER-04**: User can toggle the scroll-to-top button visibility in reader settings (#161)
 
 ### Bookmark Saving Activity
 
@@ -50,10 +50,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| READER-01 | Phase 03 | Pending |
+| READER-01 | Phase 03 | Complete |
 | READER-02 | Phase 03 | Pending |
 | READER-03 | Phase 03 | Pending |
-| READER-04 | Phase 03 | Pending |
+| READER-04 | Phase 03 | Complete |
 | SAVE-01 | Phase 04 | Pending |
 | SAVE-02 | Phase 04 | Pending |
 | LIST-01 | Phase 05 | Pending |
