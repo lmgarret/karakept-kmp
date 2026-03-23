@@ -84,8 +84,6 @@ internal fun ViewerTopBar(
     // Fullscreen toggle (desktop embedded only)
     isFullscreen: Boolean = false,
     onFullscreenToggle: (() -> Unit)? = null,
-    // READER-02: conditional "Details" menu item
-    isHeroVisible: Boolean = true,
     onDetailsClick: (() -> Unit)? = null
 ) {
     // Status bar background - fades in with top bar for parallax effect
@@ -249,8 +247,8 @@ internal fun ViewerTopBar(
                     HorizontalDivider()
                 }
 
-                // Details — mobile: only when hero scrolled away; desktop: always
-                if (onDetailsClick != null && (isDesktop || !isHeroVisible)) {
+                // Details — always present in the overflow menu
+                if (onDetailsClick != null) {
                     DropdownMenuItem(
                         text = { Text("Details") },
                         leadingIcon = {
