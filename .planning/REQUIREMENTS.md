@@ -1,50 +1,71 @@
-# Requirements: Karakept KMP — v1.7.0 Tech Debt Cleanup
+# Requirements: Karakept KMP — v1.8.0 Bug Fixes & UX Improvements
 
-**Defined:** 2026-03-21
-**Core Value:** Production code uses structured logging, stays within size targets, and avoids redundant operations
+**Defined:** 2026-03-23
+**Core Value:** A reliable, well-structured bookmark management app with clean code practices
 
-## v1.7.0 Requirements
+## v1.8.0 Requirements
 
-### Logging Cleanup
+### Reader UX
 
-- [x] **LOG-01**: Replace all remaining `println` debug calls (~97) with `AppLogger` calls or remove them
-  - `BookmarkActionsRepositorySync.kt`: ~53 calls
-  - `BookmarkRepository.kt`: ~17 calls
-  - `HighlightRepository.kt`: ~13 calls
-  - `BookmarkActionsRepository.kt`: ~7 calls
-  - `ImageCacheManager.kt`: ~5 calls
-  - Other files: ~2 calls
+- [ ] **READER-01**: Closing the reader view restores the user's scroll position in the bookmark list (#152)
+- [ ] **READER-02**: Reader info button moves to the three-dots overflow menu when the hero section scrolls out of view (#160)
+- [ ] **READER-03**: User can tap a scroll-to-top button in the reader to return to the beginning of the article (#161)
+- [ ] **READER-04**: User can toggle the scroll-to-top button visibility in reader settings (#161)
 
-### Code Size
+### Bookmark Saving Activity
 
-- [x] **SIZE-01**: Reduce `BookmarkSyncPipeline.kt` to under 500 lines (currently 545)
-- [x] **SIZE-02**: Reduce `SettingsRepositoryMutations.kt` to under 500 lines (currently 511)
+- [ ] **SAVE-01**: User can navigate back from the reader to the bookmark list after saving via Android share target (#158)
+- [ ] **SAVE-02**: Sharing a second bookmark from another app creates a fresh saving activity instead of reusing the previous one (#159)
 
-### Code Quality
+### List & Sync
 
-- [x] **QUAL-01**: Remove redundant `koinInject<ServerRepository>()` call in `App.kt`
+- [ ] **LIST-01**: Quick actions (e.g. removing a bookmark from a list) are immediately reflected in the currently viewed list (#154)
+- [ ] **LIST-02**: Enabling per-list offline sync actually downloads entries for offline reading (#155)
+
+### Selection & Filtering
+
+- [ ] **FILT-01**: Select-all selects all entries in the list, not just the first page (#153)
+- [ ] **FILT-02**: Quick Filters (All, Favorites, Archived, Highlights) display bookmark counters in the navigation drawer (#156)
+- [ ] **FILT-03**: User can pull-to-refresh on the Highlights view (#157)
+
+## Future Requirements
+
+### From backlog (not in scope for v1.8.0)
+
+- **FEAT-01**: Add 'On open bookmark' custom action (#113)
+- **FEAT-02**: Server API version check (#61)
+- **FEAT-03**: Add support for bookmark refresh (#18)
+- **FEAT-04**: Support other kind of bookmarks (#14)
+- **FEAT-05**: Compute reading time for non-synced articles (#9)
+- **FEAT-06**: Implement OIDC connect (#5)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| New functionality | This is a cleanup-only milestone |
-| Dependency upgrades | Tracked separately for future release |
-| Platform-specific work | Separate effort |
+| Dependency upgrades | Tracked separately |
+| New major features (#5, #9, #14, #18, #61, #113) | Deferred to future milestones — this milestone focuses on fixes and polish |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOG-01 | Phase 1 | Complete |
-| SIZE-01 | Phase 2 | Complete |
-| SIZE-02 | Phase 2 | Complete |
-| QUAL-01 | Phase 2 | Complete |
+| READER-01 | — | Pending |
+| READER-02 | — | Pending |
+| READER-03 | — | Pending |
+| READER-04 | — | Pending |
+| SAVE-01 | — | Pending |
+| SAVE-02 | — | Pending |
+| LIST-01 | — | Pending |
+| LIST-02 | — | Pending |
+| FILT-01 | — | Pending |
+| FILT-02 | — | Pending |
+| FILT-03 | — | Pending |
 
 **Coverage:**
-- v1.7.0 requirements: 4 total
-- Mapped to phases: 4
-- Unmapped: 0
+- v1.8.0 requirements: 11 total
+- Mapped to phases: 0
+- Unmapped: 11 ⚠️
 
 ---
-*Requirements defined: 2026-03-21*
+*Requirements defined: 2026-03-23*
