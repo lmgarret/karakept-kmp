@@ -76,10 +76,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. User removes a bookmark from a list via quick actions, and the bookmark immediately disappears from the currently viewed list without manual refresh
   2. User enables offline sync for a specific list in settings, triggers a sync, and the entries in that list are available for offline reading
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md -- Fix list removal optimistic update and wire per-list offline sync
 
 ### Phase 06: Selection & Filtering
 **Goal**: Users can effectively select, filter, and refresh their bookmark collections at any scale
@@ -89,7 +89,7 @@ Plans:
   1. User taps select-all on a list with more than 20 entries, and all entries in the list are selected (not just the first page)
   2. Quick Filters (All, Favorites, Archived, Highlights) in the navigation drawer display accurate bookmark counters next to each filter name
   3. User can pull-to-refresh on the Highlights view and the list updates with the latest data from the server
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
 - [ ] 06-01: TBD
@@ -105,7 +105,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 | 02. File Trimming & Quality | v1.7.0 | 1/1 | Complete | 2026-03-21 |
 | 03. Reader UX | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
 | 04. Bookmark Saving Activity | v1.8.0 | 1/1 | Complete    | 2026-03-23 |
-| 05. List & Sync | v1.8.0 | 0/? | Not started | - |
+| 05. List & Sync | v1.8.0 | 0/1 | Planning complete | - |
 | 06. Selection & Filtering | v1.8.0 | 0/? | Not started | - |
 
 ### Phase 7: UI Tests — Add Compose UI test infrastructure and instrumented tests for reader UX, bookmark saving, list sync, and selection/filtering scenarios introduced in v1.8.0
