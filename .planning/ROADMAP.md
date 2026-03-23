@@ -79,7 +79,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-00-PLAN.md -- Wave 0: Create unit test scaffolds for LIST-01 and LIST-02
+- [x] 05-00-PLAN.md -- Wave 0: Create unit test scaffolds for LIST-01 and LIST-02
 - [ ] 05-01-PLAN.md -- Fix list removal optimistic update and wire per-list offline sync with child list expansion
 
 ### Phase 06: Selection & Filtering
@@ -106,7 +106,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 | 02. File Trimming & Quality | v1.7.0 | 1/1 | Complete | 2026-03-21 |
 | 03. Reader UX | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
 | 04. Bookmark Saving Activity | v1.8.0 | 1/1 | Complete    | 2026-03-23 |
-| 05. List & Sync | v1.8.0 | 0/2 | Planning complete | - |
+| 05. List & Sync | v1.8.0 | 1/2 | In Progress|  |
 | 06. Selection & Filtering | v1.8.0 | 0/? | Not started | - |
 
 ### Phase 7: UI Tests — Add Compose UI test infrastructure and instrumented tests for reader UX, bookmark saving, list sync, and selection/filtering scenarios introduced in v1.8.0
@@ -114,7 +114,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 6
-**Plans:** 1/1 plans complete
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 7 to break down)

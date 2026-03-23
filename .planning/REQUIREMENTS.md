@@ -56,8 +56,8 @@
 | READER-04 | Phase 03 | Complete |
 | SAVE-01 | Phase 04 | Complete |
 | SAVE-02 | Phase 04 | Complete |
-| LIST-01 | Phase 05 | Pending |
-| LIST-02 | Phase 05 | Pending |
+| LIST-01 | Phase 05 | In Progress |
+| LIST-02 | Phase 05 | In Progress |
 | FILT-01 | Phase 06 | Pending |
 | FILT-02 | Phase 06 | Pending |
 | FILT-03 | Phase 06 | Pending |
