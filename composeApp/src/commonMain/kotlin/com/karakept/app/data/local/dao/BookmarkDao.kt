@@ -224,4 +224,64 @@ interface BookmarkDao {
         WHERE serverId = :serverId
     """)
     suspend fun getBookmarksForServerWithContentInfo(serverId: String): List<BookmarkEntity>
+
+    // Unpaged queries for select-all (no LIMIT/OFFSET)
+    @Query("""
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId AND isArchived = 0
+        ORDER BY createdAt DESC
+    """)
+    suspend fun getAllNotArchivedForServer(serverId: String): List<BookmarkEntity>
+
+    @Query("""
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId AND isStarred = 1
+        ORDER BY createdAt DESC
+    """)
+    suspend fun getAllFavoritesForServer(serverId: String): List<BookmarkEntity>
+
+    @Query("""
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId AND isArchived = 1
+        ORDER BY createdAt DESC
+    """)
+    suspend fun getAllArchivedForServer(serverId: String): List<BookmarkEntity>
+
+    @Query("""
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId
+        ORDER BY createdAt DESC
+    """)
+    suspend fun getAllBookmarksForServerSuspend(serverId: String): List<BookmarkEntity>
+
+    @Query("""
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId
+        AND (listIds = :listId
+             OR listIds LIKE :listId || ',%'
+             OR listIds LIKE '%,' || :listId
+             OR listIds LIKE '%,' || :listId || ',%')
+        ORDER BY createdAt DESC
+    """)
+    suspend fun getAllBookmarksForList(serverId: String, listId: String): List<BookmarkEntity>
 }

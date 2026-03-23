@@ -280,6 +280,31 @@ class BookmarkRepository(
         return result
     }
 
+    /**
+     * Fetches all bookmarks matching [status] and [listId] without pagination.
+     * Used by selectAll() to select beyond the first page.
+     */
+    suspend fun getAllBookmarks(
+        server: Server,
+        status: com.karakept.app.data.model.FilterStatus,
+        listId: String? = null
+    ): List<BookmarkEntity> {
+        return if (listId != null) {
+            bookmarkDao.getAllBookmarksForList(server.id, listId)
+        } else {
+            when (status) {
+                com.karakept.app.data.model.FilterStatus.ALL ->
+                    bookmarkDao.getAllNotArchivedForServer(server.id)
+                com.karakept.app.data.model.FilterStatus.ALL_INCLUDING_ARCHIVED ->
+                    bookmarkDao.getAllBookmarksForServerSuspend(server.id)
+                com.karakept.app.data.model.FilterStatus.FAVORITES ->
+                    bookmarkDao.getAllFavoritesForServer(server.id)
+                com.karakept.app.data.model.FilterStatus.ARCHIVED ->
+                    bookmarkDao.getAllArchivedForServer(server.id)
+            }
+        }
+    }
+
     suspend fun getBookmarkCount(
         server: Server,
         status: com.karakept.app.data.model.FilterStatus,
