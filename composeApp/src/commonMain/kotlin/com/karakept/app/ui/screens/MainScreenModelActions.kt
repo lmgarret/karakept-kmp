@@ -156,16 +156,20 @@ fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: Str
         bookmarkActionsRepository.removeFromList(
             bookmark.remoteId, bookmark.serverId, listId, isOnline
         )
-        updateAccumulatedBookmarks { list ->
-            list.map {
-                if (it.remoteId == bookmark.remoteId) {
-                    val newListIds = it.listIds
-                        .split(",")
-                        .map { id -> id.trim() }
-                        .filter { id -> id.isNotBlank() && id != listId }
-                    it.copy(listIds = newListIds.joinToString(","))
-                } else {
-                    it
+        if (_currentListContext.value == listId) {
+            updateAccumulatedBookmarks { it.filter { b -> b.remoteId != bookmark.remoteId } }
+        } else {
+            updateAccumulatedBookmarks { list ->
+                list.map {
+                    if (it.remoteId == bookmark.remoteId) {
+                        val newListIds = it.listIds
+                            .split(",")
+                            .map { id -> id.trim() }
+                            .filter { id -> id.isNotBlank() && id != listId }
+                        it.copy(listIds = newListIds.joinToString(","))
+                    } else {
+                        it
+                    }
                 }
             }
         }
