@@ -1,7 +1,9 @@
 package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.BookmarkDao
+import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.remote.RemoteDataSource
@@ -69,6 +71,7 @@ internal class BookmarkSyncPipeline(
     private val settingsRepository: SettingsRepository,
     private val highlightRepository: HighlightRepository,
     private val imageCacheManager: ImageCacheManager,
+    private val listDao: ListDao,
     private val syncProgress: MutableStateFlow<com.karakept.app.data.model.SyncProgress>,
     private val fetchRemoteContent: suspend (Server, String) -> String?,
     private val cacheHeroAssetsForBookmark: suspend (Server, Long, String, String?, String?) -> Unit
@@ -458,6 +461,36 @@ internal class BookmarkSyncPipeline(
         if (bookmarksToSync.isNotEmpty()) {
             fetchContentForBookmarks(bookmarksToSync)
         }
+
+        // Per-list offline sync: fetch content for bookmarks in lists with syncOffline = true
+        val allListSettings = settingsRepository.allListSettings.first()
+        val offlineListIds = allListSettings
+            .filter { (_, settings) -> settings.syncOffline }
+            .keys
+            .toMutableSet()
+
+        // Expand with descendant list IDs for lists with includeChildListBookmarks = true
+        val listsWithChildren = allListSettings
+            .filter { (listId, settings) -> settings.syncOffline && settings.includeChildListBookmarks && listId in offlineListIds }
+            .keys
+        if (listsWithChildren.isNotEmpty()) {
+            val allLists = listDao.getListsForServerOnce(config.server.id)
+            for (parentId in listsWithChildren) {
+                addDescendantListIds(parentId, allLists, offlineListIds)
+            }
+        }
+
+        if (offlineListIds.isNotEmpty()) {
+            val alreadySyncedIds = bookmarksToSync.map { it.remoteId }.toSet()
+            val offlineBookmarks = entities.filter { entity ->
+                if (alreadySyncedIds.contains(entity.remoteId)) return@filter false
+                val entityListIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()
+                entityListIds.intersect(offlineListIds).isNotEmpty() && entity.readingTimeMinutes == 0
+            }
+            if (offlineBookmarks.isNotEmpty()) {
+                fetchContentForBookmarks(offlineBookmarks)
+            }
+        }
     }
 
     private suspend fun fetchContentForBookmarks(bookmarks: List<BookmarkEntity>) {
@@ -488,6 +521,18 @@ internal class BookmarkSyncPipeline(
             }
             current++
             syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingContent(current, total)
+        }
+    }
+
+    /**
+     * Recursively adds all descendant list IDs to the target set.
+     * Same pattern as ListSyncConfig.addAllDescendants().
+     */
+    private fun addDescendantListIds(parentId: String, allLists: List<ListEntity>, target: MutableSet<String>) {
+        val children = allLists.filter { it.parentId == parentId }
+        for (child in children) {
+            target.add(child.remoteId)
+            addDescendantListIds(child.remoteId, allLists, target)
         }
     }
 }
