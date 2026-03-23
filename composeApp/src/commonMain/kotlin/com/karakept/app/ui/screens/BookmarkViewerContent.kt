@@ -19,8 +19,12 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -225,6 +229,9 @@ fun BookmarkViewerContent(
     val displayState = if (loadingState is BookmarkLoadingState.Error && lastValidState is BookmarkLoadingState.FullyLoaded) lastValidState else loadingState
 
     val fabVisible = rememberFabVisibilityState(scrollState = scrollState, fabExpanded = fabExpanded)
+    val scrollToTopEnabled by screenModel.scrollToTopEnabled.collectAsState()
+    val scrollToTopVisible = rememberScrollToTopVisibility(scrollState = scrollState, fabVisible = fabVisible)
+    val isHeroVisible by remember { androidx.compose.runtime.derivedStateOf { scrollState.firstVisibleItemIndex == 0 } }
     val showStickyTitle = rememberStickyTitleVisibility(scrollState = scrollState, bannerHeight = bannerHeight, toolbarHeight = toolbarHeight)
     val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
 
@@ -386,6 +393,25 @@ fun BookmarkViewerContent(
                         }
                     }
 
+                    // Scroll-to-top button (READER-03)
+                    AnimatedVisibility(
+                        visible = scrollToTopVisible && scrollToTopEnabled,
+                        enter = fadeIn(animationSpec = tween(300)),
+                        exit = fadeOut(animationSpec = tween(300)),
+                        modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
+                    ) {
+                        SmallFloatingActionButton(
+                            onClick = { scope.launch { scrollState.animateScrollToItem(0) } },
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowUpward,
+                                contentDescription = "Scroll to top"
+                            )
+                        }
+                    }
+
                     // Global Dimming Overlay
                     if (selectedHighlightId != null) {
                         var overlayRootOffset by remember { mutableStateOf(Offset.Zero) }
@@ -430,7 +456,9 @@ fun BookmarkViewerContent(
                             uriHandler.openUri(state.bookmark.url)
                             scope.launch { snackbarManager.showSnackbar("Opening in browser") }
                         },
-                        isFullscreen = isFullscreen, onFullscreenToggle = onFullscreenToggle
+                        isFullscreen = isFullscreen, onFullscreenToggle = onFullscreenToggle,
+                        isHeroVisible = isHeroVisible,
+                        onDetailsClick = { showDetailsPanel = true }
                     )
 
                     if (!getPlatform().isDesktop) {
