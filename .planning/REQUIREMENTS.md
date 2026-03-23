@@ -14,8 +14,8 @@
 
 ### Bookmark Saving Activity
 
-- [ ] **SAVE-01**: User can navigate back from the reader to the bookmark list after saving via Android share target (#158)
-- [ ] **SAVE-02**: Sharing a second bookmark from another app creates a fresh saving activity instead of reusing the previous one (#159)
+- [x] **SAVE-01**: User can navigate back from the reader to the bookmark list after saving via Android share target (#158)
+- [x] **SAVE-02**: Sharing a second bookmark from another app creates a fresh saving activity instead of reusing the previous one (#159)
 
 ### List & Sync
 
@@ -54,8 +54,8 @@
 | READER-02 | Phase 03 | Complete |
 | READER-03 | Phase 03 | Complete |
 | READER-04 | Phase 03 | Complete |
-| SAVE-01 | Phase 04 | Pending |
-| SAVE-02 | Phase 04 | Pending |
+| SAVE-01 | Phase 04 | Complete |
+| SAVE-02 | Phase 04 | Complete |
 | LIST-01 | Phase 05 | Pending |
 | LIST-02 | Phase 05 | Pending |
 | FILT-01 | Phase 06 | Pending |
