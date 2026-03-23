@@ -2,6 +2,7 @@ package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
+import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
@@ -31,7 +32,8 @@ class BookmarkRepository(
     private val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
     private val serverRepository: com.karakept.app.data.repository.ServerRepository,
     private val highlightRepository: com.karakept.app.data.repository.HighlightRepository,
-    private val imageCacheManager: ImageCacheManager
+    private val imageCacheManager: ImageCacheManager,
+    private val listDao: ListDao
 ) {
     fun getBookmarks(server: Server): Flow<List<BookmarkEntity>> {
         return bookmarkDao.getBookmarksForServer(server.id)
@@ -358,6 +360,7 @@ class BookmarkRepository(
                     settingsRepository = settingsRepository,
                     highlightRepository = highlightRepository,
                     imageCacheManager = imageCacheManager,
+                    listDao = listDao,
                     syncProgress = _syncProgress,
                     fetchRemoteContent = ::fetchRemoteContent,
                     cacheHeroAssetsForBookmark = ::cacheHeroAssetsForBookmark
