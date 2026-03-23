@@ -2,12 +2,12 @@
 phase: 05
 slug: list-sync
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-23
 ---
 
-# Phase 05 — Validation Strategy
+# Phase 05 -- Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
 
@@ -17,7 +17,7 @@ created: 2026-03-23
 
 | Property | Value |
 |----------|-------|
-| **Framework** | JUnit + kotlinx-coroutines-test (desktop target) |
+| **Framework** | JUnit + kotlinx-coroutines-test + mockk (desktop target) |
 | **Config file** | `composeApp/build.gradle.kts` |
 | **Quick run command** | `./gradlew :composeApp:assembleDebug` |
 | **Full suite command** | `./gradlew :composeApp:desktopTest -x kspCommonMainKotlinMetadata` |
@@ -38,20 +38,25 @@ created: 2026-03-23
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 05-01-01 | 01 | 1 | LIST-01 | unit | Manual verification (UI state test) | ❌ W0 | ⬜ pending |
-| 05-01-02 | 01 | 1 | LIST-01 | unit | Manual verification (UI state test) | ❌ W0 | ⬜ pending |
-| 05-02-01 | 02 | 1 | LIST-02 | unit | Manual verification (sync pipeline test) | ❌ W0 | ⬜ pending |
-| 05-02-02 | 02 | 1 | LIST-02 | unit | Manual verification | ❌ W0 | ⬜ pending |
+| 05-00-01 | 00 | 0 | LIST-01 | unit (scaffold) | `./gradlew :composeApp:desktopTest --tests "*.RemoveBookmarkFromListTest" -x kspCommonMainKotlinMetadata` | Created by W0 | pending |
+| 05-00-02 | 00 | 0 | LIST-02 | unit (scaffold) | `./gradlew :composeApp:desktopTest --tests "*.SyncContentOfflineTest" -x kspCommonMainKotlinMetadata` | Created by W0 | pending |
+| 05-01-01 | 01 | 1 | LIST-01 | unit | `./gradlew :composeApp:desktopTest --tests "*.RemoveBookmarkFromListTest" -x kspCommonMainKotlinMetadata` | Yes (W0) | pending |
+| 05-01-02 | 01 | 1 | LIST-02 | unit | `./gradlew :composeApp:desktopTest --tests "*.SyncContentOfflineTest" -x kspCommonMainKotlinMetadata` | Yes (W0) | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-Both fixes are small, well-scoped changes. The existing test infrastructure is integration-focused (tests against live Karakeep server) and not suitable for unit-level validation of these fixes. Manual verification via app testing is recommended.
+Wave 0 (Plan 05-00) creates two test files:
 
-*Existing infrastructure covers all phase requirements — no new test files needed for Wave 0.*
+| Test File | Requirement | Behaviors Tested |
+|-----------|-------------|------------------|
+| `RemoveBookmarkFromListTest.kt` | LIST-01 | Conditional filtering when viewing target list vs. listIds update when viewing other context |
+| `SyncContentOfflineTest.kt` | LIST-02 | Content fetch for offline-enabled lists, skip for existing content, child list expansion, no-op when no offline lists |
+
+Tests use mockk + kotlinx-coroutines-test, consistent with existing `PendingActionQueueTest.kt` patterns.
 
 ---
 
@@ -59,20 +64,18 @@ Both fixes are small, well-scoped changes. The existing test infrastructure is i
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| Bookmark disappears from list view after quick-action removal | LIST-01 | UI state flow; integration test infrastructure is server-focused | Remove bookmark from a list via quick action while viewing that list; verify it disappears immediately |
-| Bookmark stays visible in All Bookmarks after list removal | LIST-01 | UI state flow context check | Remove bookmark from a list while viewing All Bookmarks; verify bookmark stays visible |
-| Content downloaded for offline-enabled list bookmarks on sync | LIST-02 | Requires live server + actual sync cycle | Enable offline sync for a list, trigger sync, verify entries available for offline reading |
-| Bookmarks with existing content are skipped during offline sync | LIST-02 | Requires live server + actual sync cycle | Verify sync does not re-fetch content for bookmarks already having content in offline-enabled list |
+| End-to-end bookmark removal from list view | LIST-01 | Full UI flow with real navigation | Remove bookmark from a list via quick action while viewing that list; verify it disappears immediately |
+| End-to-end content download for offline list | LIST-02 | Requires live server + actual sync cycle | Enable offline sync for a list, trigger sync, verify entries available for offline reading |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify commands pointing to Wave 0 test files
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (Plan 05-00 creates both test files)
+- [x] No watch-mode flags
+- [x] Feedback latency < 60s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved
