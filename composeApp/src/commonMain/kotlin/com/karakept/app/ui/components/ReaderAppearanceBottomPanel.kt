@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.FontDownload
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -103,6 +104,11 @@ fun ReaderAppearanceBottomPanel(
             Tab(
                 selected = selectedTab == 4,
                 onClick = { selectedTab = 4 },
+                icon = { Icon(Icons.Default.Tune, contentDescription = "Behaviour") }
+            )
+            Tab(
+                selected = selectedTab == 5,
+                onClick = { selectedTab = 5 },
                 icon = { Icon(Icons.Default.RestartAlt, contentDescription = "Reset") }
             )
         }
@@ -119,26 +125,11 @@ fun ReaderAppearanceBottomPanel(
                 1 -> FontTab(fontFamily, onFontFamilyChange)
                 2 -> TextColorTab(textColor, onTextColorChange)
                 3 -> BackgroundColorTab(backgroundColor, onBackgroundColorChange)
-                4 -> ResetTab(onReset = { showResetDialog = true })
+                4 -> BehaviourTab(scrollToTopEnabled, onScrollToTopToggle)
+                5 -> ResetTab(onReset = { showResetDialog = true })
             }
         }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Scroll-to-top button",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Switch(
-                checked = scrollToTopEnabled,
-                onCheckedChange = onScrollToTopToggle
-            )
-        }
     }
 
     if (showResetDialog) {
@@ -328,6 +319,27 @@ private fun BackgroundColorTab(currentColor: Color?, onColorSelected: (Color?) -
                     onClick = { onColorSelected(color) }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun BehaviourTab(scrollToTopEnabled: Boolean, onScrollToTopToggle: (Boolean) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Scroll-to-top button",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Switch(
+                checked = scrollToTopEnabled,
+                onCheckedChange = onScrollToTopToggle
+            )
         }
     }
 }
