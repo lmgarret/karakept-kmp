@@ -43,6 +43,7 @@ import com.karakept.app.ui.screens.BookmarkViewerContent
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
 import com.karakept.app.ui.screens.HighlightsScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
+import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.ui.screens.SettingsScreen
 import com.karakept.app.ui.screens.settings.PerListSettingsScreen
 import com.karakept.api.model.KarakeepList
@@ -89,6 +90,8 @@ fun MainScreenExpandedLayout(
     screenModel: MainScreenModel,
     navigateTo: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
     isDesktop: Boolean,
+    quickFilterCounts: QuickFilterCounts = QuickFilterCounts(),
+    highlightsCount: Int = 0,
     scaffoldContent: @Composable (isExpandedLayout: Boolean) -> Unit
 ) {
     // Column width state -- persisted via SettingsRepository
@@ -180,7 +183,9 @@ fun MainScreenExpandedLayout(
                     isHighlightsSelected = showHighlights,
                     onAddBookmark = if (isDesktop && !offlineMode && !isAutoOffline) {
                         { onShowAddBookmarkDialogChanged(true) }
-                    } else null
+                    } else null,
+                    quickFilterCounts = quickFilterCounts,
+                    highlightsCount = highlightsCount
                 )
             }
         }
