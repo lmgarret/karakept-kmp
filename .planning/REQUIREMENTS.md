@@ -19,8 +19,8 @@
 
 ### List & Sync
 
-- [ ] **LIST-01**: Quick actions (e.g. removing a bookmark from a list) are immediately reflected in the currently viewed list (#154)
-- [ ] **LIST-02**: Enabling per-list offline sync actually downloads entries for offline reading (#155)
+- [x] **LIST-01**: Quick actions (e.g. removing a bookmark from a list) are immediately reflected in the currently viewed list (#154)
+- [x] **LIST-02**: Enabling per-list offline sync actually downloads entries for offline reading (#155)
 
 ### Selection & Filtering
 
