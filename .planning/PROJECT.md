@@ -19,7 +19,9 @@ A reliable, well-structured bookmark management app with clean code practices.
 
 ### Active
 
-- [ ] Fix reader closing scrolling list to top (#152)
+- ✓ Fix reader closing scrolling list to top (#152) — Phase 03
+- ✓ Reader info button should move to menu on scroll (#160) — Phase 03 (simplified: always in menu)
+- ✓ Scroll-to-top button in reader (#161) — Phase 03
 - [ ] Fix select-all only selecting 20 entries (#153)
 - [ ] Quick actions not reflected in viewed list (#154)
 - [ ] Per-list offline sync not working (#155)
@@ -27,8 +29,6 @@ A reliable, well-structured bookmark management app with clean code practices.
 - [ ] Pull-to-refresh for Highlights (#157)
 - [ ] Cannot go back to bookmark list after share-save (#158)
 - [ ] State leak between bookmark saving activities (#159)
-- [ ] Reader info button should move to menu on scroll (#160)
-- [ ] Scroll-to-top button in reader (#161)
 
 ### Out of Scope
 
@@ -86,4 +86,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 after v1.8.0 milestone start*
+*Last updated: 2026-03-23 after Phase 03 (reader-ux) complete*
