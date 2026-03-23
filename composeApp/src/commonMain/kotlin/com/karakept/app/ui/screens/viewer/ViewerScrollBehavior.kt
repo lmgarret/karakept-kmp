@@ -160,3 +160,28 @@ internal fun rememberStickyTitleVisibility(
 
     return showStickyTitle
 }
+
+/**
+ * Remembers scroll-to-top button visibility based on hero visibility,
+ * FAB visibility (scroll-up detection), and end-of-article detection.
+ *
+ * The button is shown when:
+ * - Hero is NOT visible AND (FAB is visible OR user is at the end of the article)
+ */
+@Composable
+internal fun rememberScrollToTopVisibility(
+    scrollState: LazyListState,
+    fabVisible: Boolean
+): Boolean {
+    val isHeroVisible by remember {
+        derivedStateOf { scrollState.firstVisibleItemIndex == 0 }
+    }
+    val isAtEnd by remember {
+        derivedStateOf {
+            val layoutInfo = scrollState.layoutInfo
+            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()
+            lastVisible != null && lastVisible.index == layoutInfo.totalItemsCount - 1
+        }
+    }
+    return !isHeroVisible && (fabVisible || isAtEnd)
+}
