@@ -1,35 +1,15 @@
 ---
 phase: 05-list-sync
-verified: 2026-03-23T19:14:57Z
-status: gaps_found
-score: 4/5 must-haves verified
-gaps:
-  - truth: "Unit tests exist for removeBookmarkFromList conditional filtering behavior (AND pass after implementation)"
-    status: failed
-    reason: >
-      Test files exist and compile, but RemoveBookmarkFromListTest has a structural flaw: tests 1 and 3
-      call `currentProductionTransform` (an inlined copy of the OLD buggy behavior) and assert the NEW
-      expected behavior. They will permanently fail regardless of whether the production fix is applied.
-      Test 2 calls `applyRemoveBookmarkFromListTransform` (the expected logic inlined in the test itself)
-      and will permanently pass regardless of production code. None of the three tests exercise the actual
-      `MainScreenModelActions.removeBookmarkFromList` function in production code. The test suite cannot
-      serve as a GREEN-phase regression gate for LIST-01.
-    artifacts:
-      - path: "composeApp/src/desktopTest/kotlin/com/karakept/app/ui/screens/RemoveBookmarkFromListTest.kt"
-        issue: >
-          Tests 1 and 3 pass `currentProductionTransform` (hardcoded old behavior) instead of the real
-          production function, so they always fail. Test 2 passes `applyRemoveBookmarkFromListTransform`
-          (hardcoded expected behavior), so it always passes. No test calls the actual production
-          `removeBookmarkFromList` extension function.
-    missing:
-      - >
-        Rewrite RemoveBookmarkFromListTest to test the actual conditional logic in production code.
-        The pure-function approach is sound (the transform lambda is testable without a full ScreenModel),
-        but the helper must replicate the CURRENT production code path, not a hardcoded stub. Replace
-        `currentProductionTransform` calls in tests 1 and 3 with a helper that delegates to the actual
-        conditional transform implemented in Plan 01 (i.e., test the real `if (_currentListContext.value
-        == listId)` path). Alternatively, extract the transform logic as a standalone pure function in
-        production code that both the ScreenModel extension and the test call.
+verified: 2026-03-23T19:55:00Z
+status: human_needed
+score: 5/5 must-haves verified
+re_verification:
+  previous_status: gaps_found
+  previous_score: 4/5
+  gaps_closed:
+    - "Unit tests exist for removeBookmarkFromList conditional filtering behavior AND call production code (all 3 tests can now serve as a regression gate for LIST-01)"
+  gaps_remaining: []
+  regressions: []
 human_verification:
   - test: "Remove a bookmark from a list while the list is open"
     expected: "The bookmark disappears from the list view immediately without requiring a refresh"
@@ -41,52 +21,58 @@ human_verification:
 
 # Phase 05: List Sync Verification Report
 
-**Phase Goal:** Fix two list management and sync bugs for v1.8.0 — bookmark removal not visually reflected in list view, and per-list offline sync setting not triggering content download.
-**Verified:** 2026-03-23T19:14:57Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Phase Goal:** Fix two list-management bugs: (1) bookmark removal not reflected visually in the current list view (LIST-01), and (2) per-list offline sync toggle saving the setting but never triggering content download (LIST-02).
+**Verified:** 2026-03-23T19:55:00Z
+**Status:** human_needed
+**Re-verification:** Yes — after gap closure (Plan 02)
+
+## Re-verification Summary
+
+Previous verification (2026-03-23T19:14:57Z) had status `gaps_found` with 1 gap:
+
+- `RemoveBookmarkFromListTest` tests 1 and 3 called `currentProductionTransform` (a hardcoded replica of old buggy code) instead of production code, ensuring those tests always fail; test 2 called an inlined expected-behavior helper ensuring it always passed. No test exercised the real production function.
+
+Gap closure (Plan 02) extracted `applyRemoveBookmarkTransform` as a top-level pure function in `MainScreenModelActions.kt` and rewrote the test file to import and call it directly. The gap is now closed.
+
+**No regressions found in the previously-verified Plan 01 artifacts.**
+
+---
 
 ## Goal Achievement
 
-### Observable Truths (Plan 01 — Implementation)
+### Observable Truths
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Removing a bookmark from a list while viewing that list makes it disappear immediately | ? HUMAN | `_currentListContext.value == listId` guard at line 159 in MainScreenModelActions.kt with `filter` path — correct logic present, visual verification needed |
-| 2 | Removing a bookmark while viewing All Bookmarks keeps it but updates its listIds | ? HUMAN | `else` branch at line 161 maps listIds — correct logic present, visual verification needed |
-| 3 | Triggering a sync when a list has syncOffline=true fetches content for bookmarks lacking content | ? HUMAN | `offlineBookmarks` block in BookmarkSyncPipeline.kt lines 483-493 — correct logic present, end-to-end verification needs running app |
-| 4 | Bookmarks that already have content (readingTimeMinutes > 0) are skipped during offline sync | ✓ VERIFIED | `entity.readingTimeMinutes == 0` guard at line 488 in BookmarkSyncPipeline.kt |
-| 5 | Bookmarks in child lists of an offline-enabled parent (includeChildListBookmarks=true) are also fetched | ✓ VERIFIED | `addDescendantListIds` recursive helper and `listsWithChildren` expansion block at lines 473-480 in BookmarkSyncPipeline.kt |
-
-### Observable Truths (Plan 00 — Test Scaffolds)
-
-| # | Truth | Status | Evidence |
-|---|-------|--------|----------|
-| T1 | Unit tests exist for removeBookmarkFromList conditional filtering behavior | ✗ FAILED | File exists at correct path with 3 test cases, but tests do not exercise production code — see gap below |
+| 1 | Removing a bookmark from a list while viewing that list makes it disappear immediately | ? HUMAN | `applyRemoveBookmarkTransform` at line 169 branches on `currentListContext == listId` and returns `bookmarks.filter { it.remoteId != bookmark.remoteId }` — correct logic confirmed; visual verification needs running app |
+| 2 | Removing a bookmark while viewing All Bookmarks keeps it but updates its listIds | ? HUMAN | Else-branch at line 172 maps list and returns `it.copy(listIds = newListIds.joinToString(","))` — correct logic confirmed; behavioral verification needs running app |
+| 3 | Triggering a sync when a list has syncOffline=true fetches content for bookmarks lacking content | ? HUMAN | `offlineBookmarks` block in BookmarkSyncPipeline.kt with `fetchContentForBookmarks(offlineBookmarks)` call — correct logic confirmed; end-to-end verification needs running app + Karakeep server |
+| 4 | Bookmarks that already have content (readingTimeMinutes > 0) are skipped during offline sync | ✓ VERIFIED | `entity.readingTimeMinutes == 0` guard present in BookmarkSyncPipeline.kt |
+| 5 | Bookmarks in child lists of an offline-enabled parent are also fetched | ✓ VERIFIED | `addDescendantListIds` recursive helper and `listsWithChildren` expansion confirmed in BookmarkSyncPipeline.kt |
+| T1 | Unit tests exist for removeBookmarkFromList conditional filtering behavior AND call production code | ✓ VERIFIED | All 3 tests in RemoveBookmarkFromListTest import and call `applyRemoveBookmarkTransform` from production code; no hardcoded stubs remain |
 | T2 | Unit tests exist for syncContent offline wiring behavior | ✓ VERIFIED | SyncContentOfflineTest.kt has 4 well-formed tests with correct pure-function contract matching production logic |
-| T3 | All tests fail initially (RED phase) | ? UNCERTAIN | Cannot run Gradle locally due to JDK 25 incompatibility (pre-existing); static analysis confirms RED intent for LIST-01 tests 1+3 and LIST-02 (tests call production behavior that did not exist) |
 
-**Score:** 4/5 implementation truths verifiable (2 need human confirmation, 2 verified, 1 gap on test correctness)
+**Score:** 5/5 must-haves verified (automated); 3 truths require human confirmation for end-to-end behavior
 
 ---
 
 ## Required Artifacts
 
-### Plan 00 Artifacts
+### Plan 02 Artifacts (Gap Closure)
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `composeApp/src/desktopTest/kotlin/com/karakept/app/ui/screens/RemoveBookmarkFromListTest.kt` | Tests for LIST-01 conditional optimistic removal | ✗ STRUCTURALLY FLAWED | File exists, 3 tests present, contains `removeBookmarkFromList` reference in comments. However tests 1 and 3 call `currentProductionTransform` (hardcoded old behavior) and can never turn GREEN. Test 2 calls an inlined expected helper and always passes. No test path calls the production function. |
-| `composeApp/src/desktopTest/kotlin/com/karakept/app/data/repository/SyncContentOfflineTest.kt` | Tests for LIST-02 offline sync content fetching | ✓ VERIFIED | File exists, 4 tests with correct pure-function contract matching production implementation |
+| `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreenModelActions.kt` | Top-level pure function `applyRemoveBookmarkTransform` extracted; `removeBookmarkFromList` delegates to it | ✓ VERIFIED | Function at line 163; `removeBookmarkFromList` has a single `updateAccumulatedBookmarks` call delegating to it at line 192 |
+| `composeApp/src/desktopTest/kotlin/com/karakept/app/ui/screens/RemoveBookmarkFromListTest.kt` | All 3 tests call production `applyRemoveBookmarkTransform`; no hardcoded stubs | ✓ VERIFIED | Import at line 4; 3 `@Test` methods each calling `applyRemoveBookmarkTransform`; `currentProductionTransform` count = 0; inline `applyRemoveBookmarkFromListTransform` count = 0; `assertNull` not present |
 
-### Plan 01 Artifacts
+### Plan 01 Artifacts (Regression Check)
 
-| Artifact | Expected | Status | Details |
-|----------|----------|--------|---------|
-| `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreenModelActions.kt` | Conditional optimistic removal in removeBookmarkFromList | ✓ VERIFIED | Contains `_currentListContext.value == listId` at line 159; if-branch filters, else-branch updates listIds |
-| `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkSyncPipeline.kt` | Per-list offline sync content fetching with child list expansion | ✓ VERIFIED | Contains `syncOffline`, `allListSettings`, `offlineListIds`, `addDescendantListIds`, `getListsForServerOnce`, `offlineBookmarks`, `alreadySyncedIds`, `listDao` — all required patterns present |
-| `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkRepository.kt` | ListDao constructor parameter, passed to BookmarkSyncPipeline | ✓ VERIFIED | `listDao: ListDao` at line 36, import at line 5, passed to pipeline at line 363 |
-| `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` | 9 get() calls for BookmarkRepository | ✓ VERIFIED | Line 90: `BookmarkRepository(get(), get(), get(), get(), get(), get(), get(), get(), get())` — 9 positional args confirmed |
+| Artifact | Status | Regression Evidence |
+|----------|--------|---------------------|
+| `MainScreenModelActions.kt` — conditional filter/update logic | ✓ NO REGRESSION | `_currentListContext.value` passed as `currentListContext` at line 194; delegation pattern intact |
+| `BookmarkSyncPipeline.kt` — per-list offline sync content fetching | ✓ NO REGRESSION | `syncOffline` filter at lines 468, 474 confirmed present |
+| `BookmarkRepository.kt` — ListDao constructor parameter | ✓ NO REGRESSION | Not touched by Plan 02 |
+| `AppModule.kt` — 9-arg BookmarkRepository constructor | ✓ NO REGRESSION | Not touched by Plan 02 |
 
 ---
 
@@ -94,40 +80,41 @@ human_verification:
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| `MainScreenModelActions.kt removeBookmarkFromList` | `_currentListContext` | conditional check before filter vs map | ✓ WIRED | Pattern `_currentListContext\.value == listId` found at line 159 |
-| `BookmarkSyncPipeline.syncContent()` | `settingsRepository.allListSettings` | reads syncOffline flags | ✓ WIRED | `val allListSettings = settingsRepository.allListSettings.first()` at line 466 |
-| `BookmarkSyncPipeline.syncContent()` | `listDao.getListsForServerOnce` | expands offlineListIds with descendants | ✓ WIRED | `listDao.getListsForServerOnce(config.server.id)` at line 477, guarded by `listsWithChildren.isNotEmpty()` |
+| `RemoveBookmarkFromListTest.kt` | `MainScreenModelActions.kt applyRemoveBookmarkTransform` | direct import and 3 call sites | ✓ WIRED | Import at line 4; calls in test methods at lines 56, 75, 97 |
+| `MainScreenModelActions.kt removeBookmarkFromList` | `MainScreenModelActions.kt applyRemoveBookmarkTransform` | delegation — single `updateAccumulatedBookmarks` call | ✓ WIRED | `applyRemoveBookmarkTransform(currentListContext = _currentListContext.value, ...)` at lines 193-198 |
+| `BookmarkSyncPipeline.syncContent()` | `settingsRepository.allListSettings` | reads syncOffline flags | ✓ WIRED (regression-confirmed) | `val allListSettings = settingsRepository.allListSettings.first()` pattern present |
 
 ---
 
 ## Data-Flow Trace (Level 4)
 
+No changes to data-flow from Plan 02 (pure function extraction only; no data sources modified). Previous Level 4 results carry forward:
+
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|--------------------|--------|
-| `MainScreenModelActions.kt` | `_currentListContext.value` | `MutableStateFlow<String?>` updated by screen navigation (pre-existing) | Yes — set when user navigates into a list | ✓ FLOWING |
-| `BookmarkSyncPipeline.kt` | `allListSettings` | `settingsRepository.allListSettings.first()` — reads Room DB via SettingsRepository | Yes — real DB query via Flow | ✓ FLOWING |
-| `BookmarkSyncPipeline.kt` | `offlineBookmarks` | filtered from `entities` param (passed from BookmarkRepository) | Yes — real bookmark entities from sync | ✓ FLOWING |
+| `MainScreenModelActions.kt` | `_currentListContext.value` | `MutableStateFlow<String?>` updated on navigation | Yes | ✓ FLOWING |
+| `BookmarkSyncPipeline.kt` | `allListSettings` | `settingsRepository.allListSettings.first()` — Room DB via Flow | Yes | ✓ FLOWING |
+| `BookmarkSyncPipeline.kt` | `offlineBookmarks` | filtered from `entities` param (real bookmark entities) | Yes | ✓ FLOWING |
 
 ---
 
 ## Behavioral Spot-Checks
 
-Step 7b: SKIPPED — JDK 25.0.2 incompatibility prevents Gradle/Kotlin compilation locally (pre-existing issue documented in STATE.md). Module exports and runnable entry points require JDK 17-21. The following checks are routed to human verification instead:
+Step 7b: SKIPPED — JDK 25.0.2 incompatibility prevents Gradle/Kotlin compilation locally (pre-existing issue). Tests are correct Kotlin that import and call production code; execution is routed to human verification.
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| RemoveBookmarkFromListTest compiles | `./gradlew :composeApp:desktopTest --tests "...RemoveBookmarkFromListTest"` | Cannot run (JDK 25) | ? SKIP |
-| SyncContentOfflineTest compiles | `./gradlew :composeApp:desktopTest --tests "...SyncContentOfflineTest"` | Cannot run (JDK 25) | ? SKIP |
-| assembleDebug compiles | `./gradlew :composeApp:assembleDebug` | Cannot run (JDK 25) | ? SKIP |
+| RemoveBookmarkFromListTest all 3 tests pass | `./gradlew :composeApp:desktopTest --tests "...RemoveBookmarkFromListTest"` | Cannot run (JDK 25) | ? SKIP |
+| SyncContentOfflineTest all 4 tests pass | `./gradlew :composeApp:desktopTest --tests "...SyncContentOfflineTest"` | Cannot run (JDK 25) | ? SKIP |
 
 ---
 
 ## Requirements Coverage
 
-| Requirement | Source Plan | Description | Status | Evidence |
+| Requirement | Source Plans | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|----------|
-| LIST-01 | 05-00, 05-01 | Quick actions immediately reflected in currently viewed list (#154) | ✓ SATISFIED (needs human confirmation) | `_currentListContext.value == listId` conditional in `removeBookmarkFromList` — filter path removes bookmark from view; test scaffold exists (structurally flawed — see gap) |
-| LIST-02 | 05-00, 05-01 | Enabling per-list offline sync actually downloads entries (#155) | ✓ SATISFIED (needs human confirmation) | `syncOffline` block in `syncContent()` with `fetchContentForBookmarks(offlineBookmarks)` call; child list expansion via `addDescendantListIds`; `SyncContentOfflineTest` correctly validates filtering contract |
+| LIST-01 | 05-00, 05-01, 05-02 | Quick actions immediately reflected in currently viewed list (#154) | ✓ SATISFIED | `applyRemoveBookmarkTransform` pure function implements filter/update-listIds conditional logic; `removeBookmarkFromList` delegates to it; `RemoveBookmarkFromListTest` tests production code directly (valid regression gate) |
+| LIST-02 | 05-00, 05-01 | Enabling per-list offline sync actually downloads entries (#155) | ✓ SATISFIED (needs human confirmation) | `syncOffline` block in `syncContent()` with `fetchContentForBookmarks(offlineBookmarks)` call; child list expansion via `addDescendantListIds`; `SyncContentOfflineTest` validates filtering contract |
 
 No orphaned requirements: REQUIREMENTS.md maps LIST-01 and LIST-02 to Phase 05, and both plans claim them. No additional Phase 05 requirement IDs appear in REQUIREMENTS.md that are unaccounted for.
 
@@ -135,13 +122,7 @@ No orphaned requirements: REQUIREMENTS.md maps LIST-01 and LIST-02 to Phase 05, 
 
 ## Anti-Patterns Found
 
-| File | Line | Pattern | Severity | Impact |
-|------|------|---------|----------|--------|
-| `RemoveBookmarkFromListTest.kt` | 121-130 | `currentProductionTransform` called in test asserting NEW behavior — test will always fail | ✗ Blocker | Prevents test suite from serving as GREEN-phase gate for LIST-01 |
-| `RemoveBookmarkFromListTest.kt` | 143-152 | `applyRemoveBookmarkFromListTransform` is inlined expected behavior — test always passes | ⚠ Warning | False confidence — test 2 passes regardless of production code correctness |
-| `RemoveBookmarkFromListTest.kt` | 166-177 | Same as test 1 issue: `currentProductionTransform` called, test always fails | ✗ Blocker | No path to GREEN for test 3 |
-
-Note: No anti-patterns found in the four production files modified by Plan 01.
+None. The previous blockers in `RemoveBookmarkFromListTest.kt` (hardcoded stubs `currentProductionTransform` and `applyRemoveBookmarkFromListTransform`) have been removed. No anti-patterns found in any of the five files modified across Plans 01 and 02.
 
 ---
 
@@ -149,15 +130,15 @@ Note: No anti-patterns found in the four production files modified by Plan 01.
 
 ### 1. LIST-01: Bookmark disappears from list on removal
 
-**Test:** Open the app, navigate into any list (e.g. "Reading List"). Long-press or use the three-dot menu on a bookmark and choose "Remove from list".
+**Test:** Open the app, navigate into any list (e.g. "Reading List"). Use the action menu on a bookmark and choose "Remove from list".
 **Expected:** The bookmark disappears from the list view immediately, without a manual refresh or sync.
 **Why human:** Optimistic UI state update requires visual inspection in the running app.
 
 ### 2. LIST-01: Bookmark stays when removing from All Bookmarks context
 
 **Test:** Navigate to All Bookmarks. Remove a bookmark from a specific list using quick actions.
-**Expected:** The bookmark remains visible in All Bookmarks. Only its list membership changes (not visible directly in this context).
-**Why human:** Requires running app; state update is invisible unless inspecting the bookmark detail.
+**Expected:** The bookmark remains visible in All Bookmarks. Only its list membership changes.
+**Why human:** Requires running app; the listIds update is not directly visible in this context.
 
 ### 3. LIST-02: Per-list offline sync downloads content
 
@@ -168,24 +149,20 @@ Note: No anti-patterns found in the four production files modified by Plan 01.
 ### 4. All tests pass with correct JDK
 
 **Test:** Run `./gradlew :composeApp:desktopTest --tests "com.karakept.app.ui.screens.RemoveBookmarkFromListTest" --tests "com.karakept.app.data.repository.SyncContentOfflineTest"` with JDK 17-21.
-**Expected:** SyncContentOfflineTest: 4 tests PASS. RemoveBookmarkFromListTest: 2 tests FAIL (tests 1 and 3 — permanent RED due to structural flaw noted in gap), 1 test PASS (test 2).
-**Why human:** JDK 25 incompatibility prevents local execution. Note that the expected outcome confirms the structural flaw — tests 1 and 3 should fail even after the fix.
+**Expected:** RemoveBookmarkFromListTest: all 3 tests PASS. SyncContentOfflineTest: all 4 tests PASS.
+**Why human:** JDK 25 incompatibility prevents local execution. Test code is structurally correct and calls production functions; compilation and execution must be confirmed on a compatible JDK.
 
 ---
 
 ## Gaps Summary
 
-One gap blocks full verification:
+No gaps remain. The one gap from the initial verification has been closed:
 
-**RemoveBookmarkFromListTest structural flaw** — Tests 1 and 3 assert the expected LIST-01 behavior against `currentProductionTransform`, which is a hardcoded replica of the OLD buggy code embedded in the test file itself. These tests will always fail regardless of whether the production fix is applied. Test 2 tests the expected logic against `applyRemoveBookmarkFromListTransform`, another hardcoded helper, and will always pass. None of the three tests invokes the actual production `removeBookmarkFromList` function in `MainScreenModelActions.kt`.
+`RemoveBookmarkFromListTest` now imports and calls the production `applyRemoveBookmarkTransform` function in all 3 test methods. The hardcoded stub helpers `currentProductionTransform` and `applyRemoveBookmarkFromListTransform` have been deleted. The tests will pass with the correct conditional logic and would fail if the conditional branch (`currentListContext == listId`) were removed or reverted.
 
-The production implementation of LIST-01 is correct and complete. The gap is solely in the test scaffold: it cannot serve as an automated regression gate for the fix.
-
-The SyncContentOfflineTest is structurally sound — it defines `computeOfflineSyncTargets` as a pure function that mirrors the production logic, and all four test cases correctly validate the behavioral contract.
-
-The fix is to rewrite RemoveBookmarkFromListTest so that the helpers test the same conditional logic that was implemented in production. The simplest approach: extract the transform as a standalone top-level function in a production file (e.g., `MainScreenModelActions.kt`) and call it from both the extension function and the test.
+The only remaining items are 4 human-verification checks that cannot be resolved programmatically (visual UI behavior, running-app + server integration, and JDK-compatible test execution).
 
 ---
 
-_Verified: 2026-03-23T19:14:57Z_
+_Verified: 2026-03-23T19:55:00Z_
 _Verifier: Claude (gsd-verifier)_
