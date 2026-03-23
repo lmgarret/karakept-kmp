@@ -91,10 +91,11 @@ Plans:
   1. User taps select-all on a list with more than 20 entries, and all entries in the list are selected (not just the first page)
   2. Quick Filters (All, Favorites, Archived, Highlights) in the navigation drawer display accurate bookmark counters next to each filter name
   3. User can pull-to-refresh on the Highlights view and the list updates with the latest data from the server
-**Plans**: 1 plan
+**Plans**: 2 plans
 
 Plans:
-- [ ] 06-01: TBD
+- [ ] 06-01-PLAN.md -- Fix select-all to fetch all matching entities when more pages exist (FILT-01)
+- [ ] 06-02-PLAN.md -- Add quick filter counters to drawer and pull-to-refresh on Highlights (FILT-02, FILT-03)
 
 ## Progress
 
@@ -108,7 +109,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 | 03. Reader UX | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
 | 04. Bookmark Saving Activity | v1.8.0 | 1/1 | Complete    | 2026-03-23 |
 | 05. List & Sync | v1.8.0 | 2/3 | Complete    | 2026-03-23 |
-| 06. Selection & Filtering | v1.8.0 | 0/? | Not started | - |
+| 06. Selection & Filtering | v1.8.0 | 0/2 | Not started | - |
 
 ### Phase 7: UI Tests — Add Compose UI test infrastructure and instrumented tests for reader UX, bookmark saving, list sync, and selection/filtering scenarios introduced in v1.8.0
 
