@@ -1,5 +1,12 @@
 # Milestones
 
+## v1.8.0 Bug Fixes & UX Improvements (In Progress)
+
+**Phases:** 03-06 (4 phases, 11 requirements)
+**Goal:** Fix 6 bugs and deliver 4 UX improvements across reader, bookmark saving, list sync, and filtering.
+
+---
+
 ## v1.7.0 Tech Debt Cleanup (Shipped: 2026-03-21)
 
 **Phases completed:** 2 phases, 3 plans, 6 tasks
