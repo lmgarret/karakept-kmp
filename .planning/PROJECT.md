@@ -23,8 +23,8 @@ A reliable, well-structured bookmark management app with clean code practices.
 - ✓ Reader info button should move to menu on scroll (#160) — Phase 03 (simplified: always in menu)
 - ✓ Scroll-to-top button in reader (#161) — Phase 03
 - [ ] Fix select-all only selecting 20 entries (#153)
-- [ ] Quick actions not reflected in viewed list (#154)
-- [ ] Per-list offline sync not working (#155)
+- ✓ Quick actions not reflected in viewed list (#154) — Phase 05
+- ✓ Per-list offline sync not working (#155) — Phase 05
 - [ ] Add counters to Quick Filters in drawer (#156)
 - [ ] Pull-to-refresh for Highlights (#157)
 - ✓ Cannot go back to bookmark list after share-save (#158) — Phase 04
@@ -86,4 +86,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 after Phase 04 (bookmark-saving-activity) complete*
+*Last updated: 2026-03-23 after Phase 05 (list-sync) complete*
