@@ -13,30 +13,28 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.repository.BookmarkRepository
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
-import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-data class ShareBookmarkScreen(val url: String) : Screen {
+data class ShareBookmarkScreen(val url: String, val onClose: (() -> Unit)? = null) : Screen {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val repository = koinInject<BookmarkRepository>()
-        val scope = rememberCoroutineScope()
         var error by remember { mutableStateOf<String?>(null) }
         var status by remember { mutableStateOf("Saving bookmark...") }
-        
-        LaunchedEffect(Unit) {
-            scope.launch {
-                val result = repository.createBookmark(url) { newStatus ->
-                    status = newStatus
-                }
-                if (result.isSuccess) {
-                    val bookmark = result.getOrThrow()
-                    // Open the viewer for the new bookmark
-                    navigator.replace(BookmarkViewerScreen(bookmark.localId))
-                } else {
-                    error = result.exceptionOrNull()?.message ?: "Unknown error"
-                }
+        var retryTrigger by remember { mutableIntStateOf(0) }
+
+        LaunchedEffect(retryTrigger) {
+            error = null
+            status = "Saving bookmark..."
+            val result = repository.createBookmark(url) { newStatus ->
+                status = newStatus
+            }
+            if (result.isSuccess) {
+                val bookmark = result.getOrThrow()
+                navigator.replaceAll(listOf(MainScreen, BookmarkViewerScreen(bookmark.localId)))
+            } else {
+                error = result.exceptionOrNull()?.message ?: "Unknown error"
             }
         }
 
@@ -55,7 +53,7 @@ data class ShareBookmarkScreen(val url: String) : Screen {
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
                     )
-                    
+
                     Text(
                         text = url,
                         style = MaterialTheme.typography.bodyMedium,
@@ -91,10 +89,13 @@ data class ShareBookmarkScreen(val url: String) : Screen {
                         textAlign = TextAlign.Center
                     )
 
-                    Button(
-                        onClick = { navigator.pop() }
-                    ) {
-                        Text("Close")
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(onClick = { retryTrigger++ }) {
+                            Text("Retry")
+                        }
+                        Button(onClick = { onClose?.invoke() ?: navigator.pop() }) {
+                            Text("Close")
+                        }
                     }
                 }
             }

@@ -109,7 +109,6 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
             androidx.compose.runtime.LaunchedEffect(sharedUrl, openBookmarkId) {
                 AppLogger.d("App", "LaunchedEffect. sharedUrl=$sharedUrl, openBookmarkId=$openBookmarkId")
                 if (sharedUrl != null) {
-                    AppLogger.d("App", "Showing ShareBookmarkScreen")
                     initialScreens = listOf(com.karakept.app.ui.screens.ShareBookmarkScreen(sharedUrl))
                 } else if (serverRepository.hasServers()) {
                     val screens = mutableListOf<cafe.adriel.voyager.core.screen.Screen>(com.karakept.app.ui.screens.MainScreen)
