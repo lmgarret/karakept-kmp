@@ -121,7 +121,7 @@ fun MainScreenExpandedLayout(
     val remainingWidth = maxWidth - drawerTotalWidth - dividerWidth - dividerWidth
     val minListWidth = 250.dp
     val minReaderWidth = 300.dp
-    val maxListWidth = remainingWidth - minReaderWidth
+    val maxListWidth = (remainingWidth - minReaderWidth).coerceAtLeast(minListWidth)
     val listWidth = (remainingWidth * listFraction).coerceIn(minListWidth, maxListWidth)
 
     // Reset fullscreen when bookmark is deselected
