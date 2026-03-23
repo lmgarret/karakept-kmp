@@ -94,7 +94,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 06-01-PLAN.md -- Fix select-all to fetch all matching entities when more pages exist (FILT-01)
+- [x] 06-01-PLAN.md -- Fix select-all to fetch all matching entities when more pages exist (FILT-01)
 - [ ] 06-02-PLAN.md -- Add quick filter counters to drawer and pull-to-refresh on Highlights (FILT-02, FILT-03)
 
 ## Progress

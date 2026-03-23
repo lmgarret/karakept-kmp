@@ -24,7 +24,7 @@
 
 ### Selection & Filtering
 
-- [ ] **FILT-01**: Select-all selects all entries in the list, not just the first page (#153)
+- [x] **FILT-01**: Select-all selects all entries in the list, not just the first page (#153)
 - [ ] **FILT-02**: Quick Filters (All, Favorites, Archived, Highlights) display bookmark counters in the navigation drawer (#156)
 - [ ] **FILT-03**: User can pull-to-refresh on the Highlights view (#157)
 
@@ -58,7 +58,7 @@
 | SAVE-02 | Phase 04 | Complete |
 | LIST-01 | Phase 05 | In Progress |
 | LIST-02 | Phase 05 | In Progress |
-| FILT-01 | Phase 06 | Pending |
+| FILT-01 | Phase 06 | Complete |
 | FILT-02 | Phase 06 | Pending |
 | FILT-03 | Phase 06 | Pending |
 
