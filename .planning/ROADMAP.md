@@ -36,7 +36,7 @@ Plans:
 **Milestone Goal:** Fix 6 bugs and deliver 4 UX improvements across reader, bookmark saving, list sync, and filtering.
 
 - [x] **Phase 03: Reader UX** - Restore scroll position, move info button to overflow menu, add scroll-to-top button (completed 2026-03-23)
-- [ ] **Phase 04: Bookmark Saving Activity** - Fix Android share-target navigation and state leak
+- [x] **Phase 04: Bookmark Saving Activity** - Fix Android share-target navigation and state leak (completed 2026-03-23)
 - [ ] **Phase 05: List & Sync** - Fix quick action list refresh and per-list offline sync
 - [ ] **Phase 06: Selection & Filtering** - Fix select-all pagination, add quick filter counters, add pull-to-refresh for Highlights
 
@@ -67,7 +67,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 04-01-PLAN.md -- Replace ShareActivity with self-contained BookmarkSavingActivity, add retry/close error handling, fix back stack navigation
+- [x] 04-01-PLAN.md -- Replace ShareActivity with self-contained BookmarkSavingActivity, add retry/close error handling, fix back stack navigation
 
 ### Phase 05: List & Sync
 **Goal**: List views stay current after user actions and per-list offline sync downloads content as configured
@@ -104,7 +104,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 | 01. Println Cleanup | v1.7.0 | 2/2 | Complete | 2026-03-21 |
 | 02. File Trimming & Quality | v1.7.0 | 1/1 | Complete | 2026-03-21 |
 | 03. Reader UX | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
-| 04. Bookmark Saving Activity | v1.8.0 | 0/1 | Not started | - |
+| 04. Bookmark Saving Activity | v1.8.0 | 1/1 | Complete   | 2026-03-23 |
 | 05. List & Sync | v1.8.0 | 0/? | Not started | - |
 | 06. Selection & Filtering | v1.8.0 | 0/? | Not started | - |
 
@@ -113,7 +113,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 **Goal:** [To be planned]
 **Requirements**: TBD
 **Depends on:** Phase 6
-**Plans:** 2/2 plans complete
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 7 to break down)
