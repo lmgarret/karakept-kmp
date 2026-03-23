@@ -13,6 +13,7 @@ import com.karakept.app.data.repository.batchSetFavourite
 import com.karakept.app.data.repository.batchDelete
 import com.karakept.app.data.repository.batchUpdateTags
 import com.karakept.app.data.repository.batchMoveToList
+import com.karakept.app.domain.BookmarkFilterUtils
 
 /** Track the last clicked bookmark index (call on every normal click). */
 fun MainScreenModel.trackLastClickedIndex(index: Int) {
@@ -74,7 +75,37 @@ fun MainScreenModel.clearSelection() {
 }
 
 fun MainScreenModel.selectAll() {
-    _selectedBookmarkIds.value = _accumulatedBookmarks.value.map { it.remoteId }.toSet()
+    if (!_hasMoreItems.value) {
+        // D-03: All pages already loaded -- current behavior is correct
+        _selectedBookmarkIds.value = _accumulatedBookmarks.value.map { it.remoteId }.toSet()
+        return
+    }
+    // D-01: Fetch all matching entities from DB in one query
+    screenModelScope.launch {
+        val server = _selectedServer.value ?: return@launch
+        val filter = _currentFilter.value
+
+        // Expand list children (same as loadBookmarksPage per Pitfall 2)
+        val expandedFilter = if (filter.lists.isNotEmpty()) {
+            val expandedLists = expandListsWithChildren(filter.lists)
+            if (expandedLists != filter.lists) filter.copy(lists = expandedLists) else filter
+        } else filter
+
+        // D-04: Apply current filter to DB query
+        val singleListId = if (expandedFilter.lists.size == 1) expandedFilter.lists.first() else null
+        val allEntities = bookmarkRepository.getAllBookmarks(server, expandedFilter.status, singleListId)
+
+        // Apply client-side filters (tags, multi-list) per Pitfall 1
+        val filtered = BookmarkFilterUtils.applyClientSideFilters(
+            allEntities, expandedFilter, skipListFilter = singleListId != null
+        )
+        val sorted = BookmarkFilterUtils.applySorting(filtered, expandedFilter.sort)
+
+        // Use updateAccumulatedBookmarks for thread safety per Pitfall 3
+        updateAccumulatedBookmarks { sorted }
+        _hasMoreItems.value = false
+        _selectedBookmarkIds.value = sorted.map { it.remoteId }.toSet()
+    }
 }
 
 internal fun MainScreenModel.getSelectedBookmarks(): List<BookmarkEntity> {
