@@ -27,6 +27,10 @@ class HighlightRepository(
         }
     }
 
+    fun getHighlightsCount(serverId: String): Flow<Int> {
+        return highlightDao.getHighlightsCountForServer(serverId)
+    }
+
     suspend fun getHighlightsPaged(serverId: String, limit: Int, offset: Int): List<Highlight> {
         return highlightDao.getHighlightsPagedForServer(serverId, limit, offset).map { it.toDomain() }
     }

@@ -10,6 +10,7 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.repository.BookmarkRepository
+import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.setDefaultListType
 import com.karakept.app.data.repository.setDefaultListId
@@ -36,6 +37,12 @@ import com.karakept.app.domain.BookmarkFilterUtils
 import com.karakept.app.domain.DefaultFilterResolver
 import com.karakept.app.domain.ListHierarchyUtils
 
+data class QuickFilterCounts(
+    val all: Int = 0,
+    val favorites: Int = 0,
+    val archived: Int = 0
+)
+
 class MainScreenModel(
     private val serverRepository: ServerRepository,
     internal val bookmarkRepository: BookmarkRepository,
@@ -43,7 +50,8 @@ class MainScreenModel(
     internal val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
     internal val listRepository: com.karakept.app.data.repository.ListRepository,
     internal val bookmarkActionController: BookmarkActionController,
-    internal val snackbarManager: ActionSnackbarManager
+    internal val snackbarManager: ActionSnackbarManager,
+    private val highlightRepository: HighlightRepository
 ) : ScreenModel {
 
     private val defaultFilterResolver = DefaultFilterResolver(settingsRepository)
@@ -171,6 +179,24 @@ class MainScreenModel(
             listId to count
         }
     }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    val quickFilterCounts: StateFlow<QuickFilterCounts> = combine(
+        selectedServer, allBookmarks
+    ) { server, bookmarks ->
+        if (server == null) return@combine QuickFilterCounts()
+        QuickFilterCounts(
+            all = bookmarks.count { !it.isArchived },
+            favorites = bookmarks.count { it.isStarred && !it.isArchived },
+            archived = bookmarks.count { it.isArchived }
+        )
+    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
+
+    val highlightsCount: StateFlow<Int> = selectedServer
+        .flatMapLatest { server ->
+            if (server != null) highlightRepository.getHighlightsCount(server.id)
+            else flowOf(0)
+        }
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val swipeLeftAction: StateFlow<com.karakept.app.data.model.SwipeAction> =
         settingsRepository.swipeLeftAction.stateIn(
