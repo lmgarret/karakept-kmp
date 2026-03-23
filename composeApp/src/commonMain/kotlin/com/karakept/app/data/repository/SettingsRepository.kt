@@ -336,6 +336,9 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     val showTagsInViewer: Flow<Boolean> =
         readerSettingsFlow.map { it.showTagsInViewer }.distinctUntilChanged()
 
+    val scrollToTopEnabled: Flow<Boolean> =
+        readerSettingsFlow.map { it.scrollToTopEnabled }.distinctUntilChanged()
+
     // ── Derived flows (swipe) ─────────────────────────────────────────────────
 
     val swipeLeftAction: Flow<SwipeAction> =

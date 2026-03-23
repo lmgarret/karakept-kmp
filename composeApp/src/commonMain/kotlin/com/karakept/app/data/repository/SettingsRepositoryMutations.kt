@@ -247,6 +247,9 @@ suspend fun SettingsRepository.setLinkOpenMode(mode: LinkOpenMode) =
 suspend fun SettingsRepository.setShowTagsInViewer(show: Boolean) =
     updateReaderSettings { copy(showTagsInViewer = show) }
 
+suspend fun SettingsRepository.setScrollToTopEnabled(enabled: Boolean) =
+    updateReaderSettings { copy(scrollToTopEnabled = enabled) }
+
 suspend fun SettingsRepository.resetReaderAppearance() = updateReaderSettings {
     copy(
         htmlTextColor = null,

@@ -102,6 +102,9 @@ class BookmarkViewerScreenModel(
     val showTags: StateFlow<Boolean> = settingsRepository.showTagsInViewer
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val scrollToTopEnabled: StateFlow<Boolean> = settingsRepository.scrollToTopEnabled
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     val dateDisplayMode: StateFlow<DateDisplayMode> = settingsRepository.dateDisplayMode
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), DateDisplayMode.ELAPSED)
 

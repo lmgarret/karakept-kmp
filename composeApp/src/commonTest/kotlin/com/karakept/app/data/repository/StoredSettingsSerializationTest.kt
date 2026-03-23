@@ -111,7 +111,9 @@ class StoredSettingsSerializationTest {
             readingSpeedWpm = 350,
             trackReadingProgress = false,
             resetProgressOnMarkUnread = false,
-            linkOpenMode = "EXTERNAL_BROWSER"
+            linkOpenMode = "EXTERNAL_BROWSER",
+            showTagsInViewer = false,
+            scrollToTopEnabled = false
         )
         assertEquals(original, json.decodeFromString<StoredReaderSettings>(json.encodeToString(original)))
     }
@@ -136,6 +138,30 @@ class StoredSettingsSerializationTest {
     fun `StoredReaderSettings missing fields use defaults`() {
         val settings = json.decodeFromString<StoredReaderSettings>("{}")
         assertEquals(StoredReaderSettings(), settings)
+    }
+
+    @Test
+    fun `scrollToTopEnabled defaults to true`() {
+        assertEquals(true, StoredReaderSettings().scrollToTopEnabled)
+    }
+
+    @Test
+    fun `scrollToTopEnabled false round-trips`() {
+        val original = StoredReaderSettings(scrollToTopEnabled = false)
+        val deserialized = json.decodeFromString<StoredReaderSettings>(json.encodeToString(original))
+        assertEquals(false, deserialized.scrollToTopEnabled)
+    }
+
+    @Test
+    fun `missing scrollToTopEnabled uses default true`() {
+        val settings = json.decodeFromString<StoredReaderSettings>("{}")
+        assertEquals(true, settings.scrollToTopEnabled)
+    }
+
+    @Test
+    fun `explicit scrollToTopEnabled false decodes correctly`() {
+        val settings = json.decodeFromString<StoredReaderSettings>("""{"scrollToTopEnabled":false}""")
+        assertEquals(false, settings.scrollToTopEnabled)
     }
 
     // ── StoredSwipeSettings ───────────────────────────────────────────────────
