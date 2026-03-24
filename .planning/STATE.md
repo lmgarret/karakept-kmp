@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.8.0
 milestone_name: Bug Fixes & UX Improvements
 status: Milestone complete
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-03-23T21:25:23.183Z"
-last_activity: 2026-03-23
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-24T09:59:00.000Z"
+last_activity: 2026-03-24
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 10
+  completed_plans: 9
 ---
 
 # Project State
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** A reliable, well-structured bookmark management app with clean code practices
-**Current focus:** Phase 06 — selection-filtering
+**Current focus:** Phase 07 — ui-tests
 
 ## Current Position
 
-Phase: 06
-Plan: Not started
+Phase: 07
+Plan: 02 (next)
 
 ## Performance Metrics
 
@@ -56,6 +56,8 @@ Plan: Not started
 - [Phase 06-selection-filtering]: HighlightRepository injected into MainScreenModel constructor as 8th param for reactive highlights count
 - [Phase 06-selection-filtering]: Modifier.weight(1f) on label Text in BuiltinDrawerItem achieves count right-alignment without changing Row arrangement
 - [Phase 06-selection-filtering]: PullToRefreshBox receives paddingValues so LazyColumn/empty-state Box do not carry it
+- [Phase 07]: Used Robolectric 4.14 with SDK 34 default to avoid JDK/SDK compatibility issues
+- [Phase 07]: ScreenModel-centric testing with mockk: construct directly, exercise methods, assert StateFlow values
 
 ### Roadmap Evolution
 
@@ -83,9 +85,10 @@ None yet.
 | Phase 05-list-sync P02 | 8 | 2 tasks | 2 files |
 | Phase 06-selection-filtering P01 | 8 | 2 tasks | 3 files |
 | Phase 06-selection-filtering P02 | 15 | 2 tasks | 8 files |
+| Phase 07-ui-tests P01 | 4 | 2 tasks | 7 files |
 
 ## Session Continuity
 
-Last activity: 2026-03-23
-Stopped at: Completed 06-02-PLAN.md
+Last activity: 2026-03-24
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None
