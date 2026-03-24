@@ -40,7 +40,7 @@ created: 2026-03-24
 |---------|------|------|----------|-----------|-------------------|-------------|--------|
 | 07-W0-01 | 01 | 0 | Build infra | build | `./gradlew :composeApp:testDebugUnitTest` | ❌ W0 | ⬜ pending |
 | 07-01-01 | 01 | 1 | FILT-01 select-all | unit | `./gradlew :composeApp:testDebugUnitTest --tests "*.MainScreenSelectAllTest"` | ❌ W0 | ⬜ pending |
-| 07-01-02 | 01 | 1 | FILT-02 counters | unit | `./gradlew :composeApp:testDebugUnitTest --tests "*.MainScreenCountersTest"` | ❌ W0 | ⬜ pending |
+| 07-01-02 | 01 | 1 | FILT-02 counters | unit | `./gradlew :composeApp:testDebugUnitTest --tests "*.QuickFilterCountsTest"` | ❌ W0 | ⬜ pending |
 | 07-01-03 | 01 | 1 | FILT-03 pull-to-refresh | unit | `./gradlew :composeApp:testDebugUnitTest --tests "*.HighlightsPullToRefreshTest"` | ❌ W0 | ⬜ pending |
 | 07-02-01 | 02 | 2 | READER-03/04 scroll-to-top | compose-ui | `./gradlew :composeApp:testDebugUnitTest --tests "*.BookmarkViewerScrollToTopTest"` | ❌ W0 | ⬜ pending |
 | 07-02-02 | 02 | 2 | SAVE-01/02 back-nav | activity | `./gradlew :composeApp:testDebugUnitTest --tests "*.BookmarkSavingActivityTest"` | ❌ W0 | ⬜ pending |
