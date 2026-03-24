@@ -123,6 +123,16 @@ kotlin {
                 implementation(libs.mockk)
             }
         }
+        val androidUnitTest by getting {
+            dependencies {
+                implementation(compose.uiTest)
+                implementation(libs.robolectric)
+                implementation(libs.junit)
+                implementation(libs.mockk)
+                implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.androidx.test.core)
+            }
+        }
         val commonTest by getting {
             dependencies {
                 implementation(libs.kotlin.test)
@@ -181,6 +191,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
+    }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
     }
     dependencies {
         debugImplementation(compose.uiTooling)
