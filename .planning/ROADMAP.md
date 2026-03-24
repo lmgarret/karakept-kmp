@@ -100,7 +100,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 03 -> 04 -> 05 -> 06
+Phases execute in numeric order: 03 -> 04 -> 05 -> 06 -> 07
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -110,13 +110,22 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06
 | 04. Bookmark Saving Activity | v1.8.0 | 1/1 | Complete    | 2026-03-23 |
 | 05. List & Sync | v1.8.0 | 2/3 | Complete    | 2026-03-23 |
 | 06. Selection & Filtering | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
+| 07. UI Tests | v1.8.0 | 0/2 | Planned | -- |
 
-### Phase 7: UI Tests — Add Compose UI test infrastructure and instrumented tests for reader UX, bookmark saving, list sync, and selection/filtering scenarios introduced in v1.8.0
-
-**Goal:** [To be planned]
-**Requirements**: TBD
+### Phase 7: UI Tests
+**Goal:** All v1.8.0 behavioral scenarios have automated regression tests using Robolectric + Compose UI test in androidUnitTest
 **Depends on:** Phase 6
-**Plans:** 2/2 plans complete
+**Requirements**: TEST-INFRA, TEST-FILT01, TEST-FILT02, TEST-FILT03, TEST-READER, TEST-SAVE, TEST-REGR
+**Success Criteria** (what must be TRUE):
+  1. androidUnitTest source set compiles with Robolectric 4.14 + compose-ui-test
+  2. selectAll() beyond first page is tested and passes
+  3. Quick filter counter computation is tested and passes
+  4. Pull-to-refresh on Highlights triggers sync (tested and passes)
+  5. Scroll-to-top button visibility logic is tested via Compose rule
+  6. BookmarkSavingActivity URL extraction and onNewIntent fresh state are tested
+  7. Scroll position persistence regression test passes
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 7 to break down)
+- [ ] 07-01-PLAN.md -- Build infrastructure + ScreenModel tests (FILT-01, FILT-02, FILT-03, regression)
+- [ ] 07-02-PLAN.md -- Compose UI tests (READER-03/04) + Activity lifecycle tests (SAVE-01/02)
