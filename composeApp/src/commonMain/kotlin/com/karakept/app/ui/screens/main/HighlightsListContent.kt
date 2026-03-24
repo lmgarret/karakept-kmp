@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -43,7 +44,9 @@ fun HighlightsListContent(
     onHighlightClick: (Highlight) -> Unit,
     onDeleteHighlight: (Highlight) -> Unit,
     onLoadMore: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    showRefreshButton: Boolean = false,
+    onRefresh: (() -> Unit)? = null
 ) {
     val listState = remember { LazyListState() }
 
@@ -69,6 +72,13 @@ fun HighlightsListContent(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (showRefreshButton && onRefresh != null) {
+                        IconButton(onClick = onRefresh, enabled = !isSyncing) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        }
                     }
                 }
             )
