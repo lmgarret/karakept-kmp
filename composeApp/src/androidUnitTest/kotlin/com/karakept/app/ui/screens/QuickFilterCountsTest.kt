@@ -17,7 +17,9 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -40,6 +42,7 @@ import kotlin.test.assertEquals
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(application = android.app.Application::class)
 class QuickFilterCountsTest {
 
     private val testDispatcher = StandardTestDispatcher()
@@ -89,6 +92,10 @@ class QuickFilterCountsTest {
         every { settingsRepository.defaultListId } returns flowOf(null)
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
+        // Relaxed mocks for SharedFlow<T> emit Nothing values causing KotlinNothingValueException;
+        // replace with emptyFlow() to prevent crashes in the background coroutines.
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Long>()
+        every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
     }
 
     @After
@@ -133,9 +140,13 @@ class QuickFilterCountsTest {
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
 
         val model = createMainScreenModel()
+        // Subscribe to trigger SharingStarted.WhileSubscribed — without a subscriber
+        // the upstream combine never runs and .value stays at the initial QuickFilterCounts().
+        val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 
         assertEquals(QuickFilterCounts(0, 0, 0), model.quickFilterCounts.value)
+        job.cancel()
     }
 
     @Test
@@ -156,12 +167,14 @@ class QuickFilterCountsTest {
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
 
         val model = createMainScreenModel()
+        val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 
         assertEquals(
             QuickFilterCounts(all = 7, favorites = 2, archived = 3),
             model.quickFilterCounts.value
         )
+        job.cancel()
     }
 
     @Test
@@ -170,11 +183,13 @@ class QuickFilterCountsTest {
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
 
         val model = createMainScreenModel()
+        val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 
         assertEquals(
             QuickFilterCounts(all = 0, favorites = 0, archived = 5),
             model.quickFilterCounts.value
         )
+        job.cancel()
     }
 }

@@ -30,6 +30,7 @@ testcontainers = "1.20.1"
 mockk = "1.13.12"
 robolectric = "4.14"
 androidx-test-core = "1.6.1"
+androidx-compose-ui-test = "1.8.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -112,6 +113,7 @@ mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 
 # Robolectric
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4", version.ref = "androidx-compose-ui-test" }
 
 # AndroidX Test
 androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }

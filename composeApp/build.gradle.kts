@@ -125,7 +125,7 @@ kotlin {
         }
         val androidUnitTest by getting {
             dependencies {
-                implementation(compose.uiTest)
+                implementation(libs.compose.ui.test.junit4)
                 implementation(libs.robolectric)
                 implementation(libs.junit)
                 implementation(libs.mockk)
