@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.8.0
 milestone_name: Bug Fixes & UX Improvements
-status: Executing phase 07
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-03-24T09:59:00.000Z"
+status: Phase 07 complete
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-03-24T10:05:40.000Z"
 last_activity: 2026-03-24
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 07
-Plan: 02 (next)
+Phase: 07 (complete)
+Plan: 02 (complete)
 
 ## Performance Metrics
 
@@ -58,6 +58,8 @@ Plan: 02 (next)
 - [Phase 06-selection-filtering]: PullToRefreshBox receives paddingValues so LazyColumn/empty-state Box do not carry it
 - [Phase 07]: Used Robolectric 4.14 with SDK 34 default to avoid JDK/SDK compatibility issues
 - [Phase 07]: ScreenModel-centric testing with mockk: construct directly, exercise methods, assert StateFlow values
+- [Phase 07]: Real LazyColumn + programmatic scrollToItem for Compose UI scroll tests (per Pitfall 7)
+- [Phase 07]: Reflection-based Activity state testing to avoid full Koin/Voyager dependency graph
 
 ### Roadmap Evolution
 
@@ -86,9 +88,10 @@ None yet.
 | Phase 06-selection-filtering P01 | 8 | 2 tasks | 3 files |
 | Phase 06-selection-filtering P02 | 15 | 2 tasks | 8 files |
 | Phase 07-ui-tests P01 | 4 | 2 tasks | 7 files |
+| Phase 07-ui-tests P02 | 2 | 2 tasks | 2 files |
 
 ## Session Continuity
 
 Last activity: 2026-03-24
-Stopped at: Completed 07-01-PLAN.md
+Stopped at: Completed 07-02-PLAN.md (phase 07 complete)
 Resume file: None
