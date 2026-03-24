@@ -28,6 +28,8 @@ knotify = "0.4.3"
 nativefiledialog = "1.0.3"
 testcontainers = "1.20.1"
 mockk = "1.13.12"
+robolectric = "4.14"
+androidx-test-core = "1.6.1"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -107,6 +109,12 @@ testcontainers-core = { module = "org.testcontainers:testcontainers", version.re
 
 # Mocking
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+
+# Robolectric
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+
+# AndroidX Test
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }
 
 [plugins]
 openapi-generator = { id = "org.openapi.generator", version.ref = "openapi-generator" }
