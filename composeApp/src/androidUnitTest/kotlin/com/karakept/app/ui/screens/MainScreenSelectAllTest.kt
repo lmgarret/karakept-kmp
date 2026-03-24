@@ -162,8 +162,12 @@ class MainScreenSelectAllTest {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model._hasMoreItems.value = true
+        // Set server first and let resetPaginationAndLoad (triggered by _selectedServer change)
+        // finish before configuring test state — otherwise it races with selectAll() and overwrites.
         model._selectedServer.value = fakeServer
+        advanceUntilIdle()
+
+        model._hasMoreItems.value = true
         model._accumulatedBookmarks.value = allBookmarks.take(20)
 
         model.selectAll()
@@ -180,8 +184,10 @@ class MainScreenSelectAllTest {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model._hasMoreItems.value = true
         model._selectedServer.value = fakeServer
+        advanceUntilIdle()
+
+        model._hasMoreItems.value = true
         model._accumulatedBookmarks.value = allBookmarks.take(20)
 
         model.selectAll()
@@ -198,8 +204,10 @@ class MainScreenSelectAllTest {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model._hasMoreItems.value = true
         model._selectedServer.value = fakeServer
+        advanceUntilIdle()
+
+        model._hasMoreItems.value = true
         model._accumulatedBookmarks.value = allBookmarks.take(20)
 
         model.selectAll()
