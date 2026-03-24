@@ -89,7 +89,7 @@ class MainScreenSelectAllTest {
         every { settingsRepository.dimReadBookmarks } returns flowOf(true)
         every { settingsRepository.defaultLayoutId } returns flowOf(null)
         every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(false)
+        every { settingsRepository.offlineMode } returns flowOf(true)
         every { settingsRepository.activeServerId } returns flowOf("server-1")
         every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
         every { settingsRepository.defaultListId } returns flowOf(null)
