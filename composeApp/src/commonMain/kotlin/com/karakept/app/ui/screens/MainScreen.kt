@@ -49,6 +49,8 @@ import com.karakept.app.ui.screens.main.MainScreenAddBookmarkDialog
 import kotlinx.coroutines.launch
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
+import com.karakept.app.ui.screens.main.HighlightsListContent
+import com.karakept.app.ui.screens.HighlightsScreenModel
 import com.karakept.app.ui.screens.settings.PerListSettingsScreen
 import getPlatform
 import org.koin.compose.koinInject
@@ -334,8 +336,8 @@ object MainScreen : Screen {
                 MainScreenDrawer(
                     drawerState = drawerState, lists = lists, listCounts = listCounts, expandedLists = expandedLists,
                     currentFilter = currentFilter,
-                    onFilterApply = { filter -> screenModel.applyFilter(filter); scope.launch { drawerState.close() } },
-                    onClearFilter = { screenModel.clearFilter(); scope.launch { drawerState.close() } },
+                    onFilterApply = { filter -> showHighlights = false; screenModel.applyFilter(filter); scope.launch { drawerState.close() } },
+                    onClearFilter = { showHighlights = false; screenModel.clearFilter(); scope.launch { drawerState.close() } },
                     onToggleListExpanded = { screenModel.toggleListExpanded(it) },
                     onMarkAllAsRead = { screenModel.markAllBookmarksInListAsRead(it); scope.launch { drawerState.close() } },
                     onRenameList = { listId, listName -> val t = lists.find { it.id == listId }; renameListTarget = Triple(listId, listName, t?.icon); scope.launch { drawerState.close() } },
@@ -343,21 +345,52 @@ object MainScreen : Screen {
                     onSetAsDefault = { screenModel.setDefaultList(it); scope.launch { drawerState.close() } },
                     onSetAsDefaultType = { screenModel.setDefaultListType(it); scope.launch { drawerState.close() } },
                     onNavigateToSettings = { navigator.push(SettingsScreen()); scope.launch { drawerState.close() } },
-                    onNavigateToHighlights = { navigator.push(HighlightsScreen()); scope.launch { drawerState.close() } },
+                    onNavigateToHighlights = { showHighlights = true; scope.launch { drawerState.close() } },
+                    isHighlightsSelected = showHighlights,
                     quickFilterCounts = quickFilterCounts,
                     highlightsCount = highlightsCount
                 ) {
-                    scaffoldContent(false, null, { bookmark ->
-                        val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
-                        if (idx >= 0) screenModel.trackLastClickedIndex(idx)
-                        navigator.push(BookmarkViewerScreen(bookmark.localId))
-                    }, { scope.launch { drawerState.open() } })
+                    if (showHighlights) {
+                        val highlightsScreenModel = koinInject<HighlightsScreenModel>()
+                        val highlightsList by highlightsScreenModel.highlights.collectAsState()
+                        val isHighlightsSyncing by highlightsScreenModel.isSyncing.collectAsState()
+                        val isHighlightsLoadingMore by highlightsScreenModel.isLoadingMore.collectAsState()
+                        val hasMoreHighlights by highlightsScreenModel.hasMoreItems.collectAsState()
+
+                        LaunchedEffect(showHighlights) {
+                            highlightsScreenModel.syncHighlights()
+                        }
+
+                        HighlightsListContent(
+                            highlights = highlightsList,
+                            isSyncing = isHighlightsSyncing,
+                            isLoadingMore = isHighlightsLoadingMore,
+                            hasMoreItems = hasMoreHighlights,
+                            activeHighlightId = null,
+                            onHighlightClick = { highlight ->
+                                scope.launch {
+                                    val bookmarkLocalId = highlightsScreenModel.getBookmarkLocalIdForHighlight(highlight)
+                                    if (bookmarkLocalId != null) navigator.push(BookmarkViewerScreen(bookmarkLocalId, highlight.id))
+                                }
+                            },
+                            onDeleteHighlight = { highlightsScreenModel.deleteHighlight(it) },
+                            onLoadMore = { highlightsScreenModel.loadNextPage() },
+                            onBack = { showHighlights = false }
+                        )
+                    } else {
+                        scaffoldContent(false, null, { bookmark ->
+                            val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
+                            if (idx >= 0) screenModel.trackLastClickedIndex(idx)
+                            navigator.push(BookmarkViewerScreen(bookmark.localId))
+                        }, { scope.launch { drawerState.open() } })
+                    }
                 }
             }
         }
 
         // Back Handlers
         com.karakept.app.ui.components.BackHandler(enabled = isReaderFullscreen) { isReaderFullscreen = false }
+        com.karakept.app.ui.components.BackHandler(enabled = showHighlights && !isExpandedLayout) { showHighlights = false }
         com.karakept.app.ui.components.BackHandler(enabled = isSelectionMode) { screenModel.clearSelection() }
         com.karakept.app.ui.components.BackHandler(enabled = isSearchActive) { isSearchActive = false; screenModel.clearSearch() }
         com.karakept.app.ui.components.BackHandler(enabled = showFilterDialog) { showFilterDialog = false }

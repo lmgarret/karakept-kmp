@@ -241,6 +241,8 @@ fun MainScreenExpandedLayout(
                         },
                         onDeleteHighlight = { highlightsScreenModel.deleteHighlight(it) },
                         onLoadMore = { highlightsScreenModel.loadNextPage() },
+                        showRefreshButton = true,
+                        onRefresh = { highlightsScreenModel.syncHighlights() },
                         onBack = {
                             onShowHighlightsChanged(false)
                             onSelectedBookmarkIdChanged(null)
