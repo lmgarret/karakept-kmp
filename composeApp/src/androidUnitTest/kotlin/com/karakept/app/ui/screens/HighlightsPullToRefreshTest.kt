@@ -38,6 +38,7 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(application = android.app.Application::class)
 class HighlightsPullToRefreshTest {
 
     private val testDispatcher = StandardTestDispatcher()

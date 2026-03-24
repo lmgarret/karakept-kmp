@@ -9,10 +9,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import org.junit.Assert.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -33,7 +34,7 @@ import org.robolectric.annotation.Config
  * (per Pitfall 7: constructor-based LazyListState does NOT populate visibleItemsInfo).
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], application = android.app.Application::class)
 class ScrollToTopVisibilityTest {
 
     @get:Rule
@@ -63,7 +64,7 @@ class ScrollToTopVisibilityTest {
         }
 
         // At index 0 (hero visible), button should NOT be shown
-        composeTestRule.onNodeWithTag("scrollToTop").assertDoesNotExist()
+        assertTrue(composeTestRule.onAllNodesWithTag("scrollToTop").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
@@ -110,8 +111,11 @@ class ScrollToTopVisibilityTest {
                 fabVisible = false
             )
 
+            // Use enough items that the last item is off-screen and scrolling
+            // is required; 10 short Text items fit on Robolectric's virtual
+            // screen so firstVisibleItemIndex never advances past 0.
             LazyColumn(state = state) {
-                items(10) { index ->
+                items(50) { index ->
                     Text("Item $index")
                 }
             }
@@ -123,7 +127,7 @@ class ScrollToTopVisibilityTest {
 
         // Scroll to the last item (end of article)
         composeTestRule.runOnIdle {
-            runBlocking { scrollState!!.scrollToItem(9) }
+            runBlocking { scrollState!!.scrollToItem(49) }
         }
         composeTestRule.waitForIdle()
 
@@ -162,6 +166,6 @@ class ScrollToTopVisibilityTest {
         composeTestRule.waitForIdle()
 
         // But scrollToTopEnabled is false, so button should NOT be composed
-        composeTestRule.onNodeWithTag("scrollToTop").assertDoesNotExist()
+        assertTrue(composeTestRule.onAllNodesWithTag("scrollToTop").fetchSemanticsNodes().isEmpty())
     }
 }

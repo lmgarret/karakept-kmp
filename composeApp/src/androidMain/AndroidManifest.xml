@@ -45,6 +45,9 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+
+        <!-- Required for compose-ui-test createComposeRule() under Robolectric -->
+        <activity android:name="androidx.activity.ComponentActivity" />
     </application>
 
 </manifest>
