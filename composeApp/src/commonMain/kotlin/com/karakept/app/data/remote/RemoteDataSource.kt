@@ -22,11 +22,26 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import com.karakept.api.infrastructure.HttpResponse as ApiHttpResponse
 
 /**
  * Exception thrown when a network request is blocked due to offline mode being enabled.
  */
 class OfflineModeException(message: String = "Offline mode is enabled - network request blocked") : Exception(message)
+
+/**
+ * Extension that checks the HTTP status of a generated API response before deserializing.
+ * If the response is non-2xx, throws [ApiException] with the status code and response body,
+ * preventing cryptic [io.ktor.client.call.NoTransformationFoundException] errors when the
+ * server returns a non-JSON error response (e.g. 401 text/plain).
+ */
+private suspend fun <T : Any> ApiHttpResponse<T>.checkedBody(): T {
+    if (!success) {
+        val errorBody = try { response.bodyAsText() } catch (_: Exception) { "(unreadable)" }
+        throw ApiException("HTTP $status: $errorBody")
+    }
+    return body()
+}
 
 class RemoteDataSource(
     private val client: HttpClient,
@@ -90,7 +105,7 @@ class RemoteDataSource(
                 includeContent = includeContent,
                 archived = archived,
                 favourited = favourited
-            ).body()
+            ).checkedBody()
         } catch (e: Exception) {
             throw ApiException("Error fetching bookmarks: ${e.message}", e)
         }
@@ -98,7 +113,7 @@ class RemoteDataSource(
 
     suspend fun fetchBookmark(server: Server, bookmarkId: String, includeContent: Boolean = true): Bookmark = guardedCall {
         try {
-            bookmarksApi(server).bookmarksBookmarkIdGet(bookmarkId, includeContent).body()
+            bookmarksApi(server).bookmarksBookmarkIdGet(bookmarkId, includeContent).checkedBody()
         } catch (e: Exception) {
             throw ApiException("Error fetching bookmark: ${e.message}", e)
         }
@@ -106,7 +121,7 @@ class RemoteDataSource(
 
     suspend fun fetchLists(server: Server): List<KarakeepList> = guardedCall {
         try {
-            val response = listsApi(server).listsGet().body()
+            val response = listsApi(server).listsGet().checkedBody()
             response.lists ?: emptyList()
         } catch (e: Exception) {
             throw ApiException("Error fetching lists: ${e.message}", e)
@@ -122,7 +137,7 @@ class RemoteDataSource(
                     listId,
                     includeContent = includeContent,
                     cursor = cursor
-                ).body()
+                ).checkedBody()
                 allBookmarks.addAll(response.bookmarks ?: emptyList())
                 cursor = response.nextCursor
             } while (cursor != null)
@@ -136,7 +151,7 @@ class RemoteDataSource(
         try {
              BookmarksApi(getBaseUrl(Server(id = "", url = url, apiKey = apiKey, label = "")), client).apply {
                  setBearerToken(apiKey)
-             }.bookmarksGet(limit = 1.0).body()
+             }.bookmarksGet(limit = 1.0).checkedBody()
              true
         } catch (e: Exception) {
             false
@@ -177,7 +192,7 @@ class RemoteDataSource(
             val api = bookmarksApi(server)
             api.bookmarksBookmarkIdPatch(bookmarkId, updates)
             // Fetch updated bookmark to ensure we have full data (content, tags, assets)
-            api.bookmarksBookmarkIdGet(bookmarkId, includeContent = true).body()
+            api.bookmarksBookmarkIdGet(bookmarkId, includeContent = true).checkedBody()
         } catch (e: Exception) {
             throw ApiException("Error updating bookmark: ${e.message}", e)
         }
@@ -187,7 +202,7 @@ class RemoteDataSource(
      * Fetch all bookmarks (without content)
      */
     suspend fun fetchAllBookmarks(server: Server): List<Bookmark> = guardedCall {
-        bookmarksApi(server).bookmarksGet(includeContent = false).body().bookmarks ?: emptyList()
+        bookmarksApi(server).bookmarksGet(includeContent = false).checkedBody().bookmarks ?: emptyList()
     }
 
     /**
@@ -215,7 +230,7 @@ class RemoteDataSource(
             val request = BookmarksBookmarkIdTagsPostRequest(
                 tags = tags.map { BookmarksBookmarkIdTagsPostRequestTagsInner(tagName = it) }
             )
-            bookmarksApi(server).bookmarksBookmarkIdTagsPost(bookmarkId, request).body()
+            bookmarksApi(server).bookmarksBookmarkIdTagsPost(bookmarkId, request).checkedBody()
         } catch (e: Exception) {
             throw ApiException("Error attaching tags: ${e.message}", e)
         }
@@ -230,7 +245,7 @@ class RemoteDataSource(
             val request = BookmarksBookmarkIdTagsPostRequest(
                 tags = tags.map { BookmarksBookmarkIdTagsPostRequestTagsInner(tagId = it) }
             )
-            bookmarksApi(server).bookmarksBookmarkIdTagsDelete(bookmarkId, request).body()
+            bookmarksApi(server).bookmarksBookmarkIdTagsDelete(bookmarkId, request).checkedBody()
         } catch (e: Exception) {
             throw ApiException("Error detaching tags: ${e.message}", e)
         }
@@ -293,7 +308,7 @@ class RemoteDataSource(
     ): KarakeepList = guardedCall {
         try {
             val request = ListsListIdPatchRequest(name = name, icon = icon)
-            listsApi(server).listsListIdPatch(listId, request).body()
+            listsApi(server).listsListIdPatch(listId, request).checkedBody()
         } catch (e: Exception) {
             throw ApiException("Error updating list: ${e.message}", e)
         }
@@ -305,7 +320,7 @@ class RemoteDataSource(
      */
     suspend fun fetchAllHighlights(server: Server): List<Highlight> = guardedCall {
         try {
-            highlightsApi(server).highlightsGet(limit = 100.0).body().highlights ?: emptyList()
+            highlightsApi(server).highlightsGet(limit = 100.0).checkedBody().highlights ?: emptyList()
         } catch (e: Exception) {
             throw ApiException("Error fetching all highlights: ${e.message}", e)
         }
@@ -317,7 +332,7 @@ class RemoteDataSource(
      */
     suspend fun fetchHighlightsForBookmark(server: Server, bookmarkId: String): List<Highlight> = guardedCall {
         try {
-            bookmarksApi(server).bookmarksBookmarkIdHighlightsGet(bookmarkId).body().highlights ?: emptyList()
+            bookmarksApi(server).bookmarksBookmarkIdHighlightsGet(bookmarkId).checkedBody().highlights ?: emptyList()
         } catch (e: Exception) {
             throw ApiException("Error fetching highlights for bookmark $bookmarkId: ${e.message}", e)
         }
@@ -351,7 +366,7 @@ class RemoteDataSource(
                 note = note ?: "",
                 color = colorEnum
             )
-            highlightsApi(server).highlightsPost(request).body()
+            highlightsApi(server).highlightsPost(request).checkedBody()
         } catch (e: Exception) {
             throw ApiException("Error creating highlight: ${e.message}", e)
         }
@@ -380,7 +395,7 @@ class RemoteDataSource(
                 note = note,
                 color = colorEnum
             )
-            highlightsApi(server).highlightsHighlightIdPatch(highlightId, request).body()
+            highlightsApi(server).highlightsHighlightIdPatch(highlightId, request).checkedBody()
         } catch (e: Exception) {
             throw ApiException("Error updating highlight: ${e.message}", e)
         }
