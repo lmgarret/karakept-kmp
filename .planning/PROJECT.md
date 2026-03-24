@@ -35,9 +35,10 @@ A reliable, well-structured bookmark management app with clean code practices.
 - Dependency upgrades (tracked separately)
 - Platform-specific improvements
 
-## Current Milestone: v1.8.0 Bug Fixes & UX Improvements
+## Current Milestone: v1.8.0 Bug Fixes & UX Improvements — COMPLETE
 
 **Goal:** Fix 6 bugs and deliver 4 UX improvements across reader, bookmark saving, list sync, and filtering.
+**Status:** All 5 phases executed and verified (Phase 07 complete 2026-03-24).
 
 **Target features:**
 - Reader UX: restore scroll position, info button in overflow menu, scroll-to-top button
@@ -86,4 +87,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 after Phase 06 (selection-filtering) complete*
+*Last updated: 2026-03-24 after Phase 07 (ui-tests) complete — v1.8.0 milestone fully executed*
