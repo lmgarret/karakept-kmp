@@ -124,7 +124,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06 -> 07
   5. Scroll-to-top button visibility logic is tested via Compose rule
   6. BookmarkSavingActivity URL extraction and onNewIntent fresh state are tested
   7. Scroll position persistence regression test passes
-**Plans:** 2 plans
+**Plans:** 0/2 plans executed
 
 Plans:
 - [x] 07-01-PLAN.md -- Build infrastructure + ScreenModel tests (FILT-01, FILT-02, FILT-03, regression)
