@@ -375,7 +375,8 @@ object MainScreen : Screen {
                             },
                             onDeleteHighlight = { highlightsScreenModel.deleteHighlight(it) },
                             onLoadMore = { highlightsScreenModel.loadNextPage() },
-                            onBack = { showHighlights = false }
+                            onBack = { showHighlights = false },
+                            onOpenDrawer = { scope.launch { drawerState.open() } }
                         )
                     } else {
                         scaffoldContent(false, null, { bookmark ->
