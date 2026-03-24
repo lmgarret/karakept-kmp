@@ -110,7 +110,7 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06 -> 07
 | 04. Bookmark Saving Activity | v1.8.0 | 1/1 | Complete    | 2026-03-23 |
 | 05. List & Sync | v1.8.0 | 2/3 | Complete    | 2026-03-23 |
 | 06. Selection & Filtering | v1.8.0 | 2/2 | Complete    | 2026-03-23 |
-| 07. UI Tests | v1.8.0 | 1/2 | In Progress | -- |
+| 07. UI Tests | v1.8.0 | 2/2 | Complete | 2026-03-24 |
 
 ### Phase 7: UI Tests
 **Goal:** All v1.8.0 behavioral scenarios have automated regression tests using Robolectric + Compose UI test in androidUnitTest
@@ -124,8 +124,8 @@ Phases execute in numeric order: 03 -> 04 -> 05 -> 06 -> 07
   5. Scroll-to-top button visibility logic is tested via Compose rule
   6. BookmarkSavingActivity URL extraction and onNewIntent fresh state are tested
   7. Scroll position persistence regression test passes
-**Plans:** 0/2 plans executed
+**Plans:** 2/2 plans executed
 
 Plans:
 - [x] 07-01-PLAN.md -- Build infrastructure + ScreenModel tests (FILT-01, FILT-02, FILT-03, regression)
-- [ ] 07-02-PLAN.md -- Compose UI tests (READER-03/04) + Activity lifecycle tests (SAVE-01/02)
+- [x] 07-02-PLAN.md -- Compose UI tests (READER-03/04) + Activity lifecycle tests (SAVE-01/02)
