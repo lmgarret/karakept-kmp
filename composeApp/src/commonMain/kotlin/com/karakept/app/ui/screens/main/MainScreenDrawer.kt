@@ -217,6 +217,7 @@ internal fun MainScreenDrawer(
     onSetAsDefaultType: (DefaultListType) -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToHighlights: () -> Unit,
+    isHighlightsSelected: Boolean = false,
     quickFilterCounts: QuickFilterCounts = QuickFilterCounts(),
     highlightsCount: Int = 0,
     content: @Composable () -> Unit
@@ -240,6 +241,7 @@ internal fun MainScreenDrawer(
                     onSetAsDefaultType = onSetAsDefaultType,
                     onNavigateToSettings = onNavigateToSettings,
                     onNavigateToHighlights = onNavigateToHighlights,
+                    isHighlightsSelected = isHighlightsSelected,
                     quickFilterCounts = quickFilterCounts,
                     highlightsCount = highlightsCount
                 )
