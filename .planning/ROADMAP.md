@@ -41,7 +41,9 @@
 <details open>
 <summary>🚧 v1.9.0 Bug Fixes & UX Polish (Phases 12-16) — IN PROGRESS</summary>
 
-- [ ] Phase 12: Notification Fixes — NOTIF-01, NOTIF-02 (#169, #170)
+- [ ] Phase 12: Notification Fixes — NOTIF-01, NOTIF-02 (#169, #170) — **Plans:** 1 plan
+  Plans:
+  - [ ] 12-01-PLAN.md — Fix digest notification count + add per-list notification
 - [ ] Phase 13: Smart List & Saving Follow-ups — SAVE-02, LIST-02 (#163, #165)
 - [ ] Phase 14: UI Interaction Fixes — FILT-04, UI-01 (#164, #168)
 - [ ] Phase 15: Snackbar Undo System — UX-01 (#166)
@@ -64,7 +66,7 @@
 | 09. SettingsRepository Flow Tests | Platform Health | 1/1 | Complete | 2026-03-25 |
 | 10. Dialog and Component UI Tests | Platform Health | 2/2 | Complete | 2026-03-25 |
 | 11. BackupRepository Edge Case Tests | Platform Health | 1/1 | Complete | 2026-03-25 |
-| 12. Notification Fixes | v1.9.0 | 0/? | Planned | — |
+| 12. Notification Fixes | v1.9.0 | 0/1 | Planned | — |
 | 13. Smart List & Saving Follow-ups | v1.9.0 | 0/? | Planned | — |
 | 14. UI Interaction Fixes | v1.9.0 | 0/? | Planned | — |
 | 15. Snackbar Undo System | v1.9.0 | 0/? | Planned | — |
