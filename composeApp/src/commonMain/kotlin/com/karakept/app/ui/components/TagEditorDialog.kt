@@ -32,6 +32,45 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 
 /**
+ * Filters [availableTags] to those containing [searchInput] (case-insensitive)
+ * and not already in [currentTags], sorted alphabetically, max 8 results.
+ */
+internal fun filterTagSuggestions(
+    availableTags: List<String>,
+    searchInput: String,
+    currentTags: List<String>
+): List<String> {
+    if (searchInput.isBlank()) return emptyList()
+    return availableTags
+        .filter { it.contains(searchInput, ignoreCase = true) && !currentTags.contains(it) }
+        .sortedBy { it.lowercase() }
+        .take(8)
+}
+
+/**
+ * Whether the current [searchInput] can be added as a tag.
+ */
+internal fun canAddTag(
+    searchInput: String,
+    currentTags: List<String>,
+    availableTags: List<String>,
+    canCreateNew: Boolean
+): Boolean {
+    val trimmed = searchInput.trim()
+    if (trimmed.isBlank()) return false
+    if (currentTags.contains(trimmed)) return false
+    if (canCreateNew) return true
+    return availableTags.any { it.equals(trimmed, ignoreCase = true) }
+}
+
+/**
+ * Finds an exact case-insensitive match for [searchInput] in [availableTags].
+ */
+internal fun findExactTagMatch(searchInput: String, availableTags: List<String>): String? {
+    return availableTags.find { it.equals(searchInput.trim(), ignoreCase = true) }
+}
+
+/**
  * MD3 AlertDialog for editing (or filtering by) tags.
  *
  * As the user types, matching tags from [availableTags] are shown as clickable suggestion chips
@@ -61,11 +100,7 @@ fun TagEditorDialog(
     var searchInput by remember { mutableStateOf("") }
 
     val suggestions = remember(availableTags, searchInput, tags) {
-        if (searchInput.isBlank()) emptyList()
-        else availableTags
-            .filter { it.contains(searchInput, ignoreCase = true) && !tags.contains(it) }
-            .sortedBy { it.lowercase() }
-            .take(8)
+        filterTagSuggestions(availableTags, searchInput, tags)
     }
 
     fun addTag(tag: String) {
@@ -99,9 +134,8 @@ fun TagEditorDialog(
                 }
 
                 // Search / add input
-                val exactMatch = availableTags.find { it.equals(searchInput.trim(), ignoreCase = true) }
-                val canAdd = searchInput.isNotBlank() && !tags.contains(searchInput.trim()) &&
-                    (canCreateNew || exactMatch != null)
+                val exactMatch = findExactTagMatch(searchInput, availableTags)
+                val canAdd = canAddTag(searchInput, tags, availableTags, canCreateNew)
 
                 TextField(
                     value = searchInput,

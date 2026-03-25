@@ -21,6 +21,13 @@ enum class TagsDisplayStyle {
 }
 
 /**
+ * Parses a comma-separated tag string into a trimmed, non-blank list of tag names.
+ */
+internal fun parseTagString(tags: String): List<String> {
+    return tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+}
+
+/**
  * Displays bookmark tags as chips in a flow layout or a single scrollable row.
  *
  * @param tags Comma-separated tag string from BookmarkEntity
@@ -38,9 +45,7 @@ fun BookmarkTagsDisplay(
     modifier: Modifier = Modifier
 ) {
     // Parse tags and filter empty strings
-    val tagList = tags.split(",")
-        .map { it.trim() }
-        .filter { it.isNotBlank() }
+    val tagList = parseTagString(tags)
 
     // Don't render if no tags
     if (tagList.isEmpty()) {
