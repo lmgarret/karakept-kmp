@@ -32,9 +32,17 @@ A reliable, well-structured bookmark management app with clean code practices.
 - ✓ BackupRepository edge case tests: 6 new tests covering blank PIN guard, setBackupPin branches, malformed JSON, scheduled export trigger, silent exception swallow — v1.9.0 Phase 11
 - ✓ SettingsRepository flow tests: 53 flow-level tests across all 8 settings categories via FakeDataStore — v1.9.0 Phase 09
 
-### Active
+### Active (v1.9.0 Bug Fixes & UX Polish)
 
-(None — start fresh requirements for next milestone via `/gsd:new-milestone`)
+- NOTIF-01: Sync digest notification must show bookmark count (#169)
+- NOTIF-02: "Notify on new bookmarks" option on list must fire (#170)
+- SAVE-02: Navigate back after saving bookmarks must show bookmark list (#163)
+- LIST-02: Smart list must reflect quick-action changes immediately (#165)
+- FILT-04: Pull-to-refresh must work on Highlights on mobile (#164)
+- UI-01: Scroll-to-top button must reach the actual top (#168)
+- UX-01: Snackbars for reversible actions must include an Undo button (#166)
+- UX-02: Custom layout improvements (#167)
+- NFR-01: Regression tests for every fix (required by user)
 
 ### Out of Scope
 
@@ -51,7 +59,8 @@ A reliable, well-structured bookmark management app with clean code practices.
 
 - v1.7.0 shipped 2026-03-21: tech debt cleanup (logging, file sizes, redundant DI)
 - v1.8.0 shipped 2026-03-25: 6 bugs fixed, 4 UX improvements, Robolectric test infrastructure
-- v1.9.0 shipped 2026-03-25: platform health — 201 new tests, ~40% → ~75-80% business logic coverage
+- Platform Health archived 2026-03-25 (internal, no git tag): 201 new tests, ~40% → ~75-80% business logic coverage
+- v1.9.0 in progress: 6 bug fixes + 2 UX enhancements, all with regression tests
 - Test files: 37+ test files / ~9,000+ lines of test code across commonTest, androidUnitTest, desktopTest
 - All key untested areas addressed: pure utilities, action layer, sync pipeline, settings flows, UI components, backup edge cases
 - The app is functional and in active use
@@ -78,7 +87,7 @@ A reliable, well-structured bookmark management app with clean code practices.
 | FakeDataStore via MutableStateFlow + Mutex | Thread-safe atomic updates matching real DataStore semantics | 53 SettingsRepository flow tests passing ✓ |
 | Real-object pattern for extension functions | Extension functions accessing internal members conflict with MockK relaxed mocking | BookmarkSyncPipeline fully testable ✓ |
 | Internal top-level function extraction for composable logic | Enables direct import in commonTest without Compose runtime | filterTagSuggestions/canAddTag/parseTagString tested in commonTest ✓ |
-| platform-health assigned v1.9.0 at archive time | Internal quality work; milestone completed without versioned release | Test coverage milestone archived as v1.9.0 ✓ |
+| platform-health archived without git tag | Internal quality work; milestone completed without versioned release | Test coverage milestone archived as "Platform Health (internal)" ✓ |
 
 ## Evolution
 
@@ -98,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 after v1.9.0 platform-health milestone complete*
+*Last updated: 2026-03-25 — v1.9.0 Bug Fixes & UX Polish milestone started (Phases 12-16)*
