@@ -93,20 +93,17 @@ fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<S
  * Uses GET /bookmarks/{id}/lists — one API call — instead of syncing entire smart lists.
  * Then reloads the visible list so the UI reflects the change immediately.
  */
-private fun MainScreenModel.syncSmartLists(bookmark: BookmarkEntity) {
+private fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
     val server = _selectedServer.value ?: return
-    val smartLists = listRepository.lists.value.filter { it.type == KarakeepList.Type.SMART }
-    if (smartLists.isEmpty()) return
-    val smartListIds = smartLists.mapNotNull { it.id }.toSet()
     val capturedFilter = _currentFilter.value
     screenModelScope.launch {
         try {
-            bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId, smartListIds)
+            bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId)
             if (_currentFilter.value == capturedFilter) {
                 resetPaginationAndLoad(server, capturedFilter)
             }
         } catch (e: Exception) {
-            AppLogger.e("MainScreenModel", "Smart list reconciliation failed for bookmark ${bookmark.localId}: ${e.message}", e)
+            AppLogger.e("MainScreenModel", "List membership reconciliation failed for bookmark ${bookmark.localId}: ${e.message}", e)
         }
     }
 }
@@ -134,7 +131,7 @@ fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String)
                 }
             }
         }
-        syncSmartLists(bookmark)
+        reconcileBookmarkLists(bookmark)
     }
 }
 
@@ -223,7 +220,7 @@ fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: Str
                 bookmark = bookmark
             )
         }
-        syncSmartLists(bookmark)
+        reconcileBookmarkLists(bookmark)
     }
 }
 
