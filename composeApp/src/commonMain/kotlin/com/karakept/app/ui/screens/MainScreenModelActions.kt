@@ -100,7 +100,7 @@ private fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
         try {
             bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId)
             if (_currentFilter.value == capturedFilter) {
-                resetPaginationAndLoad(server, capturedFilter)
+                resetPaginationAndLoad(server, capturedFilter, scrollToTop = false)
             }
         } catch (e: Exception) {
             AppLogger.e("MainScreenModel", "List membership reconciliation failed for bookmark ${bookmark.localId}: ${e.message}", e)
