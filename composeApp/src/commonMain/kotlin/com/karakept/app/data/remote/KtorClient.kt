@@ -26,7 +26,8 @@ fun createHttpClient(): HttpClient {
 
         install(Logging) {
             logger = object : Logger {
-                override fun log(message: String) = AppLogger.d("HttpClient", message)
+                override fun log(message: String) =
+                    message.lines().forEach { AppLogger.d("HttpClient", it) }
             }
             level = LogLevel.INFO
         }
