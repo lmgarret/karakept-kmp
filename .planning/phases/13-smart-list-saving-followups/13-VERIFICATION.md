@@ -1,17 +1,23 @@
 ---
 phase: 13-smart-list-saving-followups
-verified: 2026-03-26T21:00:00Z
-status: gaps_found
-score: 6/7 must-haves verified
-re_verification: false
+verified: 2026-03-26T22:00:00Z
+status: passed
+score: 7/7 must-haves verified
+re_verification:
+  previous_status: gaps_found
+  previous_score: 6/7
+  gaps_closed:
+    - "After a ForList sync, bookmarks locally in the list but absent from server response have that listId stripped from their listIds"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 13: Smart List & Saving Follow-ups Verification Report
 
-**Phase Goal:** Fix SAVE-02 (MainScreenModel init stall in secondary Activity) and LIST-02 (smart lists not updating after quick actions)
-**Verified:** 2026-03-26
+**Phase Goal:** Fix smart-list-saving followup bugs (SAVE-02, LIST-02) identified after Phase 12 UAT.
+**Verified:** 2026-03-26T22:00:00Z
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after gap closure (13-03)
 
 ---
 
@@ -21,16 +27,15 @@ re_verification: false
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | MainScreenModel reaches InitState.Ready when created inside BookmarkSavingActivity Navigator | VERIFIED | Factory registration confirmed at AppModule.kt:111; Save02RegressionTest.kt test 1 asserts `_accumulatedBookmarks` non-empty after `advanceUntilIdle()` |
+| 1 | MainScreenModel reaches InitState.Ready when created inside BookmarkSavingActivity Navigator | VERIFIED | factory registration at AppModule.kt:111; Save02RegressionTest.kt asserts `_accumulatedBookmarks` non-empty after init |
 | 2 | Bookmark list is populated (non-empty `_accumulatedBookmarks`) after init completes | VERIFIED | Save02RegressionTest.kt:156 directly asserts `model._accumulatedBookmarks.value.isNotEmpty()` |
 | 3 | Drawer counters (quickFilterCounts) emit correct values after init | VERIFIED | Save02RegressionTest.kt:215 asserts `counts.all == 4` matching the 4 stubbed bookmarks |
-| 4 | After moveBookmarkToList, syncBookmarksForList is called for every SMART list | VERIFIED | MainScreenModelActions.kt:137 calls `syncSmartLists()` inside the `screenModelScope.launch` block; List02RegressionTest.kt:140 verifies with `coVerify` |
-| 5 | After removeBookmarkFromList, syncBookmarksForList is called for every SMART list | VERIFIED | MainScreenModelActions.kt:226 calls `syncSmartLists()` inside the `screenModelScope.launch` block; List02RegressionTest.kt:156 verifies with `coVerify` |
-| **GAP** | **Syncing a smart list actually removes bookmarks that no longer match its query from the local DB membership** | **FAILED** | `SyncConfiguration.ForList` has `shouldDeleteRemoved = false`. The pipeline upserts returned bookmarks but never strips `listId` from bookmarks that were locally in the list but absent from the server response. Line 241–245 of `BookmarkSyncPipeline.kt` explicitly merges (adds) list membership but never removes stale entries. The sync trigger fires correctly, but the pipeline silently no-ops on removals. |
-| 6 | MANUAL lists are NOT synced by the smart list sync trigger | VERIFIED | `syncSmartLists()` at line 98 filters `it.type == KarakeepList.Type.SMART`; List02RegressionTest.kt:152,168 use `coVerify(exactly = 0)` for manual-1 |
-| 7 | Smart list syncs are non-blocking background operations | VERIFIED | `syncSmartLists()` uses nested `launch {}` per smart list (parallel fire-and-forget); errors caught per-list and logged via AppLogger without affecting UI |
+| 4 | After moveBookmarkToList, syncBookmarksForList is called for every SMART list | VERIFIED | MainScreenModelActions.kt:137 calls `syncSmartLists()`; List02RegressionTest.kt verifies with `coVerify` |
+| 5 | After removeBookmarkFromList, syncBookmarksForList is called for every SMART list | VERIFIED | MainScreenModelActions.kt:226 calls `syncSmartLists()`; List02RegressionTest.kt verifies with `coVerify` |
+| 6 | After a ForList sync, bookmarks locally in the list but absent from server response have that listId stripped from their listIds | VERIFIED | `reconcileListMembership` private method at BookmarkSyncPipeline.kt:539; called after Phase 4 at lines 98-101 gated by `config is SyncConfiguration.ForList`; `computeStaleListRemovals` internal top-level function at line 597; BookmarkSyncPipelineReconcileTest.kt: 5 tests covering all edge cases |
+| 7 | MANUAL lists are NOT synced by the smart list sync trigger | VERIFIED | `syncSmartLists()` at MainScreenModelActions.kt:98 filters `it.type == KarakeepList.Type.SMART`; List02RegressionTest.kt uses `coVerify(exactly = 0)` for manual lists |
 
-**Score:** 6/7 truths verified
+**Score:** 7/7 truths verified
 
 ---
 
@@ -38,11 +43,12 @@ re_verification: false
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` | Factory registration for MainScreenModel | VERIFIED | Line 111: `factory { MainScreenModel(...) }` with explanatory comment about SAVE-02 rationale |
-| `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreenModel.kt` | Comment updated to reflect factory lifecycle | VERIFIED | Comment updated at scroll-position section; `syncProgress` StateFlow and init state machine intact |
-| `composeApp/src/androidUnitTest/kotlin/com/karakept/app/ui/screens/Save02RegressionTest.kt` | Regression test for SAVE-02 (min 50 lines) | VERIFIED | 242 lines; `class Save02RegressionTest` with 3 `@Test` methods; covers `_accumulatedBookmarks`, `bookmarks` StateFlow, `quickFilterCounts` |
-| `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreenModelActions.kt` | `syncSmartLists` helper + wired into moveBookmarkToList and removeBookmarkFromList | VERIFIED | `private fun MainScreenModel.syncSmartLists()` at line 96; called at line 137 (`moveBookmarkToList`) and line 226 (`removeBookmarkFromList`) |
-| `composeApp/src/androidUnitTest/kotlin/com/karakept/app/ui/screens/List02RegressionTest.kt` | Regression tests for LIST-02 (min 60 lines) | VERIFIED | 204 lines; `class List02RegressionTest` with 4 `@Test` methods |
+| `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` | factory registration for MainScreenModel | VERIFIED | Line 111: `factory { MainScreenModel(...) }` with SAVE-02 rationale comment |
+| `composeApp/src/androidUnitTest/kotlin/com/karakept/app/ui/screens/Save02RegressionTest.kt` | Regression tests for SAVE-02 (min 50 lines) | VERIFIED | 242 lines; 3 `@Test` methods |
+| `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreenModelActions.kt` | `syncSmartLists` helper wired into move and remove | VERIFIED | Function at line 96; called at lines 137 and 226 |
+| `composeApp/src/androidUnitTest/kotlin/com/karakept/app/ui/screens/List02RegressionTest.kt` | Regression tests for LIST-02 (min 60 lines) | VERIFIED | 204 lines; 4 `@Test` methods |
+| `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkSyncPipeline.kt` | `reconcileListMembership` + `computeStaleListRemovals` + ForList gating | VERIFIED | `reconcileListMembership` at line 539; `computeStaleListRemovals` at line 597; ForList guard at lines 98-101; calls `bookmarkDao.getAllBookmarksForList` (line 544) and `bookmarkDao.updateBookmarkMetadata` (line 550) |
+| `composeApp/src/commonTest/kotlin/com/karakept/app/data/repository/BookmarkSyncPipelineReconcileTest.kt` | Unit tests for reconciliation pure function (min 60 lines) | VERIFIED | 120 lines; 5 `@Test` methods covering all edge cases |
 
 ---
 
@@ -50,33 +56,34 @@ re_verification: false
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| MainScreenModel.init (Coroutine B) | DefaultFilterResolver.resolve() | settingsRepository flows | VERIFIED | `defaultFilterResolver.resolve()` called at MainScreenModel.kt:329 inside init state machine |
-| MainScreenModel.init (Coroutine B) | resetPaginationAndLoad | sequential state machine | VERIFIED | `resetPaginationAndLoad(server, defaultFilter)` called at MainScreenModel.kt:339 |
-| MainScreenModelActions.moveBookmarkToList | syncSmartLists | function call after updateAccumulatedBookmarks | VERIFIED | `syncSmartLists()` at MainScreenModelActions.kt:137, last call inside `screenModelScope.launch` block |
-| MainScreenModelActions.removeBookmarkFromList | syncSmartLists | function call after updateAccumulatedBookmarks | VERIFIED | `syncSmartLists()` at MainScreenModelActions.kt:226, last call inside `screenModelScope.launch` block |
-| syncSmartLists | bookmarkRepository.syncBookmarksForList | launch per smart list | VERIFIED | `bookmarkRepository.syncBookmarksForList(server, listId)` at MainScreenModelActions.kt:105 inside nested `launch {}` |
+| `BookmarkSyncPipeline.execute` | `reconcileListMembership` | `if (config is SyncConfiguration.ForList)` guard | WIRED | Lines 98-101 in BookmarkSyncPipeline.kt |
+| `reconcileListMembership` | `computeStaleListRemovals` | direct call at line 546 | WIRED | `val removals = computeStaleListRemovals(localBookmarksInList, serverRemoteIds, listId)` |
+| `reconcileListMembership` | `bookmarkDao.updateBookmarkMetadata` | loop over removals at lines 548-565 | WIRED | Each `(localId, newListIds)` pair persisted via metadata update |
+| `reconcileListMembership` | `bookmarkDao.getAllBookmarksForList` | call at line 544 | WIRED | DAO method confirmed at BookmarkDao.kt:286 |
+| `MainScreenModelActions.moveBookmarkToList` | `syncSmartLists` | call at line 137 | WIRED | Confirmed in MainScreenModelActions.kt |
+| `MainScreenModelActions.removeBookmarkFromList` | `syncSmartLists` | call at line 226 | WIRED | Confirmed in MainScreenModelActions.kt |
 
 ---
 
 ### Data-Flow Trace (Level 4)
 
-Both fixes address behavioral correctness (DI lifecycle change + sync trigger wiring) rather than data display components. The data flows themselves (bookmark list rendering, drawer counters) were already wired in prior phases. Level 4 is not separately applicable to these infrastructure-level changes; the test assertions directly verify the end-to-end data flow (bookmarks non-empty in StateFlow, counts correct).
+The gap closure fixes infrastructure-level sync behavior rather than a UI rendering component. The reconciliation step writes directly to DB rows via `bookmarkDao.updateBookmarkMetadata`. The rendering components downstream (bookmark list, smart list view) already read from the same DAO flows and were verified in prior phases. The 5 unit tests on `computeStaleListRemovals` assert the exact `listIds` string values that would be persisted, covering the full data-flow contract for this phase.
 
 ---
 
 ### Behavioral Spot-Checks
 
-These fixes require running Android instrumented tests (Robolectric) against coroutines. Static verification via grep is sufficient for this phase.
+`computeStaleListRemovals` is a pure Kotlin function in `commonTest` — directly testable without an Android runtime or running server.
 
 | Behavior | Evidence | Status |
 |----------|----------|--------|
-| Save02RegressionTest: `_accumulatedBookmarks` non-empty after init | File exists, 3 `@Test` methods verified; SUMMARY confirms BUILD SUCCESSFUL | PASS |
-| Save02RegressionTest: `bookmarks` StateFlow non-empty | Test at line 184 present and substantive | PASS |
-| Save02RegressionTest: `quickFilterCounts` reflects loaded bookmarks | Test at line 215 present and substantive | PASS |
-| List02RegressionTest: moveBookmarkToList syncs SMART only | 4 `@Test` methods verified; SUMMARY confirms BUILD SUCCESSFUL | PASS |
-| List02RegressionTest: removeBookmarkFromList syncs SMART only | Test at line 155 present with `coVerify(exactly = 0)` for manual | PASS |
-| List02RegressionTest: no sync when no SMART lists | Test at line 172 with `coVerify(exactly = 0)` for all syncs | PASS |
-| List02RegressionTest: ADD_TO_LIST transitive sync | Test at line 187 verifying delegation chain | PASS |
+| All local bookmarks in server response — no removals | Test 1 in BookmarkSyncPipelineReconcileTest.kt | PASS |
+| Stale bookmark stripped but other list memberships preserved | Test 2: `smart-1,manual-1` becomes `manual-1` | PASS |
+| Bookmark with sole listId stripped — empty string result | Test 3: `smart-1` becomes `""` | PASS |
+| Multiple stale bookmarks all flagged | Test 4: 3 stale bookmarks, all 3 returned | PASS |
+| Present bookmarks excluded from removal set | Test 5: mixed present/absent — only absent flagged | PASS |
+| Full and Filtered syncs unaffected by reconciliation | ForList guard at lines 98-101 — `reconcileListMembership` never called for Full/Filtered | PASS |
+| No regressions in full suite | SUMMARY 13-03: 453/459 tests passing; 6 pre-existing Docker failures unchanged | PASS |
 
 ---
 
@@ -84,46 +91,44 @@ These fixes require running Android instrumented tests (Robolectric) against cor
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|----------|
-| SAVE-02 | 13-01-PLAN.md | Navigate back after saving bookmarks must show bookmark list | SATISFIED | AppModule.kt: `factory{}` for MainScreenModel (line 111); Save02RegressionTest.kt: 3 passing tests |
-| LIST-02 | 13-02-PLAN.md | Smart list must reflect quick-action changes immediately | **GAP** | Trigger wired (syncSmartLists), but `BookmarkSyncPipeline.ForList` never removes stale list membership — bookmarks evicted from a smart list server-side remain in the local DB under that listId indefinitely. |
-| NFR-01 | 13-01-PLAN.md, 13-02-PLAN.md | Regression tests for every fix | SATISFIED | Save02RegressionTest.kt (3 tests for SAVE-02); List02RegressionTest.kt (4 tests for LIST-02) |
-| NFR-02 | 13-01-PLAN.md (Task 2), 13-02-PLAN.md (Task 2) | No new regressions | SATISFIED | Both SUMMARYs confirm BUILD SUCCESSFUL on full `testDebugUnitTest` + `desktopTest`; 6 pre-existing Docker integration failures unrelated to this phase |
+| SAVE-02 | 13-01-PLAN.md | Navigate back after saving bookmarks must show bookmark list | SATISFIED | `factory {}` registration at AppModule.kt:111; Save02RegressionTest.kt: 3 tests confirming non-empty bookmarks and drawer counters after init |
+| LIST-02 | 13-02-PLAN.md, 13-03-PLAN.md | Smart list must reflect quick-action changes immediately | SATISFIED | Trigger: `syncSmartLists()` wired in MainScreenModelActions.kt at lines 137 and 226; Reconciliation: `reconcileListMembership` in ForList sync path strips stale listIds via `bookmarkDao.updateBookmarkMetadata`; 5 unit tests confirm edge cases; 4 regression tests confirm trigger wiring |
+| NFR-01 | 13-01-PLAN.md, 13-02-PLAN.md, 13-03-PLAN.md | Regression tests for every fix | SATISFIED | Save02RegressionTest.kt (3 tests); List02RegressionTest.kt (4 tests); BookmarkSyncPipelineReconcileTest.kt (5 tests) |
+| NFR-02 | 13-01-PLAN.md, 13-02-PLAN.md, 13-03-PLAN.md | No new regressions | SATISFIED | All three plan SUMMARYs report BUILD SUCCESSFUL; reconciliation guarded by `config is SyncConfiguration.ForList` so Full/Filtered sync paths are untouched; 6 pre-existing Docker failures unchanged |
 
-No orphaned requirements: REQUIREMENTS.md maps no additional IDs to Phase 13 beyond SAVE-02 and LIST-02 (NFR-01 and NFR-02 are milestone-wide, not phase-specific assignments).
+No orphaned requirements: REQUIREMENTS.md maps no additional IDs to Phase 13 beyond SAVE-02 and LIST-02. NFR-01 and NFR-02 are milestone-wide requirements satisfied by this phase's test artifacts.
 
 ---
 
 ### Anti-Patterns Found
 
-No anti-patterns detected:
+None detected in the files modified by 13-03.
 
-- No TODO/FIXME/placeholder comments in modified files
-- No `return null`, `return {}`, or `return []` stub implementations in production code paths
-- `syncSmartLists()` returns early on `null` server or empty smart list — these are valid guard clauses, not stubs
-- Test files use `MutableStateFlow(emptyList())` and `MutableSharedFlow()` as test infrastructure, not production stubs
-- No hardcoded empty props passed to rendering components
+- No TODO/FIXME/placeholder comments in BookmarkSyncPipeline.kt or BookmarkSyncPipelineReconcileTest.kt
+- `return emptyList()` in `computeStaleListRemovals` only executes when the filter produces no matches — correct behavior, not a stub
+- `emptySet<String>()` in test fixtures is test infrastructure, not production stubbing
+- `if (config is SyncConfiguration.ForList)` guard at lines 98-101 is a valid type check, not a placeholder
 
 ---
 
 ### Human Verification Required
 
-None. All observable truths are covered by automated regression tests (Save02RegressionTest and List02RegressionTest). The fix is structural (DI lifecycle) and the data flow is verified at the ViewModel level.
+None. All observable truths are covered by automated regression tests and static code analysis. The fix is structural (pipeline reconciliation step) and verified at the pure function level.
 
 ---
 
-## Gaps Summary
+## Re-verification Summary
 
-**1 gap found — LIST-02 pipeline reconciliation missing**
+**Previous status:** gaps_found (6/7 truths verified)
+**Current status:** passed (7/7 truths verified)
 
-The plan's must_haves only described the *trigger* (syncSmartLists is called) and not the *effect* (stale list membership is removed). The trigger is correctly wired, but `BookmarkSyncPipeline` does not implement list-membership reconciliation for `ForList` syncs.
+**Gap that was found (initial verification):** `BookmarkSyncPipeline.ForList` sync never removed stale list membership — `shouldDeleteRemoved = false` plus merge-only logic in `mapDtoToEntity` meant bookmarks evicted from a smart list server-side remained in local DB membership indefinitely.
 
-**Root cause:** `SyncConfiguration.ForList.shouldDeleteRemoved = false` + the merge-only logic at lines 241–245 of `BookmarkSyncPipeline.kt` means a `ForList` sync can only add a bookmark to a list, never remove one. A bookmark added to `Read Later` (which causes the server to evict it from `RSS Feeds`) will remain in the local `RSS Feeds` membership indefinitely until a full sync runs.
+**Gap closure (13-03):** Pure function `computeStaleListRemovals` computes which locally-tracked bookmarks are absent from the server response for the synced list. `reconcileListMembership` calls `bookmarkDao.updateBookmarkMetadata` to strip the stale `listId` from each affected bookmark, preserving other list memberships. The step is inserted as Phase 4.5 in `execute()` gated by `config is SyncConfiguration.ForList`, leaving Full and Filtered sync paths unchanged.
 
-**Fix needed:** After a `ForList` sync, query the DB for all bookmarks that have `listId` in their `listIds`, diff against the server response, and strip `listId` from any bookmark not present in the server response (without deleting the bookmark, since it may belong to other lists).
-
-SAVE-02 is fully resolved. NFR-02 (no regressions) remains satisfied.
+Commits: `5c1e888` (RED: failing tests) and `e0253bd` (GREEN: implementation and pipeline wiring) — both confirmed in git log.
 
 ---
 
-_Verified: 2026-03-26T21:00:00Z_
+_Verified: 2026-03-26T22:00:00Z_
 _Verifier: Claude (gsd-verifier)_
