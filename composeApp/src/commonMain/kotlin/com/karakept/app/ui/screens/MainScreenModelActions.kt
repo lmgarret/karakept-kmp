@@ -101,22 +101,20 @@ private fun MainScreenModel.syncSmartLists() {
     if (smartLists.isEmpty()) return
     val capturedFilter = _currentFilter.value
     screenModelScope.launch {
-        kotlinx.coroutines.coroutineScope {
-            smartLists.forEach { smartList ->
-                val listId = smartList.id ?: return@forEach
-                launch {
-                    try {
-                        bookmarkRepository.syncBookmarksForList(server, listId)
-                    } catch (e: Exception) {
-                        AppLogger.e("MainScreenModel", "Smart list sync failed for $listId: ${e.message}", e)
+        smartLists.forEach { smartList ->
+            val listId = smartList.id ?: return@forEach
+            launch {
+                try {
+                    bookmarkRepository.syncBookmarksForList(server, listId)
+                    // Reload after each sync so the UI reflects DB changes as soon
+                    // as any individual smart list finishes — no need to wait for all.
+                    if (_currentFilter.value == capturedFilter) {
+                        resetPaginationAndLoad(server, capturedFilter)
                     }
+                } catch (e: Exception) {
+                    AppLogger.e("MainScreenModel", "Smart list sync failed for $listId: ${e.message}", e)
                 }
             }
-        }
-        // All smart list syncs complete — reload so the UI reflects DB changes
-        // (e.g. a bookmark evicted from a smart list disappears from the visible list).
-        if (_currentFilter.value == capturedFilter) {
-            resetPaginationAndLoad(server, capturedFilter)
         }
     }
 }
