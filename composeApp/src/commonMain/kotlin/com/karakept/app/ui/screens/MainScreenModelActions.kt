@@ -89,7 +89,9 @@ fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<S
 }
 
 /**
- * Triggers background sync for all smart lists after a list-membership action.
+ * Triggers background sync for all smart lists after a list-membership action,
+ * then reloads the visible bookmark list so removals/additions are reflected
+ * without a manual sync.
  * Smart list queries are server-owned, so we must re-fetch from server to get
  * accurate contents and drawer counts.
  */
@@ -97,16 +99,24 @@ private fun MainScreenModel.syncSmartLists() {
     val server = _selectedServer.value ?: return
     val smartLists = listRepository.lists.value.filter { it.type == KarakeepList.Type.SMART }
     if (smartLists.isEmpty()) return
+    val capturedFilter = _currentFilter.value
     screenModelScope.launch {
-        smartLists.forEach { smartList ->
-            val listId = smartList.id ?: return@forEach
-            launch {
-                try {
-                    bookmarkRepository.syncBookmarksForList(server, listId)
-                } catch (e: Exception) {
-                    AppLogger.e("MainScreenModel", "Smart list sync failed for $listId: ${e.message}", e)
+        kotlinx.coroutines.coroutineScope {
+            smartLists.forEach { smartList ->
+                val listId = smartList.id ?: return@forEach
+                launch {
+                    try {
+                        bookmarkRepository.syncBookmarksForList(server, listId)
+                    } catch (e: Exception) {
+                        AppLogger.e("MainScreenModel", "Smart list sync failed for $listId: ${e.message}", e)
+                    }
                 }
             }
+        }
+        // All smart list syncs complete — reload so the UI reflects DB changes
+        // (e.g. a bookmark evicted from a smart list disappears from the visible list).
+        if (_currentFilter.value == capturedFilter) {
+            resetPaginationAndLoad(server, capturedFilter)
         }
     }
 }
