@@ -46,6 +46,14 @@ class BackgroundSyncWorker(
                 showDigestNotification(newCount)
             }
 
+            // Per-list notification (NOTIF-02)
+            if (newCount > 0 && notificationsEnabled && hasNotificationPermission()) {
+                val listsToNotify = bookmarkRepository.getListsNeedingNotification(server.id)
+                if (listsToNotify.isNotEmpty()) {
+                    showListNotification(listsToNotify.map { it.second })
+                }
+            }
+
             Result.success()
         } catch (e: Exception) {
             Result.retry()
@@ -60,6 +68,39 @@ class BackgroundSyncWorker(
             ) == PackageManager.PERMISSION_GRANTED
         } else {
             true
+        }
+    }
+
+    private fun showListNotification(listNames: List<String>) {
+        val notificationManager =
+            applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                LIST_CHANNEL_ID,
+                "List Updates",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifications for lists with new bookmarks"
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val contentText = "New bookmarks in ${listNames.joinToString(", ")}"
+
+        val notification = NotificationCompat.Builder(applicationContext, LIST_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("List updates")
+            .setContentText(contentText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        try {
+            notificationManager.notify(LIST_NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {
+            // Permission revoked between check and post
         }
     }
 
@@ -103,5 +144,7 @@ class BackgroundSyncWorker(
         const val WORK_NAME = "background_bookmark_sync"
         const val CHANNEL_ID = "background_sync_channel"
         const val NOTIFICATION_ID = 2001
+        const val LIST_CHANNEL_ID = "list_updates_channel"
+        const val LIST_NOTIFICATION_ID = 2002
     }
 }

@@ -4,6 +4,8 @@ import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.ListEntity
+import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppLogger
@@ -401,6 +403,21 @@ class BookmarkRepository(
     }
 
     /**
+     * After sync, finds lists with notifyOnNewBookmarks=true that received new bookmarks.
+     * Returns list of (listId, listName) pairs for notification dispatch.
+     */
+    suspend fun getListsNeedingNotification(serverId: String): List<Pair<String, String>> {
+        val allSettings = settingsRepository.allListSettings.first()
+        val notifyListIds = allSettings.filter { it.value.notifyOnNewBookmarks }.keys
+        if (notifyListIds.isEmpty()) return emptyList()
+
+        val allBookmarks = bookmarkDao.getBookmarksForServer(serverId).first()
+        val allLists = listDao.getListsForServer(serverId).first()
+
+        return findListsWithNewBookmarks(allSettings, allBookmarks, allLists)
+    }
+
+    /**
      * Downloads and caches hero images (banner and screenshot) for a bookmark.
      * Stores the local file paths in the AssetEntity for offline access.
      */
@@ -472,5 +489,32 @@ class BookmarkRepository(
                 AppLogger.e("BookmarkRepository", "Failed to cache screenshot: ${e.message}")
             }
         }
+    }
+}
+
+/**
+ * Determines which lists with notifyOnNewBookmarks=true received new bookmarks.
+ * Returns list of (listId, listName) pairs for lists that should trigger a notification.
+ *
+ * Extracted as internal top-level function for testability in commonTest.
+ */
+internal fun findListsWithNewBookmarks(
+    allListSettings: Map<String, ListSettings>,
+    newBookmarks: List<BookmarkEntity>,
+    allLists: List<ListEntity>
+): List<Pair<String, String>> {
+    val notifyListIds = allListSettings
+        .filter { it.value.notifyOnNewBookmarks }
+        .keys
+    if (notifyListIds.isEmpty()) return emptyList()
+
+    val listNameMap = allLists.associate { it.remoteId to it.name }
+
+    return notifyListIds.filter { listId ->
+        newBookmarks.any { bookmark ->
+            bookmark.listIds.split(",").map { it.trim() }.contains(listId)
+        }
+    }.mapNotNull { listId ->
+        listNameMap[listId]?.let { name -> listId to name }
     }
 }
