@@ -3,6 +3,7 @@ package com.karakept.app.services
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.utils.AppLogger
 import io.github.kdroidfilter.knotify.builder.ExperimentalNotificationsApi
 import io.github.kdroidfilter.knotify.builder.notification
 import kotlinx.coroutines.CoroutineScope
@@ -67,11 +68,13 @@ object BackgroundSyncScheduler {
     private fun showDigestNotification() {
         val title = "Bookmarks synced"
         val message = "Your bookmarks have been synced in the background."
+        AppLogger.d("BackgroundSync", "Sending notification: $title")
 
         // UNUserNotificationCenter requires a valid macOS .app bundle. When running via
         // `gradlew run`, the JVM process has no real bundle and throws an uncatchable
         // NSInternalInconsistencyException that crashes the process. Fall back to osascript.
         if (!isMacAppBundleAvailable()) {
+            AppLogger.d("BackgroundSync", "No .app bundle — falling back to osascript for notification")
             showMacNotificationViaAppleScript(title, message)
             return
         }
