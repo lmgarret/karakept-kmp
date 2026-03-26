@@ -95,10 +95,14 @@ fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<S
  */
 private fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
     val server = _selectedServer.value ?: return
+    val smartListIds = listRepository.lists.value
+        .filter { it.type == KarakeepList.Type.SMART }
+        .mapNotNull { it.id }
+        .toSet()
     val capturedFilter = _currentFilter.value
     screenModelScope.launch {
         try {
-            bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId)
+            bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId, smartListIds)
             if (_currentFilter.value == capturedFilter) {
                 resetPaginationAndLoad(server, capturedFilter, scrollToTop = false)
             }

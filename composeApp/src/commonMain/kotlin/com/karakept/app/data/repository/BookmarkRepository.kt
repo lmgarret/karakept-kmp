@@ -492,17 +492,32 @@ class BookmarkRepository(
     }
 
     /**
-     * Updates a single bookmark's list membership to exactly match the server.
-     * Uses GET /bookmarks/{id}/lists — one call, authoritative source of truth for all lists.
+     * Reconciles a bookmark's list membership after a quick action.
+     * Uses GET /bookmarks/{id}/lists — one API call.
+     *
+     * Smart list membership is server-computed and fully replaced with the server's answer.
+     * Manual list membership is kept from the local DB — the optimistic update applied by
+     * the action is already correct, and the queued server action may not have been
+     * processed yet when this call is made.
+     *
+     * @param smartListIds the IDs of all known smart lists — only these are overwritten
+     *                     by the server response; manual list IDs are preserved locally
      */
     suspend fun reconcileBookmarkSmartListMembership(
         server: Server,
-        bookmarkLocalId: Long
+        bookmarkLocalId: Long,
+        smartListIds: Set<String>
     ) {
         val entity = bookmarkDao.getBookmarkById(bookmarkLocalId) ?: return
         try {
             val serverLists = remoteDataSource.fetchListsForBookmark(server, entity.originalRemoteId)
-            val updatedIds = serverLists.mapNotNull { it.id }.joinToString(",")
+            val serverListIds = serverLists.mapNotNull { it.id }.toSet()
+
+            val currentIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()
+            // Smart lists: server is authoritative (criteria are server-computed)
+            // Manual lists: local DB is authoritative (optimistic update already applied)
+            val updatedIds = ((currentIds - smartListIds) + (serverListIds intersect smartListIds))
+                .joinToString(",")
 
             if (updatedIds != entity.listIds) {
                 bookmarkDao.updateBookmarkMetadata(
@@ -520,10 +535,10 @@ class BookmarkRepository(
                     isRead = entity.isRead,
                     readingTimeMinutes = entity.readingTimeMinutes
                 )
-                AppLogger.d("BookmarkRepository", "Updated list membership for bookmark $bookmarkLocalId: $updatedIds")
+                AppLogger.d("BookmarkRepository", "Reconciled list membership for bookmark $bookmarkLocalId: $updatedIds")
             }
         } catch (e: Exception) {
-            AppLogger.e("BookmarkRepository", "Failed to update list membership for bookmark $bookmarkLocalId: ${e.message}", e)
+            AppLogger.e("BookmarkRepository", "Failed to reconcile list membership for bookmark $bookmarkLocalId: ${e.message}", e)
         }
     }
 }
