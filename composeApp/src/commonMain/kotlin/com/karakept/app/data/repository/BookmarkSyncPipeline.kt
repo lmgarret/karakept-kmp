@@ -84,8 +84,10 @@ internal class BookmarkSyncPipeline(
         // Phase 2: Fetch metadata
         val remoteBookmarks = fetchBookmarkMetadata()
 
-        // Phase 2.5: Sync Highlights
-        highlightRepository.syncHighlights(config.server)
+        // Phase 2.5: Sync Highlights (skip for ForList — membership reconciliation only)
+        if (config !is SyncConfiguration.ForList) {
+            highlightRepository.syncHighlights(config.server)
+        }
 
         // Phase 3: Fetch list membership (conditional)
         val bookmarkListMap = fetchListMembership(remoteBookmarks)
@@ -100,8 +102,10 @@ internal class BookmarkSyncPipeline(
             reconcileListMembership(remoteBookmarks, config.listId)
         }
 
-        // Phase 5: Content sync (uses entities with correct localIds)
-        syncContent(entitiesWithLocalIds)
+        // Phase 5: Content sync (skip for ForList — content is fetched lazily on open)
+        if (config !is SyncConfiguration.ForList) {
+            syncContent(entitiesWithLocalIds)
+        }
 
         // Phase 6: Sync reading progress for in-progress bookmarks
         syncReadingProgress(entitiesWithLocalIds)
