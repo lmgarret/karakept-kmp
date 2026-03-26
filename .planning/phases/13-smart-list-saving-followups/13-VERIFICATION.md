@@ -1,8 +1,8 @@
 ---
 phase: 13-smart-list-saving-followups
 verified: 2026-03-26T21:00:00Z
-status: passed
-score: 7/7 must-haves verified
+status: gaps_found
+score: 6/7 must-haves verified
 re_verification: false
 ---
 
@@ -26,10 +26,11 @@ re_verification: false
 | 3 | Drawer counters (quickFilterCounts) emit correct values after init | VERIFIED | Save02RegressionTest.kt:215 asserts `counts.all == 4` matching the 4 stubbed bookmarks |
 | 4 | After moveBookmarkToList, syncBookmarksForList is called for every SMART list | VERIFIED | MainScreenModelActions.kt:137 calls `syncSmartLists()` inside the `screenModelScope.launch` block; List02RegressionTest.kt:140 verifies with `coVerify` |
 | 5 | After removeBookmarkFromList, syncBookmarksForList is called for every SMART list | VERIFIED | MainScreenModelActions.kt:226 calls `syncSmartLists()` inside the `screenModelScope.launch` block; List02RegressionTest.kt:156 verifies with `coVerify` |
+| **GAP** | **Syncing a smart list actually removes bookmarks that no longer match its query from the local DB membership** | **FAILED** | `SyncConfiguration.ForList` has `shouldDeleteRemoved = false`. The pipeline upserts returned bookmarks but never strips `listId` from bookmarks that were locally in the list but absent from the server response. Line 241–245 of `BookmarkSyncPipeline.kt` explicitly merges (adds) list membership but never removes stale entries. The sync trigger fires correctly, but the pipeline silently no-ops on removals. |
 | 6 | MANUAL lists are NOT synced by the smart list sync trigger | VERIFIED | `syncSmartLists()` at line 98 filters `it.type == KarakeepList.Type.SMART`; List02RegressionTest.kt:152,168 use `coVerify(exactly = 0)` for manual-1 |
 | 7 | Smart list syncs are non-blocking background operations | VERIFIED | `syncSmartLists()` uses nested `launch {}` per smart list (parallel fire-and-forget); errors caught per-list and logged via AppLogger without affecting UI |
 
-**Score:** 7/7 truths verified
+**Score:** 6/7 truths verified
 
 ---
 
@@ -84,7 +85,7 @@ These fixes require running Android instrumented tests (Robolectric) against cor
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|----------|
 | SAVE-02 | 13-01-PLAN.md | Navigate back after saving bookmarks must show bookmark list | SATISFIED | AppModule.kt: `factory{}` for MainScreenModel (line 111); Save02RegressionTest.kt: 3 passing tests |
-| LIST-02 | 13-02-PLAN.md | Smart list must reflect quick-action changes immediately | SATISFIED | syncSmartLists() in MainScreenModelActions.kt; List02RegressionTest.kt: 4 passing tests |
+| LIST-02 | 13-02-PLAN.md | Smart list must reflect quick-action changes immediately | **GAP** | Trigger wired (syncSmartLists), but `BookmarkSyncPipeline.ForList` never removes stale list membership — bookmarks evicted from a smart list server-side remain in the local DB under that listId indefinitely. |
 | NFR-01 | 13-01-PLAN.md, 13-02-PLAN.md | Regression tests for every fix | SATISFIED | Save02RegressionTest.kt (3 tests for SAVE-02); List02RegressionTest.kt (4 tests for LIST-02) |
 | NFR-02 | 13-01-PLAN.md (Task 2), 13-02-PLAN.md (Task 2) | No new regressions | SATISFIED | Both SUMMARYs confirm BUILD SUCCESSFUL on full `testDebugUnitTest` + `desktopTest`; 6 pre-existing Docker integration failures unrelated to this phase |
 
@@ -112,11 +113,15 @@ None. All observable truths are covered by automated regression tests (Save02Reg
 
 ## Gaps Summary
 
-No gaps. All 7 must-have truths are verified, all artifacts exist and are substantive, all key links are wired, all 4 requirement IDs are satisfied, and no anti-patterns were found.
+**1 gap found — LIST-02 pipeline reconciliation missing**
 
-Both commits exist and are included in the current branch:
-- `015e414` — SAVE-02 fix (factory{} + regression test)
-- `9b49941` — LIST-02 fix (syncSmartLists + regression test)
+The plan's must_haves only described the *trigger* (syncSmartLists is called) and not the *effect* (stale list membership is removed). The trigger is correctly wired, but `BookmarkSyncPipeline` does not implement list-membership reconciliation for `ForList` syncs.
+
+**Root cause:** `SyncConfiguration.ForList.shouldDeleteRemoved = false` + the merge-only logic at lines 241–245 of `BookmarkSyncPipeline.kt` means a `ForList` sync can only add a bookmark to a list, never remove one. A bookmark added to `Read Later` (which causes the server to evict it from `RSS Feeds`) will remain in the local `RSS Feeds` membership indefinitely until a full sync runs.
+
+**Fix needed:** After a `ForList` sync, query the DB for all bookmarks that have `listId` in their `listIds`, diff against the server response, and strip `listId` from any bookmark not present in the server response (without deleting the bookmark, since it may belong to other lists).
+
+SAVE-02 is fully resolved. NFR-02 (no regressions) remains satisfied.
 
 ---
 
