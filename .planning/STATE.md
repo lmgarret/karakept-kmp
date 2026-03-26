@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.9.0
-milestone_name: bug-fixes-ux-polish
-status: Planning complete — ready to execute Phase 12
-stopped_at: new-milestone completed; REQUIREMENTS.md and ROADMAP.md written
-last_updated: "2026-03-25T00:00:00.000Z"
-last_activity: 2026-03-25
+milestone_name: Bug Fixes & UX Polish
+status: Milestone complete
+stopped_at: Completed 12-notification-fixes plan 01 (NOTIF-01 + NOTIF-02)
+last_updated: "2026-03-26T08:10:10.267Z"
+last_activity: 2026-03-26
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 5
+  total_plans: 8
+  completed_plans: 8
 ---
 
 # Project State
@@ -20,11 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A reliable, well-structured bookmark management app with clean code practices
-**Current focus:** v1.9.0 Bug Fixes & UX Polish — 6 bugs + 2 enhancements + regression tests
+**Current focus:** Phase 12 — notification-fixes
 
 ## Current Position
 
-Milestone v1.9.0 planning complete. 5 phases defined (12-16). Ready to start Phase 12.
+Phase: 12
+Plan: Not started
 
 ## Accumulated Context
 
@@ -35,6 +36,8 @@ Milestone v1.9.0 planning complete. 5 phases defined (12-16). Ready to start Pha
 - FakeDataStore uses MutableStateFlow + Mutex for thread-safe atomic updates
 - Real-object pattern for extension functions accessing internal members
 - Internal top-level function extraction for composable logic to enable commonTest
+- [Phase 12-notification-fixes]: Return value propagation from BookmarkSyncPipeline.execute() instead of racy StateFlow read fixes NOTIF-01 digest notification count
+- [Phase 12-notification-fixes]: Post-sync DB query approach for NOTIF-02 per-list notification - keeps Int return type, findListsWithNewBookmarks extracted as internal top-level function for commonTest
 
 ### Known Blockers
 
@@ -42,6 +45,6 @@ Milestone v1.9.0 planning complete. 5 phases defined (12-16). Ready to start Pha
 
 ## Session Continuity
 
-Last activity: 2026-03-25
-Stopped at: new-milestone planning complete
+Last activity: 2026-03-26
+Stopped at: Completed 12-notification-fixes plan 01 (NOTIF-01 + NOTIF-02)
 Resume: run `/gsd:plan-phase 12` to start Notification Fixes
