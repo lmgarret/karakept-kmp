@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.9.0
 milestone_name: Bug Fixes & UX Polish
-status: Milestone complete
-stopped_at: Completed 12-notification-fixes plan 01 (NOTIF-01 + NOTIF-02)
+status: active
+stopped_at: Completed 13-CONTEXT.md for Smart List & Saving Follow-ups
 last_updated: "2026-03-26T08:10:10.267Z"
 last_activity: 2026-03-26
 progress:
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A reliable, well-structured bookmark management app with clean code practices
-**Current focus:** Phase 12 — notification-fixes
+**Current focus:** Phase 13 — smart-list-saving-followups
 
 ## Current Position
 
@@ -53,4 +53,4 @@ Plan: Not started
 
 Last activity: 2026-03-26 - Completed quick task 260326-eaz: guard MacNotification against nil bundle when running outside .app bundle
 Stopped at: Completed 12-notification-fixes plan 01 (NOTIF-01 + NOTIF-02)
-Resume: run `/gsd:plan-phase 12` to start Notification Fixes
+Resume: run `/gsd:plan-phase 13` to plan Smart List & Saving Follow-ups
