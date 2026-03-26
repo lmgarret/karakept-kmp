@@ -65,6 +65,10 @@ object BackgroundSyncScheduler {
 
     @OptIn(ExperimentalNotificationsApi::class)
     private fun showDigestNotification() {
+        // UNUserNotificationCenter requires a valid macOS .app bundle. When running via
+        // `gradlew run`, the JVM process has no real bundle and throws an uncatchable
+        // NSInternalInconsistencyException that crashes the process. Guard against this.
+        if (!isMacAppBundleAvailable()) return
         try {
             notification(
                 title = "Bookmarks synced",
@@ -73,5 +77,15 @@ object BackgroundSyncScheduler {
         } catch (_: Exception) {
             // Notifications not available on this platform
         }
+    }
+
+    /**
+     * Returns false on macOS when running outside a proper .app bundle (e.g. via `gradlew run`).
+     * UNUserNotificationCenter crashes with NSInternalInconsistencyException in that case.
+     */
+    private fun isMacAppBundleAvailable(): Boolean {
+        if (!System.getProperty("os.name", "").lowercase().contains("mac")) return true
+        val command = ProcessHandle.current().info().command().orElse("")
+        return command.contains(".app/Contents/MacOS/")
     }
 }
