@@ -74,34 +74,13 @@ object BackgroundSyncScheduler {
         // `gradlew run`, the JVM process has no real bundle and throws an uncatchable
         // NSInternalInconsistencyException that crashes the process. Fall back to osascript.
         if (!isMacAppBundleAvailable()) {
-            AppLogger.d("BackgroundSync", "No .app bundle — falling back to osascript for notification")
-            showMacNotificationViaAppleScript(title, message)
+            AppLogger.d("BackgroundSync", "No .app bundle — skipping notification (not supported outside packaged app)")
             return
         }
         try {
             notification(title = title, message = message).send()
         } catch (_: Exception) {
             // Notifications not available on this platform
-        }
-    }
-
-    /**
-     * Delivers a macOS notification via `osascript` when running outside a .app bundle
-     * (e.g. `gradlew run`). Waits for the process to finish and logs any errors.
-     */
-    private fun showMacNotificationViaAppleScript(title: String, message: String) {
-        try {
-            val safeTitle = title.replace("\"", "\\\"")
-            val safeMessage = message.replace("\"", "\\\"")
-            val script = "display notification \"$safeMessage\" with title \"$safeTitle\""
-            val process = Runtime.getRuntime().exec(arrayOf("osascript", "-e", script))
-            val exitCode = process.waitFor()
-            if (exitCode != 0) {
-                val stderr = process.errorStream.bufferedReader().readText().trim()
-                AppLogger.w("BackgroundSync", "osascript exited $exitCode: $stderr")
-            }
-        } catch (e: Exception) {
-            AppLogger.w("BackgroundSync", "osascript notification failed: ${e.message}")
         }
     }
 
