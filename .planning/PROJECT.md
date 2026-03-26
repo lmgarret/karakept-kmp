@@ -34,8 +34,8 @@ A reliable, well-structured bookmark management app with clean code practices.
 
 ### Active (v1.9.0 Bug Fixes & UX Polish)
 
-- NOTIF-01: Sync digest notification must show bookmark count (#169)
-- NOTIF-02: "Notify on new bookmarks" option on list must fire (#170)
+- ✓ NOTIF-01: Sync digest notification must show bookmark count (#169) — v1.9.0 Phase 12 (return value propagation from pipeline)
+- ✓ NOTIF-02: "Notify on new bookmarks" option on list must fire (#170) — v1.9.0 Phase 12 (post-sync DB query + combined notification)
 - SAVE-02: Navigate back after saving bookmarks must show bookmark list (#163)
 - LIST-02: Smart list must reflect quick-action changes immediately (#165)
 - FILT-04: Pull-to-refresh must work on Highlights on mobile (#164)
@@ -107,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 — v1.9.0 Bug Fixes & UX Polish milestone started (Phases 12-16)*
+*Last updated: 2026-03-26
