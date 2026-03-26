@@ -76,7 +76,7 @@ internal class BookmarkSyncPipeline(
     private val fetchRemoteContent: suspend (Server, String) -> String?,
     private val cacheHeroAssetsForBookmark: suspend (Server, Long, String, String?, String?) -> Unit
 ) {
-    suspend fun execute() {
+    suspend fun execute(): Int {
         // Phase 1: Process pending actions
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Starting
         val processedIds = processPendingActions()
@@ -107,6 +107,8 @@ internal class BookmarkSyncPipeline(
             kotlinx.coroutines.delay(100)  // Give UI time to process
         }
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+
+        return newCount
     }
 
     // Phase 1: Process Pending Actions

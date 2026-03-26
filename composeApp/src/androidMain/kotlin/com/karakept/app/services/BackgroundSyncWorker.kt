@@ -11,7 +11,6 @@ import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.karakept.app.R
-import com.karakept.app.data.model.SyncProgress
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -39,10 +38,7 @@ class BackgroundSyncWorker(
         val server = servers.find { it.id == activeServerId } ?: servers.first()
 
         return try {
-            bookmarkRepository.syncBookmarks(server)
-
-            val syncResult = bookmarkRepository.syncProgress.value
-            val newCount = (syncResult as? SyncProgress.SyncComplete)?.newBookmarksCount ?: 0
+            val newCount = bookmarkRepository.syncBookmarks(server)
 
             val digestEnabled = settingsRepository.backgroundSyncDigestNotification.first()
             val notificationsEnabled = settingsRepository.notificationsEnabled.first()

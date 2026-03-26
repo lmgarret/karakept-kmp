@@ -48,31 +48,27 @@ class BookmarkRepository(
     private val _syncProgress = MutableStateFlow<com.karakept.app.data.model.SyncProgress>(com.karakept.app.data.model.SyncProgress.Idle)
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> = _syncProgress.asStateFlow()
 
-    suspend fun syncBookmarks(server: Server) {
+    suspend fun syncBookmarks(server: Server): Int =
         executeSyncPipeline(SyncConfiguration.Full(server))
-    }
 
     /**
      * Syncs only favorited bookmarks.
      */
-    suspend fun syncFavorites(server: Server) {
+    suspend fun syncFavorites(server: Server): Int =
         executeSyncPipeline(SyncConfiguration.Filtered(server, favourited = true))
-    }
 
     /**
      * Syncs only archived bookmarks.
      */
-    suspend fun syncArchived(server: Server) {
+    suspend fun syncArchived(server: Server): Int =
         executeSyncPipeline(SyncConfiguration.Filtered(server, archived = true))
-    }
 
     /**
      * Syncs only bookmarks from a specific list.
      * Respects content sync mode (NEVER/PER_BOOKMARK/PER_LIST/ALL).
      */
-    suspend fun syncBookmarksForList(server: Server, listId: String) {
+    suspend fun syncBookmarksForList(server: Server, listId: String): Int =
         executeSyncPipeline(SyncConfiguration.ForList(server, listId))
-    }
 
     @OptIn(DelicateCoroutinesApi::class)
     suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<BookmarkEntity> {
@@ -373,9 +369,10 @@ class BookmarkRepository(
     /**
      * Executes the sync pipeline with the given configuration.
      * Provides unified error handling and progress reporting.
+     * Returns the number of new bookmarks inserted.
      */
-    private suspend fun executeSyncPipeline(config: SyncConfiguration) {
-        mutex.withLock {
+    private suspend fun executeSyncPipeline(config: SyncConfiguration): Int {
+        return mutex.withLock {
             try {
                 val pipeline = BookmarkSyncPipeline(
                     config = config,
