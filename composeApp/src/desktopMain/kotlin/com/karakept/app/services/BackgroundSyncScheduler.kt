@@ -65,17 +65,35 @@ object BackgroundSyncScheduler {
 
     @OptIn(ExperimentalNotificationsApi::class)
     private fun showDigestNotification() {
+        val title = "Bookmarks synced"
+        val message = "Your bookmarks have been synced in the background."
+
         // UNUserNotificationCenter requires a valid macOS .app bundle. When running via
         // `gradlew run`, the JVM process has no real bundle and throws an uncatchable
-        // NSInternalInconsistencyException that crashes the process. Guard against this.
-        if (!isMacAppBundleAvailable()) return
+        // NSInternalInconsistencyException that crashes the process. Fall back to osascript.
+        if (!isMacAppBundleAvailable()) {
+            showMacNotificationViaAppleScript(title, message)
+            return
+        }
         try {
-            notification(
-                title = "Bookmarks synced",
-                message = "Your bookmarks have been synced in the background."
-            ).send()
+            notification(title = title, message = message).send()
         } catch (_: Exception) {
             // Notifications not available on this platform
+        }
+    }
+
+    /**
+     * Delivers a macOS notification via `osascript` when running outside a .app bundle
+     * (e.g. `gradlew run`). Fire-and-forget: the process is started and not awaited.
+     */
+    private fun showMacNotificationViaAppleScript(title: String, message: String) {
+        try {
+            val safeTitle = title.replace("\"", "\\\"")
+            val safeMessage = message.replace("\"", "\\\"")
+            val script = "display notification \"$safeMessage\" with title \"$safeTitle\""
+            Runtime.getRuntime().exec(arrayOf("osascript", "-e", script))
+        } catch (_: Exception) {
+            // osascript not available or failed — silently ignore
         }
     }
 
