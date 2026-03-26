@@ -5,7 +5,7 @@
 - ✅ **v1.7.0 Tech Debt Cleanup** — Phases 01-02 (shipped 2026-03-21)
 - ✅ **v1.8.0 Bug Fixes & UX Improvements** — Phases 03-07 (shipped 2026-03-25)
 - ✅ **Platform Health (internal, no release tag)** — Phases 08-11 (archived 2026-03-25)
-- 🚧 **v1.9.0 Bug Fixes & UX Polish** — Phases 12-16 (in progress)
+- 🚧 **v1.9.0 Bug Fixes & UX Polish** — Phases 12-21 (in progress)
 
 ## Phases
 
@@ -51,6 +51,11 @@
 - [ ] Phase 14: UI Interaction Fixes — FILT-04, UI-01 (#164, #168)
 - [ ] Phase 15: Snackbar Undo System — UX-01 (#166)
 - [ ] Phase 16: Custom Layout Improvements — UX-02 (#167)
+- [ ] Phase 17: Desktop 401 Auth Fix — AUTH-01 (#173)
+- [ ] Phase 18: Pre Diagram Rendering Fix — RENDER-01 (#171)
+- [ ] Phase 19: Scroll-to-top for List Views — UI-02 (#172)
+- [ ] Phase 20: Home List Auto-expand in Drawer — NAV-01 (#174)
+- [ ] Phase 21: Desktop List Settings in Second Panel — DESK-01 (#175)
 
 </details>
 
@@ -74,3 +79,8 @@
 | 14. UI Interaction Fixes | v1.9.0 | 0/? | Planned | — |
 | 15. Snackbar Undo System | v1.9.0 | 0/? | Planned | — |
 | 16. Custom Layout Improvements | v1.9.0 | 0/? | Planned | — |
+| 17. Desktop 401 Auth Fix | v1.9.0 | 0/? | Planned | — |
+| 18. Pre Diagram Rendering Fix | v1.9.0 | 0/? | Planned | — |
+| 19. Scroll-to-top for List Views | v1.9.0 | 0/? | Planned | — |
+| 20. Home List Auto-expand in Drawer | v1.9.0 | 0/? | Planned | — |
+| 21. Desktop List Settings in Second Panel | v1.9.0 | 0/? | Planned | — |
