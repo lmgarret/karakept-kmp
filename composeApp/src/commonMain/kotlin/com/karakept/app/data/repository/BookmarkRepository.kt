@@ -490,6 +490,50 @@ class BookmarkRepository(
             }
         }
     }
+
+    /**
+     * Reconciles a single bookmark's smart list membership against the server.
+     * Uses GET /bookmarks/{id}/lists — one call, returns the bookmark's current list set.
+     * Strips any smart list IDs that the server no longer includes, preserving manual list IDs.
+     */
+    suspend fun reconcileBookmarkSmartListMembership(
+        server: Server,
+        bookmarkLocalId: Long,
+        smartListIds: Set<String>
+    ) {
+        val entity = bookmarkDao.getBookmarkById(bookmarkLocalId) ?: return
+        try {
+            val serverLists = remoteDataSource.fetchListsForBookmark(server, entity.originalRemoteId)
+            val serverListIds = serverLists.mapNotNull { it.id }.toSet()
+
+            // Strip smart list IDs the server no longer includes, preserve all manual list IDs
+            val currentIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()
+            val updatedIds = currentIds
+                .filter { id -> id !in smartListIds || id in serverListIds }
+                .joinToString(",")
+
+            if (updatedIds != entity.listIds) {
+                bookmarkDao.updateBookmarkMetadata(
+                    localId = bookmarkLocalId,
+                    title = entity.title,
+                    url = entity.url,
+                    description = entity.description,
+                    imageUrl = entity.imageUrl,
+                    bannerImageAssetId = entity.bannerImageAssetId,
+                    screenshotAssetId = entity.screenshotAssetId,
+                    tags = entity.tags,
+                    listIds = updatedIds,
+                    isStarred = entity.isStarred,
+                    isArchived = entity.isArchived,
+                    isRead = entity.isRead,
+                    readingTimeMinutes = entity.readingTimeMinutes
+                )
+                AppLogger.d("BookmarkRepository", "Reconciled smart list membership for bookmark $bookmarkLocalId: $updatedIds")
+            }
+        } catch (e: Exception) {
+            AppLogger.e("BookmarkRepository", "Failed to reconcile smart list membership for bookmark $bookmarkLocalId: ${e.message}", e)
+        }
+    }
 }
 
 /**

@@ -89,32 +89,24 @@ fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<S
 }
 
 /**
- * Triggers background sync for all smart lists after a list-membership action,
- * then reloads the visible bookmark list so removals/additions are reflected
- * without a manual sync.
- * Smart list queries are server-owned, so we must re-fetch from server to get
- * accurate contents and drawer counts.
+ * Reconciles a single bookmark's smart list membership after a list-membership action.
+ * Uses GET /bookmarks/{id}/lists — one API call — instead of syncing entire smart lists.
+ * Then reloads the visible list so the UI reflects the change immediately.
  */
-private fun MainScreenModel.syncSmartLists() {
+private fun MainScreenModel.syncSmartLists(bookmark: BookmarkEntity) {
     val server = _selectedServer.value ?: return
     val smartLists = listRepository.lists.value.filter { it.type == KarakeepList.Type.SMART }
     if (smartLists.isEmpty()) return
+    val smartListIds = smartLists.mapNotNull { it.id }.toSet()
     val capturedFilter = _currentFilter.value
     screenModelScope.launch {
-        smartLists.forEach { smartList ->
-            val listId = smartList.id ?: return@forEach
-            launch {
-                try {
-                    bookmarkRepository.syncBookmarksForList(server, listId)
-                    // Reload after each sync so the UI reflects DB changes as soon
-                    // as any individual smart list finishes — no need to wait for all.
-                    if (_currentFilter.value == capturedFilter) {
-                        resetPaginationAndLoad(server, capturedFilter)
-                    }
-                } catch (e: Exception) {
-                    AppLogger.e("MainScreenModel", "Smart list sync failed for $listId: ${e.message}", e)
-                }
+        try {
+            bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId, smartListIds)
+            if (_currentFilter.value == capturedFilter) {
+                resetPaginationAndLoad(server, capturedFilter)
             }
+        } catch (e: Exception) {
+            AppLogger.e("MainScreenModel", "Smart list reconciliation failed for bookmark ${bookmark.localId}: ${e.message}", e)
         }
     }
 }
@@ -142,7 +134,7 @@ fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String)
                 }
             }
         }
-        syncSmartLists()
+        syncSmartLists(bookmark)
     }
 }
 
@@ -231,7 +223,7 @@ fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: Str
                 bookmark = bookmark
             )
         }
-        syncSmartLists()
+        syncSmartLists(bookmark)
     }
 }
 

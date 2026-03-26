@@ -119,6 +119,14 @@ class RemoteDataSource(
         }
     }
 
+    suspend fun fetchListsForBookmark(server: Server, bookmarkId: String): List<com.karakept.api.model.KarakeepList> = guardedCall {
+        try {
+            bookmarksApi(server).bookmarksBookmarkIdListsGet(bookmarkId).checkedBody().lists ?: emptyList()
+        } catch (e: Exception) {
+            throw ApiException("Error fetching lists for bookmark $bookmarkId: ${e.message}", e)
+        }
+    }
+
     suspend fun fetchLists(server: Server): List<KarakeepList> = guardedCall {
         try {
             val response = listsApi(server).listsGet().checkedBody()
