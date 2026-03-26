@@ -2,9 +2,11 @@
 package com.karakept.app.ui.screens
 
 import cafe.adriel.voyager.core.model.screenModelScope
+import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.domain.action.BookmarkActionEvent
+import com.karakept.app.utils.AppLogger
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -86,6 +88,29 @@ fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<S
     }
 }
 
+/**
+ * Triggers background sync for all smart lists after a list-membership action.
+ * Smart list queries are server-owned, so we must re-fetch from server to get
+ * accurate contents and drawer counts.
+ */
+private fun MainScreenModel.syncSmartLists() {
+    val server = _selectedServer.value ?: return
+    val smartLists = listRepository.lists.value.filter { it.type == KarakeepList.Type.SMART }
+    if (smartLists.isEmpty()) return
+    screenModelScope.launch {
+        smartLists.forEach { smartList ->
+            val listId = smartList.id ?: return@forEach
+            launch {
+                try {
+                    bookmarkRepository.syncBookmarksForList(server, listId)
+                } catch (e: Exception) {
+                    AppLogger.e("MainScreenModel", "Smart list sync failed for $listId: ${e.message}", e)
+                }
+            }
+        }
+    }
+}
+
 fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
     screenModelScope.launch {
         val isOnline = !_isSyncing.value
@@ -109,6 +134,7 @@ fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String)
                 }
             }
         }
+        syncSmartLists()
     }
 }
 
@@ -197,6 +223,7 @@ fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: Str
                 bookmark = bookmark
             )
         }
+        syncSmartLists()
     }
 }
 
