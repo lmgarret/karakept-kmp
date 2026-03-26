@@ -44,10 +44,11 @@
 - [ ] Phase 12: Notification Fixes — NOTIF-01, NOTIF-02 (#169, #170) — **Plans:** 1 plan
   Plans:
   - [ ] 12-01-PLAN.md — Fix digest notification count + add per-list notification
-- [ ] Phase 13: Smart List & Saving Follow-ups — SAVE-02, LIST-02 (#163, #165) — **Plans:** 2 plans
+- [ ] Phase 13: Smart List & Saving Follow-ups — SAVE-02, LIST-02 (#163, #165) — **Plans:** 3 plans
   Plans:
   - [x] 13-01-PLAN.md — Fix MainScreenModel init stall in secondary Activity (SAVE-02)
   - [x] 13-02-PLAN.md — Add smart list sync after list-membership quick actions (LIST-02)
+  - [ ] 13-03-PLAN.md — Fix ForList sync pipeline list membership reconciliation (LIST-02 gap closure)
 - [ ] Phase 14: UI Interaction Fixes — FILT-04, UI-01 (#164, #168)
 - [ ] Phase 15: Snackbar Undo System — UX-01 (#166)
 - [ ] Phase 16: Custom Layout Improvements — UX-02 (#167)
@@ -75,7 +76,7 @@
 | 10. Dialog and Component UI Tests | Platform Health | 2/2 | Complete | 2026-03-25 |
 | 11. BackupRepository Edge Case Tests | Platform Health | 1/1 | Complete | 2026-03-25 |
 | 12. Notification Fixes | v1.9.0 | 0/1 | Complete    | 2026-03-26 |
-| 13. Smart List & Saving Follow-ups | v1.9.0 | 2/2 | Complete    | 2026-03-26 |
+| 13. Smart List & Saving Follow-ups | v1.9.0 | 2/3 | In Progress | — |
 | 14. UI Interaction Fixes | v1.9.0 | 0/? | Planned | — |
 | 15. Snackbar Undo System | v1.9.0 | 0/? | Planned | — |
 | 16. Custom Layout Improvements | v1.9.0 | 0/? | Planned | — |
