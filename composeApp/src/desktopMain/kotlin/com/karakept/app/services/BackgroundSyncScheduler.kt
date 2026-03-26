@@ -87,16 +87,21 @@ object BackgroundSyncScheduler {
 
     /**
      * Delivers a macOS notification via `osascript` when running outside a .app bundle
-     * (e.g. `gradlew run`). Fire-and-forget: the process is started and not awaited.
+     * (e.g. `gradlew run`). Waits for the process to finish and logs any errors.
      */
     private fun showMacNotificationViaAppleScript(title: String, message: String) {
         try {
             val safeTitle = title.replace("\"", "\\\"")
             val safeMessage = message.replace("\"", "\\\"")
             val script = "display notification \"$safeMessage\" with title \"$safeTitle\""
-            Runtime.getRuntime().exec(arrayOf("osascript", "-e", script))
-        } catch (_: Exception) {
-            // osascript not available or failed — silently ignore
+            val process = Runtime.getRuntime().exec(arrayOf("osascript", "-e", script))
+            val exitCode = process.waitFor()
+            if (exitCode != 0) {
+                val stderr = process.errorStream.bufferedReader().readText().trim()
+                AppLogger.w("BackgroundSync", "osascript exited $exitCode: $stderr")
+            }
+        } catch (e: Exception) {
+            AppLogger.w("BackgroundSync", "osascript notification failed: ${e.message}")
         }
     }
 
