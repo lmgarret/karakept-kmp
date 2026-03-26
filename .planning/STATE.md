@@ -43,8 +43,14 @@ Plan: Not started
 
 - Robolectric 4.14 ModalBottomSheet click bug (performClick() silently fails inside bottom sheets on SDK 29-34); upgrade to 4.15.1 before writing bottom sheet interaction tests
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260326-eaz | guard MacNotification against nil bundle when running outside .app bundle | 2026-03-26 | 19695da | [260326-eaz-guard-macnotification-against-nil-bundle](./quick/260326-eaz-guard-macnotification-against-nil-bundle/) |
+
 ## Session Continuity
 
-Last activity: 2026-03-26
+Last activity: 2026-03-26 - Completed quick task 260326-eaz: guard MacNotification against nil bundle when running outside .app bundle
 Stopped at: Completed 12-notification-fixes plan 01 (NOTIF-01 + NOTIF-02)
 Resume: run `/gsd:plan-phase 12` to start Notification Fixes
