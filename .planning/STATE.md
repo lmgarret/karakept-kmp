@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.9.0
 milestone_name: Bug Fixes & UX Polish
-status: Ready to execute
-stopped_at: Completed 13-smart-list-saving-followups plan 02 (LIST-02 smart list sync after quick actions)
-last_updated: "2026-03-26T19:23:04.414Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 13-smart-list-saving-followups plan 01 (SAVE-02 fix)
+last_updated: "2026-03-26T19:26:09.862Z"
 last_activity: 2026-03-26
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -39,6 +39,7 @@ Plan: 2 of 2
 - [Phase 12-notification-fixes]: Return value propagation from BookmarkSyncPipeline.execute() instead of racy StateFlow read fixes NOTIF-01 digest notification count
 - [Phase 12-notification-fixes]: Post-sync DB query approach for NOTIF-02 per-list notification - keeps Int return type, findListsWithNewBookmarks extracted as internal top-level function for commonTest
 - [Phase 13-smart-list-saving-followups]: syncSmartLists fires in parallel nested launches per smart list — independent, fire-and-forget, errors logged not surfaced
+- [Phase 13]: MainScreenModel changed from Koin single{} to factory{} — each Voyager Navigator gets a fresh instance with its own screenModelScope
 
 ### Known Blockers
 
@@ -53,5 +54,5 @@ Plan: 2 of 2
 ## Session Continuity
 
 Last activity: 2026-03-26
-Stopped at: Completed 13-smart-list-saving-followups plan 02 (LIST-02 smart list sync after quick actions)
+Stopped at: Completed 13-smart-list-saving-followups plan 01 (SAVE-02 fix)
 Resume: run `/gsd:plan-phase 13` to plan Smart List & Saving Follow-ups
