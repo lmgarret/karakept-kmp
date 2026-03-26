@@ -104,7 +104,11 @@ val appModule = module {
 
     factory { LoginScreenModel(get(), get(), get()) }
     factory { OnboardingScreenModel(get(), get(), get(), get()) }
-    single { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    // factory (not single) so each Voyager Navigator gets a fresh instance with its own
+    // screenModelScope. A Koin single would share one instance across Activities, but
+    // Voyager cancels the screenModelScope when a Navigator is disposed — the reused
+    // singleton would then have dead coroutines and never load bookmarks (SAVE-02).
+    factory { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { SettingsScreenModel(get(), get(), get(), get()) }
     factory { HighlightsScreenModel(get(), get(), get(), get()) }

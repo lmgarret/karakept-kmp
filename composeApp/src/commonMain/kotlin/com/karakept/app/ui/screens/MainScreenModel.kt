@@ -113,8 +113,9 @@ class MainScreenModel(
     internal val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
-    // Hoisted scroll position — survives Voyager push/pop because MainScreenModel is a
-    // Koin singleton.  Updated by a LaunchedEffect in MainScreen that observes LazyListState;
+    // Hoisted scroll position — survives Voyager push/pop within the same Navigator because
+    // the same MainScreenModel instance is reused for the same Navigator's ScreenModelStore.
+    // Updated by a LaunchedEffect in MainScreen that observes LazyListState;
     // read back when the composable re-enters composition to initialise a new LazyListState.
     @Volatile var savedScrollIndex: Int = 0
         internal set
