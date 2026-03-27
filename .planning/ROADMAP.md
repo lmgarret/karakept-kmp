@@ -49,7 +49,10 @@
   - [x] 13-01-PLAN.md — Fix MainScreenModel init stall in secondary Activity (SAVE-02)
   - [x] 13-02-PLAN.md — Add smart list sync after list-membership quick actions (LIST-02)
   - [x] 13-03-PLAN.md — Fix ForList sync pipeline list membership reconciliation (LIST-02 gap closure)
-- [ ] Phase 14: UI Interaction Fixes — FILT-04, UI-01 (#164, #168)
+- [ ] Phase 14: UI Interaction Fixes — FILT-04, UI-01 (#164, #168) — **Plans:** 2 plans
+  Plans:
+  - [ ] 14-01-PLAN.md — Fix highlights PTR + scroll-to-top position bug
+  - [ ] 14-02-PLAN.md — Migrate deprecated pullRefresh to MD3 PullToRefreshBox
 - [ ] Phase 15: Snackbar Undo System — UX-01 (#166)
 - [ ] Phase 16: Custom Layout Improvements — UX-02 (#167)
 - [ ] Phase 17: Desktop 401 Auth Fix — AUTH-01 (#173)
@@ -77,7 +80,7 @@
 | 11. BackupRepository Edge Case Tests | Platform Health | 1/1 | Complete | 2026-03-25 |
 | 12. Notification Fixes | v1.9.0 | 0/1 | Complete    | 2026-03-26 |
 | 13. Smart List & Saving Follow-ups | v1.9.0 | 3/3 | Complete    | 2026-03-26 |
-| 14. UI Interaction Fixes | v1.9.0 | 0/? | Planned | — |
+| 14. UI Interaction Fixes | v1.9.0 | 0/2 | Planned | — |
 | 15. Snackbar Undo System | v1.9.0 | 0/? | Planned | — |
 | 16. Custom Layout Improvements | v1.9.0 | 0/? | Planned | — |
 | 17. Desktop 401 Auth Fix | v1.9.0 | 0/? | Planned | — |
