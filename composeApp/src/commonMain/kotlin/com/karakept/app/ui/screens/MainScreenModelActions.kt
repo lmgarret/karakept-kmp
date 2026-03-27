@@ -6,6 +6,7 @@ import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.domain.action.BookmarkActionEvent
+import com.karakept.app.data.repository.flushPendingActions
 import com.karakept.app.utils.AppLogger
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -99,13 +100,21 @@ private fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
         .filter { it.type == KarakeepList.Type.SMART }
         .mapNotNull { it.id }
         .toSet()
-    val capturedFilter = _currentFilter.value
     screenModelScope.launch {
         try {
-            bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId, smartListIds)
-            if (_currentFilter.value == capturedFilter) {
-                resetPaginationAndLoad(server, capturedFilter, scrollToTop = false)
+            bookmarkActionsRepository.flushPendingActions(server)
+            val serverHadSmartLists = bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId, smartListIds)
+            if (!serverHadSmartLists && smartListIds.isNotEmpty()) {
+                // Server's per-bookmark endpoint returned stale smart list data
+                // (async recalculation not done yet). Mark smart lists as needing
+                // a full sync when the user navigates to one of them.
+                _smartListsNeedingRefresh.value += smartListIds
+                AppLogger.d("MainScreenModel", "Marked ${smartListIds.size} smart lists for deferred refresh")
             }
+            // Always reload the current filter — the user may have navigated to a different list
+            // (e.g. list A after removing from list B) that now has updated smart-list membership.
+            val reloadServer = _selectedServer.value ?: server
+            resetPaginationAndLoad(reloadServer, _currentFilter.value, scrollToTop = false)
         } catch (e: Exception) {
             AppLogger.e("MainScreenModel", "List membership reconciliation failed for bookmark ${bookmark.localId}: ${e.message}", e)
         }

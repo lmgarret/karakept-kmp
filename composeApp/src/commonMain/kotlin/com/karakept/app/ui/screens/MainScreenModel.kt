@@ -80,6 +80,10 @@ class MainScreenModel(
     internal val _currentListContext = MutableStateFlow<String?>(null)
     val currentListContext: StateFlow<String?> = _currentListContext
 
+    // Smart lists that may have stale membership after a recent list-action.
+    // Cleared per-list after a successful sync when the user navigates to one.
+    internal val _smartListsNeedingRefresh = MutableStateFlow<Set<String>>(emptySet())
+
     // Pagination state
     internal val pageSize = 20
     internal val _isLoadingMore = MutableStateFlow(false)
@@ -344,6 +348,21 @@ class MainScreenModel(
             launch {
                 _currentFilter.drop(1).collectLatest { filter ->
                     val currentServer = _selectedServer.value ?: return@collectLatest
+                    // If navigating to a smart list that needs refresh (stale after a
+                    // recent list-membership action), sync it from the server first.
+                    // GET /lists/{id}/bookmarks is always fresh, unlike the per-bookmark endpoint.
+                    val listId = filter.lists.singleOrNull()
+                    val needsRefresh = listId != null && listId in _smartListsNeedingRefresh.value
+                    if (needsRefresh) {
+                        _smartListsNeedingRefresh.value -= listId!!
+                        try {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                bookmarkRepository.syncBookmarksForList(currentServer, listId)
+                            }
+                        } catch (e: Exception) {
+                            AppLogger.e("MainScreenModel", "Smart list refresh failed for $listId: ${e.message}", e)
+                        }
+                    }
                     resetPaginationAndLoad(currentServer, filter)
                 }
             }

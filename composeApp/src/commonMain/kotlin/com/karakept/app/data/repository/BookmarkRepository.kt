@@ -503,15 +503,19 @@ class BookmarkRepository(
      * @param smartListIds the IDs of all known smart lists — only these are overwritten
      *                     by the server response; manual list IDs are preserved locally
      */
+    /**
+     * @return true if the server returned smart list membership (fresh data),
+     *         false if potentially stale (no smart lists returned by the server).
+     */
     suspend fun reconcileBookmarkSmartListMembership(
         server: Server,
         bookmarkLocalId: Long,
         smartListIds: Set<String>
-    ) {
-        val entity = bookmarkDao.getBookmarkById(bookmarkLocalId) ?: return
+    ): Boolean {
+        val entity = bookmarkDao.getBookmarkById(bookmarkLocalId) ?: return true
         try {
-            val serverLists = remoteDataSource.fetchListsForBookmark(server, entity.originalRemoteId)
-            val serverListIds = serverLists.mapNotNull { it.id }.toSet()
+            val serverListIds = remoteDataSource.fetchListsForBookmark(server, entity.originalRemoteId)
+                .mapNotNull { it.id }.toSet()
 
             val currentIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()
             // Smart lists: server is authoritative (criteria are server-computed)
@@ -537,8 +541,14 @@ class BookmarkRepository(
                 )
                 AppLogger.d("BookmarkRepository", "Reconciled list membership for bookmark $bookmarkLocalId: $updatedIds")
             }
+
+            // If the server returned no smart list membership, the response may be stale
+            // (server's async smart list recalculation hasn't completed yet).
+            val serverHasSmartLists = (serverListIds intersect smartListIds).isNotEmpty()
+            return serverHasSmartLists
         } catch (e: Exception) {
             AppLogger.e("BookmarkRepository", "Failed to reconcile list membership for bookmark $bookmarkLocalId: ${e.message}", e)
+            return false
         }
     }
 }
