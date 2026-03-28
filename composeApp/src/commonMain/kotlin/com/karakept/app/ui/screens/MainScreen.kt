@@ -370,6 +370,7 @@ object MainScreen : Screen {
                             onDeleteHighlight = { highlightsScreenModel.deleteHighlight(it) },
                             onLoadMore = { highlightsScreenModel.loadNextPage() },
                             onBack = { showHighlights = false },
+                            onRefresh = { highlightsScreenModel.syncHighlights() },
                             onOpenDrawer = { scope.launch { drawerState.open() } }
                         )
                     } else {
