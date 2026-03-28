@@ -53,7 +53,10 @@
   Plans:
   - [x] 14-01-PLAN.md — Fix highlights PTR + scroll-to-top position bug
   - [ ] 14-02-PLAN.md — Migrate deprecated pullRefresh to MD3 PullToRefreshBox
-- [ ] Phase 15: Snackbar Undo System — UX-01 (#166)
+- [ ] Phase 15: Snackbar Undo System — UX-01, NFR-01 (#166) — **Plans:** 2 plans
+  Plans:
+  - [ ] 15-01-PLAN.md — Wire undo snackbars to MainScreen swipe, bottom sheet, and batch actions
+  - [ ] 15-02-PLAN.md — Wire undo snackbars to BookmarkViewer actions + regression tests
 - [ ] Phase 16: Custom Layout Improvements — UX-02 (#167)
 - [ ] Phase 17: Desktop 401 Auth Fix — AUTH-01 (#173)
 - [ ] Phase 18: Pre Diagram Rendering Fix — RENDER-01 (#171)
@@ -81,7 +84,7 @@
 | 12. Notification Fixes | v1.9.0 | 0/1 | Complete    | 2026-03-26 |
 | 13. Smart List & Saving Follow-ups | v1.9.0 | 3/3 | Complete    | 2026-03-26 |
 | 14. UI Interaction Fixes | v1.9.0 | 1/2 | Complete    | 2026-03-28 |
-| 15. Snackbar Undo System | v1.9.0 | 0/? | Planned | — |
+| 15. Snackbar Undo System | v1.9.0 | 0/2 | Planned | — |
 | 16. Custom Layout Improvements | v1.9.0 | 0/? | Planned | — |
 | 17. Desktop 401 Auth Fix | v1.9.0 | 0/? | Planned | — |
 | 18. Pre Diagram Rendering Fix | v1.9.0 | 0/? | Planned | — |
