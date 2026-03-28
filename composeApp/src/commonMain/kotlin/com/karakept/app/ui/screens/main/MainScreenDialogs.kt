@@ -20,6 +20,7 @@ import com.karakept.app.ui.screens.moveBookmarkToList
 import com.karakept.app.ui.screens.updateBookmarkTags
 import com.karakept.app.ui.screens.deleteBookmark
 import com.karakept.app.ui.screens.enterSelectionMode
+import com.karakept.app.ui.screens.removeBookmarkFromList
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,7 @@ import com.karakept.app.ui.components.TagEditorDialog
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.domain.action.ActionSnackbarManager
+import com.karakept.app.domain.action.undoableAction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -164,11 +166,41 @@ fun MainScreenBookmarkActionsMenu(
             availableTags = allAvailableTags,
             onAction = { action ->
                 when (action) {
-                    is BookmarkAction.ToggleArchive -> screenModel.toggleBookmarkArchive(bm)
-                    is BookmarkAction.ToggleFavorite -> screenModel.toggleBookmarkFavorite(bm)
-                    is BookmarkAction.ToggleRead -> screenModel.toggleBookmarkRead(bm)
-                    is BookmarkAction.MoveToList -> screenModel.moveBookmarkToList(bm, action.listId)
-                    is BookmarkAction.UpdateTags -> screenModel.updateBookmarkTags(bm, action.tags)
+                    is BookmarkAction.ToggleArchive -> {
+                        val msg = if (bm.isArchived) "Unarchived" else "Archived"
+                        screenModel.toggleBookmarkArchive(bm)
+                        scope.undoableAction(snackbarManager, msg) {
+                            screenModel.toggleBookmarkArchive(bm)
+                        }
+                    }
+                    is BookmarkAction.ToggleFavorite -> {
+                        val msg = if (bm.isStarred) "Removed from favorites" else "Added to favorites"
+                        screenModel.toggleBookmarkFavorite(bm)
+                        scope.undoableAction(snackbarManager, msg) {
+                            screenModel.toggleBookmarkFavorite(bm)
+                        }
+                    }
+                    is BookmarkAction.ToggleRead -> {
+                        val msg = if (bm.isRead) "Marked as unread" else "Marked as read"
+                        screenModel.toggleBookmarkRead(bm)
+                        scope.undoableAction(snackbarManager, msg) {
+                            screenModel.toggleBookmarkRead(bm)
+                        }
+                    }
+                    is BookmarkAction.MoveToList -> {
+                        screenModel.moveBookmarkToList(bm, action.listId)
+                        val listName = lists.firstOrNull { it.id == action.listId }?.name ?: "list"
+                        scope.undoableAction(snackbarManager, "Moved to '$listName'") {
+                            screenModel.removeBookmarkFromList(bm, action.listId)
+                        }
+                    }
+                    is BookmarkAction.UpdateTags -> {
+                        val oldTags = bm.tags.split(",").filter { it.isNotBlank() }
+                        screenModel.updateBookmarkTags(bm, action.tags)
+                        scope.undoableAction(snackbarManager, "Tags updated") {
+                            screenModel.updateBookmarkTags(bm, oldTags)
+                        }
+                    }
                     is BookmarkAction.Delete -> screenModel.deleteBookmark(bm)
                     is BookmarkAction.Share -> {
                         com.karakept.app.utils.ShareUtils.shareText(bm.url, bm.title)

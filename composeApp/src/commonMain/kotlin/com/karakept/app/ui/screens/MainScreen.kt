@@ -49,6 +49,7 @@ import com.karakept.app.ui.screens.main.MainScreenAddBookmarkDialog
 import kotlinx.coroutines.launch
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
+import com.karakept.app.domain.action.undoableAction
 import com.karakept.app.ui.screens.main.HighlightsListContent
 import com.karakept.app.ui.screens.HighlightsScreenModel
 import com.karakept.app.ui.screens.settings.PerListSettingsScreen
@@ -230,9 +231,27 @@ object MainScreen : Screen {
         // Swipe action handler shared between modes
         val handleSwipeAction: (com.karakept.app.data.local.entity.BookmarkEntity, SwipeAction, com.karakept.app.data.model.CustomSwipeActionConfig?) -> Unit = { bookmark, action, config ->
             when (action) {
-                SwipeAction.ARCHIVE -> screenModel.toggleBookmarkArchive(bookmark)
-                SwipeAction.MARK_READ -> screenModel.toggleBookmarkRead(bookmark)
-                SwipeAction.FAVOURITE -> screenModel.toggleBookmarkFavorite(bookmark)
+                SwipeAction.ARCHIVE -> {
+                    val wasArchived = bookmark.isArchived
+                    screenModel.toggleBookmarkArchive(bookmark)
+                    scope.undoableAction(snackbarManager, if (wasArchived) "Unarchived" else "Archived") {
+                        screenModel.toggleBookmarkArchive(bookmark)
+                    }
+                }
+                SwipeAction.MARK_READ -> {
+                    val wasRead = bookmark.isRead
+                    screenModel.toggleBookmarkRead(bookmark)
+                    scope.undoableAction(snackbarManager, if (wasRead) "Marked as unread" else "Marked as read") {
+                        screenModel.toggleBookmarkRead(bookmark)
+                    }
+                }
+                SwipeAction.FAVOURITE -> {
+                    val wasStarred = bookmark.isStarred
+                    screenModel.toggleBookmarkFavorite(bookmark)
+                    scope.undoableAction(snackbarManager, if (wasStarred) "Removed from favorites" else "Added to favorites") {
+                        screenModel.toggleBookmarkFavorite(bookmark)
+                    }
+                }
                 SwipeAction.DELETE -> selectedBookmarkForActions = bookmark
                 SwipeAction.SHARE -> {
                     com.karakept.app.utils.ShareUtils.shareText(bookmark.url, bookmark.title)
@@ -246,16 +265,34 @@ object MainScreen : Screen {
                     val tagName = config?.tagName
                     if (tagName != null) {
                         val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                        if (currentTags.contains(tagName)) { screenModel.removeBookmarkTag(bookmark, tagName); scope.launch { snackbarManager.showSnackbar("Removed tag '$tagName'") } }
-                        else { screenModel.addBookmarkTag(bookmark, tagName); scope.launch { snackbarManager.showSnackbar("Added tag '$tagName'") } }
+                        if (currentTags.contains(tagName)) {
+                            screenModel.removeBookmarkTag(bookmark, tagName)
+                            scope.undoableAction(snackbarManager, "Removed tag '$tagName'") {
+                                screenModel.addBookmarkTag(bookmark, tagName)
+                            }
+                        } else {
+                            screenModel.addBookmarkTag(bookmark, tagName)
+                            scope.undoableAction(snackbarManager, "Added tag '$tagName'") {
+                                screenModel.removeBookmarkTag(bookmark, tagName)
+                            }
+                        }
                     }
                 }
                 SwipeAction.ADD_TO_LIST -> {
                     val listId = config?.listId; val listName = config?.listName ?: "list"
                     if (listId != null) {
                         val bookmarkListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                        if (bookmarkListIds.contains(listId)) { screenModel.removeBookmarkFromList(bookmark, listId); scope.launch { snackbarManager.showSnackbar("Removed from '$listName'") } }
-                        else { screenModel.moveBookmarkToList(bookmark, listId); scope.launch { snackbarManager.showSnackbar("Added to '$listName'") } }
+                        if (bookmarkListIds.contains(listId)) {
+                            screenModel.removeBookmarkFromList(bookmark, listId)
+                            scope.undoableAction(snackbarManager, "Removed from '$listName'") {
+                                screenModel.moveBookmarkToList(bookmark, listId)
+                            }
+                        } else {
+                            screenModel.moveBookmarkToList(bookmark, listId)
+                            scope.undoableAction(snackbarManager, "Added to '$listName'") {
+                                screenModel.removeBookmarkFromList(bookmark, listId)
+                            }
+                        }
                     }
                 }
                 SwipeAction.NONE -> {}
