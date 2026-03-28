@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.pullrefresh.PullRefreshState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -77,7 +75,7 @@ data class MainScreenDisplayConfig(
  * Scaffold content shared between compact and expanded modes.
  * Contains the top bar, bookmark list, FAB, and snackbar host.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreenScaffoldContent(
     isExpandedLayout: Boolean,
@@ -103,7 +101,6 @@ fun MainScreenScaffoldContent(
     searchQuery: String,
     listState: LazyListState,
     isDesktop: Boolean,
-    pullRefreshState: PullRefreshState,
     snackbarHostState: SnackbarHostState,
     isDrawerVisible: Boolean,
     hasActiveFilter: Boolean,
@@ -241,7 +238,6 @@ fun MainScreenScaffoldContent(
                 },
                 listState = listState,
                 isDesktop = isDesktop,
-                pullRefreshState = pullRefreshState,
                 onBookmarkClick = onBookmarkClick,
                 onBookmarkLongClick = onBookmarkLongClick,
                 serverUrl = serverUrl,

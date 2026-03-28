@@ -10,17 +10,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.PullRefreshState
-import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,7 +58,7 @@ import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.utils.AssetUrlUtils
 import com.karakept.app.utils.fileExists
 
-@OptIn(ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun BookmarkListContent(
     bookmarks: List<BookmarkEntity>,
@@ -93,7 +91,6 @@ internal fun BookmarkListContent(
     onBookmarkSelectionToggle: (BookmarkEntity) -> Unit = {},
     listState: LazyListState,
     isDesktop: Boolean = false,
-    pullRefreshState: PullRefreshState,
     onBookmarkClick: (BookmarkEntity) -> Unit,
     onBookmarkLongClick: (BookmarkEntity) -> Unit,
     onSwipeAction: (BookmarkEntity, SwipeAction, CustomSwipeActionConfig?) -> Unit,
@@ -153,11 +150,8 @@ internal fun BookmarkListContent(
         autoScrollSpeed.value = 0f
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(if (!isDesktop) Modifier.pullRefresh(pullRefreshState) else Modifier)
-    ) {
+    val listContent: @Composable () -> Unit = {
+        Box(modifier = Modifier.fillMaxSize()) {
         // Container-level drag selection: the gesture lives here (not per-item) so that
         // edge-scroll auto-scrolling does not recycle the item that owns the gesture detector,
         // which would kill the drag mid-gesture.
@@ -588,12 +582,20 @@ internal fun BookmarkListContent(
             }
         }
 
-        if (!isDesktop) {
-            PullRefreshIndicator(
-                refreshing = isSyncing,
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+        } // end inner Box
+    }
+
+    if (!isDesktop) {
+        PullToRefreshBox(
+            isRefreshing = isSyncing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            listContent()
+        }
+    } else {
+        Box(modifier = Modifier.fillMaxSize()) {
+            listContent()
         }
     }
 }

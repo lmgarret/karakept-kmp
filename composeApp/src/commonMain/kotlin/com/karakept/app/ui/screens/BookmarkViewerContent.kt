@@ -16,13 +16,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
@@ -64,7 +62,7 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import com.karakept.app.domain.action.ActionSnackbarManager
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookmarkViewerContent(
     bookmarkId: Long,
@@ -100,11 +98,6 @@ fun BookmarkViewerContent(
     val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
     val serverProgressChecked by screenModel.serverProgressChecked.collectAsState()
     val contentFetchAttempted by screenModel.contentFetchAttempted.collectAsState()
-
-    val pullRefreshState = rememberPullRefreshState(
-        refreshing = isRefreshing,
-        onRefresh = { screenModel.refreshBookmark(bookmarkId) }
-    )
 
     var showModeDialog by remember { mutableStateOf(false) }
     var showAppearancePanel by remember { mutableStateOf(false) }
@@ -304,7 +297,8 @@ fun BookmarkViewerContent(
                 val bannerImageLocalPath by screenModel.bannerImageLocalPath.collectAsState()
                 val screenshotLocalPath by screenModel.screenshotLocalPath.collectAsState()
 
-                Box(modifier = Modifier.fillMaxSize()) {
+                val viewerContent: @Composable () -> Unit = {
+                    Box(modifier = Modifier.fillMaxSize()) {
                     val needsScrollRestore = trackReadingProgress && !scrollRestoration.hasRestoredScroll &&
                         loadingState is BookmarkLoadingState.FullyLoaded &&
                         ((loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f || !serverProgressChecked)
@@ -458,12 +452,20 @@ fun BookmarkViewerContent(
                         isFullscreen = isFullscreen, onFullscreenToggle = onFullscreenToggle,
                         onDetailsClick = { showDetailsPanel = true }
                     )
+                    } // end inner Box
+                }
 
-                    if (!getPlatform().isDesktop) {
-                        PullRefreshIndicator(
-                            refreshing = isRefreshing, state = pullRefreshState,
-                            modifier = Modifier.align(Alignment.TopCenter).padding(padding)
-                        )
+                if (!getPlatform().isDesktop) {
+                    PullToRefreshBox(
+                        isRefreshing = isRefreshing,
+                        onRefresh = { screenModel.refreshBookmark(bookmarkId) },
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        viewerContent()
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        viewerContent()
                     }
                 }
             }

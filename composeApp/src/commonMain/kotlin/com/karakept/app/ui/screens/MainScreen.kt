@@ -3,9 +3,7 @@ package com.karakept.app.ui.screens
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarDuration
@@ -56,7 +54,7 @@ import getPlatform
 import org.koin.compose.koinInject
 
 object MainScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -170,10 +168,6 @@ object MainScreen : Screen {
         var activeHighlightId by remember { mutableStateOf<String?>(null) }
         var isReaderFullscreen by remember { mutableStateOf(false) }
 
-        val pullRefreshState = rememberPullRefreshState(
-            refreshing = isSyncing,
-            onRefresh = { if (!offlineMode) screenModel.syncBookmarks() }
-        )
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val scope = rememberCoroutineScope()
 
@@ -274,7 +268,7 @@ object MainScreen : Screen {
                     pendingBookmarkRemoteIds = pendingBookmarkRemoteIds, isSelectionMode = isSelectionMode,
                     selectedBookmarkIds = selectedBookmarkIds, activeBookmarkId = activeBmId,
                     isSearchActive = isSearchActive, searchQuery = searchQuery, listState = listState, isDesktop = isDesktop,
-                    pullRefreshState = pullRefreshState, snackbarHostState = snackbarHostState,
+                    snackbarHostState = snackbarHostState,
                     isDrawerVisible = isDrawerVisible, hasActiveFilter = hasActiveFilter, serverUrl = servers.firstOrNull()?.url,
                     screenModel = screenModel, snackbarManager = snackbarManager, scope = scope, uriHandler = uriHandler,
                     onMenuClick = onMenuClick, onFilterClick = { showFilterDialog = true },
