@@ -196,7 +196,7 @@ object MainScreen : Screen {
         }
 
         // Listen for scroll-to-top trigger
-        LaunchedEffect(Unit) { screenModel.scrollToTopTrigger.collect { listState.animateScrollToItem(0) } }
+        LaunchedEffect(Unit) { screenModel.scrollToTopTrigger.collect { listState.animateScrollToItem(0, 0) } }
 
         // Scroll-triggered action
         MainScreenScrollAction(

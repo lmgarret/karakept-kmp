@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -92,68 +93,74 @@ fun HighlightsListContent(
             )
         }
     ) { paddingValues ->
-        if (highlights.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isSyncing) {
-                    CircularProgressIndicator()
-                } else {
-                    Text("No highlights yet", style = MaterialTheme.typography.bodyLarge)
-                }
-            }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(highlights, key = { it.id }) { highlight ->
-                    val isActive = highlight.id == activeHighlightId
-                    HighlightCard(
-                        highlight = highlight,
-                        onClick = { onHighlightClick(highlight) },
-                        onDelete = { onDeleteHighlight(highlight) },
-                        modifier = if (isActive) {
-                            Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .border(
-                                    2.dp,
-                                    MaterialTheme.colorScheme.tertiary,
-                                    RoundedCornerShape(12.dp)
-                                )
-                        } else {
-                            Modifier
-                        }
-                    )
-                }
-
-                // Loading indicator at bottom
-                if (isLoadingMore) {
-                    item(contentType = "loading") {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
+        PullToRefreshBox(
+            isRefreshing = isSyncing,
+            onRefresh = { onRefresh?.invoke() },
+            modifier = Modifier.fillMaxSize().padding(paddingValues)
+        ) {
+            if (highlights.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSyncing) {
+                        CircularProgressIndicator()
+                    } else {
+                        Text("No highlights yet", style = MaterialTheme.typography.bodyLarge)
                     }
                 }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(highlights, key = { it.id }) { highlight ->
+                        val isActive = highlight.id == activeHighlightId
+                        HighlightCard(
+                            highlight = highlight,
+                            onClick = { onHighlightClick(highlight) },
+                            onDelete = { onDeleteHighlight(highlight) },
+                            modifier = if (isActive) {
+                                Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .border(
+                                        2.dp,
+                                        MaterialTheme.colorScheme.tertiary,
+                                        RoundedCornerShape(12.dp)
+                                    )
+                            } else {
+                                Modifier
+                            }
+                        )
+                    }
 
-                // End of list indicator
-                if (!hasMoreItems && highlights.isNotEmpty()) {
-                    item(contentType = "end") {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No more highlights",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                    // Loading indicator at bottom
+                    if (isLoadingMore) {
+                        item(contentType = "loading") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                    }
+
+                    // End of list indicator
+                    if (!hasMoreItems && highlights.isNotEmpty()) {
+                        item(contentType = "end") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No more highlights",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }

@@ -400,7 +400,7 @@ fun BookmarkViewerContent(
                         modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
                     ) {
                         SmallFloatingActionButton(
-                            onClick = { scope.launch { scrollState.animateScrollToItem(0) } },
+                            onClick = { scope.launch { scrollState.animateScrollToItem(0, 0) } },
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                             contentColor = MaterialTheme.colorScheme.onSurface
                         ) {
