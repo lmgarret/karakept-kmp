@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.9.0
 milestone_name: Bug Fixes & UX Polish
 status: Milestone complete
-stopped_at: Phase 15 context gathered
-last_updated: "2026-03-28T10:03:59.317Z"
+stopped_at: Completed 15-02-PLAN.md
+last_updated: "2026-03-28T14:05:02.079Z"
 last_activity: 2026-03-28
 progress:
   total_phases: 8
-  completed_phases: 7
-  total_plans: 13
-  completed_plans: 13
+  completed_phases: 8
+  total_plans: 15
+  completed_plans: 15
 ---
 
 # Project State
@@ -20,11 +20,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A reliable, well-structured bookmark management app with clean code practices
-**Current focus:** Phase 13 — smart-list-saving-followups
+**Current focus:** Phase 15 — snackbar-undo-system
 
 ## Current Position
 
-Phase: 14
+Phase: 15
 Plan: Not started
 
 ## Accumulated Context
@@ -44,6 +44,8 @@ Plan: Not started
 - [Phase 14]: PullToRefreshBox wraps entire Scaffold content including empty state for consistent PTR gesture
 - [Phase 14]: Explicit scrollOffset=0 in all animateScrollToItem(0) sites to prevent residual pixel offset
 - [Phase 14]: Content lambda extraction pattern for PullToRefreshBox/Box conditional wrapping: shared composable lambda with inner Box for BoxScope access
+- [Phase 15-snackbar-undo-system]: undoableAction as CoroutineScope extension for reuse across 4+ call sites; batchSetTags gets plain snackbar (no undo) due to per-bookmark tag complexity
+- [Phase 15-snackbar-undo-system]: Used named parameter onUndo= syntax for showSnackbarWithUndo to avoid Kotlin trailing lambda ambiguity
 
 ### Known Blockers
 
@@ -58,5 +60,5 @@ Plan: Not started
 ## Session Continuity
 
 Last activity: 2026-03-28
-Stopped at: Phase 15 context gathered
+Stopped at: Completed 15-02-PLAN.md
 Resume: Execute 14-02-PLAN.md
