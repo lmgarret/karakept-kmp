@@ -267,9 +267,27 @@ fun BookmarkViewerContent(
                     BookmarkFabMenu(
                         expanded = fabExpanded, onExpandedChange = { fabExpanded = it },
                         bookmark = fullyLoadedState.bookmark,
-                        onFavoriteClick = { screenModel.toggleBookmarkFavorite(fullyLoadedState.bookmark); fabExpanded = false },
-                        onArchiveClick = { screenModel.toggleBookmarkArchive(fullyLoadedState.bookmark); fabExpanded = false },
-                        onReadClick = { screenModel.toggleBookmarkRead(fullyLoadedState.bookmark); fabExpanded = false },
+                        onFavoriteClick = {
+                            val bm = fullyLoadedState.bookmark
+                            screenModel.toggleBookmarkFavorite(bm)
+                            val msg = if (bm.isStarred) "Removed from favorites" else "Added to favorites"
+                            scope.launch { snackbarManager.showSnackbarWithUndo(msg, onUndo = { screenModel.toggleBookmarkFavorite(bm) }) }
+                            fabExpanded = false
+                        },
+                        onArchiveClick = {
+                            val bm = fullyLoadedState.bookmark
+                            screenModel.toggleBookmarkArchive(bm)
+                            val msg = if (bm.isArchived) "Unarchived" else "Archived"
+                            scope.launch { snackbarManager.showSnackbarWithUndo(msg, onUndo = { screenModel.toggleBookmarkArchive(bm) }) }
+                            fabExpanded = false
+                        },
+                        onReadClick = {
+                            val bm = fullyLoadedState.bookmark
+                            screenModel.toggleBookmarkRead(bm)
+                            val msg = if (bm.isRead) "Marked as unread" else "Marked as read"
+                            scope.launch { snackbarManager.showSnackbarWithUndo(msg, onUndo = { screenModel.toggleBookmarkRead(bm) }) }
+                            fabExpanded = false
+                        },
                         onShareClick = {
                             ShareUtils.shareText(fullyLoadedState.bookmark.url, fullyLoadedState.bookmark.title)
                             scope.launch { snackbarManager.showSnackbar(if (getPlatform().isDesktop) "Copied to clipboard" else "Shared") }
@@ -444,9 +462,24 @@ fun BookmarkViewerContent(
                         onEditTagsClick = { showTagEditor = true },
                         onDeleteClick = { showDeleteConfirmation = true },
                         isDesktop = getPlatform().isDesktop, bookmark = state.bookmark,
-                        onFavoriteClick = { screenModel.toggleBookmarkFavorite(state.bookmark) },
-                        onArchiveClick = { screenModel.toggleBookmarkArchive(state.bookmark) },
-                        onReadClick = { screenModel.toggleBookmarkRead(state.bookmark) },
+                        onFavoriteClick = {
+                            val bm = state.bookmark
+                            screenModel.toggleBookmarkFavorite(bm)
+                            val msg = if (bm.isStarred) "Removed from favorites" else "Added to favorites"
+                            scope.launch { snackbarManager.showSnackbarWithUndo(msg, onUndo = { screenModel.toggleBookmarkFavorite(bm) }) }
+                        },
+                        onArchiveClick = {
+                            val bm = state.bookmark
+                            screenModel.toggleBookmarkArchive(bm)
+                            val msg = if (bm.isArchived) "Unarchived" else "Archived"
+                            scope.launch { snackbarManager.showSnackbarWithUndo(msg, onUndo = { screenModel.toggleBookmarkArchive(bm) }) }
+                        },
+                        onReadClick = {
+                            val bm = state.bookmark
+                            screenModel.toggleBookmarkRead(bm)
+                            val msg = if (bm.isRead) "Marked as unread" else "Marked as read"
+                            scope.launch { snackbarManager.showSnackbarWithUndo(msg, onUndo = { screenModel.toggleBookmarkRead(bm) }) }
+                        },
                         onShareClick = {
                             ShareUtils.shareText(state.bookmark.url, state.bookmark.title)
                             scope.launch { snackbarManager.showSnackbar(if (getPlatform().isDesktop) "Copied to clipboard" else "Shared") }
