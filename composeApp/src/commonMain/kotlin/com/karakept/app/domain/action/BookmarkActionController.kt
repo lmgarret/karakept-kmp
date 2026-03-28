@@ -172,16 +172,27 @@ class BookmarkActionController(
     }
 
     /**
-     * Capture the current state before modification for undo
+     * Capture the current state before modification for undo.
+     *
+     * Reads the bookmark from the database instead of using the UI-passed entity.
+     * The UI entity can be stale when a scroll action (e.g. ADD_TO_LIST) modified
+     * the bookmark's listIds after the Compose snapshot but before the user triggered
+     * this action. Using the DB state ensures the undo snapshot reflects all prior
+     * changes (including scroll-action list membership additions).
      */
     private suspend fun captureUndoState(event: BookmarkActionEvent, originalPosition: Int): UndoableActionState {
+        // Read the authoritative state from DB — the UI entity may have stale listIds
+        val currentBookmark = bookmarkDao.getBookmarkByRemoteId(
+            event.bookmark.remoteId, event.bookmark.serverId
+        ) ?: event.bookmark
+
         // Get current pending actions for this bookmark (to remove on undo)
         val pendingActions = pendingActionDao.getPendingActionsList(event.bookmark.serverId)
             .filter { it.bookmarkRemoteId == event.bookmark.remoteId }
             .map { it.id }
 
         return UndoableActionState(
-            originalBookmark = event.bookmark.copy(), // Deep copy
+            originalBookmark = currentBookmark.copy(),
             action = event,
             timestamp = System.currentTimeMillis(),
             pendingActionIds = pendingActions,
@@ -246,8 +257,7 @@ class BookmarkActionController(
                     _undoCompletedEvents.emit(UndoCompletedEvent(restoredBookmark, undoState.originalPosition))
                 }
 
-                // 6. Show confirmation
-                snackbarManager.showSnackbar("Undone")
+                // 6. Confirmation is shown by the snackbar collector after onUndo completes
 
             } catch (e: Exception) {
                 snackbarManager.showSnackbar("Undo failed: ${e.message}")

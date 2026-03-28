@@ -94,7 +94,7 @@ fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<S
  * Uses GET /bookmarks/{id}/lists — one API call — instead of syncing entire smart lists.
  * Then reloads the visible list so the UI reflects the change immediately.
  */
-private fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
+internal fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
     val server = _selectedServer.value ?: return
     val smartListIds = listRepository.lists.value
         .filter { it.type == KarakeepList.Type.SMART }
@@ -145,6 +145,69 @@ fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String)
             }
         }
         reconcileBookmarkLists(bookmark)
+    }
+}
+
+/**
+ * Re-adds a bookmark to a list and reloads the UI from the database.
+ * Used by undo lambdas where the bookmark was removed from the visible list.
+ *
+ * Skips [reconcileBookmarkLists] intentionally — calling it would launch a
+ * separate coroutine with API calls + [resetPaginationAndLoad], which races
+ * with the original [removeBookmarkFromList]'s reconciliation coroutine.
+ * Smart list reconciliation will happen on the next sync.
+ */
+fun MainScreenModel.restoreAndMoveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
+    screenModelScope.launch {
+        val isOnline = !_isSyncing.value
+        bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
+        val server = _selectedServer.value ?: return@launch
+        resetPaginationAndLoad(server, _currentFilter.value, scrollToTop = false)
+    }
+}
+
+/**
+ * Removes a bookmark from a list and restores it in the visible accumulated list.
+ * Used by undo lambdas when the bookmark may have been removed from the
+ * accumulated list by smart list reconciliation (e.g. smart list that
+ * excludes the target list — after adding to Read Later, the server
+ * recalculates the smart list and strips its ID from the bookmark's local
+ * listIds; undoing the add removes Read Later but the smart list ID is
+ * still gone, so [resetPaginationAndLoad] won't find it).
+ *
+ * Optimistically re-inserts the bookmark at the top of the accumulated
+ * list if it's missing, so the user sees it immediately. Smart list
+ * membership will be fully reconciled on the next sync.
+ */
+fun MainScreenModel.accumulatedBookmarkPosition(bookmark: BookmarkEntity): Int =
+    _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+
+fun MainScreenModel.restoreAndRemoveBookmarkFromList(bookmark: BookmarkEntity, listId: String, originalPosition: Int = -1) {
+    screenModelScope.launch {
+        val isOnline = !_isSyncing.value
+        bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
+        updateAccumulatedBookmarks { current ->
+            if (current.any { it.remoteId == bookmark.remoteId }) {
+                // Bookmark is still in the list — just strip the target listId
+                current.map {
+                    if (it.remoteId == bookmark.remoteId) {
+                        val ids = it.listIds.split(",").map { id -> id.trim() }
+                            .filter { id -> id.isNotBlank() && id != listId }
+                        it.copy(listIds = ids.joinToString(","))
+                    } else it
+                }
+            } else {
+                // Bookmark was removed (smart list reconciliation stripped it).
+                // Re-insert at original position with state from before the action.
+                val mutable = current.toMutableList()
+                if (originalPosition in 0..mutable.size) {
+                    mutable.add(originalPosition, bookmark)
+                } else {
+                    mutable.add(0, bookmark)
+                }
+                mutable
+            }
+        }
     }
 }
 

@@ -124,6 +124,7 @@ fun MainScreenModel.batchArchive() {
         val count = bookmarks.size
         snackbarManager.showSnackbarWithUndo("Archived $count bookmark${if (count > 1) "s" else ""}", onUndo = {
             bookmarkActionsRepository.batchUnarchive(bookmarks)
+            updateAccumulatedBookmarks { it + bookmarks.map { b -> b.copy(isArchived = false) } }
         })
     }
 }
@@ -139,6 +140,7 @@ fun MainScreenModel.batchUnarchive() {
         val count = bookmarks.size
         snackbarManager.showSnackbarWithUndo("Unarchived $count bookmark${if (count > 1) "s" else ""}", onUndo = {
             bookmarkActionsRepository.batchArchive(bookmarks)
+            updateAccumulatedBookmarks { it + bookmarks.map { b -> b.copy(isArchived = true) } }
         })
     }
 }
@@ -156,6 +158,9 @@ fun MainScreenModel.batchMarkRead() {
         val count = bookmarks.size
         snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as read", onUndo = {
             bookmarkActionsRepository.batchMarkUnread(bookmarks, false)
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isRead = false) else it }
+            }
         })
     }
 }
@@ -179,6 +184,9 @@ fun MainScreenModel.batchMarkUnread() {
         val count = bookmarks.size
         snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as unread", onUndo = {
             bookmarkActionsRepository.batchMarkRead(bookmarks)
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isRead = true) else it }
+            }
         })
     }
 }
@@ -196,6 +204,9 @@ fun MainScreenModel.batchFavourite() {
         val count = bookmarks.size
         snackbarManager.showSnackbarWithUndo("Added $count bookmark${if (count > 1) "s" else ""} to favorites", onUndo = {
             bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = false)
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isStarred = false) else it }
+            }
         })
     }
 }
@@ -213,6 +224,9 @@ fun MainScreenModel.batchUnfavourite() {
         val count = bookmarks.size
         snackbarManager.showSnackbarWithUndo("Removed $count bookmark${if (count > 1) "s" else ""} from favorites", onUndo = {
             bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = true)
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isStarred = true) else it }
+            }
         })
     }
 }
@@ -250,6 +264,7 @@ fun MainScreenModel.batchMoveToList(listId: String) {
     val bookmarks = getSelectedBookmarks()
     if (bookmarks.isEmpty()) { clearSelection(); return }
     screenModelScope.launch {
+        val positions = bookmarks.associate { it.remoteId to accumulatedBookmarkPosition(it) }
         bookmarkActionsRepository.batchMoveToList(bookmarks, listId)
         val ids = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { list ->
@@ -262,12 +277,12 @@ fun MainScreenModel.batchMoveToList(listId: String) {
                 } else bookmark
             }
         }
+        bookmarks.firstOrNull()?.let { reconcileBookmarkLists(it) }
         clearSelection()
         val count = bookmarks.size
         snackbarManager.showSnackbarWithUndo("Moved $count bookmark${if (count > 1) "s" else ""} to list", onUndo = {
-            val isOnline = !_isSyncing.value
             for (bookmark in bookmarks) {
-                bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
+                restoreAndRemoveBookmarkFromList(bookmark, listId, positions[bookmark.remoteId] ?: -1)
             }
         })
     }

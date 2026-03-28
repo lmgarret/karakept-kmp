@@ -225,27 +225,9 @@ object MainScreen : Screen {
         // Swipe action handler shared between modes
         val handleSwipeAction: (com.karakept.app.data.local.entity.BookmarkEntity, SwipeAction, com.karakept.app.data.model.CustomSwipeActionConfig?) -> Unit = { bookmark, action, config ->
             when (action) {
-                SwipeAction.ARCHIVE -> {
-                    val wasArchived = bookmark.isArchived
-                    screenModel.toggleBookmarkArchive(bookmark)
-                    scope.undoableAction(snackbarManager, if (wasArchived) "Unarchived" else "Archived") {
-                        screenModel.toggleBookmarkArchive(bookmark)
-                    }
-                }
-                SwipeAction.MARK_READ -> {
-                    val wasRead = bookmark.isRead
-                    screenModel.toggleBookmarkRead(bookmark)
-                    scope.undoableAction(snackbarManager, if (wasRead) "Marked as unread" else "Marked as read") {
-                        screenModel.toggleBookmarkRead(bookmark)
-                    }
-                }
-                SwipeAction.FAVOURITE -> {
-                    val wasStarred = bookmark.isStarred
-                    screenModel.toggleBookmarkFavorite(bookmark)
-                    scope.undoableAction(snackbarManager, if (wasStarred) "Removed from favorites" else "Added to favorites") {
-                        screenModel.toggleBookmarkFavorite(bookmark)
-                    }
-                }
+                SwipeAction.ARCHIVE -> screenModel.toggleBookmarkArchive(bookmark)
+                SwipeAction.MARK_READ -> screenModel.toggleBookmarkRead(bookmark)
+                SwipeAction.FAVOURITE -> screenModel.toggleBookmarkFavorite(bookmark)
                 SwipeAction.DELETE -> selectedBookmarkForActions = bookmark
                 SwipeAction.SHARE -> {
                     com.karakept.app.utils.ShareUtils.shareText(bookmark.url, bookmark.title)
@@ -275,16 +257,17 @@ object MainScreen : Screen {
                 SwipeAction.ADD_TO_LIST -> {
                     val listId = config?.listId; val listName = config?.listName ?: "list"
                     if (listId != null) {
+                        val position = screenModel.accumulatedBookmarkPosition(bookmark)
                         val bookmarkListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
                         if (bookmarkListIds.contains(listId)) {
                             screenModel.removeBookmarkFromList(bookmark, listId)
                             scope.undoableAction(snackbarManager, "Removed from '$listName'") {
-                                screenModel.moveBookmarkToList(bookmark, listId)
+                                screenModel.restoreAndMoveBookmarkToList(bookmark, listId)
                             }
                         } else {
                             screenModel.moveBookmarkToList(bookmark, listId)
                             scope.undoableAction(snackbarManager, "Added to '$listName'") {
-                                screenModel.removeBookmarkFromList(bookmark, listId)
+                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, listId, position)
                             }
                         }
                     }
@@ -495,7 +478,10 @@ fun rememberSnackbarHostState(
                 is SnackbarEvent.Message -> snackbarHostState.showSnackbar(message = event.text, duration = event.duration)
                 is SnackbarEvent.MessageWithUndo -> {
                     val result = snackbarHostState.showSnackbar(message = event.text, actionLabel = "Undo", duration = event.duration)
-                    if (result == SnackbarResult.ActionPerformed) scope.launch { event.onUndo() }
+                    if (result == SnackbarResult.ActionPerformed) scope.launch {
+                        event.onUndo()
+                        manager.showSnackbar("Undone")
+                    }
                 }
                 is SnackbarEvent.MessageWithAction -> {
                     val result = snackbarHostState.showSnackbar(message = event.text, actionLabel = event.actionLabel, duration = event.duration)
