@@ -80,7 +80,7 @@
 | 11. BackupRepository Edge Case Tests | Platform Health | 1/1 | Complete | 2026-03-25 |
 | 12. Notification Fixes | v1.9.0 | 0/1 | Complete    | 2026-03-26 |
 | 13. Smart List & Saving Follow-ups | v1.9.0 | 3/3 | Complete    | 2026-03-26 |
-| 14. UI Interaction Fixes | v1.9.0 | 1/2 | In Progress | — |
+| 14. UI Interaction Fixes | v1.9.0 | 1/2 | Complete    | 2026-03-28 |
 | 15. Snackbar Undo System | v1.9.0 | 0/? | Planned | — |
 | 16. Custom Layout Improvements | v1.9.0 | 0/? | Planned | — |
 | 17. Desktop 401 Auth Fix | v1.9.0 | 0/? | Planned | — |
