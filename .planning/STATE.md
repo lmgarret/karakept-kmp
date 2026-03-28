@@ -41,6 +41,8 @@ Plan: Not started
 - [Phase 13-smart-list-saving-followups]: syncSmartLists fires in parallel nested launches per smart list — independent, fire-and-forget, errors logged not surfaced
 - [Phase 13]: MainScreenModel changed from Koin single{} to factory{} — each Voyager Navigator gets a fresh instance with its own screenModelScope
 - [Phase 13]: Pure function extraction for reconciliation logic (computeStaleListRemovals) enables direct commonTest testing without mocks
+- [Phase 14]: PullToRefreshBox wraps entire Scaffold content including empty state for consistent PTR gesture
+- [Phase 14]: Explicit scrollOffset=0 in all animateScrollToItem(0) sites to prevent residual pixel offset
 
 ### Known Blockers
 
@@ -54,6 +56,6 @@ Plan: Not started
 
 ## Session Continuity
 
-Last activity: 2026-03-26
-Stopped at: Phase 14 context gathered
-Resume: run `/gsd:plan-phase 13` to plan Smart List & Saving Follow-ups
+Last activity: 2026-03-28
+Stopped at: Completed 14-01-PLAN.md
+Resume: Execute 14-02-PLAN.md
