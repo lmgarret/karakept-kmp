@@ -187,27 +187,43 @@ fun MainScreenModel.restoreAndRemoveBookmarkFromList(bookmark: BookmarkEntity, l
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
         updateAccumulatedBookmarks { current ->
-            if (current.any { it.remoteId == bookmark.remoteId }) {
-                // Bookmark is still in the list — just strip the target listId
-                current.map {
-                    if (it.remoteId == bookmark.remoteId) {
-                        val ids = it.listIds.split(",").map { id -> id.trim() }
-                            .filter { id -> id.isNotBlank() && id != listId }
-                        it.copy(listIds = ids.joinToString(","))
-                    } else it
-                }
-            } else {
-                // Bookmark was removed (smart list reconciliation stripped it).
-                // Re-insert at original position with state from before the action.
-                val mutable = current.toMutableList()
-                if (originalPosition in 0..mutable.size) {
-                    mutable.add(originalPosition, bookmark)
-                } else {
-                    mutable.add(0, bookmark)
-                }
-                mutable
-            }
+            applyRestoreAndRemoveFromListTransform(current, bookmark, listId, originalPosition)
         }
+    }
+}
+
+/**
+ * Pure function implementing the undo-add-to-list transform.
+ *
+ * If the bookmark is still in [currentBookmarks], strips [listId] from its listIds.
+ * If the bookmark is missing (smart list reconciliation removed it), re-inserts it
+ * at [originalPosition] (or index 0 if the position is out of bounds).
+ */
+fun applyRestoreAndRemoveFromListTransform(
+    currentBookmarks: List<BookmarkEntity>,
+    bookmark: BookmarkEntity,
+    listId: String,
+    originalPosition: Int = -1
+): List<BookmarkEntity> {
+    return if (currentBookmarks.any { it.remoteId == bookmark.remoteId }) {
+        // Bookmark is still in the list — just strip the target listId
+        currentBookmarks.map {
+            if (it.remoteId == bookmark.remoteId) {
+                val ids = it.listIds.split(",").map { id -> id.trim() }
+                    .filter { id -> id.isNotBlank() && id != listId }
+                it.copy(listIds = ids.joinToString(","))
+            } else it
+        }
+    } else {
+        // Bookmark was removed (smart list reconciliation stripped it).
+        // Re-insert at original position with state from before the action.
+        val mutable = currentBookmarks.toMutableList()
+        if (originalPosition in 0..mutable.size) {
+            mutable.add(originalPosition, bookmark)
+        } else {
+            mutable.add(0, bookmark)
+        }
+        mutable
     }
 }
 
