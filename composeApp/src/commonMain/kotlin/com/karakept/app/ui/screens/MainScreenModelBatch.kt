@@ -121,6 +121,10 @@ fun MainScreenModel.batchArchive() {
         val remoteIds = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Archived $count bookmark${if (count > 1) "s" else ""}") {
+            bookmarkActionsRepository.batchUnarchive(bookmarks)
+        }
     }
 }
 
@@ -132,6 +136,10 @@ fun MainScreenModel.batchUnarchive() {
         val remoteIds = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Unarchived $count bookmark${if (count > 1) "s" else ""}") {
+            bookmarkActionsRepository.batchArchive(bookmarks)
+        }
     }
 }
 
@@ -145,6 +153,10 @@ fun MainScreenModel.batchMarkRead() {
             list.map { if (it.remoteId in ids) it.copy(isRead = true) else it }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as read") {
+            bookmarkActionsRepository.batchMarkUnread(bookmarks, false)
+        }
     }
 }
 
@@ -164,6 +176,10 @@ fun MainScreenModel.batchMarkUnread() {
             }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as unread") {
+            bookmarkActionsRepository.batchMarkRead(bookmarks)
+        }
     }
 }
 
@@ -177,6 +193,10 @@ fun MainScreenModel.batchFavourite() {
             list.map { if (it.remoteId in ids) it.copy(isStarred = true) else it }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Added $count bookmark${if (count > 1) "s" else ""} to favorites") {
+            bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = false)
+        }
     }
 }
 
@@ -190,6 +210,10 @@ fun MainScreenModel.batchUnfavourite() {
             list.map { if (it.remoteId in ids) it.copy(isStarred = false) else it }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Removed $count bookmark${if (count > 1) "s" else ""} from favorites") {
+            bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = true)
+        }
     }
 }
 
@@ -217,6 +241,8 @@ fun MainScreenModel.batchSetTags(newTags: List<String>) {
             }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbar("Tags updated for $count bookmark${if (count > 1) "s" else ""}")
     }
 }
 
@@ -237,5 +263,12 @@ fun MainScreenModel.batchMoveToList(listId: String) {
             }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Moved $count bookmark${if (count > 1) "s" else ""} to list") {
+            val isOnline = !_isSyncing.value
+            for (bookmark in bookmarks) {
+                bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
+            }
+        }
     }
 }
