@@ -403,7 +403,15 @@ fun BookmarkViewerContent(
                         modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
                     ) {
                         SmallFloatingActionButton(
-                            onClick = { scope.launch { scrollState.animateScrollToItem(0, 0) } },
+                            onClick = {
+                                scope.launch {
+                                    scrollState.animateScrollToItem(0, 0)
+                                    // Use safeScrollToItem to update the scroll guard's
+                                    // approved position — without this, the guard detects
+                                    // an "unintended jump" and snaps back to the old position
+                                    scrollRestoration.safeScrollToItem(0, 0)
+                                }
+                            },
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                             contentColor = MaterialTheme.colorScheme.onSurface
                         ) {
