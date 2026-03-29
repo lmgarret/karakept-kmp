@@ -247,6 +247,9 @@ class BookmarkRepository(
 
             // Cache hero images (banner/screenshot)
             cacheHeroAssetsForBookmark(server, existing.remoteId, existing.serverId, bannerImageAssetId, screenshotAssetId)
+
+            // Notify UI so the accumulated list refreshes this bookmark (e.g. with asset IDs)
+            bookmarkActionsRepository.notifyBookmarkChanged(existing.remoteId)
         } catch (e: Exception) {
             AppLogger.e("BookmarkRepository", "syncSingleBookmark failed for $bookmarkId: ${e.message}", e)
             throw e
