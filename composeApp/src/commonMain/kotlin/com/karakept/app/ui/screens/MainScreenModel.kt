@@ -454,8 +454,13 @@ class MainScreenModel(
                 if (_currentFilter.value == capturedFilter) {
                     resetPaginationAndLoad(server, capturedFilter)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Scope cancelled (e.g. screen navigated away) — not a sync error.
+                // Reset sync progress so it doesn't stick in Error state.
+                bookmarkRepository.resetSyncProgress()
+                throw e
             } catch (e: Exception) {
-                AppLogger.e("MainScreenModel", "Failed to toggle bookmark state: ${e.message}", e)
+                AppLogger.e("MainScreenModel", "Sync failed: ${e.message}", e)
                 snackbarManager.showErrorWithRetry("Couldn't sync bookmarks") {
                     syncBookmarks()
                 }

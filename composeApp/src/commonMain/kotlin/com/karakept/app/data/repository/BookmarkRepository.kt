@@ -50,6 +50,11 @@ class BookmarkRepository(
     private val _syncProgress = MutableStateFlow<com.karakept.app.data.model.SyncProgress>(com.karakept.app.data.model.SyncProgress.Idle)
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> = _syncProgress.asStateFlow()
 
+    /** Resets sync progress to Idle. Used when a sync is cancelled (not failed). */
+    fun resetSyncProgress() {
+        _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+    }
+
     suspend fun syncBookmarks(server: Server): Int =
         executeSyncPipeline(SyncConfiguration.Full(server))
 
@@ -164,7 +169,9 @@ class BookmarkRepository(
         val existing = bookmarkDao.getBookmarkByRemoteId(bookmarkId, serverId) ?: return
 
         try {
-            _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingMetadata(1, 1)
+            // Note: intentionally NOT updating _syncProgress here. This method is called
+            // from a background GlobalScope.launch after createBookmark and should not
+            // interfere with the main sync progress state shown in the UI.
             val dto = remoteDataSource.fetchBookmark(server, existing.originalRemoteId)
 
             // Map DTO to entity, preserving localId and content if not provided in DTO
@@ -240,10 +247,8 @@ class BookmarkRepository(
 
             // Cache hero images (banner/screenshot)
             cacheHeroAssetsForBookmark(server, existing.remoteId, existing.serverId, bannerImageAssetId, screenshotAssetId)
-
-            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
         } catch (e: Exception) {
-            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Sync failed")
+            AppLogger.e("BookmarkRepository", "syncSingleBookmark failed for $bookmarkId: ${e.message}", e)
             throw e
         }
     }
@@ -390,6 +395,10 @@ class BookmarkRepository(
                     cacheHeroAssetsForBookmark = ::cacheHeroAssetsForBookmark
                 )
                 pipeline.execute()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Scope cancelled — not a real error, reset to Idle
+                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+                throw e
             } catch (e: Exception) {
                 AppLogger.e("BookmarkRepo", "Failed to fetch bookmarks: ${e.message}", e)
                 _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
