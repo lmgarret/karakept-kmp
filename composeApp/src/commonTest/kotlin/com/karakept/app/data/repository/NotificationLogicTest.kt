@@ -11,7 +11,8 @@ import kotlin.test.assertTrue
  * Unit tests for [findListsWithNewBookmarks] — the pure notification logic function.
  *
  * Tests the per-list notification query logic (NOTIF-02):
- * given list settings and new bookmarks, which lists should trigger a notification?
+ * given list settings and new bookmarks, which lists should trigger a notification
+ * and with what bookmark count?
  */
 class NotificationLogicTest {
 
@@ -83,8 +84,8 @@ class NotificationLogicTest {
         val result = findListsWithNewBookmarks(settings, bookmarks, lists)
 
         assertEquals(2, result.size)
-        assertTrue(result.any { it.first == "list-a" && it.second == "List A" })
-        assertTrue(result.any { it.first == "list-b" && it.second == "List B" })
+        assertTrue(result.any { it.first == "list-a" && it.second == "List A" && it.third == 1 })
+        assertTrue(result.any { it.first == "list-b" && it.second == "List B" && it.third == 1 })
     }
 
     @Test
@@ -92,7 +93,6 @@ class NotificationLogicTest {
         val settings = mapOf(
             "list-a" to ListSettings(notifyOnNewBookmarks = true)
         )
-        // Bookmarks are in list-b, not list-a
         val bookmarks = listOf(
             makeBookmarkEntity(remoteId = 1L, listIds = "list-b")
         )
@@ -111,7 +111,6 @@ class NotificationLogicTest {
         val settings = mapOf(
             "list-a" to ListSettings(notifyOnNewBookmarks = false)
         )
-        // Bookmark IS in list-a but notifyOnNewBookmarks=false
         val bookmarks = listOf(
             makeBookmarkEntity(remoteId = 1L, listIds = "list-a")
         )
@@ -141,7 +140,6 @@ class NotificationLogicTest {
 
     @Test
     fun bookmarkWithCommaSeparatedListIds_matchesCorrectList() {
-        // Bookmark belongs to multiple lists, one of which has notify=true
         val settings = mapOf(
             "list-x" to ListSettings(notifyOnNewBookmarks = true)
         )
@@ -155,6 +153,49 @@ class NotificationLogicTest {
         val result = findListsWithNewBookmarks(settings, bookmarks, lists)
 
         assertEquals(1, result.size)
-        assertEquals("list-x" to "List X", result.first())
+        assertEquals(Triple("list-x", "List X", 1), result.first())
+    }
+
+    @Test
+    fun multipleBookmarksInSameList_returnsCorrectCount() {
+        val settings = mapOf(
+            "list-a" to ListSettings(notifyOnNewBookmarks = true)
+        )
+        val bookmarks = listOf(
+            makeBookmarkEntity(remoteId = 1L, listIds = "list-a"),
+            makeBookmarkEntity(remoteId = 2L, listIds = "list-a"),
+            makeBookmarkEntity(remoteId = 3L, listIds = "list-a")
+        )
+        val lists = listOf(
+            makeListEntity("list-a", "List A")
+        )
+
+        val result = findListsWithNewBookmarks(settings, bookmarks, lists)
+
+        assertEquals(1, result.size)
+        assertEquals(Triple("list-a", "List A", 3), result.first())
+    }
+
+    @Test
+    fun multipleListsWithDifferentCounts() {
+        val settings = mapOf(
+            "list-a" to ListSettings(notifyOnNewBookmarks = true),
+            "list-b" to ListSettings(notifyOnNewBookmarks = true)
+        )
+        val bookmarks = listOf(
+            makeBookmarkEntity(remoteId = 1L, listIds = "list-a"),
+            makeBookmarkEntity(remoteId = 2L, listIds = "list-a"),
+            makeBookmarkEntity(remoteId = 3L, listIds = "list-b")
+        )
+        val lists = listOf(
+            makeListEntity("list-a", "List A"),
+            makeListEntity("list-b", "List B")
+        )
+
+        val result = findListsWithNewBookmarks(settings, bookmarks, lists)
+
+        assertEquals(2, result.size)
+        assertTrue(result.any { it.first == "list-a" && it.third == 2 })
+        assertTrue(result.any { it.first == "list-b" && it.third == 1 })
     }
 }

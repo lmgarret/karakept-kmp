@@ -50,6 +50,9 @@ class BookmarkRepository(
     private val _syncProgress = MutableStateFlow<com.karakept.app.data.model.SyncProgress>(com.karakept.app.data.model.SyncProgress.Idle)
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> = _syncProgress.asStateFlow()
 
+    /** Bookmarks inserted during the last sync, used for per-list notification counts. */
+    private var _lastSyncNewBookmarks: List<BookmarkEntity> = emptyList()
+
     /** Resets sync progress to Idle. Used when a sync is cancelled (not failed). */
     fun resetSyncProgress() {
         _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
@@ -397,7 +400,9 @@ class BookmarkRepository(
                     fetchRemoteContent = ::fetchRemoteContent,
                     cacheHeroAssetsForBookmark = ::cacheHeroAssetsForBookmark
                 )
-                pipeline.execute()
+                val result = pipeline.execute()
+                _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks
+                result
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Scope cancelled — not a real error, reset to Idle
                 _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
@@ -416,17 +421,19 @@ class BookmarkRepository(
 
     /**
      * After sync, finds lists with notifyOnNewBookmarks=true that received new bookmarks.
-     * Returns list of (listId, listName) pairs for notification dispatch.
+     * Returns list of (listId, listName, count) triples for notification dispatch.
      */
-    suspend fun getListsNeedingNotification(serverId: String): List<Pair<String, String>> {
+    suspend fun getListsNeedingNotification(serverId: String): List<Triple<String, String, Int>> {
         val allSettings = settingsRepository.allListSettings.first()
         val notifyListIds = allSettings.filter { it.value.notifyOnNewBookmarks }.keys
         if (notifyListIds.isEmpty()) return emptyList()
 
-        val allBookmarks = bookmarkDao.getBookmarksForServer(serverId).first()
+        val newBookmarks = _lastSyncNewBookmarks
+        if (newBookmarks.isEmpty()) return emptyList()
+
         val allLists = listDao.getListsForServer(serverId).first()
 
-        return findListsWithNewBookmarks(allSettings, allBookmarks, allLists)
+        return findListsWithNewBookmarks(allSettings, newBookmarks, allLists)
     }
 
     /**
@@ -575,7 +582,7 @@ internal fun findListsWithNewBookmarks(
     allListSettings: Map<String, ListSettings>,
     newBookmarks: List<BookmarkEntity>,
     allLists: List<ListEntity>
-): List<Pair<String, String>> {
+): List<Triple<String, String, Int>> {
     val notifyListIds = allListSettings
         .filter { it.value.notifyOnNewBookmarks }
         .keys
@@ -583,11 +590,12 @@ internal fun findListsWithNewBookmarks(
 
     val listNameMap = allLists.associate { it.remoteId to it.name }
 
-    return notifyListIds.filter { listId ->
-        newBookmarks.any { bookmark ->
+    return notifyListIds.mapNotNull { listId ->
+        val count = newBookmarks.count { bookmark ->
             bookmark.listIds.split(",").map { it.trim() }.contains(listId)
         }
-    }.mapNotNull { listId ->
-        listNameMap[listId]?.let { name -> listId to name }
+        if (count > 0) {
+            listNameMap[listId]?.let { name -> Triple(listId, name, count) }
+        } else null
     }
 }

@@ -76,6 +76,10 @@ internal class BookmarkSyncPipeline(
     private val fetchRemoteContent: suspend (Server, String) -> String?,
     private val cacheHeroAssetsForBookmark: suspend (Server, Long, String, String?, String?) -> Unit
 ) {
+    /** Bookmarks inserted during the last execute() call, available after completion. */
+    var newlyInsertedBookmarks: List<BookmarkEntity> = emptyList()
+        private set
+
     suspend fun execute(): Int {
         // Phase 1: Process pending actions
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Starting
@@ -380,6 +384,9 @@ internal class BookmarkSyncPipeline(
                     entity
                 }
             }
+
+            // Expose newly inserted bookmarks for per-list notification counts
+            newlyInsertedBookmarks = toInsert
 
             // Return the updated entities list for content sync
             return Pair(updatedEntities, newBookmarksCount)

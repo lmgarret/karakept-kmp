@@ -50,7 +50,7 @@ class BackgroundSyncWorker(
             if (newCount > 0 && notificationsEnabled && hasNotificationPermission()) {
                 val listsToNotify = bookmarkRepository.getListsNeedingNotification(server.id)
                 if (listsToNotify.isNotEmpty()) {
-                    showListNotification(listsToNotify.map { it.second })
+                    showListNotification(listsToNotify.map { (_, name, count) -> name to count })
                 }
             }
 
@@ -71,7 +71,7 @@ class BackgroundSyncWorker(
         }
     }
 
-    private fun showListNotification(listNames: List<String>) {
+    private fun showListNotification(listNamesWithCounts: List<Pair<String, Int>>) {
         val notificationManager =
             applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -86,7 +86,9 @@ class BackgroundSyncWorker(
             notificationManager.createNotificationChannel(channel)
         }
 
-        val contentText = "New bookmarks in ${listNames.joinToString(", ")}"
+        val contentText = listNamesWithCounts.joinToString(", ") { (name, count) ->
+            "$count new in $name"
+        }
 
         val notification = NotificationCompat.Builder(applicationContext, LIST_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
