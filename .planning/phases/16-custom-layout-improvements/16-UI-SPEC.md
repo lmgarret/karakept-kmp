@@ -59,12 +59,11 @@ All typography uses `MaterialTheme.typography.*` tokens. No hardcoded sizes.
 | Role | Token | Usage in This Phase |
 |------|-------|---------------------|
 | Section heading | `titleLarge` | Editor section headers ("Show", "Layout", "URL Display", etc.) |
-| Option title | `titleMedium` | Toggle row labels, slider labels |
-| Option label | `bodyLarge` | Radio option primary text, dialog list item primary text |
-| Option description | `bodySmall` | Radio option secondary text, URL display in bookmark cards/lists |
-| Card title | `titleMedium` | Bookmark title in List/Card layouts |
-| Compact title | `bodyMedium` | Bookmark title in compact-style List layouts |
-| Metadata | `bodySmall` | Date, reading time, URL/domain text in bookmark items |
+| Option title / Card title | `titleMedium` | Toggle row labels, slider labels, bookmark title in List/Card layouts |
+| Option label / Content text | `bodyLarge` | Radio option primary text, dialog list item primary text, bookmark title in compact-style List layouts |
+| Option description / Metadata | `bodySmall` | Radio option secondary text, URL display in bookmark cards/lists, date, reading time, URL/domain text in bookmark items |
+
+**Note:** Line height: `MaterialTheme.typography` carries spec-compliant line heights -- no override needed.
 
 **Source:** Existing `LayoutEditorScreen.kt` and `BookmarkLayouts.kt` typography tokens.
 
@@ -87,7 +86,15 @@ All colors use `MaterialTheme.colorScheme.*` tokens. No hardcoded hex values.
 
 Accent reserved for: selected radio button icons in editor, "Create new layout" button icon/text, selection borders on bookmark cards, linear progress indicator.
 
+**Note:** 60/30/10 not applicable -- surface-dominant settings screen; primary used only for accent per reserved-for list.
+
 **Source:** Existing `BookmarkLayouts.kt` and `LayoutEditorScreen.kt` color usage.
+
+---
+
+## Focal Point
+
+The primary visual anchor for `LayoutEditorScreen` is the `PreviewBookmarkItem` composable -- all toggle and radio changes update this live preview, making it the user's reference point for every edit.
 
 ---
 
