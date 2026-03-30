@@ -17,7 +17,24 @@ import kotlinx.coroutines.flow.first
  */
 class DefaultFilterResolver(private val settingsRepository: SettingsRepository) {
 
+    /**
+     * Resolves the startup filter: prefers the last-active filter (persisted on
+     * every filter change) so the user returns to where they left off. Falls back
+     * to the configured "default list" setting on first launch or when the
+     * last-active filter has no data.
+     */
     suspend fun resolve(): FilterConfig {
+        // Try last-active filter first (survives process death).
+        val (lastStatus, lastListId) = combine(
+            settingsRepository.lastActiveFilterStatus,
+            settingsRepository.lastActiveFilterListId
+        ) { s, l -> s to l }.first()
+
+        if (lastStatus != null || lastListId != null) {
+            return buildLastActiveFilter(lastStatus, lastListId)
+        }
+
+        // Fallback: configured default list.
         val (type, id) = combine(
             settingsRepository.defaultListType,
             settingsRepository.defaultListId
@@ -38,6 +55,17 @@ class DefaultFilterResolver(private val settingsRepository: SettingsRepository) 
             } else {
                 FilterConfig()
             }
+        }
+
+        /**
+         * Reconstructs a [FilterConfig] from persisted last-active state.
+         */
+        fun buildLastActiveFilter(status: String?, listId: String?): FilterConfig {
+            val filterStatus = status?.let {
+                try { FilterStatus.valueOf(it) } catch (_: Exception) { FilterStatus.ALL }
+            } ?: FilterStatus.ALL
+            val lists = if (listId != null) listOf(listId) else emptyList()
+            return FilterConfig(status = filterStatus, lists = lists)
         }
     }
 }

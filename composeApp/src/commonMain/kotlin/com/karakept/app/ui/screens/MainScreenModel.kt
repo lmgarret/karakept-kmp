@@ -480,6 +480,7 @@ class MainScreenModel(
                 ListHierarchyUtils.getAncestorIds(filter.lists.first(), lists.value)
         }
         // scrollToTop() removed — resetPaginationAndLoad emits it after the new data is ready
+        persistActiveFilter(filter)
     }
 
     fun applyTagFilter(tag: String, sourceBookmarkId: Long) {
@@ -498,6 +499,16 @@ class MainScreenModel(
         _currentListContext.value = null
         _tagFilterSourceBookmarkId.value = null
         // scrollToTop() removed — resetPaginationAndLoad emits it after the new data is ready
+        persistActiveFilter(FilterConfig())
+    }
+
+    private fun persistActiveFilter(filter: FilterConfig) {
+        screenModelScope.launch {
+            settingsRepository.saveLastActiveFilter(
+                status = filter.status.name,
+                listId = filter.lists.singleOrNull()
+            )
+        }
     }
 
     fun setDefaultList(listId: String) {
