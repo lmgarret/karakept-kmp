@@ -28,10 +28,13 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
+import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.screens.main.BatchDeleteConfirmDialog
 import com.karakept.app.ui.screens.main.BatchListPickerDialog
 import com.karakept.app.ui.screens.main.BatchTagEditorDialog
@@ -107,7 +110,18 @@ object MainScreen : Screen {
                 tagsScrollable = activeLayout?.tagsScrollable ?: false,
                 quickActionPosition = activeLayout?.quickActionPosition
                     ?.let { com.karakept.app.data.model.QuickActionPosition.valueOf(it) }
-                    ?: com.karakept.app.data.model.QuickActionPosition.RIGHT
+                    ?: com.karakept.app.data.model.QuickActionPosition.RIGHT,
+                showDescription = activeLayout?.showDescription ?: true,
+                descriptionPosition = activeLayout?.descriptionPosition
+                    ?.let { DescriptionPosition.fromString(it) }
+                    ?: DescriptionPosition.BELOW_TITLE,
+                showUrl = activeLayout?.showUrl ?: false,
+                urlDisplayMode = activeLayout?.urlDisplayMode
+                    ?.let { UrlDisplayMode.fromString(it) }
+                    ?: UrlDisplayMode.DOMAIN_ONLY,
+                urlPosition = activeLayout?.urlPosition
+                    ?.let { UrlPosition.fromString(it) }
+                    ?: UrlPosition.BELOW_TITLE,
             )
         }
 

@@ -47,14 +47,16 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
+import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.ThumbnailSide
+import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.BookmarkCardLayout
-import com.karakept.app.ui.components.BookmarkCompactListLayout
 import com.karakept.app.ui.components.BookmarkContextMenu
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.BookmarkPlaceholderItem
@@ -93,6 +95,11 @@ internal fun BookmarkListContent(
     metadataPosition: MetadataPosition = MetadataPosition.BELOW,
     tagsScrollable: Boolean = false,
     quickActionPosition: QuickActionPosition = QuickActionPosition.RIGHT,
+    showDescription: Boolean = true,
+    descriptionPosition: DescriptionPosition = DescriptionPosition.BELOW_TITLE,
+    showUrl: Boolean = false,
+    urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
+    urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
     isSelectionMode: Boolean = false,
@@ -470,9 +477,13 @@ internal fun BookmarkListContent(
                                 screenshotUrl = screenshotUrl,
                                 isSelected = isSelected,
                                 tagsScrollable = tagsScrollable,
-                                isActive = isActiveBookmark
+                                isActive = isActiveBookmark,
+                                showDescription = showDescription,
+                                showUrl = showUrl,
+                                urlDisplayMode = urlDisplayMode,
+                                urlPosition = urlPosition,
                             )
-                            LayoutType.LIST -> BookmarkListLayout(
+                            LayoutType.LIST, @Suppress("DEPRECATION") LayoutType.COMPACT_LIST -> BookmarkListLayout(
                                 bookmark = bookmark,
                                 onClick = remember(bookmark.localId, isSelectionMode) {
                                     {
@@ -499,34 +510,12 @@ internal fun BookmarkListContent(
                                 thumbnailSize = thumbnailSize,
                                 metadataPosition = metadataPosition,
                                 tagsScrollable = tagsScrollable,
-                                isActive = isActiveBookmark
-                            )
-                            LayoutType.COMPACT_LIST -> BookmarkCompactListLayout(
-                                bookmark = bookmark,
-                                onClick = remember(bookmark.localId, isSelectionMode) {
-                                    {
-                                        if (isSelectionMode) onBookmarkSelectionToggle(bookmark)
-                                        else onBookmarkClick(bookmark)
-                                    }
-                                },
-                                onLongClick = remember(bookmark.localId, isSelectionMode) {
-                                    if (isSelectionMode) null else { { onBookmarkLongClick(bookmark) } }
-                                },
-                                showReadingTime = showReadingTimeBadge,
-                                showReadingProgress = showReadingProgress,
-                                showTags = showTags,
-                                showDate = showDate,
-                                dateDisplayMode = dateDisplayMode,
-                                dimRead = dimReadBookmarks,
-                                offlineMode = offlineMode,
-                                bannerImageUrl = bannerImageUrl,
-                                screenshotUrl = screenshotUrl,
-                                isSelected = isSelected,
-                                thumbnailSide = thumbnailSide,
-                                showFavicon = showFavicon,
-                                thumbnailSize = thumbnailSize,
-                                metadataPosition = metadataPosition,
-                                tagsScrollable = tagsScrollable
+                                isActive = isActiveBookmark,
+                                showDescription = showDescription,
+                                descriptionPosition = descriptionPosition,
+                                showUrl = showUrl,
+                                urlDisplayMode = urlDisplayMode,
+                                urlPosition = urlPosition,
                             )
                         }
                     }
