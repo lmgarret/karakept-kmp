@@ -89,7 +89,7 @@
 | 13. Smart List & Saving Follow-ups | v1.9.0 | 3/3 | Complete    | 2026-03-26 |
 | 14. UI Interaction Fixes | v1.9.0 | 1/2 | Complete    | 2026-03-28 |
 | 15. Snackbar Undo System | v1.9.0 | 0/2 | Complete    | 2026-03-28 |
-| 16. Custom Layout Improvements | v1.9.0 | 3/3 | Complete   | 2026-03-30 |
+| 16. Custom Layout Improvements | v1.9.0 | 3/3 | Complete    | 2026-03-30 |
 | 17. Desktop 401 Auth Fix | v1.9.0 | 0/? | Planned | — |
 | 18. Pre Diagram Rendering Fix | v1.9.0 | 0/? | Planned | — |
 | 19. Scroll-to-top for List Views | v1.9.0 | 0/? | Planned | — |
