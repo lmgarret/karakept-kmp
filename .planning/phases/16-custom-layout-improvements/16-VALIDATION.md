@@ -38,24 +38,26 @@ created: 2026-03-30
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 16-??-01 | TBD | 0 | UX-02a | unit | `./gradlew :composeApp:desktopTest --tests "*LayoutType*"` | ❌ W0 | ⬜ pending |
-| 16-??-02 | TBD | 0 | UX-02b/c | unit | `./gradlew :composeApp:desktopTest --tests "*BookmarkLayout*"` | ❌ W0 | ⬜ pending |
-| 16-??-03 | TBD | 0 | UX-02d | unit | `./gradlew :composeApp:desktopTest --tests "*Position*"` | ❌ W0 | ⬜ pending |
-| 16-??-04 | TBD | 0 | UX-02e | unit | `./gradlew :composeApp:desktopTest --tests "*UrlUtils*"` | ❌ W0 | ⬜ pending |
-| 16-??-05 | TBD | 0 | UX-02f | unit | `./gradlew :composeApp:desktopTest --tests "*LayoutEditor*"` | ❌ W0 | ⬜ pending |
+| 16-??-01 | TBD | 0 | UX-02a | unit | `./gradlew :composeApp:desktopTest --tests "*LayoutType*"` | W0 | pending |
+| 16-??-02 | TBD | 0 | UX-02b/c | unit | `./gradlew :composeApp:desktopTest --tests "*BookmarkLayout*"` | W0 | pending |
+| 16-??-03 | TBD | 0 | UX-02d | unit | `./gradlew :composeApp:desktopTest --tests "*Position*"` | W0 | pending |
+| 16-??-04 | TBD | 0 | UX-02e | unit | `./gradlew :composeApp:desktopTest --tests "*UrlUtils*"` | W0 | pending |
+| 16-03-T1 | 16-03 | 3 | UX-02f | unit (TDD) | `./gradlew :composeApp:desktopTest --tests "*LayoutEditorScreenModel*"` | Plan 16-03 Task 1 creates it | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/data/model/LayoutTypeTest.kt` — COMPACT_LIST fromString maps to LIST
-- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/data/model/BookmarkLayoutTest.kt` — built-in preset values, new field defaults, serialization round-trip
-- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/data/model/UrlPositionTest.kt` — enum fromString for all values
-- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/data/model/UrlDisplayModeTest.kt` — enum fromString for all values
-- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/data/model/DescriptionPositionTest.kt` — enum fromString for all values
-- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/ui/utils/UrlUtilsTest.kt` — domain extraction from various URL formats
+- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/data/model/LayoutTypeTest.kt` -- COMPACT_LIST fromString maps to LIST
+- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/data/model/BookmarkLayoutTest.kt` -- built-in preset values, new field defaults, serialization round-trip
+- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/data/model/UrlPositionTest.kt` -- enum fromString for all values
+- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/data/model/UrlDisplayModeTest.kt` -- enum fromString for all values
+- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/data/model/DescriptionPositionTest.kt` -- enum fromString for all values
+- [ ] `composeApp/src/commonTest/kotlin/com/karakept/app/ui/utils/UrlUtilsTest.kt` -- domain extraction from various URL formats
+
+**Note:** UX-02f (LayoutEditorScreenModel update functions) is covered by Plan 16-03 Task 1 via TDD -- test file `LayoutEditorScreenModelTest.kt` is created as part of the RED phase before the update functions are implemented.
 
 ---
 
