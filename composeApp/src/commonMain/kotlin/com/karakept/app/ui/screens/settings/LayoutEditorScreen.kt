@@ -261,10 +261,12 @@ private fun LayoutEditorContent(
                 .padding(padding)
         ) {
             // Pinned preview — does not scroll
+            // Card layouts include a 200.dp image area so they need more vertical space
+            val previewMaxHeight = if (LayoutType.fromString(layout.layoutType) == LayoutType.CARD) 420.dp else 280.dp
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 280.dp)
+                    .heightIn(max = previewMaxHeight)
                     .padding(16.dp)
             ) {
                 Text(
