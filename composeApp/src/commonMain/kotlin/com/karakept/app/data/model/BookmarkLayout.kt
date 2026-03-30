@@ -20,6 +20,11 @@ data class BookmarkLayout(
     val metadataPosition: String = MetadataPosition.BELOW.name,
     val tagsScrollable: Boolean = false,
     val quickActionPosition: String = QuickActionPosition.RIGHT.name,
+    val showDescription: Boolean = true,
+    val descriptionPosition: String = DescriptionPosition.BELOW_TITLE.name,
+    val showUrl: Boolean = false,
+    val urlDisplayMode: String = UrlDisplayMode.DOMAIN_ONLY.name,
+    val urlPosition: String = UrlPosition.BELOW_TITLE.name,
     val isBuiltIn: Boolean = false
 ) {
     companion object {
@@ -50,7 +55,8 @@ data class BookmarkLayout(
             name = "Compact List",
             description = "Compact list with title and minimal metadata",
             icon = "List",
-            layoutType = LayoutType.COMPACT_LIST.name,
+            layoutType = LayoutType.LIST.name,
+            showDescription = false,
             showTags = false,
             showDate = true,
             thumbnailSize = 48,
