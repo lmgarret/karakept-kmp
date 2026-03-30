@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.9.0
 milestone_name: Bug Fixes & UX Polish
-status: Ready to execute
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-03-30T15:35:13.745Z"
+status: Phase complete — ready for verification
+stopped_at: "Completed 16-03-PLAN.md (awaiting checkpoint:human-verify)"
+last_updated: "2026-03-30T16:06:22.677Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 9
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 18
-  completed_plans: 16
+  completed_plans: 18
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 ## Current Position
 
 Phase: 16 (custom-layout-improvements) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Accumulated Context
 
@@ -48,6 +48,10 @@ Plan: 2 of 3
 - [Phase 15-snackbar-undo-system]: Used named parameter onUndo= syntax for showSnackbarWithUndo to avoid Kotlin trailing lambda ambiguity
 - [Phase 16-custom-layout-improvements]: Use Ktor io.ktor.http.Url (not java.net.URI) for extractDomain() — consistent with FaviconUtils pattern, works across all KMP targets
 - [Phase 16-custom-layout-improvements]: COMPACT_LIST enum value kept @Deprecated for deserialization compat; fromString() redirects to LIST transparently
+- [Phase 16-custom-layout-improvements]: UrlDisplay implemented as private @Composable in BookmarkLayouts.kt — avoids local composable restrictions, reused by both LIST and CARD renderers
+- [Phase 16-custom-layout-improvements]: COMPACT_LIST merged into LIST branch with comma syntax and @Suppress(DEPRECATION) — exhaustive when without code duplication
+- [Phase 16-custom-layout-improvements]: URL Display Mode sub-options inline in Show card (not separate section) — two options don't warrant own section
+- [Phase 16-custom-layout-improvements]: PerListSettingsScreen: desktop LayoutEditorDialog, mobile navigator.push — matches LayoutsScreen pattern
 
 ### Known Blockers
 
@@ -62,5 +66,5 @@ Plan: 2 of 3
 ## Session Continuity
 
 Last activity: 2026-03-30
-Stopped at: Completed 16-01-PLAN.md
+Stopped at: Completed 16-03-PLAN.md (awaiting checkpoint:human-verify)
 Resume: Execute 14-02-PLAN.md
