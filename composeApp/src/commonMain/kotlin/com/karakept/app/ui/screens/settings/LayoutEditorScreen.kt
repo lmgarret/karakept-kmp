@@ -65,6 +65,7 @@ import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.ThumbnailSide
 import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
 import getPlatform
 import com.karakept.app.data.local.entity.BookmarkEntity
@@ -122,6 +123,7 @@ class LayoutEditorScreenModel(
     fun updateShowUrl(show: Boolean) { _layout.value = _layout.value.copy(showUrl = show) }
     fun updateUrlDisplayMode(mode: UrlDisplayMode) { _layout.value = _layout.value.copy(urlDisplayMode = mode.name) }
     fun updateUrlPosition(pos: UrlPosition) { _layout.value = _layout.value.copy(urlPosition = pos.name) }
+    fun updateUrlIconMode(mode: UrlIconMode) { _layout.value = _layout.value.copy(urlIconMode = mode.name) }
 
     fun save() {
         screenModelScope.launch {
@@ -445,6 +447,22 @@ private fun LayoutEditorContent(
                                 isSelected = UrlDisplayMode.fromString(layout.urlDisplayMode) == UrlDisplayMode.FULL_URL,
                                 onClick = { screenModel.updateUrlDisplayMode(UrlDisplayMode.FULL_URL) }
                             )
+                            HorizontalDivider()
+                            LayoutRadioOption(
+                                title = "Globe icon",
+                                description = "Always show globe icon next to URL",
+                                icon = Icons.Default.Language,
+                                isSelected = UrlIconMode.fromString(layout.urlIconMode) == UrlIconMode.GLOBE_ONLY,
+                                onClick = { screenModel.updateUrlIconMode(UrlIconMode.GLOBE_ONLY) }
+                            )
+                            HorizontalDivider()
+                            LayoutRadioOption(
+                                title = "Site favicon",
+                                description = "Show site favicon next to URL (falls back to globe)",
+                                icon = Icons.Default.Language,
+                                isSelected = UrlIconMode.fromString(layout.urlIconMode) == UrlIconMode.FAVICON,
+                                onClick = { screenModel.updateUrlIconMode(UrlIconMode.FAVICON) }
+                            )
                         }
                         HorizontalDivider()
                         ToggleRow(
@@ -689,6 +707,7 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
     val descriptionPos = DescriptionPosition.fromString(layout.descriptionPosition)
     val urlPos = UrlPosition.fromString(layout.urlPosition)
     val urlMode = UrlDisplayMode.fromString(layout.urlDisplayMode)
+    val urlIconMode = UrlIconMode.fromString(layout.urlIconMode)
     when (layoutType) {
         LayoutType.CARD -> BookmarkCardLayout(
             bookmark = PREVIEW_BOOKMARK,
@@ -704,7 +723,8 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             showDescription = layout.showDescription,
             showUrl = layout.showUrl,
             urlDisplayMode = urlMode,
-            urlPosition = urlPos
+            urlPosition = urlPos,
+            urlIconMode = urlIconMode
         )
         LayoutType.LIST -> BookmarkListLayout(
             bookmark = PREVIEW_BOOKMARK,
@@ -725,7 +745,8 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             descriptionPosition = descriptionPos,
             showUrl = layout.showUrl,
             urlDisplayMode = urlMode,
-            urlPosition = urlPos
+            urlPosition = urlPos,
+            urlIconMode = urlIconMode
         )
         @Suppress("DEPRECATION")
         LayoutType.COMPACT_LIST -> BookmarkListLayout(
@@ -747,7 +768,8 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             descriptionPosition = descriptionPos,
             showUrl = layout.showUrl,
             urlDisplayMode = urlMode,
-            urlPosition = urlPos
+            urlPosition = urlPos,
+            urlIconMode = urlIconMode
         )
     }
 }

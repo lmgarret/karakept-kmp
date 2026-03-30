@@ -25,6 +25,7 @@ data class BookmarkLayout(
     val showUrl: Boolean = false,
     val urlDisplayMode: String = UrlDisplayMode.DOMAIN_ONLY.name,
     val urlPosition: String = UrlPosition.BELOW_TITLE.name,
+    val urlIconMode: String = UrlIconMode.GLOBE_ONLY.name,
     val isBuiltIn: Boolean = false
 ) {
     companion object {

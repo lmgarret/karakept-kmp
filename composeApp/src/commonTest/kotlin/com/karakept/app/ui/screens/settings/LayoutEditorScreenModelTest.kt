@@ -2,6 +2,7 @@ package com.karakept.app.ui.screens.settings
 
 import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.data.repository.SettingsRepository
 import io.mockk.mockk
@@ -83,5 +84,18 @@ class LayoutEditorScreenModelTest {
         screenModel.updateUrlPosition(UrlPosition.METADATA_ROW)
         screenModel.updateUrlPosition(UrlPosition.BELOW_TITLE)
         assertEquals("BELOW_TITLE", screenModel.layout.value.urlPosition)
+    }
+
+    @Test
+    fun updateUrlIconMode_FAVICON_setsUrlIconModeToFAVICON() {
+        screenModel.updateUrlIconMode(UrlIconMode.FAVICON)
+        assertEquals("FAVICON", screenModel.layout.value.urlIconMode)
+    }
+
+    @Test
+    fun updateUrlIconMode_GLOBE_ONLY_setsUrlIconModeToGLOBE_ONLY() {
+        screenModel.updateUrlIconMode(UrlIconMode.FAVICON)
+        screenModel.updateUrlIconMode(UrlIconMode.GLOBE_ONLY)
+        assertEquals("GLOBE_ONLY", screenModel.layout.value.urlIconMode)
     }
 }

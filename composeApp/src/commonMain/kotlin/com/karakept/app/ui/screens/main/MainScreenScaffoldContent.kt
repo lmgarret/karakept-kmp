@@ -31,6 +31,7 @@ import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.SyncProgress
 import com.karakept.app.data.model.ThumbnailSide
 import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.screens.MainScreenModel
@@ -77,6 +78,7 @@ data class MainScreenDisplayConfig(
     val showUrl: Boolean = false,
     val urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
     val urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
+    val urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
 )
 
 /**
@@ -241,6 +243,7 @@ fun MainScreenScaffoldContent(
                 showUrl = displayConfig.showUrl,
                 urlDisplayMode = displayConfig.urlDisplayMode,
                 urlPosition = displayConfig.urlPosition,
+                urlIconMode = displayConfig.urlIconMode,
                 offlineMode = offlineMode || isAutoOffline,
                 pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                 isSelectionMode = isSelectionMode,

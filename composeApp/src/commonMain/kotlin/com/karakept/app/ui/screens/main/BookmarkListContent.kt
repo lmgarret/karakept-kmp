@@ -54,6 +54,7 @@ import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.ThumbnailSide
 import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.BookmarkCardLayout
@@ -100,6 +101,7 @@ internal fun BookmarkListContent(
     showUrl: Boolean = false,
     urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
     urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
+    urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
     isSelectionMode: Boolean = false,
@@ -482,6 +484,7 @@ internal fun BookmarkListContent(
                                 showUrl = showUrl,
                                 urlDisplayMode = urlDisplayMode,
                                 urlPosition = urlPosition,
+                                urlIconMode = urlIconMode,
                             )
                             LayoutType.LIST, @Suppress("DEPRECATION") LayoutType.COMPACT_LIST -> BookmarkListLayout(
                                 bookmark = bookmark,
@@ -516,6 +519,7 @@ internal fun BookmarkListContent(
                                 showUrl = showUrl,
                                 urlDisplayMode = urlDisplayMode,
                                 urlPosition = urlPosition,
+                                urlIconMode = urlIconMode,
                             )
                         }
                     }

@@ -34,6 +34,7 @@ import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.screens.main.BatchDeleteConfirmDialog
 import com.karakept.app.ui.screens.main.BatchListPickerDialog
@@ -122,6 +123,9 @@ object MainScreen : Screen {
                 urlPosition = activeLayout?.urlPosition
                     ?.let { UrlPosition.fromString(it) }
                     ?: UrlPosition.BELOW_TITLE,
+                urlIconMode = activeLayout?.urlIconMode
+                    ?.let { UrlIconMode.fromString(it) }
+                    ?: UrlIconMode.GLOBE_ONLY,
             )
         }
 

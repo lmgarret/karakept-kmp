@@ -48,6 +48,7 @@ import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.ThumbnailSide
 import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.utils.extractDomain
 import com.karakept.app.utils.FaviconUtils
@@ -76,6 +77,7 @@ fun BookmarkCardLayout(
     showUrl: Boolean = false,
     urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
     urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
+    urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
     modifier: Modifier = Modifier
 ) {
     val isFullyRead = bookmark.isRead
@@ -157,7 +159,7 @@ fun BookmarkCardLayout(
                             overflow = TextOverflow.Ellipsis
                         )
                         if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.BELOW_TITLE) {
-                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, modifier = Modifier.padding(top = 4.dp))
+                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(top = 4.dp))
                         }
                         if (showTags && bookmark.tags.isNotBlank()) {
                             BookmarkTagsDisplay(
@@ -194,7 +196,7 @@ fun BookmarkCardLayout(
                                 Spacer(modifier = Modifier.weight(1f))
                             }
                             if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.METADATA_ROW) {
-                                UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, modifier = Modifier.padding(end = 8.dp))
+                                UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(end = 8.dp))
                             }
                             if (showReadingTime) {
                                 if (bookmark.readingTimeMinutes > 0) {
@@ -260,6 +262,7 @@ fun BookmarkListLayout(
     showUrl: Boolean = false,
     urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
     urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
+    urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
     modifier: Modifier = Modifier
 ) {
     val isFullyRead = bookmark.isRead
@@ -339,7 +342,7 @@ fun BookmarkListLayout(
                         }
                         Spacer(modifier = Modifier.weight(1f))
                         if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.METADATA_ROW) {
-                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, modifier = Modifier.padding(end = 8.dp))
+                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(end = 8.dp))
                         }
                         if (showReadingTime) {
                             if (bookmark.readingTimeMinutes > 0) {
@@ -415,7 +418,7 @@ fun BookmarkListLayout(
                             overflow = TextOverflow.Ellipsis
                         )
                         if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.BELOW_TITLE) {
-                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, modifier = Modifier.padding(top = 4.dp))
+                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(top = 4.dp))
                         }
                         if (showDescription && !bookmark.description.isNullOrBlank() && descriptionPosition == DescriptionPosition.BELOW_TITLE) {
                             Text(
@@ -492,7 +495,12 @@ fun BookmarkListLayout(
 }
 
 @Composable
-private fun UrlDisplay(url: String, urlDisplayMode: UrlDisplayMode, modifier: Modifier = Modifier) {
+private fun UrlDisplay(
+    url: String,
+    urlDisplayMode: UrlDisplayMode,
+    urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
+    modifier: Modifier = Modifier
+) {
     val displayText = when (urlDisplayMode) {
         UrlDisplayMode.DOMAIN_ONLY -> extractDomain(url)
         UrlDisplayMode.FULL_URL -> url
@@ -501,12 +509,31 @@ private fun UrlDisplay(url: String, urlDisplayMode: UrlDisplayMode, modifier: Mo
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
     ) {
-        Icon(
-            imageVector = Icons.Default.Language,
-            contentDescription = null,
-            modifier = Modifier.size(14.dp).padding(end = 4.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Box(modifier = Modifier.size(14.dp).padding(end = 4.dp)) {
+            // Globe icon always shown as base/fallback
+            Icon(
+                imageVector = Icons.Default.Language,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            // When FAVICON mode, overlay an AsyncImage that loads the site favicon;
+            // if it fails to load, the globe behind it remains visible.
+            if (urlIconMode == UrlIconMode.FAVICON) {
+                val faviconUrl = FaviconUtils.getFaviconUrl(url)
+                if (faviconUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalPlatformContext.current)
+                            .data(faviconUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+        }
         Text(
             text = displayText,
             style = MaterialTheme.typography.bodySmall,
