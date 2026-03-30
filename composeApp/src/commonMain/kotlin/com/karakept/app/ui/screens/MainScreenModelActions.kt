@@ -6,6 +6,8 @@ import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.domain.action.BookmarkActionEvent
+import com.karakept.app.data.repository.batchMarkRead
+import com.karakept.app.data.repository.batchMarkUnread
 import com.karakept.app.data.repository.flushPendingActions
 import com.karakept.app.utils.AppLogger
 import kotlinx.coroutines.flow.first
@@ -317,21 +319,24 @@ fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: Str
 }
 
 fun MainScreenModel.markAllBookmarksInListAsRead(listId: String) {
+    val unreadInList = allBookmarks.value.filter { bookmark ->
+        val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        bookmarkLists.contains(listId) && !bookmark.isRead
+    }
+    if (unreadInList.isEmpty()) return
     screenModelScope.launch {
-        val serverId = _selectedServer.value?.id ?: return@launch
-        val unreadInList = allBookmarks.value.filter { bookmark ->
-            val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            bookmarkLists.contains(listId) && !bookmark.isRead
-        }
-        unreadInList.forEach { bookmark ->
-            bookmarkActionsRepository.markAsRead(bookmark.remoteId, serverId)
-        }
+        bookmarkActionsRepository.batchMarkRead(unreadInList)
+        val ids = unreadInList.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { list ->
-            list.map {
-                val bookmarkLists = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotEmpty() }
-                if (bookmarkLists.contains(listId)) it.copy(isRead = true) else it
-            }
+            list.map { if (it.remoteId in ids) it.copy(isRead = true) else it }
         }
+        val count = unreadInList.size
+        snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as read", onUndo = {
+            bookmarkActionsRepository.batchMarkUnread(unreadInList, false)
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isRead = false) else it }
+            }
+        })
     }
 }
 

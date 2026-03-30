@@ -28,7 +28,10 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setWindowState
 import com.karakept.app.di.appModule
+import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.services.BackgroundSyncScheduler
+import com.karakept.app.services.DesktopNotificationProvider
+import com.karakept.app.services.NotificationProvider
 import com.kdroid.composetray.tray.api.Tray
 import com.kdroid.composetray.utils.IconRenderProperties
 import com.kdroid.composetray.utils.isMenuBarInDarkMode
@@ -49,6 +52,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.Image
 import org.koin.core.context.startKoin
+import org.koin.dsl.module
 import org.koin.java.KoinJavaComponent.getKoin
 import java.awt.GraphicsEnvironment
 
@@ -180,15 +184,16 @@ fun main(args: Array<String> = emptyArray()) {
     }
 
     startKoin {
-        modules(appModule)
+        modules(appModule, module {
+            single<NotificationProvider> { DesktopNotificationProvider() }
+        })
     }
 
     // Initialize background sync — mirrors KarakeptApp.initializeBackgroundSync() on Android.
     // Uses a long-lived scope that outlives individual Compose compositions.
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val bgSyncSettingsRepo = getKoin().get<SettingsRepository>()
-    val bgSyncBookmarkRepo = getKoin().get<BookmarkRepository>()
-    val bgSyncServerRepo = getKoin().get<ServerRepository>()
+    val bgSyncOrchestrator = getKoin().get<BackgroundSyncOrchestrator>()
     appScope.launch {
         combine(
             bgSyncSettingsRepo.backgroundSyncEnabled,
@@ -199,9 +204,7 @@ fun main(args: Array<String> = emptyArray()) {
                 if (enabled) {
                     BackgroundSyncScheduler.schedule(
                         scope = appScope,
-                        settingsRepository = bgSyncSettingsRepo,
-                        bookmarkRepository = bgSyncBookmarkRepo,
-                        serverRepository = bgSyncServerRepo,
+                        orchestrator = bgSyncOrchestrator,
                         frequencyMinutes = frequency
                     )
                 } else {

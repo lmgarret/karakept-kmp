@@ -18,6 +18,7 @@ import com.karakept.api.client.*
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.secure.SecureCredentialStore
 import com.karakept.app.data.repository.HighlightRepository
+import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.OnboardingScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
@@ -98,6 +99,9 @@ val appModule = module {
     // Action system - centralized action handling with undo support
     single { ActionSnackbarManager() }
     single { BookmarkActionController(get(), get(), get(), get(), get()) }
+
+    // Background sync orchestrator — NotificationProvider is registered per-platform
+    single { BackgroundSyncOrchestrator(get(), get(), get(), get()) }
 
     // Backup & Restore
     single { BackupRepository(get(), get()) }
