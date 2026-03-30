@@ -14,7 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.ViewList
+
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Label
@@ -107,14 +107,6 @@ class DefaultDisplaySettingsScreen : Screen {
                     icon = Icons.AutoMirrored.Filled.List,
                     isSelected = currentLayoutType == LayoutType.LIST,
                     onClick = { screenModel.setLayoutType(LayoutType.LIST) }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                LayoutOption(
-                    title = "Compact List",
-                    description = "Compact rows with title and minimal metadata",
-                    icon = Icons.AutoMirrored.Filled.ViewList,
-                    isSelected = currentLayoutType == LayoutType.COMPACT_LIST,
-                    onClick = { screenModel.setLayoutType(LayoutType.COMPACT_LIST) }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))

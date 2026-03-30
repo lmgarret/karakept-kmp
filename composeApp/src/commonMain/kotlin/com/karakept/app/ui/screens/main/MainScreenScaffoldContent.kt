@@ -23,12 +23,15 @@ import androidx.compose.ui.input.key.type
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
+import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.SyncProgress
 import com.karakept.app.data.model.ThumbnailSide
+import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.clearSelection
@@ -68,7 +71,12 @@ data class MainScreenDisplayConfig(
     val thumbnailSize: Int,
     val metadataPosition: MetadataPosition,
     val tagsScrollable: Boolean,
-    val quickActionPosition: QuickActionPosition
+    val quickActionPosition: QuickActionPosition,
+    val showDescription: Boolean = true,
+    val descriptionPosition: DescriptionPosition = DescriptionPosition.BELOW_TITLE,
+    val showUrl: Boolean = false,
+    val urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
+    val urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
 )
 
 /**
@@ -228,6 +236,11 @@ fun MainScreenScaffoldContent(
                 metadataPosition = displayConfig.metadataPosition,
                 tagsScrollable = displayConfig.tagsScrollable,
                 quickActionPosition = displayConfig.quickActionPosition,
+                showDescription = displayConfig.showDescription,
+                descriptionPosition = displayConfig.descriptionPosition,
+                showUrl = displayConfig.showUrl,
+                urlDisplayMode = displayConfig.urlDisplayMode,
+                urlPosition = displayConfig.urlPosition,
                 offlineMode = offlineMode || isAutoOffline,
                 pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                 isSelectionMode = isSelectionMode,
