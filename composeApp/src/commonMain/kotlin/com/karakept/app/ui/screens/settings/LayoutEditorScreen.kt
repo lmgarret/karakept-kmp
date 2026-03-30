@@ -66,7 +66,7 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.saveLayout
 import com.karakept.app.ui.components.BookmarkCardLayout
-import com.karakept.app.ui.components.BookmarkCompactListLayout
+
 import com.karakept.app.ui.components.BookmarkListLayout
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -625,7 +625,8 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             metadataPosition = metadataPos,
             tagsScrollable = layout.tagsScrollable
         )
-        LayoutType.COMPACT_LIST -> BookmarkCompactListLayout(
+        @Suppress("DEPRECATION")
+        LayoutType.COMPACT_LIST -> BookmarkListLayout(
             bookmark = PREVIEW_BOOKMARK,
             onClick = {},
             showReadingTime = layout.showReadingTime,
