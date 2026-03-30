@@ -35,13 +35,18 @@ Declared values (must be multiples of 4):
 |-------|-------|-------|
 | xs | 4px (2.dp) | Tag chip vertical padding, compact metadata top padding |
 | sm | 8px (8.dp) | Section title bottom padding, radio option start padding, field gaps |
-| md | 12px (12.dp) | Compact layout horizontal padding, radio option horizontal/vertical padding |
+| md | 12px (12.dp) | Compact layout horizontal padding, radio option horizontal/vertical padding, list row spacing |
 | lg | 16px (16.dp) | Card content padding, toggle row horizontal padding, section padding |
 | xl | 24px (24.dp) | Section breaks between editor setting groups |
 | 2xl | 48px (48.dp) | Not used in this phase |
 | 3xl | 80px (80.dp) | Bottom spacer in scrollable editor content |
 
-Exceptions: 10.dp used for compact list row spacing (`Arrangement.spacedBy(10.dp)`), 12.dp for list row spacing (`Arrangement.spacedBy(12.dp)`). These are established patterns -- do not change.
+**Named exceptions (justified):**
+
+| Value | Rationale |
+|-------|-----------|
+| 12dp (md) | Matches established MD3 ListItem padding pattern used throughout the codebase. Also used for `Arrangement.spacedBy(12.dp)` in list row spacing. Not in the standard {4, 8, 16, 24, 32, 48, 64} set but is a multiple of 4 and consistent with existing code. |
+| 80dp (3xl) | Bottom spacer to ensure scrollable editor content clears the FAB. Not in the standard set but is a multiple of 4 and matches the existing `LayoutEditorScreen` pattern. |
 
 **Source:** Existing `LayoutEditorScreen.kt` and `BookmarkLayouts.kt` spacing values.
 
@@ -194,7 +199,7 @@ Options:
 
 | Element | Copy |
 |---------|------|
-| Primary CTA (editor) | "Save" (existing, unchanged) |
+| Primary CTA (editor) | "Save Layout" |
 | Create layout button | "Create new layout" |
 | List type description | "Row layout with configurable thumbnail, title, and metadata" |
 | URL toggle label | "URL" |
@@ -238,7 +243,7 @@ The `COMPACT_LIST` enum value remains in `LayoutType.fromString()` for deseriali
 3. User taps "Create new layout"
 4. Dialog dismisses
 5. Navigator pushes `LayoutEditorScreen(layoutId = null)`
-6. User configures and taps "Save"
+6. User configures and taps "Save Layout"
 7. Navigator pops back to per-list settings
 8. If user opens the layout picker again, the new layout appears in the list (via `allLayouts` StateFlow refresh)
 
