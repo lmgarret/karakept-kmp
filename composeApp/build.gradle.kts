@@ -151,6 +151,10 @@ android {
     sourceSets["main"].res.srcDirs("src/androidMain/res")
     sourceSets["main"].resources.srcDirs("src/commonMain/resources")
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.karakept.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
@@ -158,6 +162,7 @@ android {
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = (project.findProperty("versionName") as String?) ?: "1.0"
         manifestPlaceholders["appName"] = "Karakept"
+        buildConfigField("boolean", "IS_DEV", "false")
     }
     packaging {
         resources {
@@ -186,6 +191,7 @@ android {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
             manifestPlaceholders["appName"] = "Karakept Dev"
+            buildConfigField("boolean", "IS_DEV", "true")
         }
     }
     compileOptions {
