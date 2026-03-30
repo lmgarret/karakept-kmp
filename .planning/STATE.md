@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.9.0
 milestone_name: Bug Fixes & UX Polish
-status: Milestone complete
-stopped_at: Phase 16 context gathered
-last_updated: "2026-03-30T13:16:21.534Z"
-last_activity: 2026-03-28
+status: Ready to execute
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-03-30T15:35:13.745Z"
+last_activity: 2026-03-30
 progress:
   total_phases: 9
   completed_phases: 8
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 18
+  completed_plans: 16
 ---
 
 # Project State
@@ -20,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** A reliable, well-structured bookmark management app with clean code practices
-**Current focus:** Phase 15 — snackbar-undo-system
+**Current focus:** Phase 16 — custom-layout-improvements
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
+Phase: 16 (custom-layout-improvements) — EXECUTING
+Plan: 2 of 3
 
 ## Accumulated Context
 
@@ -46,6 +46,8 @@ Plan: Not started
 - [Phase 14]: Content lambda extraction pattern for PullToRefreshBox/Box conditional wrapping: shared composable lambda with inner Box for BoxScope access
 - [Phase 15-snackbar-undo-system]: undoableAction as CoroutineScope extension for reuse across 4+ call sites; batchSetTags gets plain snackbar (no undo) due to per-bookmark tag complexity
 - [Phase 15-snackbar-undo-system]: Used named parameter onUndo= syntax for showSnackbarWithUndo to avoid Kotlin trailing lambda ambiguity
+- [Phase 16-custom-layout-improvements]: Use Ktor io.ktor.http.Url (not java.net.URI) for extractDomain() — consistent with FaviconUtils pattern, works across all KMP targets
+- [Phase 16-custom-layout-improvements]: COMPACT_LIST enum value kept @Deprecated for deserialization compat; fromString() redirects to LIST transparently
 
 ### Known Blockers
 
@@ -59,6 +61,6 @@ Plan: Not started
 
 ## Session Continuity
 
-Last activity: 2026-03-28
-Stopped at: Phase 16 context gathered
+Last activity: 2026-03-30
+Stopped at: Completed 16-01-PLAN.md
 Resume: Execute 14-02-PLAN.md
