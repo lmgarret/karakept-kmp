@@ -63,7 +63,7 @@ completed: 2026-03-30
 - **Duration:** 18 min
 - **Started:** 2026-03-30T16:00:00Z
 - **Completed:** 2026-03-30T16:18:00Z
-- **Tasks:** 2 (plus checkpoint:human-verify pending)
+- **Tasks:** 3 (Task 1 TDD RED+GREEN, Task 2 per-list button, Task 3 human-verify)
 - **Files modified:** 3
 
 ## Accomplishments
@@ -80,8 +80,9 @@ Each task was committed atomically:
 1. **Task 1 RED: Failing tests for 5 new update functions** - `a5fcae7` (test)
 2. **Task 1 GREEN: Add update functions + full editor UI controls** - `6b3fbe0` (feat)
 3. **Task 2: Create new layout button in per-list picker** - `61a5adc` (feat)
+4. **Fix: Increase card preview max height** - `51ffc6f` (fix)
 
-_Note: TDD task has two commits (RED test fail → GREEN implementation pass)_
+_Note: TDD task has two commits (RED test fail → GREEN implementation pass). Fix commit applied post-checkpoint before user approval._
 
 ## Files Created/Modified
 
@@ -117,8 +118,18 @@ _Note: TDD task has two commits (RED test fail → GREEN implementation pass)_
 
 ---
 
-**Total deviations:** 2 auto-fixed (Rule 3 - Blocking)
-**Impact on plan:** Both required to compile and run tests. No scope creep.
+**3. [Rule 1 - Bug] Increased card preview max height**
+- **Found during:** Task 3 (visual verification)
+- **Issue:** Card preview panel height was too constrained — thumbnail covered content below it, hiding URL and description fields in the live preview
+- **Fix:** Increased `maxHeight` constraint on card preview composable
+- **Files modified:** `ui/screens/settings/LayoutEditorScreen.kt`
+- **Verification:** All 13 visual verification steps passed after fix; user approved
+- **Committed in:** `51ffc6f` (fix commit, post-checkpoint)
+
+---
+
+**Total deviations:** 3 auto-fixed (2 Rule 3 - Blocking, 1 Rule 1 - Bug)
+**Impact on plan:** All fixes necessary for compilability or preview correctness. No scope creep.
 
 ## Issues Encountered
 
@@ -131,9 +142,9 @@ None — all new fields are wired to real implementations. Preview uses live `Bo
 
 ## Next Phase Readiness
 
-- All Phase 16 custom layout improvements are code-complete
-- Pending: visual verification by user (Task 3 checkpoint:human-verify)
-- After visual approval, Phase 16 is complete
+- All Phase 16 custom layout improvements are code-complete and visually verified
+- All 13 verification steps approved by user
+- Phase 16 is fully complete — no blockers
 
 ## Self-Check: PASSED
 
@@ -141,7 +152,7 @@ None — all new fields are wired to real implementations. Preview uses live `Bo
 - `LayoutEditorScreen.kt` contains `fun updateShowDescription` — verified
 - `LayoutEditorScreen.kt` does NOT contain LayoutRadioOption with "Compact" — verified
 - `PerListSettingsScreen.kt` contains "Create new layout" — verified
-- Commits a5fcae7, 6b3fbe0, 61a5adc exist in git log — verified
+- Commits a5fcae7, 6b3fbe0, 61a5adc, 51ffc6f exist in git log — verified
 
 ---
 *Phase: 16-custom-layout-improvements*

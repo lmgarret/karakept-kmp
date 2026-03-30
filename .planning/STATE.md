@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.9.0
 milestone_name: Bug Fixes & UX Polish
 status: Phase complete — ready for verification
-stopped_at: "Completed 16-03-PLAN.md (awaiting checkpoint:human-verify)"
-last_updated: "2026-03-30T16:06:22.677Z"
+stopped_at: Completed 16-03-PLAN.md
+last_updated: "2026-03-30T17:58:39.928Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 9
@@ -52,6 +52,8 @@ Plan: 3 of 3
 - [Phase 16-custom-layout-improvements]: COMPACT_LIST merged into LIST branch with comma syntax and @Suppress(DEPRECATION) — exhaustive when without code duplication
 - [Phase 16-custom-layout-improvements]: URL Display Mode sub-options inline in Show card (not separate section) — two options don't warrant own section
 - [Phase 16-custom-layout-improvements]: PerListSettingsScreen: desktop LayoutEditorDialog, mobile navigator.push — matches LayoutsScreen pattern
+- [Phase 16]: URL Display Mode sub-options inline in Show card (not separate section) — two options don't warrant own section
+- [Phase 16]: PerListSettingsScreen: desktop LayoutEditorDialog, mobile navigator.push — matches LayoutsScreen pattern
 
 ### Known Blockers
 
@@ -66,5 +68,5 @@ Plan: 3 of 3
 ## Session Continuity
 
 Last activity: 2026-03-30
-Stopped at: Completed 16-03-PLAN.md (awaiting checkpoint:human-verify)
+Stopped at: Completed 16-03-PLAN.md
 Resume: Execute 14-02-PLAN.md
