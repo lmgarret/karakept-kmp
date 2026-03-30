@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.9.0
 milestone_name: Bug Fixes & UX Polish
-status: Milestone complete
-stopped_at: Completed 16-03-PLAN.md
-last_updated: "2026-03-30T18:06:49.649Z"
+status: Ready to execute
+stopped_at: "Checkpoint: human-verify Task 2 in 16-04-PLAN.md"
+last_updated: "2026-03-30T20:33:33.616Z"
 last_activity: 2026-03-30
 progress:
   total_phases: 9
   completed_phases: 9
-  total_plans: 18
-  completed_plans: 18
+  total_plans: 19
+  completed_plans: 19
 ---
 
 # Project State
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md (updated 2026-03-25)
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
+Phase: 16 (custom-layout-improvements) — EXECUTING
+Plan: 2 of 4
 
 ## Accumulated Context
 
@@ -54,6 +54,8 @@ Plan: Not started
 - [Phase 16-custom-layout-improvements]: PerListSettingsScreen: desktop LayoutEditorDialog, mobile navigator.push — matches LayoutsScreen pattern
 - [Phase 16]: URL Display Mode sub-options inline in Show card (not separate section) — two options don't warrant own section
 - [Phase 16]: PerListSettingsScreen: desktop LayoutEditorDialog, mobile navigator.push — matches LayoutsScreen pattern
+- [Phase 16]: Globe icon rendered behind favicon AsyncImage in Box for natural fallback without error callbacks
+- [Phase 16]: UrlIconMode stored as String in BookmarkLayout for JSON serialization compat; GLOBE_ONLY default preserves backward compat
 
 ### Known Blockers
 
@@ -68,5 +70,5 @@ Plan: Not started
 ## Session Continuity
 
 Last activity: 2026-03-30
-Stopped at: Completed 16-03-PLAN.md
+Stopped at: Checkpoint: human-verify Task 2 in 16-04-PLAN.md
 Resume: Execute 14-02-PLAN.md
