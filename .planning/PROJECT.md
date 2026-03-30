@@ -41,7 +41,7 @@ A reliable, well-structured bookmark management app with clean code practices.
 - FILT-04: Pull-to-refresh must work on Highlights on mobile (#164)
 - UI-01: Scroll-to-top button must reach the actual top (#168)
 - UX-01: Snackbars for reversible actions must include an Undo button (#166)
-- UX-02: Custom layout improvements (#167)
+- ✓ UX-02: Custom layout improvements (#167) — v1.9.0 Phase 16 (description/URL toggles with position controls, COMPACT_LIST merged into LIST, "Create new layout" in per-list picker)
 - NFR-01: Regression tests for every fix (required by user)
 
 ### Out of Scope
@@ -107,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-26
+*Last updated: 2026-03-30
