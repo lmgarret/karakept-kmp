@@ -57,11 +57,12 @@
   Plans:
   - [ ] 15-01-PLAN.md — Wire undo snackbars to MainScreen swipe, bottom sheet, and batch actions
   - [ ] 15-02-PLAN.md — Wire undo snackbars to BookmarkViewer actions + regression tests
-- [ ] Phase 16: Custom Layout Improvements — UX-02 (#167) — **Plans:** 3 plans
+- [ ] Phase 16: Custom Layout Improvements — UX-02 (#167) — **Plans:** 4 plans
   Plans:
   - [x] 16-01-PLAN.md — Data model foundation: new enums, BookmarkLayout fields, COMPACT_LIST migration, URL utility (TDD)
   - [x] 16-02-PLAN.md — Rendering pipeline: update renderers, wire display config, delete COMPACT_LIST code paths
   - [x] 16-03-PLAN.md — Editor UI: new toggles/sections + per-list picker "Create new layout" button
+  - [ ] 16-04-PLAN.md — Gap closure: configurable URL icon mode (globe vs favicon)
 - [ ] Phase 17: Desktop 401 Auth Fix — AUTH-01 (#173)
 - [ ] Phase 18: Pre Diagram Rendering Fix — RENDER-01 (#171)
 - [ ] Phase 19: Scroll-to-top for List Views — UI-02 (#172)
@@ -89,7 +90,7 @@
 | 13. Smart List & Saving Follow-ups | v1.9.0 | 3/3 | Complete    | 2026-03-26 |
 | 14. UI Interaction Fixes | v1.9.0 | 1/2 | Complete    | 2026-03-28 |
 | 15. Snackbar Undo System | v1.9.0 | 0/2 | Complete    | 2026-03-28 |
-| 16. Custom Layout Improvements | v1.9.0 | 3/3 | Complete    | 2026-03-30 |
+| 16. Custom Layout Improvements | v1.9.0 | 3/4 | In Progress | — |
 | 17. Desktop 401 Auth Fix | v1.9.0 | 0/? | Planned | — |
 | 18. Pre Diagram Rendering Fix | v1.9.0 | 0/? | Planned | — |
 | 19. Scroll-to-top for List Views | v1.9.0 | 0/? | Planned | — |
