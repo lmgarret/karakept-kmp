@@ -38,6 +38,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.painter.Painter
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
@@ -78,6 +80,9 @@ fun BookmarkCardLayout(
     urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
     urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
     urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
+    faviconByLinkSize: Int = 16,
+    faviconPainter: Painter? = null,
+    thumbnailPainter: Painter? = null,
     modifier: Modifier = Modifier
 ) {
     val isFullyRead = bookmark.isRead
@@ -115,10 +120,20 @@ fun BookmarkCardLayout(
         Box {
             Box(modifier = Modifier.alpha(alpha)) {
                 Column {
-                    // Determine which image to show: bannerImageUrl (server asset) → screenshotUrl → emoji
-                    val effectiveImageUrl = bannerImageUrl ?: screenshotUrl
+                    // Determine which image to show: thumbnailPainter (bundled) → bannerImageUrl (server asset) → screenshotUrl → emoji
+                    val effectiveImageUrl = if (thumbnailPainter == null) bannerImageUrl ?: screenshotUrl else null
 
-                    if (effectiveImageUrl != null) {
+                    if (thumbnailPainter != null) {
+                        Image(
+                            painter = thumbnailPainter,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else if (effectiveImageUrl != null) {
                         AsyncImage(
                             model = ImageRequest.Builder(LocalPlatformContext.current)
                                 .data(effectiveImageUrl)
@@ -159,7 +174,7 @@ fun BookmarkCardLayout(
                             overflow = TextOverflow.Ellipsis
                         )
                         if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.BELOW_TITLE) {
-                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(top = 4.dp))
+                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, iconSize = faviconByLinkSize, faviconPainter = faviconPainter, modifier = Modifier.padding(top = 4.dp))
                         }
                         if (showTags && bookmark.tags.isNotBlank()) {
                             BookmarkTagsDisplay(
@@ -196,7 +211,7 @@ fun BookmarkCardLayout(
                                 Spacer(modifier = Modifier.weight(1f))
                             }
                             if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.METADATA_ROW) {
-                                UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(end = 8.dp))
+                                UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, iconSize = faviconByLinkSize, faviconPainter = faviconPainter, modifier = Modifier.padding(end = 8.dp))
                             }
                             if (showReadingTime) {
                                 if (bookmark.readingTimeMinutes > 0) {
@@ -263,6 +278,9 @@ fun BookmarkListLayout(
     urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
     urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
     urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
+    faviconByLinkSize: Int = 16,
+    faviconPainter: Painter? = null,
+    thumbnailPainter: Painter? = null,
     modifier: Modifier = Modifier
 ) {
     val isFullyRead = bookmark.isRead
@@ -342,7 +360,7 @@ fun BookmarkListLayout(
                         }
                         Spacer(modifier = Modifier.weight(1f))
                         if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.METADATA_ROW) {
-                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(end = 8.dp))
+                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, iconSize = faviconByLinkSize, faviconPainter = faviconPainter, modifier = Modifier.padding(end = 8.dp))
                         }
                         if (showReadingTime) {
                             if (bookmark.readingTimeMinutes > 0) {
@@ -360,9 +378,18 @@ fun BookmarkListLayout(
                             .size(thumbSizeDp)
                             .clip(RoundedCornerShape(cornerDp))
                     ) {
-                        val effectiveImageUrl = bannerImageUrl ?: screenshotUrl
+                        val effectiveImageUrl = if (thumbnailPainter == null) bannerImageUrl ?: screenshotUrl else null
 
-                        if (effectiveImageUrl != null) {
+                        if (thumbnailPainter != null) {
+                            Image(
+                                painter = thumbnailPainter,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else if (effectiveImageUrl != null) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalPlatformContext.current)
                                     .data(effectiveImageUrl)
@@ -374,7 +401,7 @@ fun BookmarkListLayout(
                                     .fillMaxSize()
                                     .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentScale = ContentScale.Crop,
-                                filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
+                                filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium
                             )
                         } else {
                             Box(
@@ -392,17 +419,27 @@ fun BookmarkListLayout(
                         }
 
                         if (showFavicon) {
-                            AsyncImage(
-                                model = FaviconUtils.getFaviconUrl(bookmark.url),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(faviconPaddingDp)
-                                    .size(faviconSizeDp)
-                                    .clip(RoundedCornerShape(faviconSizeDp / 4))
-                                    .background(Color.White.copy(alpha = 0.5f)),
-                                contentScale = ContentScale.Fit
-                            )
+                            val faviconModifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(faviconPaddingDp)
+                                .size(faviconSizeDp)
+                                .clip(RoundedCornerShape(faviconSizeDp / 4))
+                                .background(Color.White.copy(alpha = 0.5f))
+                            if (faviconPainter != null) {
+                                Image(
+                                    painter = faviconPainter,
+                                    contentDescription = null,
+                                    modifier = faviconModifier,
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                AsyncImage(
+                                    model = FaviconUtils.getFaviconUrl(bookmark.url),
+                                    contentDescription = null,
+                                    modifier = faviconModifier,
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
                         }
                     }
                 }
@@ -418,7 +455,7 @@ fun BookmarkListLayout(
                             overflow = TextOverflow.Ellipsis
                         )
                         if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.BELOW_TITLE) {
-                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(top = 4.dp))
+                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, iconSize = faviconByLinkSize, faviconPainter = faviconPainter, modifier = Modifier.padding(top = 4.dp))
                         }
                         if (showDescription && !bookmark.description.isNullOrBlank() && descriptionPosition == DescriptionPosition.BELOW_TITLE) {
                             Text(
@@ -499,6 +536,8 @@ private fun UrlDisplay(
     url: String,
     urlDisplayMode: UrlDisplayMode,
     urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
+    iconSize: Int = 16,
+    faviconPainter: Painter? = null,
     modifier: Modifier = Modifier
 ) {
     val displayText = when (urlDisplayMode) {
@@ -509,30 +548,49 @@ private fun UrlDisplay(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
     ) {
-        Box(modifier = Modifier.size(14.dp).padding(end = 4.dp)) {
-            // Globe icon always shown as base/fallback
-            Icon(
-                imageVector = Icons.Default.Language,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            // When FAVICON mode, overlay an AsyncImage that loads the site favicon;
-            // if it fails to load, the globe behind it remains visible.
-            if (urlIconMode == UrlIconMode.FAVICON) {
-                val faviconUrl = FaviconUtils.getFaviconUrl(url)
-                if (faviconUrl.isNotBlank()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalPlatformContext.current)
-                            .data(faviconUrl)
-                            .crossfade(true)
-                            .build(),
+        if (urlIconMode != UrlIconMode.NONE) {
+            Box(modifier = Modifier.size(iconSize.dp)) {
+                if (urlIconMode == UrlIconMode.FAVICON) {
+                    if (faviconPainter != null) {
+                        Image(
+                            painter = faviconPainter,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        val faviconUrl = FaviconUtils.getFaviconUrl(url)
+                        if (faviconUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalPlatformContext.current)
+                                    .data(faviconUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        } else {
+                            // Fallback to globe when no favicon URL available
+                            Icon(
+                                imageVector = Icons.Default.Language,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    // GLOBE_ONLY mode
+                    Icon(
+                        imageVector = Icons.Default.Language,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
+            Spacer(modifier = Modifier.size(4.dp))
         }
         Text(
             text = displayText,

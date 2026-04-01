@@ -102,6 +102,7 @@ internal fun BookmarkListContent(
     urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
     urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
     urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
+    faviconByLinkSize: Int = 16,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
     isSelectionMode: Boolean = false,
@@ -485,6 +486,7 @@ internal fun BookmarkListContent(
                                 urlDisplayMode = urlDisplayMode,
                                 urlPosition = urlPosition,
                                 urlIconMode = urlIconMode,
+                                faviconByLinkSize = faviconByLinkSize,
                             )
                             LayoutType.LIST, @Suppress("DEPRECATION") LayoutType.COMPACT_LIST -> BookmarkListLayout(
                                 bookmark = bookmark,
@@ -520,6 +522,7 @@ internal fun BookmarkListContent(
                                 urlDisplayMode = urlDisplayMode,
                                 urlPosition = urlPosition,
                                 urlIconMode = urlIconMode,
+                                faviconByLinkSize = faviconByLinkSize,
                             )
                         }
                     }

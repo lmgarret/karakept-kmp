@@ -126,6 +126,7 @@ object MainScreen : Screen {
                 urlIconMode = activeLayout?.urlIconMode
                     ?.let { UrlIconMode.fromString(it) }
                     ?: UrlIconMode.GLOBE_ONLY,
+                faviconByLinkSize = activeLayout?.faviconByLinkSize ?: 16,
             )
         }
 

@@ -14,7 +14,6 @@ object FaviconUtils {
             val domain = Url(url).host
             "https://icons.duckduckgo.com/ip3/$domain.ico"
         } catch (e: Exception) {
-            // Fallback if URL parsing fails, though unlikely with valid URLs
             ""
         }
     }

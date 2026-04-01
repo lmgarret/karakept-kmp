@@ -16,6 +16,11 @@ class UrlIconModeTest {
     }
 
     @Test
+    fun `fromString NONE returns NONE`() {
+        assertEquals(UrlIconMode.NONE, UrlIconMode.fromString("NONE"))
+    }
+
+    @Test
     fun `fromString invalid value returns GLOBE_ONLY default`() {
         assertEquals(UrlIconMode.GLOBE_ONLY, UrlIconMode.fromString("UNKNOWN"))
     }

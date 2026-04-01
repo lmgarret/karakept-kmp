@@ -90,6 +90,8 @@ class QuickFilterCountsTest {
         every { settingsRepository.activeServerId } returns flowOf("server-1")
         every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
         every { settingsRepository.defaultListId } returns flowOf(null)
+        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
+        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         // Relaxed mocks for SharedFlow<T> emit Nothing values causing KotlinNothingValueException;

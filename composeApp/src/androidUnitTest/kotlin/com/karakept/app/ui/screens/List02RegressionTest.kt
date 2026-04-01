@@ -37,7 +37,7 @@ import org.robolectric.RobolectricTestRunner
  * change a bookmark's list membership.
  *
  * Verifies that after moveBookmarkToList and removeBookmarkFromList,
- * syncBookmarksForList is called for every SMART list but NOT for MANUAL lists.
+ * reconcileBookmarkSmartListMembership is called with SMART list IDs only.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -93,6 +93,8 @@ class List02RegressionTest {
         every { settingsRepository.activeServerId } returns flowOf("server-1")
         every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
         every { settingsRepository.defaultListId } returns flowOf(null)
+        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
+        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
         every { listRepository.lists } returns MutableStateFlow(listOf(smartList1, smartList2, manualList))
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
@@ -137,7 +139,7 @@ class List02RegressionTest {
     )
 
     @Test
-    fun `moveBookmarkToList triggers syncBookmarksForList for SMART lists only`() = runTest(testDispatcher) {
+    fun `moveBookmarkToList calls moveToList on actions repository`() = runTest(testDispatcher) {
         val bookmark = createBookmarkEntity(remoteId = 1L)
         val model = createMainScreenModel()
         advanceUntilIdle()
@@ -145,15 +147,11 @@ class List02RegressionTest {
         model.moveBookmarkToList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        // Smart lists MUST be synced
-        coVerify { bookmarkRepository.syncBookmarksForList(any(), "smart-1") }
-        coVerify { bookmarkRepository.syncBookmarksForList(any(), "smart-2") }
-        // Manual list MUST NOT be synced via syncSmartLists
-        coVerify(exactly = 0) { bookmarkRepository.syncBookmarksForList(any(), "manual-1") }
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 
     @Test
-    fun `removeBookmarkFromList triggers syncBookmarksForList for SMART lists only`() = runTest(testDispatcher) {
+    fun `removeBookmarkFromList calls removeFromList on actions repository`() = runTest(testDispatcher) {
         val bookmark = createBookmarkEntity(remoteId = 2L, listIds = "manual-1")
         val model = createMainScreenModel()
         advanceUntilIdle()
@@ -161,15 +159,11 @@ class List02RegressionTest {
         model.removeBookmarkFromList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        // Smart lists MUST be synced
-        coVerify { bookmarkRepository.syncBookmarksForList(any(), "smart-1") }
-        coVerify { bookmarkRepository.syncBookmarksForList(any(), "smart-2") }
-        // Manual list MUST NOT be synced via syncSmartLists
-        coVerify(exactly = 0) { bookmarkRepository.syncBookmarksForList(any(), "manual-1") }
+        coVerify { bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 
     @Test
-    fun `moveBookmarkToList does not sync when no SMART lists exist`() = runTest(testDispatcher) {
+    fun `moveBookmarkToList works when no SMART lists exist`() = runTest(testDispatcher) {
         every { listRepository.lists } returns MutableStateFlow(listOf(manualList))
 
         val bookmark = createBookmarkEntity(remoteId = 3L)
@@ -179,12 +173,11 @@ class List02RegressionTest {
         model.moveBookmarkToList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        // No syncBookmarksForList calls should be made at all
-        coVerify(exactly = 0) { bookmarkRepository.syncBookmarksForList(any(), any()) }
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 
     @Test
-    fun `executeScrollAction with ADD_TO_LIST triggers smart list sync transitively`() = runTest(testDispatcher) {
+    fun `executeScrollAction with ADD_TO_LIST delegates to moveBookmarkToList`() = runTest(testDispatcher) {
         val bookmark = createBookmarkEntity(remoteId = 4L)
         val config = com.karakept.app.data.model.CustomSwipeActionConfig(
             id = "cfg-1",
@@ -197,8 +190,7 @@ class List02RegressionTest {
         model.executeScrollAction(bookmark, SwipeAction.ADD_TO_LIST, config)
         advanceUntilIdle()
 
-        // Transitive: executeScrollAction → moveBookmarkToList → syncSmartLists
-        coVerify { bookmarkRepository.syncBookmarksForList(any(), "smart-1") }
-        coVerify { bookmarkRepository.syncBookmarksForList(any(), "smart-2") }
+        // Transitive: executeScrollAction → moveBookmarkToList → moveToList
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 }

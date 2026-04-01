@@ -79,6 +79,7 @@ data class MainScreenDisplayConfig(
     val urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
     val urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
     val urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
+    val faviconByLinkSize: Int = 16,
 )
 
 /**
@@ -244,6 +245,7 @@ fun MainScreenScaffoldContent(
                 urlDisplayMode = displayConfig.urlDisplayMode,
                 urlPosition = displayConfig.urlPosition,
                 urlIconMode = displayConfig.urlIconMode,
+                faviconByLinkSize = displayConfig.faviconByLinkSize,
                 offlineMode = offlineMode || isAutoOffline,
                 pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                 isSelectionMode = isSelectionMode,
