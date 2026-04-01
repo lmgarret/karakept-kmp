@@ -70,7 +70,7 @@
 - [ ] Phase 21: Desktop List Settings in Second Panel — DESK-01 (#175)
 - [ ] Phase 22: Dev Release Icon & Label Differentiation — DEV-01 (#177) — **Plans:** 1 plan
   Plans:
-  - [ ] 22-01-PLAN.md — Cherry-pick and validate DEV icon/label draft implementation
+  - [x] 22-01-PLAN.md — Cherry-pick and validate DEV icon/label draft implementation
 
 </details>
 
@@ -99,14 +99,14 @@
 | 19. Scroll-to-top for List Views | v1.9.0 | 0/? | Planned | — |
 | 20. Home List Auto-expand in Drawer | v1.9.0 | 0/? | Planned | — |
 | 21. Desktop List Settings in Second Panel | v1.9.0 | 0/? | Planned | — |
-| 22. Dev Release Icon & Label Differentiation | v1.9.0 | 0/1 | Planned | — |
+| 22. Dev Release Icon & Label Differentiation | v1.9.0 | 1/1 | Complete    | 2026-04-01 |
 
 ### Phase 22: Dev Release Icon & Label Differentiation — DEV-01 (#177)
 
 **Goal:** Add a distinct app icon and "DEV" label for dev/debug builds so users can distinguish dev from production installs
 **Requirements**: DEV-01
 **Depends on:** None
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 22-01-PLAN.md — Cherry-pick and validate DEV icon/label draft implementation
