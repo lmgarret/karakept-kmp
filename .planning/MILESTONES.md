@@ -1,5 +1,31 @@
 # Milestones
 
+## v1.9.0 Bug Fixes & UX Polish (Shipped: 2026-04-01)
+
+**Phases completed:** 6 phases (12-16, 22), 13 plans
+**Files modified:** 99 | **Lines:** +7,760 / -588
+**Timeline:** 7 days (2026-03-25 → 2026-04-01)
+
+**Key accomplishments:**
+
+- Fixed racy StateFlow read causing always-zero digest notification count and added per-list notifications (NOTIF-01/02)
+- Fixed smart list sync after quick-action changes (computeStaleListRemovals) and MainScreenModel factory{} scope leak (SAVE-02/LIST-02)
+- Migrated all pull-to-refresh to MD3 PullToRefreshBox and fixed scroll-to-top offset with explicit (0, 0) positioning
+- Added undo snackbars to all reversible actions across main screen (swipe, bottom sheet, batch) and bookmark viewer (FAB + desktop top bar)
+- Redesigned custom layout system: description/URL toggles with position controls, favicon support, COMPACT_LIST merged into LIST, "Create new layout" in per-list picker
+- Added DEV build icon ribbon and in-app badge for dev/production build differentiation (Android + Desktop)
+
+### Known Gaps
+
+Phases 17-21 were planned in the roadmap but never executed (requirements not in REQUIREMENTS.md):
+- Phase 17: Desktop 401 Auth Fix (AUTH-01, #173) — deferred
+- Phase 18: Pre Diagram Rendering Fix (RENDER-01, #171) — deferred
+- Phase 19: Scroll-to-top for List Views (UI-02, #172) — deferred
+- Phase 20: Home List Auto-expand in Drawer (NAV-01, #174) — deferred
+- Phase 21: Desktop List Settings in Second Panel (DESK-01, #175) — deferred
+
+---
+
 ## v1.9.0 Platform Health (Shipped: 2026-03-25)
 
 **Phases completed:** 4 phases, 7 plans

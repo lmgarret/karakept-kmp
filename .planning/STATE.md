@@ -2,60 +2,36 @@
 gsd_state_version: 1.0
 milestone: v1.9.0
 milestone_name: Bug Fixes & UX Polish
-status: Milestone complete
-stopped_at: "Checkpoint: human-verify Task 2 in 16-04-PLAN.md"
-last_updated: "2026-04-01T07:30:03.464Z"
+status: Milestone complete — archived
+stopped_at: ""
+last_updated: "2026-04-01T10:30:00.000Z"
 last_activity: 2026-04-01
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 13
+  completed_plans: 13
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-25)
+See: .planning/PROJECT.md (updated 2026-04-01)
 
 **Core value:** A reliable, well-structured bookmark management app with clean code practices
-**Current focus:** Phase 16 — custom-layout-improvements
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
+Milestone v1.9.0 shipped. Next: `/gsd:new-milestone`
 
 ## Accumulated Context
 
 ### Decisions
 
 - Milestone versioning aligned to git tags (v1.7.0 → v1.8.0 → v1.9.0)
-- Platform Health milestone archived as internal (no git tag); v1.9.0 is the next real release
-- FakeDataStore uses MutableStateFlow + Mutex for thread-safe atomic updates
-- Real-object pattern for extension functions accessing internal members
-- Internal top-level function extraction for composable logic to enable commonTest
-- [Phase 12-notification-fixes]: Return value propagation from BookmarkSyncPipeline.execute() instead of racy StateFlow read fixes NOTIF-01 digest notification count
-- [Phase 12-notification-fixes]: Post-sync DB query approach for NOTIF-02 per-list notification - keeps Int return type, findListsWithNewBookmarks extracted as internal top-level function for commonTest
-- [Phase 13-smart-list-saving-followups]: syncSmartLists fires in parallel nested launches per smart list — independent, fire-and-forget, errors logged not surfaced
-- [Phase 13]: MainScreenModel changed from Koin single{} to factory{} — each Voyager Navigator gets a fresh instance with its own screenModelScope
-- [Phase 13]: Pure function extraction for reconciliation logic (computeStaleListRemovals) enables direct commonTest testing without mocks
-- [Phase 14]: PullToRefreshBox wraps entire Scaffold content including empty state for consistent PTR gesture
-- [Phase 14]: Explicit scrollOffset=0 in all animateScrollToItem(0) sites to prevent residual pixel offset
-- [Phase 14]: Content lambda extraction pattern for PullToRefreshBox/Box conditional wrapping: shared composable lambda with inner Box for BoxScope access
-- [Phase 15-snackbar-undo-system]: undoableAction as CoroutineScope extension for reuse across 4+ call sites; batchSetTags gets plain snackbar (no undo) due to per-bookmark tag complexity
-- [Phase 15-snackbar-undo-system]: Used named parameter onUndo= syntax for showSnackbarWithUndo to avoid Kotlin trailing lambda ambiguity
-- [Phase 16-custom-layout-improvements]: Use Ktor io.ktor.http.Url (not java.net.URI) for extractDomain() — consistent with FaviconUtils pattern, works across all KMP targets
-- [Phase 16-custom-layout-improvements]: COMPACT_LIST enum value kept @Deprecated for deserialization compat; fromString() redirects to LIST transparently
-- [Phase 16-custom-layout-improvements]: UrlDisplay implemented as private @Composable in BookmarkLayouts.kt — avoids local composable restrictions, reused by both LIST and CARD renderers
-- [Phase 16-custom-layout-improvements]: COMPACT_LIST merged into LIST branch with comma syntax and @Suppress(DEPRECATION) — exhaustive when without code duplication
-- [Phase 16-custom-layout-improvements]: URL Display Mode sub-options inline in Show card (not separate section) — two options don't warrant own section
-- [Phase 16-custom-layout-improvements]: PerListSettingsScreen: desktop LayoutEditorDialog, mobile navigator.push — matches LayoutsScreen pattern
-- [Phase 16]: URL Display Mode sub-options inline in Show card (not separate section) — two options don't warrant own section
-- [Phase 16]: PerListSettingsScreen: desktop LayoutEditorDialog, mobile navigator.push — matches LayoutsScreen pattern
-- [Phase 16]: Globe icon rendered behind favicon AsyncImage in Box for natural fallback without error callbacks
-- [Phase 16]: UrlIconMode stored as String in BookmarkLayout for JSON serialization compat; GLOBE_ONLY default preserves backward compat
+- Phases 17-21 deferred from v1.9.0 to next milestone (desktop auth, pre rendering, scroll-to-top for lists, drawer auto-expand, desktop list settings)
 
 ### Known Blockers
 
@@ -70,5 +46,5 @@ Plan: Not started
 ## Session Continuity
 
 Last activity: 2026-04-01
-Stopped at: Checkpoint: human-verify Task 2 in 16-04-PLAN.md
-Resume: Execute 14-02-PLAN.md
+Stopped at: Milestone v1.9.0 archived
+Resume: `/gsd:new-milestone`

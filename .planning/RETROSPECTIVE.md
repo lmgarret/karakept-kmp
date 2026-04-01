@@ -83,6 +83,50 @@
 
 ---
 
+## Milestone: v1.9.0 — Bug Fixes & UX Polish
+
+**Shipped:** 2026-04-01
+**Phases:** 6 (12-16, 22) | **Plans:** 13
+
+### What Was Built
+- Notification fixes: digest notification count via return value propagation, per-list notifications via post-sync DB query
+- Smart list sync: computeStaleListRemovals for ForList reconciliation, MainScreenModel factory{} scope fix
+- UI interaction polish: MD3 PullToRefreshBox migration (all deprecated pullRefresh removed), explicit scroll-to-top offset fix
+- Undo snackbar system: shared undoableAction helper wired to 12 reversible action sites across main screen and bookmark viewer
+- Custom layout redesign: description/URL toggles with position controls, favicon support via globe fallback, COMPACT_LIST merged into LIST, "Create new layout" in per-list picker
+- DEV build differentiation: Android adaptive icon ribbon, Desktop -Dkarakept.dev mode, cross-platform isDevBuild expect/actual
+
+### What Worked
+- **undoableAction as CoroutineScope extension**: clean reuse across 4+ call sites, named parameter onUndo= syntax avoided Kotlin trailing lambda ambiguity
+- **PullToRefreshBox wrapping entire Scaffold content**: consistent PTR gesture across all states (loaded, empty, error) without duplication
+- **Globe icon behind favicon AsyncImage in Box**: natural fallback without onError callbacks — clean composable pattern
+- **TDD across Phase 16**: 26 tests written before implementation for data model foundation; all 4 plans followed RED-GREEN cycle
+- **Cherry-pick strategy for Phase 22**: adopting a draft implementation from another branch saved significant implementation time
+
+### What Was Inefficient
+- **5 phases deferred (17-21)**: requirements added to ROADMAP after REQUIREMENTS.md was finalized — should define requirements before expanding scope
+- **Phase plan checkboxes vs actual execution**: several ROADMAP plan entries showed [ ] while SUMMARY.md existed — progress table was more accurate than plan checkbox state
+- **Stale VERIFICATION.md references**: 3 phases had verification docs referencing pre-refactor method names (post-execution refactors not reflected)
+
+### Patterns Established
+- undoableAction CoroutineScope extension for reusable undo snackbar pattern
+- Content lambda extraction for PullToRefreshBox/Box conditional wrapping
+- Globe-behind-favicon Box pattern for composable icon fallback
+- isDevBuild expect/actual for cross-platform build flavor detection
+- @Deprecated enum value with fromString() redirect for deserialization backward compat
+
+### Key Lessons
+1. **Define requirements before expanding roadmap scope** — phases 17-21 were added ad hoc and never formalized, creating audit gaps at milestone close
+2. **Cherry-pick from draft branches when available** — Phase 22 showed this can collapse implementation to validation-only
+3. **VERIFICATION.md should be updated after post-phase refactors** — 3 phases had stale method references; add a "verify docs" step after any refactor touching verified code
+
+### Cost Observations
+- Model mix: ~70% sonnet (execution), ~30% opus (planning/research/retrospective)
+- Sessions: ~10 sessions across 6 phases
+- Notable: Phase 16 (4 plans, most complex) benefited from TDD — each plan was self-contained with clear pass/fail criteria
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -91,7 +135,8 @@
 |-----------|--------|-------|------------|
 | v1.7.0 | 2 | 3 | Established GSD workflow baseline |
 | v1.8.0 | 5 | 10 | Added Wave 0 TDD, pure function extraction pattern, Robolectric infrastructure |
-| v1.9.0 | 4 | 7 | Coverage sprint: real-object pattern, FakeDataStore, internal function extraction |
+| Platform Health | 4 | 7 | Coverage sprint: real-object pattern, FakeDataStore, internal function extraction |
+| v1.9.0 | 6 | 13 | Undo system, custom layout redesign, MD3 migration, DEV build differentiation |
 
 ### Cumulative Quality
 
@@ -99,10 +144,12 @@
 |-----------|-----------|------------|-------|
 | v1.7.0 | ~26 | ~5,800 | Existing desktopTest + commonTest coverage |
 | v1.8.0 | 36 | ~7,254 | Added androidUnitTest infrastructure, ScreenModel + Compose UI tests |
-| v1.9.0 | 43+ | ~9,200+ | Coverage sprint: utilities, action layer, sync pipeline, settings, UI components, backup |
+| Platform Health | 43+ | ~9,200+ | Coverage sprint: utilities, action layer, sync pipeline, settings, UI components, backup |
+| v1.9.0 | 43+ | ~9,200+ | Regression tests for all bug fixes + new features |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. **Small, independent phases execute faster and with fewer blockers** — all 3 milestones validated this; resist the urge to batch unrelated work
-2. **Pure function extraction pays test dividends immediately** — first established in v1.8.0, confirmed in v1.9.0; should be default practice going forward
-3. **Dedicated coverage sprints are more efficient than interspersed test phases** — v1.9.0 proved that a focused "no features, only tests" milestone is clean and fast to plan and execute
+1. **Small, independent phases execute faster and with fewer blockers** — all 4 milestones validated this; resist the urge to batch unrelated work
+2. **Pure function extraction pays test dividends immediately** — established v1.8.0, confirmed Platform Health + v1.9.0; default practice
+3. **Dedicated coverage sprints are more efficient than interspersed test phases** — Platform Health proved this; v1.9.0 tests were per-feature rather than sprint-based
+4. **Define requirements before expanding roadmap scope** — v1.9.0 deferred 5 phases because they were added without formal requirements; always update REQUIREMENTS.md first
