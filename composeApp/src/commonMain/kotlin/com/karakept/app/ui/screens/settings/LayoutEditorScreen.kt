@@ -72,8 +72,9 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.saveLayout
 import com.karakept.app.ui.components.BookmarkCardLayout
-
 import com.karakept.app.ui.components.BookmarkListLayout
+import karakept.composeapp.generated.resources.Res
+import karakept.composeapp.generated.resources.preview_thumbnail
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -81,6 +82,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.painterResource
 
 class LayoutEditorScreenModel(
     private val settingsRepository: SettingsRepository
@@ -113,7 +115,6 @@ class LayoutEditorScreenModel(
     fun updateDimReadBookmarks(dim: Boolean) { _layout.value = _layout.value.copy(dimReadBookmarks = dim) }
     fun updateDateDisplayMode(mode: DateDisplayMode) { _layout.value = _layout.value.copy(dateDisplayMode = mode.name) }
     fun updateThumbnailSide(side: ThumbnailSide) { _layout.value = _layout.value.copy(thumbnailSide = side.name) }
-    fun updateShowFavicon(show: Boolean) { _layout.value = _layout.value.copy(showFavicon = show) }
     fun updateThumbnailSize(size: Int) { _layout.value = _layout.value.copy(thumbnailSize = size) }
     fun updateMetadataPosition(position: MetadataPosition) { _layout.value = _layout.value.copy(metadataPosition = position.name) }
     fun updateTagsScrollable(v: Boolean) { _layout.value = _layout.value.copy(tagsScrollable = v) }
@@ -123,7 +124,31 @@ class LayoutEditorScreenModel(
     fun updateShowUrl(show: Boolean) { _layout.value = _layout.value.copy(showUrl = show) }
     fun updateUrlDisplayMode(mode: UrlDisplayMode) { _layout.value = _layout.value.copy(urlDisplayMode = mode.name) }
     fun updateUrlPosition(pos: UrlPosition) { _layout.value = _layout.value.copy(urlPosition = pos.name) }
-    fun updateUrlIconMode(mode: UrlIconMode) { _layout.value = _layout.value.copy(urlIconMode = mode.name) }
+    /** Master favicon toggle: ON defaults to GLOBE_ONLY, OFF clears both. */
+    fun updateFaviconEnabled(enabled: Boolean) {
+        if (enabled) {
+            if (UrlIconMode.fromString(_layout.value.urlIconMode) == UrlIconMode.NONE) {
+                _layout.value = _layout.value.copy(urlIconMode = UrlIconMode.GLOBE_ONLY.name)
+            }
+        } else {
+            _layout.value = _layout.value.copy(showFavicon = false, urlIconMode = UrlIconMode.NONE.name)
+        }
+    }
+    /** Independently toggle the "on thumbnail" favicon. */
+    fun updateShowFavicon(show: Boolean) {
+        _layout.value = _layout.value.copy(showFavicon = show)
+    }
+    /** Set the by-link icon mode (GLOBE_ONLY or FAVICON). */
+    fun updateUrlIconMode(mode: UrlIconMode) {
+        _layout.value = _layout.value.copy(urlIconMode = mode.name)
+    }
+    fun updateFaviconByLinkSize(size: Int) {
+        _layout.value = _layout.value.copy(faviconByLinkSize = size)
+    }
+    @Deprecated("Use updateFaviconEnabled / updateShowFavicon / updateUrlIconMode")
+    fun updateFaviconMode(showFavicon: Boolean, urlIconMode: UrlIconMode) {
+        _layout.value = _layout.value.copy(showFavicon = showFavicon, urlIconMode = urlIconMode.name)
+    }
 
     fun save() {
         screenModelScope.launch {
@@ -146,8 +171,8 @@ private val PREVIEW_BOOKMARK = BookmarkEntity(
     remoteId = -1L,
     originalRemoteId = "preview",
     serverId = "preview",
-    url = "https://example.com/article",
-    title = "Example Article Title",
+    url = "https://karakeep.app/article/bookmarking-best-practices",
+    title = "Bookmarking Best Practices",
     content = null,
     imageUrl = null,
     bannerImageAssetId = null,
@@ -287,412 +312,375 @@ private fun LayoutEditorContent(
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
-                verticalArrangement = Arrangement.Top
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // Layout name + description
-                Text(
-                    text = "Layout Info",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                OutlinedTextField(
-                    value = layout.name,
-                    onValueChange = { screenModel.updateName(it) },
-                    label = { Text("Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = layout.description ?: "",
-                    onValueChange = { screenModel.updateDescription(it) },
-                    label = { Text("Description (optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                val isList = layout.layoutType != LayoutType.CARD.name
+                val urlIconMode = UrlIconMode.fromString(layout.urlIconMode)
+                val faviconEnabled = layout.showFavicon || urlIconMode != UrlIconMode.NONE
 
-                Spacer(modifier = Modifier.height(24.dp))
+                // ── Layout Info ───────────────────────────────────────────────
+                SettingsSection(title = "Layout Info") {
+                    OutlinedTextField(
+                        value = layout.name,
+                        onValueChange = { screenModel.updateName(it) },
+                        label = { Text("Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = layout.description ?: "",
+                        onValueChange = { screenModel.updateDescription(it) },
+                        label = { Text("Description (optional)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
-                // Layout
-                Text(
-                    text = "Layout",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column {
-                        LayoutRadioOption(
-                            title = "Card",
-                            description = "Large hero images with title below",
-                            icon = Icons.Default.Window,
-                            isSelected = layout.layoutType == LayoutType.CARD.name,
-                            onClick = { screenModel.updateLayoutType(LayoutType.CARD) }
-                        )
-                        HorizontalDivider()
-                        LayoutRadioOption(
-                            title = "List",
-                            description = "Row layout with configurable thumbnail, title, and metadata",
-                            icon = Icons.AutoMirrored.Filled.ViewList,
-                            isSelected = layout.layoutType == LayoutType.LIST.name,
-                            onClick = { screenModel.updateLayoutType(LayoutType.LIST) }
-                        )
+                // ── Layout Type ───────────────────────────────────────────────
+                SettingsSection(title = "Layout Type") {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            LayoutRadioOption(
+                                title = "Card",
+                                description = "Large hero image with title and metadata below",
+                                icon = Icons.Default.Window,
+                                isSelected = layout.layoutType == LayoutType.CARD.name,
+                                onClick = { screenModel.updateLayoutType(LayoutType.CARD) }
+                            )
+                            HorizontalDivider()
+                            LayoutRadioOption(
+                                title = "List",
+                                description = "Row layout with thumbnail, title, and metadata",
+                                icon = Icons.AutoMirrored.Filled.ViewList,
+                                isSelected = isList,
+                                onClick = { screenModel.updateLayoutType(LayoutType.LIST) }
+                            )
+                        }
                     }
                 }
 
-                // Thumbnail settings — only for LIST and COMPACT_LIST
-                if (layout.layoutType != LayoutType.CARD.name) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = "Thumbnail",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column {
-                            // Thumbnail Position
-                            LayoutRadioOption(
-                                title = "Left",
-                                description = "Thumbnail on the left side",
-                                icon = Icons.AutoMirrored.Filled.ViewList,
-                                isSelected = layout.thumbnailSide == ThumbnailSide.LEFT.name,
-                                onClick = { screenModel.updateThumbnailSide(ThumbnailSide.LEFT) }
-                            )
-                            HorizontalDivider()
-                            LayoutRadioOption(
-                                title = "Right",
-                                description = "Thumbnail on the right side",
-                                icon = Icons.AutoMirrored.Filled.ViewList,
-                                isSelected = layout.thumbnailSide == ThumbnailSide.RIGHT.name,
-                                onClick = { screenModel.updateThumbnailSide(ThumbnailSide.RIGHT) }
-                            )
-                            HorizontalDivider()
-                            // Thumbnail Size slider
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                // ── Thumbnail (list only) ─────────────────────────────────────
+                if (isList) {
+                    SettingsSection(title = "Thumbnail") {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column {
+                                LayoutRadioOption(
+                                    title = "Left",
+                                    description = "Thumbnail on the left side",
+                                    icon = Icons.AutoMirrored.Filled.ViewList,
+                                    isSelected = layout.thumbnailSide == ThumbnailSide.LEFT.name,
+                                    onClick = { screenModel.updateThumbnailSide(ThumbnailSide.LEFT) }
+                                )
+                                HorizontalDivider()
+                                LayoutRadioOption(
+                                    title = "Right",
+                                    description = "Thumbnail on the right side",
+                                    icon = Icons.AutoMirrored.Filled.ViewList,
+                                    isSelected = layout.thumbnailSide == ThumbnailSide.RIGHT.name,
+                                    onClick = { screenModel.updateThumbnailSide(ThumbnailSide.RIGHT) }
+                                )
+                                HorizontalDivider()
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp)
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.Photo,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(end = 16.dp)
-                                        )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Photo,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(end = 16.dp)
+                                            )
+                                            Text("Size", style = MaterialTheme.typography.titleMedium)
+                                        }
                                         Text(
-                                            text = "Size",
-                                            style = MaterialTheme.typography.titleMedium
+                                            text = "${layout.thumbnailSize}dp",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    Text(
-                                        text = "${layout.thumbnailSize}dp",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    Slider(
+                                        value = layout.thumbnailSize.toFloat(),
+                                        onValueChange = { screenModel.updateThumbnailSize(it.toInt()) },
+                                        valueRange = 32f..120f,
+                                        steps = 10,
+                                        modifier = Modifier.padding(top = 4.dp)
                                     )
                                 }
-                                Slider(
-                                    value = layout.thumbnailSize.toFloat(),
-                                    onValueChange = { screenModel.updateThumbnailSize(it.toInt()) },
-                                    valueRange = 32f..120f,
-                                    steps = 10,
-                                    modifier = Modifier.padding(top = 4.dp)
+                            }
+                        }
+                    }
+                }
+
+                // ── Description ───────────────────────────────────────────────
+                SettingsSection(title = "Description") {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            ToggleRow(
+                                icon = Icons.Default.Notes,
+                                title = "Show description",
+                                checked = layout.showDescription,
+                                onCheckedChange = { screenModel.updateShowDescription(it) }
+                            )
+                            if (layout.showDescription && isList) {
+                                HorizontalDivider()
+                                SubsectionHeader("Position")
+                                SimpleRadioOption(
+                                    title = "Below title",
+                                    isSelected = DescriptionPosition.fromString(layout.descriptionPosition) == DescriptionPosition.BELOW_TITLE,
+                                    onClick = { screenModel.updateDescriptionPosition(DescriptionPosition.BELOW_TITLE) }
+                                )
+                                SimpleRadioOption(
+                                    title = "Above metadata",
+                                    isSelected = DescriptionPosition.fromString(layout.descriptionPosition) == DescriptionPosition.ABOVE_METADATA,
+                                    onClick = { screenModel.updateDescriptionPosition(DescriptionPosition.ABOVE_METADATA) }
                                 )
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // What to show
-                Text(
-                    text = "Show",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column {
-                        ToggleRow(
-                            icon = Icons.Default.Notes,
-                            title = "Description",
-                            checked = layout.showDescription,
-                            onCheckedChange = { screenModel.updateShowDescription(it) }
-                        )
-                        HorizontalDivider()
-                        ToggleRow(
-                            icon = Icons.Default.Link,
-                            title = "URL",
-                            checked = layout.showUrl,
-                            onCheckedChange = { screenModel.updateShowUrl(it) }
-                        )
-                        if (layout.showUrl) {
-                            HorizontalDivider()
-                            LayoutRadioOption(
-                                title = "Domain only",
-                                description = "e.g., github.com",
+                // ── Link ──────────────────────────────────────────────────────
+                SettingsSection(title = "Link") {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            ToggleRow(
                                 icon = Icons.Default.Link,
-                                isSelected = UrlDisplayMode.fromString(layout.urlDisplayMode) == UrlDisplayMode.DOMAIN_ONLY,
-                                onClick = { screenModel.updateUrlDisplayMode(UrlDisplayMode.DOMAIN_ONLY) }
+                                title = "Show link",
+                                checked = layout.showUrl,
+                                onCheckedChange = { screenModel.updateShowUrl(it) }
                             )
-                            HorizontalDivider()
-                            LayoutRadioOption(
-                                title = "Full URL",
-                                description = "e.g., https://github.com/repo/...",
-                                icon = Icons.Default.Link,
-                                isSelected = UrlDisplayMode.fromString(layout.urlDisplayMode) == UrlDisplayMode.FULL_URL,
-                                onClick = { screenModel.updateUrlDisplayMode(UrlDisplayMode.FULL_URL) }
-                            )
-                            HorizontalDivider()
-                            LayoutRadioOption(
-                                title = "Globe icon",
-                                description = "Always show globe icon next to URL",
-                                icon = Icons.Default.Language,
-                                isSelected = UrlIconMode.fromString(layout.urlIconMode) == UrlIconMode.GLOBE_ONLY,
-                                onClick = { screenModel.updateUrlIconMode(UrlIconMode.GLOBE_ONLY) }
-                            )
-                            HorizontalDivider()
-                            LayoutRadioOption(
-                                title = "Site favicon",
-                                description = "Show site favicon next to URL (falls back to globe)",
-                                icon = Icons.Default.Language,
-                                isSelected = UrlIconMode.fromString(layout.urlIconMode) == UrlIconMode.FAVICON,
-                                onClick = { screenModel.updateUrlIconMode(UrlIconMode.FAVICON) }
-                            )
+                            if (layout.showUrl) {
+                                HorizontalDivider()
+                                SubsectionHeader("Format")
+                                SimpleRadioOption(
+                                    title = "Domain only",
+                                    description = "e.g., karakeep.app",
+                                    isSelected = UrlDisplayMode.fromString(layout.urlDisplayMode) == UrlDisplayMode.DOMAIN_ONLY,
+                                    onClick = { screenModel.updateUrlDisplayMode(UrlDisplayMode.DOMAIN_ONLY) }
+                                )
+                                SimpleRadioOption(
+                                    title = "Full URL",
+                                    description = "e.g., https://karakeep.app/article/...",
+                                    isSelected = UrlDisplayMode.fromString(layout.urlDisplayMode) == UrlDisplayMode.FULL_URL,
+                                    onClick = { screenModel.updateUrlDisplayMode(UrlDisplayMode.FULL_URL) }
+                                )
+                                HorizontalDivider()
+                                SubsectionHeader("Position")
+                                SimpleRadioOption(
+                                    title = "Below title",
+                                    isSelected = UrlPosition.fromString(layout.urlPosition) == UrlPosition.BELOW_TITLE,
+                                    onClick = { screenModel.updateUrlPosition(UrlPosition.BELOW_TITLE) }
+                                )
+                                SimpleRadioOption(
+                                    title = "In metadata row",
+                                    isSelected = UrlPosition.fromString(layout.urlPosition) == UrlPosition.METADATA_ROW,
+                                    onClick = { screenModel.updateUrlPosition(UrlPosition.METADATA_ROW) }
+                                )
+                            }
                         }
-                        HorizontalDivider()
+                    }
+                }
+
+                // ── Favicon ───────────────────────────────────────────────────
+                SettingsSection(title = "Favicon") {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            ToggleRow(
+                                icon = Icons.Default.Language,
+                                title = "Show favicon",
+                                checked = faviconEnabled,
+                                onCheckedChange = { screenModel.updateFaviconEnabled(it) }
+                            )
+                            if (faviconEnabled) {
+                                if (isList) {
+                                    HorizontalDivider()
+                                    SubsectionHeader("Placement")
+                                    ToggleRow(
+                                        icon = null,
+                                        title = "On thumbnail",
+                                        checked = layout.showFavicon,
+                                        onCheckedChange = { screenModel.updateShowFavicon(it) }
+                                    )
+                                }
+                                HorizontalDivider()
+                                SubsectionHeader("By link")
+                                SimpleRadioOption(
+                                    title = "Globe icon",
+                                    isSelected = urlIconMode == UrlIconMode.GLOBE_ONLY,
+                                    onClick = { screenModel.updateUrlIconMode(UrlIconMode.GLOBE_ONLY) }
+                                )
+                                SimpleRadioOption(
+                                    title = "Site favicon",
+                                    isSelected = urlIconMode == UrlIconMode.FAVICON,
+                                    onClick = { screenModel.updateUrlIconMode(UrlIconMode.FAVICON) }
+                                )
+                                if (urlIconMode != UrlIconMode.NONE) {
+                                    HorizontalDivider()
+                                    SubsectionHeader("Icon size")
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("${layout.faviconByLinkSize}dp", style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Slider(
+                                            value = layout.faviconByLinkSize.toFloat(),
+                                            onValueChange = { screenModel.updateFaviconByLinkSize(it.toInt()) },
+                                            valueRange = 10f..24f,
+                                            steps = 6
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Date ──────────────────────────────────────────────────────
+                SettingsSection(title = "Date") {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            ToggleRow(
+                                icon = Icons.Default.CalendarToday,
+                                title = "Show date",
+                                checked = layout.showDate,
+                                onCheckedChange = { screenModel.updateShowDate(it) }
+                            )
+                            if (layout.showDate) {
+                                HorizontalDivider()
+                                SubsectionHeader("Format")
+                                SimpleRadioOption(
+                                    title = "Relative",
+                                    description = "e.g., 33m ago, 2h ago",
+                                    isSelected = layout.dateDisplayMode == DateDisplayMode.ELAPSED.name,
+                                    onClick = { screenModel.updateDateDisplayMode(DateDisplayMode.ELAPSED) }
+                                )
+                                SimpleRadioOption(
+                                    title = "Absolute",
+                                    description = "e.g., 2024-01-15",
+                                    isSelected = layout.dateDisplayMode == DateDisplayMode.ABSOLUTE.name,
+                                    onClick = { screenModel.updateDateDisplayMode(DateDisplayMode.ABSOLUTE) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── Reading Time ──────────────────────────────────────────────
+                SettingsSection(title = "Reading Time") {
+                    Card(modifier = Modifier.fillMaxWidth()) {
                         ToggleRow(
                             icon = Icons.Outlined.MenuBook,
-                            title = "Reading Time",
+                            title = "Show reading time",
                             checked = layout.showReadingTime,
                             onCheckedChange = { screenModel.updateShowReadingTime(it) }
                         )
-                        HorizontalDivider()
-                        ToggleRow(
-                            icon = Icons.Default.CalendarToday,
-                            title = "Date",
-                            checked = layout.showDate,
-                            onCheckedChange = { screenModel.updateShowDate(it) }
-                        )
-                        HorizontalDivider()
-                        ToggleRow(
-                            icon = Icons.Default.Label,
-                            title = "Tags",
-                            checked = layout.showTags,
-                            onCheckedChange = { screenModel.updateShowTags(it) }
-                        )
-                        if (layout.showTags) {
-                            HorizontalDivider()
+                    }
+                }
+
+                // ── Tags ──────────────────────────────────────────────────────
+                SettingsSection(title = "Tags") {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column {
                             ToggleRow(
-                                icon = Icons.AutoMirrored.Filled.List,
-                                title = "Scrollable Tags",
-                                checked = layout.tagsScrollable,
-                                onCheckedChange = { screenModel.updateTagsScrollable(it) }
+                                icon = Icons.Default.Label,
+                                title = "Show tags",
+                                checked = layout.showTags,
+                                onCheckedChange = { screenModel.updateShowTags(it) }
                             )
-                        }
-                        HorizontalDivider()
-                        ToggleRow(
-                            icon = Icons.Default.Language,
-                            title = "Favicon",
-                            checked = layout.showFavicon,
-                            onCheckedChange = { screenModel.updateShowFavicon(it) }
-                        )
-                    }
-                }
-
-                // Metadata position — only for LIST and COMPACT_LIST
-                if (layout.layoutType != LayoutType.CARD.name) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = "Metadata Position",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column {
-                            LayoutRadioOption(
-                                title = "Below",
-                                description = "Tags, date and reading time below thumbnail and text",
-                                icon = Icons.AutoMirrored.Filled.List,
-                                isSelected = layout.metadataPosition == MetadataPosition.BELOW.name,
-                                onClick = { screenModel.updateMetadataPosition(MetadataPosition.BELOW) }
-                            )
-                            HorizontalDivider()
-                            LayoutRadioOption(
-                                title = "Beside",
-                                description = "Tags, date and reading time beside the thumbnail, under the title",
-                                icon = Icons.Default.VerticalSplit,
-                                isSelected = layout.metadataPosition == MetadataPosition.BESIDE.name,
-                                onClick = { screenModel.updateMetadataPosition(MetadataPosition.BESIDE) }
-                            )
-                            HorizontalDivider()
-                            LayoutRadioOption(
-                                title = "Above",
-                                description = "Tags, date and reading time above the thumbnail and text",
-                                icon = Icons.AutoMirrored.Filled.List,
-                                isSelected = layout.metadataPosition == MetadataPosition.ABOVE.name,
-                                onClick = { screenModel.updateMetadataPosition(MetadataPosition.ABOVE) }
-                            )
-                        }
-                    }
-                }
-
-                // URL Position — only when showUrl is true
-                if (layout.showUrl) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = "URL Position",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        LayoutRadioOption(
-                            title = "Below title",
-                            description = "URL appears between title and description",
-                            icon = Icons.Default.Link,
-                            isSelected = UrlPosition.fromString(layout.urlPosition) == UrlPosition.BELOW_TITLE,
-                            onClick = { screenModel.updateUrlPosition(UrlPosition.BELOW_TITLE) }
-                        )
-                        HorizontalDivider()
-                        LayoutRadioOption(
-                            title = "In metadata row",
-                            description = "URL appears alongside date and reading time",
-                            icon = Icons.Default.Link,
-                            isSelected = UrlPosition.fromString(layout.urlPosition) == UrlPosition.METADATA_ROW,
-                            onClick = { screenModel.updateUrlPosition(UrlPosition.METADATA_ROW) }
-                        )
-                    }
-                }
-
-                // Description Position — only for LIST type when showDescription is true (per D-03)
-                if (LayoutType.fromString(layout.layoutType) == LayoutType.LIST && layout.showDescription) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = "Description Position",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        LayoutRadioOption(
-                            title = "Below title",
-                            description = "Description appears under the title text",
-                            icon = Icons.Default.Notes,
-                            isSelected = DescriptionPosition.fromString(layout.descriptionPosition) == DescriptionPosition.BELOW_TITLE,
-                            onClick = { screenModel.updateDescriptionPosition(DescriptionPosition.BELOW_TITLE) }
-                        )
-                        HorizontalDivider()
-                        LayoutRadioOption(
-                            title = "Above metadata",
-                            description = "Description appears between title area and metadata row",
-                            icon = Icons.Default.Notes,
-                            isSelected = DescriptionPosition.fromString(layout.descriptionPosition) == DescriptionPosition.ABOVE_METADATA,
-                            onClick = { screenModel.updateDescriptionPosition(DescriptionPosition.ABOVE_METADATA) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Customization
-                Text(
-                    text = "Customization",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column {
-                        ToggleRow(
-                            icon = Icons.Default.VisibilityOff,
-                            title = "Dim Read Bookmarks",
-                            checked = layout.dimReadBookmarks,
-                            onCheckedChange = { screenModel.updateDimReadBookmarks(it) }
-                        )
-                    }
-                }
-
-                // Quick Action Position — desktop only
-                if (getPlatform().isDesktop) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = "Quick Action Position",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column {
-                            LayoutRadioOption(
-                                title = "Left",
-                                description = "Quick action buttons on the left side",
-                                icon = Icons.AutoMirrored.Filled.ViewList,
-                                isSelected = layout.quickActionPosition == QuickActionPosition.LEFT.name,
-                                onClick = { screenModel.updateQuickActionPosition(QuickActionPosition.LEFT) }
-                            )
-                            HorizontalDivider()
-                            LayoutRadioOption(
-                                title = "Right",
-                                description = "Quick action buttons on the right side",
-                                icon = Icons.AutoMirrored.Filled.ViewList,
-                                isSelected = layout.quickActionPosition == QuickActionPosition.RIGHT.name,
-                                onClick = { screenModel.updateQuickActionPosition(QuickActionPosition.RIGHT) }
-                            )
-                        }
-                    }
-                }
-
-                if (layout.showDate) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { screenModel.updateDateDisplayMode(DateDisplayMode.ELAPSED) }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = layout.dateDisplayMode == DateDisplayMode.ELAPSED.name,
-                                    onClick = { screenModel.updateDateDisplayMode(DateDisplayMode.ELAPSED) }
+                            if (layout.showTags) {
+                                HorizontalDivider()
+                                ToggleRow(
+                                    icon = null,
+                                    title = "Scrollable",
+                                    checked = layout.tagsScrollable,
+                                    onCheckedChange = { screenModel.updateTagsScrollable(it) }
                                 )
-                                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                                    Text("Relative date", style = MaterialTheme.typography.bodyLarge)
-                                    Text("e.g., 33m ago, 2h ago", style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                if (layout.dateDisplayMode == DateDisplayMode.ELAPSED.name) {
-                                    Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                            HorizontalDivider()
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { screenModel.updateDateDisplayMode(DateDisplayMode.ABSOLUTE) }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = layout.dateDisplayMode == DateDisplayMode.ABSOLUTE.name,
-                                    onClick = { screenModel.updateDateDisplayMode(DateDisplayMode.ABSOLUTE) }
-                                )
-                                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                                    Text("Absolute date", style = MaterialTheme.typography.bodyLarge)
-                                    Text("e.g., 2024-01-15", style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                if (layout.dateDisplayMode == DateDisplayMode.ABSOLUTE.name) {
-                                    Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
-                                }
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(80.dp))
+                // ── Metadata Position (list only) ─────────────────────────────
+                if (isList) {
+                    SettingsSection(title = "Metadata Position") {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column {
+                                LayoutRadioOption(
+                                    title = "Below",
+                                    description = "Tags, date and reading time below thumbnail and text",
+                                    icon = Icons.AutoMirrored.Filled.List,
+                                    isSelected = layout.metadataPosition == MetadataPosition.BELOW.name,
+                                    onClick = { screenModel.updateMetadataPosition(MetadataPosition.BELOW) }
+                                )
+                                HorizontalDivider()
+                                LayoutRadioOption(
+                                    title = "Beside",
+                                    description = "Tags, date and reading time beside the thumbnail, under the title",
+                                    icon = Icons.Default.VerticalSplit,
+                                    isSelected = layout.metadataPosition == MetadataPosition.BESIDE.name,
+                                    onClick = { screenModel.updateMetadataPosition(MetadataPosition.BESIDE) }
+                                )
+                                HorizontalDivider()
+                                LayoutRadioOption(
+                                    title = "Above",
+                                    description = "Tags, date and reading time above the thumbnail and text",
+                                    icon = Icons.AutoMirrored.Filled.List,
+                                    isSelected = layout.metadataPosition == MetadataPosition.ABOVE.name,
+                                    onClick = { screenModel.updateMetadataPosition(MetadataPosition.ABOVE) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── Appearance ────────────────────────────────────────────────
+                SettingsSection(title = "Appearance") {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            ToggleRow(
+                                icon = Icons.Default.VisibilityOff,
+                                title = "Dim read bookmarks",
+                                checked = layout.dimReadBookmarks,
+                                onCheckedChange = { screenModel.updateDimReadBookmarks(it) }
+                            )
+                            if (getPlatform().isDesktop) {
+                                HorizontalDivider()
+                                LayoutRadioOption(
+                                    title = "Quick actions — Left",
+                                    description = "Quick action buttons on the left side",
+                                    icon = Icons.AutoMirrored.Filled.ViewList,
+                                    isSelected = layout.quickActionPosition == QuickActionPosition.LEFT.name,
+                                    onClick = { screenModel.updateQuickActionPosition(QuickActionPosition.LEFT) }
+                                )
+                                HorizontalDivider()
+                                LayoutRadioOption(
+                                    title = "Quick actions — Right",
+                                    description = "Quick action buttons on the right side",
+                                    icon = Icons.AutoMirrored.Filled.ViewList,
+                                    isSelected = layout.quickActionPosition == QuickActionPosition.RIGHT.name,
+                                    onClick = { screenModel.updateQuickActionPosition(QuickActionPosition.RIGHT) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(56.dp))
             }
         }
     }
@@ -708,6 +696,7 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
     val urlPos = UrlPosition.fromString(layout.urlPosition)
     val urlMode = UrlDisplayMode.fromString(layout.urlDisplayMode)
     val urlIconMode = UrlIconMode.fromString(layout.urlIconMode)
+    val previewThumbnail = painterResource(Res.drawable.preview_thumbnail)
     when (layoutType) {
         LayoutType.CARD -> BookmarkCardLayout(
             bookmark = PREVIEW_BOOKMARK,
@@ -719,12 +708,15 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             dateDisplayMode = dateMode,
             dimRead = false,
             offlineMode = false,
+            bannerImageUrl = null,
+            thumbnailPainter = previewThumbnail,
             tagsScrollable = layout.tagsScrollable,
             showDescription = layout.showDescription,
             showUrl = layout.showUrl,
             urlDisplayMode = urlMode,
             urlPosition = urlPos,
-            urlIconMode = urlIconMode
+            urlIconMode = urlIconMode,
+            faviconByLinkSize = layout.faviconByLinkSize
         )
         LayoutType.LIST -> BookmarkListLayout(
             bookmark = PREVIEW_BOOKMARK,
@@ -736,6 +728,8 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             dateDisplayMode = dateMode,
             dimRead = false,
             offlineMode = false,
+            bannerImageUrl = null,
+            thumbnailPainter = previewThumbnail,
             thumbnailSide = thumbnailSide,
             showFavicon = layout.showFavicon,
             thumbnailSize = layout.thumbnailSize,
@@ -746,7 +740,8 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             showUrl = layout.showUrl,
             urlDisplayMode = urlMode,
             urlPosition = urlPos,
-            urlIconMode = urlIconMode
+            urlIconMode = urlIconMode,
+            faviconByLinkSize = layout.faviconByLinkSize
         )
         @Suppress("DEPRECATION")
         LayoutType.COMPACT_LIST -> BookmarkListLayout(
@@ -759,6 +754,8 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             dateDisplayMode = dateMode,
             dimRead = false,
             offlineMode = false,
+            bannerImageUrl = null,
+            thumbnailPainter = previewThumbnail,
             thumbnailSide = thumbnailSide,
             showFavicon = layout.showFavicon,
             thumbnailSize = layout.thumbnailSize,
@@ -769,8 +766,25 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             showUrl = layout.showUrl,
             urlDisplayMode = urlMode,
             urlPosition = urlPos,
-            urlIconMode = urlIconMode
+            urlIconMode = urlIconMode,
+            faviconByLinkSize = layout.faviconByLinkSize
         )
+    }
+}
+
+@Composable
+private fun SettingsSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        content()
     }
 }
 
@@ -805,8 +819,43 @@ private fun LayoutRadioOption(
 }
 
 @Composable
+private fun SubsectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+private fun SimpleRadioOption(
+    title: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    description: String? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(selected = isSelected, onClick = onClick)
+        Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
+            if (description != null) {
+                Text(text = description, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
 private fun ToggleRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: androidx.compose.ui.graphics.vector.ImageVector?,
     title: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
@@ -818,12 +867,14 @@ private fun ToggleRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(end = 16.dp)
-        )
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 16.dp)
+            )
+        }
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
