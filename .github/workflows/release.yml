@@ -98,9 +98,10 @@ jobs:
 
       - name: Compose release body
         id: body
+        env:
+          COMMITS: ${{ steps.commitlog.outputs.log }}
+          CHANGELOG: ${{ steps.changelog.outputs.changelogs && fromJSON(steps.changelog.outputs.changelogs).default.en || '' }}
         run: |
-          COMMITS='${{ steps.commitlog.outputs.log }}'
-          CHANGELOG='${{ steps.changelog.outputs.changelogs && fromJSON(steps.changelog.outputs.changelogs).default.en || '' }}'
           {
             echo "body<<BODY_EOF"
             if [ -n "$CHANGELOG" ]; then
