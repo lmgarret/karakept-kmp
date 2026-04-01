@@ -151,6 +151,10 @@ android {
     sourceSets["main"].res.srcDirs("src/androidMain/res")
     sourceSets["main"].resources.srcDirs("src/commonMain/resources")
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.karakept.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
@@ -158,6 +162,7 @@ android {
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = (project.findProperty("versionName") as String?) ?: "1.0"
         manifestPlaceholders["appName"] = "Karakept"
+        buildConfigField("boolean", "IS_DEV", "false")
     }
     packaging {
         resources {
@@ -186,6 +191,7 @@ android {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
             manifestPlaceholders["appName"] = "Karakept Dev"
+            buildConfigField("boolean", "IS_DEV", "true")
         }
     }
     compileOptions {
@@ -216,6 +222,10 @@ compose.desktop {
     application {
         mainClass = "MainKt"
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
+        // Dev mode: ./gradlew run -Pdev=true → window title shows "(DEV)", onboarding badge visible
+        if (project.hasProperty("dev")) {
+            jvmArgs += "-Dkarakept.dev=true"
+        }
         // ZGC reduces GC pause times to <1ms, eliminating the stutters/jank
         // that G1GC (the default) causes in interactive Compose Desktop apps.
         // -XX:+ZGenerational enables the generational mode added in JDK 21,

@@ -448,6 +448,30 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
         prefs[DEFAULT_LIST_ID_KEY]
     }
 
+    // ── Last active filter (ephemeral — not backed up) ──────────────────────
+
+    private val LAST_ACTIVE_FILTER_STATUS_KEY = stringPreferencesKey("last_active_filter_status")
+    private val LAST_ACTIVE_FILTER_LIST_ID_KEY = stringPreferencesKey("last_active_filter_list_id")
+
+    val lastActiveFilterStatus: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[LAST_ACTIVE_FILTER_STATUS_KEY]
+    }
+
+    val lastActiveFilterListId: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[LAST_ACTIVE_FILTER_LIST_ID_KEY]
+    }
+
+    suspend fun saveLastActiveFilter(status: String?, listId: String?) {
+        dataStore.updateData { prefs ->
+            prefs.toMutablePreferences().apply {
+                if (status != null) set(LAST_ACTIVE_FILTER_STATUS_KEY, status)
+                else remove(LAST_ACTIVE_FILTER_STATUS_KEY)
+                if (listId != null) set(LAST_ACTIVE_FILTER_LIST_ID_KEY, listId)
+                else remove(LAST_ACTIVE_FILTER_LIST_ID_KEY)
+            }
+        }
+    }
+
     // ── Date display settings (non-backed-up individual keys) ────────────────
 
     internal val SHOW_DATE_IN_LIST_KEY = booleanPreferencesKey("show_date_in_list")

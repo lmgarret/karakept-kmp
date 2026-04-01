@@ -75,13 +75,48 @@ class DefaultFilterResolverTest {
     }
 
     // -------------------------------------------------------------------------
+    // buildLastActiveFilter — pure function tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun buildLastActiveFilter_withListId_returnsListFilter() {
+        assertEquals(
+            FilterConfig(lists = listOf("list-42")),
+            DefaultFilterResolver.buildLastActiveFilter("ALL", "list-42")
+        )
+    }
+
+    @Test
+    fun buildLastActiveFilter_favorites_returnsFavoritesFilter() {
+        assertEquals(
+            FilterConfig(status = FilterStatus.FAVORITES),
+            DefaultFilterResolver.buildLastActiveFilter("FAVORITES", null)
+        )
+    }
+
+    @Test
+    fun buildLastActiveFilter_invalidStatus_fallsBackToAll() {
+        assertEquals(
+            FilterConfig(status = FilterStatus.ALL),
+            DefaultFilterResolver.buildLastActiveFilter("INVALID", null)
+        )
+    }
+
+    // -------------------------------------------------------------------------
     // resolve() — integration with mocked SettingsRepository
     // -------------------------------------------------------------------------
 
-    private fun makeRepo(type: DefaultListType, id: String?): SettingsRepository =
+    private fun makeRepo(
+        type: DefaultListType,
+        id: String?,
+        lastStatus: String? = null,
+        lastListId: String? = null
+    ): SettingsRepository =
         mockk<SettingsRepository>().also {
             every { it.defaultListType } returns flowOf(type)
             every { it.defaultListId } returns flowOf(id)
+            every { it.lastActiveFilterStatus } returns flowOf(lastStatus)
+            every { it.lastActiveFilterListId } returns flowOf(lastListId)
         }
 
     @Test
@@ -124,5 +159,35 @@ class DefaultFilterResolverTest {
     fun resolve_specificList_filterHasNoTags() = runTest {
         val resolver = DefaultFilterResolver(makeRepo(DefaultListType.SPECIFIC_LIST, "x"))
         assertEquals(emptyList(), resolver.resolve().tags)
+    }
+
+    // -------------------------------------------------------------------------
+    // resolve() — last-active filter takes priority
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun resolve_prefersLastActiveFilter_overConfiguredDefault() = runTest {
+        // Configured default is All Bookmarks, but last active was a specific list.
+        val resolver = DefaultFilterResolver(
+            makeRepo(DefaultListType.ALL_BOOKMARKS, null, lastStatus = "ALL", lastListId = "list-42")
+        )
+        assertEquals(FilterConfig(lists = listOf("list-42")), resolver.resolve())
+    }
+
+    @Test
+    fun resolve_lastActiveFavorites_overridesDefault() = runTest {
+        val resolver = DefaultFilterResolver(
+            makeRepo(DefaultListType.ALL_BOOKMARKS, null, lastStatus = "FAVORITES", lastListId = null)
+        )
+        assertEquals(FilterConfig(status = FilterStatus.FAVORITES), resolver.resolve())
+    }
+
+    @Test
+    fun resolve_noLastActive_fallsBackToConfiguredDefault() = runTest {
+        // No last-active filter saved — uses configured default.
+        val resolver = DefaultFilterResolver(
+            makeRepo(DefaultListType.SPECIFIC_LIST, "list-99", lastStatus = null, lastListId = null)
+        )
+        assertEquals(FilterConfig(lists = listOf("list-99")), resolver.resolve())
     }
 }

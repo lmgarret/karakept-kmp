@@ -18,6 +18,7 @@ import com.karakept.api.client.*
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.secure.SecureCredentialStore
 import com.karakept.app.data.repository.HighlightRepository
+import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.OnboardingScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
@@ -99,12 +100,19 @@ val appModule = module {
     single { ActionSnackbarManager() }
     single { BookmarkActionController(get(), get(), get(), get(), get()) }
 
+    // Background sync orchestrator — NotificationProvider is registered per-platform
+    single { BackgroundSyncOrchestrator(get(), get(), get(), get()) }
+
     // Backup & Restore
     single { BackupRepository(get(), get()) }
 
     factory { LoginScreenModel(get(), get(), get()) }
     factory { OnboardingScreenModel(get(), get(), get(), get()) }
-    single { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    // factory (not single) so each Voyager Navigator gets a fresh instance with its own
+    // screenModelScope. A Koin single would share one instance across Activities, but
+    // Voyager cancels the screenModelScope when a Navigator is disposed — the reused
+    // singleton would then have dead coroutines and never load bookmarks (SAVE-02).
+    factory { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { SettingsScreenModel(get(), get(), get(), get()) }
     factory { HighlightsScreenModel(get(), get(), get(), get()) }

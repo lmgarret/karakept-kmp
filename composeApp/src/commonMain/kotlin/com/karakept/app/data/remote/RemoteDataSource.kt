@@ -55,7 +55,17 @@ class RemoteDataSource(
         if (offlineModeProvider?.invoke() == true) {
             throw OfflineModeException()
         }
-        return block()
+        try {
+            return block()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Inner catch blocks wrap CancellationException in ApiException — unwrap it
+            // so coroutine cancellation propagates correctly.
+            val cause = e.cause
+            if (cause is kotlinx.coroutines.CancellationException) throw cause
+            throw e
+        }
     }
     private val trpcJson = Json { ignoreUnknownKeys = true }
 
@@ -116,6 +126,14 @@ class RemoteDataSource(
             bookmarksApi(server).bookmarksBookmarkIdGet(bookmarkId, includeContent).checkedBody()
         } catch (e: Exception) {
             throw ApiException("Error fetching bookmark: ${e.message}", e)
+        }
+    }
+
+    suspend fun fetchListsForBookmark(server: Server, bookmarkId: String): List<com.karakept.api.model.KarakeepList> = guardedCall {
+        try {
+            bookmarksApi(server).bookmarksBookmarkIdListsGet(bookmarkId).checkedBody().lists ?: emptyList()
+        } catch (e: Exception) {
+            throw ApiException("Error fetching lists for bookmark $bookmarkId: ${e.message}", e)
         }
     }
 

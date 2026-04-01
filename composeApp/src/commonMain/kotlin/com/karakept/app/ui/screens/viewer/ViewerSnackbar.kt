@@ -86,6 +86,7 @@ fun showSnackbarEvent(
                 )
                 if (result == SnackbarResult.ActionPerformed) {
                     event.onUndo()
+                    snackbarHostState.showSnackbar("Undone")
                 }
             }
             is SnackbarEvent.MessageWithAction -> {

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.TouchApp
@@ -49,6 +50,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.koin.koinScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import getPlatform
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.ListSettings
@@ -137,6 +139,15 @@ data class PerListSettingsScreen(
         val allLayouts by screenModel.allLayouts.collectAsState()
         var showScrollActionDialog by remember { mutableStateOf(false) }
         var showLayoutPickerDialog by remember { mutableStateOf(false) }
+        var showLayoutEditorDialog by remember { mutableStateOf(false) }
+        val isDesktop = getPlatform().isDesktop
+
+        if (showLayoutEditorDialog && isDesktop) {
+            LayoutEditorDialog(
+                layoutId = null,
+                onDismiss = { showLayoutEditorDialog = false }
+            )
+        }
 
         if (showLayoutPickerDialog) {
             AlertDialog(
@@ -195,6 +206,30 @@ data class PerListSettingsScreen(
                                     }
                                 }
                             }
+                        }
+                        HorizontalDivider()
+                        TextButton(
+                            onClick = {
+                                showLayoutPickerDialog = false
+                                if (isDesktop) {
+                                    showLayoutEditorDialog = true
+                                } else {
+                                    navigator.push(LayoutEditorScreen(layoutId = null))
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "Create new layout",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
                 },

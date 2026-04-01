@@ -76,7 +76,11 @@ internal class BookmarkSyncPipeline(
     private val fetchRemoteContent: suspend (Server, String) -> String?,
     private val cacheHeroAssetsForBookmark: suspend (Server, Long, String, String?, String?) -> Unit
 ) {
-    suspend fun execute() {
+    /** Bookmarks inserted during the last execute() call, available after completion. */
+    var newlyInsertedBookmarks: List<BookmarkEntity> = emptyList()
+        private set
+
+    suspend fun execute(): Int {
         // Phase 1: Process pending actions
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Starting
         val processedIds = processPendingActions()
@@ -84,8 +88,10 @@ internal class BookmarkSyncPipeline(
         // Phase 2: Fetch metadata
         val remoteBookmarks = fetchBookmarkMetadata()
 
-        // Phase 2.5: Sync Highlights
-        highlightRepository.syncHighlights(config.server)
+        // Phase 2.5: Sync Highlights (skip for ForList — membership reconciliation only)
+        if (config !is SyncConfiguration.ForList) {
+            highlightRepository.syncHighlights(config.server)
+        }
 
         // Phase 3: Fetch list membership (conditional)
         val bookmarkListMap = fetchListMembership(remoteBookmarks)
@@ -95,8 +101,15 @@ internal class BookmarkSyncPipeline(
         val entities = mapToEntities(remoteBookmarks, bookmarkListMap)
         val (entitiesWithLocalIds, newCount) = performDifferentialSync(entities, processedIds)
 
-        // Phase 5: Content sync (uses entities with correct localIds)
-        syncContent(entitiesWithLocalIds)
+        // Phase 4.5: Reconcile list membership for ForList syncs
+        if (config is SyncConfiguration.ForList) {
+            reconcileListMembership(remoteBookmarks, config.listId)
+        }
+
+        // Phase 5: Content sync (skip for ForList — content is fetched lazily on open)
+        if (config !is SyncConfiguration.ForList) {
+            syncContent(entitiesWithLocalIds)
+        }
 
         // Phase 6: Sync reading progress for in-progress bookmarks
         syncReadingProgress(entitiesWithLocalIds)
@@ -107,6 +120,8 @@ internal class BookmarkSyncPipeline(
             kotlinx.coroutines.delay(100)  // Give UI time to process
         }
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+
+        return newCount
     }
 
     // Phase 1: Process Pending Actions
@@ -370,6 +385,9 @@ internal class BookmarkSyncPipeline(
                 }
             }
 
+            // Expose newly inserted bookmarks for per-list notification counts
+            newlyInsertedBookmarks = toInsert
+
             // Return the updated entities list for content sync
             return Pair(updatedEntities, newBookmarksCount)
         }
@@ -525,6 +543,44 @@ internal class BookmarkSyncPipeline(
     }
 
     /**
+     * After a ForList sync, removes the listId from any local bookmark that the server
+     * no longer returns for that list. This handles smart list eviction -- when a bookmark
+     * no longer matches a smart list's query, it must be removed from local membership.
+     */
+    private suspend fun reconcileListMembership(
+        remoteBookmarks: List<com.karakept.api.model.Bookmark>,
+        listId: String
+    ) {
+        val serverRemoteIds = remoteBookmarks.mapNotNull { it.id }.toSet()
+        val localBookmarksInList = bookmarkDao.getAllBookmarksForList(config.server.id, listId)
+
+        val removals = computeStaleListRemovals(localBookmarksInList, serverRemoteIds, listId)
+
+        for ((localId, newListIds) in removals) {
+            val bookmark = localBookmarksInList.first { it.localId == localId }
+            bookmarkDao.updateBookmarkMetadata(
+                localId = localId,
+                title = bookmark.title,
+                url = bookmark.url,
+                description = bookmark.description,
+                imageUrl = bookmark.imageUrl,
+                bannerImageAssetId = bookmark.bannerImageAssetId,
+                screenshotAssetId = bookmark.screenshotAssetId,
+                tags = bookmark.tags,
+                listIds = newListIds,
+                isStarred = bookmark.isStarred,
+                isArchived = bookmark.isArchived,
+                isRead = bookmark.isRead,
+                readingTimeMinutes = bookmark.readingTimeMinutes
+            )
+        }
+
+        if (removals.isNotEmpty()) {
+            AppLogger.d("BookmarkRepo", "Reconciled list $listId: removed ${removals.size} stale bookmark(s)")
+        }
+    }
+
+    /**
      * Recursively adds all descendant list IDs to the target set.
      * Same pattern as ListSyncConfig.addAllDescendants().
      */
@@ -535,4 +591,32 @@ internal class BookmarkSyncPipeline(
             addDescendantListIds(child.remoteId, allLists, target)
         }
     }
+}
+
+/**
+ * Computes which bookmarks need their list membership updated after a ForList sync.
+ *
+ * Compares local bookmarks that claim membership in [listId] against the set of
+ * bookmark IDs returned by the server. Any local bookmark NOT in the server response
+ * has [listId] stripped from its listIds (but retains other list memberships).
+ *
+ * @param localBookmarksInList all local BookmarkEntity rows whose listIds contain [listId]
+ * @param serverRemoteIds the set of originalRemoteId values the server returned for [listId]
+ * @param listId the list being reconciled
+ * @return list of Pair(localId, newListIds) for bookmarks that need updating
+ */
+internal fun computeStaleListRemovals(
+    localBookmarksInList: List<BookmarkEntity>,
+    serverRemoteIds: Set<String>,
+    listId: String
+): List<Pair<Long, String>> {
+    return localBookmarksInList
+        .filter { it.originalRemoteId !in serverRemoteIds }
+        .map { entity ->
+            val updatedIds = entity.listIds
+                .split(",")
+                .filter { it.isNotEmpty() && it != listId }
+                .joinToString(",")
+            Pair(entity.localId, updatedIds)
+        }
 }

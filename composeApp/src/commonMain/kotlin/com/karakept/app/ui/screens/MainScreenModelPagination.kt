@@ -118,7 +118,7 @@ fun MainScreenModel.loadNextPage() {
  * Clears accumulated bookmarks and loads the first page for [filter].
  * This is the single entry-point for "start displaying a filter".
  */
-internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filter: FilterConfig) {
+internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filter: FilterConfig, scrollToTop: Boolean = true) {
     _currentPage.value = 0
     _hasMoreItems.value = true
 
@@ -132,5 +132,5 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     }
     // Scroll to top after data is ready, so plain back-navigation from the viewer
     // (which doesn't call resetPaginationAndLoad) never triggers an unwanted scroll.
-    scrollToTop()
+    if (scrollToTop) scrollToTop()
 }

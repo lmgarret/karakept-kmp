@@ -85,6 +85,14 @@ internal suspend fun BookmarkActionsRepository.processPendingActionsForBookmark(
 }
 
 /**
+ * Flush all pending actions to the server and wait for completion.
+ * Call this before reading back server state to ensure the server has processed recent actions.
+ */
+suspend fun BookmarkActionsRepository.flushPendingActions(server: Server) {
+    processPendingActions(server)
+}
+
+/**
  * Process all pending actions for a server. Called during sync.
  * Returns list of bookmark remote IDs that were processed.
  */

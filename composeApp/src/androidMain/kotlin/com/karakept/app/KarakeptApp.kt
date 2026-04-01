@@ -3,7 +3,9 @@ package com.karakept.app
 import android.app.Application
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.di.appModule
+import com.karakept.app.services.AndroidNotificationProvider
 import com.karakept.app.services.BackgroundSyncScheduler
+import com.karakept.app.services.NotificationProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,6 +17,7 @@ import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import org.koin.dsl.module
 
 class KarakeptApp : Application(), KoinComponent {
 
@@ -26,7 +29,9 @@ class KarakeptApp : Application(), KoinComponent {
         startKoin {
             androidLogger()
             androidContext(this@KarakeptApp)
-            modules(appModule)
+            modules(appModule, module {
+                single<NotificationProvider> { AndroidNotificationProvider(androidContext()) }
+            })
         }
 
         // Initialize platform-specific database context

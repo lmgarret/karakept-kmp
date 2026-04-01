@@ -2,9 +2,14 @@
 package com.karakept.app.ui.screens
 
 import cafe.adriel.voyager.core.model.screenModelScope
+import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.domain.action.BookmarkActionEvent
+import com.karakept.app.data.repository.batchMarkRead
+import com.karakept.app.data.repository.batchMarkUnread
+import com.karakept.app.data.repository.flushPendingActions
+import com.karakept.app.utils.AppLogger
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -86,6 +91,38 @@ fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<S
     }
 }
 
+/**
+ * Reconciles a single bookmark's smart list membership after a list-membership action.
+ * Uses GET /bookmarks/{id}/lists — one API call — instead of syncing entire smart lists.
+ * Then reloads the visible list so the UI reflects the change immediately.
+ */
+internal fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
+    val server = _selectedServer.value ?: return
+    val smartListIds = listRepository.lists.value
+        .filter { it.type == KarakeepList.Type.SMART }
+        .mapNotNull { it.id }
+        .toSet()
+    screenModelScope.launch {
+        try {
+            bookmarkActionsRepository.flushPendingActions(server)
+            val serverHadSmartLists = bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId, smartListIds)
+            if (!serverHadSmartLists && smartListIds.isNotEmpty()) {
+                // Server's per-bookmark endpoint returned stale smart list data
+                // (async recalculation not done yet). Mark smart lists as needing
+                // a full sync when the user navigates to one of them.
+                _smartListsNeedingRefresh.value += smartListIds
+                AppLogger.d("MainScreenModel", "Marked ${smartListIds.size} smart lists for deferred refresh")
+            }
+            // Always reload the current filter — the user may have navigated to a different list
+            // (e.g. list A after removing from list B) that now has updated smart-list membership.
+            val reloadServer = _selectedServer.value ?: server
+            resetPaginationAndLoad(reloadServer, _currentFilter.value, scrollToTop = false)
+        } catch (e: Exception) {
+            AppLogger.e("MainScreenModel", "List membership reconciliation failed for bookmark ${bookmark.localId}: ${e.message}", e)
+        }
+    }
+}
+
 fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
     screenModelScope.launch {
         val isOnline = !_isSyncing.value
@@ -109,6 +146,86 @@ fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String)
                 }
             }
         }
+        reconcileBookmarkLists(bookmark)
+    }
+}
+
+/**
+ * Re-adds a bookmark to a list and reloads the UI from the database.
+ * Used by undo lambdas where the bookmark was removed from the visible list.
+ *
+ * Skips [reconcileBookmarkLists] intentionally — calling it would launch a
+ * separate coroutine with API calls + [resetPaginationAndLoad], which races
+ * with the original [removeBookmarkFromList]'s reconciliation coroutine.
+ * Smart list reconciliation will happen on the next sync.
+ */
+fun MainScreenModel.restoreAndMoveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
+    screenModelScope.launch {
+        val isOnline = !_isSyncing.value
+        bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
+        val server = _selectedServer.value ?: return@launch
+        resetPaginationAndLoad(server, _currentFilter.value, scrollToTop = false)
+    }
+}
+
+/**
+ * Removes a bookmark from a list and restores it in the visible accumulated list.
+ * Used by undo lambdas when the bookmark may have been removed from the
+ * accumulated list by smart list reconciliation (e.g. smart list that
+ * excludes the target list — after adding to Read Later, the server
+ * recalculates the smart list and strips its ID from the bookmark's local
+ * listIds; undoing the add removes Read Later but the smart list ID is
+ * still gone, so [resetPaginationAndLoad] won't find it).
+ *
+ * Optimistically re-inserts the bookmark at the top of the accumulated
+ * list if it's missing, so the user sees it immediately. Smart list
+ * membership will be fully reconciled on the next sync.
+ */
+fun MainScreenModel.accumulatedBookmarkPosition(bookmark: BookmarkEntity): Int =
+    _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+
+fun MainScreenModel.restoreAndRemoveBookmarkFromList(bookmark: BookmarkEntity, listId: String, originalPosition: Int = -1) {
+    screenModelScope.launch {
+        val isOnline = !_isSyncing.value
+        bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
+        updateAccumulatedBookmarks { current ->
+            applyRestoreAndRemoveFromListTransform(current, bookmark, listId, originalPosition)
+        }
+    }
+}
+
+/**
+ * Pure function implementing the undo-add-to-list transform.
+ *
+ * If the bookmark is still in [currentBookmarks], strips [listId] from its listIds.
+ * If the bookmark is missing (smart list reconciliation removed it), re-inserts it
+ * at [originalPosition] (or index 0 if the position is out of bounds).
+ */
+fun applyRestoreAndRemoveFromListTransform(
+    currentBookmarks: List<BookmarkEntity>,
+    bookmark: BookmarkEntity,
+    listId: String,
+    originalPosition: Int = -1
+): List<BookmarkEntity> {
+    return if (currentBookmarks.any { it.remoteId == bookmark.remoteId }) {
+        // Bookmark is still in the list — just strip the target listId
+        currentBookmarks.map {
+            if (it.remoteId == bookmark.remoteId) {
+                val ids = it.listIds.split(",").map { id -> id.trim() }
+                    .filter { id -> id.isNotBlank() && id != listId }
+                it.copy(listIds = ids.joinToString(","))
+            } else it
+        }
+    } else {
+        // Bookmark was removed (smart list reconciliation stripped it).
+        // Re-insert at original position with state from before the action.
+        val mutable = currentBookmarks.toMutableList()
+        if (originalPosition in 0..mutable.size) {
+            mutable.add(originalPosition, bookmark)
+        } else {
+            mutable.add(0, bookmark)
+        }
+        mutable
     }
 }
 
@@ -197,25 +314,29 @@ fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: Str
                 bookmark = bookmark
             )
         }
+        reconcileBookmarkLists(bookmark)
     }
 }
 
 fun MainScreenModel.markAllBookmarksInListAsRead(listId: String) {
+    val unreadInList = allBookmarks.value.filter { bookmark ->
+        val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        bookmarkLists.contains(listId) && !bookmark.isRead
+    }
+    if (unreadInList.isEmpty()) return
     screenModelScope.launch {
-        val serverId = _selectedServer.value?.id ?: return@launch
-        val unreadInList = allBookmarks.value.filter { bookmark ->
-            val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            bookmarkLists.contains(listId) && !bookmark.isRead
-        }
-        unreadInList.forEach { bookmark ->
-            bookmarkActionsRepository.markAsRead(bookmark.remoteId, serverId)
-        }
+        bookmarkActionsRepository.batchMarkRead(unreadInList)
+        val ids = unreadInList.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { list ->
-            list.map {
-                val bookmarkLists = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotEmpty() }
-                if (bookmarkLists.contains(listId)) it.copy(isRead = true) else it
-            }
+            list.map { if (it.remoteId in ids) it.copy(isRead = true) else it }
         }
+        val count = unreadInList.size
+        snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as read", onUndo = {
+            bookmarkActionsRepository.batchMarkUnread(unreadInList, false)
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isRead = false) else it }
+            }
+        })
     }
 }
 

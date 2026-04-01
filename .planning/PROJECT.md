@@ -34,14 +34,14 @@ A reliable, well-structured bookmark management app with clean code practices.
 
 ### Active (v1.9.0 Bug Fixes & UX Polish)
 
-- NOTIF-01: Sync digest notification must show bookmark count (#169)
-- NOTIF-02: "Notify on new bookmarks" option on list must fire (#170)
-- SAVE-02: Navigate back after saving bookmarks must show bookmark list (#163)
-- LIST-02: Smart list must reflect quick-action changes immediately (#165)
+- ✓ NOTIF-01: Sync digest notification must show bookmark count (#169) — v1.9.0 Phase 12 (return value propagation from pipeline)
+- ✓ NOTIF-02: "Notify on new bookmarks" option on list must fire (#170) — v1.9.0 Phase 12 (post-sync DB query + combined notification)
+- ✓ SAVE-02: Navigate back after saving bookmarks must show bookmark list (#163) — v1.9.0 Phase 13 (factory{} scope fix + regression test)
+- ✓ LIST-02: Smart list must reflect quick-action changes immediately (#165) — v1.9.0 Phase 13 (syncSmartLists helper + ForList reconciliation + regression tests)
 - FILT-04: Pull-to-refresh must work on Highlights on mobile (#164)
 - UI-01: Scroll-to-top button must reach the actual top (#168)
 - UX-01: Snackbars for reversible actions must include an Undo button (#166)
-- UX-02: Custom layout improvements (#167)
+- ✓ UX-02: Custom layout improvements (#167) — v1.9.0 Phase 16 (description/URL toggles with position controls, COMPACT_LIST merged into LIST, "Create new layout" in per-list picker)
 - NFR-01: Regression tests for every fix (required by user)
 
 ### Out of Scope
@@ -60,7 +60,7 @@ A reliable, well-structured bookmark management app with clean code practices.
 - v1.7.0 shipped 2026-03-21: tech debt cleanup (logging, file sizes, redundant DI)
 - v1.8.0 shipped 2026-03-25: 6 bugs fixed, 4 UX improvements, Robolectric test infrastructure
 - Platform Health archived 2026-03-25 (internal, no git tag): 201 new tests, ~40% → ~75-80% business logic coverage
-- v1.9.0 in progress: 6 bug fixes + 2 UX enhancements, all with regression tests
+- v1.9.0 in progress: 6 bug fixes + 2 UX enhancements, all with regression tests — Phase 13 complete (SAVE-02 + LIST-02 fully closed, including ForList sync reconciliation gap)
 - Test files: 37+ test files / ~9,000+ lines of test code across commonTest, androidUnitTest, desktopTest
 - All key untested areas addressed: pure utilities, action layer, sync pipeline, settings flows, UI components, backup edge cases
 - The app is functional and in active use
@@ -107,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 — v1.9.0 Bug Fixes & UX Polish milestone started (Phases 12-16)*
+*Last updated: 2026-03-30

@@ -3,9 +3,7 @@ package com.karakept.app.ui.screens
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarDuration
@@ -30,10 +28,14 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
+import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlIconMode
+import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.screens.main.BatchDeleteConfirmDialog
 import com.karakept.app.ui.screens.main.BatchListPickerDialog
 import com.karakept.app.ui.screens.main.BatchTagEditorDialog
@@ -49,6 +51,7 @@ import com.karakept.app.ui.screens.main.MainScreenAddBookmarkDialog
 import kotlinx.coroutines.launch
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
+import com.karakept.app.domain.action.undoableAction
 import com.karakept.app.ui.screens.main.HighlightsListContent
 import com.karakept.app.ui.screens.HighlightsScreenModel
 import com.karakept.app.ui.screens.settings.PerListSettingsScreen
@@ -56,7 +59,7 @@ import getPlatform
 import org.koin.compose.koinInject
 
 object MainScreen : Screen {
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -108,7 +111,21 @@ object MainScreen : Screen {
                 tagsScrollable = activeLayout?.tagsScrollable ?: false,
                 quickActionPosition = activeLayout?.quickActionPosition
                     ?.let { com.karakept.app.data.model.QuickActionPosition.valueOf(it) }
-                    ?: com.karakept.app.data.model.QuickActionPosition.RIGHT
+                    ?: com.karakept.app.data.model.QuickActionPosition.RIGHT,
+                showDescription = activeLayout?.showDescription ?: true,
+                descriptionPosition = activeLayout?.descriptionPosition
+                    ?.let { DescriptionPosition.fromString(it) }
+                    ?: DescriptionPosition.BELOW_TITLE,
+                showUrl = activeLayout?.showUrl ?: false,
+                urlDisplayMode = activeLayout?.urlDisplayMode
+                    ?.let { UrlDisplayMode.fromString(it) }
+                    ?: UrlDisplayMode.DOMAIN_ONLY,
+                urlPosition = activeLayout?.urlPosition
+                    ?.let { UrlPosition.fromString(it) }
+                    ?: UrlPosition.BELOW_TITLE,
+                urlIconMode = activeLayout?.urlIconMode
+                    ?.let { UrlIconMode.fromString(it) }
+                    ?: UrlIconMode.GLOBE_ONLY,
             )
         }
 
@@ -170,10 +187,6 @@ object MainScreen : Screen {
         var activeHighlightId by remember { mutableStateOf<String?>(null) }
         var isReaderFullscreen by remember { mutableStateOf(false) }
 
-        val pullRefreshState = rememberPullRefreshState(
-            refreshing = isSyncing,
-            onRefresh = { if (!offlineMode) screenModel.syncBookmarks() }
-        )
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val scope = rememberCoroutineScope()
 
@@ -196,7 +209,7 @@ object MainScreen : Screen {
         }
 
         // Listen for scroll-to-top trigger
-        LaunchedEffect(Unit) { screenModel.scrollToTopTrigger.collect { listState.animateScrollToItem(0) } }
+        LaunchedEffect(Unit) { screenModel.scrollToTopTrigger.collect { listState.animateScrollToItem(0, 0) } }
 
         // Scroll-triggered action
         MainScreenScrollAction(
@@ -246,16 +259,35 @@ object MainScreen : Screen {
                     val tagName = config?.tagName
                     if (tagName != null) {
                         val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                        if (currentTags.contains(tagName)) { screenModel.removeBookmarkTag(bookmark, tagName); scope.launch { snackbarManager.showSnackbar("Removed tag '$tagName'") } }
-                        else { screenModel.addBookmarkTag(bookmark, tagName); scope.launch { snackbarManager.showSnackbar("Added tag '$tagName'") } }
+                        if (currentTags.contains(tagName)) {
+                            screenModel.removeBookmarkTag(bookmark, tagName)
+                            scope.undoableAction(snackbarManager, "Removed tag '$tagName'") {
+                                screenModel.addBookmarkTag(bookmark, tagName)
+                            }
+                        } else {
+                            screenModel.addBookmarkTag(bookmark, tagName)
+                            scope.undoableAction(snackbarManager, "Added tag '$tagName'") {
+                                screenModel.removeBookmarkTag(bookmark, tagName)
+                            }
+                        }
                     }
                 }
                 SwipeAction.ADD_TO_LIST -> {
                     val listId = config?.listId; val listName = config?.listName ?: "list"
                     if (listId != null) {
+                        val position = screenModel.accumulatedBookmarkPosition(bookmark)
                         val bookmarkListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                        if (bookmarkListIds.contains(listId)) { screenModel.removeBookmarkFromList(bookmark, listId); scope.launch { snackbarManager.showSnackbar("Removed from '$listName'") } }
-                        else { screenModel.moveBookmarkToList(bookmark, listId); scope.launch { snackbarManager.showSnackbar("Added to '$listName'") } }
+                        if (bookmarkListIds.contains(listId)) {
+                            screenModel.removeBookmarkFromList(bookmark, listId)
+                            scope.undoableAction(snackbarManager, "Removed from '$listName'") {
+                                screenModel.restoreAndMoveBookmarkToList(bookmark, listId)
+                            }
+                        } else {
+                            screenModel.moveBookmarkToList(bookmark, listId)
+                            scope.undoableAction(snackbarManager, "Added to '$listName'") {
+                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, listId, position)
+                            }
+                        }
                     }
                 }
                 SwipeAction.NONE -> {}
@@ -274,7 +306,7 @@ object MainScreen : Screen {
                     pendingBookmarkRemoteIds = pendingBookmarkRemoteIds, isSelectionMode = isSelectionMode,
                     selectedBookmarkIds = selectedBookmarkIds, activeBookmarkId = activeBmId,
                     isSearchActive = isSearchActive, searchQuery = searchQuery, listState = listState, isDesktop = isDesktop,
-                    pullRefreshState = pullRefreshState, snackbarHostState = snackbarHostState,
+                    snackbarHostState = snackbarHostState,
                     isDrawerVisible = isDrawerVisible, hasActiveFilter = hasActiveFilter, serverUrl = servers.firstOrNull()?.url,
                     screenModel = screenModel, snackbarManager = snackbarManager, scope = scope, uriHandler = uriHandler,
                     onMenuClick = onMenuClick, onFilterClick = { showFilterDialog = true },
@@ -376,6 +408,7 @@ object MainScreen : Screen {
                             onDeleteHighlight = { highlightsScreenModel.deleteHighlight(it) },
                             onLoadMore = { highlightsScreenModel.loadNextPage() },
                             onBack = { showHighlights = false },
+                            onRefresh = { highlightsScreenModel.syncHighlights() },
                             onOpenDrawer = { scope.launch { drawerState.open() } }
                         )
                     } else {
@@ -463,7 +496,10 @@ fun rememberSnackbarHostState(
                 is SnackbarEvent.Message -> snackbarHostState.showSnackbar(message = event.text, duration = event.duration)
                 is SnackbarEvent.MessageWithUndo -> {
                     val result = snackbarHostState.showSnackbar(message = event.text, actionLabel = "Undo", duration = event.duration)
-                    if (result == SnackbarResult.ActionPerformed) scope.launch { event.onUndo() }
+                    if (result == SnackbarResult.ActionPerformed) scope.launch {
+                        event.onUndo()
+                        manager.showSnackbar("Undone")
+                    }
                 }
                 is SnackbarEvent.MessageWithAction -> {
                     val result = snackbarHostState.showSnackbar(message = event.text, actionLabel = event.actionLabel, duration = event.duration)

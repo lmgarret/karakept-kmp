@@ -14,7 +14,12 @@ object AppLogger {
 
     private fun log(level: Level, tag: String, message: String, throwable: Throwable? = null) {
         if (level < minLevel) return
-        println("${level.name[0]}/$tag: $message")
-        throwable?.let { println("${level.name[0]}/$tag: ${it.stackTraceToString()}") }
+        val ts = currentTimestamp()
+        val prefix = if (ts.isNotEmpty()) "$ts " else ""
+        println("$prefix${level.name[0]}/$tag: $message")
+        throwable?.let { println("$prefix${level.name[0]}/$tag: ${it.stackTraceToString()}") }
     }
 }
+
+/** Returns a timestamp prefix for log lines, or empty string if the platform handles it (e.g. Logcat). */
+internal expect fun currentTimestamp(): String

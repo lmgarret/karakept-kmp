@@ -10,17 +10,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.PullRefreshState
-import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,14 +47,17 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
+import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.ThumbnailSide
+import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlIconMode
+import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.BookmarkCardLayout
-import com.karakept.app.ui.components.BookmarkCompactListLayout
 import com.karakept.app.ui.components.BookmarkContextMenu
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.BookmarkPlaceholderItem
@@ -60,7 +71,7 @@ import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.utils.AssetUrlUtils
 import com.karakept.app.utils.fileExists
 
-@OptIn(ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun BookmarkListContent(
     bookmarks: List<BookmarkEntity>,
@@ -85,6 +96,12 @@ internal fun BookmarkListContent(
     metadataPosition: MetadataPosition = MetadataPosition.BELOW,
     tagsScrollable: Boolean = false,
     quickActionPosition: QuickActionPosition = QuickActionPosition.RIGHT,
+    showDescription: Boolean = true,
+    descriptionPosition: DescriptionPosition = DescriptionPosition.BELOW_TITLE,
+    showUrl: Boolean = false,
+    urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
+    urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
+    urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
     isSelectionMode: Boolean = false,
@@ -93,7 +110,6 @@ internal fun BookmarkListContent(
     onBookmarkSelectionToggle: (BookmarkEntity) -> Unit = {},
     listState: LazyListState,
     isDesktop: Boolean = false,
-    pullRefreshState: PullRefreshState,
     onBookmarkClick: (BookmarkEntity) -> Unit,
     onBookmarkLongClick: (BookmarkEntity) -> Unit,
     onSwipeAction: (BookmarkEntity, SwipeAction, CustomSwipeActionConfig?) -> Unit,
@@ -118,6 +134,11 @@ internal fun BookmarkListContent(
                     }
                 }
             }
+    }
+
+    val scope = rememberCoroutineScope()
+    val showScrollToTop by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 3 }
     }
 
     val hapticFeedback = LocalHapticFeedback.current
@@ -153,11 +174,8 @@ internal fun BookmarkListContent(
         autoScrollSpeed.value = 0f
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(if (!isDesktop) Modifier.pullRefresh(pullRefreshState) else Modifier)
-    ) {
+    val listContent: @Composable () -> Unit = {
+        Box(modifier = Modifier.fillMaxSize()) {
         // Container-level drag selection: the gesture lives here (not per-item) so that
         // edge-scroll auto-scrolling does not recycle the item that owns the gesture detector,
         // which would kill the drag mid-gesture.
@@ -461,9 +479,14 @@ internal fun BookmarkListContent(
                                 screenshotUrl = screenshotUrl,
                                 isSelected = isSelected,
                                 tagsScrollable = tagsScrollable,
-                                isActive = isActiveBookmark
+                                isActive = isActiveBookmark,
+                                showDescription = showDescription,
+                                showUrl = showUrl,
+                                urlDisplayMode = urlDisplayMode,
+                                urlPosition = urlPosition,
+                                urlIconMode = urlIconMode,
                             )
-                            LayoutType.LIST -> BookmarkListLayout(
+                            LayoutType.LIST, @Suppress("DEPRECATION") LayoutType.COMPACT_LIST -> BookmarkListLayout(
                                 bookmark = bookmark,
                                 onClick = remember(bookmark.localId, isSelectionMode) {
                                     {
@@ -490,34 +513,13 @@ internal fun BookmarkListContent(
                                 thumbnailSize = thumbnailSize,
                                 metadataPosition = metadataPosition,
                                 tagsScrollable = tagsScrollable,
-                                isActive = isActiveBookmark
-                            )
-                            LayoutType.COMPACT_LIST -> BookmarkCompactListLayout(
-                                bookmark = bookmark,
-                                onClick = remember(bookmark.localId, isSelectionMode) {
-                                    {
-                                        if (isSelectionMode) onBookmarkSelectionToggle(bookmark)
-                                        else onBookmarkClick(bookmark)
-                                    }
-                                },
-                                onLongClick = remember(bookmark.localId, isSelectionMode) {
-                                    if (isSelectionMode) null else { { onBookmarkLongClick(bookmark) } }
-                                },
-                                showReadingTime = showReadingTimeBadge,
-                                showReadingProgress = showReadingProgress,
-                                showTags = showTags,
-                                showDate = showDate,
-                                dateDisplayMode = dateDisplayMode,
-                                dimRead = dimReadBookmarks,
-                                offlineMode = offlineMode,
-                                bannerImageUrl = bannerImageUrl,
-                                screenshotUrl = screenshotUrl,
-                                isSelected = isSelected,
-                                thumbnailSide = thumbnailSide,
-                                showFavicon = showFavicon,
-                                thumbnailSize = thumbnailSize,
-                                metadataPosition = metadataPosition,
-                                tagsScrollable = tagsScrollable
+                                isActive = isActiveBookmark,
+                                showDescription = showDescription,
+                                descriptionPosition = descriptionPosition,
+                                showUrl = showUrl,
+                                urlDisplayMode = urlDisplayMode,
+                                urlPosition = urlPosition,
+                                urlIconMode = urlIconMode,
                             )
                         }
                     }
@@ -588,12 +590,39 @@ internal fun BookmarkListContent(
             }
         }
 
-        if (!isDesktop) {
-            PullRefreshIndicator(
-                refreshing = isSyncing,
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+        // Scroll-to-top FAB
+        AnimatedVisibility(
+            visible = showScrollToTop,
+            enter = fadeIn(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300)),
+            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
+        ) {
+            SmallFloatingActionButton(
+                onClick = { scope.launch { listState.animateScrollToItem(0, 0) } },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowUpward,
+                    contentDescription = "Scroll to top"
+                )
+            }
+        }
+
+        } // end inner Box
+    }
+
+    if (!isDesktop) {
+        PullToRefreshBox(
+            isRefreshing = isSyncing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            listContent()
+        }
+    } else {
+        Box(modifier = Modifier.fillMaxSize()) {
+            listContent()
         }
     }
 }

@@ -121,6 +121,11 @@ fun MainScreenModel.batchArchive() {
         val remoteIds = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Archived $count bookmark${if (count > 1) "s" else ""}", onUndo = {
+            bookmarkActionsRepository.batchUnarchive(bookmarks)
+            updateAccumulatedBookmarks { it + bookmarks.map { b -> b.copy(isArchived = false) } }
+        })
     }
 }
 
@@ -132,6 +137,11 @@ fun MainScreenModel.batchUnarchive() {
         val remoteIds = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Unarchived $count bookmark${if (count > 1) "s" else ""}", onUndo = {
+            bookmarkActionsRepository.batchArchive(bookmarks)
+            updateAccumulatedBookmarks { it + bookmarks.map { b -> b.copy(isArchived = true) } }
+        })
     }
 }
 
@@ -145,6 +155,13 @@ fun MainScreenModel.batchMarkRead() {
             list.map { if (it.remoteId in ids) it.copy(isRead = true) else it }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as read", onUndo = {
+            bookmarkActionsRepository.batchMarkUnread(bookmarks, false)
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isRead = false) else it }
+            }
+        })
     }
 }
 
@@ -164,6 +181,13 @@ fun MainScreenModel.batchMarkUnread() {
             }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as unread", onUndo = {
+            bookmarkActionsRepository.batchMarkRead(bookmarks)
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isRead = true) else it }
+            }
+        })
     }
 }
 
@@ -177,6 +201,13 @@ fun MainScreenModel.batchFavourite() {
             list.map { if (it.remoteId in ids) it.copy(isStarred = true) else it }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Added $count bookmark${if (count > 1) "s" else ""} to favorites", onUndo = {
+            bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = false)
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isStarred = false) else it }
+            }
+        })
     }
 }
 
@@ -190,6 +221,13 @@ fun MainScreenModel.batchUnfavourite() {
             list.map { if (it.remoteId in ids) it.copy(isStarred = false) else it }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Removed $count bookmark${if (count > 1) "s" else ""} from favorites", onUndo = {
+            bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = true)
+            updateAccumulatedBookmarks { list ->
+                list.map { if (it.remoteId in ids) it.copy(isStarred = true) else it }
+            }
+        })
     }
 }
 
@@ -217,6 +255,8 @@ fun MainScreenModel.batchSetTags(newTags: List<String>) {
             }
         }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbar("Tags updated for $count bookmark${if (count > 1) "s" else ""}")
     }
 }
 
@@ -224,6 +264,7 @@ fun MainScreenModel.batchMoveToList(listId: String) {
     val bookmarks = getSelectedBookmarks()
     if (bookmarks.isEmpty()) { clearSelection(); return }
     screenModelScope.launch {
+        val positions = bookmarks.associate { it.remoteId to accumulatedBookmarkPosition(it) }
         bookmarkActionsRepository.batchMoveToList(bookmarks, listId)
         val ids = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { list ->
@@ -236,6 +277,13 @@ fun MainScreenModel.batchMoveToList(listId: String) {
                 } else bookmark
             }
         }
+        bookmarks.firstOrNull()?.let { reconcileBookmarkLists(it) }
         clearSelection()
+        val count = bookmarks.size
+        snackbarManager.showSnackbarWithUndo("Moved $count bookmark${if (count > 1) "s" else ""} to list", onUndo = {
+            for (bookmark in bookmarks) {
+                restoreAndRemoveBookmarkFromList(bookmark, listId, positions[bookmark.remoteId] ?: -1)
+            }
+        })
     }
 }

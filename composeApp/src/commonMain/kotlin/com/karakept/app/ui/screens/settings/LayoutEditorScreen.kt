@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.VerticalSplit
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Window
 import androidx.compose.material.icons.outlined.MenuBook
@@ -57,16 +59,20 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.BookmarkLayout
+import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.ThumbnailSide
+import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlIconMode
+import com.karakept.app.data.model.UrlPosition
 import getPlatform
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.saveLayout
 import com.karakept.app.ui.components.BookmarkCardLayout
-import com.karakept.app.ui.components.BookmarkCompactListLayout
+
 import com.karakept.app.ui.components.BookmarkListLayout
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -112,6 +118,12 @@ class LayoutEditorScreenModel(
     fun updateMetadataPosition(position: MetadataPosition) { _layout.value = _layout.value.copy(metadataPosition = position.name) }
     fun updateTagsScrollable(v: Boolean) { _layout.value = _layout.value.copy(tagsScrollable = v) }
     fun updateQuickActionPosition(pos: QuickActionPosition) { _layout.value = _layout.value.copy(quickActionPosition = pos.name) }
+    fun updateShowDescription(show: Boolean) { _layout.value = _layout.value.copy(showDescription = show) }
+    fun updateDescriptionPosition(pos: DescriptionPosition) { _layout.value = _layout.value.copy(descriptionPosition = pos.name) }
+    fun updateShowUrl(show: Boolean) { _layout.value = _layout.value.copy(showUrl = show) }
+    fun updateUrlDisplayMode(mode: UrlDisplayMode) { _layout.value = _layout.value.copy(urlDisplayMode = mode.name) }
+    fun updateUrlPosition(pos: UrlPosition) { _layout.value = _layout.value.copy(urlPosition = pos.name) }
+    fun updateUrlIconMode(mode: UrlIconMode) { _layout.value = _layout.value.copy(urlIconMode = mode.name) }
 
     fun save() {
         screenModelScope.launch {
@@ -251,10 +263,12 @@ private fun LayoutEditorContent(
                 .padding(padding)
         ) {
             // Pinned preview — does not scroll
+            // Card layouts include a 200.dp image area so they need more vertical space
+            val previewMaxHeight = if (LayoutType.fromString(layout.layoutType) == LayoutType.CARD) 420.dp else 280.dp
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 280.dp)
+                    .heightIn(max = previewMaxHeight)
                     .padding(16.dp)
             ) {
                 Text(
@@ -317,18 +331,10 @@ private fun LayoutEditorContent(
                         HorizontalDivider()
                         LayoutRadioOption(
                             title = "List",
-                            description = "Thumbnails with title and description",
+                            description = "Row layout with configurable thumbnail, title, and metadata",
                             icon = Icons.AutoMirrored.Filled.ViewList,
                             isSelected = layout.layoutType == LayoutType.LIST.name,
                             onClick = { screenModel.updateLayoutType(LayoutType.LIST) }
-                        )
-                        HorizontalDivider()
-                        LayoutRadioOption(
-                            title = "Compact List",
-                            description = "Small thumbnails with just the title and date",
-                            icon = Icons.AutoMirrored.Filled.List,
-                            isSelected = layout.layoutType == LayoutType.COMPACT_LIST.name,
-                            onClick = { screenModel.updateLayoutType(LayoutType.COMPACT_LIST) }
                         )
                     }
                 }
@@ -412,6 +418,54 @@ private fun LayoutEditorContent(
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         ToggleRow(
+                            icon = Icons.Default.Notes,
+                            title = "Description",
+                            checked = layout.showDescription,
+                            onCheckedChange = { screenModel.updateShowDescription(it) }
+                        )
+                        HorizontalDivider()
+                        ToggleRow(
+                            icon = Icons.Default.Link,
+                            title = "URL",
+                            checked = layout.showUrl,
+                            onCheckedChange = { screenModel.updateShowUrl(it) }
+                        )
+                        if (layout.showUrl) {
+                            HorizontalDivider()
+                            LayoutRadioOption(
+                                title = "Domain only",
+                                description = "e.g., github.com",
+                                icon = Icons.Default.Link,
+                                isSelected = UrlDisplayMode.fromString(layout.urlDisplayMode) == UrlDisplayMode.DOMAIN_ONLY,
+                                onClick = { screenModel.updateUrlDisplayMode(UrlDisplayMode.DOMAIN_ONLY) }
+                            )
+                            HorizontalDivider()
+                            LayoutRadioOption(
+                                title = "Full URL",
+                                description = "e.g., https://github.com/repo/...",
+                                icon = Icons.Default.Link,
+                                isSelected = UrlDisplayMode.fromString(layout.urlDisplayMode) == UrlDisplayMode.FULL_URL,
+                                onClick = { screenModel.updateUrlDisplayMode(UrlDisplayMode.FULL_URL) }
+                            )
+                            HorizontalDivider()
+                            LayoutRadioOption(
+                                title = "Globe icon",
+                                description = "Always show globe icon next to URL",
+                                icon = Icons.Default.Language,
+                                isSelected = UrlIconMode.fromString(layout.urlIconMode) == UrlIconMode.GLOBE_ONLY,
+                                onClick = { screenModel.updateUrlIconMode(UrlIconMode.GLOBE_ONLY) }
+                            )
+                            HorizontalDivider()
+                            LayoutRadioOption(
+                                title = "Site favicon",
+                                description = "Show site favicon next to URL (falls back to globe)",
+                                icon = Icons.Default.Language,
+                                isSelected = UrlIconMode.fromString(layout.urlIconMode) == UrlIconMode.FAVICON,
+                                onClick = { screenModel.updateUrlIconMode(UrlIconMode.FAVICON) }
+                            )
+                        }
+                        HorizontalDivider()
+                        ToggleRow(
                             icon = Icons.Outlined.MenuBook,
                             title = "Reading Time",
                             checked = layout.showReadingTime,
@@ -484,6 +538,60 @@ private fun LayoutEditorContent(
                                 onClick = { screenModel.updateMetadataPosition(MetadataPosition.ABOVE) }
                             )
                         }
+                    }
+                }
+
+                // URL Position — only when showUrl is true
+                if (layout.showUrl) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "URL Position",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        LayoutRadioOption(
+                            title = "Below title",
+                            description = "URL appears between title and description",
+                            icon = Icons.Default.Link,
+                            isSelected = UrlPosition.fromString(layout.urlPosition) == UrlPosition.BELOW_TITLE,
+                            onClick = { screenModel.updateUrlPosition(UrlPosition.BELOW_TITLE) }
+                        )
+                        HorizontalDivider()
+                        LayoutRadioOption(
+                            title = "In metadata row",
+                            description = "URL appears alongside date and reading time",
+                            icon = Icons.Default.Link,
+                            isSelected = UrlPosition.fromString(layout.urlPosition) == UrlPosition.METADATA_ROW,
+                            onClick = { screenModel.updateUrlPosition(UrlPosition.METADATA_ROW) }
+                        )
+                    }
+                }
+
+                // Description Position — only for LIST type when showDescription is true (per D-03)
+                if (LayoutType.fromString(layout.layoutType) == LayoutType.LIST && layout.showDescription) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "Description Position",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        LayoutRadioOption(
+                            title = "Below title",
+                            description = "Description appears under the title text",
+                            icon = Icons.Default.Notes,
+                            isSelected = DescriptionPosition.fromString(layout.descriptionPosition) == DescriptionPosition.BELOW_TITLE,
+                            onClick = { screenModel.updateDescriptionPosition(DescriptionPosition.BELOW_TITLE) }
+                        )
+                        HorizontalDivider()
+                        LayoutRadioOption(
+                            title = "Above metadata",
+                            description = "Description appears between title area and metadata row",
+                            icon = Icons.Default.Notes,
+                            isSelected = DescriptionPosition.fromString(layout.descriptionPosition) == DescriptionPosition.ABOVE_METADATA,
+                            onClick = { screenModel.updateDescriptionPosition(DescriptionPosition.ABOVE_METADATA) }
+                        )
                     }
                 }
 
@@ -596,6 +704,10 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
     val dateMode = DateDisplayMode.fromString(layout.dateDisplayMode)
     val thumbnailSide = ThumbnailSide.fromString(layout.thumbnailSide)
     val metadataPos = MetadataPosition.fromString(layout.metadataPosition)
+    val descriptionPos = DescriptionPosition.fromString(layout.descriptionPosition)
+    val urlPos = UrlPosition.fromString(layout.urlPosition)
+    val urlMode = UrlDisplayMode.fromString(layout.urlDisplayMode)
+    val urlIconMode = UrlIconMode.fromString(layout.urlIconMode)
     when (layoutType) {
         LayoutType.CARD -> BookmarkCardLayout(
             bookmark = PREVIEW_BOOKMARK,
@@ -607,7 +719,12 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             dateDisplayMode = dateMode,
             dimRead = false,
             offlineMode = false,
-            tagsScrollable = layout.tagsScrollable
+            tagsScrollable = layout.tagsScrollable,
+            showDescription = layout.showDescription,
+            showUrl = layout.showUrl,
+            urlDisplayMode = urlMode,
+            urlPosition = urlPos,
+            urlIconMode = urlIconMode
         )
         LayoutType.LIST -> BookmarkListLayout(
             bookmark = PREVIEW_BOOKMARK,
@@ -623,9 +740,16 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             showFavicon = layout.showFavicon,
             thumbnailSize = layout.thumbnailSize,
             metadataPosition = metadataPos,
-            tagsScrollable = layout.tagsScrollable
+            tagsScrollable = layout.tagsScrollable,
+            showDescription = layout.showDescription,
+            descriptionPosition = descriptionPos,
+            showUrl = layout.showUrl,
+            urlDisplayMode = urlMode,
+            urlPosition = urlPos,
+            urlIconMode = urlIconMode
         )
-        LayoutType.COMPACT_LIST -> BookmarkCompactListLayout(
+        @Suppress("DEPRECATION")
+        LayoutType.COMPACT_LIST -> BookmarkListLayout(
             bookmark = PREVIEW_BOOKMARK,
             onClick = {},
             showReadingTime = layout.showReadingTime,
@@ -639,7 +763,13 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             showFavicon = layout.showFavicon,
             thumbnailSize = layout.thumbnailSize,
             metadataPosition = metadataPos,
-            tagsScrollable = layout.tagsScrollable
+            tagsScrollable = layout.tagsScrollable,
+            showDescription = layout.showDescription,
+            descriptionPosition = descriptionPos,
+            showUrl = layout.showUrl,
+            urlDisplayMode = urlMode,
+            urlPosition = urlPos,
+            urlIconMode = urlIconMode
         )
     }
 }

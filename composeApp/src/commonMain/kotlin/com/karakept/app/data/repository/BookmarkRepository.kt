@@ -4,6 +4,8 @@ import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.ListEntity
+import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppLogger
@@ -48,31 +50,35 @@ class BookmarkRepository(
     private val _syncProgress = MutableStateFlow<com.karakept.app.data.model.SyncProgress>(com.karakept.app.data.model.SyncProgress.Idle)
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> = _syncProgress.asStateFlow()
 
-    suspend fun syncBookmarks(server: Server) {
-        executeSyncPipeline(SyncConfiguration.Full(server))
+    /** Bookmarks inserted during the last sync, used for per-list notification counts. */
+    private var _lastSyncNewBookmarks: List<BookmarkEntity> = emptyList()
+
+    /** Resets sync progress to Idle. Used when a sync is cancelled (not failed). */
+    fun resetSyncProgress() {
+        _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
     }
+
+    suspend fun syncBookmarks(server: Server): Int =
+        executeSyncPipeline(SyncConfiguration.Full(server))
 
     /**
      * Syncs only favorited bookmarks.
      */
-    suspend fun syncFavorites(server: Server) {
+    suspend fun syncFavorites(server: Server): Int =
         executeSyncPipeline(SyncConfiguration.Filtered(server, favourited = true))
-    }
 
     /**
      * Syncs only archived bookmarks.
      */
-    suspend fun syncArchived(server: Server) {
+    suspend fun syncArchived(server: Server): Int =
         executeSyncPipeline(SyncConfiguration.Filtered(server, archived = true))
-    }
 
     /**
      * Syncs only bookmarks from a specific list.
      * Respects content sync mode (NEVER/PER_BOOKMARK/PER_LIST/ALL).
      */
-    suspend fun syncBookmarksForList(server: Server, listId: String) {
+    suspend fun syncBookmarksForList(server: Server, listId: String): Int =
         executeSyncPipeline(SyncConfiguration.ForList(server, listId))
-    }
 
     @OptIn(DelicateCoroutinesApi::class)
     suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<BookmarkEntity> {
@@ -166,7 +172,9 @@ class BookmarkRepository(
         val existing = bookmarkDao.getBookmarkByRemoteId(bookmarkId, serverId) ?: return
 
         try {
-            _syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingMetadata(1, 1)
+            // Note: intentionally NOT updating _syncProgress here. This method is called
+            // from a background GlobalScope.launch after createBookmark and should not
+            // interfere with the main sync progress state shown in the UI.
             val dto = remoteDataSource.fetchBookmark(server, existing.originalRemoteId)
 
             // Map DTO to entity, preserving localId and content if not provided in DTO
@@ -243,9 +251,10 @@ class BookmarkRepository(
             // Cache hero images (banner/screenshot)
             cacheHeroAssetsForBookmark(server, existing.remoteId, existing.serverId, bannerImageAssetId, screenshotAssetId)
 
-            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+            // Notify UI so the accumulated list refreshes this bookmark (e.g. with asset IDs)
+            bookmarkActionsRepository.notifyBookmarkChanged(existing.remoteId)
         } catch (e: Exception) {
-            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Sync failed")
+            AppLogger.e("BookmarkRepository", "syncSingleBookmark failed for $bookmarkId: ${e.message}", e)
             throw e
         }
     }
@@ -373,9 +382,10 @@ class BookmarkRepository(
     /**
      * Executes the sync pipeline with the given configuration.
      * Provides unified error handling and progress reporting.
+     * Returns the number of new bookmarks inserted.
      */
-    private suspend fun executeSyncPipeline(config: SyncConfiguration) {
-        mutex.withLock {
+    private suspend fun executeSyncPipeline(config: SyncConfiguration): Int {
+        return mutex.withLock {
             try {
                 val pipeline = BookmarkSyncPipeline(
                     config = config,
@@ -390,7 +400,13 @@ class BookmarkRepository(
                     fetchRemoteContent = ::fetchRemoteContent,
                     cacheHeroAssetsForBookmark = ::cacheHeroAssetsForBookmark
                 )
-                pipeline.execute()
+                val result = pipeline.execute()
+                _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks
+                result
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Scope cancelled — not a real error, reset to Idle
+                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+                throw e
             } catch (e: Exception) {
                 AppLogger.e("BookmarkRepo", "Failed to fetch bookmarks: ${e.message}", e)
                 _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
@@ -401,6 +417,23 @@ class BookmarkRepository(
                 }
             }
         }
+    }
+
+    /**
+     * After sync, finds lists with notifyOnNewBookmarks=true that received new bookmarks.
+     * Returns list of (listId, listName, count) triples for notification dispatch.
+     */
+    suspend fun getListsNeedingNotification(serverId: String): List<Triple<String, String, Int>> {
+        val allSettings = settingsRepository.allListSettings.first()
+        val notifyListIds = allSettings.filter { it.value.notifyOnNewBookmarks }.keys
+        if (notifyListIds.isEmpty()) return emptyList()
+
+        val newBookmarks = _lastSyncNewBookmarks
+        if (newBookmarks.isEmpty()) return emptyList()
+
+        val allLists = listDao.getListsForServer(serverId).first()
+
+        return findListsWithNewBookmarks(allSettings, newBookmarks, allLists)
     }
 
     /**
@@ -475,5 +508,94 @@ class BookmarkRepository(
                 AppLogger.e("BookmarkRepository", "Failed to cache screenshot: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Reconciles a bookmark's list membership after a quick action.
+     * Uses GET /bookmarks/{id}/lists — one API call.
+     *
+     * Smart list membership is server-computed and fully replaced with the server's answer.
+     * Manual list membership is kept from the local DB — the optimistic update applied by
+     * the action is already correct, and the queued server action may not have been
+     * processed yet when this call is made.
+     *
+     * @param smartListIds the IDs of all known smart lists — only these are overwritten
+     *                     by the server response; manual list IDs are preserved locally
+     */
+    /**
+     * @return true if the server returned smart list membership (fresh data),
+     *         false if potentially stale (no smart lists returned by the server).
+     */
+    suspend fun reconcileBookmarkSmartListMembership(
+        server: Server,
+        bookmarkLocalId: Long,
+        smartListIds: Set<String>
+    ): Boolean {
+        val entity = bookmarkDao.getBookmarkById(bookmarkLocalId) ?: return true
+        try {
+            val serverListIds = remoteDataSource.fetchListsForBookmark(server, entity.originalRemoteId)
+                .mapNotNull { it.id }.toSet()
+
+            val currentIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()
+            // Smart lists: server is authoritative (criteria are server-computed)
+            // Manual lists: local DB is authoritative (optimistic update already applied)
+            val updatedIds = ((currentIds - smartListIds) + (serverListIds intersect smartListIds))
+                .joinToString(",")
+
+            if (updatedIds != entity.listIds) {
+                bookmarkDao.updateBookmarkMetadata(
+                    localId = bookmarkLocalId,
+                    title = entity.title,
+                    url = entity.url,
+                    description = entity.description,
+                    imageUrl = entity.imageUrl,
+                    bannerImageAssetId = entity.bannerImageAssetId,
+                    screenshotAssetId = entity.screenshotAssetId,
+                    tags = entity.tags,
+                    listIds = updatedIds,
+                    isStarred = entity.isStarred,
+                    isArchived = entity.isArchived,
+                    isRead = entity.isRead,
+                    readingTimeMinutes = entity.readingTimeMinutes
+                )
+                AppLogger.d("BookmarkRepository", "Reconciled list membership for bookmark $bookmarkLocalId: $updatedIds")
+            }
+
+            // If the server returned no smart list membership, the response may be stale
+            // (server's async smart list recalculation hasn't completed yet).
+            val serverHasSmartLists = (serverListIds intersect smartListIds).isNotEmpty()
+            return serverHasSmartLists
+        } catch (e: Exception) {
+            AppLogger.e("BookmarkRepository", "Failed to reconcile list membership for bookmark $bookmarkLocalId: ${e.message}", e)
+            return false
+        }
+    }
+}
+
+/**
+ * Determines which lists with notifyOnNewBookmarks=true received new bookmarks.
+ * Returns list of (listId, listName) pairs for lists that should trigger a notification.
+ *
+ * Extracted as internal top-level function for testability in commonTest.
+ */
+internal fun findListsWithNewBookmarks(
+    allListSettings: Map<String, ListSettings>,
+    newBookmarks: List<BookmarkEntity>,
+    allLists: List<ListEntity>
+): List<Triple<String, String, Int>> {
+    val notifyListIds = allListSettings
+        .filter { it.value.notifyOnNewBookmarks }
+        .keys
+    if (notifyListIds.isEmpty()) return emptyList()
+
+    val listNameMap = allLists.associate { it.remoteId to it.name }
+
+    return notifyListIds.mapNotNull { listId ->
+        val count = newBookmarks.count { bookmark ->
+            bookmark.listIds.split(",").map { it.trim() }.contains(listId)
+        }
+        if (count > 0) {
+            listNameMap[listId]?.let { name -> Triple(listId, name, count) }
+        } else null
     }
 }

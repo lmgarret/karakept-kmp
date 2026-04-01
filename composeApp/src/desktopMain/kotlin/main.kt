@@ -28,7 +28,10 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setWindowState
 import com.karakept.app.di.appModule
+import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.services.BackgroundSyncScheduler
+import com.karakept.app.services.DesktopNotificationProvider
+import com.karakept.app.services.NotificationProvider
 import com.kdroid.composetray.tray.api.Tray
 import com.kdroid.composetray.utils.IconRenderProperties
 import com.kdroid.composetray.utils.isMenuBarInDarkMode
@@ -49,6 +52,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.Image
 import org.koin.core.context.startKoin
+import org.koin.dsl.module
 import org.koin.java.KoinJavaComponent.getKoin
 import java.awt.GraphicsEnvironment
 
@@ -65,7 +69,7 @@ fun main(args: Array<String> = emptyArray()) {
     // macOS-specific AWT properties — must be set before AWT initializes.
     if (System.getProperty("os.name").lowercase().contains("mac")) {
         // Set app name so notifications show "Karakept" instead of "java"
-        System.setProperty("apple.awt.application.name", "Karakept")
+        System.setProperty("apple.awt.application.name", if (isDevBuild) "Karakept (DEV)" else "Karakept")
 
         // Let AWT/JBR follow the OS appearance automatically so the Compose
         // window chrome (title bar, toolbar) matches the current system theme.
@@ -128,13 +132,21 @@ fun main(args: Array<String> = emptyArray()) {
         ?.readBytes()
     if (isMac && iconBytes != null) {
         try {
-            val awtImage = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(iconBytes))
-            if (awtImage != null && java.awt.Taskbar.isTaskbarSupported()) {
-                java.awt.Taskbar.getTaskbar().iconImage = awtImage
+            var awtImage = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(iconBytes))
+            if (awtImage != null) {
+                if (isDevBuild) awtImage = overlayDevBanner(awtImage)
+                if (java.awt.Taskbar.isTaskbarSupported()) {
+                    java.awt.Taskbar.getTaskbar().iconImage = awtImage
+                }
             }
         } catch (_: UnsupportedOperationException) { }
     }
-    val iconImage = iconBytes?.let { Image.makeFromEncoded(it).toComposeImageBitmap() }
+    val iconImage = iconBytes?.let { bytes ->
+        var awtImg = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(bytes))
+        if (isDevBuild && awtImg != null) awtImg = overlayDevBanner(awtImg)
+        val finalBytes = awtImg?.toPngBytes() ?: bytes
+        Image.makeFromEncoded(finalBytes).toComposeImageBitmap()
+    }
 
     // Load monochrome tray icon: trim adaptive-icon padding so the silhouette
     // fills the menu-bar slot. ComposeNativeTray's Painter overload handles
@@ -180,15 +192,16 @@ fun main(args: Array<String> = emptyArray()) {
     }
 
     startKoin {
-        modules(appModule)
+        modules(appModule, module {
+            single<NotificationProvider> { DesktopNotificationProvider() }
+        })
     }
 
     // Initialize background sync — mirrors KarakeptApp.initializeBackgroundSync() on Android.
     // Uses a long-lived scope that outlives individual Compose compositions.
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val bgSyncSettingsRepo = getKoin().get<SettingsRepository>()
-    val bgSyncBookmarkRepo = getKoin().get<BookmarkRepository>()
-    val bgSyncServerRepo = getKoin().get<ServerRepository>()
+    val bgSyncOrchestrator = getKoin().get<BackgroundSyncOrchestrator>()
     appScope.launch {
         combine(
             bgSyncSettingsRepo.backgroundSyncEnabled,
@@ -199,9 +212,7 @@ fun main(args: Array<String> = emptyArray()) {
                 if (enabled) {
                     BackgroundSyncScheduler.schedule(
                         scope = appScope,
-                        settingsRepository = bgSyncSettingsRepo,
-                        bookmarkRepository = bgSyncBookmarkRepo,
-                        serverRepository = bgSyncServerRepo,
+                        orchestrator = bgSyncOrchestrator,
                         frequencyMinutes = frequency
                     )
                 } else {
@@ -336,7 +347,7 @@ fun main(args: Array<String> = emptyArray()) {
                         )
                     }
                 },
-                tooltip = "Karakept",
+                tooltip = if (isDevBuild) "Karakept (DEV)" else "Karakept",
                 primaryAction = { isWindowVisible = !isWindowVisible },
                 menuContent = {
                     // Server status (informational, disabled)
@@ -422,7 +433,7 @@ fun main(args: Array<String> = emptyArray()) {
         Window(
             visible = isWindowVisible,
             onCloseRequest = { isWindowVisible = false },
-            title = "Karakept",
+            title = if (isDevBuild) "Karakept (DEV)" else "Karakept",
             state = state,
             icon = iconImage?.let { BitmapPainter(it) }
         ) {
@@ -460,6 +471,39 @@ private fun java.awt.image.BufferedImage.toPngBytes(): ByteArray {
     val out = java.io.ByteArrayOutputStream()
     javax.imageio.ImageIO.write(this, "png", out)
     return out.toByteArray()
+}
+
+/** Overlay a red "DEV" banner at the bottom of an icon image, clipped to the icon's alpha. */
+private fun overlayDevBanner(src: java.awt.image.BufferedImage): java.awt.image.BufferedImage {
+    val size = src.width
+    val result = java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+    val g = result.createGraphics()
+    g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+    g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+    g.drawImage(src, 0, 0, null)
+
+    // Clip to the icon's existing alpha so the banner doesn't overflow rounded corners.
+    // SrcAtop composites the banner only where the destination (icon) already has alpha.
+    g.composite = java.awt.AlphaComposite.SrcAtop
+
+    // Red banner positioned inside the icon's rounded bottom edge (~15% height, offset up 5%)
+    val bannerHeight = (size * 0.15).toInt()
+    val bannerY = size - bannerHeight - (size * 0.10).toInt()
+    g.color = java.awt.Color(0xD3, 0x2F, 0x2F, 230)
+    g.fillRect(0, bannerY, size, bannerHeight)
+
+    // "DEV" text centered in the banner
+    val fontSize = (bannerHeight * 0.65f)
+    g.font = java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, fontSize.toInt())
+    g.color = java.awt.Color.WHITE
+    val fm = g.fontMetrics
+    val textWidth = fm.stringWidth("DEV")
+    val textX = (size - textWidth) / 2
+    val textY = bannerY + (bannerHeight + fm.ascent - fm.descent) / 2
+    g.drawString("DEV", textX, textY)
+
+    g.dispose()
+    return result
 }
 
 /** Read a URL from the system clipboard, or null if clipboard doesn't contain a URL. */

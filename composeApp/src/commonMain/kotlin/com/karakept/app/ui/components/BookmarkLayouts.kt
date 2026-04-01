@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -43,8 +44,13 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DateDisplayMode
+import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.ThumbnailSide
+import com.karakept.app.data.model.UrlDisplayMode
+import com.karakept.app.data.model.UrlIconMode
+import com.karakept.app.data.model.UrlPosition
+import com.karakept.app.ui.utils.extractDomain
 import com.karakept.app.utils.FaviconUtils
 import com.karakept.app.utils.formatBookmarkDate
 
@@ -67,6 +73,11 @@ fun BookmarkCardLayout(
     isSelected: Boolean = false,
     tagsScrollable: Boolean = false,
     isActive: Boolean = false,
+    showDescription: Boolean = true,
+    showUrl: Boolean = false,
+    urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
+    urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
+    urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
     modifier: Modifier = Modifier
 ) {
     val isFullyRead = bookmark.isRead
@@ -147,11 +158,24 @@ fun BookmarkCardLayout(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
+                        if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.BELOW_TITLE) {
+                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(top = 4.dp))
+                        }
                         if (showTags && bookmark.tags.isNotBlank()) {
                             BookmarkTagsDisplay(
                                 tags = bookmark.tags,
                                 style = TagsDisplayStyle.COMPACT,
                                 scrollable = tagsScrollable,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        if (showDescription && !bookmark.description.isNullOrBlank()) {
+                            Text(
+                                text = bookmark.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
@@ -170,6 +194,9 @@ fun BookmarkCardLayout(
                                 )
                             } else {
                                 Spacer(modifier = Modifier.weight(1f))
+                            }
+                            if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.METADATA_ROW) {
+                                UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(end = 8.dp))
                             }
                             if (showReadingTime) {
                                 if (bookmark.readingTimeMinutes > 0) {
@@ -230,6 +257,12 @@ fun BookmarkListLayout(
     metadataPosition: MetadataPosition = MetadataPosition.BELOW,
     tagsScrollable: Boolean = false,
     isActive: Boolean = false,
+    showDescription: Boolean = true,
+    descriptionPosition: DescriptionPosition = DescriptionPosition.BELOW_TITLE,
+    showUrl: Boolean = false,
+    urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
+    urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
+    urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
     modifier: Modifier = Modifier
 ) {
     val isFullyRead = bookmark.isRead
@@ -278,6 +311,16 @@ fun BookmarkListLayout(
             ) {
                 // Metadata composable used in both positions
                 val metadataContent: @Composable () -> Unit = {
+                    if (showDescription && !bookmark.description.isNullOrBlank() && descriptionPosition == DescriptionPosition.ABOVE_METADATA) {
+                        Text(
+                            text = bookmark.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
                     if (showTags && bookmark.tags.isNotBlank()) {
                         BookmarkTagsDisplay(
                             tags = bookmark.tags,
@@ -298,6 +341,9 @@ fun BookmarkListLayout(
                             )
                         }
                         Spacer(modifier = Modifier.weight(1f))
+                        if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.METADATA_ROW) {
+                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(end = 8.dp))
+                        }
                         if (showReadingTime) {
                             if (bookmark.readingTimeMinutes > 0) {
                                 ReadingTimeBadge(readingTimeMinutes = bookmark.readingTimeMinutes)
@@ -371,7 +417,10 @@ fun BookmarkListLayout(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
-                        if (bookmark.description != null) {
+                        if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.BELOW_TITLE) {
+                            UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, modifier = Modifier.padding(top = 4.dp))
+                        }
+                        if (showDescription && !bookmark.description.isNullOrBlank() && descriptionPosition == DescriptionPosition.BELOW_TITLE) {
                             Text(
                                 text = bookmark.description,
                                 style = MaterialTheme.typography.bodySmall,
@@ -445,208 +494,53 @@ fun BookmarkListLayout(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun BookmarkCompactListLayout(
-    bookmark: BookmarkEntity,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
-    showReadingTime: Boolean = true,
-    showReadingProgress: Boolean = true,
-    showTags: Boolean = false,
-    showDate: Boolean = true,
-    dateDisplayMode: DateDisplayMode = DateDisplayMode.ELAPSED,
-    dimRead: Boolean = false,
-    offlineMode: Boolean = false,
-    bannerImageUrl: String? = null,
-    screenshotUrl: String? = null,
-    isSelected: Boolean = false,
-    thumbnailSide: ThumbnailSide = ThumbnailSide.LEFT,
-    showFavicon: Boolean = false,
-    thumbnailSize: Int = 48,
-    metadataPosition: MetadataPosition = MetadataPosition.BESIDE,
-    tagsScrollable: Boolean = false,
+private fun UrlDisplay(
+    url: String,
+    urlDisplayMode: UrlDisplayMode,
+    urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
     modifier: Modifier = Modifier
 ) {
-    val isFullyRead = bookmark.isRead
-    val alpha = if (isFullyRead && dimRead) 0.5f else 1f
-    val selectionBorderModifier = if (isSelected) {
-        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
-    } else {
-        Modifier
+    val displayText = when (urlDisplayMode) {
+        UrlDisplayMode.DOMAIN_ONLY -> extractDomain(url)
+        UrlDisplayMode.FULL_URL -> url
     }
-    val hapticFeedback = LocalHapticFeedback.current
-    val hapticLongClick = androidx.compose.runtime.remember(onLongClick) {
-        onLongClick?.let { callback ->
-            { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress); callback() }
-        }
-    }
-    val thumbSizeDp = thumbnailSize.dp
-    val faviconSizeDp = (thumbnailSize * 12 / 48).coerceIn(8, 16).dp
-    val faviconPaddingDp = (thumbnailSize * 2 / 48).coerceIn(1, 4).dp
-    val cornerDp = (thumbnailSize * 6 / 48).coerceIn(3, 10).dp
-
-    Card(
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .fillMaxWidth()
-            .then(selectionBorderModifier)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = hapticLongClick
-            )
-            ,
-        colors = if (isSelected) {
-            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
-        } else {
-            CardDefaults.cardColors()
-        }
     ) {
-        Box {
-            Box(modifier = Modifier.alpha(alpha)) {
-                val compactMetadataContent: @Composable () -> Unit = {
-                    if (showTags && bookmark.tags.isNotBlank()) {
-                        BookmarkTagsDisplay(
-                            tags = bookmark.tags,
-                            style = TagsDisplayStyle.COMPACT,
-                            scrollable = tagsScrollable,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 2.dp)
-                    ) {
-                        if (showDate) {
-                            Text(
-                                text = formatBookmarkDate(bookmark.createdAt, dateDisplayMode),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f)
-                            )
-                        } else {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                        if (showReadingTime && bookmark.readingTimeMinutes > 0) {
-                            ReadingTimeBadge(readingTimeMinutes = bookmark.readingTimeMinutes)
-                        } else if (showReadingTime && offlineMode) {
-                            NotSyncedBadge()
-                        }
-                    }
-                }
-
-                val compactThumbnailContent: @Composable RowScope.() -> Unit = {
-                    Box(
-                        modifier = Modifier
-                            .size(thumbSizeDp)
-                            .clip(RoundedCornerShape(cornerDp))
-                    ) {
-                        val effectiveImageUrl = bannerImageUrl ?: screenshotUrl
-                        if (effectiveImageUrl != null) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalPlatformContext.current)
-                                    .data(effectiveImageUrl)
-                                    .size(150)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentScale = ContentScale.Crop,
-                                filterQuality = androidx.compose.ui.graphics.FilterQuality.Low
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "📰",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-
-                        if (showFavicon) {
-                            AsyncImage(
-                                model = FaviconUtils.getFaviconUrl(bookmark.url),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(faviconPaddingDp)
-                                    .size(faviconSizeDp)
-                                    .clip(RoundedCornerShape(faviconSizeDp / 4))
-                                    .background(Color.White.copy(alpha = 0.5f)),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-                    }
-                }
-                val compactTextContent: @Composable RowScope.() -> Unit = {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = bookmark.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (metadataPosition == MetadataPosition.BESIDE) {
-                            compactMetadataContent()
-                        }
-                    }
-                }
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    if (metadataPosition == MetadataPosition.ABOVE) {
-                        Column(modifier = Modifier.padding(bottom = 4.dp)) {
-                            compactMetadataContent()
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (thumbnailSide == ThumbnailSide.LEFT) {
-                            compactThumbnailContent()
-                            compactTextContent()
-                        } else {
-                            compactTextContent()
-                            compactThumbnailContent()
-                        }
-                    }
-                    if (metadataPosition == MetadataPosition.BELOW) {
-                        Column(modifier = Modifier.padding(top = 4.dp)) {
-                            compactMetadataContent()
-                        }
-                    }
-                }
-            }
-
-            if (showReadingProgress && bookmark.readingProgress > 0f) {
-                LinearProgressIndicator(
-                    progress = { bookmark.readingProgress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .align(Alignment.BottomCenter),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            }
-
-            SelectionIndicator(
-                isSelected = isSelected,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(4.dp)
+        Box(modifier = Modifier.size(14.dp).padding(end = 4.dp)) {
+            // Globe icon always shown as base/fallback
+            Icon(
+                imageVector = Icons.Default.Language,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            // When FAVICON mode, overlay an AsyncImage that loads the site favicon;
+            // if it fails to load, the globe behind it remains visible.
+            if (urlIconMode == UrlIconMode.FAVICON) {
+                val faviconUrl = FaviconUtils.getFaviconUrl(url)
+                if (faviconUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalPlatformContext.current)
+                            .data(faviconUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
         }
+        Text(
+            text = displayText,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

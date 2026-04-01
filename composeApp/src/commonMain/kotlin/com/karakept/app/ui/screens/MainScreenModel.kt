@@ -80,6 +80,10 @@ class MainScreenModel(
     internal val _currentListContext = MutableStateFlow<String?>(null)
     val currentListContext: StateFlow<String?> = _currentListContext
 
+    // Smart lists that may have stale membership after a recent list-action.
+    // Cleared per-list after a successful sync when the user navigates to one.
+    internal val _smartListsNeedingRefresh = MutableStateFlow<Set<String>>(emptySet())
+
     // Pagination state
     internal val pageSize = 20
     internal val _isLoadingMore = MutableStateFlow(false)
@@ -113,8 +117,9 @@ class MainScreenModel(
     internal val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
-    // Hoisted scroll position — survives Voyager push/pop because MainScreenModel is a
-    // Koin singleton.  Updated by a LaunchedEffect in MainScreen that observes LazyListState;
+    // Hoisted scroll position — survives Voyager push/pop within the same Navigator because
+    // the same MainScreenModel instance is reused for the same Navigator's ScreenModelStore.
+    // Updated by a LaunchedEffect in MainScreen that observes LazyListState;
     // read back when the composable re-enters composition to initialise a new LazyListState.
     @Volatile var savedScrollIndex: Int = 0
         internal set
@@ -343,6 +348,21 @@ class MainScreenModel(
             launch {
                 _currentFilter.drop(1).collectLatest { filter ->
                     val currentServer = _selectedServer.value ?: return@collectLatest
+                    // If navigating to a smart list that needs refresh (stale after a
+                    // recent list-membership action), sync it from the server first.
+                    // GET /lists/{id}/bookmarks is always fresh, unlike the per-bookmark endpoint.
+                    val listId = filter.lists.singleOrNull()
+                    val needsRefresh = listId != null && listId in _smartListsNeedingRefresh.value
+                    if (needsRefresh) {
+                        _smartListsNeedingRefresh.value -= listId!!
+                        try {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                bookmarkRepository.syncBookmarksForList(currentServer, listId)
+                            }
+                        } catch (e: Exception) {
+                            AppLogger.e("MainScreenModel", "Smart list refresh failed for $listId: ${e.message}", e)
+                        }
+                    }
                     resetPaginationAndLoad(currentServer, filter)
                 }
             }
@@ -434,8 +454,13 @@ class MainScreenModel(
                 if (_currentFilter.value == capturedFilter) {
                     resetPaginationAndLoad(server, capturedFilter)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Scope cancelled (e.g. screen navigated away) — not a sync error.
+                // Reset sync progress so it doesn't stick in Error state.
+                bookmarkRepository.resetSyncProgress()
+                throw e
             } catch (e: Exception) {
-                AppLogger.e("MainScreenModel", "Failed to toggle bookmark state: ${e.message}", e)
+                AppLogger.e("MainScreenModel", "Sync failed: ${e.message}", e)
                 snackbarManager.showErrorWithRetry("Couldn't sync bookmarks") {
                     syncBookmarks()
                 }
@@ -455,6 +480,7 @@ class MainScreenModel(
                 ListHierarchyUtils.getAncestorIds(filter.lists.first(), lists.value)
         }
         // scrollToTop() removed — resetPaginationAndLoad emits it after the new data is ready
+        persistActiveFilter(filter)
     }
 
     fun applyTagFilter(tag: String, sourceBookmarkId: Long) {
@@ -473,6 +499,16 @@ class MainScreenModel(
         _currentListContext.value = null
         _tagFilterSourceBookmarkId.value = null
         // scrollToTop() removed — resetPaginationAndLoad emits it after the new data is ready
+        persistActiveFilter(FilterConfig())
+    }
+
+    private fun persistActiveFilter(filter: FilterConfig) {
+        screenModelScope.launch {
+            settingsRepository.saveLastActiveFilter(
+                status = filter.status.name,
+                listId = filter.lists.singleOrNull()
+            )
+        }
     }
 
     fun setDefaultList(listId: String) {

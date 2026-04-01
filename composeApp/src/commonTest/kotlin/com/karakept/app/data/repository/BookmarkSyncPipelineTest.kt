@@ -885,4 +885,51 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
             })
         }
     }
+
+    // ──────────────────────────────────────────────────────────
+    // Return value propagation (NOTIF-01)
+    // ──────────────────────────────────────────────────────────
+
+    @Test
+    fun execute_returnsNewBookmarkCount_whenThreeNewBookmarksInserted() = runTest(testDispatcher) {
+        // Remote returns 3 new bookmarks, none in local DB
+        val dtos = listOf(
+            makeBookmarkDto(id = "new-1"),
+            makeBookmarkDto(id = "new-2"),
+            makeBookmarkDto(id = "new-3")
+        )
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = dtos, nextCursor = null)
+        // Local DB is empty — all 3 are new
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(emptyList())
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns emptyList()
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        val result = pipeline.execute()
+
+        assertEquals(3, result)
+    }
+
+    @Test
+    fun execute_returnsZero_whenNoNewBookmarks() = runTest(testDispatcher) {
+        // Remote returns 1 bookmark that already exists in local DB
+        val dto = makeBookmarkDto(id = "existing-bk")
+        val existingRemoteId = "existing-bk".hashCode().toLong()
+        val existingEntity = makeBookmarkEntity(
+            localId = 5L,
+            remoteId = existingRemoteId,
+            originalRemoteId = "existing-bk"
+        )
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existingEntity)
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        val result = pipeline.execute()
+
+        assertEquals(0, result)
+    }
 }
