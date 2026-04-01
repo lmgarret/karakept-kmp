@@ -5,30 +5,24 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Diagonal ribbon background (top-right corner) -->
+    <!-- Horizontal banner across the bottom of the safe zone (visible area: 21-87) -->
     <path
-        android:pathData="M56,0 L108,0 L108,52 Z"
+        android:pathData="M21,72 L87,72 L87,87 L21,87 Z"
         android:fillColor="#D32F2F" />
 
-    <!-- "DEV" text rotated 45 degrees to align with the ribbon diagonal -->
-    <group
-        android:rotation="45"
-        android:pivotX="82"
-        android:pivotY="26">
+    <!-- "DEV" text centered in the banner -->
+    <!-- D -->
+    <path
+        android:pathData="M39,75 L39,84 L43,84 C45.5,84 47,82 47,79.5 C47,77 45.5,75 43,75 Z M41.5,77.5 L42.5,77.5 C43.8,77.5 44.5,78.3 44.5,79.5 C44.5,80.7 43.8,81.5 42.5,81.5 L41.5,81.5 Z"
+        android:fillColor="#FFFFFF" />
 
-        <!-- D -->
-        <path
-            android:pathData="M73,22 L73,30 L76.5,30 C78.5,30 79.5,28.5 79.5,26 C79.5,23.5 78.5,22 76.5,22 Z M75,24 L76,24 C77,24 77.5,25 77.5,26 C77.5,27 77,28 76,28 L75,28 Z"
-            android:fillColor="#FFFFFF" />
+    <!-- E -->
+    <path
+        android:pathData="M49,75 L49,84 L56,84 L56,82 L51.5,82 L51.5,80.5 L55,80.5 L55,78.5 L51.5,78.5 L51.5,77 L56,77 L56,75 Z"
+        android:fillColor="#FFFFFF" />
 
-        <!-- E -->
-        <path
-            android:pathData="M81,22 L81,30 L87,30 L87,28.5 L83,28.5 L83,27 L86,27 L86,25.5 L83,25.5 L83,23.5 L87,23.5 L87,22 Z"
-            android:fillColor="#FFFFFF" />
-
-        <!-- V -->
-        <path
-            android:pathData="M89,22 L91.5,29 L94,22 L96,22 L92.5,30 L90.5,30 L87,22 Z"
-            android:fillColor="#FFFFFF" />
-    </group>
+    <!-- V -->
+    <path
+        android:pathData="M58,75 L61,83 L64,75 L66.5,75 L62.5,84 L59.5,84 L55.5,75 Z"
+        android:fillColor="#FFFFFF" />
 </vector>

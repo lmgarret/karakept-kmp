@@ -222,6 +222,10 @@ compose.desktop {
     application {
         mainClass = "MainKt"
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
+        // Dev mode: ./gradlew run -Pdev=true → window title shows "(DEV)", onboarding badge visible
+        if (project.hasProperty("dev")) {
+            jvmArgs += "-Dkarakept.dev=true"
+        }
         // ZGC reduces GC pause times to <1ms, eliminating the stutters/jank
         // that G1GC (the default) causes in interactive Compose Desktop apps.
         // -XX:+ZGenerational enables the generational mode added in JDK 21,
