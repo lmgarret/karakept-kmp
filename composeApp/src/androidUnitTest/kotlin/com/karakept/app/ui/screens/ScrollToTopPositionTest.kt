@@ -53,7 +53,7 @@ class ScrollToTopPositionTest {
 
         // Scroll to top with explicit offset
         composeTestRule.runOnIdle {
-            runBlocking { listState.animateScrollToItem(0, 0) }
+            runBlocking { listState.scrollToItem(0, 0) }
         }
         composeTestRule.waitForIdle()
 
@@ -87,9 +87,9 @@ class ScrollToTopPositionTest {
             assertEquals(15, listState.firstVisibleItemScrollOffset)
         }
 
-        // animateScrollToItem(0, 0) should clear the residual offset
+        // scrollToItem(0, 0) should clear the residual offset
         composeTestRule.runOnIdle {
-            runBlocking { listState.animateScrollToItem(0, 0) }
+            runBlocking { listState.scrollToItem(0, 0) }
         }
         composeTestRule.waitForIdle()
 

@@ -93,6 +93,8 @@ class List02RegressionTest {
         every { settingsRepository.activeServerId } returns flowOf("server-1")
         every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
         every { settingsRepository.defaultListId } returns flowOf(null)
+        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
+        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
         every { listRepository.lists } returns MutableStateFlow(listOf(smartList1, smartList2, manualList))
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
