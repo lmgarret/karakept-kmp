@@ -537,6 +537,7 @@ actual fun HtmlRenderer(
                         }
                         pre {
                             overflow-x: auto;
+                            max-width: 100%;
                             padding: 8px;
                             background-color: rgba(127, 127, 127, 0.1);
                             border-radius: 4px;

@@ -228,9 +228,20 @@ private fun appendNodeChildren(
                         )
                     }
 
-                    "span", "div" -> {
-                        // Pass-through for inline span/div — just render children
+                    "span" -> {
                         appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                    }
+
+                    "div", "p", "section", "article", "header", "footer",
+                    "nav", "aside", "main", "address" -> {
+                        // Block-level element inside inline context (e.g. <div>/<p> lines inside <pre>)
+                        // — render children then add a newline to preserve line structure.
+                        // Skip the newline if the last char is already a newline (avoids
+                        // double-newlines from nested block elements like <div><p>...</p></div>).
+                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        if (builder.length == 0 || builder.toAnnotatedString().text.last() != '\n') {
+                            builder.append("\n")
+                        }
                     }
 
                     "br" -> {
