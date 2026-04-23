@@ -135,6 +135,23 @@ interface BookmarkDao {
     @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND isArchived = 0")
     suspend fun getNotArchivedCount(serverId: String): Int
 
+    @Query("""
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0
+        ORDER BY createdAt DESC
+    """)
+    suspend fun getAllOfflineForServer(serverId: String): List<BookmarkEntity>
+
+    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0")
+    fun getOfflineCountFlow(serverId: String): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0")
+    suspend fun getOfflineCount(serverId: String): Int
+
     // Query for sync that includes content length and reading time to determine if content exists
     @Query("""
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,

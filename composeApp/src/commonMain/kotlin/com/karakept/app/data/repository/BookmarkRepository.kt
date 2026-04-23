@@ -44,6 +44,10 @@ class BookmarkRepository(
         return bookmarkDao.getBookmarksForServer(server.id)
     }
 
+    fun getOfflineBookmarkCount(serverId: String): Flow<Int> {
+        return bookmarkDao.getOfflineCountFlow(serverId)
+    }
+
     suspend fun getBookmarkByRemoteId(remoteId: Long, serverId: String): BookmarkEntity? {
         return bookmarkDao.getBookmarkByRemoteId(remoteId, serverId)
     }
@@ -311,6 +315,7 @@ class BookmarkRepository(
                 FilterStatus.ALL_INCLUDING_ARCHIVED -> "serverId = ?"
                 FilterStatus.FAVORITES -> "serverId = ? AND isStarred = 1"
                 FilterStatus.ARCHIVED -> "serverId = ? AND isArchived = 1"
+                FilterStatus.OFFLINE -> "serverId = ? AND content IS NOT NULL AND length(content) > 0"
             }
             RoomRawQuery(
                 "SELECT $BOOKMARK_SELECT FROM bookmarks WHERE $whereClause ORDER BY $orderBy LIMIT ? OFFSET ?"
@@ -359,6 +364,8 @@ class BookmarkRepository(
                     bookmarkDao.getAllFavoritesForServer(server.id)
                 com.karakept.app.data.model.FilterStatus.ARCHIVED ->
                     bookmarkDao.getAllArchivedForServer(server.id)
+                com.karakept.app.data.model.FilterStatus.OFFLINE ->
+                    bookmarkDao.getAllOfflineForServer(server.id)
             }
         }
     }
@@ -383,6 +390,8 @@ class BookmarkRepository(
                     bookmarkDao.getFavoritesCount(server.id)
                 com.karakept.app.data.model.FilterStatus.ARCHIVED ->
                     bookmarkDao.getArchivedCount(server.id)
+                com.karakept.app.data.model.FilterStatus.OFFLINE ->
+                    bookmarkDao.getOfflineCount(server.id)
             }
         }
     }

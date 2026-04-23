@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Home
@@ -134,6 +135,15 @@ internal fun DrawerContent(
                 onClick = { onFilterApply(FilterConfig(status = FilterStatus.ARCHIVED)) },
                 onSetAsHome = { onSetAsDefaultType(DefaultListType.ARCHIVED) },
                 count = quickFilterCounts.archived
+            )
+
+            BuiltinDrawerItem(
+                label = "Offline",
+                icon = { Icon(Icons.Default.CloudDone, contentDescription = null) },
+                selected = currentFilter == FilterConfig(status = FilterStatus.OFFLINE),
+                onClick = { onFilterApply(FilterConfig(status = FilterStatus.OFFLINE)) },
+                onSetAsHome = null,
+                count = quickFilterCounts.offline
             )
 
             BuiltinDrawerItem(

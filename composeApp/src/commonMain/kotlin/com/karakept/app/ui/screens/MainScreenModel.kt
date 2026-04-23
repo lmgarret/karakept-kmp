@@ -40,7 +40,8 @@ import com.karakept.app.domain.ListHierarchyUtils
 data class QuickFilterCounts(
     val all: Int = 0,
     val favorites: Int = 0,
-    val archived: Int = 0
+    val archived: Int = 0,
+    val offline: Int = 0
 )
 
 class MainScreenModel(
@@ -185,14 +186,22 @@ class MainScreenModel(
         }
     }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+    private val offlineBookmarkCount: StateFlow<Int> = selectedServer
+        .flatMapLatest { server ->
+            if (server != null) bookmarkRepository.getOfflineBookmarkCount(server.id)
+            else flowOf(0)
+        }
+        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     val quickFilterCounts: StateFlow<QuickFilterCounts> = combine(
-        selectedServer, allBookmarks
-    ) { server, bookmarks ->
+        selectedServer, allBookmarks, offlineBookmarkCount
+    ) { server, bookmarks, offline ->
         if (server == null) return@combine QuickFilterCounts()
         QuickFilterCounts(
             all = bookmarks.count { !it.isArchived },
             favorites = bookmarks.count { it.isStarred && !it.isArchived },
-            archived = bookmarks.count { it.isArchived }
+            archived = bookmarks.count { it.isArchived },
+            offline = offline
         )
     }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
 
