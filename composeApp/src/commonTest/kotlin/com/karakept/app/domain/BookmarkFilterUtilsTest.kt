@@ -401,6 +401,31 @@ class BookmarkFilterUtilsTest {
     }
 
     @Test
+    fun searchFilter_statusOffline_excludesArchived() {
+        // In search mode allBookmarks strips content, so OFFLINE falls back to non-archived behaviour.
+        val normal = makeBookmark(isArchived = false, title = "Active offline")
+        val archived = makeBookmark(isArchived = true, title = "Active offline archived")
+        val result = BookmarkFilterUtils.applySearchFilter(
+            listOf(normal, archived),
+            FilterConfig(status = FilterStatus.OFFLINE),
+            "active"
+        )
+        assertEquals(listOf(normal), result)
+    }
+
+    @Test
+    fun searchFilter_statusOffline_withQuery_matchesTitle() {
+        val match = makeBookmark(isArchived = false, title = "Offline Kotlin Article")
+        val noMatch = makeBookmark(isArchived = false, title = "Online Swift Article")
+        val result = BookmarkFilterUtils.applySearchFilter(
+            listOf(match, noMatch),
+            FilterConfig(status = FilterStatus.OFFLINE),
+            "kotlin"
+        )
+        assertEquals(listOf(match), result)
+    }
+
+    @Test
     fun searchFilter_emptyQuery_returnsAll() {
         val bookmarks = listOf(makeBookmark(), makeBookmark(), makeBookmark())
         val result = BookmarkFilterUtils.applySearchFilter(bookmarks, FilterConfig(), "")
