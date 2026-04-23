@@ -94,7 +94,8 @@ fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<S
 /**
  * Reconciles a single bookmark's smart list membership after a list-membership action.
  * Uses GET /bookmarks/{id}/lists — one API call — instead of syncing entire smart lists.
- * Then reloads the visible list so the UI reflects the change immediately.
+ * Then updates the visible list surgically so the UI reflects the change immediately
+ * without discarding the user's scroll position.
  */
 internal fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
     val server = _selectedServer.value ?: return
@@ -113,13 +114,46 @@ internal fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
                 _smartListsNeedingRefresh.value += smartListIds
                 AppLogger.d("MainScreenModel", "Marked ${smartListIds.size} smart lists for deferred refresh")
             }
-            // Always reload the current filter — the user may have navigated to a different list
-            // (e.g. list A after removing from list B) that now has updated smart-list membership.
+            // Targeted update: fetch the reconciled bookmark from DB and apply a surgical
+            // transform instead of resetPaginationAndLoad. resetPaginationAndLoad replaces
+            // the whole accumulated list with only page 0 (≤20 items), which discards any
+            // pages the user had scrolled through and causes the list to jump to a fixed
+            // near-top position regardless of where the user was.
             val reloadServer = _selectedServer.value ?: server
-            resetPaginationAndLoad(reloadServer, _currentFilter.value, scrollToTop = false)
+            val updated = bookmarkRepository.getBookmarkByRemoteId(bookmark.remoteId, reloadServer.id)
+            updateAccumulatedBookmarks { current ->
+                applyReconcileBookmarkTransform(current, bookmark.remoteId, updated, _currentListContext.value)
+            }
         } catch (e: Exception) {
             AppLogger.e("MainScreenModel", "List membership reconciliation failed for bookmark ${bookmark.localId}: ${e.message}", e)
         }
+    }
+}
+
+/**
+ * Pure transform applied after smart-list reconciliation.
+ *
+ * - [updated] == null  → bookmark was deleted server-side; remove it.
+ * - [currentListContext] set and bookmark no longer in that list → remove it
+ *   (e.g. a Feeds smart list that now excludes a bookmark added to Read Later).
+ * - Otherwise → update the bookmark in place with fresh server data.
+ *
+ * Extracted as a top-level function so both production code and unit tests
+ * exercise the same logic path.
+ */
+internal fun applyReconcileBookmarkTransform(
+    current: List<BookmarkEntity>,
+    remoteId: Long,
+    updated: BookmarkEntity?,
+    currentListContext: String?
+): List<BookmarkEntity> {
+    if (updated == null) return current.filter { it.remoteId != remoteId }
+    val updatedListIds = updated.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    val stillInContext = currentListContext == null || updatedListIds.contains(currentListContext)
+    return if (stillInContext) {
+        current.map { if (it.remoteId == remoteId) updated else it }
+    } else {
+        current.filter { it.remoteId != remoteId }
     }
 }
 
