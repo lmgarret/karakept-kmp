@@ -16,6 +16,8 @@ import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.UndoCompletedEvent
 import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.eq
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -36,15 +38,13 @@ import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 
 /**
- * Regression tests for the bug where sorting was applied per-page rather than
- * across the entire accumulated bookmark list.
+ * Tests that the [FilterConfig.sort] option is propagated to [BookmarkRepository.getBookmarksPaged]
+ * so that the database cursor starts in the correct order rather than sorting in memory after
+ * pagination has already sliced the collection.
  *
- * When the DB returns bookmarks in creation-date order and the user selects a
- * different sort (e.g. TITLE_AZ or OLDEST), each loaded page was sorted in
- * isolation. Items from page N+1 were appended after page N without a global
- * re-sort, so the overall list was only ordered within each page window.
- *
- * The fix re-sorts the full accumulated list after every page append.
+ * The key invariant: when the user selects OLDEST or TITLE_AZ, the very first page returned by
+ * the DB must contain the globally-oldest / alphabetically-first bookmarks, not just the first 20
+ * in the DB's default createdAt-DESC order.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -106,6 +106,12 @@ class MainScreenModelPaginationSortingTest {
         every { bookmarkRepository.syncProgress } returns MutableStateFlow(
             com.karakept.app.data.model.SyncProgress.Idle
         )
+        coEvery {
+            bookmarkRepository.getBookmarksPaged(
+                server = any(), status = any(), offset = any(), limit = any(),
+                sort = any(), listId = any()
+            )
+        } returns emptyList()
     }
 
     @After
@@ -142,141 +148,128 @@ class MainScreenModelPaginationSortingTest {
     )
 
     /**
-     * Page 0 returns 20 bookmarks titled "Z-01"…"Z-20" (full page → more pages exist).
-     * Page 1 returns 3 bookmarks titled "A-01"…"A-03" (partial page → DB exhausted).
-     *
-     * Without the fix the accumulated list would be [Z-01…Z-20, A-01…A-03].
-     * With the fix it must be globally sorted: [A-01…A-03, Z-01…Z-20].
+     * On initialization the model uses the default filter (NEWEST), so the repository
+     * must be called with sort = NEWEST to get the DB cursor pointing at newest-first.
      */
     @Test
-    fun `titleAz sort is applied globally across page boundaries`() = runTest(testDispatcher) {
-        val pageSize = 20
-        val page0 = (1..pageSize).map { makeBookmark(id = it.toLong(), title = "Z-%02d".format(it)) }
-        val page1 = (1..3).map { makeBookmark(id = (pageSize + it).toLong(), title = "A-%02d".format(it)) }
-
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = 0, limit = any(), listId = any()
-            )
-        } returns page0
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = pageSize, limit = any(), listId = any()
-            )
-        } returns page1
-
+    fun `NEWEST sort is passed to repository on initialization`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model.applyFilter(FilterConfig(sort = SortOption.TITLE_AZ))
-        advanceUntilIdle()
-
-        model.loadNextPage()
-        advanceUntilIdle()
-
-        val titles = model._accumulatedBookmarks.value.map { it.title }
-        assertEquals(
-            "A-01", titles.first(),
-            "Expected globally sorted list to start with 'A-01', but got: $titles"
-        )
-        assertEquals(
-            "Z-20", titles.last(),
-            "Expected globally sorted list to end with 'Z-20', but got: $titles"
-        )
-        assertEquals(pageSize + 3, titles.size)
+        coVerify(atLeast = 1) {
+            bookmarkRepository.getBookmarksPaged(
+                server = any(), status = any(), offset = any(), limit = any(),
+                sort = eq(SortOption.NEWEST), listId = any()
+            )
+        }
     }
 
     /**
-     * Page 0 returns 20 bookmarks with createdAt in range 1001–1020 (newer).
-     * Page 1 returns 3 bookmarks with createdAt 1, 2, 3 (older).
-     *
-     * Without the fix the accumulated list stays [newer…, older…].
-     * With the fix and OLDEST sort the list must be globally ordered oldest-first.
+     * When the user switches to OLDEST sort, the repository call must carry
+     * sort = OLDEST so the DB cursor starts at the oldest bookmark rather than
+     * sorting an already-paginated slice in memory.
      */
     @Test
-    fun `oldest sort is applied globally across page boundaries`() = runTest(testDispatcher) {
-        val pageSize = 20
-        val page0 = (1..pageSize).map {
-            makeBookmark(id = it.toLong(), title = "Bookmark $it", createdAt = 1000L + it)
-        }
-        val page1 = (1..3).map {
-            makeBookmark(id = (pageSize + it).toLong(), title = "Old $it", createdAt = it.toLong())
-        }
-
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = 0, limit = any(), listId = any()
-            )
-        } returns page0
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = pageSize, limit = any(), listId = any()
-            )
-        } returns page1
-
+    fun `OLDEST sort is forwarded to repository when filter changes`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
         model.applyFilter(FilterConfig(sort = SortOption.OLDEST))
         advanceUntilIdle()
 
-        model.loadNextPage()
-        advanceUntilIdle()
-
-        val timestamps = model._accumulatedBookmarks.value.map { it.createdAt }
-        assertEquals(
-            1L, timestamps.first(),
-            "Expected oldest bookmark first, but got timestamps: $timestamps"
-        )
-        assertEquals(
-            1020L, timestamps.last(),
-            "Expected newest bookmark last, but got timestamps: $timestamps"
-        )
-        assertEquals(pageSize + 3, timestamps.size)
+        coVerify(atLeast = 1) {
+            bookmarkRepository.getBookmarksPaged(
+                server = any(), status = any(), offset = any(), limit = any(),
+                sort = eq(SortOption.OLDEST), listId = any()
+            )
+        }
     }
 
     /**
-     * Sanity check: the default NEWEST sort (createdAt DESC) must also be
-     * globally consistent after a page append, even though it matches the DB's
-     * own ordering.
+     * When the user switches to TITLE_AZ sort, the repository call must carry
+     * sort = TITLE_AZ so the DB cursor yields bookmarks in alphabetical order
+     * from the very first page.
      */
     @Test
-    fun `newest sort is consistent across page boundaries`() = runTest(testDispatcher) {
-        val pageSize = 20
-        // Page 0: createdAt 21..40 (newer, as if DB returned them first)
-        val page0 = (1..pageSize).map {
-            makeBookmark(id = it.toLong(), title = "Bookmark $it", createdAt = (20 + it).toLong())
-        }
-        // Page 1: createdAt 1..3 (older, second DB page)
-        val page1 = (1..3).map {
-            makeBookmark(id = (pageSize + it).toLong(), title = "Old $it", createdAt = it.toLong())
-        }
-
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = 0, limit = any(), listId = any()
-            )
-        } returns page0
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = pageSize, limit = any(), listId = any()
-            )
-        } returns page1
-
+    fun `TITLE_AZ sort is forwarded to repository when filter changes`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model.loadNextPage()
+        model.applyFilter(FilterConfig(sort = SortOption.TITLE_AZ))
         advanceUntilIdle()
 
-        val timestamps = model._accumulatedBookmarks.value.map { it.createdAt }
-        assertEquals(
-            40L, timestamps.first(),
-            "Expected newest bookmark first, but got timestamps: $timestamps"
-        )
-        assertEquals(
-            1L, timestamps.last(),
-            "Expected oldest bookmark last, but got timestamps: $timestamps"
-        )
+        coVerify(atLeast = 1) {
+            bookmarkRepository.getBookmarksPaged(
+                server = any(), status = any(), offset = any(), limit = any(),
+                sort = eq(SortOption.TITLE_AZ), listId = any()
+            )
+        }
     }
+
+    /**
+     * Each change to the sort option must produce a repository call with the new
+     * sort — including subsequent changes in the same session.
+     */
+    @Test
+    fun `sort option change is reflected in every subsequent repository call`() =
+        runTest(testDispatcher) {
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+
+            model.applyFilter(FilterConfig(sort = SortOption.TITLE_AZ))
+            advanceUntilIdle()
+
+            model.applyFilter(FilterConfig(sort = SortOption.READING_TIME_SHORT))
+            advanceUntilIdle()
+
+            coVerify(atLeast = 1) {
+                bookmarkRepository.getBookmarksPaged(
+                    server = any(), status = any(), offset = any(), limit = any(),
+                    sort = eq(SortOption.READING_TIME_SHORT), listId = any()
+                )
+            }
+        }
+
+    /**
+     * Verifies that loadNextPage also forwards the current sort so that each
+     * successive page continues from the right position in the sorted DB cursor.
+     */
+    @Test
+    fun `subsequent pages are requested with the same sort as the first page`() =
+        runTest(testDispatcher) {
+            val pageSize = 20
+            // Page 0: full page so the model considers more data available
+            val page0 = (1..pageSize).map { makeBookmark(id = it.toLong(), title = "A-$it") }
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(
+                    server = any(), status = any(), offset = 0, limit = any(),
+                    sort = any(), listId = any()
+                )
+            } returns page0
+            // Page 1: partial page to signal DB exhaustion
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(
+                    server = any(), status = any(), offset = pageSize, limit = any(),
+                    sort = any(), listId = any()
+                )
+            } returns listOf(makeBookmark(id = 99, title = "Z-1"))
+
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+
+            model.applyFilter(FilterConfig(sort = SortOption.TITLE_AZ))
+            advanceUntilIdle()
+
+            model.loadNextPage()
+            advanceUntilIdle()
+
+            // Both the initial load (offset=0) and the next page (offset=20) must use TITLE_AZ
+            coVerify(atLeast = 2) {
+                bookmarkRepository.getBookmarksPaged(
+                    server = any(), status = any(), offset = any(), limit = any(),
+                    sort = eq(SortOption.TITLE_AZ), listId = any()
+                )
+            }
+            assertEquals(pageSize + 1, model._accumulatedBookmarks.value.size)
+        }
 }
