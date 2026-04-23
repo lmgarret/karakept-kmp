@@ -17,7 +17,6 @@ import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.UndoCompletedEvent
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.eq
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -159,7 +158,7 @@ class MainScreenModelPaginationSortingTest {
         coVerify(atLeast = 1) {
             bookmarkRepository.getBookmarksPaged(
                 server = any(), status = any(), offset = any(), limit = any(),
-                sort = eq(SortOption.NEWEST), listId = any()
+                sort = SortOption.NEWEST, listId = any()
             )
         }
     }
@@ -180,7 +179,7 @@ class MainScreenModelPaginationSortingTest {
         coVerify(atLeast = 1) {
             bookmarkRepository.getBookmarksPaged(
                 server = any(), status = any(), offset = any(), limit = any(),
-                sort = eq(SortOption.OLDEST), listId = any()
+                sort = SortOption.OLDEST, listId = any()
             )
         }
     }
@@ -201,7 +200,7 @@ class MainScreenModelPaginationSortingTest {
         coVerify(atLeast = 1) {
             bookmarkRepository.getBookmarksPaged(
                 server = any(), status = any(), offset = any(), limit = any(),
-                sort = eq(SortOption.TITLE_AZ), listId = any()
+                sort = SortOption.TITLE_AZ, listId = any()
             )
         }
     }
@@ -225,7 +224,7 @@ class MainScreenModelPaginationSortingTest {
             coVerify(atLeast = 1) {
                 bookmarkRepository.getBookmarksPaged(
                     server = any(), status = any(), offset = any(), limit = any(),
-                    sort = eq(SortOption.READING_TIME_SHORT), listId = any()
+                    sort = SortOption.READING_TIME_SHORT, listId = any()
                 )
             }
         }
@@ -267,7 +266,7 @@ class MainScreenModelPaginationSortingTest {
             coVerify(atLeast = 2) {
                 bookmarkRepository.getBookmarksPaged(
                     server = any(), status = any(), offset = any(), limit = any(),
-                    sort = eq(SortOption.TITLE_AZ), listId = any()
+                    sort = SortOption.TITLE_AZ, listId = any()
                 )
             }
             assertEquals(pageSize + 1, model._accumulatedBookmarks.value.size)
