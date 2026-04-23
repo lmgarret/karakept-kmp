@@ -97,7 +97,9 @@ fun MainScreenModel.loadNextPage() {
             val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, nextPage)
 
             if (newItems.isNotEmpty()) {
-                updateAccumulatedBookmarks { it + newItems }
+                updateAccumulatedBookmarks { current ->
+                    BookmarkFilterUtils.applySorting(current + newItems, filter.sort)
+                }
                 _currentPage.value = lastPage
             }
             if (dbExhausted) {
