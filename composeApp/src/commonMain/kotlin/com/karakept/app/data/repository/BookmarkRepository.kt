@@ -246,6 +246,18 @@ class BookmarkRepository(
                 }
                 val readingTime = ReadingTimeCalculator.calculateReadingTime(cachedContent)
                 bookmarkDao.updateContent(existing.localId, cachedContent, readingTime)
+            } else if (!existing.content.isNullOrBlank()) {
+                // No fresh content from server, but existing stored HTML may still have http://
+                // image URLs from a previous failed download. Re-process to retry those.
+                try {
+                    val cachedContent = imageCacheManager.cacheImagesInHtml(existing.content!!)
+                    if (cachedContent != existing.content) {
+                        val readingTime = ReadingTimeCalculator.calculateReadingTime(cachedContent)
+                        bookmarkDao.updateContent(existing.localId, cachedContent, readingTime)
+                    }
+                } catch (e: Exception) {
+                    AppLogger.e("BookmarkRepository", "Failed to re-cache images in existing content: ${e.message}")
+                }
             }
 
             // Cache hero images (banner/screenshot)
