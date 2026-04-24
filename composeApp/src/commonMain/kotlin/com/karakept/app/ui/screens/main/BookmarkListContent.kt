@@ -56,12 +56,14 @@ import com.karakept.app.data.model.ThumbnailSide
 import com.karakept.app.data.model.UrlDisplayMode
 import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
+import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkContextMenu
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.BookmarkPlaceholderItem
 import com.karakept.app.ui.components.QuickActionBookmarkItem
+import com.karakept.app.ui.components.ScrollCursorIndicator
 import com.karakept.app.ui.components.SwipeableBookmarkItem
 import com.karakept.app.ui.components.getEffectiveColor
 import com.karakept.app.ui.utils.onDesktopModifiedClick
@@ -79,6 +81,8 @@ internal fun BookmarkListContent(
     syncProgress: com.karakept.app.data.model.SyncProgress?,
     isLoadingMore: Boolean,
     hasMoreItems: Boolean,
+    showScrollCursor: Boolean = false,
+    sortOption: SortOption = SortOption.NEWEST,
     layoutType: LayoutType,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -610,6 +614,15 @@ internal fun BookmarkListContent(
                     contentDescription = "Scroll to top"
                 )
             }
+        }
+
+        if (showScrollCursor) {
+            ScrollCursorIndicator(
+                listState = listState,
+                bookmarks = bookmarks,
+                sortOption = sortOption,
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)
+            )
         }
 
         } // end inner Box

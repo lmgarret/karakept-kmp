@@ -92,6 +92,7 @@ object MainScreen : Screen {
         val showDateInList by settingsScreenModel.showDateInList.collectAsState()
         val dateDisplayMode by settingsScreenModel.dateDisplayMode.collectAsState()
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
+        val showScrollCursor by settingsScreenModel.showScrollCursor.collectAsState()
         val displayConfig = remember(activeLayout, layoutType, dimReadBookmarks, showReadingTimeBadge, showTags, showDateInList, dateDisplayMode) {
             MainScreenDisplayConfig(
                 layoutType = activeLayout?.layoutType?.let { LayoutType.fromString(it) } ?: layoutType,
@@ -300,7 +301,9 @@ object MainScreen : Screen {
             { isExpanded, activeBmId, onBookmarkClick, onMenuClick ->
                 MainScreenScaffoldContent(
                     isExpandedLayout = isExpanded, bookmarks = bookmarks, isSyncing = isSyncing, syncProgress = syncProgress,
-                    isLoadingMore = isLoadingMore, hasMoreItems = hasMoreItems, displayConfig = displayConfig,
+                    isLoadingMore = isLoadingMore, hasMoreItems = hasMoreItems,
+                    showScrollCursor = showScrollCursor, sortOption = currentFilter.sort,
+                    displayConfig = displayConfig,
                     swipeLeftAction = swipeLeftAction, swipeRightAction = swipeRightAction,
                     customSwipeActionConfigs = customSwipeActionConfigs, swipeLeftConfigId = swipeLeftConfigId, swipeRightConfigId = swipeRightConfigId,
                     trackReadingProgress = trackReadingProgress, offlineMode = offlineMode, isAutoOffline = isAutoOffline,

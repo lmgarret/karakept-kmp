@@ -303,6 +303,7 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     val showReadingTimeBadge: Flow<Boolean> = displaySettingsFlow.map { it.showReadingTimeBadge }.distinctUntilChanged()
     val showTags: Flow<Boolean> = displaySettingsFlow.map { it.showTags }.distinctUntilChanged()
     val dimReadBookmarks: Flow<Boolean> = displaySettingsFlow.map { it.dimReadBookmarks }.distinctUntilChanged()
+    val showScrollCursor: Flow<Boolean> = displaySettingsFlow.map { it.showScrollCursor }.distinctUntilChanged()
 
     // ── Derived flows (reader) ────────────────────────────────────────────────
 
