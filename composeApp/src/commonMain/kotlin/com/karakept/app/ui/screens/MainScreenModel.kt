@@ -8,6 +8,10 @@ import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.ListSyncStatus
+import com.karakept.app.data.model.SYNC_KEY_ARCHIVED
+import com.karakept.app.data.model.SYNC_KEY_FAVORITES
+import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
@@ -15,6 +19,7 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.setDefaultListType
 import com.karakept.app.data.repository.setDefaultListId
 import com.karakept.api.model.KarakeepList as KarakeepList
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -62,11 +67,40 @@ class MainScreenModel(
     internal val _selectedServer = MutableStateFlow<Server?>(null)
     val selectedServer: StateFlow<Server?> = _selectedServer
 
-    internal val _isSyncing = MutableStateFlow(false)
-    val isSyncing: StateFlow<Boolean> = _isSyncing
-
     internal val _currentFilter = MutableStateFlow(FilterConfig())
     val currentFilter: StateFlow<FilterConfig> = _currentFilter
+
+    // Track the current active list filter (if any)
+    internal val _currentListContext = MutableStateFlow<String?>(null)
+    val currentListContext: StateFlow<String?> = _currentListContext
+
+    // Per-key sync status from the repository; drives both drawer indicators and the top bar.
+    val listSyncStatuses: StateFlow<Map<SyncKey, ListSyncStatus>> =
+        bookmarkRepository.perKeyProgress
+            .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    // Sync status for the list/filter currently on screen. Reacts immediately when the user
+    // navigates to a different list so the top bar always reflects the current view.
+    val currentSyncStatus: StateFlow<ListSyncStatus> = combine(
+        _currentListContext,
+        _currentFilter,
+        bookmarkRepository.perKeyProgress
+    ) { listId, filter, statuses ->
+        statuses[resolveCurrentKey(listId, filter)] ?: ListSyncStatus.Idle
+    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ListSyncStatus.Idle)
+
+    // Backward-compat for PullToRefreshBox: only active when the CURRENT list is syncing.
+    // Other lists syncing in background show their status only in the drawer.
+    val isSyncing: StateFlow<Boolean> = combine(
+        _currentListContext,
+        _currentFilter,
+        bookmarkRepository.perKeyProgress
+    ) { listId, filter, statuses ->
+        statuses[resolveCurrentKey(listId, filter)] != null
+    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    @Deprecated("Use currentSyncStatus instead", ReplaceWith("currentSyncStatus"))
+    internal val _isSyncing = MutableStateFlow(false)
 
     private val _tagFilterSourceBookmarkId = MutableStateFlow<Long?>(null)
     val tagFilterSourceBookmarkId: StateFlow<Long?> = _tagFilterSourceBookmarkId
@@ -75,10 +109,6 @@ class MainScreenModel(
 
     private val _expandedLists = MutableStateFlow<Set<String>>(emptySet())
     val expandedLists: StateFlow<Set<String>> = _expandedLists
-
-    // Track the current active list filter (if any)
-    internal val _currentListContext = MutableStateFlow<String?>(null)
-    val currentListContext: StateFlow<String?> = _currentListContext
 
     // Smart lists that may have stale membership after a recent list-action.
     // Cleared per-list after a successful sync when the user navigates to one.
@@ -149,8 +179,16 @@ class MainScreenModel(
         .map { it.isNotEmpty() }
         .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    // Backward-compat for BookmarkListContent's top progress bar.
+    // Derived from the current list's sync status rather than the global repository flow.
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> =
-        bookmarkRepository.syncProgress.stateIn(
+        currentSyncStatus.map { status ->
+            when (status) {
+                is ListSyncStatus.FetchingMetadata -> com.karakept.app.data.model.SyncProgress.FetchingMetadata(0, 0)
+                is ListSyncStatus.FetchingContent  -> com.karakept.app.data.model.SyncProgress.FetchingContent(status.current, status.total)
+                is ListSyncStatus.Idle             -> com.karakept.app.data.model.SyncProgress.Idle
+            }
+        }.stateIn(
             screenModelScope,
             SharingStarted.WhileSubscribed(5000),
             com.karakept.app.data.model.SyncProgress.Idle
@@ -375,7 +413,7 @@ class MainScreenModel(
             }
 
             val isOffline: Boolean = settingsRepository.offlineMode.first()
-            if (!isOffline && !_isSyncing.value) {
+            if (!isOffline) {
                 syncBookmarks()
             }
         }
@@ -418,6 +456,14 @@ class MainScreenModel(
 
     // Pagination — see MainScreenModelPagination.kt
 
+    /** Maps the current view (list context + filter) to a [SyncKey] for progress tracking. */
+    private fun resolveCurrentKey(listId: String?, filter: FilterConfig): SyncKey = when {
+        listId != null -> listId
+        filter.status == FilterStatus.FAVORITES -> SYNC_KEY_FAVORITES
+        filter.status == FilterStatus.ARCHIVED  -> SYNC_KEY_ARCHIVED
+        else -> null
+    }
+
     fun syncBookmarks() {
         screenModelScope.launch {
             // Capture state BEFORE any suspension so the sync strategy and the
@@ -431,32 +477,28 @@ class MainScreenModel(
             val server = selectedServer.value ?: return@launch
 
             try {
-                _isSyncing.value = true
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    when {
-                        capturedListContext != null ->
-                            bookmarkRepository.syncBookmarksForList(server, capturedListContext)
-                        capturedFilter.status == FilterStatus.FAVORITES ->
-                            bookmarkRepository.syncFavorites(server)
-                        capturedFilter.status == FilterStatus.ARCHIVED ->
-                            bookmarkRepository.syncArchived(server)
-                        else ->
-                            bookmarkRepository.syncBookmarks(server)
-                    }
+                    // Step 1: Fetch lists first so the drawer updates immediately.
                     listRepository.refreshLists(server)
+
+                    // Step 2: Sync the currently-rendered list/filter first so the user
+                    // sees their bookmarks as soon as possible.
+                    syncCurrentView(server, capturedListContext, capturedFilter)
                 }
 
-                // Reload with the same filter that was active when sync started.
-                // Use resetPaginationAndLoad so the code path is identical to the
-                // initial load (proven not to blink). If the user changed the
-                // filter while sync was running the drop(1) observer already
-                // triggered a reload for the new filter — skip in that case.
+                // Step 3: Reload the current view immediately after its metadata lands.
                 if (_currentFilter.value == capturedFilter) {
                     resetPaginationAndLoad(server, capturedFilter)
                 }
+
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    // Step 4: Sync all other named lists concurrently.
+                    // Each call is independently deduplicated by BookmarkRepository.
+                    val currentKey = resolveCurrentKey(capturedListContext, capturedFilter)
+                    syncOtherLists(server, currentKey)
+                }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Scope cancelled (e.g. screen navigated away) — not a sync error.
-                // Reset sync progress so it doesn't stick in Error state.
                 bookmarkRepository.resetSyncProgress()
                 throw e
             } catch (e: Exception) {
@@ -464,8 +506,44 @@ class MainScreenModel(
                 snackbarManager.showErrorWithRetry("Couldn't sync bookmarks") {
                     syncBookmarks()
                 }
-            } finally {
-                _isSyncing.value = false
+            }
+        }
+    }
+
+    /** Dispatches the correct repository call for the currently-viewed list or filter. */
+    private suspend fun syncCurrentView(
+        server: com.karakept.app.data.model.Server,
+        listContext: String?,
+        filter: FilterConfig
+    ) {
+        when {
+            listContext != null -> bookmarkRepository.syncBookmarksForList(server, listContext)
+            filter.status == FilterStatus.FAVORITES -> bookmarkRepository.syncFavorites(server)
+            filter.status == FilterStatus.ARCHIVED  -> bookmarkRepository.syncArchived(server)
+            else -> bookmarkRepository.syncBookmarks(server)
+        }
+    }
+
+    /**
+     * Syncs all named lists except [skipKey] concurrently.
+     * Failures of individual lists are logged but not re-thrown — they are non-fatal
+     * and do not block the user from seeing already-synced data.
+     */
+    private suspend fun syncOtherLists(
+        server: com.karakept.app.data.model.Server,
+        skipKey: SyncKey
+    ) {
+        coroutineScope {
+            listRepository.lists.value.forEach { list ->
+                val key = list.id ?: return@forEach
+                if (key == skipKey) return@forEach
+                launch {
+                    try {
+                        bookmarkRepository.syncBookmarksForList(server, key)
+                    } catch (e: Exception) {
+                        AppLogger.w("MainScreenModel", "Other-list sync failed for list $key: ${e.message}")
+                    }
+                }
             }
         }
     }

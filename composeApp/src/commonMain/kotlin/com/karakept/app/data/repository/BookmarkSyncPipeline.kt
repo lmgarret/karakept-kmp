@@ -4,6 +4,7 @@ import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.ListEntity
+import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.remote.RemoteDataSource
@@ -74,7 +75,8 @@ internal class BookmarkSyncPipeline(
     private val listDao: ListDao,
     private val syncProgress: MutableStateFlow<com.karakept.app.data.model.SyncProgress>,
     private val fetchRemoteContent: suspend (Server, String) -> String?,
-    private val cacheHeroAssetsForBookmark: suspend (Server, Long, String, String?, String?) -> Unit
+    private val cacheHeroAssetsForBookmark: suspend (Server, Long, String, String?, String?) -> Unit,
+    private val onProgress: ((ListSyncStatus) -> Unit)? = null
 ) {
     /** Bookmarks inserted during the last execute() call, available after completion. */
     var newlyInsertedBookmarks: List<BookmarkEntity> = emptyList()
@@ -83,6 +85,7 @@ internal class BookmarkSyncPipeline(
     suspend fun execute(): Int {
         // Phase 1: Process pending actions
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Starting
+        onProgress?.invoke(ListSyncStatus.FetchingMetadata)
         val processedIds = processPendingActions()
 
         // Phase 2: Fetch metadata
@@ -98,6 +101,7 @@ internal class BookmarkSyncPipeline(
 
         // Phase 4: Map DTOs to entities & perform differential sync
         syncProgress.value = com.karakept.app.data.model.SyncProgress.ProcessingMetadata
+        onProgress?.invoke(ListSyncStatus.FetchingMetadata)
         val entities = mapToEntities(remoteBookmarks, bookmarkListMap)
         val (entitiesWithLocalIds, newCount) = performDifferentialSync(entities, processedIds)
 
@@ -106,10 +110,10 @@ internal class BookmarkSyncPipeline(
             reconcileListMembership(remoteBookmarks, config.listId)
         }
 
-        // Phase 5: Content sync (skip for ForList — content is fetched lazily on open)
-        if (config !is SyncConfiguration.ForList) {
-            syncContent(entitiesWithLocalIds)
-        }
+        // Phase 5: Content sync. ForList syncs also run this phase — syncContent() is gated
+        // internally by each list's syncOffline setting, so content is only downloaded for
+        // lists explicitly configured for offline reading.
+        syncContent(entitiesWithLocalIds)
 
         // Phase 6: Sync reading progress for in-progress bookmarks
         syncReadingProgress(entitiesWithLocalIds)
@@ -515,6 +519,7 @@ internal class BookmarkSyncPipeline(
         var current = 0
         val total = bookmarks.size
         syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingContent(current, total)
+        onProgress?.invoke(ListSyncStatus.FetchingContent(current, total))
 
         bookmarks.forEach { entity ->
             try {
@@ -539,6 +544,7 @@ internal class BookmarkSyncPipeline(
             }
             current++
             syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingContent(current, total)
+            onProgress?.invoke(ListSyncStatus.FetchingContent(current, total))
         }
     }
 

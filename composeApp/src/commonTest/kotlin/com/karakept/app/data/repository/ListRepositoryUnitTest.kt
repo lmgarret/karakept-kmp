@@ -10,7 +10,10 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -71,6 +74,37 @@ class ListRepositoryUnitTest : BaseRepositoryTest() {
         coVerify(exactly = 1) {
             listDao.updateListNameAndIcon(listId, testServer.id, newName, newIcon, any())
         }
+    }
+
+    /**
+     * Concurrent refreshLists calls must deduplicate: only the first reaches the network.
+     * The second call hits the tryLock guard and returns immediately.
+     */
+    @Test
+    fun refreshLists_concurrentCalls_onlyOneNetworkRequestMade() = runTest(testDispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        coEvery { settingsRepository.offlineMode } returns flowOf(false)
+        coEvery { remoteDataSource.fetchLists(testServer) } coAnswers {
+            gate.await()
+            emptyList()
+        }
+        coEvery { listDao.getListsForServerOnce(testServer.id) } returns emptyList()
+
+        // First refresh — blocks on gate.await inside fetchLists
+        val firstJob = launch { repository.refreshLists(testServer) }
+        advanceUntilIdle()
+
+        // Second refresh while first is in progress — should be skipped (tryLock fails)
+        launch { repository.refreshLists(testServer) }
+        advanceUntilIdle()
+
+        // Release the first fetch
+        gate.complete(Unit)
+        advanceUntilIdle()
+        firstJob.join()
+
+        // Only one network request should have been made
+        coVerify(exactly = 1) { remoteDataSource.fetchLists(testServer) }
     }
 
     @Test

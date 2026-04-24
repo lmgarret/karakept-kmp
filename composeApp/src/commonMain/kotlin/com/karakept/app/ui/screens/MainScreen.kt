@@ -132,6 +132,7 @@ object MainScreen : Screen {
 
         val expandedLists by screenModel.expandedLists.collectAsState()
         val listCounts by screenModel.listCounts.collectAsState()
+        val listSyncStatuses by screenModel.listSyncStatuses.collectAsState()
         val quickFilterCounts by screenModel.quickFilterCounts.collectAsState()
         val highlightsCount by screenModel.highlightsCount.collectAsState()
         val currentListId by screenModel.currentListContext.collectAsState()
@@ -357,6 +358,7 @@ object MainScreen : Screen {
                     renameListTarget = renameListTarget, onRenameListTargetChanged = { renameListTarget = it },
                     screenModel = screenModel, navigateTo = { screen -> navigator.push(screen) }, isDesktop = isDesktop,
                     quickFilterCounts = quickFilterCounts, highlightsCount = highlightsCount,
+                    listSyncStatuses = listSyncStatuses,
                     scaffoldContent = { isExpanded ->
                         scaffoldContent(isExpanded, selectedBookmarkId, { bookmark ->
                             val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
@@ -381,7 +383,8 @@ object MainScreen : Screen {
                     onNavigateToHighlights = { showHighlights = true; scope.launch { drawerState.close() } },
                     isHighlightsSelected = showHighlights,
                     quickFilterCounts = quickFilterCounts,
-                    highlightsCount = highlightsCount
+                    highlightsCount = highlightsCount,
+                    listSyncStatuses = listSyncStatuses
                 ) {
                     if (showHighlights) {
                         val highlightsScreenModel = koinInject<HighlightsScreenModel>()

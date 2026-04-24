@@ -23,6 +23,9 @@ class ListRepository(
 ) {
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    // Prevent concurrent refreshLists calls from each issuing a redundant network request.
+    private val refreshMutex = kotlinx.coroutines.sync.Mutex()
+
     // Maintain StateFlow for backward compatibility with existing UI code
     private val _lists = MutableStateFlow<List<KarakeepList>>(emptyList())
     val lists: StateFlow<List<KarakeepList>> = _lists.asStateFlow()
@@ -34,8 +37,22 @@ class ListRepository(
      * Refresh lists from the remote server and update local database.
      * The StateFlow will be updated with the new lists.
      * Skips network call if offline mode is enabled, but still loads from local database.
+     * Concurrent calls are deduplicated: if a refresh is already in progress, the second
+     * caller returns immediately without issuing a redundant network request.
      */
     suspend fun refreshLists(server: Server) {
+        if (!refreshMutex.tryLock()) {
+            AppLogger.d("ListRepo", "refreshLists already in progress, skipping duplicate call")
+            return
+        }
+        try {
+            refreshListsInternal(server)
+        } finally {
+            refreshMutex.unlock()
+        }
+    }
+
+    private suspend fun refreshListsInternal(server: Server) {
         currentServerId = server.id
 
         // Check if offline mode is enabled

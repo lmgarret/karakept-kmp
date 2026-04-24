@@ -7,7 +7,7 @@ This document details the architecture and logic of the Karakept bookmark synchr
 The sync pipeline is a unified mechanism responsible for synchronizing bookmarks between the local database and the Karakept server. It handles:
 - Fetching bookmark metadata (title, url, tags, etc.)
 - Determining list membership
-- performing differential sync (Insert/Update/Delete)
+- Performing differential sync (Insert/Update/Delete)
 - Fetching full content (HTML/Text) based on user configuration
 
 ## Sync Architectures
@@ -18,7 +18,7 @@ The pipeline supports three distinct configurations (`SyncConfiguration`):
     -   Fetches **all** bookmarks from the server.
     -   Fetches **all** lists and determines membership for every bookmark.
     -   **Deletes** local bookmarks that are no longer on the server.
-    -   Used for the primary background sync.
+    -   Used for the primary background sync and the "All Bookmarks" view.
 
 2.  **Filtered Sync**:
     -   Fetches a subset of bookmarks (e.g., only Favorites or Archived).
@@ -26,14 +26,37 @@ The pipeline supports three distinct configurations (`SyncConfiguration`):
     -   **Does NOT** delete removed bookmarks (only upserts/updates).
     -   Used for quick updates of specific views (e.g., pulling down new favorites).
 
-3.  **List Sync**:
+3.  **List Sync (ForList)**:
     -   Fetches bookmarks belonging to a specific `listId`.
     -   **Does NOT** delete removed bookmarks (only upserts).
+    -   Also runs content sync (Phase 5) — gated by the list's `syncOffline` setting.
     -   Used when viewing a specific list to ensure it is up-to-date.
+
+## 4-Step Sync Orchestration (Pull-to-Refresh)
+
+When the user pulls to refresh (or the app starts a sync), `MainScreenModel.syncBookmarks()` follows a strict sequential + parallel order designed to show the user useful content as fast as possible:
+
+```
+Step 1: refreshLists(server)
+        └─ Updates the navigation drawer immediately.
+
+Step 2: syncCurrentView(server, currentList, currentFilter)
+        └─ Syncs the list/filter the user is currently looking at.
+
+Step 3: resetPaginationAndLoad(server, currentFilter)
+        └─ Reloads the visible bookmark list from the local DB.
+           User sees fresh bookmarks as quickly as possible.
+
+Step 4: syncOtherLists(server, skipKey=currentKey)  [concurrent]
+        └─ Each named list is synced independently in parallel.
+           Only lists with syncOffline=true download content.
+```
+
+Quick-filter views (All Bookmarks, Favorites, Archived) also trigger Step 4, syncing all named lists afterward.
 
 ## The Pipeline Phases
 
-The `BookmarkSyncPipeline` executes in 5 linear phases:
+The `BookmarkSyncPipeline` executes in 6 linear phases:
 
 ### Phase 1: Process Pending Actions
 -   Uploads any locally pending changes (archives, favorites, moves) to the server.
@@ -43,6 +66,9 @@ The `BookmarkSyncPipeline` executes in 5 linear phases:
 -   Downloads bookmark DTOs (Data Transfer Objects) from the API.
 -   Uses pagination (`cursor`) to retrieve all matching items.
 -   **Optimization**: Does *not* request full content (`includeContent=false`) at this stage to save bandwidth.
+
+### Phase 2.5: Sync Highlights
+-   Syncs highlights from the server (skipped for ForList syncs).
 
 ### Phase 3: List Membership
 -   **Full Sync**: Iterates through all available lists on the server and maps bookmarks to lists.
@@ -56,9 +82,18 @@ The `BookmarkSyncPipeline` executes in 5 linear phases:
 -   **Inserts**: Creates new local bookmarks.
 -   **Deletes**: Removes local bookmarks not present in the fetch (only in Full Sync).
 
+### Phase 4.5: Reconcile List Membership (ForList only)
+-   Removes the synced `listId` from any local bookmark that the server no longer has in that list.
+-   Merges list membership (adds `listId` to bookmarks in the list, does not strip other lists).
+
 ### Phase 5: Content Sync
--   Determines which bookmarks need full content based on the **Content Sync Strategy**.
+-   Determines which bookmarks need full content based on:
+    1. The global **Content Sync Strategy** (NEVER / PER_LIST / ALL)
+    2. Per-list **syncOffline** setting (applies to ALL sync configurations including ForList)
 -   Fetches and stores content for eligible bookmarks.
+
+### Phase 6: Reading Progress Sync
+-   Syncs reading progress from the server for in-progress bookmarks (capped for performance).
 
 ## Content Sync Strategies
 
@@ -70,6 +105,66 @@ Users can configure *when* content is downloaded for offline reading:
 | **PER_BOOKMARK** | (Legacy/Not Fully Used) Same as Never currently. |
 | **PER_LIST** | Downloads content **only** if the bookmark belongs to a specific set of "Offline Lists" selected by the user. |
 | **ALL** | Downloads content for **every** bookmark. |
+
+In addition to the global strategy, individual lists can have **syncOffline = true** in their per-list settings. Bookmarks in those lists have content downloaded during any sync — regardless of the global strategy or sync configuration type (Full, Filtered, or ForList).
+
+## Per-List Sync Status and Deduplication
+
+### SyncKey
+
+Each pipeline execution is identified by a `SyncKey` (a type alias for `String?`):
+
+| SyncKey value | Corresponds to |
+| :--- | :--- |
+| `null` | Full / All Bookmarks sync |
+| `"__FAVORITES__"` | Filtered sync for Favorites |
+| `"__ARCHIVED__"` | Filtered sync for Archived |
+| `"<listId>"` | ForList sync for that list |
+
+### Deduplication
+
+`BookmarkRepository` prevents redundant concurrent pipelines via a set of active keys:
+
+```
+tryAcquireKey(key)  → if already in activeKeys: return 0 immediately (skip)
+                      else: add to activeKeys → run pipeline → releaseKey(finally)
+```
+
+`ListRepository.refreshLists()` uses a `Mutex.tryLock()` guard with the same skip-if-running semantics. Rapid double-taps on pull-to-refresh therefore issue only one network request for the list fetch.
+
+### perKeyProgress
+
+`BookmarkRepository.perKeyProgress: StateFlow<Map<SyncKey, ListSyncStatus>>` tracks the live status of every running pipeline. Idle keys are removed from the map (not stored as explicit `Idle` entries).
+
+```
+ListSyncStatus:
+  Idle              → key absent from map
+  FetchingMetadata  → indeterminate spinner in drawer
+  FetchingContent(current, total) → determinate progress ring in drawer
+```
+
+## UX Progress Tracking
+
+### Drawer indicators
+
+Each list item in the navigation drawer shows a `ListCountOrSyncIndicator`:
+
+- **Idle**: displays the bookmark count as a number.
+- **FetchingMetadata**: shows a 16 dp indeterminate `CircularProgressIndicator`.
+- **FetchingContent**: shows a 16 dp determinate `CircularProgressIndicator` with `progress = current/total`.
+
+### Top bar
+
+`MainScreenModel.currentSyncStatus` is derived from `perKeyProgress` and the current list context:
+
+```
+currentSyncStatus = perKeyProgress[resolveCurrentKey(currentList, currentFilter)]
+                    ?: ListSyncStatus.Idle
+```
+
+Switching lists while a sync is in progress immediately updates `currentSyncStatus` to reflect the new list's status (or Idle if that list is not syncing). Background syncs for other lists continue uninterrupted.
+
+`isSyncing` (used for pull-to-refresh spinner) is `true` only when the **current list's** key is present in `perKeyProgress` — background other-list syncs do not trigger the pull-to-refresh indicator.
 
 ## Content Fetching Logic (Precedence)
 
