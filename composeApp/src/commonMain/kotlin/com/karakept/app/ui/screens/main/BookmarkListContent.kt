@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -621,7 +622,7 @@ internal fun BookmarkListContent(
                 listState = listState,
                 bookmarks = bookmarks,
                 sortOption = sortOption,
-                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
             )
         }
 
