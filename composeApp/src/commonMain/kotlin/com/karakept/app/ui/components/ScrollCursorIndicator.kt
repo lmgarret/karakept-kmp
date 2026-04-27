@@ -1,8 +1,10 @@
 package com.karakept.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.SortOption
@@ -88,39 +89,36 @@ fun ScrollCursorIndicator(
                 .width(touchTargetWidthDp)
                 .onSizeChanged { trackHeightPx = it.height.toFloat() }
                 .pointerInput(bookmarks.size) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            down.consume()
+                    detectDragGestures(
+                        onDragStart = { offset ->
                             isDragging = true
                             val trackH = size.height.toFloat()
-                            dragFraction = (down.position.y / trackH).coerceIn(0f, 1f)
+                            dragFraction = (offset.y / trackH).coerceIn(0f, 1f)
                             coroutineScope.launch {
                                 listState.scrollToItem(
                                     (dragFraction * (bookmarks.size - 1))
                                         .roundToInt().coerceIn(0, bookmarks.size - 1)
                                 )
                             }
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                event.changes.forEach { it.consume() }
-                                if (!event.changes.any { it.pressed }) break
-                                dragFraction = (event.changes.first().position.y / trackH)
-                                    .coerceIn(0f, 1f)
-                                coroutineScope.launch {
-                                    listState.scrollToItem(
-                                        (dragFraction * (bookmarks.size - 1))
-                                            .roundToInt().coerceIn(0, bookmarks.size - 1)
-                                    )
-                                }
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            val trackH = size.height.toFloat()
+                            dragFraction = (change.position.y / trackH).coerceIn(0f, 1f)
+                            coroutineScope.launch {
+                                listState.scrollToItem(
+                                    (dragFraction * (bookmarks.size - 1))
+                                        .roundToInt().coerceIn(0, bookmarks.size - 1)
+                                )
                             }
-                            isDragging = false
-                        }
-                    }
+                        },
+                        onDragEnd = { isDragging = false },
+                        onDragCancel = { isDragging = false }
+                    )
                 }
         ) {
             val effectiveTrackPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
-            val thumbOffsetPx = displayFraction * effectiveTrackPx
+            val thumbOffsetDp = with(density) { (displayFraction * effectiveTrackPx).toDp() }
 
             // Track bar
             Box(
@@ -138,7 +136,7 @@ fun ScrollCursorIndicator(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .offset { IntOffset(0, thumbOffsetPx.roundToInt()) }
+                    .offset(y = thumbOffsetDp)
                     .size(thumbWidthDp, thumbHeightDp)
                     .background(
                         if (isDragging) MaterialTheme.colorScheme.primary
