@@ -164,6 +164,7 @@ class Save02RegressionTest {
                     status = any(),
                     offset = any(),
                     limit = any(),
+                    sort = any(),
                     listId = any()
                 )
             } returns fakeBookmarks
@@ -192,6 +193,7 @@ class Save02RegressionTest {
                     status = any(),
                     offset = any(),
                     limit = any(),
+                    sort = any(),
                     listId = any()
                 )
             } returns fakeBookmarks
