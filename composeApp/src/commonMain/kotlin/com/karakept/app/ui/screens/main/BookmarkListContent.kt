@@ -84,6 +84,7 @@ internal fun BookmarkListContent(
     hasMoreItems: Boolean,
     showScrollCursor: Boolean = false,
     sortOption: SortOption = SortOption.NEWEST,
+    totalBookmarkCount: Int = 0,
     layoutType: LayoutType,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -622,6 +623,7 @@ internal fun BookmarkListContent(
                 listState = listState,
                 bookmarks = bookmarks,
                 sortOption = sortOption,
+                totalBookmarkCount = totalBookmarkCount,
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
             )
         }
