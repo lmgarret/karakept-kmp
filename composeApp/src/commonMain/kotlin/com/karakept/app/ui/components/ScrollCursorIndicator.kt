@@ -1,5 +1,11 @@
 package com.karakept.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -10,8 +16,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -26,26 +33,28 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.SortOption
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
  * Fast-scroll thumb on the right edge of the bookmark list.
  *
- * The thumb tracks the list scroll position and can be grabbed + dragged to jump
- * through the list. While dragging, a circular label appears to the left of the
- * thumb showing the current position in terms of the active sort order:
- *   - Date sorts  → compact elapsed time ("3d", "5h", "2mo")
- *   - Title sorts → first letter of the title ("A", "B", …)
- *   - Reading-time sorts → minutes ("5mn", "12mn")
+ * Drag the thumb to jump through the list. While dragging, an animated speech-bubble
+ * tooltip grows from the thumb showing the current position label (date, letter, or
+ * reading time) depending on the active sort option.
  *
  * [totalBookmarkCount] should be the full DB count for the current filter so that
  * the thumb position is accurate even when only a partial page has been loaded.
@@ -61,17 +70,13 @@ fun ScrollCursorIndicator(
     if (bookmarks.size < 2) return
 
     val coroutineScope = rememberCoroutineScope()
-    // Single job — cancelled before each new scrollToItem so concurrent jumps don't stack up.
     var scrollJob by remember { mutableStateOf<Job?>(null) }
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableStateOf(0f) }
     var trackHeightPx by remember { mutableStateOf(0f) }
+    var tooltipHeightPx by remember { mutableStateOf(0f) }
 
-    // Use the DB total when available so the thumb covers the full list, not just one page.
     val effectiveTotal = if (totalBookmarkCount > bookmarks.size) totalBookmarkCount else bookmarks.size
-
-    // rememberUpdatedState lets the pointerInput coroutine (keyed on Unit) always read the
-    // latest values without restarting mid-drag when pagination loads a new page.
     val effectiveTotalState = rememberUpdatedState(effectiveTotal)
     val bookmarksState = rememberUpdatedState(bookmarks)
 
@@ -84,26 +89,67 @@ fun ScrollCursorIndicator(
     }
 
     val displayFraction = if (isDragging) dragFraction else listScrollFraction
-
     val pointedIndex = (displayFraction * (bookmarks.size - 1))
         .roundToInt().coerceIn(0, bookmarks.size - 1)
     val label = scrollCursorLabel(bookmarks.getOrNull(pointedIndex), sortOption)
 
     val density = LocalDensity.current
-    val thumbHeightDp = 48.dp
-    val thumbWidthDp = 8.dp
-    val trackWidthDp = 3.dp
+
+    // Thumb is half the original size
+    val thumbHeightDp = 24.dp
+    val thumbWidthDp = 4.dp
+    val trackWidthDp = 2.dp
     val touchTargetWidthDp = 24.dp
-    val labelSizeDp = 56.dp
+
+    // Tooltip speech-bubble geometry
+    val arrowWidthDp = 9.dp
+    val tooltipHPadDp = 10.dp
+    val tooltipVPadDp = 7.dp
 
     val thumbHeightPx = with(density) { thumbHeightDp.toPx() }
     val touchTargetWidthPx = with(density) { touchTargetWidthDp.toPx() }
+    val arrowWidthPx = with(density) { arrowWidthDp.toPx() }
+    val cornerPx = with(density) { 10.dp.toPx() }
+
+    // Speech-bubble shape: rounded-rect body + right-pointing arrow
+    val tooltipShape = remember(arrowWidthPx, cornerPx) {
+        GenericShape { size, _ ->
+            val bodyW = size.width - arrowWidthPx
+            val midY = size.height / 2f
+            val arrowHalf = min(arrowWidthPx * 0.7f, size.height * 0.35f)
+            // Rounded rectangle for the body
+            addRoundRect(
+                RoundRect(
+                    left = 0f, top = 0f,
+                    right = bodyW, bottom = size.height,
+                    cornerRadius = CornerRadius(cornerPx)
+                )
+            )
+            // Arrow triangle pointing right (toward the scrollbar)
+            moveTo(bodyW, midY - arrowHalf)
+            lineTo(size.width, midY)
+            lineTo(bodyW, midY + arrowHalf)
+            close()
+        }
+    }
+
+    val effectiveTrackPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
+    val thumbOffsetDp = with(density) { (displayFraction * effectiveTrackPx).toDp() }
+
+    // Center the tooltip on the thumb, clamped within the track.
+    // tooltipHeightPx starts at 0; once the Surface is measured it becomes accurate.
+    val thumbCenterPx = displayFraction * effectiveTrackPx + thumbHeightPx / 2f
+    val tooltipTopPx = (thumbCenterPx - tooltipHeightPx / 2f)
+        .coerceIn(0f, (trackHeightPx - tooltipHeightPx).coerceAtLeast(0f))
+    val tooltipTopDp = with(density) { tooltipTopPx.toDp() }
 
     Box(
         modifier = modifier
+            // Always at least as wide as the touch target so the gesture fires correctly
+            .widthIn(min = touchTargetWidthDp)
             .onSizeChanged { trackHeightPx = it.height.toFloat() }
-            // Gesture lives on the outer Box (full height) so it can't be stolen by sibling
-            // components (LazyColumn scroll, FAB, swipeable items) once a drag starts.
+            // Gesture lives on the outer Box so it can't be stolen by sibling components
+            // (LazyColumn scroll, FAB, swipeable items) once a drag starts.
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -137,74 +183,75 @@ fun ScrollCursorIndicator(
                         }
                     }
 
-                    // Cancel any in-flight scroll so it doesn't fight the list's own inertia.
                     scrollJob?.cancel()
                     isDragging = false
                 }
             }
     ) {
-        // Visual track + thumb at the right edge
+        // Thin track bar, flush against the right edge
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .fillMaxHeight()
-                .width(touchTargetWidthDp)
+                .width(trackWidthDp)
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.30f),
+                    RoundedCornerShape(1.dp)
+                )
+        )
+
+        // Thumb, flush against the right edge, always themed
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(y = thumbOffsetDp)
+                .size(thumbWidthDp, thumbHeightDp)
+                .background(
+                    MaterialTheme.colorScheme.primary,
+                    RoundedCornerShape(2.dp)
+                )
+        )
+
+        // Speech-bubble tooltip: grows from the scrollbar, shrinks away when released.
+        // zIndex keeps it above the scroll-to-top FAB that lives in the same parent Box.
+        AnimatedVisibility(
+            visible = isDragging && label.isNotEmpty(),
+            enter = scaleIn(
+                animationSpec = tween(180),
+                transformOrigin = TransformOrigin(1f, 0.5f)
+            ) + fadeIn(tween(180)),
+            exit = scaleOut(
+                animationSpec = tween(130),
+                transformOrigin = TransformOrigin(1f, 0.5f)
+            ) + fadeOut(tween(130)),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                // Arrow tip sits right at the track's left edge
+                .padding(end = trackWidthDp)
+                .offset(y = tooltipTopDp)
         ) {
-            val effectiveTrackPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
-            val thumbOffsetDp = with(density) { (displayFraction * effectiveTrackPx).toDp() }
-
-            // Track bar
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .fillMaxHeight()
-                    .width(trackWidthDp)
-                    .background(
-                        MaterialTheme.colorScheme.outlineVariant,
-                        RoundedCornerShape(2.dp)
-                    )
-            )
-
-            // Thumb
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .offset(y = thumbOffsetDp)
-                    .size(thumbWidthDp, thumbHeightDp)
-                    .background(
-                        if (isDragging) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outline,
-                        RoundedCornerShape(4.dp)
-                    )
-            )
-        }
-
-        // Circular label bubble that appears while dragging
-        if (isDragging && label.isNotEmpty()) {
-            val effectiveTrackPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
-            val thumbCenterPx = displayFraction * effectiveTrackPx + thumbHeightPx / 2f
-            val labelSizePx = with(density) { labelSizeDp.toPx() }
-            val labelTopPx = (thumbCenterPx - labelSizePx / 2f)
-                .coerceIn(0f, (trackHeightPx - labelSizePx).coerceAtLeast(0f))
-            val labelTopDp = with(density) { labelTopPx.toDp() }
-
             Surface(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(end = touchTargetWidthDp + 8.dp)
-                    .offset(y = labelTopDp)
-                    .size(labelSizeDp),
-                shape = CircleShape,
+                shape = tooltipShape,
                 color = MaterialTheme.colorScheme.primary,
-                shadowElevation = 4.dp
+                shadowElevation = 2.dp,
+                tonalElevation = 0.dp,
+                modifier = Modifier.onSizeChanged { tooltipHeightPx = it.height.toFloat() }
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
+                Text(
+                    text = label,
+                    modifier = Modifier.padding(
+                        start = tooltipHPadDp,
+                        top = tooltipVPadDp,
+                        // Extra right padding reserves space for the arrow within the shape
+                        end = tooltipHPadDp + arrowWidthDp,
+                        bottom = tooltipVPadDp
+                    ),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
             }
         }
     }
