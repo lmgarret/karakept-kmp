@@ -85,16 +85,21 @@ internal suspend fun MainScreenModel.findPageWithItems(
  */
 fun MainScreenModel.loadNextPage() {
     if (_isLoadingMore.value || !_hasMoreItems.value || _searchQuery.value.isNotBlank()) return
+    // Set before launching so rapid consecutive calls all see the flag immediately,
+    // even before the coroutine body runs.
+    _isLoadingMore.value = true
 
     screenModelScope.launch {
         try {
-            _isLoadingMore.value = true
-
+            val generation = paginationGeneration
             val server = _selectedServer.value ?: return@launch
             val filter = _currentFilter.value
             val nextPage = _currentPage.value + 1
 
             val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, nextPage)
+
+            // Discard results if a resetPaginationAndLoad started while we were fetching.
+            if (paginationGeneration != generation) return@launch
 
             if (newItems.isNotEmpty()) {
                 updateAccumulatedBookmarks { current ->
@@ -121,16 +126,32 @@ fun MainScreenModel.loadNextPage() {
  * This is the single entry-point for "start displaying a filter".
  */
 internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filter: FilterConfig, scrollToTop: Boolean = true) {
+    // Increment generation so any in-flight loadNextPage knows its results are stale.
+    paginationGeneration++
+    val myGeneration = paginationGeneration
+
     _currentPage.value = 0
     _hasMoreItems.value = true
+    // Block loadNextPage from launching while we are iterating through pages.
+    _isLoadingMore.value = true
 
-    // Load items first, then swap atomically to avoid a blank flash.
-    val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
-    updateAccumulatedBookmarks { newItems }
-    _bookmarkListVersion.value++
-    _currentPage.value = lastPage
-    if (dbExhausted) {
-        _hasMoreItems.value = false
+    try {
+        // Load items first, then swap atomically to avoid a blank flash.
+        val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
+
+        // Another reset started while we were fetching — our results are stale.
+        if (paginationGeneration != myGeneration) return
+
+        updateAccumulatedBookmarks { newItems }
+        _bookmarkListVersion.value++
+        _currentPage.value = lastPage
+        if (dbExhausted) {
+            _hasMoreItems.value = false
+        }
+    } finally {
+        if (paginationGeneration == myGeneration) {
+            _isLoadingMore.value = false
+        }
     }
     // Scroll to top after data is ready, so plain back-navigation from the viewer
     // (which doesn't call resetPaginationAndLoad) never triggers an unwanted scroll.
