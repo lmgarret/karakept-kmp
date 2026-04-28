@@ -57,6 +57,7 @@ data class BackupSettings(
     val showReadingTimeBadge: Boolean = true,
     val showTags: Boolean = true,
     val dimReadBookmarks: Boolean = true,
+    val showScrollCursor: Boolean = true,
 
     // Viewer / reader
     val viewerMode: String = ViewerMode.READER.name,
