@@ -1,8 +1,10 @@
 package com.karakept.app.domain
 
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.ContentFilter
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.SortOption
 
 /**
@@ -49,6 +51,27 @@ object BookmarkFilterUtils {
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
                 bookmarkLists.any { listId -> filter.lists.contains(listId) }
+            }
+        }
+
+        if (filter.readFilter != ReadFilter.ALL) {
+            result = result.filter { bm ->
+                when (filter.readFilter) {
+                    ReadFilter.UNREAD      -> !bm.isRead
+                    ReadFilter.READ        -> bm.isRead
+                    ReadFilter.IN_PROGRESS -> bm.readingProgress > 0f && !bm.isRead
+                    ReadFilter.ALL         -> true
+                }
+            }
+        }
+
+        if (filter.contentFilter != ContentFilter.ALL) {
+            result = result.filter { bm ->
+                when (filter.contentFilter) {
+                    ContentFilter.DOWNLOADED     -> bm.readingTimeMinutes > 0
+                    ContentFilter.NOT_DOWNLOADED -> bm.readingTimeMinutes == 0
+                    ContentFilter.ALL            -> true
+                }
             }
         }
 
@@ -107,6 +130,27 @@ object BookmarkFilterUtils {
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
                 filter.lists.any { listId -> lists.contains(listId) }
+            }
+        }
+
+        if (filter.readFilter != ReadFilter.ALL) {
+            result = result.filter { bm ->
+                when (filter.readFilter) {
+                    ReadFilter.UNREAD      -> !bm.isRead
+                    ReadFilter.READ        -> bm.isRead
+                    ReadFilter.IN_PROGRESS -> bm.readingProgress > 0f && !bm.isRead
+                    ReadFilter.ALL         -> true
+                }
+            }
+        }
+
+        if (filter.contentFilter != ContentFilter.ALL) {
+            result = result.filter { bm ->
+                when (filter.contentFilter) {
+                    ContentFilter.DOWNLOADED     -> bm.readingTimeMinutes > 0
+                    ContentFilter.NOT_DOWNLOADED -> bm.readingTimeMinutes == 0
+                    ContentFilter.ALL            -> true
+                }
             }
         }
 

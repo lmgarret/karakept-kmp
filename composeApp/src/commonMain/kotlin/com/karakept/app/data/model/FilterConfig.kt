@@ -5,6 +5,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class FilterConfig(
     val status: FilterStatus = FilterStatus.ALL,
+    val readFilter: ReadFilter = ReadFilter.ALL,
+    val contentFilter: ContentFilter = ContentFilter.ALL,
     val tags: List<String> = emptyList(),
     val lists: List<String> = emptyList(), // List IDs
     val sort: SortOption = SortOption.NEWEST
@@ -15,6 +17,19 @@ enum class FilterStatus {
     ALL_INCLUDING_ARCHIVED, // Shows all bookmarks (used for list views)
     FAVORITES,              // Shows starred bookmarks (includes archived)
     ARCHIVED                // Shows archived bookmarks
+}
+
+enum class ReadFilter {
+    ALL,
+    UNREAD,       // !isRead
+    IN_PROGRESS,  // readingProgress > 0f && !isRead
+    READ          // isRead
+}
+
+enum class ContentFilter {
+    ALL,
+    DOWNLOADED,     // readingTimeMinutes > 0
+    NOT_DOWNLOADED  // readingTimeMinutes == 0
 }
 
 enum class SortOption {
