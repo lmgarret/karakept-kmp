@@ -503,6 +503,8 @@ class RemoteDataSource(
                 ?.jsonObject
             val result = data?.get("readingProgressPercent")?.jsonPrimitive?.intOrNull
             result
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             AppLogger.e("RemoteDataSource", "Read progress sync failed: ${e.message}", e)
             // Non-critical – return null if fetch fails
