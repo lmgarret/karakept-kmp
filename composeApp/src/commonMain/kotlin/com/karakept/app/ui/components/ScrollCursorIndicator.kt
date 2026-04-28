@@ -136,10 +136,11 @@ fun ScrollCursorIndicator(
     val effectiveTrackPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
     val thumbOffsetDp = with(density) { (displayFraction * effectiveTrackPx).toDp() }
 
-    // Center the tooltip on the thumb, clamped within the track.
-    // tooltipHeightPx starts at 0; once the Surface is measured it becomes accurate.
-    val thumbCenterPx = displayFraction * effectiveTrackPx + thumbHeightPx / 2f
-    val tooltipTopPx = (thumbCenterPx - tooltipHeightPx / 2f)
+    // Position tooltip ABOVE the thumb so it is not hidden under the user's finger.
+    // The bottom of the tooltip sits fingerClearancePx above the thumb's top edge.
+    val fingerClearancePx = with(density) { 8.dp.toPx() }
+    val thumbTopPx = displayFraction * effectiveTrackPx
+    val tooltipTopPx = (thumbTopPx - tooltipHeightPx - fingerClearancePx)
         .coerceIn(0f, (trackHeightPx - tooltipHeightPx).coerceAtLeast(0f))
     val tooltipTopDp = with(density) { tooltipTopPx.toDp() }
 
@@ -213,7 +214,6 @@ fun ScrollCursorIndicator(
         )
 
         // Speech-bubble tooltip: grows from the scrollbar, shrinks away when released.
-        // zIndex keeps it above the scroll-to-top FAB that lives in the same parent Box.
         AnimatedVisibility(
             visible = isDragging && label.isNotEmpty(),
             enter = scaleIn(
@@ -233,9 +233,7 @@ fun ScrollCursorIndicator(
             Surface(
                 shape = tooltipShape,
                 color = MaterialTheme.colorScheme.primary,
-                // shadowElevation must exceed SmallFloatingActionButton's default 6dp so that
-                // Android's hardware renderer draws this node on top of the FAB.
-                shadowElevation = 10.dp,
+                shadowElevation = 4.dp,
                 tonalElevation = 0.dp,
                 modifier = Modifier.onSizeChanged { tooltipHeightPx = it.height.toFloat() }
             ) {

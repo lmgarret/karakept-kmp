@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.zIndex
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -619,20 +618,13 @@ internal fun BookmarkListContent(
             }
         }
 
-        if (showScrollCursor) {
-            ScrollCursorIndicator(
-                listState = listState,
-                bookmarks = bookmarks,
-                sortOption = sortOption,
-                totalBookmarkCount = totalBookmarkCount,
-                // zIndex keeps the tooltip above the scroll-to-top FAB when near the bottom
-                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().zIndex(1f)
-            )
-        }
-
         } // end inner Box
     }
 
+    // ScrollCursorIndicator is intentionally placed OUTSIDE listContent so it renders
+    // as the last child of PullToRefreshBox / desktop Box. This guarantees it is drawn
+    // on top of everything inside listContent (including the scroll-to-top FAB whose
+    // Material3 Surface creates a hardware-accelerated layer that ignores zIndex).
     if (!isDesktop) {
         PullToRefreshBox(
             isRefreshing = isSyncing,
@@ -640,10 +632,29 @@ internal fun BookmarkListContent(
             modifier = Modifier.fillMaxSize()
         ) {
             listContent()
+            if (showScrollCursor) {
+                ScrollCursorIndicator(
+                    listState = listState,
+                    bookmarks = bookmarks,
+                    sortOption = sortOption,
+                    totalBookmarkCount = totalBookmarkCount,
+                    // padding(top) keeps the scrollbar clear of the sync progress bar
+                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
+                )
+            }
         }
     } else {
         Box(modifier = Modifier.fillMaxSize()) {
             listContent()
+            if (showScrollCursor) {
+                ScrollCursorIndicator(
+                    listState = listState,
+                    bookmarks = bookmarks,
+                    sortOption = sortOption,
+                    totalBookmarkCount = totalBookmarkCount,
+                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
+                )
+            }
         }
     }
 }
