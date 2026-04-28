@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -570,33 +571,10 @@ internal fun BookmarkListContent(
         } // end drag-selection container Box
 
         if (isSyncing) {
-            // Show determinate progress when available
-            when (val progress = syncProgress) {
-                is com.karakept.app.data.model.SyncProgress.FetchingContent -> {
-                    if (progress.total > 0) {
-                        LinearProgressIndicator(
-                            progress = { progress.current.toFloat() / progress.total.toFloat() },
-                            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)
-                        )
-                    } else {
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)
-                        )
-                    }
-                }
-                is com.karakept.app.data.model.SyncProgress.FetchingMetadata -> {
-                    // Show indeterminate but with visual feedback that something is happening
-                    // We could show the bookmark count as text overlay if needed
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)
-                    )
-                }
-                else -> {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter)
-                    )
-                }
-            }
+            SyncProgressBar(
+                progress = syncProgress,
+                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+            )
         }
 
         // Scroll-to-top FAB
@@ -655,6 +633,45 @@ internal fun BookmarkListContent(
                     modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SyncProgressBar(
+    progress: com.karakept.app.data.model.SyncProgress?,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        when (progress) {
+            is com.karakept.app.data.model.SyncProgress.FetchingContent -> {
+                if (progress.total > 0) {
+                    LinearProgressIndicator(
+                        progress = { progress.current.toFloat() / progress.total.toFloat() },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = "${progress.current} / ${progress.total}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+            is com.karakept.app.data.model.SyncProgress.FetchingMetadata -> {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                if (progress.bookmarksCount > 0) {
+                    Text(
+                        text = "Processing ${progress.bookmarksCount} bookmarks…",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                    )
+                }
+            }
+            else -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
     }
 }

@@ -482,7 +482,7 @@ class BookmarkRepository(
             return 0
         }
 
-        setKeyStatus(key, ListSyncStatus.FetchingMetadata)
+        setKeyStatus(key, ListSyncStatus.FetchingMetadata())
         try {
             val pipeline = BookmarkSyncPipeline(
                 config = config,

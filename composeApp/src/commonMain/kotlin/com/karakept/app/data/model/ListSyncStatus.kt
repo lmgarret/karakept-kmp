@@ -3,7 +3,7 @@ package com.karakept.app.data.model
 /** Per-list sync progress, used for drawer indicators and the adaptive top progress bar. */
 sealed class ListSyncStatus {
     data object Idle : ListSyncStatus()
-    data object FetchingMetadata : ListSyncStatus()
+    data class FetchingMetadata(val bookmarksCount: Int = 0) : ListSyncStatus()
     data class FetchingContent(val current: Int, val total: Int) : ListSyncStatus()
 }
 

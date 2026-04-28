@@ -185,7 +185,7 @@ class MainScreenModel(
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> =
         currentSyncStatus.map { status ->
             when (status) {
-                is ListSyncStatus.FetchingMetadata -> com.karakept.app.data.model.SyncProgress.FetchingMetadata(0, 0)
+                is ListSyncStatus.FetchingMetadata -> com.karakept.app.data.model.SyncProgress.FetchingMetadata(0, status.bookmarksCount)
                 is ListSyncStatus.FetchingContent  -> com.karakept.app.data.model.SyncProgress.FetchingContent(status.current, status.total)
                 is ListSyncStatus.Idle             -> com.karakept.app.data.model.SyncProgress.Idle
             }

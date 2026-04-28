@@ -85,7 +85,7 @@ internal class BookmarkSyncPipeline(
     suspend fun execute(): Int {
         // Phase 1: Process pending actions
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Starting
-        onProgress?.invoke(ListSyncStatus.FetchingMetadata)
+        onProgress?.invoke(ListSyncStatus.FetchingMetadata())
         val processedIds = processPendingActions()
 
         // Phase 2: Fetch metadata
@@ -101,7 +101,7 @@ internal class BookmarkSyncPipeline(
 
         // Phase 4: Map DTOs to entities & perform differential sync
         syncProgress.value = com.karakept.app.data.model.SyncProgress.ProcessingMetadata
-        onProgress?.invoke(ListSyncStatus.FetchingMetadata)
+        onProgress?.invoke(ListSyncStatus.FetchingMetadata(remoteBookmarks.size))
         val entities = mapToEntities(remoteBookmarks, bookmarkListMap)
         val (entitiesWithLocalIds, newCount) = performDifferentialSync(entities, processedIds)
 
@@ -413,6 +413,9 @@ internal class BookmarkSyncPipeline(
     // accessible via per-bookmark tRPC calls (no batch endpoint). To keep
     // sync time reasonable we pull concurrently and cap the total count.
     private suspend fun syncReadingProgress(entities: List<BookmarkEntity>) {
+        // Keep the bar visible during Phase 6 — isRead changes can alter the displayed count.
+        // The executeSyncPipeline finally-block clears the key, no explicit reset needed.
+        onProgress?.invoke(ListSyncStatus.FetchingMetadata(entities.size))
         val trackProgress = kotlinx.coroutines.withTimeoutOrNull(1000) {
             settingsRepository.trackReadingProgress.firstOrNull()
         } ?: true
