@@ -233,7 +233,9 @@ fun ScrollCursorIndicator(
             Surface(
                 shape = tooltipShape,
                 color = MaterialTheme.colorScheme.primary,
-                shadowElevation = 2.dp,
+                // shadowElevation must exceed SmallFloatingActionButton's default 6dp so that
+                // Android's hardware renderer draws this node on top of the FAB.
+                shadowElevation = 10.dp,
                 tonalElevation = 0.dp,
                 modifier = Modifier.onSizeChanged { tooltipHeightPx = it.height.toFloat() }
             ) {
@@ -246,7 +248,7 @@ fun ScrollCursorIndicator(
                         end = tooltipHPadDp + arrowWidthDp,
                         bottom = tooltipVPadDp
                     ),
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onPrimary,
                     maxLines = 1,
                     softWrap = false,
