@@ -94,6 +94,7 @@ class QuickFilterCountsTest {
         every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
+        every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(0)
         // Relaxed mocks for SharedFlow<T> emit Nothing values causing KotlinNothingValueException;
         // replace with emptyFlow() to prevent crashes in the background coroutines.
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Long>()
@@ -173,7 +174,7 @@ class QuickFilterCountsTest {
         advanceUntilIdle()
 
         assertEquals(
-            QuickFilterCounts(all = 7, favorites = 2, archived = 3),
+            QuickFilterCounts(all = 7, favorites = 2, archived = 3, offline = 0),
             model.quickFilterCounts.value
         )
         job.cancel()
@@ -189,9 +190,35 @@ class QuickFilterCountsTest {
         advanceUntilIdle()
 
         assertEquals(
-            QuickFilterCounts(all = 0, favorites = 0, archived = 5),
+            QuickFilterCounts(all = 0, favorites = 0, archived = 5, offline = 0),
             model.quickFilterCounts.value
         )
+        job.cancel()
+    }
+
+    @Test
+    fun `quickFilterCounts offline reflects repository count`() = runTest(testDispatcher) {
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+        every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(4)
+
+        val model = createMainScreenModel()
+        val job = launch { model.quickFilterCounts.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(4, model.quickFilterCounts.value.offline)
+        job.cancel()
+    }
+
+    @Test
+    fun `quickFilterCounts offline is zero when no server`() = runTest(testDispatcher) {
+        every { serverRepository.servers } returns flowOf(emptyList())
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+
+        val model = createMainScreenModel()
+        val job = launch { model.quickFilterCounts.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(0, model.quickFilterCounts.value.offline)
         job.cancel()
     }
 }

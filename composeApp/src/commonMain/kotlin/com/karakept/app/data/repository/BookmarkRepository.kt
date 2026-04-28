@@ -1,16 +1,19 @@
 package com.karakept.app.data.repository
 
+import androidx.room.RoomRawQuery
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.ListEntity
+import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.SYNC_KEY_ARCHIVED
 import com.karakept.app.data.model.SYNC_KEY_FAVORITES
 import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.ReadingTimeCalculator
@@ -44,6 +47,10 @@ class BookmarkRepository(
 ) {
     fun getBookmarks(server: Server): Flow<List<BookmarkEntity>> {
         return bookmarkDao.getBookmarksForServer(server.id)
+    }
+
+    fun getOfflineBookmarkCount(serverId: String): Flow<Int> {
+        return bookmarkDao.getOfflineCountFlow(serverId)
     }
 
     suspend fun getBookmarkByRemoteId(remoteId: Long, serverId: String): BookmarkEntity? {
@@ -289,31 +296,78 @@ class BookmarkRepository(
     // Pagination support
     suspend fun getBookmarksPaged(
         server: Server,
-        status: com.karakept.app.data.model.FilterStatus,
+        status: FilterStatus,
         offset: Int,
         limit: Int,
+        sort: SortOption = SortOption.NEWEST,
         listId: String? = null
     ): List<BookmarkEntity> {
-        val result = if (listId != null) {
-            // When filtering by list, use the list-specific query
-            AppLogger.d("BookmarkRepository", "getBookmarksPaged: Using list-filtered query for listId=$listId")
-            bookmarkDao.getBookmarksForListPaged(server.id, listId, limit, offset)
+        val query = buildPagedQuery(server.id, status, sort, listId, limit, offset)
+        val result = bookmarkDao.getBookmarksPaged(query)
+        AppLogger.d("BookmarkRepository", "getBookmarksPaged: status=$status, sort=$sort, listId=$listId, limit=$limit, offset=$offset -> returned ${result.size} bookmarks")
+        return result
+    }
+
+    private fun buildPagedQuery(
+        serverId: String,
+        status: FilterStatus,
+        sort: SortOption,
+        listId: String?,
+        limit: Int,
+        offset: Int
+    ): RoomRawQuery {
+        val orderBy = sort.toOrderBySql()
+        return if (listId != null) {
+            RoomRawQuery(
+                """SELECT $BOOKMARK_SELECT FROM bookmarks
+                   WHERE serverId = ?
+                   AND (listIds = ?
+                        OR listIds LIKE ? || ',%'
+                        OR listIds LIKE '%,' || ?
+                        OR listIds LIKE '%,' || ? || ',%')
+                   ORDER BY $orderBy
+                   LIMIT ? OFFSET ?"""
+            ) { stmt ->
+                stmt.bindText(1, serverId)
+                stmt.bindText(2, listId)
+                stmt.bindText(3, listId)
+                stmt.bindText(4, listId)
+                stmt.bindText(5, listId)
+                stmt.bindLong(6, limit.toLong())
+                stmt.bindLong(7, offset.toLong())
+            }
         } else {
-            when (status) {
-                // ALL shows non-archived bookmarks
-                com.karakept.app.data.model.FilterStatus.ALL ->
-                    bookmarkDao.getNotArchivedPagedForServer(server.id, limit, offset)
-                // ALL_INCLUDING_ARCHIVED shows all bookmarks (used for list views)
-                com.karakept.app.data.model.FilterStatus.ALL_INCLUDING_ARCHIVED ->
-                    bookmarkDao.getBookmarksPagedForServer(server.id, limit, offset)
-                com.karakept.app.data.model.FilterStatus.FAVORITES ->
-                    bookmarkDao.getFavoritesPagedForServer(server.id, limit, offset)
-                com.karakept.app.data.model.FilterStatus.ARCHIVED ->
-                    bookmarkDao.getArchivedPagedForServer(server.id, limit, offset)
+            val whereClause = when (status) {
+                FilterStatus.ALL -> "serverId = ? AND isArchived = 0"
+                FilterStatus.ALL_INCLUDING_ARCHIVED -> "serverId = ?"
+                FilterStatus.FAVORITES -> "serverId = ? AND isStarred = 1"
+                FilterStatus.ARCHIVED -> "serverId = ? AND isArchived = 1"
+                FilterStatus.OFFLINE -> "serverId = ? AND content IS NOT NULL AND length(content) > 0"
+            }
+            RoomRawQuery(
+                "SELECT $BOOKMARK_SELECT FROM bookmarks WHERE $whereClause ORDER BY $orderBy LIMIT ? OFFSET ?"
+            ) { stmt ->
+                stmt.bindText(1, serverId)
+                stmt.bindLong(2, limit.toLong())
+                stmt.bindLong(3, offset.toLong())
             }
         }
-        AppLogger.d("BookmarkRepository", "getBookmarksPaged: status=$status, listId=$listId, limit=$limit, offset=$offset -> returned ${result.size} bookmarks")
-        return result
+    }
+
+    companion object {
+        private const val BOOKMARK_SELECT = """localId, remoteId, originalRemoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content"""
+
+        private fun SortOption.toOrderBySql(): String = when (this) {
+            SortOption.NEWEST             -> "createdAt DESC"
+            SortOption.OLDEST             -> "createdAt ASC"
+            SortOption.TITLE_AZ           -> "title COLLATE NOCASE ASC"
+            SortOption.TITLE_ZA           -> "title COLLATE NOCASE DESC"
+            SortOption.READING_TIME_SHORT -> "readingTimeMinutes ASC"
+            SortOption.READING_TIME_LONG  -> "readingTimeMinutes DESC"
+        }
     }
 
     /**
@@ -337,6 +391,8 @@ class BookmarkRepository(
                     bookmarkDao.getAllFavoritesForServer(server.id)
                 com.karakept.app.data.model.FilterStatus.ARCHIVED ->
                     bookmarkDao.getAllArchivedForServer(server.id)
+                com.karakept.app.data.model.FilterStatus.OFFLINE ->
+                    bookmarkDao.getAllOfflineForServer(server.id)
             }
         }
     }
@@ -361,6 +417,8 @@ class BookmarkRepository(
                     bookmarkDao.getFavoritesCount(server.id)
                 com.karakept.app.data.model.FilterStatus.ARCHIVED ->
                     bookmarkDao.getArchivedCount(server.id)
+                com.karakept.app.data.model.FilterStatus.OFFLINE ->
+                    bookmarkDao.getOfflineCount(server.id)
             }
         }
     }

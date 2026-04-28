@@ -92,6 +92,7 @@ object MainScreen : Screen {
         val showDateInList by settingsScreenModel.showDateInList.collectAsState()
         val dateDisplayMode by settingsScreenModel.dateDisplayMode.collectAsState()
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
+        val showScrollCursor by settingsScreenModel.showScrollCursor.collectAsState()
         val displayConfig = remember(activeLayout, layoutType, dimReadBookmarks, showReadingTimeBadge, showTags, showDateInList, dateDisplayMode) {
             MainScreenDisplayConfig(
                 layoutType = activeLayout?.layoutType?.let { LayoutType.fromString(it) } ?: layoutType,
@@ -297,11 +298,31 @@ object MainScreen : Screen {
         }
 
         // Common scaffold content builder used by both layout modes
+        // Derive the best total count for the scroll cursor denominator.
+        // quickFilterCounts / listCounts are computed from the full (unfiltered) DB so they
+        // represent the true total, not just the currently loaded page.
+        val totalBookmarkCount = when {
+            currentFilter.lists.size == 1 ->
+                listCounts[currentFilter.lists.first()] ?: quickFilterCounts.all
+            currentFilter.lists.size > 1 ->
+                currentFilter.lists.sumOf { listCounts[it] ?: 0 }
+            currentFilter.status == com.karakept.app.data.model.FilterStatus.FAVORITES ->
+                quickFilterCounts.favorites
+            currentFilter.status == com.karakept.app.data.model.FilterStatus.ARCHIVED ->
+                quickFilterCounts.archived
+            currentFilter.status == com.karakept.app.data.model.FilterStatus.ALL_INCLUDING_ARCHIVED ->
+                quickFilterCounts.all + quickFilterCounts.archived
+            else -> quickFilterCounts.all
+        }
+
         val scaffoldContent: @Composable (isExpanded: Boolean, activeBookmarkId: Long?, onBookmarkClick: (com.karakept.app.data.local.entity.BookmarkEntity) -> Unit, onMenuClick: () -> Unit) -> Unit =
             { isExpanded, activeBmId, onBookmarkClick, onMenuClick ->
                 MainScreenScaffoldContent(
                     isExpandedLayout = isExpanded, bookmarks = bookmarks, isSyncing = isSyncing, syncProgress = syncProgress,
-                    isLoadingMore = isLoadingMore, hasMoreItems = hasMoreItems, displayConfig = displayConfig,
+                    isLoadingMore = isLoadingMore, hasMoreItems = hasMoreItems,
+                    showScrollCursor = showScrollCursor, sortOption = currentFilter.sort,
+                    totalBookmarkCount = totalBookmarkCount,
+                    displayConfig = displayConfig,
                     swipeLeftAction = swipeLeftAction, swipeRightAction = swipeRightAction,
                     customSwipeActionConfigs = customSwipeActionConfigs, swipeLeftConfigId = swipeLeftConfigId, swipeRightConfigId = swipeRightConfigId,
                     trackReadingProgress = trackReadingProgress, offlineMode = offlineMode, isAutoOffline = isAutoOffline,

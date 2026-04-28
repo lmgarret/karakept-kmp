@@ -53,6 +53,7 @@ internal suspend fun MainScreenModel.loadBookmarksPage(
         status = expandedFilter.status,
         offset = offset,
         limit = pageSize,
+        sort = expandedFilter.sort,
         listId = singleListId
     )
 
@@ -60,9 +61,8 @@ internal suspend fun MainScreenModel.loadBookmarksPage(
     val filtered = BookmarkFilterUtils.applyClientSideFilters(
         pagedBookmarks, expandedFilter, skipListFilter = singleListId != null
     )
-    val sorted = BookmarkFilterUtils.applySorting(filtered, expandedFilter.sort)
 
-    return Pair(sorted, rawCount)
+    return Pair(filtered, rawCount)
 }
 
 /**
@@ -97,7 +97,9 @@ fun MainScreenModel.loadNextPage() {
             val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, nextPage)
 
             if (newItems.isNotEmpty()) {
-                updateAccumulatedBookmarks { it + newItems }
+                updateAccumulatedBookmarks { current ->
+                    BookmarkFilterUtils.applySorting(current + newItems, filter.sort)
+                }
                 _currentPage.value = lastPage
             }
             if (dbExhausted) {

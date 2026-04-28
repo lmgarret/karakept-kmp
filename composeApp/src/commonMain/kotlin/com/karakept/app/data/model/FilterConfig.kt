@@ -14,7 +14,8 @@ enum class FilterStatus {
     ALL,                    // Shows non-archived bookmarks
     ALL_INCLUDING_ARCHIVED, // Shows all bookmarks (used for list views)
     FAVORITES,              // Shows starred bookmarks (includes archived)
-    ARCHIVED                // Shows archived bookmarks
+    ARCHIVED,               // Shows archived bookmarks
+    OFFLINE                 // Shows bookmarks with content synced for offline reading
 }
 
 enum class SortOption {
