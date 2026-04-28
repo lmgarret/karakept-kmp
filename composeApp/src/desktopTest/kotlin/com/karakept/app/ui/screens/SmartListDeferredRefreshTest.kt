@@ -100,7 +100,7 @@ class SmartListDeferredRefreshTest {
         coEvery { any<BookmarkActionsRepository>().flushPendingActions(any()) } returns Unit
 
         coEvery {
-            bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any())
+            bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any(), any())
         } returns emptyList()
     }
 
@@ -294,7 +294,7 @@ class SmartListDeferredRefreshTest {
         assertFalse("smartA" in model._smartListsNeedingRefresh.value,
             "Flag should be cleared even on failure")
         coVerify(atLeast = 1) {
-            bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any())
+            bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any(), any())
         }
     }
 

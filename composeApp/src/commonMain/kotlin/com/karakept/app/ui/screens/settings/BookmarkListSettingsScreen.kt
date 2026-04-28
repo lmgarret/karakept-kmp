@@ -81,6 +81,7 @@ fun BookmarkListSettingsContent(
 ) {
         val readingSpeedWpm by screenModel.readingSpeedWpm.collectAsState()
         val notificationsEnabled by screenModel.notificationsEnabled.collectAsState()
+        val showScrollCursor by screenModel.showScrollCursor.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
         val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
@@ -413,6 +414,39 @@ fun BookmarkListSettingsContent(
                         Switch(
                             checked = notificationsEnabled,
                             onCheckedChange = { screenModel.setNotificationsEnabled(it) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    text = "Scroll Cursor",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Show Scroll Cursor",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Shows your position in the list while scrolling",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = showScrollCursor,
+                            onCheckedChange = { screenModel.setShowScrollCursor(it) }
                         )
                     }
                 }

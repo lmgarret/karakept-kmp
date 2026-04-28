@@ -33,6 +33,7 @@ import com.karakept.app.data.repository.setCustomSwipeActionConfigs
 import com.karakept.app.data.repository.setSwipeLeftConfigId
 import com.karakept.app.data.repository.setSwipeRightConfigId
 import com.karakept.app.data.repository.setDimReadBookmarks
+import com.karakept.app.data.repository.setShowScrollCursor
 import com.karakept.app.data.repository.setTrackReadingProgress
 import com.karakept.app.data.repository.setResetProgressOnMarkUnread
 import com.karakept.app.data.repository.setShowTagsInViewer
@@ -373,6 +374,18 @@ class SettingsScreenModel(
     fun setDimReadBookmarks(dim: Boolean) {
         screenModelScope.launch {
             settingsRepository.setDimReadBookmarks(dim)
+        }
+    }
+
+    val showScrollCursor: StateFlow<Boolean> = settingsRepository.showScrollCursor.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setShowScrollCursor(enabled: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setShowScrollCursor(enabled)
         }
     }
 

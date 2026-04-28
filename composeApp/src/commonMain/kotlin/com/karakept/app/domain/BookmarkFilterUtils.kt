@@ -88,6 +88,9 @@ object BookmarkFilterUtils {
             FilterStatus.ARCHIVED             -> all.filter { it.isArchived }
             FilterStatus.ALL                  -> all.filter { !it.isArchived }
             FilterStatus.ALL_INCLUDING_ARCHIVED -> all
+            // In search mode allBookmarks strips content, so OFFLINE falls back to all non-archived.
+            // Paged browsing uses DB-level filtering which correctly checks content length.
+            FilterStatus.OFFLINE              -> all.filter { !it.isArchived }
         }
 
         if (filter.tags.isNotEmpty()) {

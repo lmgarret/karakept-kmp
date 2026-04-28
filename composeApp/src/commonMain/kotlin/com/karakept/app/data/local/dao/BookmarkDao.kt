@@ -5,6 +5,8 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.RawQuery
+import androidx.room.RoomRawQuery
 import androidx.room.Update
 import com.karakept.app.data.local.entity.BookmarkEntity
 import kotlinx.coroutines.flow.Flow
@@ -100,70 +102,10 @@ interface BookmarkDao {
         readingTimeMinutes: Int
     )
 
-    // Paginated queries
-    @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
-               '' as content
-        FROM bookmarks
-        WHERE serverId = :serverId
-        ORDER BY createdAt DESC
-        LIMIT :limit OFFSET :offset
-    """)
-    suspend fun getBookmarksPagedForServer(
-        serverId: String,
-        limit: Int,
-        offset: Int
-    ): List<BookmarkEntity>
-
-    @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
-               '' as content
-        FROM bookmarks
-        WHERE serverId = :serverId AND isStarred = 1
-        ORDER BY createdAt DESC
-        LIMIT :limit OFFSET :offset
-    """)
-    suspend fun getFavoritesPagedForServer(
-        serverId: String,
-        limit: Int,
-        offset: Int
-    ): List<BookmarkEntity>
-
-    @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
-               '' as content
-        FROM bookmarks
-        WHERE serverId = :serverId AND isArchived = 1
-        ORDER BY createdAt DESC
-        LIMIT :limit OFFSET :offset
-    """)
-    suspend fun getArchivedPagedForServer(
-        serverId: String,
-        limit: Int,
-        offset: Int
-    ): List<BookmarkEntity>
-
-    @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
-               '' as content
-        FROM bookmarks
-        WHERE serverId = :serverId AND isArchived = 0
-        ORDER BY createdAt DESC
-        LIMIT :limit OFFSET :offset
-    """)
-    suspend fun getNotArchivedPagedForServer(
-        serverId: String,
-        limit: Int,
-        offset: Int
-    ): List<BookmarkEntity>
+    // Paginated query — ORDER BY is injected dynamically via RoomRawQuery so the
+    // sort option from FilterConfig is applied at the DB level rather than in memory.
+    @RawQuery
+    suspend fun getBookmarksPaged(query: RoomRawQuery): List<BookmarkEntity>
 
     // Count queries for pagination
     @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId")
@@ -176,27 +118,6 @@ interface BookmarkDao {
     suspend fun getArchivedCount(serverId: String): Int
 
     // List-filtered queries
-    @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
-               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
-               '' as content
-        FROM bookmarks
-        WHERE serverId = :serverId
-        AND (listIds = :listId
-             OR listIds LIKE :listId || ',%'
-             OR listIds LIKE '%,' || :listId
-             OR listIds LIKE '%,' || :listId || ',%')
-        ORDER BY createdAt DESC
-        LIMIT :limit OFFSET :offset
-    """)
-    suspend fun getBookmarksForListPaged(
-        serverId: String,
-        listId: String,
-        limit: Int,
-        offset: Int
-    ): List<BookmarkEntity>
-
     @Query("""
         SELECT COUNT(*)
         FROM bookmarks
@@ -213,6 +134,23 @@ interface BookmarkDao {
 
     @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND isArchived = 0")
     suspend fun getNotArchivedCount(serverId: String): Int
+
+    @Query("""
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0
+        ORDER BY createdAt DESC
+    """)
+    suspend fun getAllOfflineForServer(serverId: String): List<BookmarkEntity>
+
+    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0")
+    fun getOfflineCountFlow(serverId: String): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0")
+    suspend fun getOfflineCount(serverId: String): Int
 
     // Query for sync that includes content length and reading time to determine if content exists
     @Query("""

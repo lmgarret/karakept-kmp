@@ -42,7 +42,8 @@ internal data class StoredDisplaySettings(
     val hideArticleThumbnails: Boolean = true,
     val showReadingTimeBadge: Boolean = true,
     val showTags: Boolean = true,
-    val dimReadBookmarks: Boolean = true
+    val dimReadBookmarks: Boolean = true,
+    val showScrollCursor: Boolean = true
 )
 
 /** Reader / viewer settings: fonts, colors, reading speed, and progress tracking. */

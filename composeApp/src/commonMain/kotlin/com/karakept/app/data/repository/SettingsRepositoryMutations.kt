@@ -88,6 +88,7 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         showReadingTimeBadge = display.showReadingTimeBadge,
         showTags = display.showTags,
         dimReadBookmarks = display.dimReadBookmarks,
+        showScrollCursor = display.showScrollCursor,
         viewerMode = reader.viewerMode,
         htmlTextColor = reader.htmlTextColor,
         htmlBackgroundColor = reader.htmlBackgroundColor,
@@ -135,7 +136,8 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                 hideArticleThumbnails = s.hideArticleThumbnails,
                 showReadingTimeBadge = s.showReadingTimeBadge,
                 showTags = s.showTags,
-                dimReadBookmarks = s.dimReadBookmarks
+                dimReadBookmarks = s.dimReadBookmarks,
+                showScrollCursor = s.showScrollCursor
             )
         )
         prefs[READER_SETTINGS_KEY] = settingsJson.encodeToString(
@@ -216,6 +218,9 @@ suspend fun SettingsRepository.setShowTags(show: Boolean) =
 
 suspend fun SettingsRepository.setDimReadBookmarks(dim: Boolean) =
     updateDisplaySettings { copy(dimReadBookmarks = dim) }
+
+suspend fun SettingsRepository.setShowScrollCursor(enabled: Boolean) =
+    updateDisplaySettings { copy(showScrollCursor = enabled) }
 
 suspend fun SettingsRepository.setViewerMode(mode: ViewerMode) =
     updateReaderSettings { copy(viewerMode = mode.name) }

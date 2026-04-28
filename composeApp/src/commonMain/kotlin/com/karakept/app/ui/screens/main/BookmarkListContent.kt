@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -56,12 +57,14 @@ import com.karakept.app.data.model.ThumbnailSide
 import com.karakept.app.data.model.UrlDisplayMode
 import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
+import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkContextMenu
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.BookmarkPlaceholderItem
 import com.karakept.app.ui.components.QuickActionBookmarkItem
+import com.karakept.app.ui.components.ScrollCursorIndicator
 import com.karakept.app.ui.components.SwipeableBookmarkItem
 import com.karakept.app.ui.components.getEffectiveColor
 import com.karakept.app.ui.utils.onDesktopModifiedClick
@@ -79,6 +82,9 @@ internal fun BookmarkListContent(
     syncProgress: com.karakept.app.data.model.SyncProgress?,
     isLoadingMore: Boolean,
     hasMoreItems: Boolean,
+    showScrollCursor: Boolean = false,
+    sortOption: SortOption = SortOption.NEWEST,
+    totalBookmarkCount: Int = 0,
     layoutType: LayoutType,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -615,6 +621,10 @@ internal fun BookmarkListContent(
         } // end inner Box
     }
 
+    // ScrollCursorIndicator is intentionally placed OUTSIDE listContent so it renders
+    // as the last child of PullToRefreshBox / desktop Box. This guarantees it is drawn
+    // on top of everything inside listContent (including the scroll-to-top FAB whose
+    // Material3 Surface creates a hardware-accelerated layer that ignores zIndex).
     if (!isDesktop) {
         PullToRefreshBox(
             isRefreshing = isSyncing,
@@ -622,10 +632,29 @@ internal fun BookmarkListContent(
             modifier = Modifier.fillMaxSize()
         ) {
             listContent()
+            if (showScrollCursor) {
+                ScrollCursorIndicator(
+                    listState = listState,
+                    bookmarks = bookmarks,
+                    sortOption = sortOption,
+                    totalBookmarkCount = totalBookmarkCount,
+                    // padding(top) keeps the scrollbar clear of the sync progress bar
+                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
+                )
+            }
         }
     } else {
         Box(modifier = Modifier.fillMaxSize()) {
             listContent()
+            if (showScrollCursor) {
+                ScrollCursorIndicator(
+                    listState = listState,
+                    bookmarks = bookmarks,
+                    sortOption = sortOption,
+                    totalBookmarkCount = totalBookmarkCount,
+                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
+                )
+            }
         }
     }
 }
