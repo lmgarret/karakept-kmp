@@ -129,6 +129,8 @@ internal class BookmarkSyncPipeline(
         return try {
             val ids = bookmarkActionsRepository.processPendingActions(config.server)
             ids.toSet()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             AppLogger.e("BookmarkRepo", "Sync pipeline failed: ${e.message}", e)
             emptySet()
@@ -190,6 +192,8 @@ internal class BookmarkSyncPipeline(
                 listBookmarks.forEach { bookmark ->
                     bookmarkListMap.getOrPut(bookmark.id ?: "") { mutableListOf() }.add(list.id ?: "")
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 // Skip failed lists
             }
@@ -432,6 +436,8 @@ internal class BookmarkSyncPipeline(
                         bookmarkActionsRepository.pullReadingProgressFromServer(
                             bookmark.remoteId, config.server.id
                         )
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (_: Exception) {
                     } finally {
                         semaphore.release()
@@ -534,6 +540,8 @@ internal class BookmarkSyncPipeline(
                     config.server, entity.remoteId, entity.serverId,
                     entity.bannerImageAssetId, entity.screenshotAssetId
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 AppLogger.e("BookmarkRepo", "Failed to sync bookmark: ${e.message}", e)
             }

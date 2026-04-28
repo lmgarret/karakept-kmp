@@ -441,6 +441,8 @@ class BookmarkViewerScreenModel(
                         _loadingState.value = BookmarkLoadingState.Error("Bookmark not found")
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _loadingState.value = BookmarkLoadingState.Error(
                     e.message ?: "Unknown error"

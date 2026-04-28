@@ -96,6 +96,11 @@ class MainScreenModel(
     internal val _currentPage = MutableStateFlow(0)
     internal val _accumulatedBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
 
+    // Incremented at the start of every resetPaginationAndLoad call. loadNextPage captures
+    // this value before its DB fetch and discards results if the value changed (i.e. a
+    // reset overtook it), preventing duplicate entries in the LazyColumn.
+    internal var paginationGeneration = 0
+
     internal val bookmarksMutex = Mutex()
 
     /**

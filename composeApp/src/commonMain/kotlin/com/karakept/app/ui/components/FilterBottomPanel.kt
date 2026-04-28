@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,8 +14,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import com.karakept.app.data.model.ContentFilter
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.utils.buildListHierarchy
 import com.karakept.api.model.KarakeepList as KarakeepList
@@ -221,6 +224,76 @@ private fun FilterPanelContent(
             onClick = { onFilterUpdate(filter.copy(status = FilterStatus.ARCHIVED)) },
             label = { Text("Archived") },
             leadingIcon = { Icon(Icons.Default.Archive, null, modifier = Modifier.size(18.dp)) }
+        )
+    }
+
+    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+    // Reading state
+    Text("Reading", style = MaterialTheme.typography.titleMedium)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(vertical = 8.dp)
+    ) {
+        FilterChip(
+            selected = filter.readFilter == ReadFilter.UNREAD,
+            onClick = {
+                onFilterUpdate(filter.copy(
+                    readFilter = if (filter.readFilter == ReadFilter.UNREAD) ReadFilter.ALL else ReadFilter.UNREAD
+                ))
+            },
+            label = { Text("Unread") },
+            leadingIcon = { Icon(Icons.Default.Circle, null, modifier = Modifier.size(18.dp)) }
+        )
+        FilterChip(
+            selected = filter.readFilter == ReadFilter.IN_PROGRESS,
+            onClick = {
+                onFilterUpdate(filter.copy(
+                    readFilter = if (filter.readFilter == ReadFilter.IN_PROGRESS) ReadFilter.ALL else ReadFilter.IN_PROGRESS
+                ))
+            },
+            label = { Text("In Progress") },
+            leadingIcon = { Icon(Icons.Outlined.MenuBook, null, modifier = Modifier.size(18.dp)) }
+        )
+        FilterChip(
+            selected = filter.readFilter == ReadFilter.READ,
+            onClick = {
+                onFilterUpdate(filter.copy(
+                    readFilter = if (filter.readFilter == ReadFilter.READ) ReadFilter.ALL else ReadFilter.READ
+                ))
+            },
+            label = { Text("Read") },
+            leadingIcon = { Icon(Icons.Default.DoneAll, null, modifier = Modifier.size(18.dp)) }
+        )
+    }
+
+    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+    // Content availability
+    Text("Content", style = MaterialTheme.typography.titleMedium)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(vertical = 8.dp)
+    ) {
+        FilterChip(
+            selected = filter.contentFilter == ContentFilter.DOWNLOADED,
+            onClick = {
+                onFilterUpdate(filter.copy(
+                    contentFilter = if (filter.contentFilter == ContentFilter.DOWNLOADED) ContentFilter.ALL else ContentFilter.DOWNLOADED
+                ))
+            },
+            label = { Text("Downloaded") },
+            leadingIcon = { Icon(Icons.Default.OfflinePin, null, modifier = Modifier.size(18.dp)) }
+        )
+        FilterChip(
+            selected = filter.contentFilter == ContentFilter.NOT_DOWNLOADED,
+            onClick = {
+                onFilterUpdate(filter.copy(
+                    contentFilter = if (filter.contentFilter == ContentFilter.NOT_DOWNLOADED) ContentFilter.ALL else ContentFilter.NOT_DOWNLOADED
+                ))
+            },
+            label = { Text("Not Downloaded") },
+            leadingIcon = { Icon(Icons.Outlined.CloudOff, null, modifier = Modifier.size(18.dp)) }
         )
     }
 

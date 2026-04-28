@@ -65,6 +65,8 @@ suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(bookmarkRemo
                 AppLogger.d("ReadProgressSync", "server progress not higher, keeping local")
                 false
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             AppLogger.e("BookmarkActionsRepositorySync", "Failed to pull reading progress: ${e.message}")
             false
