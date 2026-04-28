@@ -111,13 +111,38 @@ fun ScrollCursorIndicator(
     val arrowWidthPx = with(density) { arrowWidthDp.toPx() }
     val cornerPx = with(density) { 10.dp.toPx() }
 
-    // Speech-bubble shape: rounded-rect body + right-pointing arrow
-    val tooltipShape = remember(arrowWidthPx, cornerPx) {
+    val effectiveTrackPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
+    val thumbOffsetDp = with(density) { (displayFraction * effectiveTrackPx).toDp() }
+    val thumbTopPx = displayFraction * effectiveTrackPx
+
+    // Place the tooltip so its arrow always points at the thumb's top edge while
+    // keeping most of the bubble above the finger.
+    // Strategy: fix arrowYFraction = 0.75 (arrow in the lower quarter of the tooltip),
+    // then derive tooltipTop so the arrow lands on thumbTopPx. When clamped (near
+    // top/bottom of the track) recompute the actual fraction so the shape matches.
+    val targetArrowFraction = 0.75f
+    val idealTooltipTopPx = if (tooltipHeightPx > 1f)
+        thumbTopPx - targetArrowFraction * tooltipHeightPx
+    else
+        thumbTopPx - 30f  // sensible default before first measurement
+    val tooltipTopPx = idealTooltipTopPx
+        .coerceIn(0f, (trackHeightPx - tooltipHeightPx).coerceAtLeast(0f))
+    val tooltipTopDp = with(density) { tooltipTopPx.toDp() }
+
+    // Actual arrow fraction after clamping — keeps the arrow aimed at the thumb
+    // even when the tooltip is pinned to the top or bottom of the track.
+    val arrowYFraction = if (tooltipHeightPx > 1f)
+        ((thumbTopPx - tooltipTopPx) / tooltipHeightPx).coerceIn(0.15f, 0.85f)
+    else
+        targetArrowFraction
+
+    // Speech-bubble shape: rounded-rect body + right-pointing arrow at arrowYFraction
+    val tooltipShape = remember(arrowWidthPx, cornerPx, arrowYFraction) {
         GenericShape { size, _ ->
             val bodyW = size.width - arrowWidthPx
-            val midY = size.height / 2f
-            val arrowHalf = min(arrowWidthPx * 0.7f, size.height * 0.35f)
-            // Rounded rectangle for the body
+            val arrowY = size.height * arrowYFraction
+            // Clamp arrowHalf so the triangle never escapes the tooltip bounds
+            val arrowHalf = min(arrowWidthPx * 0.7f, min(arrowY * 0.8f, (size.height - arrowY) * 0.8f))
             addRoundRect(
                 RoundRect(
                     left = 0f, top = 0f,
@@ -125,24 +150,12 @@ fun ScrollCursorIndicator(
                     cornerRadius = CornerRadius(cornerPx)
                 )
             )
-            // Arrow triangle pointing right (toward the scrollbar)
-            moveTo(bodyW, midY - arrowHalf)
-            lineTo(size.width, midY)
-            lineTo(bodyW, midY + arrowHalf)
+            moveTo(bodyW, arrowY - arrowHalf)
+            lineTo(size.width, arrowY)
+            lineTo(bodyW, arrowY + arrowHalf)
             close()
         }
     }
-
-    val effectiveTrackPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
-    val thumbOffsetDp = with(density) { (displayFraction * effectiveTrackPx).toDp() }
-
-    // Position tooltip ABOVE the thumb so it is not hidden under the user's finger.
-    // The bottom of the tooltip sits fingerClearancePx above the thumb's top edge.
-    val fingerClearancePx = with(density) { 8.dp.toPx() }
-    val thumbTopPx = displayFraction * effectiveTrackPx
-    val tooltipTopPx = (thumbTopPx - tooltipHeightPx - fingerClearancePx)
-        .coerceIn(0f, (trackHeightPx - tooltipHeightPx).coerceAtLeast(0f))
-    val tooltipTopDp = with(density) { tooltipTopPx.toDp() }
 
     Box(
         modifier = modifier
