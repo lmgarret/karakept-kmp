@@ -57,4 +57,16 @@ class DateUtilsTest {
         assertTrue(result.matches(Regex("\\d+d ago")),
             "~3 days ago should show 'Nd ago', got: $result")
     }
+
+    @Test
+    fun formatBookmarkDate_elapsedMode_monthsAgo_noOverflow() {
+        // 30 * 86_400_000 = 2,592,000,000 which overflows Int.MAX_VALUE (2,147,483,647)
+        // Using it as an Int divisor produces a negative result — this test guards against regression.
+        val twoMonthsAgo = Clock.System.now().toEpochMilliseconds() - 60 * 86_400_000L
+        val result = formatBookmarkDate(twoMonthsAgo, DateDisplayMode.ELAPSED)
+        assertTrue(result.matches(Regex("\\d+mo ago")),
+            "~2 months ago should show positive 'Nmo ago', got: $result")
+        assertTrue(!result.startsWith("-"),
+            "Result must not be negative, got: $result")
+    }
 }

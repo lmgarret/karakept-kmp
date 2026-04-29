@@ -23,7 +23,7 @@ private fun formatElapsed(epochMillis: Long): String {
             diffMs < 86_400_000L -> "${diffMs / 3_600_000}h ago"
             diffMs < 7 * 86_400_000L -> "${diffMs / 86_400_000}d ago"
             diffMs < 30 * 86_400_000L -> "${diffMs / (7 * 86_400_000)}w ago"
-            diffMs < 365 * 86_400_000L -> "${diffMs / (30 * 86_400_000)}mo ago"
+            diffMs < 365 * 86_400_000L -> "${diffMs / (30 * 86_400_000L)}mo ago"
             else -> formatAbsolute(epochMillis)
         }
     } catch (e: Exception) {

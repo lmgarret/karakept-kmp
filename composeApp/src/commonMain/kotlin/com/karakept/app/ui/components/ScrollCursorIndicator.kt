@@ -296,7 +296,7 @@ private fun formatScrollCursorDate(epochMillis: Long): String {
             diffMs < 86_400_000L -> "${diffMs / 3_600_000}h"
             diffMs < 7 * 86_400_000L -> "${diffMs / 86_400_000}d"
             diffMs < 30 * 86_400_000L -> "${diffMs / (7 * 86_400_000)}w"
-            diffMs < 365 * 86_400_000L -> "${diffMs / (30 * 86_400_000)}mo"
+            diffMs < 365 * 86_400_000L -> "${diffMs / (30 * 86_400_000L)}mo"
             else -> "${diffMs / (365 * 86_400_000L)}y"
         }
     } catch (e: Exception) {
