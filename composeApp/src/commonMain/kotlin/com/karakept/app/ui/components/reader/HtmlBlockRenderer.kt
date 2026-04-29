@@ -53,9 +53,16 @@ val BLOCK_TAGS = setOf(
 
 /**
  * Checks if an element should be rendered as a block-level composable.
+ *
+ * `<a>` is transparent in HTML5: when it wraps block content (e.g. a `<picture>` used
+ * as a lightbox link) it should be treated as a block so that RenderChildren dispatches
+ * its children through RenderBlock rather than swallowing them as empty inline text.
  */
 fun isBlockElement(element: Element): Boolean {
-    return element.tagName().lowercase() in BLOCK_TAGS
+    val tag = element.tagName().lowercase()
+    if (tag in BLOCK_TAGS) return true
+    if (tag == "a" && hasBlockChildren(element)) return true
+    return false
 }
 
 /**
