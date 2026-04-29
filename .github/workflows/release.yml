@@ -56,8 +56,8 @@ jobs:
         id: changelog
         uses: nosovj/llm-release-action@v1
         with:
-          model: anthropic/claude-sonnet-4-5-20250929
-          model_analysis: anthropic/claude-haiku-4-5-20251022
+          model: anthropic/claude-sonnet-4-6
+          model_analysis: anthropic/claude-haiku-4-5
           # model: mistral/mistral-large-latest
           current_version: ${{ steps.prev_tag.outputs.tag }}
           changelog_config: |
