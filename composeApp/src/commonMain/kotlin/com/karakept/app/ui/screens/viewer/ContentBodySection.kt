@@ -62,7 +62,7 @@ internal fun ContentBodySection(
     // Reset on new content; or mark ready immediately when fetch is done but no content exists,
     // so the skeleton is replaced by the content-unavailable message instead of spinning forever.
     LaunchedEffect(content, contentFetchAttempted) {
-        htmlContentReady = if (content == null && contentFetchAttempted) true else false
+        htmlContentReady = if (content.isNullOrBlank() && contentFetchAttempted) true else false
     }
 
     // Notify parent when content is fully rendered
@@ -87,7 +87,7 @@ internal fun ContentBodySection(
         // Render content area with overlay approach
         Box(modifier = Modifier.fillMaxWidth()) {
             // Content unavailable: fetch was attempted but server returned no content
-            if (content == null && contentFetchAttempted) {
+            if (content.isNullOrBlank() && contentFetchAttempted) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -119,7 +119,7 @@ internal fun ContentBodySection(
             }
 
             // Always render HtmlContent when data arrives (bottom layer)
-            if (content != null) {
+            if (!content.isNullOrBlank()) {
                 HtmlContent(
                     html = content,
                     viewerMode = viewerMode,
