@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -53,9 +54,16 @@ val BLOCK_TAGS = setOf(
 
 /**
  * Checks if an element should be rendered as a block-level composable.
+ *
+ * `<a>` is transparent in HTML5: when it wraps block content (e.g. a `<picture>` used
+ * as a lightbox link) it should be treated as a block so that RenderChildren dispatches
+ * its children through RenderBlock rather than swallowing them as empty inline text.
  */
 fun isBlockElement(element: Element): Boolean {
-    return element.tagName().lowercase() in BLOCK_TAGS
+    val tag = element.tagName().lowercase()
+    if (tag in BLOCK_TAGS) return true
+    if (tag == "a" && hasBlockChildren(element)) return true
+    return false
 }
 
 /**
@@ -719,30 +727,125 @@ private fun RenderFigcaption(
     }
 }
 
-@Composable
-private fun RenderImage(element: Element) {
-    val src = element.attr("src")
-    if (src.isBlank()) return
+/**
+ * Intrinsic dimensions declared on an `<img>` element via its `width`/`height` attributes.
+ */
+internal data class ImageDimensions(val width: Int, val height: Int) {
+    val aspectRatio: Float get() = width.toFloat() / height.toFloat()
+}
 
-    val alt = element.attr("alt")
-    AsyncImage(
-        model = src,
-        contentDescription = alt.ifBlank { null },
-        contentScale = ContentScale.FillWidth,
-        modifier = Modifier
+/**
+ * Reads the `width`/`height` attributes off an `<img>` element. Returns null if either
+ * is missing, non-numeric (e.g. "100%", "auto"), or zero — in which case the renderer
+ * falls back to filling the available width.
+ */
+internal fun extractImageDimensions(element: Element): ImageDimensions? {
+    val width = element.attr("width").toIntOrNull() ?: return null
+    val height = element.attr("height").toIntOrNull() ?: return null
+    if (width <= 0 || height <= 0) return null
+    return ImageDimensions(width, height)
+}
+
+/**
+ * Picks the best (last/largest descriptor) HTTP(S) URL from a `srcset` string.
+ * Skips SVG placeholder data URIs. Returns null if no usable URL is found.
+ *
+ * Splits on commas that introduce a new URL (lookahead for a protocol prefix) so
+ * that commas inside URL query parameters — common in CDN URLs like
+ * `?resize=928,522` — are preserved instead of fragmenting the URL.
+ */
+internal fun pickBestUrlFromSrcset(srcset: String): String? {
+    if (srcset.isBlank()) return null
+    return srcset.split(Regex(",\\s*(?=(?:https?://|file://|data:))"))
+        .mapNotNull { entry ->
+            entry.trim().split(Regex("\\s+")).firstOrNull()?.trim()
+                ?.takeIf { url ->
+                    url.isNotBlank() &&
+                    !url.startsWith("data:") &&
+                    (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file://"))
+                }
+        }
+        .lastOrNull()
+}
+
+/**
+ * Resolves the best URL from an `<img>` element, handling lazy-load patterns where
+ * the real URL is stored in `data-src` or `data-srcset` instead of `src`.
+ * Returns null if no usable URL can be found.
+ */
+internal fun resolveImageUrl(element: Element): String? {
+    val src = element.attr("src")
+    val isSvgPlaceholder = src.startsWith("data:image/svg")
+
+    if (src.isNotBlank() && !isSvgPlaceholder) return src
+
+    // Lazy-load pattern: real URL in data-src
+    val dataSrc = element.attr("data-src")
+    if (dataSrc.isNotBlank() && !dataSrc.startsWith("data:")) return dataSrc
+
+    // Try srcset / data-srcset as last resort
+    val srcset = element.attr("srcset").ifBlank { element.attr("data-srcset") }
+    return pickBestUrlFromSrcset(srcset)
+}
+
+/**
+ * Renders an image at its declared dimensions when known, otherwise filling the
+ * available width. Capping the width to the declared `width` attribute prevents
+ * tiny icons / thumbnails from being upscaled to full screen width and looking
+ * pixelated.
+ */
+@Composable
+private fun RenderResolvedImage(url: String, alt: String, dimensions: ImageDimensions?) {
+    val sizeModifier = if (dimensions != null) {
+        Modifier
+            .widthIn(max = dimensions.width.dp)
             .fillMaxWidth()
+            .aspectRatio(dimensions.aspectRatio)
+    } else {
+        Modifier.fillMaxWidth()
+    }
+    AsyncImage(
+        model = url,
+        contentDescription = alt.ifBlank { null },
+        contentScale = if (dimensions != null) ContentScale.Fit else ContentScale.FillWidth,
+        modifier = sizeModifier
             .padding(vertical = 8.dp)
             .clip(RoundedCornerShape(4.dp))
     )
 }
 
 @Composable
+private fun RenderImage(element: Element) {
+    val url = resolveImageUrl(element) ?: return
+    RenderResolvedImage(
+        url = url,
+        alt = element.attr("alt"),
+        dimensions = extractImageDimensions(element)
+    )
+}
+
+@Composable
 private fun RenderPicture(element: Element) {
-    // <picture> contains <source> and <img>. We just render the <img> fallback.
-    val img = element.selectFirst("img")
-    if (img != null) {
-        RenderImage(img)
+    // Prefer <source> children — they may carry srcset/data-srcset with real URLs
+    // even when the <img src> is still a lazy-load SVG placeholder.
+    for (source in element.select("source")) {
+        val srcset = source.attr("srcset").ifBlank { source.attr("data-srcset") }
+        val url = pickBestUrlFromSrcset(srcset)
+        if (url != null) {
+            // Even when the URL comes from <source>, the <img> child carries the
+            // alt text and intrinsic dimensions for the picture.
+            val img = element.selectFirst("img")
+            RenderResolvedImage(
+                url = url,
+                alt = img?.attr("alt").orEmpty(),
+                dimensions = img?.let { extractImageDimensions(it) }
+            )
+            return
+        }
     }
+    // Fall back to the <img> element with lazy-load awareness
+    val img = element.selectFirst("img")
+    if (img != null) RenderImage(img)
 }
 
 // --- Table support ---
