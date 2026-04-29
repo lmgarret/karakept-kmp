@@ -356,6 +356,7 @@ fun BookmarkViewerContent(
                                     htmlTextColor = htmlTextColor, htmlBackgroundColor = htmlBackgroundColor,
                                     htmlFontSize = htmlFontSize, htmlFontFamily = htmlFontFamily,
                                     precrawledAssetPath = precrawledAssetPath, loadingState = state,
+                                    contentFetchAttempted = contentFetchAttempted,
                                     highlights = highlights,
                                     onLinkClick = { linkUrl ->
                                         try { when (linkOpenMode) { LinkOpenMode.CUSTOM_TAB -> openInCustomTab(linkUrl); LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(linkUrl) } }
