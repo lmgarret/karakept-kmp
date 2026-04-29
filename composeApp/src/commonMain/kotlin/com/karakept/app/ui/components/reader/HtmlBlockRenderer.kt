@@ -719,14 +719,51 @@ private fun RenderFigcaption(
     }
 }
 
+/**
+ * Picks the best (last/largest descriptor) HTTP(S) URL from a `srcset` string.
+ * Skips SVG placeholder data URIs. Returns null if no usable URL is found.
+ */
+internal fun pickBestUrlFromSrcset(srcset: String): String? {
+    if (srcset.isBlank()) return null
+    return srcset.split(",")
+        .mapNotNull { entry ->
+            entry.trim().split(Regex("\\s+")).firstOrNull()?.trim()
+                ?.takeIf { url ->
+                    url.isNotBlank() &&
+                    !url.startsWith("data:") &&
+                    (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file://"))
+                }
+        }
+        .lastOrNull()
+}
+
+/**
+ * Resolves the best URL from an `<img>` element, handling lazy-load patterns where
+ * the real URL is stored in `data-src` or `data-srcset` instead of `src`.
+ * Returns null if no usable URL can be found.
+ */
+internal fun resolveImageUrl(element: Element): String? {
+    val src = element.attr("src")
+    val isSvgPlaceholder = src.startsWith("data:image/svg")
+
+    if (src.isNotBlank() && !isSvgPlaceholder) return src
+
+    // Lazy-load pattern: real URL in data-src
+    val dataSrc = element.attr("data-src")
+    if (dataSrc.isNotBlank() && !dataSrc.startsWith("data:")) return dataSrc
+
+    // Try srcset / data-srcset as last resort
+    val srcset = element.attr("srcset").ifBlank { element.attr("data-srcset") }
+    return pickBestUrlFromSrcset(srcset)
+}
+
 @Composable
 private fun RenderImage(element: Element) {
-    val src = element.attr("src")
-    if (src.isBlank()) return
+    val url = resolveImageUrl(element) ?: return
 
     val alt = element.attr("alt")
     AsyncImage(
-        model = src,
+        model = url,
         contentDescription = alt.ifBlank { null },
         contentScale = ContentScale.FillWidth,
         modifier = Modifier
@@ -738,11 +775,28 @@ private fun RenderImage(element: Element) {
 
 @Composable
 private fun RenderPicture(element: Element) {
-    // <picture> contains <source> and <img>. We just render the <img> fallback.
-    val img = element.selectFirst("img")
-    if (img != null) {
-        RenderImage(img)
+    // Prefer <source> children — they may carry srcset/data-srcset with real URLs
+    // even when the <img src> is still a lazy-load SVG placeholder.
+    for (source in element.select("source")) {
+        val srcset = source.attr("srcset").ifBlank { source.attr("data-srcset") }
+        val url = pickBestUrlFromSrcset(srcset)
+        if (url != null) {
+            val alt = element.selectFirst("img")?.attr("alt").orEmpty()
+            AsyncImage(
+                model = url,
+                contentDescription = alt.ifBlank { null },
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+            )
+            return
+        }
     }
+    // Fall back to the <img> element with lazy-load awareness
+    val img = element.selectFirst("img")
+    if (img != null) RenderImage(img)
 }
 
 // --- Table support ---

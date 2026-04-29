@@ -18,13 +18,18 @@ object HtmlSanitizer {
     private val safelist: Safelist by lazy {
         Safelist.relaxed()
             // Add additional tags beyond relaxed() defaults
-            .addTags("div", "span", "pre", "code", "figcaption", "figure", "picture", "img", "mark")
+            .addTags("div", "span", "pre", "code", "figcaption", "figure", "picture", "img", "source", "mark")
             // Configure link attributes
             .addAttributes("a", "href", "title")
             .addProtocols("a", "href", "http", "https")
-            // Configure image attributes - allow data: URLs for embedded base64 images
-            .addAttributes("img", "src", "alt", "title", "width", "height")
+            // Configure image attributes - allow data: URLs for embedded base64 images.
+            // Also keep srcset/data-src/data-srcset for lazy-load patterns where the real
+            // URL lives in data-src rather than src.
+            .addAttributes("img", "src", "alt", "title", "width", "height", "srcset", "data-src", "data-srcset", "sizes")
             .addProtocols("img", "src", "http", "https", "data", "file")
+            // Configure <source> inside <picture> — keep srcset/data-srcset so the renderer
+            // can pick a real URL even when <img src> is a lazy-load SVG placeholder.
+            .addAttributes("source", "srcset", "data-srcset", "type", "media", "sizes")
             // Allow classes and styles for highlights
             .addAttributes("mark", "class", "style", "data-id")
             .addAttributes("span", "class", "style")
