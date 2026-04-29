@@ -231,6 +231,17 @@ class BookmarkRepository(
             val bannerImageAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.BANNER_IMAGE }?.id
             val screenshotAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.SCREENSHOT }?.id
 
+            // Fetch fresh list memberships from the server. Falls back to the existing
+            // value on failure so a transient network issue doesn't wipe local state.
+            val refreshedListIds = try {
+                remoteDataSource.fetchListsForBookmark(server, existing.originalRemoteId)
+                    .mapNotNull { it.id }
+                    .joinToString(",")
+            } catch (e: Exception) {
+                AppLogger.e("BookmarkRepository", "Failed to fetch lists for bookmark ${existing.originalRemoteId}: ${e.message}")
+                existing.listIds
+            }
+
             // Update metadata — preserve local isRead (read status is client-side only)
             bookmarkDao.updateBookmarkMetadata(
                 localId = existing.localId,
@@ -241,7 +252,7 @@ class BookmarkRepository(
                 bannerImageAssetId = bannerImageAssetId,
                 screenshotAssetId = screenshotAssetId,
                 tags = dto.tags?.joinToString(",") { it.name ?: "" } ?: "",
-                listIds = existing.listIds, // Preserve existing listIds as fetching them is expensive for single sync
+                listIds = refreshedListIds,
                 isStarred = dto.favourited ?: false,
                 isArchived = dto.archived ?: false,
                 isRead = existing.isRead,

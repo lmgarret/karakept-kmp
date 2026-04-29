@@ -453,6 +453,7 @@ fun BookmarkViewerContent(
                         onViewerModeClick = { showModeDialog = true },
                         onMoveToListClick = { showListPicker = true },
                         onEditTagsClick = { showTagEditor = true },
+                        onRefreshClick = { screenModel.refreshBookmark(bookmarkId) },
                         onDeleteClick = { showDeleteConfirmation = true },
                         isDesktop = getPlatform().isDesktop, bookmark = state.bookmark,
                         onFavoriteClick = { screenModel.toggleBookmarkFavorite(state.bookmark) },

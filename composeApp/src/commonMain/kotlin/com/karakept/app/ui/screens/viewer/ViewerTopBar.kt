@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Unarchive
@@ -72,6 +73,7 @@ internal fun ViewerTopBar(
     onViewerModeClick: () -> Unit,
     onMoveToListClick: () -> Unit,
     onEditTagsClick: () -> Unit,
+    onRefreshClick: () -> Unit,
     onDeleteClick: () -> Unit,
     // Desktop: FAB actions moved to top bar
     isDesktop: Boolean = false,
@@ -320,6 +322,21 @@ internal fun ViewerTopBar(
                     },
                     onClick = {
                         onEditTagsClick()
+                        onMenuToggle(false)
+                    }
+                )
+
+                // Refresh — re-fetch bookmark, tags, lists, assets and inline images
+                DropdownMenuItem(
+                    text = { Text("Refresh") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        onRefreshClick()
                         onMenuToggle(false)
                     }
                 )
