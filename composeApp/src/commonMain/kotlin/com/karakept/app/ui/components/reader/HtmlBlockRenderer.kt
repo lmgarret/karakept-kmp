@@ -749,10 +749,14 @@ internal fun extractImageDimensions(element: Element): ImageDimensions? {
 /**
  * Picks the best (last/largest descriptor) HTTP(S) URL from a `srcset` string.
  * Skips SVG placeholder data URIs. Returns null if no usable URL is found.
+ *
+ * Splits on commas that introduce a new URL (lookahead for a protocol prefix) so
+ * that commas inside URL query parameters — common in CDN URLs like
+ * `?resize=928,522` — are preserved instead of fragmenting the URL.
  */
 internal fun pickBestUrlFromSrcset(srcset: String): String? {
     if (srcset.isBlank()) return null
-    return srcset.split(",")
+    return srcset.split(Regex(",\\s*(?=(?:https?://|file://|data:))"))
         .mapNotNull { entry ->
             entry.trim().split(Regex("\\s+")).firstOrNull()?.trim()
                 ?.takeIf { url ->

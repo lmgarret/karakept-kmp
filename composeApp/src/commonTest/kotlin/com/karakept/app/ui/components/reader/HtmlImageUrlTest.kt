@@ -69,6 +69,29 @@ class HtmlImageUrlTest {
         assertEquals("https://cdn.example.com/large.jpg", pickBestUrlFromSrcset(srcset))
     }
 
+    @Test
+    fun pickBestUrlFromSrcset_multipleUrlsWithCommasInQueryParams_parsesCorrectly() {
+        // Real-world pattern from Numerama / WordPress photon CDN: every URL contains
+        // a comma in its query string (?resize=W,H), and entries are themselves
+        // separated by commas. The parser must distinguish the two.
+        val srcset = "https://cdn.example.com/img-1024x576.jpg?resize=928,522&key=abc 928w," +
+                     "https://cdn.example.com/img-1024x576.jpg?resize=768,432&key=abc 768w," +
+                     "https://cdn.example.com/img-1024x576.jpg?resize=480,270&key=abc 480w"
+        assertEquals(
+            "https://cdn.example.com/img-1024x576.jpg?resize=480,270&key=abc",
+            pickBestUrlFromSrcset(srcset)
+        )
+    }
+
+    @Test
+    fun pickBestUrlFromSrcset_singleUrlWithCommaInQuery_preservesFullUrl() {
+        val srcset = "https://cdn.example.com/img.jpg?resize=1024,576&key=abc123 1024w"
+        assertEquals(
+            "https://cdn.example.com/img.jpg?resize=1024,576&key=abc123",
+            pickBestUrlFromSrcset(srcset)
+        )
+    }
+
     // --- resolveImageUrl ---
 
     private fun imgElement(src: String, dataSrc: String = "", srcset: String = "", dataSrcset: String = "") =
