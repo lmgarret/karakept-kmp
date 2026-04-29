@@ -448,6 +448,7 @@ fun BookmarkViewerContent(
                         title = title, url = url, showStickyTitle = showStickyTitle, showMenu = showMenu,
                         toolbarHeight = toolbarHeight,
                         readingProgress = if (trackReadingProgress) readingProgress else 0f,
+                        isRefreshing = isRefreshing,
                         onBackClick = onBack, onMenuToggle = { showMenu = it },
                         onAppearanceClick = { showAppearancePanel = true },
                         onViewerModeClick = { showModeDialog = true },

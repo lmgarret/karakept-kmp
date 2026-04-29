@@ -67,6 +67,7 @@ internal fun ViewerTopBar(
     showMenu: Boolean,
     toolbarHeight: Dp,
     readingProgress: Float,
+    isRefreshing: Boolean = false,
     onBackClick: () -> Unit,
     onMenuToggle: (Boolean) -> Unit,
     onAppearanceClick: () -> Unit,
@@ -364,15 +365,25 @@ internal fun ViewerTopBar(
         } // end Row wrapping action buttons
     }
 
-    // Reading progress bar - thin accent-colored line below the toolbar
-    LinearProgressIndicator(
-        progress = { readingProgress },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(3.dp),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = Color.Transparent,
-        drawStopIndicator = {}
-    )
+    // Reading progress bar — shows indeterminate while refreshing
+    if (isRefreshing) {
+        LinearProgressIndicator(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = Color.Transparent,
+        )
+    } else {
+        LinearProgressIndicator(
+            progress = { readingProgress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = Color.Transparent,
+            drawStopIndicator = {}
+        )
+    }
     } // end Column
 }
