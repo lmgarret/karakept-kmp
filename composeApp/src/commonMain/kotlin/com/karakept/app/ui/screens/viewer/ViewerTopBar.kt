@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Unarchive
@@ -66,12 +67,14 @@ internal fun ViewerTopBar(
     showMenu: Boolean,
     toolbarHeight: Dp,
     readingProgress: Float,
+    isRefreshing: Boolean = false,
     onBackClick: () -> Unit,
     onMenuToggle: (Boolean) -> Unit,
     onAppearanceClick: () -> Unit,
     onViewerModeClick: () -> Unit,
     onMoveToListClick: () -> Unit,
     onEditTagsClick: () -> Unit,
+    onRefreshClick: () -> Unit,
     onDeleteClick: () -> Unit,
     // Desktop: FAB actions moved to top bar
     isDesktop: Boolean = false,
@@ -324,6 +327,21 @@ internal fun ViewerTopBar(
                     }
                 )
 
+                // Refresh — re-fetch bookmark, tags, lists, assets and inline images
+                DropdownMenuItem(
+                    text = { Text("Refresh") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        onRefreshClick()
+                        onMenuToggle(false)
+                    }
+                )
+
                 // Delete (destructive action)
                 DropdownMenuItem(
                     text = { Text("Delete") },
@@ -347,15 +365,25 @@ internal fun ViewerTopBar(
         } // end Row wrapping action buttons
     }
 
-    // Reading progress bar - thin accent-colored line below the toolbar
-    LinearProgressIndicator(
-        progress = { readingProgress },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(3.dp),
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = Color.Transparent,
-        drawStopIndicator = {}
-    )
+    // Reading progress bar — shows indeterminate while refreshing
+    if (isRefreshing) {
+        LinearProgressIndicator(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = Color.Transparent,
+        )
+    } else {
+        LinearProgressIndicator(
+            progress = { readingProgress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = Color.Transparent,
+            drawStopIndicator = {}
+        )
+    }
     } // end Column
 }
