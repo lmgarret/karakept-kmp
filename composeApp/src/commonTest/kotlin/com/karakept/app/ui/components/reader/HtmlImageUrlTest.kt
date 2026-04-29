@@ -3,6 +3,7 @@ package com.karakept.app.ui.components.reader
 import com.fleeksoft.ksoup.Ksoup
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /**
@@ -156,5 +157,65 @@ class HtmlImageUrlTest {
         // Source's data-srcset should yield a real URL
         val srcset = source.attr("srcset").ifBlank { source.attr("data-srcset") }
         assertEquals("https://cdn.example.com/photo.webp", pickBestUrlFromSrcset(srcset))
+    }
+
+    // --- extractImageDimensions ---
+
+    private fun img(html: String) = Ksoup.parse(html).selectFirst("img")!!
+
+    @Test
+    fun extractImageDimensions_validIntegerDimensions_returnsDims() {
+        val dims = extractImageDimensions(img("<img src='https://x' width='200' height='100'>"))
+        assertNotNull(dims)
+        assertEquals(200, dims.width)
+        assertEquals(100, dims.height)
+        assertEquals(2.0f, dims.aspectRatio)
+    }
+
+    @Test
+    fun extractImageDimensions_noAttributes_returnsNull() {
+        assertNull(extractImageDimensions(img("<img src='https://x'>")))
+    }
+
+    @Test
+    fun extractImageDimensions_onlyWidth_returnsNull() {
+        assertNull(extractImageDimensions(img("<img src='https://x' width='200'>")))
+    }
+
+    @Test
+    fun extractImageDimensions_onlyHeight_returnsNull() {
+        assertNull(extractImageDimensions(img("<img src='https://x' height='100'>")))
+    }
+
+    @Test
+    fun extractImageDimensions_nonNumericValues_returnsNull() {
+        assertNull(extractImageDimensions(img("<img src='https://x' width='100%' height='auto'>")))
+    }
+
+    @Test
+    fun extractImageDimensions_zeroValues_returnsNull() {
+        assertNull(extractImageDimensions(img("<img src='https://x' width='0' height='0'>")))
+    }
+
+    @Test
+    fun extractImageDimensions_negativeValues_returnsNull() {
+        assertNull(extractImageDimensions(img("<img src='https://x' width='-50' height='100'>")))
+    }
+
+    @Test
+    fun extractImageDimensions_squareIcon_returnsAspectRatioOne() {
+        val dims = extractImageDimensions(img("<img src='https://x' width='32' height='32'>"))
+        assertNotNull(dims)
+        assertEquals(1.0f, dims.aspectRatio)
+    }
+
+    @Test
+    fun sanitizeAndExtract_dimensionsSurviveSanitizer() {
+        val html = "<img src='https://example.com/icon.png' width='48' height='48' alt='icon'>"
+        val sanitized = com.karakept.app.utils.HtmlSanitizer.sanitize(html)
+        val dims = extractImageDimensions(Ksoup.parse(sanitized).selectFirst("img")!!)
+        assertNotNull(dims, "width/height should survive sanitization")
+        assertEquals(48, dims.width)
+        assertEquals(48, dims.height)
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -727,6 +728,25 @@ private fun RenderFigcaption(
 }
 
 /**
+ * Intrinsic dimensions declared on an `<img>` element via its `width`/`height` attributes.
+ */
+internal data class ImageDimensions(val width: Int, val height: Int) {
+    val aspectRatio: Float get() = width.toFloat() / height.toFloat()
+}
+
+/**
+ * Reads the `width`/`height` attributes off an `<img>` element. Returns null if either
+ * is missing, non-numeric (e.g. "100%", "auto"), or zero — in which case the renderer
+ * falls back to filling the available width.
+ */
+internal fun extractImageDimensions(element: Element): ImageDimensions? {
+    val width = element.attr("width").toIntOrNull() ?: return null
+    val height = element.attr("height").toIntOrNull() ?: return null
+    if (width <= 0 || height <= 0) return null
+    return ImageDimensions(width, height)
+}
+
+/**
  * Picks the best (last/largest descriptor) HTTP(S) URL from a `srcset` string.
  * Skips SVG placeholder data URIs. Returns null if no usable URL is found.
  */
@@ -764,19 +784,39 @@ internal fun resolveImageUrl(element: Element): String? {
     return pickBestUrlFromSrcset(srcset)
 }
 
+/**
+ * Renders an image at its declared dimensions when known, otherwise filling the
+ * available width. Capping the width to the declared `width` attribute prevents
+ * tiny icons / thumbnails from being upscaled to full screen width and looking
+ * pixelated.
+ */
 @Composable
-private fun RenderImage(element: Element) {
-    val url = resolveImageUrl(element) ?: return
-
-    val alt = element.attr("alt")
+private fun RenderResolvedImage(url: String, alt: String, dimensions: ImageDimensions?) {
+    val sizeModifier = if (dimensions != null) {
+        Modifier
+            .widthIn(max = dimensions.width.dp)
+            .fillMaxWidth()
+            .aspectRatio(dimensions.aspectRatio)
+    } else {
+        Modifier.fillMaxWidth()
+    }
     AsyncImage(
         model = url,
         contentDescription = alt.ifBlank { null },
-        contentScale = ContentScale.FillWidth,
-        modifier = Modifier
-            .fillMaxWidth()
+        contentScale = if (dimensions != null) ContentScale.Fit else ContentScale.FillWidth,
+        modifier = sizeModifier
             .padding(vertical = 8.dp)
             .clip(RoundedCornerShape(4.dp))
+    )
+}
+
+@Composable
+private fun RenderImage(element: Element) {
+    val url = resolveImageUrl(element) ?: return
+    RenderResolvedImage(
+        url = url,
+        alt = element.attr("alt"),
+        dimensions = extractImageDimensions(element)
     )
 }
 
@@ -788,15 +828,13 @@ private fun RenderPicture(element: Element) {
         val srcset = source.attr("srcset").ifBlank { source.attr("data-srcset") }
         val url = pickBestUrlFromSrcset(srcset)
         if (url != null) {
-            val alt = element.selectFirst("img")?.attr("alt").orEmpty()
-            AsyncImage(
-                model = url,
-                contentDescription = alt.ifBlank { null },
-                contentScale = ContentScale.FillWidth,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-                    .clip(RoundedCornerShape(4.dp))
+            // Even when the URL comes from <source>, the <img> child carries the
+            // alt text and intrinsic dimensions for the picture.
+            val img = element.selectFirst("img")
+            RenderResolvedImage(
+                url = url,
+                alt = img?.attr("alt").orEmpty(),
+                dimensions = img?.let { extractImageDimensions(it) }
             )
             return
         }
