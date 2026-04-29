@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -59,6 +60,8 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.ListSyncStatus
+import com.karakept.app.data.model.SyncKey
 import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.ui.utils.buildListHierarchy
 import com.karakept.app.ui.utils.filterExpandedHierarchy
@@ -85,6 +88,7 @@ internal fun DrawerContent(
     onAddBookmark: (() -> Unit)? = null,
     quickFilterCounts: QuickFilterCounts = QuickFilterCounts(),
     highlightsCount: Int = 0,
+    listSyncStatuses: Map<SyncKey, ListSyncStatus> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -174,6 +178,7 @@ internal fun DrawerContent(
                             isSelected = currentFilter.lists.contains(listId),
                             expandedLists = expandedLists,
                             hasChildLists = hasChildLists,
+                            syncStatus = listSyncStatuses[listId] ?: ListSyncStatus.Idle,
                             onToggleExpanded = { onToggleListExpanded(listId) },
                             onSelected = {
                                 onFilterApply(
@@ -230,6 +235,7 @@ internal fun MainScreenDrawer(
     isHighlightsSelected: Boolean = false,
     quickFilterCounts: QuickFilterCounts = QuickFilterCounts(),
     highlightsCount: Int = 0,
+    listSyncStatuses: Map<SyncKey, ListSyncStatus> = emptyMap(),
     content: @Composable () -> Unit
 ) {
     ModalNavigationDrawer(
@@ -253,7 +259,8 @@ internal fun MainScreenDrawer(
                     onNavigateToHighlights = onNavigateToHighlights,
                     isHighlightsSelected = isHighlightsSelected,
                     quickFilterCounts = quickFilterCounts,
-                    highlightsCount = highlightsCount
+                    highlightsCount = highlightsCount,
+                    listSyncStatuses = listSyncStatuses
                 )
             }
         }
@@ -347,6 +354,45 @@ private fun BuiltinDrawerItem(
     }
 }
 
+/**
+ * Shows the list's bookmark count, or an animated sync indicator while the list is being
+ * refreshed from the server.
+ */
+@Composable
+private fun ListCountOrSyncIndicator(
+    count: Int?,
+    syncStatus: ListSyncStatus,
+    isSelected: Boolean
+) {
+    when (syncStatus) {
+        is ListSyncStatus.Idle -> {
+            count?.let {
+                Text(
+                    text = it.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = (if (isSelected) MaterialTheme.colorScheme.primary
+                             else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.6f)
+                )
+            }
+        }
+        is ListSyncStatus.FetchingMetadata -> {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        is ListSyncStatus.FetchingContent -> {
+            CircularProgressIndicator(
+                progress = { syncStatus.current.toFloat() / syncStatus.total.coerceAtLeast(1) },
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ListDrawerItem(
@@ -356,6 +402,7 @@ private fun ListDrawerItem(
     isSelected: Boolean,
     expandedLists: Set<String>,
     hasChildLists: Boolean,
+    syncStatus: ListSyncStatus = ListSyncStatus.Idle,
     onToggleExpanded: () -> Unit,
     onSelected: () -> Unit,
     onMarkAllAsRead: () -> Unit,
@@ -422,14 +469,11 @@ private fun ListDrawerItem(
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (isSelected) selectedTextColor else normalTextColor
                 )
-                count?.let {
-                    Text(
-                        text = it.toString(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = (if (isSelected) selectedTextColor else MaterialTheme.colorScheme.onSurfaceVariant)
-                            .copy(alpha = 0.6f)
-                    )
-                }
+                ListCountOrSyncIndicator(
+                    count = count,
+                    syncStatus = syncStatus,
+                    isSelected = isSelected
+                )
             }
             DropdownMenu(
                 expanded = showMenu,

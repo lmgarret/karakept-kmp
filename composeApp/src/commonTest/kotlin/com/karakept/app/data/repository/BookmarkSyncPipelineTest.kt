@@ -8,7 +8,9 @@ import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.dao.PendingActionDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncConfig
+import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SyncProgress
 import com.karakept.app.data.model.SyncStrategy
@@ -101,7 +103,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     // Helpers
     // ──────────────────────────────────────────────────────────
 
-    private fun createPipeline(config: SyncConfiguration): BookmarkSyncPipeline {
+    private fun createPipeline(
+        config: SyncConfiguration,
+        onProgress: ((ListSyncStatus) -> Unit)? = null
+    ): BookmarkSyncPipeline {
         return BookmarkSyncPipeline(
             config = config,
             bookmarkDao = bookmarkDao,
@@ -113,7 +118,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
             listDao = listDao,
             syncProgress = syncProgress,
             fetchRemoteContent = fetchRemoteContent,
-            cacheHeroAssetsForBookmark = cacheHeroAssetsForBookmark
+            cacheHeroAssetsForBookmark = cacheHeroAssetsForBookmark,
+            onProgress = onProgress
         )
     }
 
@@ -609,18 +615,22 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
             remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
         } returns PaginatedBookmarks(bookmarks = emptyList(), nextCursor = null)
 
-        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        val onProgressValues = mutableListOf<ListSyncStatus>()
+        val pipeline = createPipeline(
+            SyncConfiguration.Full(testServer),
+            onProgress = { status -> onProgressValues.add(status) }
+        )
 
-        // Verify initial state
         assertEquals(SyncProgress.Idle, syncProgress.value, "Should start at Idle")
 
         pipeline.execute()
 
-        // After execute completes, syncProgress should be back to Idle
-        // Note: StateFlow conflates intermediate values, so we verify the final state
-        // and check that execute() at minimum set Starting (verified by the fact that
-        // the pipeline ran to completion and returned to Idle)
         assertEquals(SyncProgress.Idle, syncProgress.value, "Should end at Idle")
+        // onProgress must have been called at least once with FetchingMetadata
+        assertTrue(
+            onProgressValues.any { it is ListSyncStatus.FetchingMetadata },
+            "onProgress should have been invoked with FetchingMetadata. Got: $onProgressValues"
+        )
     }
 
     // ──────────────────────────────────────────────────────────
@@ -931,5 +941,53 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         val result = pipeline.execute()
 
         assertEquals(0, result)
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // ForList content sync with per-list syncOffline setting
+    // ──────────────────────────────────────────────────────────
+
+    @Test
+    fun forListSync_listWithSyncOffline_downloadsContent() = runTest(testDispatcher) {
+        // Global strategy is NEVER, but list-123 has syncOffline = true
+        coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.NEVER)
+        coEvery { settingsRepository.allListSettings } returns flowOf(
+            mapOf("list-123" to ListSettings(syncOffline = true))
+        )
+
+        val dto = makeBookmarkDto(id = "bk-offline")
+        coEvery {
+            remoteDataSource.fetchBookmarksForList(testServer, "list-123", false)
+        } returns listOf(dto)
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(emptyList())
+        coEvery { fetchRemoteContent(any(), any()) } returns "<p>Offline content</p>"
+        coEvery { imageCacheManager.cacheImagesInHtml(any(), any()) } answers { firstArg() }
+
+        val pipeline = createPipeline(SyncConfiguration.ForList(testServer, "list-123"))
+        pipeline.execute()
+
+        // syncOffline = true for list-123 → content must be fetched
+        coVerify(atLeast = 1) { fetchRemoteContent(testServer, "bk-offline") }
+    }
+
+    @Test
+    fun forListSync_listWithoutSyncOffline_skipsContent() = runTest(testDispatcher) {
+        // Global strategy is NEVER, and list-123 has syncOffline = false
+        coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.NEVER)
+        coEvery { settingsRepository.allListSettings } returns flowOf(
+            mapOf("list-123" to ListSettings(syncOffline = false))
+        )
+
+        val dto = makeBookmarkDto(id = "bk-no-offline")
+        coEvery {
+            remoteDataSource.fetchBookmarksForList(testServer, "list-123", false)
+        } returns listOf(dto)
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(emptyList())
+
+        val pipeline = createPipeline(SyncConfiguration.ForList(testServer, "list-123"))
+        pipeline.execute()
+
+        // syncOffline = false → content must NOT be fetched
+        coVerify(exactly = 0) { fetchRemoteContent(any(), any()) }
     }
 }

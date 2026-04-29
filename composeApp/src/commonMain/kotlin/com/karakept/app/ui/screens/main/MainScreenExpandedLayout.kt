@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.model.ListSyncStatus
+import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setDrawerWidthDp
 import com.karakept.app.data.repository.setListColumnFraction
@@ -92,6 +94,7 @@ fun MainScreenExpandedLayout(
     isDesktop: Boolean,
     quickFilterCounts: QuickFilterCounts = QuickFilterCounts(),
     highlightsCount: Int = 0,
+    listSyncStatuses: Map<SyncKey, ListSyncStatus> = emptyMap(),
     scaffoldContent: @Composable (isExpandedLayout: Boolean) -> Unit
 ) {
     // Column width state -- persisted via SettingsRepository
@@ -185,7 +188,8 @@ fun MainScreenExpandedLayout(
                         { onShowAddBookmarkDialogChanged(true) }
                     } else null,
                     quickFilterCounts = quickFilterCounts,
-                    highlightsCount = highlightsCount
+                    highlightsCount = highlightsCount,
+                    listSyncStatuses = listSyncStatuses
                 )
             }
         }

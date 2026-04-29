@@ -8,6 +8,10 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
+import com.karakept.app.data.model.ListSyncStatus
+import com.karakept.app.data.model.SYNC_KEY_ARCHIVED
+import com.karakept.app.data.model.SYNC_KEY_FAVORITES
+import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.remote.RemoteDataSource
@@ -16,10 +20,11 @@ import com.karakept.app.utils.ReadingTimeCalculator
 import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.data.local.entity.AssetEntity
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -52,8 +57,30 @@ class BookmarkRepository(
         return bookmarkDao.getBookmarkByRemoteId(remoteId, serverId)
     }
 
-    private val mutex = Mutex()
+    // Per-key sync status, keyed by SyncKey (null = All, sentinel = Favorites/Archived, listId = list).
+    // Idle entries are removed from the map to keep it small.
+    private val _perKeyProgress = MutableStateFlow<Map<SyncKey, ListSyncStatus>>(emptyMap())
+    val perKeyProgress: StateFlow<Map<SyncKey, ListSyncStatus>> = _perKeyProgress.asStateFlow()
 
+    private fun setKeyStatus(key: SyncKey, status: ListSyncStatus) {
+        _perKeyProgress.update { map ->
+            if (status is ListSyncStatus.Idle) map - key else map + (key to status)
+        }
+    }
+
+    // Deduplication: track which SyncKeys are currently running a pipeline.
+    private val keysMutex = Mutex()
+    private val activeKeys = mutableSetOf<SyncKey>()
+
+    private suspend fun tryAcquireKey(key: SyncKey): Boolean = keysMutex.withLock {
+        if (key in activeKeys) return@withLock false
+        activeKeys.add(key)
+        true
+    }
+
+    private suspend fun releaseKey(key: SyncKey) = keysMutex.withLock { activeKeys.remove(key) }
+
+    // Kept for BackgroundSyncOrchestrator backward compatibility.
     private val _syncProgress = MutableStateFlow<com.karakept.app.data.model.SyncProgress>(com.karakept.app.data.model.SyncProgress.Idle)
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> = _syncProgress.asStateFlow()
 
@@ -439,40 +466,53 @@ class BookmarkRepository(
 
     /**
      * Executes the sync pipeline with the given configuration.
-     * Provides unified error handling and progress reporting.
+     * Uses per-key deduplication: if a pipeline for the same key is already running,
+     * this call returns 0 immediately without starting a new pipeline.
      * Returns the number of new bookmarks inserted.
      */
     private suspend fun executeSyncPipeline(config: SyncConfiguration): Int {
-        return mutex.withLock {
-            try {
-                val pipeline = BookmarkSyncPipeline(
-                    config = config,
-                    bookmarkDao = bookmarkDao,
-                    remoteDataSource = remoteDataSource,
-                    bookmarkActionsRepository = bookmarkActionsRepository,
-                    settingsRepository = settingsRepository,
-                    highlightRepository = highlightRepository,
-                    imageCacheManager = imageCacheManager,
-                    listDao = listDao,
-                    syncProgress = _syncProgress,
-                    fetchRemoteContent = ::fetchRemoteContent,
-                    cacheHeroAssetsForBookmark = ::cacheHeroAssetsForBookmark
-                )
-                val result = pipeline.execute()
-                _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks
-                result
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // Scope cancelled — not a real error, reset to Idle
+        val key: SyncKey = when (config) {
+            is SyncConfiguration.Full -> null
+            is SyncConfiguration.Filtered -> if (config.favourited == true) SYNC_KEY_FAVORITES else SYNC_KEY_ARCHIVED
+            is SyncConfiguration.ForList -> config.listId
+        }
+
+        if (!tryAcquireKey(key)) {
+            AppLogger.d("BookmarkRepo", "Sync for key=$key already in progress, skipping")
+            return 0
+        }
+
+        setKeyStatus(key, ListSyncStatus.FetchingMetadata())
+        try {
+            val pipeline = BookmarkSyncPipeline(
+                config = config,
+                bookmarkDao = bookmarkDao,
+                remoteDataSource = remoteDataSource,
+                bookmarkActionsRepository = bookmarkActionsRepository,
+                settingsRepository = settingsRepository,
+                highlightRepository = highlightRepository,
+                imageCacheManager = imageCacheManager,
+                listDao = listDao,
+                syncProgress = _syncProgress,
+                fetchRemoteContent = ::fetchRemoteContent,
+                cacheHeroAssetsForBookmark = ::cacheHeroAssetsForBookmark,
+                onProgress = { status -> setKeyStatus(key, status) }
+            )
+            val result = pipeline.execute()
+            _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks
+            return result
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+            throw e
+        } catch (e: Exception) {
+            AppLogger.e("BookmarkRepo", "Failed to fetch bookmarks: ${e.message}", e)
+            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
+            throw e
+        } finally {
+            releaseKey(key)
+            setKeyStatus(key, ListSyncStatus.Idle)
+            if (_syncProgress.value !is com.karakept.app.data.model.SyncProgress.Error) {
                 _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
-                throw e
-            } catch (e: Exception) {
-                AppLogger.e("BookmarkRepo", "Failed to fetch bookmarks: ${e.message}", e)
-                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
-                throw e
-            } finally {
-                if (_syncProgress.value !is com.karakept.app.data.model.SyncProgress.Error) {
-                    _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
-                }
             }
         }
     }
