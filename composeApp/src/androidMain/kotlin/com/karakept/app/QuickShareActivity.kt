@@ -19,23 +19,25 @@ class QuickShareActivity : ComponentActivity() {
         if (intent.action == Intent.ACTION_SEND && intent.type == "text/plain") {
             val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
             if (sharedText != null) {
-                val urlRegex = "(https?://[\\w-]+(\\.[\\w-]+)+(:\\d+)?(/[^\\s]*)?)".toRegex()
-                val match = urlRegex.find(sharedText)
-                val url = match?.value ?: sharedText
-
-                saveBookmark(url)
+                val urls = extractUrls(sharedText)
+                val message = if (urls.size > 1) "Saving ${urls.size} bookmarks..." else "Saving bookmark..."
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                urls.forEach { url -> enqueueBookmarkSave(url) }
             }
         }
         finish()
     }
 
-    private fun saveBookmark(url: String) {
-        Toast.makeText(this, "Saving bookmark...", Toast.LENGTH_SHORT).show()
-        
+    private fun extractUrls(text: String): List<String> {
+        val urlRegex = "(https?://[\\w-]+(\\.[\\w-]+)+(:\\d+)?(/[^\\s]*)?)".toRegex()
+        val matches = urlRegex.findAll(text).map { it.value }.toList()
+        return matches.ifEmpty { listOf(text) }
+    }
+
+    private fun enqueueBookmarkSave(url: String) {
         val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.karakept.app.services.SaveBookmarkWorker>()
             .setInputData(androidx.work.workDataOf(com.karakept.app.services.SaveBookmarkWorker.KEY_URL to url))
             .build()
-            
         androidx.work.WorkManager.getInstance(this).enqueue(workRequest)
     }
 }
