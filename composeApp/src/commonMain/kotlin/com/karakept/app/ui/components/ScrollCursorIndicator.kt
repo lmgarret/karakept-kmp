@@ -89,7 +89,7 @@ fun ScrollCursorIndicator(
     }
 
     val displayFraction = if (isDragging) dragFraction else listScrollFraction
-    val pointedIndex = (displayFraction * (bookmarks.size - 1))
+    val pointedIndex = (displayFraction * (effectiveTotal - 1))
         .roundToInt().coerceIn(0, bookmarks.size - 1)
     val label = scrollCursorLabel(bookmarks.getOrNull(pointedIndex), sortOption)
 
