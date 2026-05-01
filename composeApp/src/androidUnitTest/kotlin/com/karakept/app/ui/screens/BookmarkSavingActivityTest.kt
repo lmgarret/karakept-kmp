@@ -1,18 +1,15 @@
 package com.karakept.app.ui.screens
 
 import android.content.Intent
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.MutableState
 import com.karakept.app.BookmarkSavingActivity
-import io.mockk.mockk
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -130,6 +127,69 @@ class BookmarkSavingActivityTest {
         assertTrue(!activity.isFinishing, "Activity should not be finishing before close")
         activity.finish()
         assertTrue(activity.isFinishing, "Activity should be finishing after close callback")
+    }
+
+    // --- URL extraction edge cases ---
+
+    @Test
+    fun `extracts URL with query parameters`() {
+        val activity = launchActivity(
+            createShareIntent("https://example.com/search?q=hello&page=2")
+        )
+        assertEquals(listOf("https://example.com/search?q=hello&page=2"), readSharedUrls(activity))
+    }
+
+    @Test
+    fun `extracts URL embedded in prose text`() {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "Hey check out this article https://example.com/cool-post it's great!")
+        }
+        val activity = launchActivity(intent)
+        assertEquals(listOf("https://example.com/cool-post"), readSharedUrls(activity))
+    }
+
+    @Test
+    fun `falls back to full text when no URL is found`() {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, "just some plain text with no url")
+        }
+        val activity = launchActivity(intent)
+        assertEquals(listOf("just some plain text with no url"), readSharedUrls(activity))
+    }
+
+    @Test
+    fun `extracts three newline-separated URLs`() {
+        val activity = launchActivity(
+            createShareIntentMultiple(
+                listOf(
+                    "https://example.com/a",
+                    "https://example.com/b",
+                    "https://example.com/c",
+                )
+            )
+        )
+        assertEquals(
+            listOf("https://example.com/a", "https://example.com/b", "https://example.com/c"),
+            readSharedUrls(activity)
+        )
+    }
+
+    @Test
+    fun `extracts URL with https scheme`() {
+        val activity = launchActivity(createShareIntent("https://secure.example.com/page"))
+        assertEquals(listOf("https://secure.example.com/page"), readSharedUrls(activity))
+    }
+
+    @Test
+    fun `returns empty list for wrong MIME type`() {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_TEXT, "https://example.com/image.png")
+        }
+        val activity = launchActivity(intent)
+        assertTrue(readSharedUrls(activity).isEmpty())
     }
 }
 
