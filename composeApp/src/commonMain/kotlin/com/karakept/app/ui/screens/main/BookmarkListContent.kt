@@ -662,14 +662,6 @@ private fun SyncProgressBar(
             }
             is com.karakept.app.data.model.SyncProgress.FetchingMetadata -> {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                if (progress.bookmarksCount > 0) {
-                    Text(
-                        text = "Processing ${progress.bookmarksCount} bookmarks…",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-                    )
-                }
             }
             else -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
