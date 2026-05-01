@@ -2,16 +2,6 @@ name: Release
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'composeApp/**'
-      - 'api-client/**'
-      - 'gradle/**'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradle.properties'
-      - 'gradlew'
-      - 'gradlew.bat'
     tags:
       - 'v*'
   workflow_dispatch:
