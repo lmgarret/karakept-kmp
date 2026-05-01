@@ -28,10 +28,10 @@ import kotlin.test.assertTrue
 class BookmarkSavingActivityTest {
 
     @Suppress("UNCHECKED_CAST")
-    private fun readSharedUrl(activity: BookmarkSavingActivity): String? {
-        val field = BookmarkSavingActivity::class.java.getDeclaredField("sharedUrl\$delegate")
+    private fun readSharedUrls(activity: BookmarkSavingActivity): List<String> {
+        val field = BookmarkSavingActivity::class.java.getDeclaredField("sharedUrls\$delegate")
         field.isAccessible = true
-        val state = field.get(activity) as MutableState<String?>
+        val state = field.get(activity) as MutableState<List<String>>
         return state.value
     }
 
@@ -53,24 +53,43 @@ class BookmarkSavingActivityTest {
         putExtra(Intent.EXTRA_TEXT, "Check this out $url")
     }
 
+    private fun createShareIntentMultiple(urls: List<String>) = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, urls.joinToString("\n"))
+    }
+
     private fun launchActivity(intent: Intent): BookmarkSavingActivity =
         Robolectric.buildActivity(BookmarkSavingActivity::class.java, intent).create().get()
 
     @Test
-    fun `extractUrlFromIntent returns URL from valid share intent`() {
+    fun `extractUrlsFromIntent returns single URL from valid share intent`() {
         val activity = launchActivity(createShareIntent("https://example.com/article"))
-        val url = readSharedUrl(activity)
-        assertNotNull(url)
-        assertEquals("https://example.com/article", url)
+        val urls = readSharedUrls(activity)
+        assertEquals(listOf("https://example.com/article"), urls)
     }
 
     @Test
-    fun `activity extracts null URL for non-SEND action intent (triggers finish)`() {
+    fun `extractUrlsFromIntent returns all URLs from multi-URL share intent`() {
+        val activity = launchActivity(
+            createShareIntentMultiple(
+                listOf("https://example.com/first", "https://example.com/second")
+            )
+        )
+        val urls = readSharedUrls(activity)
+        assertEquals(
+            listOf("https://example.com/first", "https://example.com/second"),
+            urls
+        )
+    }
+
+    @Test
+    fun `activity extracts empty URL list for non-SEND action intent (triggers finish)`() {
         // finish() is called inside setContent {} which runs asynchronously after onCreate.
-        // We verify the precondition instead: extractUrlFromIntent returns null for non-SEND
-        // intents, which is exactly what causes the activity to call finish() in its composable.
+        // We verify the precondition instead: extractUrlsFromIntent returns empty list for
+        // non-SEND intents, which is exactly what causes the activity to call finish() in
+        // its composable.
         val activity = launchActivity(Intent(Intent.ACTION_VIEW))
-        assertNull(readSharedUrl(activity))
+        assertTrue(readSharedUrls(activity).isEmpty())
     }
 
     @Test
@@ -82,11 +101,27 @@ class BookmarkSavingActivityTest {
     }
 
     @Test
-    fun `onNewIntent updates sharedUrl with new URL`() {
+    fun `onNewIntent updates sharedUrls with new URL`() {
         val activity = launchActivity(createShareIntent("https://example.com/first"))
-        assertEquals("https://example.com/first", readSharedUrl(activity))
+        assertEquals(listOf("https://example.com/first"), readSharedUrls(activity))
         callOnNewIntent(activity, createShareIntent("https://example.com/second"))
-        assertEquals("https://example.com/second", readSharedUrl(activity))
+        assertEquals(listOf("https://example.com/second"), readSharedUrls(activity))
+    }
+
+    @Test
+    fun `onNewIntent updates sharedUrls with multiple new URLs`() {
+        val activity = launchActivity(createShareIntent("https://example.com/first"))
+        assertEquals(listOf("https://example.com/first"), readSharedUrls(activity))
+        callOnNewIntent(
+            activity,
+            createShareIntentMultiple(
+                listOf("https://example.com/a", "https://example.com/b", "https://example.com/c")
+            )
+        )
+        assertEquals(
+            listOf("https://example.com/a", "https://example.com/b", "https://example.com/c"),
+            readSharedUrls(activity)
+        )
     }
 
     @Test
@@ -97,3 +132,4 @@ class BookmarkSavingActivityTest {
         assertTrue(activity.isFinishing, "Activity should be finishing after close callback")
     }
 }
+
