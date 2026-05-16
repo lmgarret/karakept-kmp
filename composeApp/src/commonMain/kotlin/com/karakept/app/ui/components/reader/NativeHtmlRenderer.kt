@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fleeksoft.ksoup.Ksoup
 import com.fleeksoft.ksoup.nodes.Document
+import com.fleeksoft.ksoup.nodes.Element
+import com.fleeksoft.ksoup.nodes.TextNode
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.ui.theme.rememberFontFamily
@@ -62,7 +64,10 @@ fun NativeHtmlRenderer(
     scrollToHighlightId: String? = null,
     selectedHighlightId: String? = null,
     onLoaded: (() -> Unit)? = null,
-    parseDocument: ((String) -> Document?)? = null
+    parseDocument: ((String) -> Document?)? = null,
+    searchQuery: String = "",
+    activeSearchMatchIndex: Int = 0,
+    onSearchMatchesFound: (List<SearchMatch>) -> Unit = {}
 ) {
     val surfaceColor = MaterialTheme.colorScheme.surface
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -106,6 +111,18 @@ fun NativeHtmlRenderer(
     val body = document.body()
     val textOffset = remember(html) { TextOffsetTracker() }
 
+    // Compute search matches whenever query or document changes
+    val searchMatches = remember(document, searchQuery) {
+        if (searchQuery.length < 2) emptyList()
+        else findSearchMatchesInDocument(document, searchQuery)
+    }
+
+    LaunchedEffect(searchMatches) {
+        onSearchMatchesFound(searchMatches)
+    }
+
+    val searchState = if (searchMatches.isNotEmpty()) Pair(searchMatches, activeSearchMatchIndex) else null
+
     // Track whether we've reported the highlight position (only report once)
     var highlightPositionReported by remember(scrollToHighlightId) { mutableStateOf(false) }
 
@@ -128,7 +145,8 @@ fun NativeHtmlRenderer(
     ReaderThemeProvider(theme = theme) {
         val textToolbar = highlightToolbar ?: LocalTextToolbar.current
         CompositionLocalProvider(
-            LocalTextToolbar provides textToolbar
+            LocalTextToolbar provides textToolbar,
+            LocalSearchState provides searchState
         ) {
             // Block bringIntoView from propagating to the parent LazyColumn.
             // SelectionContainer initiates bringIntoView at its OWN layout level
@@ -231,4 +249,30 @@ fun NativeHtmlRenderer(
     LaunchedEffect(document) {
         onLoaded?.invoke()
     }
+}
+
+private fun extractElementText(element: Element, sb: StringBuilder) {
+    for (child in element.childNodes()) {
+        when (child) {
+            is TextNode -> sb.append(child.getWholeText())
+            is Element -> extractElementText(child, sb)
+        }
+    }
+}
+
+fun findSearchMatchesInDocument(document: Document, query: String): List<SearchMatch> {
+    val sb = StringBuilder()
+    extractElementText(document.body(), sb)
+    val text = sb.toString()
+    val lowerText = text.lowercase()
+    val lowerQuery = query.lowercase()
+    val matches = mutableListOf<SearchMatch>()
+    var startIndex = 0
+    while (true) {
+        val idx = lowerText.indexOf(lowerQuery, startIndex)
+        if (idx == -1) break
+        matches.add(SearchMatch(idx, idx + query.length))
+        startIndex = idx + 1
+    }
+    return matches
 }

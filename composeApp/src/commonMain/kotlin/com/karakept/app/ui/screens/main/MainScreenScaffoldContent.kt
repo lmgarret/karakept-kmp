@@ -142,6 +142,12 @@ fun MainScreenScaffoldContent(
             if (keyEvent.type == KeyEventType.KeyDown && keyEvent.keyboardKey == Key.Escape && isSearchActive) {
                 onSearchClose()
                 true
+            } else if (keyEvent.type == KeyEventType.KeyDown &&
+                (keyEvent.isCtrlPressed || keyEvent.isMetaPressed) &&
+                keyEvent.keyboardKey == Key.F &&
+                !isSearchActive) {
+                onSearchClick()
+                true
             } else if ((keyEvent.isCtrlPressed || keyEvent.isMetaPressed) &&
                 keyEvent.keyboardKey == Key.R &&
                 keyEvent.type == KeyEventType.KeyDown) {

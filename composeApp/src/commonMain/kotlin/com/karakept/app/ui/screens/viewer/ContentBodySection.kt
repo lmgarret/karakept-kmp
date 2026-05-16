@@ -31,6 +31,7 @@ import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.HtmlContent
 import com.karakept.app.ui.components.WebModeBadge
 import com.fleeksoft.ksoup.nodes.Document
+import com.karakept.app.ui.components.reader.SearchMatch
 import com.karakept.app.ui.screens.BookmarkLoadingState
 
 @Composable
@@ -54,7 +55,10 @@ internal fun ContentBodySection(
     onContentReady: (() -> Unit)? = null,
     scrollToHighlightId: String? = null,
     selectedHighlightId: String? = null,
-    parseDocument: ((String) -> Document?)? = null
+    parseDocument: ((String) -> Document?)? = null,
+    searchQuery: String = "",
+    activeSearchMatchIndex: Int = 0,
+    onSearchMatchesFound: (List<SearchMatch>) -> Unit = {}
 ) {
     // Track when HTML content is truly ready (processed + rendered)
     var htmlContentReady by remember { mutableStateOf(false) }
@@ -138,7 +142,10 @@ internal fun ContentBodySection(
                     onHighlightPosition = onHighlightPosition,
                     scrollToHighlightId = scrollToHighlightId,
                     selectedHighlightId = selectedHighlightId,
-                    parseDocument = parseDocument
+                    parseDocument = parseDocument,
+                    searchQuery = searchQuery,
+                    activeSearchMatchIndex = activeSearchMatchIndex,
+                    onSearchMatchesFound = onSearchMatchesFound
                 )
             }
 

@@ -141,7 +141,8 @@ fun RenderBlock(
             "td", "th" -> RenderTableCell(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, isHeader = tag == "th", selectedHighlightId = selectedHighlightId)
             "dl" -> RenderDefinitionList(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
             "dt" -> {
-                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+                val dtSearchState = LocalSearchState.current
+                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, dtSearchState)
                 AnnotatedClickableText(
                     text = text,
                     onLinkClick = onLinkClick,
@@ -268,7 +269,9 @@ private fun RenderInlineGroup(
     }
     
 
-    if (overlapping.isNotEmpty()) {
+    val inlineSearchState = LocalSearchState.current
+
+    if (overlapping.isNotEmpty() || inlineSearchState != null) {
         result = buildAnnotatedString {
             append(result)
             for (highlight in overlapping) {
@@ -280,11 +283,22 @@ private fun RenderInlineGroup(
                     SpanStyle(
                         background = bgColor,
                         color = ReaderThemeData.highlightTextColor
-                    ), 
-                    localStart, 
+                    ),
+                    localStart,
                     localEnd
                 )
                 addStringAnnotation(HIGHLIGHT_ANNOTATION_TAG, highlight.id, localStart, localEnd)
+            }
+            if (inlineSearchState != null) {
+                val (searchMatches, activeIndex) = inlineSearchState
+                for ((matchIndex, match) in searchMatches.withIndex()) {
+                    if (match.startOffset >= blockEndOffset || match.endOffset <= blockStartOffset) continue
+                    val localStart = (match.startOffset - blockStartOffset).coerceIn(0, result.length)
+                    val localEnd = (match.endOffset - blockStartOffset).coerceIn(0, result.length)
+                    if (localStart >= localEnd) continue
+                    val bg = if (matchIndex == activeIndex) Color(0xCCFF9800) else Color(0x66FFC107)
+                    addStyle(SpanStyle(background = bg, color = Color.Black), localStart, localEnd)
+                }
             }
         }
     }
@@ -373,13 +387,14 @@ private fun RenderParagraph(
     onHighlightPosition: (String, HighlightPosition) -> Unit,
     selectedHighlightId: String? = null
 ) {
+    val searchState = LocalSearchState.current
     if (hasBlockChildren(element)) {
         // <p> with block children (malformed HTML) — render as div
         Column(modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()) {
             RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
         }
     } else {
-        val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+        val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
         if (text.isNotEmpty()) {
             AnnotatedClickableText(
                 text = text,
@@ -411,12 +426,13 @@ private fun RenderDiv(
     modifier: Modifier = Modifier,
     selectedHighlightId: String? = null
 ) {
+    val searchState = LocalSearchState.current
     if (hasBlockChildren(element)) {
         Column(modifier = modifier.fillMaxWidth()) {
             RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
         }
     } else {
-        val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+        val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
         if (text.isNotEmpty()) {
             AnnotatedClickableText(
                 text = text,
@@ -447,6 +463,7 @@ private fun RenderHeading(
     level: Int,
     selectedHighlightId: String? = null
 ) {
+    val searchState = LocalSearchState.current
     val scaleFactor = when (level) {
         1 -> 2.0f
         2 -> 1.5f
@@ -455,7 +472,7 @@ private fun RenderHeading(
         5 -> 1.0f
         else -> 0.9f
     }
-    val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+    val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
     if (text.isNotEmpty()) {
         AnnotatedClickableText(
             text = text,
@@ -486,6 +503,7 @@ private fun RenderBlockquote(
     depth: Int,
     selectedHighlightId: String? = null
 ) {
+    val searchState = LocalSearchState.current
     Row(
         modifier = Modifier
             .padding(vertical = 8.dp)
@@ -508,7 +526,7 @@ private fun RenderBlockquote(
             if (hasBlockChildren(element)) {
                 RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth + 1, selectedHighlightId = selectedHighlightId)
             } else {
-                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
                 if (text.isNotEmpty()) {
                     AnnotatedClickableText(
                         text = text,
@@ -540,9 +558,10 @@ private fun RenderCodeBlock(
     onHighlightPosition: (String, HighlightPosition) -> Unit,
     selectedHighlightId: String? = null
 ) {
+    val searchState = LocalSearchState.current
     // Pre/code blocks: find the <code> child if it exists
     val codeElement = element.selectFirst("code") ?: element
-    val text = buildInlineAnnotatedString(codeElement, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+    val text = buildInlineAnnotatedString(codeElement, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
     // If the <pre> has a <code> child we already consumed its text.
     // If the <pre> has other children outside <code>, consume them too.
     if (codeElement != element) {
@@ -709,7 +728,8 @@ private fun RenderFigcaption(
     onHighlightPosition: (String, HighlightPosition) -> Unit,
     selectedHighlightId: String? = null
 ) {
-    val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+    val searchState = LocalSearchState.current
+    val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
     if (text.isNotEmpty()) {
         AnnotatedClickableText(
             text = text,
@@ -895,10 +915,11 @@ private fun RenderTable(
         } ?: 0
     }
 
+    val captionSearchState = LocalSearchState.current
     // Render caption if present
     for (child in element.children()) {
         if (child.tagName().lowercase() == "caption") {
-            val text = buildInlineAnnotatedString(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+            val text = buildInlineAnnotatedString(child, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, captionSearchState)
             AnnotatedClickableText(
                 text = text,
                 onLinkClick = onLinkClick,
@@ -1044,12 +1065,13 @@ private fun RenderTableCell(
     isHeader: Boolean,
     selectedHighlightId: String? = null
 ) {
+    val searchState = LocalSearchState.current
     if (hasBlockChildren(element)) {
         Column {
             RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
         }
     } else {
-        val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick)
+        val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
         AnnotatedClickableText(
             text = text,
             onLinkClick = onLinkClick,

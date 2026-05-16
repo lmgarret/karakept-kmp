@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
@@ -37,6 +38,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key as keyboardKey
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -52,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.ui.components.reader.SearchMatch
 import com.karakept.app.ui.components.rememberCustomTabOpener
 import com.karakept.app.ui.screens.viewer.*
 import com.karakept.app.utils.ShareUtils
@@ -110,6 +119,12 @@ fun BookmarkViewerContent(
     var selectedHighlightId by remember { mutableStateOf<String?>(null) }
     var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
     var selectedHighlightText by remember { mutableStateOf<String?>(null) }
+
+    // Search state
+    var showSearch by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchMatches by remember { mutableStateOf<List<SearchMatch>>(emptyList()) }
+    var currentMatchIndex by remember { mutableStateOf(0) }
 
     val selectedHighlight by remember {
         androidx.compose.runtime.derivedStateOf {
@@ -248,6 +263,23 @@ fun BookmarkViewerContent(
     }
 
     Scaffold(
+        modifier = Modifier.onKeyEvent { keyEvent ->
+            if (keyEvent.type == KeyEventType.KeyDown) {
+                when {
+                    (keyEvent.isCtrlPressed || keyEvent.isMetaPressed) && keyEvent.keyboardKey == Key.F -> {
+                        showSearch = true
+                        true
+                    }
+                    keyEvent.keyboardKey == Key.Escape && showSearch -> {
+                        showSearch = false
+                        searchQuery = ""
+                        searchMatches = emptyList()
+                        true
+                    }
+                    else -> false
+                }
+            } else false
+        },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             AnimatedVisibility(
@@ -390,6 +422,12 @@ fun BookmarkViewerContent(
                                     selectedHighlightId = selectedHighlightId ?: scrollToHighlightId,
                                     parseDocument = { sanitizedHtml ->
                                         screenModel.getCachedOrParseDocument(bookmarkId, sanitizedHtml)
+                                    },
+                                    searchQuery = if (showSearch) searchQuery else "",
+                                    activeSearchMatchIndex = currentMatchIndex,
+                                    onSearchMatchesFound = { matches ->
+                                        searchMatches = matches
+                                        if (currentMatchIndex >= matches.size) currentMatchIndex = 0
                                     }
                                 )
                             }
@@ -457,6 +495,7 @@ fun BookmarkViewerContent(
                         onEditTagsClick = { showTagEditor = true },
                         onRefreshClick = { screenModel.refreshBookmark(bookmarkId) },
                         onDeleteClick = { showDeleteConfirmation = true },
+                        onSearchClick = { showSearch = true },
                         isDesktop = getPlatform().isDesktop, bookmark = state.bookmark,
                         onFavoriteClick = { screenModel.toggleBookmarkFavorite(state.bookmark) },
                         onArchiveClick = { screenModel.toggleBookmarkArchive(state.bookmark) },
@@ -472,6 +511,40 @@ fun BookmarkViewerContent(
                         isFullscreen = isFullscreen, onFullscreenToggle = onFullscreenToggle,
                         onDetailsClick = { showDetailsPanel = true }
                     )
+
+                    // Search bar — positioned below the toolbar, slides in from top
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(top = toolbarHeight)
+                    ) {
+                        ReaderSearchBar(
+                            visible = showSearch,
+                            query = searchQuery,
+                            onQueryChange = { query ->
+                                searchQuery = query
+                                currentMatchIndex = 0
+                            },
+                            matchCount = searchMatches.size,
+                            currentMatchIndex = currentMatchIndex,
+                            onPrevious = {
+                                if (searchMatches.isNotEmpty()) {
+                                    currentMatchIndex = if (currentMatchIndex > 0) currentMatchIndex - 1 else searchMatches.size - 1
+                                }
+                            },
+                            onNext = {
+                                if (searchMatches.isNotEmpty()) {
+                                    currentMatchIndex = if (currentMatchIndex < searchMatches.size - 1) currentMatchIndex + 1 else 0
+                                }
+                            },
+                            onClose = {
+                                showSearch = false
+                                searchQuery = ""
+                                searchMatches = emptyList()
+                            }
+                        )
+                    }
                     } // end inner Box
                 }
 
@@ -511,6 +584,7 @@ fun BookmarkViewerContent(
         selectedHighlightId = selectedHighlightId, onSelectedHighlightIdChanged = { selectedHighlightId = it },
         selectedHighlightText = selectedHighlightText, onSelectedHighlightTextChanged = { selectedHighlightText = it },
         selectedHighlight = selectedHighlight,
+        showSearch = showSearch, onShowSearchChanged = { showSearch = it },
         screenModel = screenModel, scope = scope, onBack = onBack
     )
 }
