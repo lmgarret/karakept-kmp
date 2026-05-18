@@ -25,6 +25,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
@@ -71,6 +73,24 @@ fun isBlockElement(element: Element): Boolean {
  */
 private fun hasBlockChildren(element: Element): Boolean {
     return element.children().any { isBlockElement(it) }
+}
+
+/**
+ * Returns a [Modifier] that reports this composable's root-space Y position via
+ * [LocalSearchMatchScrollCallback] when the active search match falls within
+ * [blockStart]..[blockEnd]. Used to scroll the viewer to the active match.
+ */
+private fun searchScrollModifier(
+    blockStart: Int,
+    blockEnd: Int,
+    searchState: Pair<List<SearchMatch>, Int>?,
+    callback: ((Float) -> Unit)?
+): Modifier {
+    if (searchState == null || callback == null) return Modifier
+    val (matches, activeIndex) = searchState
+    val activeMatch = matches.getOrNull(activeIndex) ?: return Modifier
+    if (activeMatch.startOffset !in blockStart until blockEnd) return Modifier
+    return Modifier.onGloballyPositioned { coords -> callback(coords.positionInRoot().y) }
 }
 
 /**
@@ -142,7 +162,10 @@ fun RenderBlock(
             "dl" -> RenderDefinitionList(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId)
             "dt" -> {
                 val dtSearchState = LocalSearchState.current
+                val dtSearchCallback = LocalSearchMatchScrollCallback.current
+                val dtBlockStart = textOffset.offset
                 val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, dtSearchState)
+                val dtBlockEnd = textOffset.offset
                 AnnotatedClickableText(
                     text = text,
                     onLinkClick = onLinkClick,
@@ -152,7 +175,8 @@ fun RenderBlock(
                     fontSize = theme.fontSize,
                     fontFamily = theme.fontFamily,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier.padding(top = 8.dp)
+                        .then(searchScrollModifier(dtBlockStart, dtBlockEnd, dtSearchState, dtSearchCallback)),
                     selectedHighlightId = selectedHighlightId,
                     highlights = highlights
                 )
@@ -304,6 +328,7 @@ private fun RenderInlineGroup(
     }
 
     if (result.isNotEmpty()) {
+        val inlineScrollCallback = LocalSearchMatchScrollCallback.current
         AnnotatedClickableText(
             text = result,
             onLinkClick = onLinkClick,
@@ -313,6 +338,7 @@ private fun RenderInlineGroup(
             fontSize = theme.fontSize,
             fontFamily = theme.fontFamily,
             lineHeight = (theme.fontSize.value * 1.6f).sp,
+            modifier = searchScrollModifier(blockStartOffset, blockEndOffset, inlineSearchState, inlineScrollCallback),
             selectedHighlightId = selectedHighlightId,
             highlights = highlights
         )
@@ -388,13 +414,16 @@ private fun RenderParagraph(
     selectedHighlightId: String? = null
 ) {
     val searchState = LocalSearchState.current
+    val searchCallback = LocalSearchMatchScrollCallback.current
     if (hasBlockChildren(element)) {
         // <p> with block children (malformed HTML) — render as div
         Column(modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()) {
             RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
         }
     } else {
+        val blockStart = textOffset.offset
         val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
+        val blockEnd = textOffset.offset
         if (text.isNotEmpty()) {
             AnnotatedClickableText(
                 text = text,
@@ -405,7 +434,8 @@ private fun RenderParagraph(
                 fontSize = theme.fontSize,
                 fontFamily = theme.fontFamily,
                 lineHeight = (theme.fontSize.value * 1.6f).sp,
-                modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth(),
+                modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
+                    .then(searchScrollModifier(blockStart, blockEnd, searchState, searchCallback)),
                 selectedHighlightId = selectedHighlightId,
                 highlights = highlights
             )
@@ -427,12 +457,15 @@ private fun RenderDiv(
     selectedHighlightId: String? = null
 ) {
     val searchState = LocalSearchState.current
+    val searchCallback = LocalSearchMatchScrollCallback.current
     if (hasBlockChildren(element)) {
         Column(modifier = modifier.fillMaxWidth()) {
             RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
         }
     } else {
+        val blockStart = textOffset.offset
         val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
+        val blockEnd = textOffset.offset
         if (text.isNotEmpty()) {
             AnnotatedClickableText(
                 text = text,
@@ -443,7 +476,7 @@ private fun RenderDiv(
                 fontSize = theme.fontSize,
                 fontFamily = theme.fontFamily,
                 lineHeight = (theme.fontSize.value * 1.6f).sp,
-                modifier = modifier,
+                modifier = modifier.then(searchScrollModifier(blockStart, blockEnd, searchState, searchCallback)),
                 selectedHighlightId = selectedHighlightId,
                 highlights = highlights
             )
@@ -464,6 +497,7 @@ private fun RenderHeading(
     selectedHighlightId: String? = null
 ) {
     val searchState = LocalSearchState.current
+    val searchCallback = LocalSearchMatchScrollCallback.current
     val scaleFactor = when (level) {
         1 -> 2.0f
         2 -> 1.5f
@@ -472,7 +506,9 @@ private fun RenderHeading(
         5 -> 1.0f
         else -> 0.9f
     }
+    val blockStart = textOffset.offset
     val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
+    val blockEnd = textOffset.offset
     if (text.isNotEmpty()) {
         AnnotatedClickableText(
             text = text,
@@ -484,7 +520,8 @@ private fun RenderHeading(
             fontFamily = theme.fontFamily,
             fontWeight = FontWeight.Bold,
             lineHeight = (theme.fontSize.value * scaleFactor * 1.4f).sp,
-            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp).fillMaxWidth(),
+            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp).fillMaxWidth()
+                .then(searchScrollModifier(blockStart, blockEnd, searchState, searchCallback)),
             selectedHighlightId = selectedHighlightId,
             highlights = highlights
         )
@@ -504,6 +541,7 @@ private fun RenderBlockquote(
     selectedHighlightId: String? = null
 ) {
     val searchState = LocalSearchState.current
+    val searchCallback = LocalSearchMatchScrollCallback.current
     Row(
         modifier = Modifier
             .padding(vertical = 8.dp)
@@ -526,7 +564,9 @@ private fun RenderBlockquote(
             if (hasBlockChildren(element)) {
                 RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth + 1, selectedHighlightId = selectedHighlightId)
             } else {
+                val blockStart = textOffset.offset
                 val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
+                val blockEnd = textOffset.offset
                 if (text.isNotEmpty()) {
                     AnnotatedClickableText(
                         text = text,
@@ -538,6 +578,7 @@ private fun RenderBlockquote(
                         fontFamily = theme.fontFamily,
                         fontStyle = FontStyle.Italic,
                         lineHeight = (theme.fontSize.value * 1.6f).sp,
+                        modifier = searchScrollModifier(blockStart, blockEnd, searchState, searchCallback),
                         selectedHighlightId = selectedHighlightId,
                         highlights = highlights
                     )
@@ -559,9 +600,12 @@ private fun RenderCodeBlock(
     selectedHighlightId: String? = null
 ) {
     val searchState = LocalSearchState.current
+    val searchCallback = LocalSearchMatchScrollCallback.current
     // Pre/code blocks: find the <code> child if it exists
     val codeElement = element.selectFirst("code") ?: element
+    val blockStart = textOffset.offset
     val text = buildInlineAnnotatedString(codeElement, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
+    val blockEnd = textOffset.offset
     // If the <pre> has a <code> child we already consumed its text.
     // If the <pre> has other children outside <code>, consume them too.
     if (codeElement != element) {
@@ -596,6 +640,7 @@ private fun RenderCodeBlock(
                 fontSize = (theme.fontSize.value * 0.875f).sp,
                 fontFamily = FontFamily.Monospace,
                 lineHeight = (theme.fontSize.value * 0.875f * 1.4f).sp,
+                modifier = searchScrollModifier(blockStart, blockEnd, searchState, searchCallback),
                 selectedHighlightId = selectedHighlightId,
                 highlights = highlights
             )
@@ -674,11 +719,15 @@ private fun RenderListItem(
             fontFamily = theme.fontFamily,
             modifier = Modifier.width(24.dp)
         )
+        val searchState = LocalSearchState.current
+        val searchCallback = LocalSearchMatchScrollCallback.current
         Column(modifier = Modifier.weight(1f)) {
             if (hasBlockChildren(element)) {
                 RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth + 1, selectedHighlightId = selectedHighlightId)
             } else {
-                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId)
+                val blockStart = textOffset.offset
+                val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
+                val blockEnd = textOffset.offset
                 AnnotatedClickableText(
                     text = text,
                     onLinkClick = onLinkClick,
@@ -688,6 +737,7 @@ private fun RenderListItem(
                     fontSize = theme.fontSize,
                     fontFamily = theme.fontFamily,
                     lineHeight = (theme.fontSize.value * 1.6f).sp,
+                    modifier = searchScrollModifier(blockStart, blockEnd, searchState, searchCallback),
                     selectedHighlightId = selectedHighlightId,
                     highlights = highlights
                 )
@@ -729,7 +779,10 @@ private fun RenderFigcaption(
     selectedHighlightId: String? = null
 ) {
     val searchState = LocalSearchState.current
+    val searchCallback = LocalSearchMatchScrollCallback.current
+    val blockStart = textOffset.offset
     val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
+    val blockEnd = textOffset.offset
     if (text.isNotEmpty()) {
         AnnotatedClickableText(
             text = text,
@@ -740,7 +793,8 @@ private fun RenderFigcaption(
             fontSize = (theme.fontSize.value * 0.875f).sp,
             fontFamily = theme.fontFamily,
             fontStyle = FontStyle.Italic,
-            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp).fillMaxWidth(),
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp).fillMaxWidth()
+                .then(searchScrollModifier(blockStart, blockEnd, searchState, searchCallback)),
             selectedHighlightId = selectedHighlightId,
             highlights = highlights
         )
@@ -1066,12 +1120,15 @@ private fun RenderTableCell(
     selectedHighlightId: String? = null
 ) {
     val searchState = LocalSearchState.current
+    val searchCallback = LocalSearchMatchScrollCallback.current
     if (hasBlockChildren(element)) {
         Column {
             RenderChildren(element, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
         }
     } else {
+        val blockStart = textOffset.offset
         val text = buildInlineAnnotatedString(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
+        val blockEnd = textOffset.offset
         AnnotatedClickableText(
             text = text,
             onLinkClick = onLinkClick,
@@ -1082,6 +1139,7 @@ private fun RenderTableCell(
             fontFamily = theme.fontFamily,
             fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
             lineHeight = (theme.fontSize.value * 1.4f).sp,
+            modifier = searchScrollModifier(blockStart, blockEnd, searchState, searchCallback),
             selectedHighlightId = selectedHighlightId,
             highlights = highlights
         )

@@ -58,7 +58,8 @@ internal fun ContentBodySection(
     parseDocument: ((String) -> Document?)? = null,
     searchQuery: String = "",
     activeSearchMatchIndex: Int = 0,
-    onSearchMatchesFound: (List<SearchMatch>) -> Unit = {}
+    onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
+    onSearchMatchPosition: (Float) -> Unit = {}
 ) {
     // Track when HTML content is truly ready (processed + rendered)
     var htmlContentReady by remember { mutableStateOf(false) }
@@ -145,7 +146,8 @@ internal fun ContentBodySection(
                     parseDocument = parseDocument,
                     searchQuery = searchQuery,
                     activeSearchMatchIndex = activeSearchMatchIndex,
-                    onSearchMatchesFound = onSearchMatchesFound
+                    onSearchMatchesFound = onSearchMatchesFound,
+                    onSearchMatchPosition = onSearchMatchPosition
                 )
             }
 

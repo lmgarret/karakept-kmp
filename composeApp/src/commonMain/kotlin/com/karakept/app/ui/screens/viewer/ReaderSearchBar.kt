@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardActions
@@ -43,7 +44,8 @@ fun ReaderSearchBar(
     currentMatchIndex: Int,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val focusRequester = remember { FocusRequester() }
 
@@ -53,24 +55,26 @@ fun ReaderSearchBar(
 
     AnimatedVisibility(
         visible = visible,
-        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+        modifier = modifier,
+        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
     ) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shadowElevation = 4.dp
+            shadowElevation = 8.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .navigationBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, end = 4.dp)
+                    modifier = Modifier.padding(start = 8.dp, end = 4.dp)
                 )
 
                 TextField(
@@ -79,7 +83,12 @@ fun ReaderSearchBar(
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(focusRequester),
-                    placeholder = { Text("Find in article…") },
+                    placeholder = {
+                        Text(
+                            "Find in article…",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    },
                     singleLine = true,
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -89,26 +98,26 @@ fun ReaderSearchBar(
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { onNext() }),
-                    textStyle = MaterialTheme.typography.bodyMedium
+                    textStyle = MaterialTheme.typography.bodySmall
                 )
 
                 if (matchCount > 0) {
                     Text(
-                        text = "${currentMatchIndex + 1} / $matchCount",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = "${currentMatchIndex + 1}/$matchCount",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
-                            .widthIn(min = 48.dp)
-                            .padding(horizontal = 4.dp)
+                            .widthIn(min = 40.dp)
+                            .padding(horizontal = 2.dp)
                     )
                 } else if (query.length >= 2) {
                     Text(
-                        text = "0 / 0",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = "0/0",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
-                            .widthIn(min = 48.dp)
-                            .padding(horizontal = 4.dp)
+                            .widthIn(min = 40.dp)
+                            .padding(horizontal = 2.dp)
                     )
                 }
 

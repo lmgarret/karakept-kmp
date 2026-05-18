@@ -125,6 +125,8 @@ fun BookmarkViewerContent(
     var searchQuery by remember { mutableStateOf("") }
     var searchMatches by remember { mutableStateOf<List<SearchMatch>>(emptyList()) }
     var currentMatchIndex by remember { mutableStateOf(0) }
+    var searchMatchScrollY by remember { mutableStateOf<Float?>(null) }
+    var lastScrolledMatchIndex by remember { mutableStateOf(-1) }
 
     val selectedHighlight by remember {
         androidx.compose.runtime.derivedStateOf {
@@ -260,6 +262,21 @@ fun BookmarkViewerContent(
                 )
             }
         }
+    }
+
+    // Scroll to active search match when position is reported by a block renderer
+    LaunchedEffect(searchMatchScrollY) {
+        val y = searchMatchScrollY ?: return@LaunchedEffect
+        if (currentMatchIndex == lastScrolledMatchIndex) return@LaunchedEffect
+        lastScrolledMatchIndex = currentMatchIndex
+        val state = loadingState as? BookmarkLoadingState.FullyLoaded ?: return@LaunchedEffect
+        val contentBodyIndex = if (!state.bookmark.description.isNullOrBlank()) 2 else 1
+        val layoutInfo = scrollState.layoutInfo
+        val contentBodyTop = layoutInfo.visibleItemsInfo.find { it.index == contentBodyIndex }?.offset ?: 0
+        val matchOffsetInItem = (y.toInt() - contentBodyTop).coerceAtLeast(0)
+        val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+        val scrollOffset = maxOf(0, matchOffsetInItem - viewportHeight / 4)
+        scrollState.animateScrollToItem(contentBodyIndex, scrollOffset)
     }
 
     Scaffold(
@@ -428,6 +445,9 @@ fun BookmarkViewerContent(
                                     onSearchMatchesFound = { matches ->
                                         searchMatches = matches
                                         if (currentMatchIndex >= matches.size) currentMatchIndex = 0
+                                    },
+                                    onSearchMatchPosition = { y ->
+                                        if (searchMatchScrollY == null) searchMatchScrollY = y
                                     }
                                 )
                             }
@@ -512,39 +532,37 @@ fun BookmarkViewerContent(
                         onDetailsClick = { showDetailsPanel = true }
                     )
 
-                    // Search bar — positioned below the toolbar, slides in from top
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(top = toolbarHeight)
-                    ) {
-                        ReaderSearchBar(
-                            visible = showSearch,
-                            query = searchQuery,
-                            onQueryChange = { query ->
-                                searchQuery = query
-                                currentMatchIndex = 0
-                            },
-                            matchCount = searchMatches.size,
-                            currentMatchIndex = currentMatchIndex,
-                            onPrevious = {
-                                if (searchMatches.isNotEmpty()) {
-                                    currentMatchIndex = if (currentMatchIndex > 0) currentMatchIndex - 1 else searchMatches.size - 1
-                                }
-                            },
-                            onNext = {
-                                if (searchMatches.isNotEmpty()) {
-                                    currentMatchIndex = if (currentMatchIndex < searchMatches.size - 1) currentMatchIndex + 1 else 0
-                                }
-                            },
-                            onClose = {
-                                showSearch = false
-                                searchQuery = ""
-                                searchMatches = emptyList()
+                    // Search bar — slides in from bottom (Firefox-style)
+                    ReaderSearchBar(
+                        visible = showSearch,
+                        query = searchQuery,
+                        onQueryChange = { query ->
+                            searchQuery = query
+                            currentMatchIndex = 0
+                            searchMatchScrollY = null
+                        },
+                        matchCount = searchMatches.size,
+                        currentMatchIndex = currentMatchIndex,
+                        onPrevious = {
+                            if (searchMatches.isNotEmpty()) {
+                                currentMatchIndex = if (currentMatchIndex > 0) currentMatchIndex - 1 else searchMatches.size - 1
+                                searchMatchScrollY = null
                             }
-                        )
-                    }
+                        },
+                        onNext = {
+                            if (searchMatches.isNotEmpty()) {
+                                currentMatchIndex = if (currentMatchIndex < searchMatches.size - 1) currentMatchIndex + 1 else 0
+                                searchMatchScrollY = null
+                            }
+                        },
+                        onClose = {
+                            showSearch = false
+                            searchQuery = ""
+                            searchMatches = emptyList()
+                            searchMatchScrollY = null
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
                     } // end inner Box
                 }
 

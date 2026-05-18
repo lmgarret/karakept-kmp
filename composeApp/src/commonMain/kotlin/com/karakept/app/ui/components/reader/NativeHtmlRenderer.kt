@@ -67,7 +67,8 @@ fun NativeHtmlRenderer(
     parseDocument: ((String) -> Document?)? = null,
     searchQuery: String = "",
     activeSearchMatchIndex: Int = 0,
-    onSearchMatchesFound: (List<SearchMatch>) -> Unit = {}
+    onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
+    onSearchMatchPosition: (Float) -> Unit = {}
 ) {
     val surfaceColor = MaterialTheme.colorScheme.surface
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -122,6 +123,7 @@ fun NativeHtmlRenderer(
     }
 
     val searchState = if (searchMatches.isNotEmpty()) Pair(searchMatches, activeSearchMatchIndex) else null
+    val searchScrollCallback: ((Float) -> Unit)? = if (searchState != null) onSearchMatchPosition else null
 
     // Track whether we've reported the highlight position (only report once)
     var highlightPositionReported by remember(scrollToHighlightId) { mutableStateOf(false) }
@@ -146,7 +148,8 @@ fun NativeHtmlRenderer(
         val textToolbar = highlightToolbar ?: LocalTextToolbar.current
         CompositionLocalProvider(
             LocalTextToolbar provides textToolbar,
-            LocalSearchState provides searchState
+            LocalSearchState provides searchState,
+            LocalSearchMatchScrollCallback provides searchScrollCallback
         ) {
             // Block bringIntoView from propagating to the parent LazyColumn.
             // SelectionContainer initiates bringIntoView at its OWN layout level
@@ -251,28 +254,3 @@ fun NativeHtmlRenderer(
     }
 }
 
-private fun extractElementText(element: Element, sb: StringBuilder) {
-    for (child in element.childNodes()) {
-        when (child) {
-            is TextNode -> sb.append(child.getWholeText())
-            is Element -> extractElementText(child, sb)
-        }
-    }
-}
-
-fun findSearchMatchesInDocument(document: Document, query: String): List<SearchMatch> {
-    val sb = StringBuilder()
-    extractElementText(document.body(), sb)
-    val text = sb.toString()
-    val lowerText = text.lowercase()
-    val lowerQuery = query.lowercase()
-    val matches = mutableListOf<SearchMatch>()
-    var startIndex = 0
-    while (true) {
-        val idx = lowerText.indexOf(lowerQuery, startIndex)
-        if (idx == -1) break
-        matches.add(SearchMatch(idx, idx + query.length))
-        startIndex = idx + 1
-    }
-    return matches
-}
