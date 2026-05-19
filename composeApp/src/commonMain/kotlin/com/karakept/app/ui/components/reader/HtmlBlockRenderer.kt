@@ -22,9 +22,6 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -76,21 +73,8 @@ private fun hasBlockChildren(element: Element): Boolean {
     return element.children().any { isBlockElement(it) }
 }
 
-/**
- * Returns a [Modifier] that tracks this composable's root-space Y position and fires
- * [callback] via [SideEffect] on every recomposition when the active search match falls
- * within [blockStart]..[blockEnd].
- *
- * Design:
- * - [onGloballyPositioned] is attached whenever search is active, continuously keeping
- *   [storedY] current (fires on layout changes, including when the modifier is first
- *   attached after search is activated).
- * - [SideEffect] fires after every composition when this block is the active match AND
- *   [storedY] is known (non-null). This fires when [searchState.second] (activeIndex)
- *   changes to point at this block — even with no layout change — triggering the scroll.
- * - Using [Float?] prevents a premature scroll to Y=0 before [onGloballyPositioned] has
- *   captured the real position.
- */
+private class YRef { var y: Float? = null }
+
 @Composable
 private fun rememberSearchScrollModifier(
     blockStart: Int,
@@ -102,17 +86,18 @@ private fun rememberSearchScrollModifier(
         searchState.first.getOrNull(searchState.second)
             ?.startOffset?.let { it in blockStart until blockEnd } == true
 
-    val storedY = remember { mutableStateOf<Float?>(null) }
-    val currentY = storedY.value  // read during composition so Compose tracks this state
-
-    if (isActive && currentY != null) {
-        SideEffect { callback!!(currentY) }
+    val ref = remember { YRef() }
+    when {
+        searchState == null -> SideEffect { ref.y = null }
+        isActive -> SideEffect { ref.y?.let { callback!!(it) } }
     }
 
     return if (searchState != null) {
-        // Always track position while search is active so storedY is ready when this
-        // block becomes the active match (avoids a frame delay on next/prev navigation).
-        Modifier.onGloballyPositioned { coords -> storedY.value = coords.positionInRoot().y }
+        Modifier.onGloballyPositioned { coords ->
+            val wasNull = ref.y == null
+            ref.y = coords.positionInRoot().y
+            if (isActive && wasNull) callback!!(ref.y!!)
+        }
     } else {
         Modifier
     }

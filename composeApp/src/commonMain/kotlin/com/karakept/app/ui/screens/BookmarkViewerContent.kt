@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -529,7 +530,8 @@ fun BookmarkViewerContent(
                         onDetailsClick = { showDetailsPanel = true }
                     )
 
-                    // Search bar — slides in from bottom (Firefox-style)
+                    // Search bar — floating pill, to the left of FAB on Android
+                    val isDesktop = getPlatform().isDesktop
                     ReaderSearchBar(
                         visible = showSearch,
                         query = searchQuery,
@@ -558,7 +560,13 @@ fun BookmarkViewerContent(
                             searchMatches = emptyList()
                             lastScrolledMatchIndex = -1
                         },
-                        modifier = Modifier.align(Alignment.BottomCenter)
+                        maxWidth = if (isDesktop) 520.dp else 360.dp,
+                        modifier = if (isDesktop)
+                            Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+                        else
+                            Modifier.align(Alignment.BottomEnd)
+                                .navigationBarsPadding()
+                                .padding(end = 80.dp, bottom = 16.dp, start = 16.dp)
                     )
                     } // end inner Box
                 }
