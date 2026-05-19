@@ -139,9 +139,15 @@ fun BookmarkViewerContent(
     var lastScrolledMatchIndex by remember { mutableStateOf(-1) }
     val contentFocusRequester = remember { FocusRequester() }
 
-    // Open reader search when triggered externally (desktop split-pane Ctrl+F)
+    // Open reader search when triggered externally (desktop split-pane Ctrl+F).
+    // lastHandledSearchTrigger is initialised from the current searchTrigger so that
+    // stale non-zero values inherited across bookmark changes don't open search.
+    val lastHandledSearchTrigger = remember { mutableStateOf(searchTrigger) }
     LaunchedEffect(searchTrigger) {
-        if (searchTrigger > 0) showSearch = true
+        if (searchTrigger != lastHandledSearchTrigger.value) {
+            lastHandledSearchTrigger.value = searchTrigger
+            showSearch = true
+        }
     }
     val selectedHighlight by remember {
         androidx.compose.runtime.derivedStateOf {
