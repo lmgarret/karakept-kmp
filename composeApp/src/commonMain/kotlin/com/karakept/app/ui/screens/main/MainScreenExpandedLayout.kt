@@ -25,11 +25,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.karakept.app.ui.screens.markAllBookmarksInListAsRead
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key as keyboardKey
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.DefaultListType
@@ -136,8 +144,19 @@ fun MainScreenExpandedLayout(
     }
 
     val scope = rememberCoroutineScope()
+    var readerSearchTrigger by remember { mutableStateOf(0) }
 
-    Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+    Row(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)
+        .onPreviewKeyEvent { keyEvent ->
+            if (selectedBookmarkId != null &&
+                keyEvent.type == KeyEventType.KeyDown &&
+                (keyEvent.isCtrlPressed || keyEvent.isMetaPressed) &&
+                keyEvent.keyboardKey == Key.F) {
+                readerSearchTrigger++
+                true
+            } else false
+        }
+    ) {
         // Drawer column (collapsible)
         AnimatedVisibility(
             visible = isDrawerVisible && !isReaderFullscreen,
@@ -313,6 +332,7 @@ fun MainScreenExpandedLayout(
                         BookmarkViewerContent(
                             bookmarkId = currentBookmarkId,
                             scrollToHighlightId = currentScrollToHighlightId,
+                            searchTrigger = readerSearchTrigger,
                             screenModel = viewerScreenModel,
                             onBack = {
                                 if (isReaderFullscreen) {

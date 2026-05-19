@@ -86,6 +86,7 @@ import com.karakept.app.domain.action.ActionSnackbarManager
 fun BookmarkViewerContent(
     bookmarkId: Long,
     scrollToHighlightId: String? = null,
+    searchTrigger: Int = 0,
     screenModel: BookmarkViewerScreenModel,
     onBack: () -> Unit,
     onTagFilterApply: (tag: String) -> Unit,
@@ -138,8 +139,9 @@ fun BookmarkViewerContent(
     var lastScrolledMatchIndex by remember { mutableStateOf(-1) }
     val contentFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) {
-        if (getPlatform().isDesktop) contentFocusRequester.requestFocus()
+    // Open reader search when triggered externally (desktop split-pane Ctrl+F)
+    LaunchedEffect(searchTrigger) {
+        if (searchTrigger > 0) showSearch = true
     }
     val selectedHighlight by remember {
         androidx.compose.runtime.derivedStateOf {
@@ -281,7 +283,7 @@ fun BookmarkViewerContent(
         modifier = Modifier.onKeyEvent { keyEvent ->
             if (keyEvent.type == KeyEventType.KeyDown) {
                 when {
-                    (keyEvent.isCtrlPressed || keyEvent.isMetaPressed) && keyEvent.keyboardKey == Key.F -> {
+                    !isEmbedded && (keyEvent.isCtrlPressed || keyEvent.isMetaPressed) && keyEvent.keyboardKey == Key.F -> {
                         showSearch = true
                         true
                     }
@@ -289,7 +291,9 @@ fun BookmarkViewerContent(
                         showSearch = false
                         searchQuery = ""
                         searchMatches = emptyList()
-                        scope.launch { contentFocusRequester.requestFocus() }
+                        // Delay so the TextField releases focus before we claim it,
+                        // ensuring the outer onPreviewKeyEvent sees the next Ctrl+F.
+                        scope.launch { kotlinx.coroutines.delay(100); contentFocusRequester.requestFocus() }
                         true
                     }
                     else -> false
@@ -585,6 +589,7 @@ fun BookmarkViewerContent(
                             searchQuery = ""
                             searchMatches = emptyList()
                             lastScrolledMatchIndex = -1
+                            scope.launch { kotlinx.coroutines.delay(100); contentFocusRequester.requestFocus() }
                         },
                         maxWidth = if (isDesktop) 520.dp else 360.dp,
                         modifier = if (isDesktop)
