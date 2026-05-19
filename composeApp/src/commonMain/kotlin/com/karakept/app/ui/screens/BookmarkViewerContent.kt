@@ -6,13 +6,21 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -37,6 +45,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key as keyboardKey
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -52,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.ui.components.reader.SearchMatch
 import com.karakept.app.ui.components.rememberCustomTabOpener
 import com.karakept.app.ui.screens.viewer.*
 import com.karakept.app.utils.ShareUtils
@@ -67,6 +86,7 @@ import com.karakept.app.domain.action.ActionSnackbarManager
 fun BookmarkViewerContent(
     bookmarkId: Long,
     scrollToHighlightId: String? = null,
+    searchTrigger: Int = 0,
     screenModel: BookmarkViewerScreenModel,
     onBack: () -> Unit,
     onTagFilterApply: (tag: String) -> Unit,
@@ -111,6 +131,24 @@ fun BookmarkViewerContent(
     var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
     var selectedHighlightText by remember { mutableStateOf<String?>(null) }
 
+    // Search state
+    var showSearch by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var searchMatches by remember { mutableStateOf<List<SearchMatch>>(emptyList()) }
+    var currentMatchIndex by remember { mutableStateOf(0) }
+    var lastScrolledMatchIndex by remember { mutableStateOf(-1) }
+    val contentFocusRequester = remember { FocusRequester() }
+
+    // Open reader search when triggered externally (desktop split-pane Ctrl+F).
+    // lastHandledSearchTrigger is initialised from the current searchTrigger so that
+    // stale non-zero values inherited across bookmark changes don't open search.
+    val lastHandledSearchTrigger = remember { mutableStateOf(searchTrigger) }
+    LaunchedEffect(searchTrigger) {
+        if (searchTrigger != lastHandledSearchTrigger.value) {
+            lastHandledSearchTrigger.value = searchTrigger
+            showSearch = true
+        }
+    }
     val selectedHighlight by remember {
         androidx.compose.runtime.derivedStateOf {
             val id = selectedHighlightId ?: return@derivedStateOf null
@@ -248,6 +286,26 @@ fun BookmarkViewerContent(
     }
 
     Scaffold(
+        modifier = Modifier.onKeyEvent { keyEvent ->
+            if (keyEvent.type == KeyEventType.KeyDown) {
+                when {
+                    !isEmbedded && (keyEvent.isCtrlPressed || keyEvent.isMetaPressed) && keyEvent.keyboardKey == Key.F -> {
+                        showSearch = true
+                        true
+                    }
+                    keyEvent.keyboardKey == Key.Escape && showSearch -> {
+                        showSearch = false
+                        searchQuery = ""
+                        searchMatches = emptyList()
+                        // Delay so the TextField releases focus before we claim it,
+                        // ensuring the outer onPreviewKeyEvent sees the next Ctrl+F.
+                        scope.launch { kotlinx.coroutines.delay(100); contentFocusRequester.requestFocus() }
+                        true
+                    }
+                    else -> false
+                }
+            } else false
+        },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             AnimatedVisibility(
@@ -307,7 +365,11 @@ fun BookmarkViewerContent(
                 val screenshotLocalPath by screenModel.screenshotLocalPath.collectAsState()
 
                 val viewerContent: @Composable () -> Unit = {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize()
+                        .then(if (getPlatform().isDesktop)
+                            Modifier.focusRequester(contentFocusRequester).focusable()
+                        else Modifier)
+                    ) {
                     val needsScrollRestore = trackReadingProgress && !scrollRestoration.hasRestoredScroll &&
                         loadingState is BookmarkLoadingState.FullyLoaded &&
                         ((loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f || !serverProgressChecked)
@@ -390,6 +452,29 @@ fun BookmarkViewerContent(
                                     selectedHighlightId = selectedHighlightId ?: scrollToHighlightId,
                                     parseDocument = { sanitizedHtml ->
                                         screenModel.getCachedOrParseDocument(bookmarkId, sanitizedHtml)
+                                    },
+                                    searchQuery = if (showSearch) searchQuery else "",
+                                    activeSearchMatchIndex = currentMatchIndex,
+                                    onSearchMatchesFound = { matches ->
+                                        searchMatches = matches
+                                        if (currentMatchIndex >= matches.size) currentMatchIndex = 0
+                                    },
+                                    onSearchMatchPosition = { y ->
+                                        if (currentMatchIndex != lastScrolledMatchIndex) {
+                                            lastScrolledMatchIndex = currentMatchIndex
+                                            val st = loadingState as? BookmarkLoadingState.FullyLoaded
+                                            if (st != null) {
+                                                val cbi = if (!st.bookmark.description.isNullOrBlank()) 2 else 1
+                                                scope.launch {
+                                                    val li = scrollState.layoutInfo
+                                                    val itemTop = li.visibleItemsInfo.find { it.index == cbi }?.offset ?: 0
+                                                    val matchInItem = (y.toInt() - itemTop).coerceAtLeast(0)
+                                                    val vpHeight = li.viewportEndOffset - li.viewportStartOffset
+                                                    val scrollOffset = maxOf(0, matchInItem - vpHeight / 4)
+                                                    scrollState.animateScrollToItem(cbi, scrollOffset)
+                                                }
+                                            }
+                                        }
                                     }
                                 )
                             }
@@ -397,11 +482,18 @@ fun BookmarkViewerContent(
                     }
 
                     // Scroll-to-top button (READER-03)
+                    val scrollToTopBottomPadding by animateDpAsState(
+                        targetValue = if (showSearch && !getPlatform().isDesktop) 76.dp else 16.dp,
+                        animationSpec = tween(300),
+                        label = "scrollToTopBottomPadding"
+                    )
                     AnimatedVisibility(
                         visible = scrollToTopVisible && scrollToTopEnabled,
                         enter = fadeIn(animationSpec = tween(300)),
                         exit = fadeOut(animationSpec = tween(300)),
-                        modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
+                        modifier = Modifier.align(Alignment.BottomStart)
+                            .navigationBarsPadding()
+                            .padding(start = 16.dp, bottom = scrollToTopBottomPadding)
                     ) {
                         SmallFloatingActionButton(
                             onClick = {
@@ -457,6 +549,7 @@ fun BookmarkViewerContent(
                         onEditTagsClick = { showTagEditor = true },
                         onRefreshClick = { screenModel.refreshBookmark(bookmarkId) },
                         onDeleteClick = { showDeleteConfirmation = true },
+                        onSearchClick = { showSearch = true },
                         isDesktop = getPlatform().isDesktop, bookmark = state.bookmark,
                         onFavoriteClick = { screenModel.toggleBookmarkFavorite(state.bookmark) },
                         onArchiveClick = { screenModel.toggleBookmarkArchive(state.bookmark) },
@@ -471,6 +564,46 @@ fun BookmarkViewerContent(
                         },
                         isFullscreen = isFullscreen, onFullscreenToggle = onFullscreenToggle,
                         onDetailsClick = { showDetailsPanel = true }
+                    )
+
+                    // Search bar — floating pill, to the left of FAB on Android
+                    val isDesktop = getPlatform().isDesktop
+                    ReaderSearchBar(
+                        visible = showSearch,
+                        query = searchQuery,
+                        onQueryChange = { query ->
+                            searchQuery = query
+                            currentMatchIndex = 0
+                            lastScrolledMatchIndex = -1
+                        },
+                        matchCount = searchMatches.size,
+                        currentMatchIndex = currentMatchIndex,
+                        onPrevious = {
+                            if (searchMatches.isNotEmpty()) {
+                                lastScrolledMatchIndex = -1
+                                currentMatchIndex = if (currentMatchIndex > 0) currentMatchIndex - 1 else searchMatches.size - 1
+                            }
+                        },
+                        onNext = {
+                            if (searchMatches.isNotEmpty()) {
+                                lastScrolledMatchIndex = -1
+                                currentMatchIndex = if (currentMatchIndex < searchMatches.size - 1) currentMatchIndex + 1 else 0
+                            }
+                        },
+                        onClose = {
+                            showSearch = false
+                            searchQuery = ""
+                            searchMatches = emptyList()
+                            lastScrolledMatchIndex = -1
+                            scope.launch { kotlinx.coroutines.delay(100); contentFocusRequester.requestFocus() }
+                        },
+                        maxWidth = if (isDesktop) 520.dp else 360.dp,
+                        modifier = if (isDesktop)
+                            Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+                        else
+                            Modifier.align(Alignment.BottomEnd)
+                                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                                .padding(end = 80.dp, bottom = 14.dp, start = 16.dp)
                     )
                     } // end inner Box
                 }
@@ -511,6 +644,7 @@ fun BookmarkViewerContent(
         selectedHighlightId = selectedHighlightId, onSelectedHighlightIdChanged = { selectedHighlightId = it },
         selectedHighlightText = selectedHighlightText, onSelectedHighlightTextChanged = { selectedHighlightText = it },
         selectedHighlight = selectedHighlight,
+        showSearch = showSearch, onShowSearchChanged = { showSearch = it },
         screenModel = screenModel, scope = scope, onBack = onBack
     )
 }

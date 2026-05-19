@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fleeksoft.ksoup.Ksoup
 import com.fleeksoft.ksoup.nodes.Document
+import com.fleeksoft.ksoup.nodes.Element
+import com.fleeksoft.ksoup.nodes.TextNode
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.ui.theme.rememberFontFamily
@@ -62,7 +64,11 @@ fun NativeHtmlRenderer(
     scrollToHighlightId: String? = null,
     selectedHighlightId: String? = null,
     onLoaded: (() -> Unit)? = null,
-    parseDocument: ((String) -> Document?)? = null
+    parseDocument: ((String) -> Document?)? = null,
+    searchQuery: String = "",
+    activeSearchMatchIndex: Int = 0,
+    onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
+    onSearchMatchPosition: (Float) -> Unit = {}
 ) {
     val surfaceColor = MaterialTheme.colorScheme.surface
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -106,6 +112,19 @@ fun NativeHtmlRenderer(
     val body = document.body()
     val textOffset = remember(html) { TextOffsetTracker() }
 
+    // Compute search matches whenever query or document changes
+    val searchMatches = remember(document, searchQuery) {
+        if (searchQuery.length < 2) emptyList()
+        else findSearchMatchesInDocument(document, searchQuery)
+    }
+
+    LaunchedEffect(searchMatches) {
+        onSearchMatchesFound(searchMatches)
+    }
+
+    val searchState = if (searchMatches.isNotEmpty()) Pair(searchMatches, activeSearchMatchIndex) else null
+    val searchScrollCallback: ((Float) -> Unit)? = if (searchState != null) onSearchMatchPosition else null
+
     // Track whether we've reported the highlight position (only report once)
     var highlightPositionReported by remember(scrollToHighlightId) { mutableStateOf(false) }
 
@@ -128,7 +147,9 @@ fun NativeHtmlRenderer(
     ReaderThemeProvider(theme = theme) {
         val textToolbar = highlightToolbar ?: LocalTextToolbar.current
         CompositionLocalProvider(
-            LocalTextToolbar provides textToolbar
+            LocalTextToolbar provides textToolbar,
+            LocalSearchState provides searchState,
+            LocalSearchMatchScrollCallback provides searchScrollCallback
         ) {
             // Block bringIntoView from propagating to the parent LazyColumn.
             // SelectionContainer initiates bringIntoView at its OWN layout level
@@ -232,3 +253,4 @@ fun NativeHtmlRenderer(
         onLoaded?.invoke()
     }
 }
+

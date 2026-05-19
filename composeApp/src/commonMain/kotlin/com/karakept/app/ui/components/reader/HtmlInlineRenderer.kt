@@ -49,7 +49,8 @@ fun buildInlineAnnotatedString(
     textOffset: TextOffsetTracker,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
-    selectedHighlightId: String? = null
+    selectedHighlightId: String? = null,
+    searchState: Pair<List<SearchMatch>, Int>? = null
 ): AnnotatedString {
     // First pass: build the string and collect span info
     val blockStartOffset = textOffset.offset
@@ -62,16 +63,14 @@ fun buildInlineAnnotatedString(
     // Second pass: apply highlight annotations on top
     val result = builder.toAnnotatedString()
 
-    if (highlights.isEmpty()) return result
-
     // Find highlights that overlap with this block's offset range
     val overlapping = highlights.filter { h ->
         h.startOffset < blockEndOffset && h.endOffset > blockStartOffset
     }
 
-    if (overlapping.isEmpty()) return result
+    if (overlapping.isEmpty() && searchState == null) return result
 
-    // Rebuild with highlight spans added on top
+    // Rebuild with highlight and search spans added on top
     return buildAnnotatedString {
         // append(AnnotatedString) copies text + all existing spans/annotations
         append(result)
@@ -98,6 +97,19 @@ fun buildInlineAnnotatedString(
                 start = localStart,
                 end = localEnd
             )
+        }
+
+        // Apply search match spans (drawn on top of highlights for visibility)
+        if (searchState != null) {
+            val (searchMatches, activeIndex) = searchState
+            for ((matchIndex, match) in searchMatches.withIndex()) {
+                if (match.startOffset >= blockEndOffset || match.endOffset <= blockStartOffset) continue
+                val localStart = (match.startOffset - blockStartOffset).coerceIn(0, result.length)
+                val localEnd = (match.endOffset - blockStartOffset).coerceIn(0, result.length)
+                if (localStart >= localEnd) continue
+                val bg = if (matchIndex == activeIndex) Color(0xCCFF9800) else Color(0x66FFC107)
+                addStyle(SpanStyle(background = bg, color = Color.Black), localStart, localEnd)
+            }
         }
     }
 }

@@ -38,6 +38,7 @@ import com.karakept.app.utils.HtmlArchiveProcessor
 import com.karakept.app.utils.HtmlCache
 import com.karakept.app.utils.HtmlSanitizer
 import com.fleeksoft.ksoup.nodes.Document
+import com.karakept.app.ui.components.reader.SearchMatch
 
 /**
  * Composable wrapper for rendering HTML content safely.
@@ -75,7 +76,11 @@ fun HtmlContent(
     onHighlightPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit = { _, _ -> },
     scrollToHighlightId: String? = null,
     selectedHighlightId: String? = null,
-    parseDocument: ((String) -> Document?)? = null
+    parseDocument: ((String) -> Document?)? = null,
+    searchQuery: String = "",
+    activeSearchMatchIndex: Int = 0,
+    onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
+    onSearchMatchPosition: (Float) -> Unit = {}
 ) {
     // Process HTML based on viewer mode asynchronously
     val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
@@ -187,7 +192,11 @@ fun HtmlContent(
                                 onLoaded = {
                                     isContentLoaded = true
                                 },
-                                parseDocument = parseDocument
+                                parseDocument = parseDocument,
+                                searchQuery = searchQuery,
+                                activeSearchMatchIndex = activeSearchMatchIndex,
+                                onSearchMatchesFound = onSearchMatchesFound,
+                                onSearchMatchPosition = onSearchMatchPosition
                             )
                         }
                         ViewerMode.WEB -> {

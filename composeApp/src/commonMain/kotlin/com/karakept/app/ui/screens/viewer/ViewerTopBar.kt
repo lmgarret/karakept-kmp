@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Unarchive
@@ -76,6 +77,7 @@ internal fun ViewerTopBar(
     onEditTagsClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onDeleteClick: () -> Unit,
+    onSearchClick: () -> Unit = {},
     // Desktop: FAB actions moved to top bar
     isDesktop: Boolean = false,
     bookmark: BookmarkEntity? = null,
@@ -264,6 +266,20 @@ internal fun ViewerTopBar(
                     )
                     HorizontalDivider()
                 }
+
+                DropdownMenuItem(
+                    text = { Text("Find in Article") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        onSearchClick()
+                        onMenuToggle(false)
+                    }
+                )
 
                 DropdownMenuItem(
                     text = { Text("Reader Appearance") },

@@ -42,15 +42,18 @@ fun ViewerContentPanels(
     selectedHighlightText: String?,
     onSelectedHighlightTextChanged: (String?) -> Unit,
     selectedHighlight: Highlight?,
+    showSearch: Boolean = false,
+    onShowSearchChanged: (Boolean) -> Unit = {},
     screenModel: BookmarkViewerScreenModel,
     scope: CoroutineScope,
     onBack: () -> Unit
 ) {
     // Back Handler for panels
     com.karakept.app.ui.components.BackHandler(
-        enabled = showAppearancePanel || showModeDialog || selectedHighlightId != null || showDetailsPanel
+        enabled = showAppearancePanel || showModeDialog || selectedHighlightId != null || showDetailsPanel || showSearch
     ) {
-        if (showDetailsPanel) onShowDetailsPanelChanged(false)
+        if (showSearch) onShowSearchChanged(false)
+        else if (showDetailsPanel) onShowDetailsPanelChanged(false)
         else if (showAppearancePanel) onShowAppearancePanelChanged(false)
         else if (showModeDialog) onShowModeDialogChanged(false)
         else if (selectedHighlightId != null) onSelectedHighlightIdChanged(null)
