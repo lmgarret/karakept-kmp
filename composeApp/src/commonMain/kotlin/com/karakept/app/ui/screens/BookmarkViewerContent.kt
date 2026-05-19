@@ -11,12 +11,17 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
@@ -455,7 +460,7 @@ fun BookmarkViewerContent(
 
                     // Scroll-to-top button (READER-03)
                     val scrollToTopBottomPadding by animateDpAsState(
-                        targetValue = if (showSearch) 76.dp else 16.dp,
+                        targetValue = if (showSearch && !getPlatform().isDesktop) 76.dp else 16.dp,
                         animationSpec = tween(300),
                         label = "scrollToTopBottomPadding"
                     )
@@ -573,8 +578,8 @@ fun BookmarkViewerContent(
                             Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
                         else
                             Modifier.align(Alignment.BottomEnd)
-                                .navigationBarsPadding()
-                                .padding(end = 80.dp, bottom = 20.dp, start = 16.dp)
+                                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                                .padding(end = 80.dp, bottom = 8.dp, start = 16.dp)
                     )
                     } // end inner Box
                 }
