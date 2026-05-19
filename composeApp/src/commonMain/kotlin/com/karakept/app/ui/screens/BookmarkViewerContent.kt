@@ -45,6 +45,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusable
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -133,6 +136,11 @@ fun BookmarkViewerContent(
     var searchMatches by remember { mutableStateOf<List<SearchMatch>>(emptyList()) }
     var currentMatchIndex by remember { mutableStateOf(0) }
     var lastScrolledMatchIndex by remember { mutableStateOf(-1) }
+    val contentFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        if (getPlatform().isDesktop) contentFocusRequester.requestFocus()
+    }
     val selectedHighlight by remember {
         androidx.compose.runtime.derivedStateOf {
             val id = selectedHighlightId ?: return@derivedStateOf null
@@ -281,6 +289,7 @@ fun BookmarkViewerContent(
                         showSearch = false
                         searchQuery = ""
                         searchMatches = emptyList()
+                        scope.launch { contentFocusRequester.requestFocus() }
                         true
                     }
                     else -> false
@@ -346,7 +355,11 @@ fun BookmarkViewerContent(
                 val screenshotLocalPath by screenModel.screenshotLocalPath.collectAsState()
 
                 val viewerContent: @Composable () -> Unit = {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize()
+                        .then(if (getPlatform().isDesktop)
+                            Modifier.focusRequester(contentFocusRequester).focusable()
+                        else Modifier)
+                    ) {
                     val needsScrollRestore = trackReadingProgress && !scrollRestoration.hasRestoredScroll &&
                         loadingState is BookmarkLoadingState.FullyLoaded &&
                         ((loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f || !serverProgressChecked)
@@ -579,7 +592,7 @@ fun BookmarkViewerContent(
                         else
                             Modifier.align(Alignment.BottomEnd)
                                 .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
-                                .padding(end = 80.dp, bottom = 8.dp, start = 16.dp)
+                                .padding(end = 80.dp, bottom = 14.dp, start = 16.dp)
                     )
                     } // end inner Box
                 }
