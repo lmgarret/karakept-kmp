@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -453,11 +454,18 @@ fun BookmarkViewerContent(
                     }
 
                     // Scroll-to-top button (READER-03)
+                    val scrollToTopBottomPadding by animateDpAsState(
+                        targetValue = if (showSearch) 76.dp else 16.dp,
+                        animationSpec = tween(300),
+                        label = "scrollToTopBottomPadding"
+                    )
                     AnimatedVisibility(
                         visible = scrollToTopVisible && scrollToTopEnabled,
                         enter = fadeIn(animationSpec = tween(300)),
                         exit = fadeOut(animationSpec = tween(300)),
-                        modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
+                        modifier = Modifier.align(Alignment.BottomStart)
+                            .navigationBarsPadding()
+                            .padding(start = 16.dp, bottom = scrollToTopBottomPadding)
                     ) {
                         SmallFloatingActionButton(
                             onClick = {
@@ -566,7 +574,7 @@ fun BookmarkViewerContent(
                         else
                             Modifier.align(Alignment.BottomEnd)
                                 .navigationBarsPadding()
-                                .padding(end = 80.dp, bottom = 16.dp, start = 16.dp)
+                                .padding(end = 80.dp, bottom = 20.dp, start = 16.dp)
                     )
                     } // end inner Box
                 }
