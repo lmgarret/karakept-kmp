@@ -236,7 +236,7 @@ compose.desktop {
         // The actual property is set conditionally in main.kt at runtime.
         // jvmArgs += "-Dskiko.renderApi=SOFTWARE_FAST"
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb)
             packageName = "Karakept"
             packageVersion = (project.findProperty("versionName") as String?) ?: "1.0.0"
             modules("jdk.unsupported")
@@ -262,6 +262,9 @@ compose.desktop {
                         </array>
                     """
                 }
+            }
+            windows {
+                iconFile.set(project.file("src/commonMain/composeResources/drawable/icon.png"))
             }
         }
     }
