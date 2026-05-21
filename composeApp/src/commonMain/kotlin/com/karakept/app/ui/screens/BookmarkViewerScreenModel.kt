@@ -7,6 +7,7 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ReaderFontFamily
@@ -115,6 +116,27 @@ class BookmarkViewerScreenModel(
     private val _precrawledAssetPath = MutableStateFlow<String?>(null)
     val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()
 
+    // Session-only content source selection (not persisted to settings)
+    private val _selectedSource = MutableStateFlow(ContentSource.EXTRACTED)
+    val selectedSource: StateFlow<ContentSource> = _selectedSource.asStateFlow()
+
+    // True when a full page archive exists on the server for this bookmark
+    // (localPath may still be null — use precrawledAssetPath != null for "locally cached")
+    private val _archiveAvailable = MutableStateFlow(false)
+    val archiveAvailable: StateFlow<Boolean> = _archiveAvailable.asStateFlow()
+
+    // Full list of asset entities for this bookmark (server metadata + local cache status)
+    private val _assets = MutableStateFlow<List<com.karakept.app.data.local.entity.AssetEntity>>(emptyList())
+    val assets: StateFlow<List<com.karakept.app.data.local.entity.AssetEntity>> = _assets.asStateFlow()
+
+    // HTML string override for FULL_PAGE_ARCHIVE + READER mode (session-only)
+    private val _sourceContentOverride = MutableStateFlow<String?>(null)
+    val sourceContentOverride: StateFlow<String?> = _sourceContentOverride.asStateFlow()
+
+    // True while archive is being downloaded for source switching
+    private val _isLoadingSource = MutableStateFlow(false)
+    val isLoadingSource: StateFlow<Boolean> = _isLoadingSource.asStateFlow()
+
     private val _bannerImageLocalPath = MutableStateFlow<String?>(null)
     val bannerImageLocalPath: StateFlow<String?> = _bannerImageLocalPath.asStateFlow()
 
@@ -166,6 +188,20 @@ class BookmarkViewerScreenModel(
     )
 
     init {
+        // When viewer mode switches to READER while FULL_PAGE_ARCHIVE is selected,
+        // ensure the archive string is loaded for the native renderer.
+        screenModelScope.launch {
+            viewerMode.collect { mode ->
+                if (_selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE
+                    && mode == ViewerMode.READER
+                    && _sourceContentOverride.value == null
+                ) {
+                    val localPath = _precrawledAssetPath.value
+                    if (localPath != null) loadArchiveContentString(localPath)
+                }
+            }
+        }
+
         @OptIn(FlowPreview::class)
         screenModelScope.launch {
             readingStateUpdates
@@ -424,15 +460,29 @@ class BookmarkViewerScreenModel(
                             _contentFetchAttempted.value = true
                         }
 
-                        // Load precrawled asset if exists
+                        // Load all asset entities and expose them for the details panel
                         val assets = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+                        _assets.value = assets
+
                         val archive = assets.find { it.assetType == "precrawledArchive" }
+                            ?: assets.find { it.assetType == "fullPageArchive" }
                         _precrawledAssetPath.value = archive?.localPath
+                        val archiveCached = archive?.localPath != null
+                        // Archive is "available" if ANY archive row exists (even without localPath),
+                        // so the "Load full page archive" button appears when the server has it.
+                        _archiveAvailable.value = archive != null
+                        // Default to FULL_PAGE_ARCHIVE only when the user has explicitly opted in.
+                        // Without the setting, extracted content is always the default so that
+                        // "Extracted" source selection reliably shows extracted HTML (or no content).
+                        val preferArchive = settingsRepository.preferFullPageHtml.first()
+                        if (archiveCached && preferArchive && _selectedSource.value == ContentSource.EXTRACTED) {
+                            _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
+                        }
 
                         // Load hero assets if exist
                         val bannerAsset = assets.find { it.assetType == "bannerImage" }
                         _bannerImageLocalPath.value = bannerAsset?.localPath
-                        
+
                         val screenshotAsset = assets.find { it.assetType == "screenshot" }
                         _screenshotLocalPath.value = screenshotAsset?.localPath
                     } else if (!hasLoadedOnce) {
@@ -487,6 +537,169 @@ class BookmarkViewerScreenModel(
 
     fun setScrollToTopEnabled(enabled: Boolean) {
         screenModelScope.launch { settingsRepository.setScrollToTopEnabled(enabled) }
+    }
+
+    fun setContentSource(source: ContentSource, bookmark: BookmarkEntity?) {
+        screenModelScope.launch {
+            _selectedSource.value = source
+            if (source == ContentSource.FULL_PAGE_ARCHIVE) {
+                val localPath = _precrawledAssetPath.value
+                if (localPath != null) {
+                    // Archive is cached — load as string if READER mode needs it
+                    if (viewerMode.value == ViewerMode.READER && _sourceContentOverride.value == null) {
+                        loadArchiveContentString(localPath)
+                    }
+                } else if (!offlineMode.value && bookmark != null) {
+                    fetchAndCacheArchive(bookmark)
+                } else {
+                    snackbarManager.showSnackbar("Full page archive not available offline")
+                    _selectedSource.value = ContentSource.EXTRACTED
+                }
+            } else {
+                _sourceContentOverride.value = null
+            }
+        }
+    }
+
+    private suspend fun loadArchiveContentString(localPath: String) {
+        try {
+            _sourceContentOverride.value = com.karakept.app.utils.FileUtils.readFileAsText(localPath)
+        } catch (e: Exception) {
+            AppLogger.e("ViewerModel", "Failed to read archive as string: ${e.message}", e)
+        }
+    }
+
+    fun fetchAndCacheArchive(bookmark: BookmarkEntity) {
+        screenModelScope.launch {
+            _isLoadingSource.value = true
+            try {
+                val servers = serverRepository.servers.first()
+                val server = servers.find { it.id == bookmark.serverId } ?: run {
+                    snackbarManager.showSnackbar("Server not found")
+                    _selectedSource.value = ContentSource.EXTRACTED
+                    return@launch
+                }
+                val fullBookmark = remoteDataSource.fetchBookmark(
+                    server, bookmark.originalRemoteId ?: bookmark.remoteId.toString()
+                )
+                val asset = fullBookmark.assets?.find {
+                    it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE
+                        || it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE
+                }
+                if (asset == null) {
+                    snackbarManager.showSnackbar("No full page archive available for this bookmark")
+                    _selectedSource.value = ContentSource.EXTRACTED
+                    return@launch
+                }
+                val bytes = remoteDataSource.downloadAsset(server, asset.id ?: "")
+                val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
+                val localPath = com.karakept.app.utils.FileUtils.saveFile(
+                    cacheDir, "archive_${asset.id}", bytes
+                )
+                assetDao.insertAssets(listOf(
+                    com.karakept.app.data.local.entity.AssetEntity(
+                        id = asset.id ?: "",
+                        bookmarkRemoteId = bookmark.remoteId,
+                        serverId = bookmark.serverId,
+                        assetType = asset.assetType?.value ?: "fullPageArchive",
+                        fileName = "archive_${asset.id}",
+                        contentType = null,
+                        localPath = localPath
+                    )
+                ))
+                _precrawledAssetPath.value = localPath
+                _archiveAvailable.value = true
+                if (viewerMode.value == ViewerMode.READER) {
+                    _sourceContentOverride.value = bytes.decodeToString()
+                }
+                _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
+                // Refresh the exposed asset list so the details panel reflects the new localPath
+                val updatedAssets = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+                _assets.value = updatedAssets
+            } catch (e: Exception) {
+                AppLogger.e("ViewerModel", "Failed to fetch archive: ${e.message}", e)
+                snackbarManager.showSnackbar("Couldn't load full page archive")
+                _selectedSource.value = ContentSource.EXTRACTED
+            } finally {
+                _isLoadingSource.value = false
+            }
+        }
+    }
+
+    fun deleteAssetLocal(asset: com.karakept.app.data.local.entity.AssetEntity) {
+        screenModelScope.launch {
+            try {
+                val localPath = asset.localPath
+                if (localPath != null) {
+                    try { com.karakept.app.utils.FileUtils.deleteFile(localPath) } catch (_: Exception) {}
+                }
+                assetDao.clearLocalPath(asset.id)
+                // Reload asset list
+                val bookmark = (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark ?: return@launch
+                val updated = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+                _assets.value = updated
+                // If this was the cached archive and user was viewing it, revert to EXTRACTED
+                if ((asset.assetType == "fullPageArchive" || asset.assetType == "precrawledArchive") && localPath != null) {
+                    val stillCached = updated.any {
+                        (it.assetType == "fullPageArchive" || it.assetType == "precrawledArchive") && it.localPath != null
+                    }
+                    if (!stillCached) {
+                        _precrawledAssetPath.value = null
+                        if (_selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE) {
+                            _selectedSource.value = ContentSource.EXTRACTED
+                            _sourceContentOverride.value = null
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                AppLogger.e("ViewerModel", "Failed to delete asset local copy: ${e.message}", e)
+                snackbarManager.showSnackbar("Couldn't delete local file")
+            }
+        }
+    }
+
+    fun downloadOrRefreshAsset(asset: com.karakept.app.data.local.entity.AssetEntity, bookmark: com.karakept.app.data.local.entity.BookmarkEntity) {
+        screenModelScope.launch {
+            when (asset.assetType) {
+                "fullPageArchive", "precrawledArchive" -> {
+                    // fetchAndCacheArchive manages _isLoadingSource itself; just clear the
+                    // local file first if this is a refresh, then delegate.
+                    if (asset.localPath != null) {
+                        try { com.karakept.app.utils.FileUtils.deleteFile(asset.localPath) } catch (_: Exception) {}
+                        assetDao.clearLocalPath(asset.id)
+                        _precrawledAssetPath.value = null
+                        val updated = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+                        _assets.value = updated
+                    }
+                    fetchAndCacheArchive(bookmark)
+                }
+                "bannerImage", "screenshot" -> {
+                    _isLoadingSource.value = true
+                    try {
+                        val servers = serverRepository.servers.first()
+                        val server = servers.find { it.id == bookmark.serverId } ?: return@launch
+                        if (asset.localPath != null) {
+                            try { com.karakept.app.utils.FileUtils.deleteFile(asset.localPath) } catch (_: Exception) {}
+                            assetDao.clearLocalPath(asset.id)
+                        }
+                        val bytes = remoteDataSource.downloadAsset(server, asset.id)
+                        val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
+                        val prefix = if (asset.assetType == "bannerImage") "hero_banner_" else "hero_screenshot_"
+                        val localPath = com.karakept.app.utils.FileUtils.saveFile(cacheDir, "$prefix${asset.id}", bytes)
+                        assetDao.insertAssets(listOf(asset.copy(localPath = localPath)))
+                        if (asset.assetType == "bannerImage") _bannerImageLocalPath.value = localPath
+                        else _screenshotLocalPath.value = localPath
+                        val updated = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+                        _assets.value = updated
+                    } catch (e: Exception) {
+                        AppLogger.e("ViewerModel", "Failed to download asset: ${e.message}", e)
+                        snackbarManager.showSnackbar("Couldn't download asset")
+                    } finally {
+                        _isLoadingSource.value = false
+                    }
+                }
+            }
+        }
     }
 
     fun loadLists(server: Server) {

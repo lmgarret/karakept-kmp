@@ -4,13 +4,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.BookmarkContentLoader
@@ -44,8 +51,13 @@ internal fun ContentBodySection(
     htmlFontSize: Int,
     htmlFontFamily: ReaderFontFamily,
     precrawledAssetPath: String? = null,
+    selectedSource: ContentSource = ContentSource.EXTRACTED,
+    sourceContentOverride: String? = null,
     loadingState: BookmarkLoadingState,
     contentFetchAttempted: Boolean = false,
+    archiveAvailableOnServer: Boolean = false,
+    isLoadingArchive: Boolean = false,
+    onFetchArchive: () -> Unit = {},
     highlights: List<com.karakept.app.data.model.Highlight> = emptyList(),
     onLinkClick: (String) -> Unit,
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
@@ -61,13 +73,25 @@ internal fun ContentBodySection(
     onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
     onSearchMatchPosition: (Float) -> Unit = {}
 ) {
+    // Resolve effective content and local file path based on source + mode
+    val effectiveContent = when {
+        selectedSource == ContentSource.FULL_PAGE_ARCHIVE && viewerMode == ViewerMode.READER ->
+            sourceContentOverride ?: content
+        else -> content
+    }
+    val effectiveLocalFilePath = when {
+        selectedSource == ContentSource.FULL_PAGE_ARCHIVE && viewerMode == ViewerMode.WEB ->
+            precrawledAssetPath
+        else -> null
+    }
+
     // Track when HTML content is truly ready (processed + rendered)
     var htmlContentReady by remember { mutableStateOf(false) }
 
     // Reset on new content; or mark ready immediately when fetch is done but no content exists,
     // so the skeleton is replaced by the content-unavailable message instead of spinning forever.
-    LaunchedEffect(content, contentFetchAttempted) {
-        htmlContentReady = if (content.isNullOrBlank() && contentFetchAttempted) true else false
+    LaunchedEffect(effectiveContent, contentFetchAttempted) {
+        htmlContentReady = if (effectiveContent.isNullOrBlank() && contentFetchAttempted) true else false
     }
 
     // Notify parent when content is fully rendered
@@ -92,7 +116,7 @@ internal fun ContentBodySection(
         // Render content area with overlay approach
         Box(modifier = Modifier.fillMaxWidth()) {
             // Content unavailable: fetch was attempted but server returned no content
-            if (content.isNullOrBlank() && contentFetchAttempted) {
+            if (effectiveContent.isNullOrBlank() && contentFetchAttempted) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -120,13 +144,56 @@ internal fun ContentBodySection(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
+
+                    if (archiveAvailableOnServer && selectedSource == ContentSource.EXTRACTED) {
+                        Spacer(modifier = Modifier.height(20.dp))
+                        FilledTonalButton(
+                            onClick = onFetchArchive,
+                            enabled = !isLoadingArchive
+                        ) {
+                            if (isLoadingArchive) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text("Load full page archive")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Downloads the complete page snapshot. Uses more storage and renders better in Web mode.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
                 }
             }
 
             // Always render HtmlContent when data arrives (bottom layer)
-            if (!content.isNullOrBlank()) {
+            if (!effectiveContent.isNullOrBlank() || effectiveLocalFilePath != null) {
                 HtmlContent(
-                    html = content,
+                    html = effectiveContent,
                     viewerMode = viewerMode,
                     removeFirstImage = removeFirstImage,
                     onLinkClick = onLinkClick,
@@ -135,7 +202,7 @@ internal fun ContentBodySection(
                     customBackgroundColor = htmlBackgroundColor,
                     customFontSize = htmlFontSize,
                     customFontFamily = htmlFontFamily,
-                    localFilePath = if (viewerMode == ViewerMode.WEB) precrawledAssetPath else null,
+                    localFilePath = effectiveLocalFilePath,
                     highlights = highlights,
                     onCreateHighlight = onCreateHighlight,
                     onDeleteHighlight = onDeleteHighlight,
