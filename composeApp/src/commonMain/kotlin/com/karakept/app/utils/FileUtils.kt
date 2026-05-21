@@ -29,6 +29,9 @@ expect object FileUtils {
     /** Reads the UTF-8 text content of the file at [path], or null if not readable. */
     fun readFileAsText(path: String): String?
 
+    /** Deletes the file at [path]. Silently ignores missing files. */
+    fun deleteFile(path: String)
+
     /** Shares / exports a backup file at [filePath] using the platform share sheet or save dialog. */
     fun shareBackupFile(filePath: String)
 }

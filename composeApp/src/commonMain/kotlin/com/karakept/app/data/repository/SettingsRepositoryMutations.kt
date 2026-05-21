@@ -98,6 +98,7 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         trackReadingProgress = reader.trackReadingProgress,
         resetProgressOnMarkUnread = reader.resetProgressOnMarkUnread,
         linkOpenMode = reader.linkOpenMode,
+        preferFullPageHtml = reader.preferFullPageHtml,
         swipeLeftAction = swipe.swipeLeftAction,
         swipeRightAction = swipe.swipeRightAction,
         customSwipeConfigsJson = swipe.customSwipeConfigsJson,
@@ -150,7 +151,8 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                 readingSpeedWpm = s.readingSpeedWpm,
                 trackReadingProgress = s.trackReadingProgress,
                 resetProgressOnMarkUnread = s.resetProgressOnMarkUnread,
-                linkOpenMode = s.linkOpenMode
+                linkOpenMode = s.linkOpenMode,
+                preferFullPageHtml = s.preferFullPageHtml
             )
         )
         prefs[SWIPE_SETTINGS_KEY] = settingsJson.encodeToString(
@@ -254,6 +256,9 @@ suspend fun SettingsRepository.setShowTagsInViewer(show: Boolean) =
 
 suspend fun SettingsRepository.setScrollToTopEnabled(enabled: Boolean) =
     updateReaderSettings { copy(scrollToTopEnabled = enabled) }
+
+suspend fun SettingsRepository.setPreferFullPageHtml(enabled: Boolean) =
+    updateReaderSettings { copy(preferFullPageHtml = enabled) }
 
 suspend fun SettingsRepository.resetReaderAppearance() = updateReaderSettings {
     copy(

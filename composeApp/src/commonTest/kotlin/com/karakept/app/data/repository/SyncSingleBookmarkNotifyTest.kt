@@ -78,6 +78,7 @@ class SyncSingleBookmarkNotifyTest : BaseRepositoryTest() {
         coEvery { serverRepository.servers } returns flowOf(listOf(testServer))
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, testServer.id) } returns existing
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
+        every { settingsRepository.preferFullPageHtml } returns flowOf(false)
 
         val mockDto = mockk<com.karakept.api.model.Bookmark>(relaxed = true) {
             every { id } returns "remote-42"

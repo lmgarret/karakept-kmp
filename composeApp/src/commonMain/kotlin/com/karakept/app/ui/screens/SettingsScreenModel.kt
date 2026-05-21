@@ -37,6 +37,7 @@ import com.karakept.app.data.repository.setShowScrollCursor
 import com.karakept.app.data.repository.setTrackReadingProgress
 import com.karakept.app.data.repository.setResetProgressOnMarkUnread
 import com.karakept.app.data.repository.setShowTagsInViewer
+import com.karakept.app.data.repository.setPreferFullPageHtml
 import com.karakept.app.data.repository.setNotificationsEnabled
 import com.karakept.app.data.repository.setLinkOpenMode
 import com.karakept.app.data.repository.setContentSyncStrategy
@@ -416,6 +417,18 @@ class SettingsScreenModel(
     fun setShowTagsInViewer(show: Boolean) {
         screenModelScope.launch {
             settingsRepository.setShowTagsInViewer(show)
+        }
+    }
+
+    val preferFullPageHtml: StateFlow<Boolean> = settingsRepository.preferFullPageHtml.stateIn(
+        scope = screenModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setPreferFullPageHtml(enabled: Boolean) {
+        screenModelScope.launch {
+            settingsRepository.setPreferFullPageHtml(enabled)
         }
     }
 

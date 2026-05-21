@@ -4,6 +4,7 @@ import com.karakept.api.model.Bookmark
 import com.karakept.api.model.BookmarkContent
 import com.karakept.api.model.BookmarkTagsInner
 import com.karakept.api.model.PaginatedBookmarks
+import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.dao.PendingActionDao
@@ -44,6 +45,7 @@ import kotlin.test.assertTrue
 class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
     private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)
+    private val assetDao = mockk<AssetDao>(relaxed = true)
     private val pendingActionDao = mockk<PendingActionDao>(relaxed = true)
     private val remoteDataSource = mockk<RemoteDataSource>(relaxed = true)
     private val serverRepository = mockk<ServerRepository>(relaxed = true)
@@ -110,6 +112,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         return BookmarkSyncPipeline(
             config = config,
             bookmarkDao = bookmarkDao,
+            assetDao = assetDao,
             remoteDataSource = remoteDataSource,
             bookmarkActionsRepository = bookmarkActionsRepository,
             settingsRepository = settingsRepository,

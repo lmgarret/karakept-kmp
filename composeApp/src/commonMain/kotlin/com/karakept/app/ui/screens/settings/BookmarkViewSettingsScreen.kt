@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Visibility
@@ -256,6 +257,7 @@ fun BookmarkViewSettingsContent(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(bottom = 12.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -286,6 +288,45 @@ fun BookmarkViewSettingsContent(
                     Switch(
                         checked = showTagsInViewer,
                         onCheckedChange = { screenModel.setShowTagsInViewer(it) }
+                    )
+                }
+            }
+
+            val preferFullPageHtml by screenModel.preferFullPageHtml.collectAsState()
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Web,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                    ) {
+                        Text(
+                            text = "Prefer Full Page HTML",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "When syncing, automatically download the full page archive if available. Uses more storage. Renders better in Web mode than in Reader mode.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = preferFullPageHtml,
+                        onCheckedChange = { screenModel.setPreferFullPageHtml(it) }
                     )
                 }
             }

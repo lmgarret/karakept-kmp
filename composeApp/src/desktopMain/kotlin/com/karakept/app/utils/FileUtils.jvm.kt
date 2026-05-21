@@ -71,6 +71,10 @@ actual object FileUtils {
         }
     }
 
+    actual fun deleteFile(path: String) {
+        try { File(path).delete() } catch (_: Exception) {}
+    }
+
     actual fun shareBackupFile(filePath: String) {
         val file = File(filePath)
         if (!file.exists()) return

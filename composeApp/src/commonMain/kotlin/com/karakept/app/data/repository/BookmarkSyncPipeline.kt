@@ -1,7 +1,9 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
+import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.ListSyncStatus
@@ -67,6 +69,7 @@ internal data class ApiFilters(
 internal class BookmarkSyncPipeline(
     private val config: SyncConfiguration,
     private val bookmarkDao: BookmarkDao,
+    private val assetDao: AssetDao,
     private val remoteDataSource: RemoteDataSource,
     private val bookmarkActionsRepository: BookmarkActionsRepository,
     private val settingsRepository: SettingsRepository,
@@ -109,6 +112,11 @@ internal class BookmarkSyncPipeline(
         if (config is SyncConfiguration.ForList) {
             reconcileListMembership(remoteBookmarks, config.listId)
         }
+
+        // Phase 4.6: Insert server-side asset metadata (linkHtmlContent, fullPageArchive,
+        // precrawledArchive) so the viewer knows what exists on the server even before
+        // downloading. Uses IGNORE conflict strategy to preserve existing localPath values.
+        insertAssetMetadata(remoteBookmarks, entitiesWithLocalIds)
 
         // Phase 5: Content sync. ForList syncs also run this phase — syncContent() is gated
         // internally by each list's syncOffline setting, so content is only downloaded for
@@ -521,6 +529,44 @@ internal class BookmarkSyncPipeline(
             if (offlineBookmarks.isNotEmpty()) {
                 fetchContentForBookmarks(offlineBookmarks)
             }
+        }
+    }
+
+    private suspend fun insertAssetMetadata(
+        dtos: List<com.karakept.api.model.Bookmark>,
+        entities: List<BookmarkEntity>
+    ) {
+        val entityByOriginalId = entities.associateBy { it.originalRemoteId }
+        val metadata = mutableListOf<AssetEntity>()
+        val trackableTypes = setOf(
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT,
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE,
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE
+        )
+        val typeStrings = mapOf(
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT to "linkHtmlContent",
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE to "fullPageArchive",
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE to "precrawledArchive"
+        )
+        for (dto in dtos) {
+            val entity = entityByOriginalId[dto.id ?: ""] ?: continue
+            dto.assets?.forEach { asset ->
+                val type = asset.assetType ?: return@forEach
+                if (type !in trackableTypes) return@forEach
+                val assetId = asset.id ?: return@forEach
+                metadata.add(AssetEntity(
+                    id = assetId,
+                    bookmarkRemoteId = entity.remoteId,
+                    serverId = config.server.id,
+                    assetType = typeStrings[type] ?: return@forEach,
+                    fileName = null,
+                    contentType = null,
+                    localPath = null
+                ))
+            }
+        }
+        if (metadata.isNotEmpty()) {
+            assetDao.insertAssetMetadataOnly(metadata)
         }
     }
 

@@ -59,7 +59,8 @@ internal data class StoredReaderSettings(
     val resetProgressOnMarkUnread: Boolean = true,
     val linkOpenMode: String = LinkOpenMode.CUSTOM_TAB.name,
     val showTagsInViewer: Boolean = true,
-    val scrollToTopEnabled: Boolean = true
+    val scrollToTopEnabled: Boolean = true,
+    val preferFullPageHtml: Boolean = false
 )
 
 /** Swipe-action settings: left/right actions and custom swipe configurations. */
