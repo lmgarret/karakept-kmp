@@ -340,6 +340,9 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     val scrollToTopEnabled: Flow<Boolean> =
         readerSettingsFlow.map { it.scrollToTopEnabled }.distinctUntilChanged()
 
+    val preferFullPageHtml: Flow<Boolean> =
+        readerSettingsFlow.map { it.preferFullPageHtml }.distinctUntilChanged()
+
     // ── Derived flows (swipe) ─────────────────────────────────────────────────
 
     val swipeLeftAction: Flow<SwipeAction> =

@@ -69,6 +69,7 @@ data class BackupSettings(
     val trackReadingProgress: Boolean = true,
     val resetProgressOnMarkUnread: Boolean = true,
     val linkOpenMode: String = LinkOpenMode.CUSTOM_TAB.name,
+    val preferFullPageHtml: Boolean = false,
 
     // Theme
     val themeMode: String = ThemeMode.SYSTEM.name,

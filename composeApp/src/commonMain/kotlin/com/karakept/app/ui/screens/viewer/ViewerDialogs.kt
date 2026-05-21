@@ -12,10 +12,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.outlined.Article
+import androidx.compose.material.icons.outlined.Web
+import com.karakept.app.data.model.ContentSource
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -70,28 +74,124 @@ internal fun ViewerModeDialog(
                         description = "Sanitized content with safe HTML only",
                         icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
                         isSelected = viewerMode == ViewerMode.READER,
-                        onClick = {
-                            onModeSelected(ViewerMode.READER)
-                        }
+                        onClick = { onModeSelected(ViewerMode.READER) }
                     )
 
-                    // WEB mode is only available on Android (uses WebView)
-                    if (!isDesktop) {
-                        ViewerModeOptionCard(
-                            title = "Web",
-                            description = "Web view with original HTML and stylesheets (JavaScript disabled)",
-                            icon = Icons.Default.Public,
-                            isSelected = viewerMode == ViewerMode.WEB,
-                            onClick = {
-                                onModeSelected(ViewerMode.WEB)
-                            }
-                        )
-                    }
+                    ViewerModeOptionCard(
+                        title = "Web",
+                        description = if (isDesktop)
+                            "Web view with original HTML and stylesheets — not available on desktop"
+                        else
+                            "Web view with original HTML and stylesheets (JavaScript disabled)",
+                        icon = Icons.Default.Public,
+                        isSelected = viewerMode == ViewerMode.WEB,
+                        enabled = !isDesktop,
+                        onClick = { if (!isDesktop) onModeSelected(ViewerMode.WEB) }
+                    )
                 }
             },
             confirmButton = {
                 TextButton(onClick = onDismiss) {
                     Text("Close")
+                }
+            }
+        )
+    }
+}
+
+/**
+ * Combined Mode & Source dialog: independently configure viewer mode and content source.
+ */
+@Composable
+internal fun ModeAndSourceDialog(
+    visible: Boolean,
+    currentViewerMode: ViewerMode,
+    currentSource: ContentSource,
+    archiveAvailable: Boolean,
+    archiveCached: Boolean,
+    isOffline: Boolean,
+    onViewerModeSelected: (ViewerMode) -> Unit,
+    onSourceSelected: (ContentSource) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isDesktop = getPlatform().isDesktop
+
+    if (visible) {
+        var pendingMode by remember(currentViewerMode) { mutableStateOf(currentViewerMode) }
+        var pendingSource by remember(currentSource) { mutableStateOf(currentSource) }
+        val archiveOfflineUnavailable = !archiveCached && isOffline
+
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Mode & Source") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Content Source",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    ViewerModeOptionCard(
+                        title = "Extracted",
+                        description = "Processed article HTML — clean reading view",
+                        icon = Icons.Outlined.Article,
+                        isSelected = pendingSource == ContentSource.EXTRACTED,
+                        onClick = { pendingSource = ContentSource.EXTRACTED }
+                    )
+
+                    val archiveSubtitle = when {
+                        archiveOfflineUnavailable -> "Not available offline"
+                        !archiveCached -> "Will download archive on confirm"
+                        else -> null
+                    }
+                    ViewerModeOptionCard(
+                        title = "Full Page Archive",
+                        description = "Complete page with original layout and images${if (archiveSubtitle != null) " — $archiveSubtitle" else ""}",
+                        icon = Icons.Outlined.Web,
+                        isSelected = pendingSource == ContentSource.FULL_PAGE_ARCHIVE,
+                        enabled = !archiveOfflineUnavailable,
+                        onClick = { if (!archiveOfflineUnavailable) pendingSource = ContentSource.FULL_PAGE_ARCHIVE }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    Text(
+                        "Viewer Mode",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    ViewerModeOptionCard(
+                        title = "Reader",
+                        description = "Sanitized content with safe HTML only",
+                        icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
+                        isSelected = pendingMode == ViewerMode.READER,
+                        onClick = { pendingMode = ViewerMode.READER }
+                    )
+
+                    ViewerModeOptionCard(
+                        title = "Web",
+                        description = "Web view with original HTML and stylesheets (JavaScript disabled)${if (isDesktop) " — not available on desktop" else ""}",
+                        icon = Icons.Default.Public,
+                        isSelected = pendingMode == ViewerMode.WEB,
+                        enabled = !isDesktop,
+                        onClick = { if (!isDesktop) pendingMode = ViewerMode.WEB }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (pendingMode != currentViewerMode) onViewerModeSelected(pendingMode)
+                    if (pendingSource != currentSource) onSourceSelected(pendingSource)
+                    onDismiss()
+                }) {
+                    Text("Apply")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
                 }
             }
         )
@@ -196,12 +296,14 @@ private fun ViewerModeOptionCard(
     description: String,
     icon: ImageVector,
     isSelected: Boolean,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val contentAlpha = if (enabled) 1f else 0.38f
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
     ) {
         Row(
             modifier = Modifier
@@ -213,11 +315,12 @@ private fun ViewerModeOptionCard(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.padding(end = 16.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha)
             )
             RadioButton(
                 selected = isSelected,
-                onClick = onClick
+                onClick = onClick,
+                enabled = enabled
             )
             Column(
                 modifier = Modifier
@@ -226,19 +329,20 @@ private fun ViewerModeOptionCard(
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                 )
             }
             if (isSelected) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = "Selected",
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha)
                 )
             }
         }

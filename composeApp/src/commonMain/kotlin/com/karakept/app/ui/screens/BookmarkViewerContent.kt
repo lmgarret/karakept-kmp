@@ -108,6 +108,11 @@ fun BookmarkViewerContent(
     val htmlFontSize by screenModel.htmlFontSize.collectAsState()
     val htmlFontFamily by screenModel.htmlFontFamily.collectAsState()
     val precrawledAssetPath by screenModel.precrawledAssetPath.collectAsState()
+    val selectedSource by screenModel.selectedSource.collectAsState()
+    val archiveAvailable by screenModel.archiveAvailable.collectAsState()
+    val sourceContentOverride by screenModel.sourceContentOverride.collectAsState()
+    val isLoadingSource by screenModel.isLoadingSource.collectAsState()
+    val assets by screenModel.assets.collectAsState()
     val lists by screenModel.lists.collectAsState()
     val showTags by screenModel.showTags.collectAsState()
     val dateDisplayMode by screenModel.dateDisplayMode.collectAsState()
@@ -417,8 +422,14 @@ fun BookmarkViewerContent(
                                     removeFirstImage = hideArticleThumbnails,
                                     htmlTextColor = htmlTextColor, htmlBackgroundColor = htmlBackgroundColor,
                                     htmlFontSize = htmlFontSize, htmlFontFamily = htmlFontFamily,
-                                    precrawledAssetPath = precrawledAssetPath, loadingState = state,
+                                    precrawledAssetPath = precrawledAssetPath,
+                                    selectedSource = selectedSource,
+                                    sourceContentOverride = sourceContentOverride,
+                                    loadingState = state,
                                     contentFetchAttempted = contentFetchAttempted,
+                                    archiveAvailableOnServer = archiveAvailable,
+                                    isLoadingArchive = isLoadingSource,
+                                    onFetchArchive = { screenModel.fetchAndCacheArchive(state.bookmark) },
                                     highlights = highlights,
                                     onLinkClick = { linkUrl ->
                                         try { when (linkOpenMode) { LinkOpenMode.CUSTOM_TAB -> openInCustomTab(linkUrl); LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(linkUrl) } }
@@ -636,6 +647,7 @@ fun BookmarkViewerContent(
         htmlTextColor = htmlTextColor, htmlBackgroundColor = htmlBackgroundColor,
         htmlFontSize = htmlFontSize, htmlFontFamily = htmlFontFamily, lists = lists,
         showModeDialog = showModeDialog, onShowModeDialogChanged = { showModeDialog = it },
+        selectedSource = selectedSource,
         showAppearancePanel = showAppearancePanel, onShowAppearancePanelChanged = { showAppearancePanel = it },
         showDetailsPanel = showDetailsPanel, onShowDetailsPanelChanged = { showDetailsPanel = it },
         showDeleteConfirmation = showDeleteConfirmation, onShowDeleteConfirmationChanged = { showDeleteConfirmation = it },
@@ -644,6 +656,7 @@ fun BookmarkViewerContent(
         selectedHighlightId = selectedHighlightId, onSelectedHighlightIdChanged = { selectedHighlightId = it },
         selectedHighlightText = selectedHighlightText, onSelectedHighlightTextChanged = { selectedHighlightText = it },
         selectedHighlight = selectedHighlight,
+        assets = assets,
         showSearch = showSearch, onShowSearchChanged = { showSearch = it },
         screenModel = screenModel, scope = scope, onBack = onBack
     )

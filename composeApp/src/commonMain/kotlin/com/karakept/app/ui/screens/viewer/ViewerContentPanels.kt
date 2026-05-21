@@ -2,10 +2,12 @@ package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.ui.screens.BookmarkLoadingState
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +29,7 @@ fun ViewerContentPanels(
     lists: List<com.karakept.api.model.KarakeepList>,
     showModeDialog: Boolean,
     onShowModeDialogChanged: (Boolean) -> Unit,
+    selectedSource: ContentSource = ContentSource.EXTRACTED,
     showAppearancePanel: Boolean,
     onShowAppearancePanelChanged: (Boolean) -> Unit,
     showDetailsPanel: Boolean,
@@ -42,6 +45,7 @@ fun ViewerContentPanels(
     selectedHighlightText: String?,
     onSelectedHighlightTextChanged: (String?) -> Unit,
     selectedHighlight: Highlight?,
+    assets: List<AssetEntity> = emptyList(),
     showSearch: Boolean = false,
     onShowSearchChanged: (Boolean) -> Unit = {},
     screenModel: BookmarkViewerScreenModel,
@@ -158,6 +162,18 @@ fun ViewerContentPanels(
     BookmarkDetailsPanel(
         visible = showDetailsPanel,
         bookmark = detailsBookmark,
+        assets = assets,
+        selectedSource = selectedSource,
+        onSourceSelected = { source ->
+            screenModel.setContentSource(source, detailsBookmark)
+        },
+        onDownloadAsset = { asset ->
+            if (detailsBookmark != null) screenModel.downloadOrRefreshAsset(asset, detailsBookmark)
+        },
+        onRefreshAsset = { asset ->
+            if (detailsBookmark != null) screenModel.downloadOrRefreshAsset(asset, detailsBookmark)
+        },
+        onDeleteAssetLocal = { asset -> screenModel.deleteAssetLocal(asset) },
         onDismiss = { onShowDetailsPanelChanged(false) }
     )
 }

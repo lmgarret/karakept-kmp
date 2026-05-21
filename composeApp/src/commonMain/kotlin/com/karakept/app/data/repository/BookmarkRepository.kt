@@ -296,6 +296,21 @@ class BookmarkRepository(
             // Cache hero images (banner/screenshot)
             cacheHeroAssetsForBookmark(server, existing.remoteId, existing.serverId, bannerImageAssetId, screenshotAssetId)
 
+            // Track server-side asset metadata (linkHtmlContent, fullPageArchive, precrawledArchive)
+            // so the viewer knows what exists on the server even before downloading locally.
+            insertContentAssetMetadata(dto, existing.remoteId, existing.serverId)
+
+            // Cache fullPageArchive asset when user prefers it, so the viewer can switch
+            // sources without touching the content field (which always stores extracted HTML).
+            if (settingsRepository.preferFullPageHtml.first()) {
+                val archiveAsset = dto.assets?.find {
+                    it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE
+                }
+                if (archiveAsset?.id != null) {
+                    cacheArchiveAsset(server, existing.remoteId, existing.serverId, archiveAsset)
+                }
+            }
+
             // Notify UI so the accumulated list refreshes this bookmark (e.g. with asset IDs)
             bookmarkActionsRepository.notifyBookmarkChanged(existing.remoteId)
         } catch (e: Exception) {
@@ -437,6 +452,8 @@ class BookmarkRepository(
     /**
      * Shared logic for fetching bookmark content from server.
      * Tries: 1. Inline HTML -> 2. Asset HTML -> 3. Note/Text
+     * The fullPageArchive asset is cached separately when preferFullPageHtml is enabled;
+     * it is never stored in the content field so that source-switching works correctly.
      */
     internal suspend fun fetchRemoteContent(server: Server, remoteBookmarkId: String): String? {
         try {
@@ -498,6 +515,7 @@ class BookmarkRepository(
             val pipeline = BookmarkSyncPipeline(
                 config = config,
                 bookmarkDao = bookmarkDao,
+                assetDao = assetDao,
                 remoteDataSource = remoteDataSource,
                 bookmarkActionsRepository = bookmarkActionsRepository,
                 settingsRepository = settingsRepository,
@@ -616,6 +634,64 @@ class BookmarkRepository(
             } catch (e: Exception) {
                 AppLogger.e("BookmarkRepository", "Failed to cache screenshot: ${e.message}")
             }
+        }
+    }
+
+    private suspend fun insertContentAssetMetadata(
+        dto: com.karakept.api.model.Bookmark,
+        bookmarkRemoteId: Long,
+        serverId: String
+    ) {
+        val typeStrings = mapOf(
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT to "linkHtmlContent",
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE to "fullPageArchive",
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE to "precrawledArchive"
+        )
+        val metadata = dto.assets?.mapNotNull { asset ->
+            val typeStr = typeStrings[asset.assetType] ?: return@mapNotNull null
+            val assetId = asset.id ?: return@mapNotNull null
+            AssetEntity(
+                id = assetId,
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = serverId,
+                assetType = typeStr,
+                fileName = null,
+                contentType = null,
+                localPath = null
+            )
+        } ?: return
+        if (metadata.isNotEmpty()) assetDao.insertAssetMetadataOnly(metadata)
+    }
+
+    private suspend fun cacheArchiveAsset(
+        server: Server,
+        bookmarkRemoteId: Long,
+        serverId: String,
+        asset: com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
+    ) {
+        val assetId = asset.id ?: return
+        try {
+            val existing = assetDao.getAssetsForBookmark(bookmarkRemoteId, serverId)
+                .find { it.id == assetId }
+            if (existing?.localPath != null) return  // already cached
+
+            val bytes = remoteDataSource.downloadAsset(server, assetId)
+            val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
+            val localPath = com.karakept.app.utils.FileUtils.saveFile(
+                cacheDir, "archive_${assetId}", bytes
+            )
+            assetDao.insertAssets(listOf(AssetEntity(
+                id = assetId,
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = serverId,
+                assetType = "fullPageArchive",
+                fileName = "archive_${assetId}",
+                contentType = null,
+                localPath = localPath
+            )))
+            AppLogger.d("BookmarkRepository", "Cached fullPageArchive for bookmark $bookmarkRemoteId: $localPath")
+        } catch (e: Exception) {
+            AppLogger.e("BookmarkRepository", "Failed to cache fullPageArchive: ${e.message}")
         }
     }
 

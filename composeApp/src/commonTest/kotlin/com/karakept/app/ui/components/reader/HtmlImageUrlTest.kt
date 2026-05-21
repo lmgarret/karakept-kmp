@@ -4,160 +4,243 @@ import com.fleeksoft.ksoup.Ksoup
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
- * Tests for [pickBestUrlFromSrcset] and [resolveImageUrl].
+ * Tests for [pickUrlsFromSrcset] and [resolveImageUrls].
  *
  * These cover the lazy-load pattern used by sites like Numerama where
  * <img src> is an SVG placeholder and the real URL lives in data-src or
- * data-srcset (or in a sibling <source srcset>).
+ * data-srcset (or in a sibling <source srcset>). The returned list is
+ * a priority-ordered fallback chain: index 0 is tried first, and Coil's
+ * onError callback advances to the next entry on failure.
  */
 class HtmlImageUrlTest {
 
-    // --- pickBestUrlFromSrcset ---
+    // --- pickUrlsFromSrcset ---
 
     @Test
-    fun pickBestUrlFromSrcset_blank_returnsNull() {
-        assertNull(pickBestUrlFromSrcset(""))
+    fun pickUrlsFromSrcset_blank_returnsEmpty() {
+        assertTrue(pickUrlsFromSrcset("").isEmpty())
     }
 
     @Test
-    fun pickBestUrlFromSrcset_singleUrl_returnsThatUrl() {
+    fun pickUrlsFromSrcset_singleUrl_returnsListWithThatUrl() {
         val srcset = "https://cdn.example.com/img-1024.jpg 1024w"
-        assertEquals("https://cdn.example.com/img-1024.jpg", pickBestUrlFromSrcset(srcset))
+        assertEquals(listOf("https://cdn.example.com/img-1024.jpg"), pickUrlsFromSrcset(srcset))
     }
 
     @Test
-    fun pickBestUrlFromSrcset_multipleEntries_returnsLast() {
-        // Typically srcset lists go from smallest to largest; we want the largest
+    fun pickUrlsFromSrcset_multipleEntries_returnsAllInDocumentOrder() {
         val srcset = "https://cdn.example.com/img-480.jpg 480w," +
-                     "https://cdn.example.com/img-768.jpg 768w," +
-                     "https://cdn.example.com/img-1024.jpg 1024w," +
-                     "https://cdn.example.com/img-2048.jpg 2048w"
-        assertEquals("https://cdn.example.com/img-2048.jpg", pickBestUrlFromSrcset(srcset))
+                "https://cdn.example.com/img-768.jpg 768w," +
+                "https://cdn.example.com/img-1024.jpg 1024w," +
+                "https://cdn.example.com/img-2048.jpg 2048w"
+        assertEquals(
+            listOf(
+                "https://cdn.example.com/img-480.jpg",
+                "https://cdn.example.com/img-768.jpg",
+                "https://cdn.example.com/img-1024.jpg",
+                "https://cdn.example.com/img-2048.jpg",
+            ),
+            pickUrlsFromSrcset(srcset)
+        )
     }
 
     @Test
-    fun pickBestUrlFromSrcset_skipsDataSvgPlaceholders() {
+    fun pickUrlsFromSrcset_skipsDataSvgPlaceholders() {
         val placeholder = "data:image/svg+xml;utf8,%3Csvg/%3E"
         val srcset = "$placeholder 1x,https://cdn.example.com/img.jpg 2x"
-        assertEquals("https://cdn.example.com/img.jpg", pickBestUrlFromSrcset(srcset))
+        assertEquals(listOf("https://cdn.example.com/img.jpg"), pickUrlsFromSrcset(srcset))
     }
 
     @Test
-    fun pickBestUrlFromSrcset_allPlaceholders_returnsNull() {
+    fun pickUrlsFromSrcset_allPlaceholders_returnsEmpty() {
         val srcset = "data:image/svg+xml;base64,PHN2Zy8+ 1x"
-        assertNull(pickBestUrlFromSrcset(srcset))
+        assertTrue(pickUrlsFromSrcset(srcset).isEmpty())
     }
 
     @Test
-    fun pickBestUrlFromSrcset_withQueryParams_preservesUrl() {
+    fun pickUrlsFromSrcset_withQueryParams_preservesUrl() {
         val srcset = "https://cdn.example.com/img.jpg?resize=1024,576&key=abc123 1024w"
-        assertEquals("https://cdn.example.com/img.jpg?resize=1024,576&key=abc123", pickBestUrlFromSrcset(srcset))
+        assertEquals(
+            listOf("https://cdn.example.com/img.jpg?resize=1024,576&key=abc123"),
+            pickUrlsFromSrcset(srcset)
+        )
     }
 
     @Test
-    fun pickBestUrlFromSrcset_fileUrl_isAccepted() {
+    fun pickUrlsFromSrcset_fileUrl_isAccepted() {
         val srcset = "file:///data/user/0/com.example/cache/img_abc.jpg 1x"
-        assertEquals("file:///data/user/0/com.example/cache/img_abc.jpg", pickBestUrlFromSrcset(srcset))
+        assertEquals(
+            listOf("file:///data/user/0/com.example/cache/img_abc.jpg"),
+            pickUrlsFromSrcset(srcset)
+        )
     }
 
     @Test
-    fun pickBestUrlFromSrcset_withSpacesAroundComma_parsesCorrectly() {
+    fun pickUrlsFromSrcset_withSpacesAroundComma_parsesCorrectly() {
         val srcset = " https://cdn.example.com/small.jpg 512w , https://cdn.example.com/large.jpg 1024w "
-        assertEquals("https://cdn.example.com/large.jpg", pickBestUrlFromSrcset(srcset))
+        assertEquals(
+            listOf("https://cdn.example.com/small.jpg", "https://cdn.example.com/large.jpg"),
+            pickUrlsFromSrcset(srcset)
+        )
     }
 
     @Test
-    fun pickBestUrlFromSrcset_multipleUrlsWithCommasInQueryParams_parsesCorrectly() {
+    fun pickUrlsFromSrcset_multipleUrlsWithCommasInQueryParams_parsesCorrectly() {
         // Real-world pattern from Numerama / WordPress photon CDN: every URL contains
         // a comma in its query string (?resize=W,H), and entries are themselves
         // separated by commas. The parser must distinguish the two.
         val srcset = "https://cdn.example.com/img-1024x576.jpg?resize=928,522&key=abc 928w," +
-                     "https://cdn.example.com/img-1024x576.jpg?resize=768,432&key=abc 768w," +
-                     "https://cdn.example.com/img-1024x576.jpg?resize=480,270&key=abc 480w"
+                "https://cdn.example.com/img-1024x576.jpg?resize=768,432&key=abc 768w," +
+                "https://cdn.example.com/img-1024x576.jpg?resize=480,270&key=abc 480w"
         assertEquals(
-            "https://cdn.example.com/img-1024x576.jpg?resize=480,270&key=abc",
-            pickBestUrlFromSrcset(srcset)
+            listOf(
+                "https://cdn.example.com/img-1024x576.jpg?resize=928,522&key=abc",
+                "https://cdn.example.com/img-1024x576.jpg?resize=768,432&key=abc",
+                "https://cdn.example.com/img-1024x576.jpg?resize=480,270&key=abc",
+            ),
+            pickUrlsFromSrcset(srcset)
         )
     }
 
     @Test
-    fun pickBestUrlFromSrcset_singleUrlWithCommaInQuery_preservesFullUrl() {
+    fun pickUrlsFromSrcset_singleUrlWithCommaInQuery_preservesFullUrl() {
         val srcset = "https://cdn.example.com/img.jpg?resize=1024,576&key=abc123 1024w"
         assertEquals(
-            "https://cdn.example.com/img.jpg?resize=1024,576&key=abc123",
-            pickBestUrlFromSrcset(srcset)
+            listOf("https://cdn.example.com/img.jpg?resize=1024,576&key=abc123"),
+            pickUrlsFromSrcset(srcset)
         )
     }
 
-    // --- resolveImageUrl ---
-
-    private fun imgElement(src: String, dataSrc: String = "", srcset: String = "", dataSrcset: String = "") =
-        Ksoup.parse(buildString {
-            append("<img")
-            if (src.isNotEmpty()) append(" src=\"$src\"")
-            if (dataSrc.isNotEmpty()) append(" data-src=\"$dataSrc\"")
-            if (srcset.isNotEmpty()) append(" srcset=\"$srcset\"")
-            if (dataSrcset.isNotEmpty()) append(" data-srcset=\"$dataSrcset\"")
-            append(">")
-        }).selectFirst("img")!!
-
     @Test
-    fun resolveImageUrl_realSrc_returnsSrc() {
-        val el = imgElement(src = "https://cdn.example.com/img.jpg")
-        assertEquals("https://cdn.example.com/img.jpg", resolveImageUrl(el))
+    fun pickUrlsFromSrcset_base64JpegDataUri_isIncluded() {
+        // Base64 content has no commas, so the srcset splitter never fragments a data URI.
+        // Non-SVG data URIs (e.g. JPEG thumbnails) belong in the fallback chain.
+        val base64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgAB"
+        val srcset = "$base64 480w"
+        assertEquals(listOf(base64), pickUrlsFromSrcset(srcset))
     }
 
     @Test
-    fun resolveImageUrl_svgPlaceholderSrc_prefersDataSrc() {
+    fun pickUrlsFromSrcset_base64JpegMixedWithHttpUrl_includesBoth() {
+        // Verifies that a srcset mixing a base64 data URI and an http URL is parsed
+        // correctly: the data URI is not split mid-value and both entries are returned.
+        val base64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABYNS"
+        val httpUrl = "https://cdn.example.com/img.jpg"
+        val srcset = "$base64 480w,$httpUrl 1024w"
+        val urls = pickUrlsFromSrcset(srcset)
+        assertEquals(2, urls.size)
+        assertEquals(base64, urls[0])
+        assertEquals(httpUrl, urls[1])
+    }
+
+    // --- resolveImageUrls ---
+
+    private fun imgElement(
+        src: String,
+        dataSrc: String = "",
+        srcset: String = "",
+        dataSrcset: String = ""
+    ) = Ksoup.parse(buildString {
+        append("<img")
+        if (src.isNotEmpty()) append(" src=\"$src\"")
+        if (dataSrc.isNotEmpty()) append(" data-src=\"$dataSrc\"")
+        if (srcset.isNotEmpty()) append(" srcset=\"$srcset\"")
+        if (dataSrcset.isNotEmpty()) append(" data-srcset=\"$dataSrcset\"")
+        append(">")
+    }).selectFirst("img")!!
+
+    @Test
+    fun resolveImageUrls_realSrc_returnsSrc() {
+        val el = imgElement(src = "https://cdn.example.com/img.jpg")
+        assertEquals(listOf("https://cdn.example.com/img.jpg"), resolveImageUrls(el))
+    }
+
+    @Test
+    fun resolveImageUrls_svgPlaceholderSrc_skipsItAndUsesDataSrc() {
         val el = imgElement(
             src = "data:image/svg+xml;utf8,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27/%3E",
             dataSrc = "https://cdn.example.com/real.jpg"
         )
-        assertEquals("https://cdn.example.com/real.jpg", resolveImageUrl(el))
+        // SVG placeholder is filtered; only data-src is returned
+        assertEquals(listOf("https://cdn.example.com/real.jpg"), resolveImageUrls(el))
     }
 
     @Test
-    fun resolveImageUrl_blankSrc_usesDataSrc() {
+    fun resolveImageUrls_blankSrc_usesDataSrc() {
         val el = imgElement(src = "", dataSrc = "https://cdn.example.com/real.jpg")
-        assertEquals("https://cdn.example.com/real.jpg", resolveImageUrl(el))
+        assertEquals(listOf("https://cdn.example.com/real.jpg"), resolveImageUrls(el))
     }
 
     @Test
-    fun resolveImageUrl_svgPlaceholderNoDataSrc_fallsBackToSrcset() {
+    fun resolveImageUrls_svgPlaceholderNoDataSrc_fallsBackToSrcset() {
         val el = imgElement(
             src = "data:image/svg+xml;utf8,%3Csvg/%3E",
             srcset = "https://cdn.example.com/img-512.jpg 512w,https://cdn.example.com/img-1024.jpg 1024w"
         )
-        assertEquals("https://cdn.example.com/img-1024.jpg", resolveImageUrl(el))
+        val urls = resolveImageUrls(el)
+        // All srcset entries are returned in document order for the fallback chain
+        assertEquals(2, urls.size)
+        assertEquals("https://cdn.example.com/img-512.jpg", urls[0])
+        assertEquals("https://cdn.example.com/img-1024.jpg", urls[1])
     }
 
     @Test
-    fun resolveImageUrl_svgPlaceholderNoDataSrc_fallsBackToDataSrcset() {
+    fun resolveImageUrls_svgPlaceholderNoDataSrc_fallsBackToDataSrcset() {
         val el = imgElement(
             src = "data:image/svg+xml;utf8,%3Csvg/%3E",
             dataSrcset = "https://cdn.example.com/img-512.jpg 512w,https://cdn.example.com/img-1024.jpg 1024w"
         )
-        assertEquals("https://cdn.example.com/img-1024.jpg", resolveImageUrl(el))
+        val urls = resolveImageUrls(el)
+        assertEquals(2, urls.size)
+        assertEquals("https://cdn.example.com/img-512.jpg", urls[0])
+        assertEquals("https://cdn.example.com/img-1024.jpg", urls[1])
     }
 
     @Test
-    fun resolveImageUrl_noUsableUrl_returnsNull() {
+    fun resolveImageUrls_noUsableUrl_returnsEmpty() {
         val el = imgElement(src = "data:image/svg+xml;utf8,%3Csvg/%3E")
-        assertNull(resolveImageUrl(el))
+        assertTrue(resolveImageUrls(el).isEmpty())
     }
 
     @Test
-    fun resolveImageUrl_dataSrcPreferredOverSrcset() {
-        // data-src is more direct than parsing srcset; it should win
+    fun resolveImageUrls_dataSrcBeforeSrcset() {
+        // data-src is a more direct pointer than srcset; it should appear first
         val el = imgElement(
             src = "data:image/svg+xml;utf8,%3Csvg/%3E",
             dataSrc = "https://cdn.example.com/from-datasrc.jpg",
             srcset = "https://cdn.example.com/from-srcset.jpg 1024w"
         )
-        assertEquals("https://cdn.example.com/from-datasrc.jpg", resolveImageUrl(el))
+        val urls = resolveImageUrls(el)
+        assertEquals("https://cdn.example.com/from-datasrc.jpg", urls.first())
+        assertTrue(urls.contains("https://cdn.example.com/from-srcset.jpg"))
+    }
+
+    @Test
+    fun resolveImageUrls_unreachableSrcWithBase64Srcset_includesBothForFallback() {
+        // Real-world pattern: src is a private-network URL (e.g. NAS or router IP)
+        // unreachable outside the LAN; srcset holds a base64-encoded JPEG that is
+        // always decodable locally. The fallback chain must include both so Coil
+        // attempts the private IP first and silently falls back to the embedded data URI.
+        val base64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgAB"
+        val el = imgElement(
+            src = "http://192.168.3.250/media/photo.jpg",
+            srcset = "$base64 480w"
+        )
+        val urls = resolveImageUrls(el)
+        assertEquals(2, urls.size)
+        assertEquals("http://192.168.3.250/media/photo.jpg", urls[0])
+        assertEquals(base64, urls[1])
+    }
+
+    @Test
+    fun resolveImageUrls_deduplicatesCandidates() {
+        // If the same URL appears as both src and srcset, it should only be tried once.
+        val url = "https://cdn.example.com/img.jpg"
+        val el = imgElement(src = url, srcset = "$url 1024w")
+        assertEquals(listOf(url), resolveImageUrls(el))
     }
 
     // --- Integration: sanitize then resolve ---
@@ -168,7 +251,7 @@ class HtmlImageUrlTest {
         val sanitized = com.karakept.app.utils.HtmlSanitizer.sanitize(html)
         val doc = Ksoup.parse(sanitized)
         val img = doc.selectFirst("img")!!
-        assertEquals("https://cdn.example.com/photo.jpg", resolveImageUrl(img))
+        assertEquals("https://cdn.example.com/photo.jpg", resolveImageUrls(img).firstOrNull())
     }
 
     @Test
@@ -177,9 +260,8 @@ class HtmlImageUrlTest {
         val sanitized = com.karakept.app.utils.HtmlSanitizer.sanitize(html)
         val doc = Ksoup.parse(sanitized)
         val source = doc.selectFirst("source")!!
-        // Source's data-srcset should yield a real URL
         val srcset = source.attr("srcset").ifBlank { source.attr("data-srcset") }
-        assertEquals("https://cdn.example.com/photo.webp", pickBestUrlFromSrcset(srcset))
+        assertEquals("https://cdn.example.com/photo.webp", pickUrlsFromSrcset(srcset).firstOrNull())
     }
 
     // --- extractImageDimensions ---
@@ -197,32 +279,32 @@ class HtmlImageUrlTest {
 
     @Test
     fun extractImageDimensions_noAttributes_returnsNull() {
-        assertNull(extractImageDimensions(img("<img src='https://x'>")))
+        assertTrue(extractImageDimensions(img("<img src='https://x'>")) == null)
     }
 
     @Test
     fun extractImageDimensions_onlyWidth_returnsNull() {
-        assertNull(extractImageDimensions(img("<img src='https://x' width='200'>")))
+        assertTrue(extractImageDimensions(img("<img src='https://x' width='200'>")) == null)
     }
 
     @Test
     fun extractImageDimensions_onlyHeight_returnsNull() {
-        assertNull(extractImageDimensions(img("<img src='https://x' height='100'>")))
+        assertTrue(extractImageDimensions(img("<img src='https://x' height='100'>")) == null)
     }
 
     @Test
     fun extractImageDimensions_nonNumericValues_returnsNull() {
-        assertNull(extractImageDimensions(img("<img src='https://x' width='100%' height='auto'>")))
+        assertTrue(extractImageDimensions(img("<img src='https://x' width='100%' height='auto'>")) == null)
     }
 
     @Test
     fun extractImageDimensions_zeroValues_returnsNull() {
-        assertNull(extractImageDimensions(img("<img src='https://x' width='0' height='0'>")))
+        assertTrue(extractImageDimensions(img("<img src='https://x' width='0' height='0'>")) == null)
     }
 
     @Test
     fun extractImageDimensions_negativeValues_returnsNull() {
-        assertNull(extractImageDimensions(img("<img src='https://x' width='-50' height='100'>")))
+        assertTrue(extractImageDimensions(img("<img src='https://x' width='-50' height='100'>")) == null)
     }
 
     @Test

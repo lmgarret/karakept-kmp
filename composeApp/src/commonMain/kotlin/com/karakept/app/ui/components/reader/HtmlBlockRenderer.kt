@@ -2,6 +2,7 @@ package com.karakept.app.ui.components.reader
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
@@ -14,14 +15,30 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -836,55 +853,58 @@ internal fun extractImageDimensions(element: Element): ImageDimensions? {
 }
 
 /**
- * Picks the best (last/largest descriptor) HTTP(S) URL from a `srcset` string.
- * Skips SVG placeholder data URIs. Returns null if no usable URL is found.
+ * Returns all usable URLs from a `srcset` string in their original order.
+ * Skips SVG placeholder data URIs; passes non-SVG base64 data URIs through to Coil.
  *
  * Splits on commas that introduce a new URL (lookahead for a protocol prefix) so
  * that commas inside URL query parameters — common in CDN URLs like
  * `?resize=928,522` — are preserved instead of fragmenting the URL.
+ * Base64 is comma-free so `data:image/jpeg;base64,...` is never split mid-value.
  */
-internal fun pickBestUrlFromSrcset(srcset: String): String? {
-    if (srcset.isBlank()) return null
+internal fun pickUrlsFromSrcset(srcset: String): List<String> {
+    if (srcset.isBlank()) return emptyList()
     return srcset.split(Regex(",\\s*(?=(?:https?://|file://|data:))"))
         .mapNotNull { entry ->
             entry.trim().split(Regex("\\s+")).firstOrNull()?.trim()
                 ?.takeIf { url ->
                     url.isNotBlank() &&
-                    !url.startsWith("data:") &&
-                    (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file://"))
+                    !url.startsWith("data:image/svg") &&
+                    (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file://") || url.startsWith("data:"))
                 }
         }
-        .lastOrNull()
 }
 
 /**
- * Resolves the best URL from an `<img>` element, handling lazy-load patterns where
- * the real URL is stored in `data-src` or `data-srcset` instead of `src`.
- * Returns null if no usable URL can be found.
+ * Resolves all candidate URLs from an `<img>` element in priority order:
+ * src → data-src → srcset/data-srcset entries.
+ * Callers try each URL in sequence and fall back on network error.
  */
-internal fun resolveImageUrl(element: Element): String? {
+internal fun resolveImageUrls(element: Element): List<String> {
+    val candidates = mutableListOf<String>()
+
     val src = element.attr("src")
-    val isSvgPlaceholder = src.startsWith("data:image/svg")
+    if (src.isNotBlank() && !src.startsWith("data:image/svg")) candidates += src
 
-    if (src.isNotBlank() && !isSvgPlaceholder) return src
-
-    // Lazy-load pattern: real URL in data-src
     val dataSrc = element.attr("data-src")
-    if (dataSrc.isNotBlank() && !dataSrc.startsWith("data:")) return dataSrc
+    if (dataSrc.isNotBlank() && !dataSrc.startsWith("data:")) candidates += dataSrc
 
-    // Try srcset / data-srcset as last resort
     val srcset = element.attr("srcset").ifBlank { element.attr("data-srcset") }
-    return pickBestUrlFromSrcset(srcset)
+    candidates += pickUrlsFromSrcset(srcset)
+
+    return candidates.distinct()
 }
 
 /**
- * Renders an image at its declared dimensions when known, otherwise filling the
- * available width. Capping the width to the declared `width` attribute prevents
- * tiny icons / thumbnails from being upscaled to full screen width and looking
- * pixelated.
+ * Renders an image trying each URL in [urls] in order, falling back to the next on
+ * Coil error. Shows a pulsing skeleton while loading and a broken-image placeholder
+ * when all URLs fail. Capping width to declared dimensions prevents upscaling small icons.
  */
 @Composable
-private fun RenderResolvedImage(url: String, alt: String, dimensions: ImageDimensions?) {
+private fun RenderResolvedImage(urls: List<String>, alt: String, dimensions: ImageDimensions?) {
+    var idx by remember(urls) { mutableIntStateOf(0) }
+    // Resets to true on every new URL attempt (idx change) and on new image (urls change).
+    var isLoading by remember(urls, idx) { mutableStateOf(true) }
+
     val sizeModifier = if (dimensions != null) {
         Modifier
             .widthIn(max = dimensions.width.dp)
@@ -893,21 +913,75 @@ private fun RenderResolvedImage(url: String, alt: String, dimensions: ImageDimen
     } else {
         Modifier.fillMaxWidth()
     }
-    AsyncImage(
-        model = url,
-        contentDescription = alt.ifBlank { null },
-        contentScale = if (dimensions != null) ContentScale.Fit else ContentScale.FillWidth,
-        modifier = sizeModifier
-            .padding(vertical = 8.dp)
-            .clip(RoundedCornerShape(4.dp))
+    val shape = RoundedCornerShape(4.dp)
+    val baseModifier = sizeModifier.padding(vertical = 8.dp)
+
+    if (idx >= urls.size) {
+        // All candidate URLs failed — show broken-image placeholder.
+        Box(
+            modifier = baseModifier
+                .then(if (dimensions == null) Modifier.height(100.dp) else Modifier)
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.ImageNotSupported,
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        }
+        return
+    }
+
+    Box(modifier = baseModifier) {
+        // Skeleton shown while the current URL is loading.
+        if (isLoading) {
+            ImageLoadingSkeleton(
+                modifier = if (dimensions != null) {
+                    Modifier.matchParentSize()
+                } else {
+                    Modifier.fillMaxWidth().height(200.dp)
+                }.clip(shape)
+            )
+        }
+        AsyncImage(
+            model = urls[idx],
+            contentDescription = alt.ifBlank { null },
+            contentScale = if (dimensions != null) ContentScale.Fit else ContentScale.FillWidth,
+            onLoading = { isLoading = true },
+            onSuccess = { isLoading = false },
+            onError = { idx++ },
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .alpha(if (isLoading) 0f else 1f)
+        )
+    }
+}
+
+@Composable
+private fun ImageLoadingSkeleton(modifier: Modifier) {
+    val transition = rememberInfiniteTransition(label = "imgSkeleton")
+    val alpha by transition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.55f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "imgSkeletonAlpha"
     )
+    Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha)))
 }
 
 @Composable
 private fun RenderImage(element: Element) {
-    val url = resolveImageUrl(element) ?: return
+    val urls = resolveImageUrls(element)
+    if (urls.isEmpty()) return
     RenderResolvedImage(
-        url = url,
+        urls = urls,
         alt = element.attr("alt"),
         dimensions = extractImageDimensions(element)
     )
@@ -915,26 +989,21 @@ private fun RenderImage(element: Element) {
 
 @Composable
 private fun RenderPicture(element: Element) {
-    // Prefer <source> children — they may carry srcset/data-srcset with real URLs
-    // even when the <img src> is still a lazy-load SVG placeholder.
+    val img = element.selectFirst("img")
+    // Collect all candidates: <source> srcsets first, then <img> src/data-src/srcset.
+    val candidates = mutableListOf<String>()
     for (source in element.select("source")) {
         val srcset = source.attr("srcset").ifBlank { source.attr("data-srcset") }
-        val url = pickBestUrlFromSrcset(srcset)
-        if (url != null) {
-            // Even when the URL comes from <source>, the <img> child carries the
-            // alt text and intrinsic dimensions for the picture.
-            val img = element.selectFirst("img")
-            RenderResolvedImage(
-                url = url,
-                alt = img?.attr("alt").orEmpty(),
-                dimensions = img?.let { extractImageDimensions(it) }
-            )
-            return
-        }
+        candidates += pickUrlsFromSrcset(srcset)
     }
-    // Fall back to the <img> element with lazy-load awareness
-    val img = element.selectFirst("img")
-    if (img != null) RenderImage(img)
+    if (img != null) candidates += resolveImageUrls(img)
+    val urls = candidates.distinct()
+    if (urls.isEmpty()) return
+    RenderResolvedImage(
+        urls = urls,
+        alt = img?.attr("alt").orEmpty(),
+        dimensions = img?.let { extractImageDimensions(it) }
+    )
 }
 
 // --- Table support ---
