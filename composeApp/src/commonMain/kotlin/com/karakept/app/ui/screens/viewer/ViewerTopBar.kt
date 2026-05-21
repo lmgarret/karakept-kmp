@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import com.karakept.app.data.local.entity.BookmarkEntity
@@ -72,7 +73,7 @@ internal fun ViewerTopBar(
     onBackClick: () -> Unit,
     onMenuToggle: (Boolean) -> Unit,
     onAppearanceClick: () -> Unit,
-    onViewerModeClick: () -> Unit,
+    onViewerModeClick: () -> Unit = {},
     onMoveToListClick: () -> Unit,
     onEditTagsClick: () -> Unit,
     onRefreshClick: () -> Unit,
@@ -294,21 +295,19 @@ internal fun ViewerTopBar(
                         onMenuToggle(false)
                     }
                 )
-                if (!getPlatform().isDesktop) {
-                    DropdownMenuItem(
-                        text = { Text("Viewer Mode") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Visibility,
-                                contentDescription = null
-                            )
-                        },
-                        onClick = {
-                            onViewerModeClick()
-                            onMenuToggle(false)
-                        }
-                    )
-                }
+                DropdownMenuItem(
+                    text = { Text("Viewer Mode") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        onViewerModeClick()
+                        onMenuToggle(false)
+                    }
+                )
 
                 // Divider to separate sections
                 HorizontalDivider()
