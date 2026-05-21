@@ -60,7 +60,7 @@ class HtmlFigureRenderingTest {
 
         val img = doc.selectFirst("img")
         assertNotNull(img, "img should survive sanitization")
-        assertEquals("https://cdn.example.com/img.jpg", resolveImageUrl(img))
+        assertEquals("https://cdn.example.com/img.jpg", resolveImageUrls(img).firstOrNull())
     }
 
     @Test
@@ -78,7 +78,7 @@ class HtmlFigureRenderingTest {
         // Image URL should resolve via data-src
         val img = doc.selectFirst("img")
         assertNotNull(img, "img should survive sanitization")
-        assertEquals("https://cdn.example.com/img.jpg", resolveImageUrl(img))
+        assertEquals("https://cdn.example.com/img.jpg", resolveImageUrls(img).firstOrNull())
     }
 
     @Test
@@ -91,7 +91,7 @@ class HtmlFigureRenderingTest {
         val source = doc.selectFirst("source")
         assertNotNull(source, "source should survive sanitization")
         val srcset = source.attr("srcset").ifBlank { source.attr("data-srcset") }
-        assertEquals("https://cdn.example.com/img-2048.jpg", pickBestUrlFromSrcset(srcset))
+        assertEquals("https://cdn.example.com/img-2048.jpg", pickUrlsFromSrcset(srcset).last())
     }
 
     @Test
@@ -123,15 +123,15 @@ class HtmlFigureRenderingTest {
         val source = doc.selectFirst("source")
         assertNotNull(source, "<source> should survive sanitization")
         val srcset = source.attr("srcset").ifBlank { source.attr("data-srcset") }
-        val sourceUrl = pickBestUrlFromSrcset(srcset)
+        val sourceUrl = pickUrlsFromSrcset(srcset).firstOrNull()
         assertNotNull(sourceUrl, "Should extract a URL from source srcset/data-srcset")
         assertTrue(sourceUrl.startsWith("https://"), "Extracted URL should be https")
 
         // img data-src should also be preserved as fallback
         val img = doc.selectFirst("img")
         assertNotNull(img, "img should survive sanitization")
-        val imgUrl = resolveImageUrl(img)
-        assertNotNull(imgUrl, "resolveImageUrl should find a URL in data-src")
+        val imgUrl = resolveImageUrls(img).firstOrNull()
+        assertNotNull(imgUrl, "resolveImageUrls should find a URL in data-src")
         assertTrue(imgUrl.startsWith("https://"), "Resolved URL should be https")
 
         // figcaption should be intact
