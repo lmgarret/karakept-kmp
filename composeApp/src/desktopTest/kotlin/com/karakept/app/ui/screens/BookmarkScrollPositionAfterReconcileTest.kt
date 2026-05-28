@@ -106,7 +106,7 @@ class BookmarkScrollPositionAfterReconcileTest {
         Dispatchers.setMain(testDispatcher)
         mockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositorySyncKt")
         coEvery { any<BookmarkActionsRepository>().flushPendingActions(any()) } returns Unit
-        coEvery { bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any()) } returns emptyList()
+        coEvery { bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any(), any()) } returns emptyList()
     }
 
     @After
@@ -272,14 +272,14 @@ class BookmarkScrollPositionAfterReconcileTest {
 
         // Reset the invocation counter after model init (init calls getBookmarksPaged once)
         io.mockk.clearMocks(bookmarkRepository, answers = false)
-        coEvery { bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any()) } returns emptyList()
+        coEvery { bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any(), any()) } returns emptyList()
 
         model.moveBookmarkToList(bk, "read-later")
         advanceUntilIdle()
 
         // getBookmarksPaged is the function resetPaginationAndLoad calls;
         // it must NOT be called during reconciliation.
-        coVerify(exactly = 0) { bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any(), any()) }
     }
 
     /**
