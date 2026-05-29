@@ -420,17 +420,19 @@ fun MainScreenModel.executeScrollAction(
     }
 }
 
-fun MainScreenModel.createBookmark(url: String) {
+fun MainScreenModel.createBookmark(url: String, noteText: String? = null) {
     viewModelScope.launch {
         val server = _selectedServer.value ?: return@launch
         val tempRemoteId = kotlin.random.Random.nextLong(Long.MIN_VALUE, -1L)
+        val isNote = noteText != null
         val placeholder = BookmarkEntity(
             remoteId = tempRemoteId,
             originalRemoteId = "pending-$tempRemoteId",
             serverId = server.id,
-            url = url,
-            title = url,
-            content = null,
+            url = if (isNote) "" else url,
+            title = if (isNote) noteText.orEmpty().lineSequence().firstOrNull()?.take(80).orEmpty().ifBlank { "Note" } else url,
+            type = if (isNote) com.karakept.app.data.local.entity.BookmarkType.TEXT.storageValue else "link",
+            content = if (isNote) noteText else null,
             imageUrl = null,
             bannerImageAssetId = null,
             screenshotAssetId = null,
@@ -443,7 +445,7 @@ fun MainScreenModel.createBookmark(url: String) {
         _pendingBookmarks.value = listOf(placeholder) + _pendingBookmarks.value
         _scrollToTopTrigger.emit(Unit)
 
-        val result = bookmarkRepository.createBookmark(url)
+        val result = bookmarkRepository.createBookmark(url, noteText = noteText)
 
         result.onSuccess { bookmark ->
             updateAccumulatedBookmarks { listOf(bookmark) + it }

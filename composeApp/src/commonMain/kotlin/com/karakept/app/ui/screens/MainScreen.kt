@@ -32,6 +32,8 @@ import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.ui.screens.QuickFilterCounts
+import com.karakept.app.data.local.entity.BookmarkType
+import com.karakept.app.data.local.entity.bookmarkType
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.UrlDisplayMode
@@ -393,9 +395,14 @@ object MainScreen : NavKey {
                     listSyncStatuses = listSyncStatuses,
                     scaffoldContent = { isExpanded ->
                         scaffoldContent(isExpanded, selectedBookmarkId, { bookmark ->
-                            val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
-                            if (idx >= 0) screenModel.trackLastClickedIndex(idx)
-                            selectedBookmarkId = bookmark.localId; scrollToHighlightId = null; activeHighlightId = null
+                            if (bookmark.bookmarkType == BookmarkType.VIDEO) {
+                                uriHandler.openUri(bookmark.sourceUrl ?: bookmark.url)
+                                scope.launch { snackbarManager.showSnackbar("Opening video") }
+                            } else {
+                                val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
+                                if (idx >= 0) screenModel.trackLastClickedIndex(idx)
+                                selectedBookmarkId = bookmark.localId; scrollToHighlightId = null; activeHighlightId = null
+                            }
                         }, { isDrawerVisible = !isDrawerVisible })
                     }
                 )
@@ -449,9 +456,14 @@ object MainScreen : NavKey {
                         )
                     } else {
                         scaffoldContent(false, null, { bookmark ->
-                            val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
-                            if (idx >= 0) screenModel.trackLastClickedIndex(idx)
-                            navigator.push(BookmarkViewerScreen(bookmark.localId))
+                            if (bookmark.bookmarkType == BookmarkType.VIDEO) {
+                                uriHandler.openUri(bookmark.sourceUrl ?: bookmark.url)
+                                scope.launch { snackbarManager.showSnackbar("Opening video") }
+                            } else {
+                                val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
+                                if (idx >= 0) screenModel.trackLastClickedIndex(idx)
+                                navigator.push(BookmarkViewerScreen(bookmark.localId))
+                            }
                         }, { scope.launch { drawerState.open() } })
                     }
                 }
@@ -488,7 +500,16 @@ object MainScreen : NavKey {
         // Add Bookmark Dialog
         if (showAddBookmarkDialog) {
             MainScreenAddBookmarkDialog(
-                onConfirm = { url -> showAddBookmarkDialog = false; screenModel.createBookmark(url); scope.launch { snackbarManager.showSnackbar("Adding bookmark...") } },
+                onConfirm = { input ->
+                    showAddBookmarkDialog = false
+                    when (input) {
+                        is com.karakept.app.ui.components.AddBookmarkInput.Link ->
+                            screenModel.createBookmark(input.url)
+                        is com.karakept.app.ui.components.AddBookmarkInput.Note ->
+                            screenModel.createBookmark(url = "", noteText = input.text)
+                    }
+                    scope.launch { snackbarManager.showSnackbar("Adding bookmark...") }
+                },
                 onDismiss = { showAddBookmarkDialog = false }
             )
         }

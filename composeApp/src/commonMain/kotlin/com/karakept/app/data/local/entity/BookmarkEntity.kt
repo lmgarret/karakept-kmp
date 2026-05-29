@@ -18,6 +18,8 @@ data class BookmarkEntity(
     val url: String,
     val title: String,
     val content: String?,
+    val type: String = "link", // BookmarkType storage value: link / text / video / asset / unknown
+    val sourceUrl: String? = null, // External link for notes (url is "") and videos
     val imageUrl: String?,
     val bannerImageAssetId: String?,
     val screenshotAssetId: String?,

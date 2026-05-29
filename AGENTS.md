@@ -171,6 +171,20 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 - **`DropdownMenu`** anchored to `IconButton` → overflow menus on list items.
 - **`BaseBottomPanel`** (`ui/components/BaseBottomPanel.kt`) → custom overlay bottom panels (matches `ModalBottomSheet` background and animation style).
 
+### Bookmark types
+
+Bookmarks are not all web links. Each `BookmarkEntity` carries a `type` (see `BookmarkType` /
+`BookmarkEntity.bookmarkType` in `data/local/entity/`): `LINK`, `TEXT` (note), `VIDEO`, `ASSET`, `UNKNOWN`.
+
+- **`VideoPlayBadge`** (`ui/components/BookmarkLayouts.kt`) → circular play overlay shown on video thumbnails.
+- **`NoteBodySection`** (`ui/screens/viewer/`) → renders a text/note body as plain selectable text.
+- **`VideoViewerSection`** (`ui/screens/viewer/`) → "open externally" action for video bookmarks.
+
+> **Rules:**
+> - **Notes never use the HTML renderer.** Note content is plain text — render it via `NoteBodySection`, never `ContentBodySection`.
+> - **Videos open externally.** Tapping a video bookmark opens `sourceUrl ?: url` via the URI handler (respecting `linkOpenMode`); there is no in-app player.
+> - Guard URL/favicon display with `url.isNotBlank()` — notes have an empty `url`.
+
 ---
 
 ## MD3 Design Guidelines

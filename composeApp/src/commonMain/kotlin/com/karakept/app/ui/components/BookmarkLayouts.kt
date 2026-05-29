@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.painter.Painter
@@ -45,6 +47,8 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.BookmarkType
+import com.karakept.app.data.local.entity.bookmarkType
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.MetadataPosition
@@ -87,6 +91,9 @@ fun BookmarkCardLayout(
 ) {
     val isFullyRead = bookmark.isRead
     val alpha = if (isFullyRead && dimRead) 0.5f else 1f
+    val type = bookmark.bookmarkType
+    val effectiveDescription = bookmark.description?.takeIf { it.isNotBlank() }
+        ?: if (type == BookmarkType.TEXT) bookmark.content?.takeIf { it.isNotBlank() }?.let { noteSnippet(it) } else null
     val selectionBorderModifier = if (isSelected) {
         Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
     } else if (isActive) {
@@ -123,43 +130,48 @@ fun BookmarkCardLayout(
                     // Determine which image to show: thumbnailPainter (bundled) → bannerImageUrl (server asset) → screenshotUrl → emoji
                     val effectiveImageUrl = if (thumbnailPainter == null) bannerImageUrl ?: screenshotUrl else null
 
-                    if (thumbnailPainter != null) {
-                        Image(
-                            painter = thumbnailPainter,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else if (effectiveImageUrl != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalPlatformContext.current)
-                                .data(effectiveImageUrl)
-                                .size(600) // Request a reasonable size for the card
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentScale = ContentScale.Crop,
-                            filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "📰",
-                                style = MaterialTheme.typography.displayLarge
+                    Box(contentAlignment = Alignment.Center) {
+                        if (thumbnailPainter != null) {
+                            Image(
+                                painter = thumbnailPainter,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentScale = ContentScale.Crop
                             )
+                        } else if (effectiveImageUrl != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalPlatformContext.current)
+                                    .data(effectiveImageUrl)
+                                    .size(600) // Request a reasonable size for the card
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentScale = ContentScale.Crop,
+                                filterQuality = androidx.compose.ui.graphics.FilterQuality.Medium
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = bookmarkEmoji(type),
+                                    style = MaterialTheme.typography.displayLarge
+                                )
+                            }
+                        }
+                        if (type == BookmarkType.VIDEO) {
+                            VideoPlayBadge(size = 56.dp)
                         }
                     }
                     Column(
@@ -184,9 +196,9 @@ fun BookmarkCardLayout(
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
-                        if (showDescription && !bookmark.description.isNullOrBlank()) {
+                        if (showDescription && !effectiveDescription.isNullOrBlank()) {
                             Text(
-                                text = bookmark.description,
+                                text = effectiveDescription,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 2,
@@ -285,6 +297,9 @@ fun BookmarkListLayout(
 ) {
     val isFullyRead = bookmark.isRead
     val alpha = if (isFullyRead && dimRead) 0.5f else 1f
+    val type = bookmark.bookmarkType
+    val effectiveDescription = bookmark.description?.takeIf { it.isNotBlank() }
+        ?: if (type == BookmarkType.TEXT) bookmark.content?.takeIf { it.isNotBlank() }?.let { noteSnippet(it) } else null
     val selectionBorderModifier = if (isSelected) {
         Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
     } else if (isActive) {
@@ -329,9 +344,9 @@ fun BookmarkListLayout(
             ) {
                 // Metadata composable used in both positions
                 val metadataContent: @Composable () -> Unit = {
-                    if (showDescription && !bookmark.description.isNullOrBlank() && descriptionPosition == DescriptionPosition.ABOVE_METADATA) {
+                    if (showDescription && !effectiveDescription.isNullOrBlank() && descriptionPosition == DescriptionPosition.ABOVE_METADATA) {
                         Text(
-                            text = bookmark.description,
+                            text = effectiveDescription,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,
@@ -411,14 +426,21 @@ fun BookmarkListLayout(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "📰",
+                                    text = bookmarkEmoji(type),
                                     style = if (thumbnailSize >= 64) MaterialTheme.typography.headlineMedium
                                         else MaterialTheme.typography.bodyLarge
                                 )
                             }
                         }
 
-                        if (showFavicon) {
+                        if (type == BookmarkType.VIDEO) {
+                            VideoPlayBadge(
+                                size = (thumbnailSize * 0.45f).dp.coerceAtLeast(20.dp),
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+
+                        if (showFavicon && bookmark.url.isNotBlank()) {
                             val faviconModifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(faviconPaddingDp)
@@ -457,9 +479,9 @@ fun BookmarkListLayout(
                         if (showUrl && !bookmark.url.isNullOrBlank() && urlPosition == UrlPosition.BELOW_TITLE) {
                             UrlDisplay(url = bookmark.url, urlDisplayMode = urlDisplayMode, urlIconMode = urlIconMode, iconSize = faviconByLinkSize, faviconPainter = faviconPainter, modifier = Modifier.padding(top = 4.dp))
                         }
-                        if (showDescription && !bookmark.description.isNullOrBlank() && descriptionPosition == DescriptionPosition.BELOW_TITLE) {
+                        if (showDescription && !effectiveDescription.isNullOrBlank() && descriptionPosition == DescriptionPosition.BELOW_TITLE) {
                             Text(
-                                text = bookmark.description,
+                                text = effectiveDescription,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 2,
@@ -601,6 +623,35 @@ private fun UrlDisplay(
         )
     }
 }
+
+
+/** Circular play overlay shown on video bookmark thumbnails. */
+@Composable
+fun VideoPlayBadge(size: Dp, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.5f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Filled.PlayArrow,
+            contentDescription = "Video",
+            tint = Color.White,
+            modifier = Modifier.size(size * 0.6f)
+        )
+    }
+}
+
+internal fun bookmarkEmoji(type: BookmarkType): String = when (type) {
+    BookmarkType.TEXT -> "📝"
+    BookmarkType.VIDEO -> "🎬"
+    else -> "📰"
+}
+
+internal fun noteSnippet(content: String): String =
+    content.replace(Regex("\\s+"), " ").trim().take(200)
 
 
 @Composable

@@ -3,10 +3,12 @@ package com.karakept.app.data.repository
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
+import com.karakept.app.data.local.entity.BookmarkType
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.ImageCacheManager
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
@@ -50,7 +52,7 @@ class BookmarkRepositoryUnitTest : BaseRepositoryTest() {
             every { id } returns "remote-id"
             every { title } returns "Mock Title"
         }
-        coEvery { remoteDataSource.createBookmark(any(), any()) } returns mockDto
+        coEvery { remoteDataSource.createBookmark(any(), any(), any(), any()) } returns mockDto
         coEvery { remoteDataSource.fetchBookmark(any(), any()) } returns mockDto
         coEvery { bookmarkDao.getBookmarkByRemoteId(any(), any()) } returns null
 
@@ -64,13 +66,40 @@ class BookmarkRepositoryUnitTest : BaseRepositoryTest() {
     }
 
     @Test
+    fun testCreateNote_storesTextAndSkipsParsePolling() = runTest(testDispatcher) {
+        // Setup
+        val testServer = Server("1", "http://localhost", "key", "Label")
+        coEvery { serverRepository.servers } returns flowOf(listOf(testServer))
+
+        val noteText = "Remember to water the plants"
+        val mockDto = mockk<com.karakept.api.model.Bookmark>(relaxed = true) {
+            every { id } returns "note-id"
+            every { title } returns null
+        }
+        coEvery { remoteDataSource.createBookmark(any(), any(), any(), any()) } returns mockDto
+        coEvery { bookmarkDao.getBookmarkByRemoteId(any(), any()) } returns null
+
+        // Execute
+        val result = repository.createBookmark(url = "", noteText = noteText)
+
+        // Verify
+        assertTrue(result.isSuccess)
+        val bookmark = result.getOrNull()
+        assertEquals("", bookmark?.url)
+        assertEquals(noteText, bookmark?.content)
+        assertEquals(BookmarkType.TEXT.storageValue, bookmark?.type)
+        // Notes carry their full body inline — no server-side parse to poll for.
+        coVerify(exactly = 0) { remoteDataSource.fetchBookmark(any(), any()) }
+    }
+
+    @Test
     fun testCreateBookmark_Failure() = runTest(testDispatcher) {
         // Setup
         val testServer = Server("1", "http://localhost", "key", "Label")
         coEvery { serverRepository.servers } returns flowOf(listOf(testServer))
         
         val testUrl = "https://example.com"
-        coEvery { remoteDataSource.createBookmark(any(), any()) } throws Exception("Network Error")
+        coEvery { remoteDataSource.createBookmark(any(), any(), any(), any()) } throws Exception("Network Error")
 
         // Execute
         val result = repository.createBookmark(testUrl)

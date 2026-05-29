@@ -5,6 +5,7 @@ import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.BookmarkType
 import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
@@ -115,10 +116,48 @@ class BookmarkRepository(
         executeSyncPipeline(SyncConfiguration.ForList(server, listId))
 
     @OptIn(DelicateCoroutinesApi::class)
-    suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<BookmarkEntity> {
+    suspend fun createBookmark(
+        url: String,
+        noteText: String? = null,
+        onStatusChange: ((String) -> Unit)? = null
+    ): Result<BookmarkEntity> {
         onStatusChange?.invoke("Waiting for server response...")
         val serversList = serverRepository.servers.first()
         val server = serversList.firstOrNull() ?: return Result.failure(Exception("No server configured"))
+
+        if (noteText != null) {
+            // Text/note bookmarks carry their full body inline — no server-side parsing to poll for.
+            return try {
+                val dto = remoteDataSource.createBookmark(server, text = noteText)
+                val entity = BookmarkEntity(
+                    localId = 0L,
+                    remoteId = (dto.id ?: "").hashCode().toLong(),
+                    originalRemoteId = dto.id ?: "",
+                    serverId = server.id,
+                    title = dto.title ?: dto.content?.title ?: "Note",
+                    url = "",
+                    type = BookmarkType.TEXT.storageValue,
+                    sourceUrl = dto.content?.sourceUrl,
+                    description = dto.content?.description,
+                    imageUrl = null,
+                    bannerImageAssetId = null,
+                    screenshotAssetId = null,
+                    tags = dto.tags?.joinToString(",") { it.name ?: "" } ?: "",
+                    listIds = "",
+                    isStarred = dto.favourited ?: false,
+                    isArchived = dto.archived ?: false,
+                    isRead = false,
+                    createdAt = try { Instant.parse(dto.createdAt ?: "").toEpochMilliseconds() } catch (e: Exception) { System.currentTimeMillis() },
+                    readingTimeMinutes = ReadingTimeCalculator.calculateReadingTime(noteText),
+                    content = dto.content?.text ?: noteText
+                )
+                bookmarkDao.insertBookmarks(listOf(entity))
+                val inserted = bookmarkDao.getBookmarkByRemoteId(entity.remoteId, server.id) ?: entity
+                Result.success(inserted)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
 
         return try {
             var dto = remoteDataSource.createBookmark(server, url)

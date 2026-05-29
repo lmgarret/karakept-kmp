@@ -5,6 +5,7 @@ import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.BookmarkType
 import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.Server
@@ -255,6 +256,19 @@ internal class BookmarkSyncPipeline(
             else -> dto.content?.url ?: ""
         }
 
+        val hasVideoAsset = dto.assets
+            ?.any { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.VIDEO } == true
+        val bookmarkType = deriveBookmarkType(
+            contentType = dto.content?.type,
+            hasVideoAsset = hasVideoAsset,
+            hasVideoAssetId = dto.content?.videoAssetId != null
+        )
+        val sourceUrl = when (bookmarkType) {
+            BookmarkType.TEXT -> dto.content?.sourceUrl
+            BookmarkType.VIDEO -> dto.content?.url
+            else -> null
+        }
+
         val createdAtMillis = try {
             Instant.parse(dto.createdAt ?: "").toEpochMilliseconds()
         } catch (e: Exception) {
@@ -280,7 +294,10 @@ internal class BookmarkSyncPipeline(
             else -> ""
         }
 
-        val newContent = when (syncStrategy) {
+        val newContent = if (bookmarkType == BookmarkType.TEXT) {
+            // Note bodies are the whole bookmark; always keep them regardless of content-sync strategy.
+            incomingContent
+        } else when (syncStrategy) {
             com.karakept.app.data.model.SyncStrategy.NEVER,
             com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> null
             com.karakept.app.data.model.SyncStrategy.PER_LIST -> {
@@ -314,6 +331,8 @@ internal class BookmarkSyncPipeline(
             serverId = config.server.id,
             title = title,
             url = url,
+            type = bookmarkType.storageValue,
+            sourceUrl = sourceUrl,
             description = dto.content?.description,
             imageUrl = dto.content?.imageUrl,
             bannerImageAssetId = bannerImageAssetId,
@@ -682,4 +701,22 @@ internal fun computeStaleListRemovals(
                 .joinToString(",")
             Pair(entity.localId, updatedIds)
         }
+}
+
+/**
+ * Derives the local [BookmarkType] from a remote bookmark's content type and assets.
+ *
+ * A video is a LINK bookmark that has a downloaded video asset (or a videoAssetId on its
+ * content) — the Karakeep API has no dedicated "video" content type.
+ */
+internal fun deriveBookmarkType(
+    contentType: com.karakept.api.model.BookmarkContent.Type?,
+    hasVideoAsset: Boolean,
+    hasVideoAssetId: Boolean
+): BookmarkType = when (contentType) {
+    com.karakept.api.model.BookmarkContent.Type.TEXT -> BookmarkType.TEXT
+    com.karakept.api.model.BookmarkContent.Type.LINK ->
+        if (hasVideoAsset || hasVideoAssetId) BookmarkType.VIDEO else BookmarkType.LINK
+    com.karakept.api.model.BookmarkContent.Type.ASSET -> BookmarkType.ASSET
+    else -> BookmarkType.UNKNOWN
 }

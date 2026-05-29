@@ -211,7 +211,7 @@ fun MainScreenBookmarkActionsMenu(
  */
 @Composable
 fun MainScreenAddBookmarkDialog(
-    onConfirm: (url: String) -> Unit,
+    onConfirm: (com.karakept.app.ui.components.AddBookmarkInput) -> Unit,
     onDismiss: () -> Unit
 ) {
     AddBookmarkDialog(

@@ -57,8 +57,12 @@
 2. BookmarkRepository.executeSyncPipeline(SyncConfiguration) called
 3. RemoteDataSource guards against offline mode and fetches from API
 4. Bookmarks mapped from API model → BookmarkEntity and persisted to Room DB
+   - `BookmarkSyncPipeline.deriveBookmarkType()` classifies each bookmark into a `BookmarkType`
+     (`LINK`, `TEXT`/note, `VIDEO`, `ASSET`, `UNKNOWN`), stored on `BookmarkEntity.type`. A video is a
+     LINK bookmark carrying a `video` asset (the API has no dedicated video content type).
 5. Flow<List<BookmarkEntity>> emitted back to UI
-6. ScreenModel collects and updates UI state
+6. ScreenModel collects and updates UI state — list/viewer branch on `bookmarkType`: notes render plain
+   text, videos open externally.
 
 **Bookmark Action Flow (with Undo):**
 

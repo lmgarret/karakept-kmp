@@ -71,6 +71,8 @@ import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.reader.SearchMatch
+import com.karakept.app.data.local.entity.BookmarkType
+import com.karakept.app.data.local.entity.bookmarkType
 import com.karakept.app.ui.components.rememberCustomTabOpener
 import com.karakept.app.ui.screens.viewer.*
 import com.karakept.app.utils.ShareUtils
@@ -359,6 +361,7 @@ fun BookmarkViewerContent(
                 val url = state.bookmark.url
                 val readingTimeMinutes = state.bookmark.readingTimeMinutes
                 val description = state.bookmark.description
+                val bookmarkType = state.bookmark.bookmarkType
 
                 val servers by serverRepository.servers.collectAsState(initial = emptyList())
                 val server = servers.firstOrNull()
@@ -417,7 +420,24 @@ fun BookmarkViewerContent(
 
                         item(key = "content_body") {
                             Box(modifier = contentItemModifier) {
-                                ContentBodySection(
+                                when (bookmarkType) {
+                                    BookmarkType.TEXT -> NoteBodySection(
+                                        content = state.bookmark.content.orEmpty(),
+                                        htmlBackgroundColor = htmlBackgroundColor,
+                                        htmlTextColor = htmlTextColor,
+                                        htmlFontSize = htmlFontSize,
+                                        htmlFontFamily = htmlFontFamily
+                                    )
+                                    BookmarkType.VIDEO -> VideoViewerSection(
+                                        onOpenVideo = {
+                                            val target = state.bookmark.sourceUrl ?: url
+                                            if (target.isNotBlank()) {
+                                                try { when (linkOpenMode) { LinkOpenMode.CUSTOM_TAB -> openInCustomTab(target); LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(target) } }
+                                                catch (e: Exception) { AppLogger.e("ViewerScreen", "Failed to open video: ${e.message}", e) }
+                                            }
+                                        }
+                                    )
+                                    else -> ContentBodySection(
                                     content = state.bookmark.content, viewerMode = viewerMode,
                                     removeFirstImage = hideArticleThumbnails,
                                     htmlTextColor = htmlTextColor, htmlBackgroundColor = htmlBackgroundColor,
@@ -488,6 +508,7 @@ fun BookmarkViewerContent(
                                         }
                                     }
                                 )
+                                }
                             }
                         }
                     }

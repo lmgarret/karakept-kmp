@@ -285,12 +285,25 @@ class RemoteDataSource(
      * Create a new bookmark
      * POST /api/v1/bookmarks
      */
-    suspend fun createBookmark(server: Server, url: String): Bookmark = guardedCall {
+    suspend fun createBookmark(
+        server: Server,
+        url: String? = null,
+        text: String? = null,
+        sourceUrl: String? = null
+    ): Bookmark = guardedCall {
         try {
-            val request = BookmarksPostRequest(
-                type = BookmarksPostRequest.Type.LINK,
-                url = url
-            )
+            val request = if (text != null) {
+                BookmarksPostRequest(
+                    type = BookmarksPostRequest.Type.TEXT,
+                    text = text,
+                    sourceUrl = sourceUrl
+                )
+            } else {
+                BookmarksPostRequest(
+                    type = BookmarksPostRequest.Type.LINK,
+                    url = url
+                )
+            }
             val response = bookmarksApi(server).bookmarksPost(request)
             if (!response.success) {
                 val errorBody = response.response.bodyAsText()
