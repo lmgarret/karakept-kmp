@@ -214,6 +214,13 @@ object MainScreen : Screen {
         // Listen for scroll-to-top trigger
         LaunchedEffect(Unit) { screenModel.scrollToTopTrigger.collect { listState.animateScrollToItem(0, 0) } }
 
+        // Keep the viewport pinned to the same bookmark when the list mutates beneath
+        // the user (e.g. a bookmark removed by smart-list reconciliation after a quick
+        // action), so the list doesn't jump.
+        com.karakept.app.ui.screens.main.PreserveListScrollAnchor(
+            listState = listState, bookmarks = bookmarks, bookmarkListVersion = bookmarkListVersion
+        )
+
         // Scroll-triggered action
         MainScreenScrollAction(
             listState = listState, bookmarks = bookmarks, bookmarkListVersion = bookmarkListVersion,
