@@ -39,14 +39,15 @@
                 android:fillColor="#D32F2F"
                 android:pathData="M21,72 L87,72 L87,87 L21,87 Z" />
             <path
+                android:fillType="evenOdd"
                 android:fillColor="#FFFFFF"
-                android:pathData="M39,75 L39,84 L43,84 C45.5,84 47,82 47,79.5 C47,77 45.5,75 43,75 Z M41.5,77.5 L42.5,77.5 C43.8,77.5 44.5,78.3 44.5,79.5 C44.5,80.7 43.8,81.5 42.5,81.5 L41.5,81.5 Z" />
+                android:pathData="M41.5,75.5 L45.5,75.5 C47.7,75.5 48.5,77.4 48.5,79.5 C48.5,81.6 47.7,83.5 45.5,83.5 L41.5,83.5 Z M43.5,77.5 L45.5,77.5 C46.4,77.5 46.5,78.6 46.5,79.5 C46.5,80.4 46.4,81.5 45.5,81.5 L43.5,81.5 Z" />
             <path
                 android:fillColor="#FFFFFF"
-                android:pathData="M49,75 L49,84 L56,84 L56,82 L51.5,82 L51.5,80.5 L55,80.5 L55,78.5 L51.5,78.5 L51.5,77 L56,77 L56,75 Z" />
+                android:pathData="M51,75.5 L57,75.5 L57,77.5 L53,77.5 L53,78.5 L55.5,78.5 L55.5,80.5 L53,80.5 L53,81.5 L57,81.5 L57,83.5 L51,83.5 Z" />
             <path
                 android:fillColor="#FFFFFF"
-                android:pathData="M58,75 L61,83 L64,75 L66.5,75 L62.5,84 L59.5,84 L55.5,75 Z" />
+                android:pathData="M59.5,75.5 L63,83.5 L66.5,75.5 L64.5,75.5 L63,80.9 L61.5,75.5 Z" />
         </group>
     </group>
 </vector>
