@@ -35,9 +35,6 @@ class QuickShareActivity : ComponentActivity() {
     }
 
     private fun enqueueBookmarkSave(url: String) {
-        val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.karakept.app.services.SaveBookmarkWorker>()
-            .setInputData(androidx.work.workDataOf(com.karakept.app.services.SaveBookmarkWorker.KEY_URL to url))
-            .build()
-        androidx.work.WorkManager.getInstance(this).enqueue(workRequest)
+        com.karakept.app.services.BookmarkSaveScheduler.enqueue(this, url)
     }
 }

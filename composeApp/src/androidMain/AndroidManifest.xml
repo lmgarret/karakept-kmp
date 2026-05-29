@@ -46,6 +46,14 @@
             </intent-filter>
         </activity>
 
+        <receiver
+            android:name=".services.SaveBookmarkRetryReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.karakept.app.action.RETRY_SAVE" />
+            </intent-filter>
+        </receiver>
+
         <!-- Required for compose-ui-test createComposeRule() under Robolectric -->
         <activity android:name="androidx.activity.ComponentActivity" />
     </application>

@@ -26,7 +26,12 @@ import kotlinx.coroutines.flow.first
 
 @Composable
 @Preview
-fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
+fun App(
+    sharedUrl: String? = null,
+    openBookmarkId: String? = null,
+    saveErrorUrl: String? = null,
+    saveErrorMessage: String? = null
+) {
     // Get ServerRepository to access API keys for authentication
     val serverRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.ServerRepository>()
 
@@ -106,12 +111,21 @@ fun App(sharedUrl: String? = null, openBookmarkId: String? = null) {
             com.karakept.app.ui.theme.SyncWindowTheme()
             var initialScreens by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<cafe.adriel.voyager.core.screen.Screen>?>(null) }
 
-            androidx.compose.runtime.LaunchedEffect(sharedUrl, openBookmarkId) {
-                AppLogger.d("App", "LaunchedEffect. sharedUrl=$sharedUrl, openBookmarkId=$openBookmarkId")
+            androidx.compose.runtime.LaunchedEffect(sharedUrl, openBookmarkId, saveErrorUrl, saveErrorMessage) {
+                AppLogger.d("App", "LaunchedEffect. sharedUrl=$sharedUrl, openBookmarkId=$openBookmarkId, saveErrorUrl=$saveErrorUrl")
                 if (sharedUrl != null) {
                     initialScreens = listOf(com.karakept.app.ui.screens.ShareBookmarkScreen(sharedUrl))
                 } else if (serverRepository.hasServers()) {
                     val screens = mutableListOf<cafe.adriel.voyager.core.screen.Screen>(com.karakept.app.ui.screens.MainScreen)
+                    if (saveErrorUrl != null) {
+                        AppLogger.d("App", "Save error for $saveErrorUrl. Adding SaveErrorScreen.")
+                        screens.add(
+                            com.karakept.app.ui.screens.SaveErrorScreen(
+                                url = saveErrorUrl,
+                                message = saveErrorMessage ?: "Unknown error"
+                            )
+                        )
+                    }
                     if (openBookmarkId != null) {
                         try {
                            val bookmarkIdLong = openBookmarkId.toLong()

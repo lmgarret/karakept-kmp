@@ -51,14 +51,14 @@ class SaveBookmarkWorker(
                 Result.success()
             } else {
                 postNotificationSafely {
-                    showErrorNotification(result.exceptionOrNull()?.message ?: "Unknown error")
+                    showErrorNotification(url, result.exceptionOrNull()?.message ?: "Unknown error")
                 }
                 Result.failure()
             }
         } catch (e: Exception) {
             AppLogger.e(TAG, "Failed to save bookmark: ${e.message}", e)
             postNotificationSafely {
-                showErrorNotification(e.message ?: "Unknown error")
+                showErrorNotification(url, e.message ?: "Unknown error")
             }
             Result.failure()
         }
@@ -168,23 +168,70 @@ class SaveBookmarkWorker(
         notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
     }
 
-    private fun showErrorNotification(error: String) {
+    private fun showErrorNotification(url: String, error: String) {
         ensureNotificationChannel()
 
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
+        // Unique id per failed save so distinct URLs don't overwrite each other's notification.
+        val notificationId = System.currentTimeMillis().toInt()
+
+        // Tapping the notification opens the dedicated save-error screen.
+        val contentIntent = Intent(applicationContext, MainActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra(EXTRA_SAVE_ERROR_URL, url)
+            putExtra(EXTRA_SAVE_ERROR_MESSAGE, error)
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            applicationContext,
+            notificationId,
+            contentIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // Retry action: re-enqueues the save via a broadcast receiver.
+        val retryIntent = Intent(applicationContext, SaveBookmarkRetryReceiver::class.java).apply {
+            action = SaveBookmarkRetryReceiver.ACTION_RETRY
+            putExtra(SaveBookmarkRetryReceiver.EXTRA_URL, url)
+            putExtra(SaveBookmarkRetryReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+        }
+        val retryPendingIntent = PendingIntent.getBroadcast(
+            applicationContext,
+            notificationId,
+            retryIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // Open action: opens the link in the browser.
+        val openIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        val openPendingIntent = PendingIntent.getActivity(
+            applicationContext,
+            notificationId + 1,
+            openIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val builder = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Save Failed")
-            .setContentText(error)
+            .setContentText(url)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$url\n\n$error"))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(contentPendingIntent)
             .setAutoCancel(true)
+            .addAction(0, "Retry", retryPendingIntent)
+            .addAction(0, "Open", openPendingIntent)
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+        notificationManager.notify(notificationId, builder.build())
     }
 
     companion object {
         const val KEY_URL = "key_url"
+        const val EXTRA_SAVE_ERROR_URL = "save_error_url"
+        const val EXTRA_SAVE_ERROR_MESSAGE = "save_error_message"
         private const val TAG = "SaveBookmarkWorker"
         private const val CHANNEL_ID = "bookmark_save_channel"
     }
