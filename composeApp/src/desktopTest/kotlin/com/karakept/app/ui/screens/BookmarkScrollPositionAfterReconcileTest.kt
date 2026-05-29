@@ -346,4 +346,82 @@ class BookmarkScrollPositionAfterReconcileTest {
         // Items beyond page 0 must still be present
         assertTrue(accumulated.any { it.remoteId == 39L }, "Item from page 1 must still be present")
     }
+
+    /**
+     * Regression: moveBookmarkToList must synchronously add the bookmark's remoteId to
+     * actedOnBookmarkIds before launching the async reconcile coroutine. This prevents
+     * MainScreenScrollAction from auto-firing the scroll action on a bookmark that is
+     * about to be removed by reconciliation (but is still technically in the list during
+     * the network round-trip).
+     */
+    @Test
+    fun moveBookmarkToList_immediatelyPopulatesActedOnBookmarkIds() = runTest(testDispatcher) {
+        val model = createModel()
+        advanceUntilIdle()
+
+        val bk = bookmark(42L, "feeds")
+        model._accumulatedBookmarks.value = listOf(bk)
+
+        // actedOnBookmarkIds must be populated synchronously — before any coroutine runs.
+        assertFalse(
+            42L in model.actedOnBookmarkIds.value,
+            "actedOnBookmarkIds should be empty before the action"
+        )
+
+        model.moveBookmarkToList(bk, "read-later")
+
+        // No advanceUntilIdle — the ID must be present synchronously, before coroutines run.
+        assertTrue(
+            42L in model.actedOnBookmarkIds.value,
+            "actedOnBookmarkIds must contain the remoteId immediately after the action is called"
+        )
+    }
+
+    /**
+     * Same guarantee for removeBookmarkFromList.
+     */
+    @Test
+    fun removeBookmarkFromList_immediatelyPopulatesActedOnBookmarkIds() = runTest(testDispatcher) {
+        val model = createModel()
+        advanceUntilIdle()
+
+        val bk = bookmark(7L, "feeds,manual-1")
+        model._accumulatedBookmarks.value = listOf(bk)
+
+        model.removeBookmarkFromList(bk, "manual-1")
+
+        assertTrue(
+            7L in model.actedOnBookmarkIds.value,
+            "actedOnBookmarkIds must contain the remoteId immediately after removeBookmarkFromList"
+        )
+    }
+
+    /**
+     * resetPaginationAndLoad clears actedOnBookmarkIds so IDs from a previous list
+     * session don't linger into the next one and suppress scroll actions incorrectly.
+     */
+    @Test
+    fun resetPaginationAndLoad_clearsActedOnBookmarkIds() = runTest(testDispatcher) {
+        val model = createModel()
+        advanceUntilIdle()
+
+        // Pre-populate actedOnBookmarkIds via an explicit action
+        val bk = bookmark(99L, "feeds")
+        model._accumulatedBookmarks.value = listOf(bk)
+        model.moveBookmarkToList(bk, "read-later")
+        assertTrue(99L in model.actedOnBookmarkIds.value, "pre-condition: ID should be in set")
+
+        // Trigger a full list reload (simulates filter change / sync)
+        val server = testServer
+        val filter = FilterConfig()
+        coEvery { bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any(), any()) } returns emptyList()
+
+        model.resetPaginationAndLoad(server, filter)
+        advanceUntilIdle()
+
+        assertTrue(
+            model.actedOnBookmarkIds.value.isEmpty(),
+            "actedOnBookmarkIds must be cleared after a full list reload"
+        )
+    }
 }

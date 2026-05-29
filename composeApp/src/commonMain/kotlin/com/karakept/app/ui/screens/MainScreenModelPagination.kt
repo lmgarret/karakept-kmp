@@ -132,6 +132,7 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
 
     _currentPage.value = 0
     _hasMoreItems.value = true
+    _actedOnBookmarkIds.value = emptySet()
     // Block loadNextPage from launching while we are iterating through pages.
     _isLoadingMore.value = true
 

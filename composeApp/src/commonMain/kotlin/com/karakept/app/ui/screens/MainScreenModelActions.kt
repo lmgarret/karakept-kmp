@@ -158,6 +158,7 @@ internal fun applyReconcileBookmarkTransform(
 }
 
 fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
+    _actedOnBookmarkIds.value += bookmark.remoteId
     screenModelScope.launch {
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.moveToList(
@@ -335,6 +336,7 @@ fun applyRemoveBookmarkTransform(
 }
 
 fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: String) {
+    _actedOnBookmarkIds.value += bookmark.remoteId
     screenModelScope.launch {
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.removeFromList(

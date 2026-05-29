@@ -150,6 +150,13 @@ fun MainScreenScrollAction(
                                 if (i < newItemsUntil) continue  // skip newly prepended items
                                 val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
                                 if (scrolledBookmark.remoteId in processedIds) continue
+                                if (scrolledBookmark.remoteId in screenModel.actedOnBookmarkIds.value) {
+                                    // User explicitly acted on this bookmark (e.g. moved it to a
+                                    // list that will remove it via async reconciliation). Absorb
+                                    // into processedIds so we never fire on it.
+                                    processedIds.add(scrolledBookmark.remoteId)
+                                    continue
+                                }
                                 processedIds.add(scrolledBookmark.remoteId)
                                 screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
                             }
@@ -212,6 +219,10 @@ fun MainScreenScrollAction(
                         if (i < newItemsUntil) continue
                         val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
                         if (scrolledBookmark.remoteId in processedIds) continue
+                        if (scrolledBookmark.remoteId in screenModel.actedOnBookmarkIds.value) {
+                            processedIds.add(scrolledBookmark.remoteId)
+                            continue
+                        }
                         processedIds.add(scrolledBookmark.remoteId)
                         screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
                     }

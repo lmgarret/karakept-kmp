@@ -153,6 +153,14 @@ class MainScreenModel(
     internal val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
+    // RemoteIds of bookmarks on which the user has explicitly performed a list-membership
+    // action (add/remove list). Prevents the scroll-triggered action from auto-firing on a
+    // bookmark that is about to leave the list via async reconciliation — the reconcile
+    // involves network calls so the window can be several seconds long.
+    // Cleared on every full list reload (resetPaginationAndLoad).
+    internal val _actedOnBookmarkIds = MutableStateFlow<Set<Long>>(emptySet())
+    val actedOnBookmarkIds: StateFlow<Set<Long>> = _actedOnBookmarkIds
+
     // Hoisted scroll position — survives Voyager push/pop within the same Navigator because
     // the same MainScreenModel instance is reused for the same Navigator's ScreenModelStore.
     // Updated by a LaunchedEffect in MainScreen that observes LazyListState;
