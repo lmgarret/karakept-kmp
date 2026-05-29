@@ -41,14 +41,6 @@ class BookmarkTypeDerivationTest {
     }
 
     @Test
-    fun assetContentMapsToAsset() {
-        assertEquals(
-            BookmarkType.ASSET,
-            deriveBookmarkType(BookmarkContent.Type.ASSET, hasVideoAsset = false, hasVideoAssetId = false)
-        )
-    }
-
-    @Test
     fun nullContentMapsToUnknown() {
         assertEquals(
             BookmarkType.UNKNOWN,

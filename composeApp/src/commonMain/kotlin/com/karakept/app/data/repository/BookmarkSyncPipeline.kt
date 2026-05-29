@@ -707,7 +707,8 @@ internal fun computeStaleListRemovals(
  * Derives the local [BookmarkType] from a remote bookmark's content type and assets.
  *
  * A video is a LINK bookmark that has a downloaded video asset (or a videoAssetId on its
- * content) — the Karakeep API has no dedicated "video" content type.
+ * content) — the Karakeep API has no dedicated "video" content type. Asset and unrecognized
+ * content both fall back to [BookmarkType.UNKNOWN] (rendered like a link).
  */
 internal fun deriveBookmarkType(
     contentType: com.karakept.api.model.BookmarkContent.Type?,
@@ -717,6 +718,5 @@ internal fun deriveBookmarkType(
     com.karakept.api.model.BookmarkContent.Type.TEXT -> BookmarkType.TEXT
     com.karakept.api.model.BookmarkContent.Type.LINK ->
         if (hasVideoAsset || hasVideoAssetId) BookmarkType.VIDEO else BookmarkType.LINK
-    com.karakept.api.model.BookmarkContent.Type.ASSET -> BookmarkType.ASSET
     else -> BookmarkType.UNKNOWN
 }
