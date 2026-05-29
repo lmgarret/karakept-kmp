@@ -1,6 +1,9 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.awt.Color as AwtColor
+import java.awt.Graphics2D as AwtGraphics2D
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage as AwtBufferedImage
+import javax.imageio.ImageIO
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -264,7 +267,10 @@ compose.desktop {
                 }
             }
             windows {
-                iconFile.set(project.file("src/commonMain/composeResources/drawable/icon.png"))
+                iconFile.set(project.file("src/desktopMain/resources/win-icon.ico"))
+                menu = true
+                menuGroup = "Karakept"
+                shortcut = true
             }
         }
     }
@@ -395,5 +401,132 @@ if (org.gradle.internal.os.OperatingSystem.current().isMacOsX) {
         tasks.named("packageDmg") {
             finalizedBy(setDmgVolumeIcon)
         }
+    }
+}
+
+// ============================================================================
+// Windows: MSI + EXE installers with a custom, branded WiX wizard (banner + welcome image)
+// ----------------------------------------------------------------------------
+// Compose's packageMsi/packageExe can neither enable the WiX dialog UI nor pass a custom
+// --resource-dir, and the default jpackage MSI ships NO wizard dialogs at all, so
+// msiexec falls back to its bare basic UI. These tasks run jpackage directly on the
+// createDistributable app image with:
+//   --win-dir-chooser   -> emits the full WixUI_InstallDir dialog set (which has a banner)
+//   --resource-dir       -> our main.wxs override that points WixUIBannerBmp / WixUIDialogBmp
+//                           at the generated bitmaps (paths passed via the environment)
+// The stock packageMsi/packageExe tasks are disabled and delegated to these (see the
+// afterEvaluate block below), so `gradlew packageMsi`/`packageExe` and CI get branding
+// for free. Requires JDK 21; WiX is downloaded by :unzipWix.
+// ============================================================================
+if (org.gradle.internal.os.OperatingSystem.current().isWindows) {
+    val winResDir = layout.buildDirectory.dir("jpackage/resources")
+    val winLogo = project.file("src/desktopMain/resources/win-icon.png")
+    val winShot = rootProject.file("docs/screenshots/screenshot_linux_bookmark_list_and_reader.png")
+    val winVersion = (project.findProperty("versionName") as String?) ?: "1.0.0"
+
+    val generateWindowsInstallerBitmaps = tasks.register("generateWindowsInstallerBitmaps") {
+        group = "compose desktop"
+        description = "Generates the WiX installer banner/dialog bitmaps from the app icon and a screenshot"
+        inputs.file(winLogo)
+        inputs.file(winShot)
+        inputs.property("rev", 1) // bump to bust the up-to-date cache when the layout changes
+        outputs.dir(winResDir)
+        doLast {
+            val dir = winResDir.get().asFile
+            dir.mkdirs()
+            fun hints(g: AwtGraphics2D) {
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+                g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            }
+            // Banner: 493x58, white, app logo right-aligned (shows top-right on interior pages).
+            val banner = AwtBufferedImage(493, 58, AwtBufferedImage.TYPE_INT_RGB)
+            banner.createGraphics().run {
+                hints(this)
+                color = AwtColor.WHITE; fillRect(0, 0, 493, 58)
+                val s = 48
+                drawImage(ImageIO.read(winLogo), 493 - s - 8, (58 - s) / 2, s, s, null)
+                dispose()
+            }
+            ImageIO.write(banner, "bmp", dir.resolve("banner.bmp"))
+            // Welcome/Exit dialog: 493x312, screenshot cover-cropped into a left band (drawer + list);
+            // the right side stays white so WiX's dark title/body text remains legible.
+            val dw = 493; val dh = 312; val band = 170
+            val dialog = AwtBufferedImage(dw, dh, AwtBufferedImage.TYPE_INT_RGB)
+            dialog.createGraphics().run {
+                hints(this)
+                color = AwtColor.WHITE; fillRect(0, 0, dw, dh)
+                val shot = ImageIO.read(winShot)
+                val srcW = (band.toDouble() * shot.height / dh).toInt() // cover-crop, left-anchored
+                drawImage(shot, 0, 0, band, dh, 0, 0, srcW, shot.height, null)
+                color = AwtColor(220, 220, 220); drawLine(band, 0, band, dh)
+                dispose()
+            }
+            ImageIO.write(dialog, "bmp", dir.resolve("dialog.bmp"))
+            println("Windows installer bitmaps written to $dir")
+        }
+    }
+
+    // Registers a jpackage Exec task that builds a branded Windows installer of the given
+    // type ("msi" or "exe"). Both types run through the same WiX pipeline, so the custom
+    // main.wxs + bitmaps apply identically (the exe simply wraps the branded msi).
+    fun registerBrandedInstaller(taskName: String, type: String) =
+        tasks.register<Exec>(taskName) {
+            group = "compose desktop"
+            description = "Builds the Windows $type installer with the custom branded WiX wizard"
+            dependsOn("createDistributable", generateWindowsInstallerBitmaps, ":unzipWix")
+
+            val appImage = layout.buildDirectory.dir("compose/binaries/main/app/Karakept")
+            val resDir = project.file("jpackage")
+            val destDir = layout.buildDirectory.dir("compose/binaries/main/$type")
+            val tmpDir = layout.buildDirectory.dir("jpackage/temp-$type")
+            val wixDir = rootProject.layout.buildDirectory.dir("wix311")
+            val jpackageExe = File(System.getProperty("java.home"), "bin/jpackage.exe")
+
+            commandLine(
+                jpackageExe.absolutePath,
+                "--type", type,
+                "--name", "Karakept",
+                "--app-version", winVersion,
+                "--app-image", appImage.get().asFile.absolutePath,
+                "--win-dir-chooser",
+                "--win-menu", "--win-menu-group", "Karakept",
+                "--win-shortcut", "--win-shortcut-prompt",
+                "--resource-dir", resDir.absolutePath,
+                "--dest", destDir.get().asFile.absolutePath,
+                "--temp", tmpDir.get().asFile.absolutePath,
+            )
+
+            doFirst {
+                check(jpackageExe.exists()) { "jpackage not found at $jpackageExe — package with JDK 21." }
+                // jpackage requires --temp to be empty/absent and refuses to overwrite an existing installer.
+                tmpDir.get().asFile.deleteRecursively()
+                destDir.get().asFile.mkdirs()
+                destDir.get().asFile.resolve("Karakept-$winVersion.$type").delete()
+                // WiX (candle/light) is downloaded by :unzipWix; jpackage finds it via PATH.
+                val wixBin = wixDir.get().asFile.takeIf { File(it, "candle.exe").exists() }
+                    ?: rootProject.layout.buildDirectory.asFile.get().walkTopDown()
+                        .firstOrNull { it.name.equals("candle.exe", ignoreCase = true) }?.parentFile
+                    ?: error("WiX candle.exe not found under ${rootProject.layout.buildDirectory.get()} (did :unzipWix run?)")
+                environment("PATH", wixBin.absolutePath + File.pathSeparator + (System.getenv("PATH") ?: ""))
+                // Bitmap paths are injected here so the committed main.wxs stays machine-independent.
+                environment("KARAKEPT_BANNER_BMP", winResDir.get().file("banner.bmp").asFile.absolutePath)
+                environment("KARAKEPT_DIALOG_BMP", winResDir.get().file("dialog.bmp").asFile.absolutePath)
+            }
+            doLast {
+                println("Branded $type: ${destDir.get().asFile.resolve("Karakept-$winVersion.$type")}")
+            }
+        }
+
+    val packageMsiBranded = registerBrandedInstaller("packageMsiBranded", "msi")
+    val packageExeBranded = registerBrandedInstaller("packageExeBranded", "exe")
+
+    // Make the stock Compose tasks produce the BRANDED installers: disable their own
+    // (unbranded) jpackage action and route them to our tasks, which write to the same
+    // build/compose/binaries/main/{msi,exe} locations. This way `gradlew packageMsi` /
+    // `packageExe` (and the release CI that calls them) get branding with no other changes.
+    afterEvaluate {
+        tasks.named("packageMsi") { enabled = false; dependsOn(packageMsiBranded) }
+        tasks.named("packageExe") { enabled = false; dependsOn(packageExeBranded) }
     }
 }
