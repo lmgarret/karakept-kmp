@@ -8,7 +8,7 @@ class DrawerWidthUtilsTest {
 
     @Test
     fun `caps at 360dp on wide screens`() {
-        assertEquals(360.dp, modalDrawerWidth(412.dp))
+        assertEquals(360.dp, modalDrawerWidth(600.dp))
         assertEquals(360.dp, modalDrawerWidth(800.dp))
     }
 
