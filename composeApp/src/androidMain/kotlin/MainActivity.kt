@@ -10,9 +10,12 @@ import android.content.Intent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import com.karakept.app.services.SaveBookmarkWorker
 
 class MainActivity : ComponentActivity() {
     private var openBookmarkId by mutableStateOf<String?>(null)
+    private var saveErrorUrl by mutableStateOf<String?>(null)
+    private var saveErrorMessage by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,9 +39,15 @@ class MainActivity : ComponentActivity() {
         intent?.getStringExtra("bookmark_id")?.let { id ->
             openBookmarkId = id
         }
+        saveErrorUrl = intent?.getStringExtra(SaveBookmarkWorker.EXTRA_SAVE_ERROR_URL)
+        saveErrorMessage = intent?.getStringExtra(SaveBookmarkWorker.EXTRA_SAVE_ERROR_MESSAGE)
 
         setContent {
-            App(openBookmarkId = openBookmarkId)
+            App(
+                openBookmarkId = openBookmarkId,
+                saveErrorUrl = saveErrorUrl,
+                saveErrorMessage = saveErrorMessage
+            )
         }
     }
 
@@ -46,10 +55,17 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
 
         val bookmarkId = intent.getStringExtra("bookmark_id")
-        if (bookmarkId != null) {
+        val errorUrl = intent.getStringExtra(SaveBookmarkWorker.EXTRA_SAVE_ERROR_URL)
+        if (bookmarkId != null || errorUrl != null) {
             openBookmarkId = bookmarkId
+            saveErrorUrl = errorUrl
+            saveErrorMessage = intent.getStringExtra(SaveBookmarkWorker.EXTRA_SAVE_ERROR_MESSAGE)
             setContent {
-                App(openBookmarkId = openBookmarkId)
+                App(
+                    openBookmarkId = openBookmarkId,
+                    saveErrorUrl = saveErrorUrl,
+                    saveErrorMessage = saveErrorMessage
+                )
             }
         }
     }
