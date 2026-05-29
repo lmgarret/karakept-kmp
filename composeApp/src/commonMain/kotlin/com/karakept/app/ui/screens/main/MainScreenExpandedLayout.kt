@@ -55,9 +55,11 @@ import com.karakept.app.ui.screens.HighlightsScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.ui.screens.SettingsScreen
-import com.karakept.app.ui.screens.settings.PerListSettingsScreen
+import com.karakept.app.ui.screens.settings.PerListSettingsContent
+import com.karakept.app.ui.screens.settings.PerListSettingsScreenModel
 import com.karakept.app.ui.utils.ExpandedDrawerDefaultWidth
 import com.karakept.app.ui.utils.coerceExpandedDrawerWidth
+import org.koin.core.parameter.parametersOf
 import com.karakept.api.model.KarakeepList
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
@@ -144,6 +146,8 @@ fun MainScreenExpandedLayout(
         if (selectedBookmarkId == null) onReaderFullscreenChanged(false)
     }
 
+    var activeListSettings by remember { mutableStateOf<Pair<String, String>?>(null) }
+
     val scope = rememberCoroutineScope()
     var readerSearchTrigger by remember { mutableStateOf(0) }
 
@@ -174,12 +178,14 @@ fun MainScreenExpandedLayout(
                     expandedLists = expandedLists,
                     currentFilter = currentFilter,
                     onFilterApply = { filter ->
+                        activeListSettings = null
                         screenModel.applyFilter(filter)
                         onShowHighlightsChanged(false)
                         onScrollToHighlightIdChanged(null)
                         onActiveHighlightIdChanged(null)
                     },
                     onClearFilter = {
+                        activeListSettings = null
                         screenModel.clearFilter()
                         onShowHighlightsChanged(false)
                         onScrollToHighlightIdChanged(null)
@@ -192,12 +198,16 @@ fun MainScreenExpandedLayout(
                         onRenameListTargetChanged(Triple(listId, listName, targetList?.icon))
                     },
                     onNavigateToListSettings = { listId, listName ->
-                        navigateTo(PerListSettingsScreen(listId, listName))
+                        activeListSettings = listId to listName
+                        onShowHighlightsChanged(false)
+                        onScrollToHighlightIdChanged(null)
+                        onActiveHighlightIdChanged(null)
                     },
                     onSetAsDefault = { listId -> screenModel.setDefaultList(listId) },
                     onSetAsDefaultType = { type -> screenModel.setDefaultListType(type) },
                     onNavigateToSettings = { navigateTo(SettingsScreen()) },
                     onNavigateToHighlights = {
+                        activeListSettings = null
                         onShowHighlightsChanged(true)
                         onSelectedBookmarkIdChanged(null)
                         onScrollToHighlightIdChanged(null)
@@ -236,7 +246,21 @@ fun MainScreenExpandedLayout(
             exit = shrinkHorizontally()
         ) {
             Box(modifier = Modifier.width(listWidth).fillMaxHeight()) {
-                if (showHighlights) {
+                val listSettingsTarget = activeListSettings
+                if (listSettingsTarget != null) {
+                    androidx.compose.runtime.key(listSettingsTarget.first) {
+                        val settingsScreenModel = koinInject<PerListSettingsScreenModel>(
+                            parameters = { parametersOf(listSettingsTarget.first) }
+                        )
+                        PerListSettingsContent(
+                            listId = listSettingsTarget.first,
+                            listName = listSettingsTarget.second,
+                            screenModel = settingsScreenModel,
+                            onBack = { activeListSettings = null },
+                            onNavigateTo = { screen -> navigateTo(screen) }
+                        )
+                    }
+                } else if (showHighlights) {
                     val highlightsScreenModel = koinInject<HighlightsScreenModel>()
                     val highlightsList by highlightsScreenModel.highlights.collectAsState()
                     val isHighlightsSyncing by highlightsScreenModel.isSyncing.collectAsState()

@@ -131,404 +131,414 @@ data class PerListSettingsScreen(
     val listId: String,
     val listName: String
 ) : NavKey {
-    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinViewModel<PerListSettingsScreenModel> { parametersOf(listId) }
-        val listSettings by screenModel.listSettings.collectAsState()
-        val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
-        val allLayouts by screenModel.allLayouts.collectAsState()
-        var showScrollActionDialog by remember { mutableStateOf(false) }
-        var showLayoutPickerDialog by remember { mutableStateOf(false) }
-        var showLayoutEditorDialog by remember { mutableStateOf(false) }
-        val isDesktop = getPlatform().isDesktop
+        PerListSettingsContent(
+            listId = listId,
+            listName = listName,
+            screenModel = screenModel,
+            onBack = { navigator.pop() },
+            onNavigateTo = { screen -> navigator.push(screen) }
+        )
+    }
+}
 
-        if (showLayoutEditorDialog && isDesktop) {
-            LayoutEditorDialog(
-                layoutId = null,
-                onDismiss = { showLayoutEditorDialog = false }
-            )
-        }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PerListSettingsContent(
+    listId: String,
+    listName: String,
+    screenModel: PerListSettingsScreenModel,
+    onBack: () -> Unit,
+    onNavigateTo: ((NavKey) -> Unit)? = null
+) {
+    val listSettings by screenModel.listSettings.collectAsState()
+    val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
+    val allLayouts by screenModel.allLayouts.collectAsState()
+    var showScrollActionDialog by remember { mutableStateOf(false) }
+    var showLayoutPickerDialog by remember { mutableStateOf(false) }
+    var showLayoutEditorDialog by remember { mutableStateOf(false) }
+    val isDesktop = getPlatform().isDesktop
 
-        if (showLayoutPickerDialog) {
-            AlertDialog(
-                onDismissRequest = { showLayoutPickerDialog = false },
-                title = { Text("Layout") },
-                text = {
-                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        // "Default" option
+    if (showLayoutEditorDialog && isDesktop) {
+        LayoutEditorDialog(
+            layoutId = null,
+            onDismiss = { showLayoutEditorDialog = false }
+        )
+    }
+
+    if (showLayoutPickerDialog) {
+        AlertDialog(
+            onDismissRequest = { showLayoutPickerDialog = false },
+            title = { Text("Layout") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    // "Default" option
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                screenModel.setLayoutId(null)
+                                showLayoutPickerDialog = false
+                            }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = listSettings.layoutId == null,
+                            onClick = {
+                                screenModel.setLayoutId(null)
+                                showLayoutPickerDialog = false
+                            }
+                        )
+                        Column(modifier = Modifier.padding(start = 8.dp)) {
+                            Text("Use default layout", style = MaterialTheme.typography.bodyLarge)
+                            Text("Follows the app-wide default", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    HorizontalDivider()
+                    allLayouts.forEach { layout ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    screenModel.setLayoutId(null)
+                                    screenModel.setLayoutId(layout.id)
                                     showLayoutPickerDialog = false
                                 }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = listSettings.layoutId == null,
+                                selected = listSettings.layoutId == layout.id,
                                 onClick = {
-                                    screenModel.setLayoutId(null)
+                                    screenModel.setLayoutId(layout.id)
                                     showLayoutPickerDialog = false
                                 }
                             )
                             Column(modifier = Modifier.padding(start = 8.dp)) {
-                                Text("Use default layout", style = MaterialTheme.typography.bodyLarge)
-                                Text("Follows the app-wide default", style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        HorizontalDivider()
-                        allLayouts.forEach { layout ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        screenModel.setLayoutId(layout.id)
-                                        showLayoutPickerDialog = false
-                                    }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = listSettings.layoutId == layout.id,
-                                    onClick = {
-                                        screenModel.setLayoutId(layout.id)
-                                        showLayoutPickerDialog = false
-                                    }
-                                )
-                                Column(modifier = Modifier.padding(start = 8.dp)) {
-                                    Text(layout.name, style = MaterialTheme.typography.bodyLarge)
-                                    if (layout.description != null) {
-                                        Text(layout.description, style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
+                                Text(layout.name, style = MaterialTheme.typography.bodyLarge)
+                                if (layout.description != null) {
+                                    Text(layout.description, style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
-                        HorizontalDivider()
-                        TextButton(
-                            onClick = {
-                                showLayoutPickerDialog = false
-                                if (isDesktop) {
-                                    showLayoutEditorDialog = true
-                                } else {
-                                    navigator.push(LayoutEditorScreen(layoutId = null))
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Add,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "Create new layout",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
                     }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showLayoutPickerDialog = false }) { Text("Close") }
-                }
-            )
-        }
-
-        if (showScrollActionDialog) {
-            ScrollActionPickerDialog(
-                selectedAction = listSettings.scrollAction,
-                selectedConfigId = listSettings.scrollActionConfigId,
-                customConfigs = customConfigs,
-                onDismiss = { showScrollActionDialog = false },
-                onActionSelected = { action, configId ->
-                    screenModel.setScrollAction(action, configId)
-                    showScrollActionDialog = false
-                }
-            )
-        }
-
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("$listName Settings") },
-                    navigationIcon = {
-                        IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    }
-                )
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.Top
-            ) {
-                Text(
-                    text = "Sync",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.WifiOff,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Sync offline",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Pre-fetch and cache all bookmark content for offline access",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = listSettings.syncOffline,
-                            onCheckedChange = { screenModel.setSyncOffline(it) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text(
-                    text = "Notifications",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Notify on new bookmarks",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Send a notification when a new bookmark is added to this list",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = listSettings.notifyOnNewBookmarks,
-                            onCheckedChange = { screenModel.setNotifyOnNewBookmarks(it) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text(
-                    text = "Display",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                // Per-list layout
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showLayoutPickerDialog = true }
-                        .padding(bottom = 16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Layers,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Layout",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            val layoutName = listSettings.layoutId?.let { id ->
-                                if (BookmarkLayout.isBuiltInId(id)) {
-                                    BookmarkLayout.getBuiltIn(id)?.name
-                                } else {
-                                    allLayouts.find { it.id == id }?.name
-                                }
-                            } ?: "Use default layout"
-                            Text(
-                                text = layoutName,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Select"
-                        )
-                    }
-                }
-
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Count only unread",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Show only the count of unread bookmarks in the sidebar badge",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = listSettings.countOnlyUnread,
-                            onCheckedChange = { screenModel.setCountOnlyUnread(it) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text(
-                    text = "Scroll Behavior",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showScrollActionDialog = true }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.TouchApp,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "On scroll action",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            val scrollActionLabel = if (listSettings.scrollAction == SwipeAction.NONE) {
-                                SwipeAction.NONE.displayName
+                    HorizontalDivider()
+                    TextButton(
+                        onClick = {
+                            showLayoutPickerDialog = false
+                            if (isDesktop) {
+                                showLayoutEditorDialog = true
                             } else {
-                                val configId = listSettings.scrollActionConfigId
-                                if (configId != null) {
-                                    // Custom action label is shown in the dialog,
-                                    // display the action type for now
-                                    listSettings.scrollAction.displayName
-                                } else {
-                                    listSettings.scrollAction.displayName
-                                }
+                                onNavigateTo?.invoke(LayoutEditorScreen(layoutId = null))
                             }
-                            Text(
-                                text = scrollActionLabel,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Select"
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Create new layout",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLayoutPickerDialog = false }) { Text("Close") }
+            }
+        )
+    }
 
-                Spacer(modifier = Modifier.height(24.dp))
+    if (showScrollActionDialog) {
+        ScrollActionPickerDialog(
+            selectedAction = listSettings.scrollAction,
+            selectedConfigId = listSettings.scrollActionConfigId,
+            customConfigs = customConfigs,
+            onDismiss = { showScrollActionDialog = false },
+            onActionSelected = { action, configId ->
+                screenModel.setScrollAction(action, configId)
+                showScrollActionDialog = false
+            }
+        )
+    }
 
-                Text(
-                    text = "Content",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("$listName Settings") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Top
+        ) {
+            Text(
+                text = "Sync",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
 
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountTree,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 16.dp),
-                            tint = MaterialTheme.colorScheme.primary
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.WifiOff,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Sync offline",
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Include bookmarks from sub-lists",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Text(
-                                text = "Also show bookmarks from all nested child lists",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = listSettings.includeChildListBookmarks,
-                            onCheckedChange = { screenModel.setIncludeChildListBookmarks(it) }
+                        Text(
+                            text = "Pre-fetch and cache all bookmark content for offline access",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Switch(
+                        checked = listSettings.syncOffline,
+                        onCheckedChange = { screenModel.setSyncOffline(it) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Notifications",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Notify on new bookmarks",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Send a notification when a new bookmark is added to this list",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = listSettings.notifyOnNewBookmarks,
+                        onCheckedChange = { screenModel.setNotifyOnNewBookmarks(it) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Display",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            // Per-list layout
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showLayoutPickerDialog = true }
+                    .padding(bottom = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Layers,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Layout",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        val layoutName = listSettings.layoutId?.let { id ->
+                            if (BookmarkLayout.isBuiltInId(id)) {
+                                BookmarkLayout.getBuiltIn(id)?.name
+                            } else {
+                                allLayouts.find { it.id == id }?.name
+                            }
+                        } ?: "Use default layout"
+                        Text(
+                            text = layoutName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Select"
+                    )
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Visibility,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Count only unread",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Show only the count of unread bookmarks in the sidebar badge",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = listSettings.countOnlyUnread,
+                        onCheckedChange = { screenModel.setCountOnlyUnread(it) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Scroll Behavior",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showScrollActionDialog = true }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.TouchApp,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "On scroll action",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        val scrollActionLabel = if (listSettings.scrollAction == SwipeAction.NONE) {
+                            SwipeAction.NONE.displayName
+                        } else {
+                            listSettings.scrollAction.displayName
+                        }
+                        Text(
+                            text = scrollActionLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Select"
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "Content",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccountTree,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Include bookmarks from sub-lists",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Also show bookmarks from all nested child lists",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = listSettings.includeChildListBookmarks,
+                        onCheckedChange = { screenModel.setIncludeChildListBookmarks(it) }
+                    )
                 }
             }
         }
