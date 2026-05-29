@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -64,6 +65,7 @@ import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.SyncKey
 import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.ui.utils.buildListHierarchy
+import com.karakept.app.ui.utils.modalDrawerWidth
 import com.karakept.app.ui.utils.filterExpandedHierarchy
 import com.karakept.app.ui.utils.listHasChildren
 import com.karakept.api.model.KarakeepList
@@ -238,34 +240,37 @@ internal fun MainScreenDrawer(
     listSyncStatuses: Map<SyncKey, ListSyncStatus> = emptyMap(),
     content: @Composable () -> Unit
 ) {
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet {
-                DrawerContent(
-                    lists = lists,
-                    listCounts = listCounts,
-                    expandedLists = expandedLists,
-                    currentFilter = currentFilter,
-                    onFilterApply = onFilterApply,
-                    onClearFilter = onClearFilter,
-                    onToggleListExpanded = onToggleListExpanded,
-                    onMarkAllAsRead = onMarkAllAsRead,
-                    onRenameList = onRenameList,
-                    onNavigateToListSettings = onNavigateToListSettings,
-                    onSetAsDefault = onSetAsDefault,
-                    onSetAsDefaultType = onSetAsDefaultType,
-                    onNavigateToSettings = onNavigateToSettings,
-                    onNavigateToHighlights = onNavigateToHighlights,
-                    isHighlightsSelected = isHighlightsSelected,
-                    quickFilterCounts = quickFilterCounts,
-                    highlightsCount = highlightsCount,
-                    listSyncStatuses = listSyncStatuses
-                )
+    BoxWithConstraints {
+        val drawerWidth = modalDrawerWidth(maxWidth)
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
+                    DrawerContent(
+                        lists = lists,
+                        listCounts = listCounts,
+                        expandedLists = expandedLists,
+                        currentFilter = currentFilter,
+                        onFilterApply = onFilterApply,
+                        onClearFilter = onClearFilter,
+                        onToggleListExpanded = onToggleListExpanded,
+                        onMarkAllAsRead = onMarkAllAsRead,
+                        onRenameList = onRenameList,
+                        onNavigateToListSettings = onNavigateToListSettings,
+                        onSetAsDefault = onSetAsDefault,
+                        onSetAsDefaultType = onSetAsDefaultType,
+                        onNavigateToSettings = onNavigateToSettings,
+                        onNavigateToHighlights = onNavigateToHighlights,
+                        isHighlightsSelected = isHighlightsSelected,
+                        quickFilterCounts = quickFilterCounts,
+                        highlightsCount = highlightsCount,
+                        listSyncStatuses = listSyncStatuses
+                    )
+                }
             }
+        ) {
+            content()
         }
-    ) {
-        content()
     }
 }
 
