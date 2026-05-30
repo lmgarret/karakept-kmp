@@ -79,37 +79,43 @@ openApiGenerate {
     skipValidateSpec.set(true)
 }
 
-// Patch generated code to fix OpenAPI Generator bug with oneOf discriminated unions
-// The generator only extracts ASSET from the Type enum, missing LINK and TEXT
+// Patch generated code to fix OpenAPI Generator bug with oneOf discriminated unions.
+// The generator only extracts ASSET from the Type enum, missing LINK and TEXT.
+// Whitespace between tokens is matched with \s+ so the patch is line-ending agnostic:
+// CI checks this script out as CRLF (autocrlf, no .gitattributes) while the generated
+// file is LF, so a regex with literal newlines would silently fail to match there.
+// The task is idempotent and throws if it can neither patch nor confirm an existing
+// patch, so a generator format change fails the build instead of shipping unpatched.
 val patchOpenApiClient by tasks.registering {
     dependsOn("openApiGenerate")
-    
+
     doLast {
         val targetFile = file("${generatedSourcesDir.get().asFile}/src/main/kotlin/com/karakept/api/model/BookmarksPostRequest.kt")
-        
-        if (targetFile.exists()) {
-            var content = targetFile.readText()
-            
-            // Replace the incomplete Type enum with the complete version
-            val incompleteEnum = """    enum class Type\(val value: kotlin\.String\) \{
-        @SerialName\(value = "asset"\) ASSET\("asset"\);
-    \}""".toRegex()
-            
-            val completeEnum = """    enum class Type(val value: kotlin.String) {
+        if (!targetFile.exists()) {
+            throw GradleException("Cannot patch Type enum: $targetFile not found")
+        }
+
+        val content = targetFile.readText()
+        val incompleteEnum = Regex(
+            """enum class Type\(val value: kotlin\.String\)\s+\{\s+@SerialName\(value = "asset"\) ASSET\("asset"\);\s+\}"""
+        )
+        val completeEnum = """enum class Type(val value: kotlin.String) {
         @SerialName(value = "link") LINK("link"),
         @SerialName(value = "text") TEXT("text"),
         @SerialName(value = "asset") ASSET("asset");
     }"""
-            
-            if (incompleteEnum.containsMatchIn(content)) {
-                content = incompleteEnum.replace(content, completeEnum)
-                targetFile.writeText(content)
+
+        when {
+            content.contains("""LINK("link")""") ->
+                println("ℹ️ BookmarksPostRequest.Type already contains LINK; no patch needed")
+            incompleteEnum.containsMatchIn(content) -> {
+                targetFile.writeText(incompleteEnum.replace(content, completeEnum))
                 println("✅ Patched BookmarksPostRequest.Type enum with LINK and TEXT values")
-            } else {
-                println("⚠️ Type enum pattern not found - may already be patched or format changed")
             }
-        } else {
-            println("❌ BookmarksPostRequest.kt not found at expected location")
+            else -> throw GradleException(
+                "Failed to patch BookmarksPostRequest.Type: neither the LINK value nor the expected " +
+                    "ASSET-only enum was found. The OpenAPI generator output format may have changed."
+            )
         }
     }
 }
