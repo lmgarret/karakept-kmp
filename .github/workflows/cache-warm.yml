@@ -1,0 +1,46 @@
+name: Warm Gradle cache
+
+# Seeds the Gradle dependency + build cache from the default branch.
+#
+# Why: gradle/actions/setup-gradle only SAVES its cache from the default branch.
+# PR runs (ci.yml) and tag-triggered releases are non-default refs, so they can
+# only RESTORE read-only. Without a workflow running setup-gradle on push to main,
+# the cache is never populated and every job starts cold.
+#
+# This runs on ubuntu-latest only (1x runner cost). It warms the cache that the
+# frequent, cheap paths reuse: every PR ci.yml run and the Linux release lane.
+# macOS (10x) and Windows (2x) are deliberately NOT warmed here — they compile
+# once per release as before and self-persist their cache (see release.yml).
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Only the newest commit's warm-up matters; cancel superseded runs.
+concurrency:
+  group: cache-warm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    name: Warm Gradle cache (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Compile the paths that PR CI (`./gradlew test`) and the Linux release lane
+      # (`:composeApp:createDistributable` → desktopJar) reuse, so their build-cache
+      # entries and resolved dependencies are populated. Compile-only where possible
+      # to keep the warm-up cheap; `test` also exercises the test-compile classpaths.
+      - name: Warm build & dependency cache
+        run: ./gradlew test :composeApp:desktopJar :composeApp:assembleDebug
