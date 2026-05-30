@@ -168,7 +168,12 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      # Releases run on tags (non-default ref), where setup-gradle defaults to a
+      # read-only cache. Allow writes so back-to-back releases reuse this runner's
+      # compiled outputs. No extra job/run is added — only a cache-save step.
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
       - name: Build DMG
         run: >
@@ -203,7 +208,11 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      # See build-macos: allow cache writes on tag-triggered releases so
+      # consecutive releases reuse compiled outputs. No extra run is added.
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
       - name: Build Windows installers
         run: >
