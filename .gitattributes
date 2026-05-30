@@ -1,0 +1,25 @@
+# Normalize line endings. Text files are stored as LF in the repository and
+# checked out as LF in every working tree (Windows included), so build scripts
+# and multi-line string literals can't differ by CRLF across platforms/CI.
+* text=auto eol=lf
+
+# Windows-only scripts must keep CRLF to run correctly.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Binary assets — never apply line-ending or text conversion.
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.webp     binary
+*.ico      binary
+*.icns     binary
+*.jar      binary
+*.keystore binary
+*.ttf      binary
+*.otf      binary
+*.woff     binary
+*.woff2    binary
+*.pdf      binary
+*.zip      binary
