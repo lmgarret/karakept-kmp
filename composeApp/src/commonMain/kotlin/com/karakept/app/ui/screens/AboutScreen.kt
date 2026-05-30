@@ -166,7 +166,13 @@ fun AboutContent(
                     FossLibrary("Kotlinx DateTime", "Apache 2.0", "https://github.com/Kotlin/kotlinx-datetime"),
                     FossLibrary("DataStore", "Apache 2.0", "https://developer.android.com/topic/libraries/architecture/datastore"),
                     FossLibrary("Ksoup", "MIT", "https://github.com/fleeksoft/ksoup"),
-                    FossLibrary("Reorderable", "Apache 2.0", "https://github.com/aclassen/ComposeReorderable"),
+                    FossLibrary("ComposeWebView", "MIT", "https://github.com/kdroidFilter/ComposeNativeWebview"),
+                    FossLibrary("ComposeNativeTray", "MIT", "https://github.com/kdroidFilter/ComposeNativeTray"),
+                    FossLibrary("KNotify", "MIT", "https://github.com/kdroidFilter/KNotify"),
+                    FossLibrary("nativefiledialog-java", "zlib", "https://github.com/WonderzGmbH/nativefiledialog-java"),
+                    FossLibrary("AndroidX Activity Compose", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/activity"),
+                    FossLibrary("AndroidX Browser", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/browser"),
+                    FossLibrary("AndroidX Core SplashScreen", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/core"),
                     FossLibrary("JavaFX", "GPL 2.0 with Classpath Exception", "https://github.com/openjdk/jfx"),
                     FossLibrary("OkHttp", "Apache 2.0", "https://github.com/square/okhttp"),
                     FossLibrary("WorkManager", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/work"),
@@ -175,6 +181,32 @@ fun AboutContent(
                 items(libraries) { lib ->
                     FossLibraryCard(lib) {
                         uriHandler.openUri(lib.url)
+                    }
+                }
+
+                item {
+                    HorizontalDivider()
+                }
+
+                item {
+                    Text(
+                        text = "Fonts",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+
+                val fonts = listOf(
+                    FossLibrary("JetBrains Mono", "SIL OFL 1.1", "https://github.com/JetBrains/JetBrainsMono"),
+                    FossLibrary("Lora", "SIL OFL 1.1", "https://github.com/cyreal/lora"),
+                    FossLibrary("Merriweather", "SIL OFL 1.1", "https://github.com/EbenSorkin/Merriweather"),
+                    FossLibrary("Noto Sans", "SIL OFL 1.1", "https://github.com/googlefonts/noto-fonts"),
+                    FossLibrary("OpenDyslexic", "SIL OFL 1.1", "https://github.com/antijingoist/opendyslexic"),
+                )
+
+                items(fonts) { font ->
+                    FossLibraryCard(font) {
+                        uriHandler.openUri(font.url)
                     }
                 }
             }
