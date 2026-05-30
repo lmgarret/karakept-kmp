@@ -37,10 +37,16 @@ jobs:
           distribution: 'temurin'
 
       - uses: gradle/actions/setup-gradle@v4
-
-      # Compile the paths that PR CI (`./gradlew test`) and the Linux release lane
-      # (`:composeApp:createDistributable` → desktopJar) reuse, so their build-cache
-      # entries and resolved dependencies are populated. Compile-only where possible
-      # to keep the warm-up cheap; `test` also exercises the test-compile classpaths.
+      
+      # `test` warms the exact compile tasks PR CI reuses: ci.yml runs `test --rerun`,
+      # which forces only the test tasks to re-run while the upstream compile/KSP/
+      # codegen tasks resolve FROM-CACHE. It also doubles as a main-branch smoke test
+      # (CI otherwise only runs on PRs). `desktopJar` warms the Linux release lane,
+      # whose createDistributable depends on it.
+      #
+      # assembleDebug is intentionally NOT run: nothing reuses it. The Android release
+      # lane builds the *release* variant (different tasks), and the only shared
+      # upstream (compileDebugKotlinAndroid) is already warmed by `test`.
       - name: Warm build & dependency cache
-        run: ./gradlew test :composeApp:desktopJar :composeApp:assembleDebug
+        run: ./gradlew test :composeApp:desktopJar
+
