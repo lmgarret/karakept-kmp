@@ -1,23 +1,23 @@
 [versions]
 openapi-generator = "7.22.0"
-agp = "8.10.0"
+agp = "8.13.0"
 android-compileSdk = "36"
 android-minSdk = "24"
 android-targetSdk = "35"
 androidx-activityCompose = "1.12.4"
 androidx-core-splashscreen = "1.2.0"
 androidx-browser = "1.9.0"
-compose-plugin = "1.10.0"
+compose-plugin = "1.11.0"
 junit = "4.13.2"
-kotlin = "2.2.0"
+kotlin = "2.3.20"
 ktor = "3.5.0"
 voyager = "1.1.0-beta03"
 coil = "3.4.0"
 koin = "4.2.1"
 room = "2.8.4"
 sqlite = "2.6.2"
-kotlinx-coroutines = "1.9.0"
-kotlinx-serialization = "1.7.3"
+kotlinx-coroutines = "1.11.0"
+kotlinx-serialization = "1.9.1"
 kotlinx-datetime = "0.6.2"
 datastore = "1.2.1"
 ksoup = "0.2.6"
@@ -124,4 +124,4 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 room = { id = "androidx.room", version.ref = "room" }
-ksp = { id = "com.google.devtools.ksp", version = "2.2.0-2.0.2" }
+ksp = { id = "com.google.devtools.ksp", version = "2.3.9" }
