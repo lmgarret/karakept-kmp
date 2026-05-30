@@ -429,7 +429,7 @@ if (org.gradle.internal.os.OperatingSystem.current().isWindows) {
         description = "Generates the WiX installer banner/dialog bitmaps from the app icon and a screenshot"
         inputs.file(winLogo)
         inputs.file(winShot)
-        inputs.property("rev", 1) // bump to bust the up-to-date cache when the layout changes
+        inputs.property("rev", 2) // bump to bust the up-to-date cache when the layout changes
         outputs.dir(winResDir)
         doLast {
             val dir = winResDir.get().asFile
@@ -439,13 +439,29 @@ if (org.gradle.internal.os.OperatingSystem.current().isWindows) {
                 g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             }
+            // Progressive (halving) downscale keeps a large source crisp at small sizes —
+            // a single-step bicubic reduction of the 824px logo to 48px looks soft.
+            fun downscale(src: AwtBufferedImage, target: Int): AwtBufferedImage {
+                var cur = src
+                while (cur.width / 2 >= target) {
+                    val w = maxOf(target, cur.width / 2)
+                    val h = maxOf(target, cur.height / 2)
+                    val next = AwtBufferedImage(w, h, AwtBufferedImage.TYPE_INT_ARGB)
+                    next.createGraphics().run { hints(this); drawImage(cur, 0, 0, w, h, null); dispose() }
+                    cur = next
+                }
+                if (cur.width == target && cur.height == target) return cur
+                val out = AwtBufferedImage(target, target, AwtBufferedImage.TYPE_INT_ARGB)
+                out.createGraphics().run { hints(this); drawImage(cur, 0, 0, target, target, null); dispose() }
+                return out
+            }
             // Banner: 493x58, white, app logo right-aligned (shows top-right on interior pages).
             val banner = AwtBufferedImage(493, 58, AwtBufferedImage.TYPE_INT_RGB)
             banner.createGraphics().run {
                 hints(this)
                 color = AwtColor.WHITE; fillRect(0, 0, 493, 58)
                 val s = 48
-                drawImage(ImageIO.read(winLogo), 493 - s - 8, (58 - s) / 2, s, s, null)
+                drawImage(downscale(ImageIO.read(winLogo), s), 493 - s - 8, (58 - s) / 2, null)
                 dispose()
             }
             ImageIO.write(banner, "bmp", dir.resolve("banner.bmp"))
@@ -477,6 +493,7 @@ if (org.gradle.internal.os.OperatingSystem.current().isWindows) {
             dependsOn("createDistributable", generateWindowsInstallerBitmaps, ":unzipWix")
 
             val appImage = layout.buildDirectory.dir("compose/binaries/main/app/Karakept")
+            val winIcon = project.file("src/desktopMain/resources/win-icon.ico")
             val resDir = project.file("jpackage")
             val destDir = layout.buildDirectory.dir("compose/binaries/main/$type")
             val tmpDir = layout.buildDirectory.dir("jpackage/temp-$type")
@@ -489,6 +506,8 @@ if (org.gradle.internal.os.OperatingSystem.current().isWindows) {
                 "--name", "Karakept",
                 "--app-version", winVersion,
                 "--app-image", appImage.get().asFile.absolutePath,
+                // Multi-resolution app icon for the installer .exe, shortcuts and ARP entry.
+                "--icon", winIcon.absolutePath,
                 "--win-dir-chooser",
                 "--win-menu", "--win-menu-group", "Karakept",
                 "--win-shortcut", "--win-shortcut-prompt",

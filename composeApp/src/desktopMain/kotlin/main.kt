@@ -113,6 +113,7 @@ fun main(args: Array<String> = emptyArray()) {
 
     val isMac = System.getProperty("os.name").lowercase().contains("mac")
     val isLinux = System.getProperty("os.name").lowercase().contains("linux")
+    val isWindows = System.getProperty("os.name").lowercase().contains("win")
 
     // Load the window icon before entering composition (non-composable).
     // macOS: use the macOS-styled icon and also push it to the Dock early so the
@@ -147,6 +148,18 @@ fun main(args: Array<String> = emptyArray()) {
         val finalBytes = awtImg?.toPngBytes() ?: bytes
         Image.makeFromEncoded(finalBytes).toComposeImageBitmap()
     }
+
+    // Windows: full-colour, square app icon (win-icon.png) for the system tray so it
+    // matches the taskbar/shortcut icon rather than the rounded macOS variant.
+    val winIconImage = Thread.currentThread().contextClassLoader
+        .getResourceAsStream("win-icon.png")
+        ?.readBytes()
+        ?.let { bytes ->
+            var awtImg = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(bytes))
+            if (isDevBuild && awtImg != null) awtImg = overlayDevBanner(awtImg)
+            val finalBytes = awtImg?.toPngBytes() ?: bytes
+            Image.makeFromEncoded(finalBytes).toComposeImageBitmap()
+        }
 
     // Load monochrome tray icon: trim adaptive-icon padding so the silhouette
     // fills the menu-bar slot. ComposeNativeTray's Painter overload handles
@@ -336,6 +349,13 @@ fun main(args: Array<String> = emptyArray()) {
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize().padding(16.dp),
                             colorFilter = ColorFilter.tint(trayIconTint)
+                        )
+                    } else if (isWindows && winIconImage != null) {
+                        // Windows: full-colour, square app icon matching the taskbar/shortcut.
+                        Image(
+                            bitmap = winIconImage,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
                         )
                     } else if (iconImage != null) {
                         // Linux: full-colour app icon, no padding — the 128×128
