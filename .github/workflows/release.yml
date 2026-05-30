@@ -215,9 +215,12 @@ jobs:
           cache-read-only: false
 
       - name: Build Windows installers
+        # Quote the property: PowerShell (the default Windows shell) otherwise splits an
+        # unquoted -PversionName=1.13.0 into "-PversionName=1" + ".13.0", so Gradle would
+        # see versionName=1 and fail Windows' MAJOR.MINOR.BUILD version validation.
         run: >
           .\gradlew.bat :composeApp:packageMsi :composeApp:packageExe
-          -PversionName=${{ needs.resolve-version.outputs.name }}
+          "-PversionName=${{ needs.resolve-version.outputs.name }}"
 
       - name: Upload Windows MSI artifact
         uses: actions/upload-artifact@v4
