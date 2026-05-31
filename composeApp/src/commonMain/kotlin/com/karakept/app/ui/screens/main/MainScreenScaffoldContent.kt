@@ -135,7 +135,7 @@ fun MainScreenScaffoldContent(
     onShowBatchTagEditor: () -> Unit,
     onShowBatchListPicker: () -> Unit,
     onShowBatchDeleteConfirm: () -> Unit,
-    navigateTo: (cafe.adriel.voyager.core.screen.Screen) -> Unit
+    navigateTo: (androidx.navigation3.runtime.NavKey) -> Unit
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize().onKeyEvent { keyEvent ->

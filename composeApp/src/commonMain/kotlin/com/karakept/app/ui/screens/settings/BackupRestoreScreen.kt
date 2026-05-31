@@ -52,10 +52,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.AutoExportInterval
 import com.karakept.app.ui.components.rememberDirectoryPicker
 import com.karakept.app.ui.components.rememberJsonFilePicker
@@ -64,11 +65,12 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-class BackupRestoreScreen : Screen {
+@Serializable
+class BackupRestoreScreen : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<BackupRestoreScreenModel>()
+        val screenModel = koinViewModel<BackupRestoreScreenModel>()
         BackupRestoreContent(
             screenModel = screenModel,
             onBack = { navigator.pop() }

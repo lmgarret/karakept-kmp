@@ -35,20 +35,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.utils.ShareUtils
 
-data class SaveErrorScreen(val errors: List<SaveError>) : Screen {
+@Serializable
+data class SaveErrorScreen(val errors: List<SaveError>) : NavKey {
     constructor(url: String, message: String) : this(listOf(SaveError(url, message)))
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<SaveErrorScreenModel>()
+        val screenModel = koinViewModel<SaveErrorScreenModel>()
         val uriHandler = LocalUriHandler.current
         val retryStates by screenModel.retryStates.collectAsState()
 

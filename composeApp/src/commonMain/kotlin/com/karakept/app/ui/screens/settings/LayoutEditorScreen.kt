@@ -51,12 +51,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.DescriptionPosition
@@ -86,7 +87,7 @@ import org.jetbrains.compose.resources.painterResource
 
 class LayoutEditorScreenModel(
     private val settingsRepository: SettingsRepository
-) : ScreenModel {
+) : ViewModel() {
 
     private val _layout = MutableStateFlow(
         BookmarkLayout(
@@ -97,7 +98,7 @@ class LayoutEditorScreenModel(
     val layout: StateFlow<BookmarkLayout> = _layout.asStateFlow()
 
     fun loadExisting(id: String) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val list = settingsRepository.customLayouts.first()
             val found = list.find { it.id == id }
             if (found != null) {
@@ -151,7 +152,7 @@ class LayoutEditorScreenModel(
     }
 
     fun save() {
-        screenModelScope.launch {
+        viewModelScope.launch {
             // Use NonCancellable so the DataStore write survives scope cancellation
             // when Voyager disposes the ScreenModel immediately after navigator.pop().
             withContext(NonCancellable) {
@@ -190,11 +191,12 @@ private val PREVIEW_BOOKMARK = BookmarkEntity(
     readingScrollOffset = 0
 )
 
-data class LayoutEditorScreen(val layoutId: String?) : Screen {
+@Serializable
+data class LayoutEditorScreen(val layoutId: String?) : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<LayoutEditorScreenModel>()
+        val screenModel = koinViewModel<LayoutEditorScreenModel>()
 
         LaunchedEffect(layoutId) {
             if (layoutId != null) screenModel.loadExisting(layoutId)

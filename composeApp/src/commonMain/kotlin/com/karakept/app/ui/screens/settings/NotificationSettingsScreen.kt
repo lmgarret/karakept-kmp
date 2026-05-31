@@ -24,17 +24,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.ui.screens.SettingsScreenModel
 
-class NotificationSettingsScreen : Screen {
+@Serializable
+class NotificationSettingsScreen : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<SettingsScreenModel>()
+        val screenModel = koinViewModel<SettingsScreenModel>()
         NotificationSettingsContent(
             screenModel = screenModel,
             onBack = { navigator.pop() }

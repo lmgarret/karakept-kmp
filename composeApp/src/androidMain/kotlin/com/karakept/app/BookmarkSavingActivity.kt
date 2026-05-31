@@ -12,11 +12,22 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import cafe.adriel.voyager.navigator.Navigator
-import cafe.adriel.voyager.transitions.SlideTransition
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
 import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.data.repository.SettingsRepository
+import androidx.compose.runtime.mutableStateListOf
+import com.karakept.app.ui.navigation.AppNavigator
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.appEntryProvider
+import com.karakept.app.ui.navigation.sharedAxisZBackward
+import com.karakept.app.ui.navigation.sharedAxisZForward
 import com.karakept.app.ui.screens.ShareBookmarkScreen
 import com.karakept.app.ui.screens.ShareMultipleBookmarksScreen
 import com.karakept.app.ui.theme.AppTheme
@@ -65,15 +76,30 @@ private fun BookmarkSavingContent(urls: List<String>, onClose: () -> Unit) {
     val themeMode by settingsRepository.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
     val accentColor by settingsRepository.accentColor.collectAsState(initial = AccentColor.PURPLE)
 
-    val initialScreen = if (urls.size == 1) {
+    val initialScreen: NavKey = if (urls.size == 1) {
         ShareBookmarkScreen(url = urls[0], onClose = onClose)
     } else {
         ShareMultipleBookmarksScreen(urls = urls, onClose = onClose)
     }
 
     AppTheme(themeMode = themeMode, accentColor = accentColor) {
-        Navigator(initialScreen) { navigator ->
-            SlideTransition(navigator)
+        // Plain in-memory back stack: this activity is ephemeral and re-derives from its intent,
+        // so it needs no saved-state serialization — and keeps the onClose lambda valid.
+        val backStack = remember { mutableStateListOf(initialScreen) }
+        val navigator = remember(backStack) { AppNavigator(backStack) }
+        CompositionLocalProvider(LocalNavigator provides navigator) {
+            NavDisplay(
+                backStack = backStack,
+                onBack = { navigator.pop() },
+                entryDecorators = listOf(
+                    rememberSaveableStateHolderNavEntryDecorator(),
+                    rememberViewModelStoreNavEntryDecorator(),
+                ),
+                transitionSpec = { sharedAxisZForward() },
+                popTransitionSpec = { sharedAxisZBackward() },
+                predictivePopTransitionSpec = { sharedAxisZBackward() },
+                entryProvider = remember { appEntryProvider() },
+            )
         }
     }
 }

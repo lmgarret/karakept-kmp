@@ -44,12 +44,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import getPlatform
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -69,36 +70,36 @@ import org.koin.core.parameter.parametersOf
 class PerListSettingsScreenModel(
     private val listId: String,
     private val settingsRepository: SettingsRepository
-) : ScreenModel {
+) : ViewModel() {
 
     val listSettings: StateFlow<ListSettings> = settingsRepository.getListSettings(listId)
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ListSettings())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ListSettings())
 
     val customSwipeActionConfigs: StateFlow<List<CustomSwipeActionConfig>> =
         settingsRepository.customSwipeActionConfigs
-            .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allLayouts: StateFlow<List<BookmarkLayout>> = combine(
         settingsRepository.customLayouts,
         settingsRepository.defaultLayoutId
     ) { custom, _ ->
         BookmarkLayout.ALL_BUILTIN + custom
-    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), BookmarkLayout.ALL_BUILTIN)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BookmarkLayout.ALL_BUILTIN)
 
     fun setSyncOffline(enabled: Boolean) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setListSettings(listId, listSettings.value.copy(syncOffline = enabled))
         }
     }
 
     fun setNotifyOnNewBookmarks(enabled: Boolean) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setListSettings(listId, listSettings.value.copy(notifyOnNewBookmarks = enabled))
         }
     }
 
     fun setScrollAction(action: SwipeAction, configId: String? = null) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setListSettings(
                 listId,
                 listSettings.value.copy(scrollAction = action, scrollActionConfigId = configId)
@@ -107,33 +108,34 @@ class PerListSettingsScreenModel(
     }
 
     fun setIncludeChildListBookmarks(enabled: Boolean) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setListSettings(listId, listSettings.value.copy(includeChildListBookmarks = enabled))
         }
     }
 
     fun setCountOnlyUnread(enabled: Boolean) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setListSettings(listId, listSettings.value.copy(countOnlyUnread = enabled))
         }
     }
 
     fun setLayoutId(layoutId: String?) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setListLayoutId(listId, layoutId)
         }
     }
 }
 
+@Serializable
 data class PerListSettingsScreen(
     val listId: String,
     val listName: String
-) : Screen {
+) : NavKey {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<PerListSettingsScreenModel> { parametersOf(listId) }
+        val screenModel = koinViewModel<PerListSettingsScreenModel> { parametersOf(listId) }
         val listSettings by screenModel.listSettings.collectAsState()
         val customConfigs by screenModel.customSwipeActionConfigs.collectAsState()
         val allLayouts by screenModel.allLayouts.collectAsState()

@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.settings
 
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.model.AutoExportInterval
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 class BackupRestoreScreenModel(
     private val backupRepository: BackupRepository,
     private val settingsRepository: SettingsRepository
-) : ScreenModel {
+) : ViewModel() {
 
     sealed class BackupState {
         data object Idle : BackupState()
@@ -35,26 +35,26 @@ class BackupRestoreScreenModel(
     val state: StateFlow<BackupState> = _state.asStateFlow()
 
     val autoExportInterval: StateFlow<AutoExportInterval> = settingsRepository.autoExportInterval.stateIn(
-        scope = screenModelScope,
+        scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = AutoExportInterval.NEVER
     )
 
     val lastAutoExportTime: StateFlow<Long> = settingsRepository.lastAutoExportTime.stateIn(
-        scope = screenModelScope,
+        scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0L
     )
 
     val backupExportDirectory: StateFlow<String?> = settingsRepository.backupExportDirectory.stateIn(
-        scope = screenModelScope,
+        scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = null
     )
 
     /** PBKDF2 hash of the backup PIN, non-null when a PIN has been set. */
     val backupPinHash: StateFlow<String?> = settingsRepository.backupPinHash.stateIn(
-        scope = screenModelScope,
+        scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = null
     )
@@ -66,7 +66,7 @@ class BackupRestoreScreenModel(
      * The caller must verify the PIN matches the stored hash before calling this.
      */
     fun exportSettings(pin: String) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             _state.value = BackupState.Loading
             try {
                 val filePath = backupRepository.exportToFile(pin)
@@ -90,7 +90,7 @@ class BackupRestoreScreenModel(
 
     /** Called after the user enters the PIN for the encrypted backup. */
     fun importWithPin(encryptedContent: String, pin: String) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             _state.value = BackupState.Loading
             try {
                 val summary = backupRepository.importFromJson(encryptedContent, pin)
@@ -105,7 +105,7 @@ class BackupRestoreScreenModel(
 
     /** Sets the backup PIN (4–6 digits). Stores the hash and the raw value for auto-exports. */
     fun setBackupPin(pin: String) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setBackupPin(pin)
         }
     }
@@ -122,13 +122,13 @@ class BackupRestoreScreenModel(
     // ── Other setters ─────────────────────────────────────────────────────────
 
     fun setAutoExportInterval(interval: AutoExportInterval) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setAutoExportInterval(interval)
         }
     }
 
     fun setBackupExportDirectory(path: String?) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setBackupExportDirectory(path)
         }
     }

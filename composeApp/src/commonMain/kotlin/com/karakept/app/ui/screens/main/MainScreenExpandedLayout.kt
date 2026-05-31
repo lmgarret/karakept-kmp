@@ -98,7 +98,7 @@ fun MainScreenExpandedLayout(
     renameListTarget: Triple<String, String, String?>?,
     onRenameListTargetChanged: (Triple<String, String, String?>?) -> Unit,
     screenModel: MainScreenModel,
-    navigateTo: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    navigateTo: (androidx.navigation3.runtime.NavKey) -> Unit,
     isDesktop: Boolean,
     quickFilterCounts: QuickFilterCounts = QuickFilterCounts(),
     highlightsCount: Int = 0,
@@ -327,7 +327,7 @@ fun MainScreenExpandedLayout(
                     androidx.compose.runtime.key(currentBookmarkId, currentScrollToHighlightId) {
                         val viewerScreenModel = koinInject<BookmarkViewerScreenModel>()
                         DisposableEffect(currentBookmarkId) {
-                            onDispose { viewerScreenModel.onDispose() }
+                            onDispose { viewerScreenModel.flushOnDispose() }
                         }
                         BookmarkViewerContent(
                             bookmarkId = currentBookmarkId,

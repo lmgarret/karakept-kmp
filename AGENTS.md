@@ -9,8 +9,9 @@ The UI follows **Material Design 3 (MD3)** guidelines throughout.
 Key technologies:
 - Kotlin 2.2.0 / Compose Multiplatform 1.10.0
 - Material3 (`androidx.compose.material3`)
-- Voyager 1.1.0 for navigation and ScreenModel (MVVM)
-- Koin 4.0.0 for dependency injection
+- Compose Navigation 3 (`androidx.navigation3` / `org.jetbrains.androidx.navigation3` 1.1.1) for navigation
+- `androidx.lifecycle` `ViewModel` (multiplatform) for per-screen state (MVVM)
+- Koin 4.2.1 for dependency injection (incl. `koin-compose-viewmodel`, `koin-compose-navigation3`)
 - Room 2.7.0 for local SQLite storage
 - Ktor 3.3.2 for HTTP/API communication
 - kotlinx-serialization, kotlinx-coroutines, kotlinx-datetime
@@ -30,7 +31,8 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 ```
 
 **Key patterns:**
-- **ScreenModel** (Voyager): lifecycle-scoped state holder per screen, injected via Koin.
+- **ScreenModel** = an `androidx.lifecycle.ViewModel` subclass (named `*ScreenModel` by convention), scoped per Nav3 back-stack entry via `rememberViewModelStoreNavEntryDecorator`, injected with `koinViewModel`.
+- **Navigation 3**: the back stack is a developer-owned `NavBackStack` of `@Serializable` `NavKey`s, rendered by `NavDisplay`. Each screen *is* a `NavKey` with a `Content()` composable; routing goes through `AppNavigator`/`LocalNavigator` (`ui/navigation/`). Predictive back (Android 14+) is wired via `NavDisplay`'s `predictivePopTransitionSpec`.
 - **Repository pattern**: each domain concept (`BookmarkRepository`, `ListRepository`, etc.) is the single source of truth.
 - **Offline-first**: mutations are queued in `PendingActionDao` and synced on reconnect.
 - **BookmarkActionController**: centralizes all bookmark mutations with 5-second undo support.
@@ -57,7 +59,8 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 - **`App.kt`**: root composable, initializes Koin, routes to initial screen based on app state.
 - **`MainActivity.kt`** (Android): sets up the Compose activity.
-- **`AppModule.kt`**: all Koin bindings — repositories as `single()`, ScreenModels as `factory()`.
+- **`AppModule.kt`**: all Koin bindings — repositories as `single()`, ScreenModels as `viewModel()`.
+- **`ui/navigation/`**: `AppNavigator`/`LocalNavigator` (back-stack wrapper + CompositionLocal), `appEntryProvider()` + `navKeySerializersModule` (NavKey↔content map and polymorphic registry), and the Shared Axis Z `NavDisplay` transition specs.
 
 ---
 
@@ -95,7 +98,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 ### Coroutines
 
-- `screenModelScope` in ScreenModels for lifecycle-aware launching.
+- `viewModelScope` in ScreenModels for lifecycle-aware launching.
 - `SharingStarted.WhileSubscribed(5000)` when converting `Flow` to `StateFlow`.
 - `runTest(testDispatcher)` in unit tests; base class `BaseRepositoryTest` provides the dispatcher.
 
@@ -103,7 +106,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 | New thing | Where |
 |---|---|
-| New screen | `ui/screens/[Feature]Screen.kt` + `[Feature]ScreenModel.kt`, register factory in `AppModule.kt` |
+| New screen | `ui/screens/[Feature]Screen.kt` (a `@Serializable` `NavKey` with `Content()`) + `[Feature]ScreenModel.kt`; register `viewModel { }` in `AppModule.kt`, add an `entry<…>` in `appEntryProvider()` and a `subclass(…)` in `navKeySerializersModule` |
 | New reusable component | `ui/components/[Component].kt` |
 | New repository | `data/repository/[Domain]Repository.kt`, add `single()` to `AppModule.kt` |
 | New DB entity | `data/local/entity/`, new DAO, update `AppDatabase.kt`, add migration, register in builders |

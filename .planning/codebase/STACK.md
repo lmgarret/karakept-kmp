@@ -32,11 +32,12 @@
 - Compose Material 1.x (androidx.compose.material) - Base Material components
 
 **Navigation:**
-- Voyager 1.1.0-beta03 - Navigator with screen models for KMP
-  - voyager-navigator: Core navigation
-  - voyager-screenModel: ViewModel alternative for Compose
-  - voyager-transitions: Navigation animations
-  - voyager-koin: Koin dependency injection integration
+- Compose Navigation 3 (1.1.1) - developer-owned back stack of `@Serializable` `NavKey`s rendered by `NavDisplay`; supports Android, desktop, iOS, web
+  - `androidx.navigation3:navigation3-runtime` (1.1.1): `NavKey`, `NavBackStack`, `rememberNavBackStack`, `entryProvider`
+  - `org.jetbrains.androidx.navigation3:navigation3-ui` (1.1.1): `NavDisplay` (CMP build) + transition/predictive-back specs
+  - `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (2.10.0): per-entry `ViewModelStore` scoping
+  - `io.insert-koin:koin-compose-navigation3` + `koin-compose-viewmodel` (4.2.1): `koinViewModel` injection per nav entry
+  - App wiring lives in `ui/navigation/` (`AppNavigator`, `LocalNavigator`, `appEntryProvider`, `navKeySerializersModule`, Shared Axis Z specs)
 
 **Networking:**
 - Ktor Client 3.5.0 - HTTP client with multiplatform support

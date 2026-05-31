@@ -1,8 +1,8 @@
 package com.karakept.app.ui.screens
 
 import androidx.compose.ui.graphics.Color
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setHtmlTextColor
@@ -17,51 +17,51 @@ import kotlinx.coroutines.launch
 
 class ReaderAppearanceScreenModel(
     private val settingsRepository: SettingsRepository
-) : ScreenModel {
+) : ViewModel() {
     val htmlTextColor: StateFlow<Color?> = settingsRepository.htmlTextColor.stateIn(
-        scope = screenModelScope,
+        scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = null
     )
 
     val htmlBackgroundColor: StateFlow<Color?> = settingsRepository.htmlBackgroundColor.stateIn(
-        scope = screenModelScope,
+        scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = null
     )
 
     val htmlFontSize: StateFlow<Int> = settingsRepository.htmlFontSize.stateIn(
-        scope = screenModelScope,
+        scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 16
     )
 
     val htmlFontFamily: StateFlow<ReaderFontFamily> = settingsRepository.htmlFontFamily.stateIn(
-        scope = screenModelScope,
+        scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = ReaderFontFamily.SYSTEM
     )
 
     fun setHtmlTextColor(color: Color?) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setHtmlTextColor(color)
         }
     }
 
     fun setHtmlBackgroundColor(color: Color?) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setHtmlBackgroundColor(color)
         }
     }
 
     fun setHtmlFontSize(size: Int) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setHtmlFontSize(size)
         }
     }
 
     fun setHtmlFontFamily(family: ReaderFontFamily) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setHtmlFontFamily(family)
         }
     }

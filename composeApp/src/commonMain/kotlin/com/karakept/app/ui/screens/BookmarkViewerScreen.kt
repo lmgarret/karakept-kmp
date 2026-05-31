@@ -2,26 +2,23 @@ package com.karakept.app.ui.screens
 
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import org.koin.compose.koinInject
 
+@Serializable
 data class BookmarkViewerScreen(
     val bookmarkId: Long,
     val scrollToHighlightId: String? = null
-) : Screen {
-    // Each bookmark needs its own Voyager key so that koinScreenModel returns a fresh
-    // ScreenModel per bookmark.  Without this, navigating from one viewer to another
-    // (without popping the first) reuses the stale ScreenModel, leaving the screen blank.
-    override val key = "BookmarkViewerScreen-$bookmarkId-${scrollToHighlightId.orEmpty()}"
-
+) : NavKey {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<BookmarkViewerScreenModel>()
+        val screenModel = koinViewModel<BookmarkViewerScreenModel>()
         val mainScreenModel = koinInject<MainScreenModel>()
 
         BookmarkViewerContent(

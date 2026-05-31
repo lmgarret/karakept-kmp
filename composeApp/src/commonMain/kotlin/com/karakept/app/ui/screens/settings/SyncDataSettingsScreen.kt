@@ -42,19 +42,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.ui.screens.SettingsScreenModel
 import kotlinx.coroutines.delay
 
-class SyncDataSettingsScreen(val highlightOfflineMode: Boolean = false) : Screen {
+@Serializable
+class SyncDataSettingsScreen(val highlightOfflineMode: Boolean = false) : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<SettingsScreenModel>()
+        val screenModel = koinViewModel<SettingsScreenModel>()
         SyncDataSettingsContent(
             screenModel = screenModel,
             highlightOfflineMode = highlightOfflineMode,
@@ -70,7 +72,7 @@ fun SyncDataSettingsContent(
     screenModel: SettingsScreenModel,
     highlightOfflineMode: Boolean = false,
     onBack: () -> Unit,
-    onNavigate: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    onNavigate: (androidx.navigation3.runtime.NavKey) -> Unit,
     showBackButton: Boolean = true
 ) {
     val offlineMode by screenModel.offlineMode.collectAsState()

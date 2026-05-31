@@ -29,10 +29,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.ui.theme.rememberFontFamily
 import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
@@ -40,9 +41,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-class ReaderAppearanceScreen : Screen {
+@Serializable
+class ReaderAppearanceScreen : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         ReaderAppearanceContent(
             onBack = { navigator.pop() }

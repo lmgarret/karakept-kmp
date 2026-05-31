@@ -42,21 +42,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.screens.ReaderAppearanceScreen
 import com.karakept.app.ui.screens.SettingsScreenModel
 import getPlatform
 
-class BookmarkViewSettingsScreen : Screen {
+@Serializable
+class BookmarkViewSettingsScreen : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<SettingsScreenModel>()
+        val screenModel = koinViewModel<SettingsScreenModel>()
         BookmarkViewSettingsContent(
             screenModel = screenModel,
             onBack = { navigator.pop() },
@@ -70,7 +72,7 @@ class BookmarkViewSettingsScreen : Screen {
 fun BookmarkViewSettingsContent(
     screenModel: SettingsScreenModel,
     onBack: () -> Unit,
-    onNavigate: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    onNavigate: (androidx.navigation3.runtime.NavKey) -> Unit,
     showBackButton: Boolean = true
 ) {
     val currentViewerMode by screenModel.viewerMode.collectAsState()

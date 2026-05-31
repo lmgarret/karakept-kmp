@@ -1,7 +1,7 @@
 /** Bookmark action extension functions for MainScreenModel. */
 package com.karakept.app.ui.screens
 
-import cafe.adriel.voyager.core.model.screenModelScope
+import androidx.lifecycle.viewModelScope
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.FilterStatus
@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 fun MainScreenModel.toggleBookmarkArchive(bookmark: BookmarkEntity) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
         val event = if (bookmark.isArchived) {
             BookmarkActionEvent.Unarchive(bookmark)
@@ -27,7 +27,7 @@ fun MainScreenModel.toggleBookmarkArchive(bookmark: BookmarkEntity) {
 }
 
 fun MainScreenModel.toggleBookmarkFavorite(bookmark: BookmarkEntity) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
         bookmarkActionController.executeAction(
             BookmarkActionEvent.ToggleFavorite(bookmark),
@@ -40,7 +40,7 @@ fun MainScreenModel.toggleBookmarkFavorite(bookmark: BookmarkEntity) {
 }
 
 fun MainScreenModel.toggleBookmarkRead(bookmark: BookmarkEntity) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val markingUnread = bookmark.isRead
         val event = if (markingUnread) {
             BookmarkActionEvent.MarkUnread(bookmark)
@@ -72,7 +72,7 @@ fun MainScreenModel.toggleBookmarkRead(bookmark: BookmarkEntity) {
 }
 
 fun MainScreenModel.deleteBookmark(bookmark: BookmarkEntity) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
         bookmarkActionController.executeAction(
             BookmarkActionEvent.Delete(bookmark),
@@ -83,7 +83,7 @@ fun MainScreenModel.deleteBookmark(bookmark: BookmarkEntity) {
 }
 
 fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<String>) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.updateTags(
             bookmark.remoteId, bookmark.serverId, newTags, isOnline
@@ -103,7 +103,7 @@ internal fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
         .filter { it.type == KarakeepList.Type.SMART }
         .mapNotNull { it.id }
         .toSet()
-    screenModelScope.launch {
+    viewModelScope.launch {
         try {
             bookmarkActionsRepository.flushPendingActions(server)
             val serverHadSmartLists = bookmarkRepository.reconcileBookmarkSmartListMembership(server, bookmark.localId, smartListIds)
@@ -159,7 +159,7 @@ internal fun applyReconcileBookmarkTransform(
 
 fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
     _actedOnBookmarkIds.value += bookmark.remoteId
-    screenModelScope.launch {
+    viewModelScope.launch {
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.moveToList(
             bookmark.remoteId, bookmark.serverId, listId, isOnline
@@ -195,7 +195,7 @@ fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String)
  * Smart list reconciliation will happen on the next sync.
  */
 fun MainScreenModel.restoreAndMoveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
         val server = _selectedServer.value ?: return@launch
@@ -220,7 +220,7 @@ fun MainScreenModel.accumulatedBookmarkPosition(bookmark: BookmarkEntity): Int =
     _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
 
 fun MainScreenModel.restoreAndRemoveBookmarkFromList(bookmark: BookmarkEntity, listId: String, originalPosition: Int = -1) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
         updateAccumulatedBookmarks { current ->
@@ -265,7 +265,7 @@ fun applyRestoreAndRemoveFromListTransform(
 }
 
 fun MainScreenModel.addBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
         if (!currentTags.contains(tagName)) {
             val newTags = currentTags + tagName
@@ -284,7 +284,7 @@ fun MainScreenModel.addBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
 }
 
 fun MainScreenModel.removeBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
         if (currentTags.contains(tagName)) {
             val newTags = currentTags.filter { it != tagName }
@@ -337,7 +337,7 @@ fun applyRemoveBookmarkTransform(
 
 fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: String) {
     _actedOnBookmarkIds.value += bookmark.remoteId
-    screenModelScope.launch {
+    viewModelScope.launch {
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.removeFromList(
             bookmark.remoteId, bookmark.serverId, listId, isOnline
@@ -360,7 +360,7 @@ fun MainScreenModel.markAllBookmarksInListAsRead(listId: String) {
         bookmarkLists.contains(listId) && !bookmark.isRead
     }
     if (unreadInList.isEmpty()) return
-    screenModelScope.launch {
+    viewModelScope.launch {
         bookmarkActionsRepository.batchMarkRead(unreadInList)
         val ids = unreadInList.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { list ->
@@ -377,7 +377,7 @@ fun MainScreenModel.markAllBookmarksInListAsRead(listId: String) {
 }
 
 fun MainScreenModel.renameList(listId: String, newName: String, newIcon: String?) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val server = _selectedServer.value ?: return@launch
         listRepository.renameList(server, listId, newName, newIcon)
     }
@@ -388,7 +388,7 @@ fun MainScreenModel.executeScrollAction(
     action: com.karakept.app.data.model.SwipeAction,
     config: com.karakept.app.data.model.CustomSwipeActionConfig?
 ) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         when (action) {
             com.karakept.app.data.model.SwipeAction.MARK_READ -> {
                 if (!bookmark.isRead) {
@@ -421,7 +421,7 @@ fun MainScreenModel.executeScrollAction(
 }
 
 fun MainScreenModel.createBookmark(url: String) {
-    screenModelScope.launch {
+    viewModelScope.launch {
         val server = _selectedServer.value ?: return@launch
         val tempRemoteId = kotlin.random.Random.nextLong(Long.MIN_VALUE, -1L)
         val placeholder = BookmarkEntity(

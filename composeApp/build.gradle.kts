@@ -44,11 +44,10 @@ kotlin {
                 implementation(compose.components.uiToolingPreview)
                 implementation(compose.materialIconsExtended)
                 
-                // Voyager
-                implementation(libs.voyager.navigator)
-                implementation(libs.voyager.screenModel)
-                implementation(libs.voyager.transitions)
-                implementation(libs.voyager.koin)
+                // Navigation 3
+                implementation(libs.navigation3.runtime)
+                implementation(libs.navigation3.ui)
+                implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 
                 // Ktor
                 implementation(libs.ktor.client.core)
@@ -64,6 +63,8 @@ kotlin {
                 // Koin
                 implementation(libs.koin.core)
                 implementation(libs.koin.compose)
+                implementation(libs.koin.compose.viewmodel)
+                implementation(libs.koin.compose.navigation3)
 
                 // Room
                 implementation(libs.androidx.room.runtime)

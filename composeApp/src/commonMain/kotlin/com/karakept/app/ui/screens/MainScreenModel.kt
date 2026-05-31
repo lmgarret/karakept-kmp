@@ -1,8 +1,8 @@
 package com.karakept.app.ui.screens
 
-import cafe.adriel.voyager.core.model.ScreenModel
+import androidx.lifecycle.ViewModel
 import com.karakept.app.utils.AppLogger
-import cafe.adriel.voyager.core.model.screenModelScope
+import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.BookmarkLayout
@@ -58,12 +58,12 @@ class MainScreenModel(
     internal val bookmarkActionController: BookmarkActionController,
     internal val snackbarManager: ActionSnackbarManager,
     private val highlightRepository: HighlightRepository
-) : ScreenModel {
+) : ViewModel() {
 
     private val defaultFilterResolver = DefaultFilterResolver(settingsRepository)
 
     val servers = serverRepository.servers
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     internal val _selectedServer = MutableStateFlow<Server?>(null)
     val selectedServer: StateFlow<Server?> = _selectedServer
@@ -78,7 +78,7 @@ class MainScreenModel(
     // Per-key sync status from the repository; drives both drawer indicators and the top bar.
     val listSyncStatuses: StateFlow<Map<SyncKey, ListSyncStatus>> =
         bookmarkRepository.perKeyProgress
-            .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // Sync status for the list/filter currently on screen. Reacts immediately when the user
     // navigates to a different list so the top bar always reflects the current view.
@@ -88,7 +88,7 @@ class MainScreenModel(
         bookmarkRepository.perKeyProgress
     ) { listId, filter, statuses ->
         statuses[resolveCurrentKey(listId, filter)] ?: ListSyncStatus.Idle
-    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ListSyncStatus.Idle)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ListSyncStatus.Idle)
 
     // Backward-compat for PullToRefreshBox: only active when the CURRENT list is syncing.
     // Other lists syncing in background show their status only in the drawer.
@@ -98,7 +98,7 @@ class MainScreenModel(
         bookmarkRepository.perKeyProgress
     ) { listId, filter, statuses ->
         statuses[resolveCurrentKey(listId, filter)] != null
-    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     @Deprecated("Use currentSyncStatus instead", ReplaceWith("currentSyncStatus"))
     internal val _isSyncing = MutableStateFlow(false)
@@ -181,7 +181,7 @@ class MainScreenModel(
     internal val _pendingBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
     val pendingBookmarkRemoteIds: StateFlow<Set<Long>> = _pendingBookmarks
         .map { list -> list.map { it.remoteId }.toSet() }
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     internal val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
@@ -191,7 +191,7 @@ class MainScreenModel(
     val selectedBookmarkIds: StateFlow<Set<Long>> = _selectedBookmarkIds
     val isSelectionMode: StateFlow<Boolean> = _selectedBookmarkIds
         .map { it.isNotEmpty() }
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     // Backward-compat for BookmarkListContent's top progress bar.
     // Derived from the current list's sync status rather than the global repository flow.
@@ -203,7 +203,7 @@ class MainScreenModel(
                 is ListSyncStatus.Idle             -> com.karakept.app.data.model.SyncProgress.Idle
             }
         }.stateIn(
-            screenModelScope,
+            viewModelScope,
             SharingStarted.WhileSubscribed(5000),
             com.karakept.app.data.model.SyncProgress.Idle
         )
@@ -215,7 +215,7 @@ class MainScreenModel(
         .flatMapLatest { server ->
             if (server != null) bookmarkRepository.getBookmarks(server) else flowOf(emptyList())
         }
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val listCounts: StateFlow<Map<String, Int>> = combine(
         selectedServer,
@@ -235,14 +235,14 @@ class MainScreenModel(
             }
             listId to count
         }
-    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private val offlineBookmarkCount: StateFlow<Int> = selectedServer
         .flatMapLatest { server ->
             if (server != null) bookmarkRepository.getOfflineBookmarkCount(server.id)
             else flowOf(0)
         }
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), 0)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val quickFilterCounts: StateFlow<QuickFilterCounts> = combine(
         selectedServer, allBookmarks, offlineBookmarkCount
@@ -254,45 +254,45 @@ class MainScreenModel(
             archived = bookmarks.count { it.isArchived },
             offline = offline
         )
-    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
 
     val highlightsCount: StateFlow<Int> = selectedServer
         .flatMapLatest { server ->
             if (server != null) highlightRepository.getHighlightsCount(server.id)
             else flowOf(0)
         }
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), 0)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val swipeLeftAction: StateFlow<com.karakept.app.data.model.SwipeAction> =
         settingsRepository.swipeLeftAction.stateIn(
-            screenModelScope, SharingStarted.WhileSubscribed(5000),
+            viewModelScope, SharingStarted.WhileSubscribed(5000),
             com.karakept.app.data.model.SwipeAction.MARK_READ
         )
 
     val swipeRightAction: StateFlow<com.karakept.app.data.model.SwipeAction> =
         settingsRepository.swipeRightAction.stateIn(
-            screenModelScope, SharingStarted.WhileSubscribed(5000),
+            viewModelScope, SharingStarted.WhileSubscribed(5000),
             com.karakept.app.data.model.SwipeAction.ARCHIVE
         )
 
     val customSwipeActionConfigs: StateFlow<List<com.karakept.app.data.model.CustomSwipeActionConfig>> =
         settingsRepository.customSwipeActionConfigs.stateIn(
-            screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
+            viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()
         )
 
     val swipeLeftConfigId: StateFlow<String?> =
         settingsRepository.swipeLeftConfigId.stateIn(
-            screenModelScope, SharingStarted.WhileSubscribed(5000), null
+            viewModelScope, SharingStarted.WhileSubscribed(5000), null
         )
 
     val swipeRightConfigId: StateFlow<String?> =
         settingsRepository.swipeRightConfigId.stateIn(
-            screenModelScope, SharingStarted.WhileSubscribed(5000), null
+            viewModelScope, SharingStarted.WhileSubscribed(5000), null
         )
 
     val dimReadBookmarks: StateFlow<Boolean> =
         settingsRepository.dimReadBookmarks.stateIn(
-            screenModelScope, SharingStarted.WhileSubscribed(5000), initialValue = true
+            viewModelScope, SharingStarted.WhileSubscribed(5000), initialValue = true
         )
 
     val currentListScrollAction: StateFlow<com.karakept.app.data.model.SwipeAction> =
@@ -305,7 +305,7 @@ class MainScreenModel(
                 }
             }
             .stateIn(
-                screenModelScope, SharingStarted.WhileSubscribed(5000),
+                viewModelScope, SharingStarted.WhileSubscribed(5000),
                 com.karakept.app.data.model.SwipeAction.NONE
             )
 
@@ -316,7 +316,7 @@ class MainScreenModel(
             val settings = allSettings[listId] ?: return@combine null
             val configId = settings.scrollActionConfigId ?: return@combine null
             configs.find { it.id == configId }
-        }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /**
      * The active [BookmarkLayout] for the current view.
@@ -336,7 +336,7 @@ class MainScreenModel(
             } else {
                 customLayouts.find { it.id == resolvedId }
             }
-        }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Two independent bookmark pipelines selected by _searchQuery:
     //  • blank query → paginated view (_pendingBookmarks + _accumulatedBookmarks)
@@ -355,7 +355,7 @@ class MainScreenModel(
                 }
             }
         }
-        .stateIn(screenModelScope, SharingStarted.Lazily, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     private sealed class InitState {
         data object Idle : InitState()
@@ -369,14 +369,14 @@ class MainScreenModel(
 
     init {
         // Log init state transitions for auditability.
-        screenModelScope.launch {
+        viewModelScope.launch {
             _initState.collect { state ->
                 AppLogger.d("MainScreenModel", "Init state: ${state::class.simpleName}")
             }
         }
 
         // Coroutine A: keep _selectedServer in sync with the server list.
-        screenModelScope.launch {
+        viewModelScope.launch {
             servers.collect { serverList ->
                 if (_selectedServer.value == null && serverList.isNotEmpty()) {
                     _selectedServer.value = serverList.first()
@@ -388,7 +388,7 @@ class MainScreenModel(
         }
 
         // Coroutine B: explicit state machine for sequential startup.
-        screenModelScope.launch {
+        viewModelScope.launch {
             _initState.value = InitState.ResolvingFilter
             val defaultFilter = defaultFilterResolver.resolve()
             _currentFilter.value = defaultFilter
@@ -441,7 +441,7 @@ class MainScreenModel(
         }
 
         // Keep the main list up-to-date when another screen mutates a bookmark.
-        screenModelScope.launch {
+        viewModelScope.launch {
             bookmarkActionsRepository.bookmarkChangedEvents.collect { remoteId ->
                 val serverId = _selectedServer.value?.id ?: return@collect
                 val updated = bookmarkRepository.getBookmarkByRemoteId(remoteId, serverId)
@@ -456,7 +456,7 @@ class MainScreenModel(
         }
 
         // Restore bookmarks on undo.
-        screenModelScope.launch {
+        viewModelScope.launch {
             bookmarkActionController.undoCompletedEvents.collect { event ->
                 updateAccumulatedBookmarks { current ->
                     val mutable = current.toMutableList()
@@ -487,7 +487,7 @@ class MainScreenModel(
     }
 
     fun syncBookmarks() {
-        screenModelScope.launch {
+        viewModelScope.launch {
             // Capture state BEFORE any suspension so the sync strategy and the
             // post-sync reload always use the same consistent snapshot.
             val capturedListContext = _currentListContext.value
@@ -603,7 +603,7 @@ class MainScreenModel(
     }
 
     private fun persistActiveFilter(filter: FilterConfig) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.saveLastActiveFilter(
                 status = filter.status.name,
                 listId = filter.lists.singleOrNull()
@@ -612,14 +612,14 @@ class MainScreenModel(
     }
 
     fun setDefaultList(listId: String) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setDefaultListType(DefaultListType.SPECIFIC_LIST)
             settingsRepository.setDefaultListId(listId)
         }
     }
 
     fun setDefaultListType(type: DefaultListType) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setDefaultListType(type)
             if (type != DefaultListType.SPECIFIC_LIST) {
                 settingsRepository.setDefaultListId(null)
@@ -644,20 +644,20 @@ class MainScreenModel(
     }
 
     fun selectServer(serverId: String) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val server = servers.value.find { it.id == serverId }
             _selectedServer.value = server
         }
     }
 
     fun scrollToTop() {
-        screenModelScope.launch {
+        viewModelScope.launch {
             _scrollToTopTrigger.emit(Unit)
         }
     }
 
     private fun loadLists() {
-        screenModelScope.launch {
+        viewModelScope.launch {
             selectedServer.value?.let { server ->
                 listRepository.refreshLists(server)
             }

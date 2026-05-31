@@ -38,20 +38,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.ui.screens.SettingsScreenModel
 
-class DefaultDisplaySettingsScreen : Screen {
+@Serializable
+class DefaultDisplaySettingsScreen : NavKey {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<SettingsScreenModel>()
+        val screenModel = koinViewModel<SettingsScreenModel>()
         val currentLayoutType by screenModel.layoutType.collectAsState()
         val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
         val showTags by screenModel.showTags.collectAsState()

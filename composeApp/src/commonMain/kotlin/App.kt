@@ -3,8 +3,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
-import cafe.adriel.voyager.navigator.Navigator
-import cafe.adriel.voyager.transitions.SlideTransition
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import com.karakept.app.ui.navigation.AppNavigator
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.appEntryProvider
+import com.karakept.app.ui.navigation.navSavedStateConfiguration
+import com.karakept.app.ui.navigation.sharedAxisZBackward
+import com.karakept.app.ui.navigation.sharedAxisZForward
 import com.karakept.app.di.appModule
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import org.koin.compose.KoinApplication
@@ -109,51 +120,72 @@ fun App(
             accentColor = accentColor
         ) {
             com.karakept.app.ui.theme.SyncWindowTheme()
-            var initialScreens by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<cafe.adriel.voyager.core.screen.Screen>?>(null) }
+
+            // Developer-owned Nav3 back stack. Persisted across config change / process death via
+            // navSavedStateConfiguration (polymorphic NavKey serialization). Seeded once below.
+            val backStack = rememberNavBackStack(navSavedStateConfiguration)
+            val navigator = remember(backStack) { AppNavigator(backStack) }
 
             androidx.compose.runtime.LaunchedEffect(sharedUrl, openBookmarkId, saveErrorUrl, saveErrorMessage) {
                 AppLogger.d("App", "LaunchedEffect. sharedUrl=$sharedUrl, openBookmarkId=$openBookmarkId, saveErrorUrl=$saveErrorUrl")
-                if (sharedUrl != null) {
-                    initialScreens = listOf(com.karakept.app.ui.screens.ShareBookmarkScreen(sharedUrl))
+                // Only seed when empty: a non-empty stack means it was restored (process death) or
+                // already initialized. New share/notification intents recreate App via an outer key().
+                if (backStack.isNotEmpty()) return@LaunchedEffect
+
+                val startKeys: List<NavKey> = if (sharedUrl != null) {
+                    listOf(com.karakept.app.ui.screens.ShareBookmarkScreen(sharedUrl))
                 } else if (serverRepository.hasServers()) {
-                    val screens = mutableListOf<cafe.adriel.voyager.core.screen.Screen>(com.karakept.app.ui.screens.MainScreen)
-                    if (saveErrorUrl != null) {
-                        AppLogger.d("App", "Save error for $saveErrorUrl. Adding SaveErrorScreen.")
-                        screens.add(
-                            com.karakept.app.ui.screens.SaveErrorScreen(
-                                url = saveErrorUrl,
-                                message = saveErrorMessage ?: "Unknown error"
+                    buildList {
+                        add(com.karakept.app.ui.screens.MainScreen)
+                        if (saveErrorUrl != null) {
+                            AppLogger.d("App", "Save error for $saveErrorUrl. Adding SaveErrorScreen.")
+                            add(
+                                com.karakept.app.ui.screens.SaveErrorScreen(
+                                    url = saveErrorUrl,
+                                    message = saveErrorMessage ?: "Unknown error"
+                                )
                             )
-                        )
-                    }
-                    if (openBookmarkId != null) {
-                        try {
-                           val bookmarkIdLong = openBookmarkId.toLong()
-                           AppLogger.d("App", "Parsing bookmark ID $bookmarkIdLong. Adding BookmarkViewerScreen.")
-                           // BookmarkViewerScreen only needs bookmarkId (Long). It handles server resolution internally.
-                           screens.add(com.karakept.app.ui.screens.BookmarkViewerScreen(bookmarkIdLong))
-                        } catch (e: Exception) {
-                            AppLogger.w("App", "Error parsing openBookmarkId: ${e.message}")
                         }
-                    } else {
-                        AppLogger.d("App", "No bookmark ID, showing only MainScreen")
+                        if (openBookmarkId != null) {
+                            try {
+                                val bookmarkIdLong = openBookmarkId.toLong()
+                                AppLogger.d("App", "Parsing bookmark ID $bookmarkIdLong. Adding BookmarkViewerScreen.")
+                                // BookmarkViewerScreen only needs bookmarkId (Long). It resolves the server internally.
+                                add(com.karakept.app.ui.screens.BookmarkViewerScreen(bookmarkIdLong))
+                            } catch (e: Exception) {
+                                AppLogger.w("App", "Error parsing openBookmarkId: ${e.message}")
+                            }
+                        } else {
+                            AppLogger.d("App", "No bookmark ID, showing only MainScreen")
+                        }
                     }
-                    initialScreens = screens
                 } else {
                     val onboardingCompleted = settingsRepository.onboardingCompleted.first()
                     if (!onboardingCompleted) {
                         AppLogger.d("App", "First launch, showing OnboardingScreen")
-                        initialScreens = listOf(com.karakept.app.ui.screens.OnboardingScreen())
+                        listOf(com.karakept.app.ui.screens.OnboardingScreen())
                     } else {
                         AppLogger.d("App", "No servers, showing LoginScreen")
-                        initialScreens = listOf(com.karakept.app.ui.screens.LoginScreen())
+                        listOf(com.karakept.app.ui.screens.LoginScreen())
                     }
                 }
+                backStack.addAll(startKeys)
             }
 
-            initialScreens?.let { screens ->
-                Navigator(screens) { navigator ->
-                    SlideTransition(navigator)
+            if (backStack.isNotEmpty()) {
+                CompositionLocalProvider(LocalNavigator provides navigator) {
+                    NavDisplay(
+                        backStack = backStack,
+                        onBack = { navigator.pop() },
+                        entryDecorators = listOf(
+                            rememberSaveableStateHolderNavEntryDecorator(),
+                            rememberViewModelStoreNavEntryDecorator(),
+                        ),
+                        transitionSpec = { sharedAxisZForward() },
+                        popTransitionSpec = { sharedAxisZBackward() },
+                        predictivePopTransitionSpec = { sharedAxisZBackward() },
+                        entryProvider = remember { appEntryProvider() },
+                    )
                 }
             }
     }
