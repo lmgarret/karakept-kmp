@@ -1,11 +1,11 @@
 # Technology Stack
 
-**Analysis Date:** 2026-03-20
+**Analysis Date:** 2026-05-30
 
 ## Languages
 
 **Primary:**
-- Kotlin 2.2.0 - Core application logic, multiplatform targets (Android, JVM Desktop)
+- Kotlin 2.3.20 - Core application logic, multiplatform targets (Android, JVM Desktop)
 - JavaScript/TypeScript - Upstream monorepo (Node.js services and tooling)
 
 **Secondary:**
@@ -27,7 +27,7 @@
 ## Frameworks
 
 **Core UI:**
-- Jetbrains Compose Multiplatform 1.10.0 - Cross-platform UI framework
+- Jetbrains Compose Multiplatform 1.11.0 - Cross-platform UI framework
 - Material Design 3 (androidx.compose.material3) - Material components and theme system
 - Compose Material 1.x (androidx.compose.material) - Base Material components
 
@@ -40,7 +40,7 @@
   - App wiring lives in `ui/navigation/` (`AppNavigator`, `LocalNavigator`, `appEntryProvider`, `navKeySerializersModule`, Shared Axis Z specs)
 
 **Networking:**
-- Ktor Client 3.3.2 - HTTP client with multiplatform support
+- Ktor Client 3.5.0 - HTTP client with multiplatform support
   - ktor-client-core: Core HTTP client
   - ktor-client-okhttp: OkHttp engine for JVM (Android + Desktop)
   - ktor-client-content-negotiation: Content type negotiation
@@ -49,43 +49,43 @@
   - ktor-client-logging: Request/response logging
 
 **Database:**
-- Room 2.7.0-alpha11 - Local SQLite ORM with KMP support
+- Room 2.8.4 - Local SQLite ORM with KMP support
   - androidx-room-runtime: Runtime database support
   - androidx-room-compiler: Code generation via KSP
-- SQLite 2.5.0-alpha11 (bundled) - Embedded database
+- SQLite 2.6.2 (bundled) - Embedded database
   - androidx-sqlite-bundled: Bundled SQLite driver for consistent behavior
 
 **State Management:**
-- Koin 4.0.0 - Dependency injection
+- Koin 4.2.1 - Dependency injection
   - koin-core: Core DI container
   - koin-compose: Compose integration
   - koin-android: Android-specific support
   - koin-androidx-workmanager: WorkManager task scheduling
 
 **Serialization:**
-- kotlinx-serialization 1.7.3 - Multiplatform serialization
+- kotlinx-serialization 1.9.1 - Multiplatform serialization
   - kotlinx-serialization-json: JSON codec
 - kotlinx-datetime 0.6.2 - Multiplatform date/time handling
 
 **Image Loading:**
-- Coil 3.0.0 - Image loading and caching
+- Coil 3.4.0 - Image loading and caching
   - coil-compose: Compose integration with Image() composable
   - coil-network-ktor: Ktor HTTP client engine for image loading
 
 **Local Preferences:**
-- DataStore 1.1.1 - Type-safe key-value store (successor to SharedPreferences)
+- DataStore 1.2.1 - Type-safe key-value store (successor to SharedPreferences)
   - androidx-datastore-preferences-core: Core library
   - androidx-datastore-preferences-android: Android-specific implementation
 
 **Async Programming:**
-- kotlinx-coroutines 1.9.0 - Async and concurrency primitives
+- kotlinx-coroutines 1.11.0 - Async and concurrency primitives
   - kotlinx-coroutines-core: Core coroutine runtime
   - kotlinx-coroutines-android: Android dispatcher integration
   - kotlinx-coroutines-swing: Swing dispatcher for desktop UI thread
   - kotlinx-coroutines-test: Testing utilities
 
 **HTML Parsing:**
-- ksoup 0.2.1 - HTML/XML parsing library (KMP-compatible)
+- ksoup 0.2.6 - HTML/XML parsing library (KMP-compatible)
 - Used for metadata extraction from bookmarked web content
 
 **Notifications:**
@@ -110,20 +110,19 @@
   - Linux: WebKitGTK
 
 **Android Integration:**
-- androidx-activity-compose 1.9.3 - Activity + Compose integration
-- androidx-browser 1.8.0 - Custom Chrome tabs for opening web content
-- androidx-core-splashscreen 1.0.1 - Splash screen API
-- androidx-lifecycle 2.8.4 - Lifecycle-aware components
-- androidx-work-runtime-ktx 2.9.0 - Background task scheduling
+- androidx-activity-compose 1.12.4 - Activity + Compose integration
+- androidx-browser 1.9.0 - Custom Chrome tabs for opening web content
+- androidx-core-splashscreen 1.2.0 - Splash screen API
+- androidx-work-runtime-ktx 2.10.5 - Background task scheduling
 
 ## Build & Code Generation
 
 **Build System:**
-- Gradle 8.10.0 (AGP - Android Gradle Plugin)
+- Gradle 8.14.5 (wrapper) with AGP 8.13.0 (Android Gradle Plugin)
 
 **Code Generation:**
-- KSP 2.2.0-2.0.2 (Kotlin Symbol Processing) - Annotation processor
-- OpenAPI Generator 7.10.0 - Generate API client from OpenAPI spec
+- KSP 2.3.9 (Kotlin Symbol Processing) - Annotation processor
+- OpenAPI Generator 7.22.0 - Generate API client from OpenAPI spec
   - Generates Kotlin multiplatform client to `com.karakept.api.*`
   - Located at: `api-client/` module
   - Source spec: `/karakeep-upstream/packages/open-api/karakeep-openapi-spec.json`
@@ -148,7 +147,7 @@
 
 **Testing:**
 - JUnit 4.13.2 - Unit test framework
-- mockk 1.13.12 - Kotlin mocking library
+- mockk 1.14.7 - Kotlin mocking library
 - kotlinx-coroutines-test - Coroutine testing utilities
 - Testcontainers 1.20.1 - Integration test containers (database isolation)
 
@@ -219,4 +218,4 @@
 
 ---
 
-*Stack analysis: 2026-03-20*
+*Stack analysis: 2026-05-30*
