@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens
 
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setActiveServerId
@@ -12,10 +12,10 @@ class LoginScreenModel(
     private val serverRepository: ServerRepository,
     private val settingsRepository: SettingsRepository,
     private val remoteDataSource: com.karakept.app.data.remote.RemoteDataSource
-) : ScreenModel {
+) : ViewModel() {
 
     fun addServer(url: String, apiKey: String, onSuccess: () -> Unit) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val trimmedUrl = url.trim()
             serverRepository.addServer(trimmedUrl, apiKey.trim(), trimmedUrl)
 
@@ -31,7 +31,7 @@ class LoginScreenModel(
     }
 
     fun testConnection(url: String, apiKey: String, onResult: (Boolean) -> Unit) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val success = remoteDataSource.testConnection(url.trim(), apiKey.trim())
             onResult(success)
         }

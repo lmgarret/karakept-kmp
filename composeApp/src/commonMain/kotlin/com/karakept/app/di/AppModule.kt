@@ -7,6 +7,7 @@ import com.karakept.app.data.local.getDatabaseBuilder
 import com.karakept.app.data.remote.createHttpClient
 import io.ktor.client.HttpClient
 import org.koin.dsl.module
+import org.koin.core.module.dsl.viewModel
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.BookmarkRepository
@@ -106,21 +107,22 @@ val appModule = module {
     // Backup & Restore
     single { BackupRepository(get(), get()) }
 
-    factory { LoginScreenModel(get(), get(), get()) }
-    factory { OnboardingScreenModel(get(), get(), get(), get()) }
-    // factory (not single) so each Voyager Navigator gets a fresh instance with its own
-    // screenModelScope. A Koin single would share one instance across Activities, but
-    // Voyager cancels the screenModelScope when a Navigator is disposed — the reused
+    viewModel { LoginScreenModel(get(), get(), get()) }
+    viewModel { OnboardingScreenModel(get(), get(), get(), get()) }
+    // viewModel (not single) so each Nav3 back-stack entry gets a fresh instance scoped
+    // to that entry's ViewModelStore (provided by rememberViewModelStoreNavEntryDecorator).
+    // A Koin single would share one instance across hosts/entries, but the store clears the
+    // ViewModel (cancelling viewModelScope) when its entry leaves the back stack — a reused
     // singleton would then have dead coroutines and never load bookmarks (SAVE-02).
-    factory { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
-    factory { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    factory { SettingsScreenModel(get(), get(), get(), get()) }
-    factory { HighlightsScreenModel(get(), get(), get(), get()) }
-    factory { com.karakept.app.ui.screens.SaveErrorScreenModel(get()) }
-    factory { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }
-    factory { params -> com.karakept.app.ui.screens.settings.PerListSettingsScreenModel(params.get(), get()) }
-    factory { ReaderAppearanceScreenModel(get()) }
-    factory { com.karakept.app.ui.screens.settings.BackupRestoreScreenModel(get(), get()) }
-    factory { com.karakept.app.ui.screens.settings.LayoutsScreenModel(get()) }
-    factory { com.karakept.app.ui.screens.settings.LayoutEditorScreenModel(get()) }
+    viewModel { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { SettingsScreenModel(get(), get(), get(), get()) }
+    viewModel { HighlightsScreenModel(get(), get(), get(), get()) }
+    viewModel { com.karakept.app.ui.screens.SaveErrorScreenModel(get()) }
+    viewModel { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }
+    viewModel { params -> com.karakept.app.ui.screens.settings.PerListSettingsScreenModel(params.get(), get()) }
+    viewModel { ReaderAppearanceScreenModel(get()) }
+    viewModel { com.karakept.app.ui.screens.settings.BackupRestoreScreenModel(get(), get()) }
+    viewModel { com.karakept.app.ui.screens.settings.LayoutsScreenModel(get()) }
+    viewModel { com.karakept.app.ui.screens.settings.LayoutEditorScreenModel(get()) }
 }

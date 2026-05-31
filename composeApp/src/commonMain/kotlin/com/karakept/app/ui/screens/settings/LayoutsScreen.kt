@@ -46,12 +46,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setDefaultLayoutId
@@ -66,7 +67,7 @@ import org.koin.compose.koinInject
 
 class LayoutsScreenModel(
     private val settingsRepository: SettingsRepository
-) : ScreenModel {
+) : ViewModel() {
 
     data class LayoutsState(
         val allLayouts: List<BookmarkLayout> = emptyList(),
@@ -81,24 +82,25 @@ class LayoutsScreenModel(
             allLayouts = BookmarkLayout.ALL_BUILTIN + custom,
             defaultLayoutId = defaultId
         )
-    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), LayoutsState())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LayoutsState())
 
     fun setDefaultLayout(id: String?) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setDefaultLayoutId(id)
         }
     }
 
     fun deleteLayout(id: String) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.deleteLayout(id)
         }
     }
 }
 
-class LayoutsScreen : Screen {
+@Serializable
+class LayoutsScreen : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         LayoutsContent(
             onBack = { navigator.pop() },
@@ -111,7 +113,7 @@ class LayoutsScreen : Screen {
 @Composable
 fun LayoutsContent(
     onBack: () -> Unit,
-    onNavigate: (Screen) -> Unit,
+    onNavigate: (NavKey) -> Unit,
     showBackButton: Boolean = true
 ) {
     val screenModel = koinInject<LayoutsScreenModel>()

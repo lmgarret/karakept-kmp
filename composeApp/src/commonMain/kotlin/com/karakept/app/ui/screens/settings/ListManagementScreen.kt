@@ -40,12 +40,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.CheckboxState
 import com.karakept.app.data.model.ListSyncConfig
 import com.karakept.app.data.model.SyncStrategy
@@ -62,14 +63,14 @@ import kotlinx.coroutines.launch
 class ListManagementScreenModel(
     private val listRepository: ListRepository,
     private val settingsRepository: SettingsRepository
-) : ScreenModel {
+) : ViewModel() {
     val lists: StateFlow<List<KarakeepList>> = listRepository.lists
 
     val syncConfig: StateFlow<ListSyncConfig> = settingsRepository.contentSyncConfig
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ListSyncConfig(emptySet(), emptySet()))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ListSyncConfig(emptySet(), emptySet()))
 
     fun cycleListSyncState(listId: String, currentState: CheckboxState) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val newState = currentState.next()
             settingsRepository.updateListSyncState(listId, newState)
         }
@@ -80,12 +81,13 @@ class ListManagementScreenModel(
     }
 }
 
-class ListManagementScreen : Screen {
+@Serializable
+class ListManagementScreen : NavKey {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<ListManagementScreenModel>()
+        val screenModel = koinViewModel<ListManagementScreenModel>()
         val lists by screenModel.lists.collectAsState()
         val syncConfig by screenModel.syncConfig.collectAsState()
 

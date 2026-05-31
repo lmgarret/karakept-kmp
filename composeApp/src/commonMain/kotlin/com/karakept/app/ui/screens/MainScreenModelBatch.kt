@@ -1,7 +1,7 @@
 /** Selection and batch operation extension functions for MainScreenModel. */
 package com.karakept.app.ui.screens
 
-import cafe.adriel.voyager.core.model.screenModelScope
+import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.local.entity.BookmarkEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -81,7 +81,7 @@ fun MainScreenModel.selectAll() {
         return
     }
     // D-01: Fetch all matching entities from DB in one query
-    screenModelScope.launch {
+    viewModelScope.launch {
         val server = _selectedServer.value ?: return@launch
         val filter = _currentFilter.value
 
@@ -116,7 +116,7 @@ internal fun MainScreenModel.getSelectedBookmarks(): List<BookmarkEntity> {
 fun MainScreenModel.batchArchive() {
     val bookmarks = getSelectedBookmarks().filter { !it.isArchived }
     if (bookmarks.isEmpty()) { clearSelection(); return }
-    screenModelScope.launch {
+    viewModelScope.launch {
         bookmarkActionsRepository.batchArchive(bookmarks)
         val remoteIds = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
@@ -132,7 +132,7 @@ fun MainScreenModel.batchArchive() {
 fun MainScreenModel.batchUnarchive() {
     val bookmarks = getSelectedBookmarks().filter { it.isArchived }
     if (bookmarks.isEmpty()) { clearSelection(); return }
-    screenModelScope.launch {
+    viewModelScope.launch {
         bookmarkActionsRepository.batchUnarchive(bookmarks)
         val remoteIds = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
@@ -148,7 +148,7 @@ fun MainScreenModel.batchUnarchive() {
 fun MainScreenModel.batchMarkRead() {
     val bookmarks = getSelectedBookmarks().filter { !it.isRead }
     if (bookmarks.isEmpty()) { clearSelection(); return }
-    screenModelScope.launch {
+    viewModelScope.launch {
         bookmarkActionsRepository.batchMarkRead(bookmarks)
         val ids = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { list ->
@@ -168,7 +168,7 @@ fun MainScreenModel.batchMarkRead() {
 fun MainScreenModel.batchMarkUnread() {
     val bookmarks = getSelectedBookmarks().filter { it.isRead }
     if (bookmarks.isEmpty()) { clearSelection(); return }
-    screenModelScope.launch {
+    viewModelScope.launch {
         val resetProgress = settingsRepository.resetProgressOnMarkUnread.first()
         bookmarkActionsRepository.batchMarkUnread(bookmarks, resetProgress)
         val ids = bookmarks.map { it.remoteId }.toSet()
@@ -194,7 +194,7 @@ fun MainScreenModel.batchMarkUnread() {
 fun MainScreenModel.batchFavourite() {
     val bookmarks = getSelectedBookmarks().filter { !it.isStarred }
     if (bookmarks.isEmpty()) { clearSelection(); return }
-    screenModelScope.launch {
+    viewModelScope.launch {
         bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = true)
         val ids = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { list ->
@@ -214,7 +214,7 @@ fun MainScreenModel.batchFavourite() {
 fun MainScreenModel.batchUnfavourite() {
     val bookmarks = getSelectedBookmarks().filter { it.isStarred }
     if (bookmarks.isEmpty()) { clearSelection(); return }
-    screenModelScope.launch {
+    viewModelScope.launch {
         bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = false)
         val ids = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { list ->
@@ -234,7 +234,7 @@ fun MainScreenModel.batchUnfavourite() {
 fun MainScreenModel.batchDelete() {
     val bookmarks = getSelectedBookmarks()
     if (bookmarks.isEmpty()) { clearSelection(); return }
-    screenModelScope.launch {
+    viewModelScope.launch {
         bookmarkActionsRepository.batchDelete(bookmarks)
         val ids = bookmarks.map { it.remoteId }.toSet()
         updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in ids } }
@@ -245,7 +245,7 @@ fun MainScreenModel.batchDelete() {
 fun MainScreenModel.batchSetTags(newTags: List<String>) {
     val bookmarks = getSelectedBookmarks()
     if (bookmarks.isEmpty()) { clearSelection(); return }
-    screenModelScope.launch {
+    viewModelScope.launch {
         bookmarkActionsRepository.batchUpdateTags(bookmarks, newTags)
         val ids = bookmarks.map { it.remoteId }.toSet()
         val tagString = newTags.joinToString(",")
@@ -263,7 +263,7 @@ fun MainScreenModel.batchSetTags(newTags: List<String>) {
 fun MainScreenModel.batchMoveToList(listId: String) {
     val bookmarks = getSelectedBookmarks()
     if (bookmarks.isEmpty()) { clearSelection(); return }
-    screenModelScope.launch {
+    viewModelScope.launch {
         val positions = bookmarks.associate { it.remoteId to accumulatedBookmarkPosition(it) }
         bookmarkActionsRepository.batchMoveToList(bookmarks, listId)
         val ids = bookmarks.map { it.remoteId }.toSet()

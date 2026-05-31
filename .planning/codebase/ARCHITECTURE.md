@@ -8,8 +8,8 @@
 
 **Key Characteristics:**
 - Multiplatform Kotlin (Compose Multiplatform targeting Android)
-- Clear separation between UI (Voyager screens), Data (repositories + local/remote sources), and Domain (business logic)
-- State management through Kotlin coroutines Flows with Voyager's ScreenModel
+- Clear separation between UI (Compose Navigation 3 screens), Data (repositories + local/remote sources), and Domain (business logic)
+- State management through Kotlin coroutines Flows with ViewModel-based ScreenModels
 - Centralized action dispatch through BookmarkActionController with automatic undo support
 - Offline-first approach with sync strategies (full, filtered, per-list)
 - Generated API client for Remote interactions
@@ -21,7 +21,7 @@
 - Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/` and `composeApp/src/androidMain/kotlin/com/karakept/app/ui/`
 - Contains: Screen composables (MainScreen, BookmarkViewerScreen, LoginScreen, SettingsScreen), reusable components (TagChip, BookmarkTagsDisplay, FilterBottomPanel, TagEditorDialog), theme configuration
 - Depends on: Data layer (repositories), Domain layer (business logic utilities, action events)
-- Used by: App.kt entry point and Voyager navigator
+- Used by: App.kt entry point and the Nav3 `NavDisplay` host (`ui/navigation/`)
 
 **Domain Layer (Business Logic):**
 - Purpose: Encapsulate business rules, filtering logic, and centralized action handling
@@ -92,7 +92,7 @@
 
 - StateFlow used for UI state (selectedServer, isSyncing, currentFilter, expandedLists)
 - SharedFlow used for events (scrollToTopTrigger, createBookmarkResult, undoCompletedEvents)
-- screenModelScope from Voyager cancels flows when screen is disposed
+- viewModelScope cancels flows when the screen's ViewModel is cleared (its Nav3 entry leaves the back stack)
 - Coroutines.flow for cold flows (database queries wrapped in flow { emitAll(...) })
 
 ## Key Abstractions
@@ -119,9 +119,9 @@
 - Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/model/FilterConfig.kt`
 - Used by: MainScreenModel and BookmarkFilterUtils
 
-**ScreenModel (from Voyager):**
-- Purpose: Lifecycle-scoped state holder for a screen, survives configuration changes
-- Pattern: Each screen has a corresponding ScreenModel factory (LoginScreenModel, MainScreenModel, BookmarkViewerScreenModel, etc.)
+**ScreenModel (`androidx.lifecycle.ViewModel` subclass):**
+- Purpose: Lifecycle-scoped state holder for a screen, survives configuration changes; scoped per Nav3 back-stack entry via `rememberViewModelStoreNavEntryDecorator`
+- Pattern: Each screen has a corresponding ScreenModel bound with `viewModel { }` in Koin (LoginScreenModel, MainScreenModel, BookmarkViewerScreenModel, etc.), obtained with `koinViewModel`
 - Dependencies injected via Koin
 
 ## Entry Points
@@ -134,7 +134,7 @@
   - Set up image loader with authentication for asset URLs
   - Route to initial screen based on app state (OnboardingScreen, LoginScreen, MainScreen, ShareBookmarkScreen, BookmarkViewerScreen)
   - Apply theme (AppTheme with Material3 colors and accent color)
-  - Initialize Voyager Navigator with SlideTransition
+  - Initialize the Nav3 `NavDisplay` host (back stack + entry decorators + Shared Axis Z / predictive-back transitions)
 
 **MainScreen / MainScreenModel:**
 - Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreen.kt`

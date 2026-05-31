@@ -7,17 +7,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.repository.BookmarkRepository
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
 import org.koin.compose.koinInject
 
-data class ShareBookmarkScreen(val url: String, val onClose: (() -> Unit)? = null) : Screen {
+@Serializable
+data class ShareBookmarkScreen(val url: String, @Transient val onClose: (() -> Unit)? = null) : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val repository = koinInject<BookmarkRepository>()
         var error by remember { mutableStateOf<String?>(null) }

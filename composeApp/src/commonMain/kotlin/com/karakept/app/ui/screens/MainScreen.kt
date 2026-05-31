@@ -22,10 +22,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalUriHandler
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.DescriptionPosition
@@ -58,13 +59,14 @@ import com.karakept.app.ui.screens.settings.PerListSettingsScreen
 import getPlatform
 import org.koin.compose.koinInject
 
-object MainScreen : Screen {
+@Serializable
+object MainScreen : NavKey {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<MainScreenModel>()
-        val settingsScreenModel = koinScreenModel<SettingsScreenModel>()
+        val screenModel = koinViewModel<MainScreenModel>()
+        val settingsScreenModel = koinViewModel<SettingsScreenModel>()
         val serverRepository = koinInject<com.karakept.app.data.repository.ServerRepository>()
         val lists by screenModel.lists.collectAsState()
         val bookmarks by screenModel.bookmarks.collectAsState()

@@ -36,10 +36,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import androidx.compose.material3.HorizontalDivider
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -58,11 +59,12 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 
-class BookmarkListSettingsScreen : Screen {
+@Serializable
+class BookmarkListSettingsScreen : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<SettingsScreenModel>()
+        val screenModel = koinViewModel<SettingsScreenModel>()
         BookmarkListSettingsContent(
             screenModel = screenModel,
             onBack = { navigator.pop() },
@@ -76,7 +78,7 @@ class BookmarkListSettingsScreen : Screen {
 fun BookmarkListSettingsContent(
     screenModel: SettingsScreenModel,
     onBack: () -> Unit,
-    onNavigate: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    onNavigate: (androidx.navigation3.runtime.NavKey) -> Unit,
     showBackButton: Boolean = true
 ) {
         val readingSpeedWpm by screenModel.readingSpeedWpm.collectAsState()

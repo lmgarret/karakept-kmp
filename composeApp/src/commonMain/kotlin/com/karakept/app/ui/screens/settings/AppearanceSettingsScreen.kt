@@ -46,19 +46,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.koin.koinScreenModel
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.ui.screens.SettingsScreenModel
 
-class AppearanceSettingsScreen : Screen {
+@Serializable
+class AppearanceSettingsScreen : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = koinScreenModel<SettingsScreenModel>()
+        val screenModel = koinViewModel<SettingsScreenModel>()
         AppearanceSettingsContent(
             screenModel = screenModel,
             onBack = { navigator.pop() },
@@ -72,7 +74,7 @@ class AppearanceSettingsScreen : Screen {
 fun AppearanceSettingsContent(
     screenModel: SettingsScreenModel,
     onBack: () -> Unit,
-    onNavigate: (cafe.adriel.voyager.core.screen.Screen) -> Unit,
+    onNavigate: (androidx.navigation3.runtime.NavKey) -> Unit,
     showBackButton: Boolean = true
 ) {
     val currentThemeMode by screenModel.themeMode.collectAsState()

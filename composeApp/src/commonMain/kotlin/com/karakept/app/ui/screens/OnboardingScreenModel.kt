@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens
 
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.repository.ServerRepository
@@ -16,14 +16,14 @@ class OnboardingScreenModel(
     private val serverRepository: ServerRepository,
     private val remoteDataSource: RemoteDataSource,
     private val backupRepository: BackupRepository
-) : ScreenModel {
+) : ViewModel() {
 
     fun completeOnboarding(
         backgroundSyncEnabled: Boolean = false,
         backgroundSyncFrequencyMinutes: Int = 60,
         onDone: () -> Unit
     ) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setOnboardingCompleted(true)
             settingsRepository.setBackgroundSyncEnabled(backgroundSyncEnabled)
             if (backgroundSyncEnabled) {
@@ -34,7 +34,7 @@ class OnboardingScreenModel(
     }
 
     fun addServer(url: String, apiKey: String, onSuccess: () -> Unit) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val trimmedUrl = url.trim()
             serverRepository.addServer(trimmedUrl, apiKey.trim(), trimmedUrl)
 
@@ -49,7 +49,7 @@ class OnboardingScreenModel(
     }
 
     fun testConnection(url: String, apiKey: String, onResult: (Boolean) -> Unit) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val success = remoteDataSource.testConnection(url.trim(), apiKey.trim())
             onResult(success)
         }
@@ -65,7 +65,7 @@ class OnboardingScreenModel(
         pin: String,
         onResult: (Result<Pair<String, Boolean>>) -> Unit
     ) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             try {
                 val summary = backupRepository.importFromJson(jsonContent, pin)
                 val serversRestored = serverRepository.servers.first().isNotEmpty()

@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens
 
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.Server
@@ -22,7 +22,7 @@ class HighlightsScreenModel(
     private val bookmarkDao: BookmarkDao,
     private val serverRepository: ServerRepository,
     private val settingsRepository: SettingsRepository
-) : ScreenModel {
+) : ViewModel() {
 
     private val pageSize = 20
 
@@ -45,10 +45,10 @@ class HighlightsScreenModel(
         settingsRepository.activeServerId
     ) { servers, id ->
         servers.find { it.id == id }
-    }.stateIn(screenModelScope, SharingStarted.Eagerly, null)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     init {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val serverId = settingsRepository.activeServerId.first()
             if (serverId != null) loadInitialPage()
         }
@@ -65,7 +65,7 @@ class HighlightsScreenModel(
 
     fun loadNextPage() {
         if (_isLoadingMore.value || !_hasMoreItems.value) return
-        screenModelScope.launch {
+        viewModelScope.launch {
             _isLoadingMore.value = true
             try {
                 val serverId = settingsRepository.activeServerId.first() ?: return@launch
@@ -84,7 +84,7 @@ class HighlightsScreenModel(
     }
 
     fun syncHighlights() {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val server = selectedServer.value ?: return@launch
             _isSyncing.value = true
             try {
@@ -97,7 +97,7 @@ class HighlightsScreenModel(
     }
 
     fun deleteHighlight(highlight: Highlight) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val server = selectedServer.value ?: return@launch
             _accumulatedHighlights.value = _accumulatedHighlights.value.filter { it.id != highlight.id }
             val bookmark = bookmarkDao.getBookmarkByOriginalRemoteId(highlight.bookmarkId, server.id) ?: return@launch

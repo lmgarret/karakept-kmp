@@ -12,9 +12,11 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.repository.BookmarkRepository
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -27,12 +29,13 @@ private data class UrlSaveState(
     val error: String? = null,
 )
 
+@Serializable
 data class ShareMultipleBookmarksScreen(
     val urls: List<String>,
-    val onClose: (() -> Unit)? = null,
-) : Screen {
+    @Transient val onClose: (() -> Unit)? = null,
+) : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val repository = koinInject<BookmarkRepository>()
         val scope = rememberCoroutineScope()

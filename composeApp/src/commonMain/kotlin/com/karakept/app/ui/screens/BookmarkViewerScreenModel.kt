@@ -2,8 +2,8 @@ package com.karakept.app.ui.screens
 
 import androidx.compose.ui.graphics.Color
 import com.karakept.app.utils.AppLogger
-import cafe.adriel.voyager.core.model.ScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.BookmarkEntity
@@ -59,7 +59,7 @@ class BookmarkViewerScreenModel(
     private val bookmarkActionController: BookmarkActionController,
     private val highlightRepository: com.karakept.app.data.repository.HighlightRepository,
     private val snackbarManager: ActionSnackbarManager
-) : ScreenModel {
+) : ViewModel() {
     private val parsedDocumentCache = ParsedDocumentCache(maxSize = 5)
 
     private val _loadingState = MutableStateFlow<BookmarkLoadingState>(BookmarkLoadingState.Initial)
@@ -83,35 +83,35 @@ class BookmarkViewerScreenModel(
         MutableStateFlow(ViewerMode.READER)
     } else {
         settingsRepository.viewerMode
-            .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ViewerMode.READER)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ViewerMode.READER)
     }
 
     val hideArticleThumbnails: StateFlow<Boolean> = settingsRepository.hideArticleThumbnails
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val htmlTextColor: StateFlow<Color?> = settingsRepository.htmlTextColor
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val htmlBackgroundColor: StateFlow<Color?> = settingsRepository.htmlBackgroundColor
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), null)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val htmlFontSize: StateFlow<Int> = settingsRepository.htmlFontSize
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), 16)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 16)
 
     val htmlFontFamily: StateFlow<ReaderFontFamily> = settingsRepository.htmlFontFamily
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), ReaderFontFamily.SYSTEM)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReaderFontFamily.SYSTEM)
 
     val showTags: StateFlow<Boolean> = settingsRepository.showTagsInViewer
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val scrollToTopEnabled: StateFlow<Boolean> = settingsRepository.scrollToTopEnabled
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val dateDisplayMode: StateFlow<DateDisplayMode> = settingsRepository.dateDisplayMode
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), DateDisplayMode.ELAPSED)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DateDisplayMode.ELAPSED)
 
     val linkOpenMode: StateFlow<LinkOpenMode> = settingsRepository.linkOpenMode
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), LinkOpenMode.CUSTOM_TAB)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LinkOpenMode.CUSTOM_TAB)
 
     private val _precrawledAssetPath = MutableStateFlow<String?>(null)
     val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()
@@ -161,13 +161,13 @@ class BookmarkViewerScreenModel(
             if (bookmark == null) flowOf(emptyList())
             else highlightRepository.getHighlightsForBookmark(bookmark.originalRemoteId, bookmark.serverId)
         }
-    }.stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val offlineMode: StateFlow<Boolean> = settingsRepository.offlineMode
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val trackReadingProgress: StateFlow<Boolean> = settingsRepository.trackReadingProgress
-        .stateIn(screenModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     // --- Reading progress persistence (flow-based debounce) ---
 
@@ -190,7 +190,7 @@ class BookmarkViewerScreenModel(
     init {
         // When viewer mode switches to READER while FULL_PAGE_ARCHIVE is selected,
         // ensure the archive string is loaded for the native renderer.
-        screenModelScope.launch {
+        viewModelScope.launch {
             viewerMode.collect { mode ->
                 if (_selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE
                     && mode == ViewerMode.READER
@@ -203,7 +203,7 @@ class BookmarkViewerScreenModel(
         }
 
         @OptIn(FlowPreview::class)
-        screenModelScope.launch {
+        viewModelScope.launch {
             readingStateUpdates
                 .debounce(500)
                 .collect { state ->
@@ -250,11 +250,21 @@ class BookmarkViewerScreenModel(
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    override fun onDispose() {
+    override fun onCleared() {
+        flushOnDispose()
+    }
+
+    /**
+     * Flushes pending reading progress and clears caches. Called automatically by [onCleared]
+     * when this ViewModel's nav entry leaves, and manually by the expanded (inline) viewer
+     * layout when the displayed bookmark changes without a nav-stack change.
+     */
+    @OptIn(DelicateCoroutinesApi::class)
+    fun flushOnDispose() {
         parsedDocumentCache.clear()
         val state = pendingReadingState ?: return
         val serverId = (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark?.serverId
-        // screenModelScope is being cancelled, so use GlobalScope for this
+        // viewModelScope is being cancelled, so use GlobalScope for this
         // fire-and-forget DB write that must complete.
         GlobalScope.launch(Dispatchers.IO) {
             bookmarkDao.updateReadingProgress(
@@ -295,7 +305,7 @@ class BookmarkViewerScreenModel(
             return
         }
 
-        screenModelScope.launch {
+        viewModelScope.launch {
             if (offlineMode.value) {
                 AppLogger.d("ViewerModel", "refreshBookmark skipped - offline mode")
                 return@launch
@@ -343,7 +353,7 @@ class BookmarkViewerScreenModel(
 
     fun loadBookmark(id: Long) {
         _bookmarkId.value = id
-        screenModelScope.launch {
+        viewModelScope.launch {
             try {
                 var hasLoadedOnce = false
                 // Cache for transient content (not persisted to DB). Without this cache,
@@ -356,7 +366,7 @@ class BookmarkViewerScreenModel(
                     if (bookmark != null) {
                         if (!hasLoadedOnce) {
                             // Trigger on-demand sync for highlights
-                            screenModelScope.launch {
+                            viewModelScope.launch {
                                 try {
                                     val servers = serverRepository.servers.first()
                                     val server = servers.find { it.id == bookmark.serverId }
@@ -376,7 +386,7 @@ class BookmarkViewerScreenModel(
                             // updated with the server value.
                             if (!settingsRepository.offlineMode.first()) {
                                 // Pull reading progress from server for cross-device sync
-                                screenModelScope.launch {
+                                viewModelScope.launch {
                                     val updated = bookmarkActionsRepository.pullReadingProgressFromServer(
                                         bookmark.remoteId, bookmark.serverId
                                     )
@@ -502,31 +512,31 @@ class BookmarkViewerScreenModel(
     }
 
     fun setViewerMode(mode: ViewerMode) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setViewerMode(mode)
         }
     }
 
     fun setHtmlTextColor(color: Color?) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setHtmlTextColor(color)
         }
     }
 
     fun setHtmlBackgroundColor(color: Color?) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setHtmlBackgroundColor(color)
         }
     }
 
     fun setHtmlFontSize(size: Int) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setHtmlFontSize(size)
         }
     }
 
     fun setHtmlFontFamily(family: ReaderFontFamily) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             settingsRepository.setHtmlFontFamily(family)
         }
     }
@@ -536,11 +546,11 @@ class BookmarkViewerScreenModel(
     }
 
     fun setScrollToTopEnabled(enabled: Boolean) {
-        screenModelScope.launch { settingsRepository.setScrollToTopEnabled(enabled) }
+        viewModelScope.launch { settingsRepository.setScrollToTopEnabled(enabled) }
     }
 
     fun setContentSource(source: ContentSource, bookmark: BookmarkEntity?) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             _selectedSource.value = source
             if (source == ContentSource.FULL_PAGE_ARCHIVE) {
                 val localPath = _precrawledAssetPath.value
@@ -570,7 +580,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun fetchAndCacheArchive(bookmark: BookmarkEntity) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             _isLoadingSource.value = true
             try {
                 val servers = serverRepository.servers.first()
@@ -627,7 +637,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun deleteAssetLocal(asset: com.karakept.app.data.local.entity.AssetEntity) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             try {
                 val localPath = asset.localPath
                 if (localPath != null) {
@@ -659,7 +669,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun downloadOrRefreshAsset(asset: com.karakept.app.data.local.entity.AssetEntity, bookmark: com.karakept.app.data.local.entity.BookmarkEntity) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             when (asset.assetType) {
                 "fullPageArchive", "precrawledArchive" -> {
                     // fetchAndCacheArchive manages _isLoadingSource itself; just clear the
@@ -703,7 +713,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun loadLists(server: Server) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             try {
                 val fetchedLists = remoteDataSource.fetchLists(server)
                 _lists.value = fetchedLists
@@ -719,7 +729,7 @@ class BookmarkViewerScreenModel(
     // Bookmark Actions
 
     fun toggleBookmarkArchive(bookmark: BookmarkEntity) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val event = if (bookmark.isArchived) {
                 BookmarkActionEvent.Unarchive(bookmark)
             } else {
@@ -730,7 +740,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun toggleBookmarkFavorite(bookmark: BookmarkEntity) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             bookmarkActionController.executeAction(
                 BookmarkActionEvent.ToggleFavorite(bookmark)
             )
@@ -738,7 +748,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun toggleBookmarkRead(bookmark: BookmarkEntity) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val event = if (bookmark.isRead) {
                 BookmarkActionEvent.MarkUnread(bookmark)
             } else {
@@ -749,7 +759,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun deleteBookmark(bookmark: BookmarkEntity, onSuccess: () -> Unit) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             bookmarkActionController.executeAction(
                 BookmarkActionEvent.Delete(bookmark)
             )
@@ -758,7 +768,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val isOffline = settingsRepository.offlineMode.first()
             bookmarkActionsRepository.moveToList(
                 bookmark.remoteId,
@@ -770,7 +780,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun updateBookmarkTags(bookmark: BookmarkEntity, tags: List<String>) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val isOffline = settingsRepository.offlineMode.first()
             bookmarkActionsRepository.updateTags(
                 bookmark.remoteId,
@@ -783,7 +793,7 @@ class BookmarkViewerScreenModel(
 
     fun createHighlight(bookmark: BookmarkEntity, text: String, startOffset: Int, endOffset: Int, note: String? = null, color: String? = null, onCreated: (String) -> Unit = {}) {
         AppLogger.d("ViewerModel", "createHighlight requested - text='${text.take(30)}...', start=$startOffset, end=$endOffset")
-        screenModelScope.launch {
+        viewModelScope.launch {
             try {
                 val servers = serverRepository.servers.first()
                 val server = servers.find { it.id == bookmark.serverId } ?: run {
@@ -803,7 +813,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun updateHighlight(bookmark: BookmarkEntity, highlightId: String, note: String?, color: String?) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val servers = serverRepository.servers.first()
             val server = servers.find { it.id == bookmark.serverId } ?: return@launch
             highlightRepository.updateHighlight(server, bookmark.localId, highlightId, note, color)
@@ -811,7 +821,7 @@ class BookmarkViewerScreenModel(
     }
 
     fun deleteHighlight(bookmark: BookmarkEntity, highlightId: String) {
-        screenModelScope.launch {
+        viewModelScope.launch {
             val servers = serverRepository.servers.first()
             val server = servers.find { it.id == bookmark.serverId } ?: return@launch
             highlightRepository.deleteHighlight(server, bookmark.localId, highlightId)

@@ -1,7 +1,7 @@
 /** Pagination extension functions for MainScreenModel. */
 package com.karakept.app.ui.screens
 
-import cafe.adriel.voyager.core.model.screenModelScope
+import androidx.lifecycle.viewModelScope
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.FilterConfig
@@ -89,7 +89,7 @@ fun MainScreenModel.loadNextPage() {
     // even before the coroutine body runs.
     _isLoadingMore.value = true
 
-    screenModelScope.launch {
+    viewModelScope.launch {
         try {
             val generation = paginationGeneration
             val server = _selectedServer.value ?: return@launch

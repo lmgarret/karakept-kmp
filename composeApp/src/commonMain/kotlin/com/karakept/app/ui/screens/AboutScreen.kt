@@ -36,9 +36,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cafe.adriel.voyager.core.screen.Screen
-import cafe.adriel.voyager.navigator.LocalNavigator
-import cafe.adriel.voyager.navigator.currentOrThrow
+import androidx.navigation3.runtime.NavKey
+import kotlinx.serialization.Serializable
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
 import coil3.compose.AsyncImage
 import com.karakept.app.utils.FaviconUtils
 
@@ -48,9 +49,10 @@ data class FossLibrary(
     val url: String
 )
 
-class AboutScreen : Screen {
+@Serializable
+class AboutScreen : NavKey {
     @Composable
-    override fun Content() {
+    fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         AboutContent(onBack = { navigator.pop() })
     }
@@ -155,7 +157,8 @@ fun AboutContent(
                 val libraries = listOf(
                     FossLibrary("Kotlin Multiplatform", "Apache 2.0", "https://github.com/JetBrains/kotlin"),
                     FossLibrary("Compose Multiplatform", "Apache 2.0", "https://github.com/JetBrains/compose-multiplatform"),
-                    FossLibrary("Voyager", "MIT", "https://github.com/adrielcafe/voyager"),
+                    FossLibrary("Navigation 3", "Apache 2.0", "https://developer.android.com/guide/navigation/navigation-3"),
+                    FossLibrary("AndroidX Lifecycle (Multiplatform)", "Apache 2.0", "https://github.com/JetBrains/compose-multiplatform-core"),
                     FossLibrary("Ktor", "Apache 2.0", "https://github.com/ktorio/ktor"),
                     FossLibrary("Coil", "Apache 2.0", "https://github.com/coil-kt/coil"),
                     FossLibrary("Koin", "Apache 2.0", "https://github.com/InsertKoinIO/koin"),
