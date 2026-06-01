@@ -345,6 +345,8 @@ object MainScreen : NavKey {
                     onSearchClick = { isSearchActive = true },
                     onSearchQueryChange = { screenModel.updateSearchQuery(it) },
                     onSearchClose = { isSearchActive = false; screenModel.clearSearch() },
+                    contextMenuLists = lists,
+                    contextMenuTags = allAvailableTags,
                     onBookmarkClick = onBookmarkClick,
                     onBookmarkLongClick = { bookmark ->
                         if (isSelectionMode) screenModel.toggleBookmarkSelection(bookmark)
