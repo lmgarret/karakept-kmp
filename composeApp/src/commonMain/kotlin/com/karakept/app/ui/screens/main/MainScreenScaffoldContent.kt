@@ -52,7 +52,12 @@ import com.karakept.app.ui.screens.toggleBookmarkArchive
 import com.karakept.app.ui.screens.toggleBookmarkFavorite
 import com.karakept.app.ui.screens.toggleBookmarkRead
 import com.karakept.app.ui.screens.deleteBookmark
+import com.karakept.app.ui.screens.moveBookmarkToList
+import com.karakept.app.ui.screens.updateBookmarkTags
+import com.karakept.app.ui.screens.accumulatedBookmarkPosition
+import com.karakept.app.ui.screens.restoreAndRemoveBookmarkFromList
 import com.karakept.app.domain.action.ActionSnackbarManager
+import com.karakept.app.domain.action.undoableAction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -128,6 +133,8 @@ fun MainScreenScaffoldContent(
     onSearchClick: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearchClose: () -> Unit,
+    contextMenuLists: List<com.karakept.api.model.KarakeepList> = emptyList(),
+    contextMenuTags: List<String> = emptyList(),
     onBookmarkClick: (BookmarkEntity) -> Unit,
     onBookmarkLongClick: (BookmarkEntity) -> Unit,
     onSwipeAction: (BookmarkEntity, SwipeAction, CustomSwipeActionConfig?) -> Unit,
@@ -268,6 +275,8 @@ fun MainScreenScaffoldContent(
                 },
                 listState = listState,
                 isDesktop = isDesktop,
+                contextMenuLists = contextMenuLists,
+                contextMenuTags = contextMenuTags,
                 onBookmarkClick = onBookmarkClick,
                 onBookmarkLongClick = onBookmarkLongClick,
                 serverUrl = serverUrl,
@@ -306,8 +315,20 @@ fun MainScreenScaffoldContent(
                             }
                         }
                         is BookmarkAction.Select -> screenModel.enterSelectionMode(bookmark)
-                        is BookmarkAction.MoveToList, is BookmarkAction.UpdateTags -> {
-                            onBookmarkLongClick(bookmark)
+                        is BookmarkAction.MoveToList -> {
+                            val pos = screenModel.accumulatedBookmarkPosition(bookmark)
+                            screenModel.moveBookmarkToList(bookmark, action.listId)
+                            val listName = contextMenuLists.firstOrNull { it.id == action.listId }?.name ?: "list"
+                            scope.undoableAction(snackbarManager, "Moved to '$listName'") {
+                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, action.listId, pos)
+                            }
+                        }
+                        is BookmarkAction.UpdateTags -> {
+                            val oldTags = bookmark.tags.split(",").filter { it.isNotBlank() }
+                            screenModel.updateBookmarkTags(bookmark, action.tags)
+                            scope.undoableAction(snackbarManager, "Tags updated") {
+                                screenModel.updateBookmarkTags(bookmark, oldTags)
+                            }
                         }
                     }
                 } else null

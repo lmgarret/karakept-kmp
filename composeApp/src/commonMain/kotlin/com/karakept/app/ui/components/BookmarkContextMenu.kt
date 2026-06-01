@@ -21,25 +21,38 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpOffset
+import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 
 /**
  * Desktop context menu for bookmark actions, shown as a DropdownMenu at the right-click position.
  * Uses the same [BookmarkAction] sealed class as [BookmarkActionsMenu].
+ *
+ * "Move to List" and "Edit Tags" open the shared [ListPickerDialog] / [TagEditorDialog] and emit
+ * the chosen value, mirroring [BookmarkActionsMenu].
  */
 @Composable
 fun BookmarkContextMenu(
     expanded: Boolean,
     bookmark: BookmarkEntity,
+    availableLists: List<KarakeepList> = emptyList(),
+    availableTags: List<String> = emptyList(),
     offset: DpOffset = DpOffset.Zero,
     onAction: (BookmarkAction) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showListPicker by remember { mutableStateOf(false) }
+    var showTagEditor by remember { mutableStateOf(false) }
+
     DropdownMenu(
-        expanded = expanded,
+        expanded = expanded && !showListPicker && !showTagEditor,
         onDismissRequest = onDismiss,
         offset = offset,
         shape = MaterialTheme.shapes.extraSmall,
@@ -94,19 +107,13 @@ fun BookmarkContextMenu(
         DropdownMenuItem(
             text = { Text("Move to List") },
             leadingIcon = { Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null) },
-            onClick = {
-                onAction(BookmarkAction.MoveToList(""))
-                onDismiss()
-            }
+            onClick = { showListPicker = true }
         )
 
         DropdownMenuItem(
             text = { Text("Edit Tags") },
             leadingIcon = { Icon(imageVector = Icons.Default.Edit, contentDescription = null) },
-            onClick = {
-                onAction(BookmarkAction.UpdateTags(emptyList()))
-                onDismiss()
-            }
+            onClick = { showTagEditor = true }
         )
 
         HorizontalDivider()
@@ -161,6 +168,40 @@ fun BookmarkContextMenu(
             colors = MenuDefaults.itemColors(
                 textColor = MaterialTheme.colorScheme.error
             )
+        )
+    }
+
+    // List picker dialog
+    if (showListPicker && availableLists.isNotEmpty()) {
+        ListPickerDialog(
+            lists = availableLists,
+            currentListIds = bookmark.listIds.split(",").filter { it.isNotBlank() },
+            onListSelected = { listId ->
+                onAction(BookmarkAction.MoveToList(listId))
+                showListPicker = false
+                onDismiss()
+            },
+            onDismiss = {
+                showListPicker = false
+                onDismiss()
+            }
+        )
+    }
+
+    // Tag editor dialog
+    if (showTagEditor) {
+        TagEditorDialog(
+            currentTags = bookmark.tags.split(",").filter { it.isNotBlank() },
+            availableTags = availableTags,
+            onTagsUpdated = { newTags ->
+                onAction(BookmarkAction.UpdateTags(newTags))
+                showTagEditor = false
+                onDismiss()
+            },
+            onDismiss = {
+                showTagEditor = false
+                onDismiss()
+            }
         )
     }
 }

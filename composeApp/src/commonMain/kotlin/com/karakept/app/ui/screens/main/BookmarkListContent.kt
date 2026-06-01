@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -126,6 +128,8 @@ internal fun BookmarkListContent(
     serverUrl: String? = null,
     onCtrlClick: ((BookmarkEntity) -> Unit)? = null,
     onShiftClick: ((Int) -> Unit)? = null,
+    contextMenuLists: List<com.karakept.api.model.KarakeepList> = emptyList(),
+    contextMenuTags: List<String> = emptyList(),
     onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null
 ) {
     // Detect when scrolled near end
@@ -330,17 +334,26 @@ internal fun BookmarkListContent(
                             } else Modifier
                         )
                 ) {
-                    // Desktop context menu anchored at right-click position
+                    // Desktop context menu anchored at right-click position.
+                    // The menu is hosted in a zero-size Box offset to the cursor so the
+                    // DropdownMenu opens at the click point rather than below the whole item.
                     if (isDesktop && contextMenuBookmark?.remoteId == bookmark.remoteId && onContextMenuAction != null) {
-                        BookmarkContextMenu(
-                            expanded = true,
-                            bookmark = bookmark,
-                            offset = contextMenuOffset,
-                            onAction = { action ->
-                                onContextMenuAction.invoke(bookmark, action)
-                            },
-                            onDismiss = { contextMenuBookmark = null }
-                        )
+                        Box(
+                            modifier = Modifier
+                                .offset(contextMenuOffset.x, contextMenuOffset.y)
+                                .size(0.dp)
+                        ) {
+                            BookmarkContextMenu(
+                                expanded = true,
+                                bookmark = bookmark,
+                                availableLists = contextMenuLists,
+                                availableTags = contextMenuTags,
+                                onAction = { action ->
+                                    onContextMenuAction.invoke(bookmark, action)
+                                },
+                                onDismiss = { contextMenuBookmark = null }
+                            )
+                        }
                     }
 
                     if (bookmark.remoteId in pendingBookmarkRemoteIds) {
