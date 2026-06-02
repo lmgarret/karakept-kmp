@@ -122,7 +122,6 @@ kotlin {
         }
         val desktopTest by getting {
             dependencies {
-                implementation(libs.testcontainers.core)
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.junit)
                 implementation(libs.mockk)

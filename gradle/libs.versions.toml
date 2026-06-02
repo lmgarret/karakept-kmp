@@ -27,7 +27,6 @@ compose-webview = "1.0.0-beta-01"
 compose-native-tray = "1.1.0"
 knotify = "0.4.3"
 nativefiledialog = "1.0.3"
-testcontainers = "1.20.1"
 mockk = "1.14.11"
 robolectric = "4.16.1"
 androidx-test-core = "1.6.1"
@@ -106,9 +105,6 @@ nativefiledialog = { module = "tv.wunderbox:nativefiledialog", version.ref = "na
 # WorkManager
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version = "2.10.5" }
 koin-androidx-workmanager = { module = "io.insert-koin:koin-androidx-workmanager", version.ref = "koin" }
-
-# Testcontainers
-testcontainers-core = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 
 # Mocking
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
