@@ -203,10 +203,10 @@
 ## Desktop Tray & Notifications
 
 **System Tray:**
-- Library: Compose Native Tray 1.1.0
+- Library: Compose Native Tray 1.3.0
 - macOS: NSStatusBar menu bar
 - Windows: Taskbar icon
-- Linux: D-Bus interface via system-tray specification
+- Linux: D-Bus StatusNotifierItem (SNI) via native C/JNI bridge
   - Requires: `dbus-x11` package and running D-Bus session
   - Issue: `platformtools.darkmodedetector` excluded from desktop build to avoid skiko version conflict
 

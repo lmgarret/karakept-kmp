@@ -94,7 +94,7 @@
   - Desktop: System notifications
 
 **Desktop-Specific:**
-- Compose Native Tray 1.1.0 - System tray integration
+- Compose Native Tray 1.3.0 - System tray integration
   - macOS: Native NSStatusBar
   - Windows: Native taskbar
   - Linux: D-Bus interface (via DBus-x11)
