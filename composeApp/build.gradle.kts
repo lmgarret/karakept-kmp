@@ -10,6 +10,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsCompose)
     alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.compose.hot.reload)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.room)
     alias(libs.plugins.ksp)
@@ -290,8 +291,10 @@ configurations.all {
 // `run` task (plain java -cp) is affected.  Exclude it from `run`; FilePicker.jvm.kt
 // falls back to Swing JFileChooser when nativefiledialog classes aren't available.
 afterEvaluate {
-    tasks.named("run", JavaExec::class.java) {
-        classpath = classpath.filter { "nativefiledialog" !in it.name }
+    listOf("run", "runHot").forEach { taskName ->
+        tasks.findByName(taskName)?.let { task ->
+            (task as? JavaExec)?.classpath = (task as JavaExec).classpath.filter { "nativefiledialog" !in it.name }
+        }
     }
 }
 

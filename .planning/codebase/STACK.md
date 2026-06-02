@@ -129,6 +129,7 @@
 
 **Kotlin Compiler Plugin:**
 - compose-compiler (bundled with kotlin-plugin-compose) - Compose IR compiler
+- org.jetbrains.compose.hot-reload (1.11.0, bundled with CMP) - Compose Hot Reload for desktop dev workflow; adds `runHot` Gradle task
 
 ## Key Dependencies
 
