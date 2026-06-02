@@ -25,7 +25,7 @@ jobs:
           submodules: true
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         with:
           python-version: '3.11'
@@ -149,7 +149,7 @@ jobs:
           mv "$APK" "composeApp/build/outputs/apk/release/Karakept-${{ needs.resolve-version.outputs.name }}.apk"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apk-release
           path: composeApp/build/outputs/apk/release/Karakept-*.apk
@@ -189,7 +189,7 @@ jobs:
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dmg-release
           path: composeApp/build/compose/binaries/main/dmg/Karakept-*.dmg
@@ -223,13 +223,13 @@ jobs:
           "-PversionName=${{ needs.resolve-version.outputs.name }}"
 
       - name: Upload Windows MSI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: msi-release
           path: composeApp/build/compose/binaries/main/msi/*.msi
 
       - name: Upload Windows EXE artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: exe-release
           path: composeApp/build/compose/binaries/main/exe/*.exe
@@ -257,7 +257,7 @@ jobs:
           -PversionName=${{ needs.resolve-version.outputs.name }}
 
       - name: Upload Linux distributable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-dist-for-flatpak
           path: |
@@ -277,7 +277,7 @@ jobs:
           submodules: true
 
       - name: Download Linux distributable
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-dist-for-flatpak
           path: composeApp/build
@@ -292,7 +292,7 @@ jobs:
       - name: Rename Flatpak
         run: mv Karakept.flatpak "Karakept-${{ needs.resolve-version.outputs.name }}.flatpak"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: flatpak-release
           path: Karakept-*.flatpak
@@ -305,11 +305,11 @@ jobs:
       contents: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
 
       - name: Create versioned release
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.resolve-version.outputs.tag }}
           name: ${{ needs.resolve-version.outputs.tag }}
@@ -324,7 +324,7 @@ jobs:
 
       - name: Update nightly pre-release
         if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: nightly
           name: "Nightly (#${{ github.run_number }})"
