@@ -97,6 +97,20 @@ For a release build:
 
 The script auto-detects your display environment (X11, XWayland, Wayland, or headless via Xvfb) and launches the app. It also sets up D-Bus for system tray support.
 
+#### Hot Reload (macOS / Linux / Windows)
+
+For a faster iteration loop, use Compose Hot Reload — UI changes appear in the running app without restarting:
+
+```bash
+# Terminal 1 — start the app
+./gradlew :composeApp:hotRunDesktop
+
+# Terminal 2 — watch for changes and hot-swap
+./gradlew -t :composeApp:reload
+```
+
+Save any `.kt` file and the UI updates in-place within a couple of seconds.
+
 **Linux host setup** (for devcontainer GUI forwarding):
 ```bash
 xhost +local:
