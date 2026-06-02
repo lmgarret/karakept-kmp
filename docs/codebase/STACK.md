@@ -191,6 +191,11 @@
   - `release.yml` - Version resolution, build, and release
   - `pr-build.yml` - Pull request validation
   - `ci.yml` - Continuous integration
+  - `cache-warm.yml` - Seeds the Gradle cache from the default branch
+  - `gradle/actions/setup-gradle@v6` (MIT) - Gradle setup + caching in CI. Pinned to
+    `cache-provider: basic`, the open-source (MIT) cache provider built on `actions/cache`.
+    The v6 default `enhanced` provider relies on the proprietary `gradle-actions-caching`
+    component governed by Gradle's commercial Terms of Use and is deliberately not used.
   - Uses LLM for changelog generation (mistral/mistral-large-latest)
   - Signing configured via environment variables (KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)
 
