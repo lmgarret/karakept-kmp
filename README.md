@@ -12,6 +12,11 @@
   <strong>Compose Multiplatform</strong> &bull; <strong>Material Design 3</strong> &bull; <strong>Offline-first</strong>
 </p>
 
+<p align="center">
+  <a href="https://github.com/lmgarret/karakept-kmp/actions/workflows/ci.yml"><img src="https://github.com/lmgarret/karakept-kmp/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+</p>
+
 ---
 
 ## Screenshots
@@ -188,6 +193,14 @@ karakept-kmp/
 ├── .devcontainer/          # Devcontainer configuration
 └── gradle/                 # Gradle wrapper and version catalog
 ```
+
+## Acknowledgments
+
+Karakept is an independent, unofficial client for [Karakeep](https://github.com/karakeep-app/karakeep) — the open-source bookmark-everything app. This project is not affiliated with or endorsed by the Karakeep team. All credit for the backend, sync engine, and API goes to the Karakeep maintainers and contributors.
+
+The code under `api-client/` is generated from Karakeep's [OpenAPI specification](https://github.com/karakeep-app/karakeep) using [OpenAPI Generator](https://openapi-generator.tech/).
+
+Open-source libraries and fonts used by the app are credited in-app on the **About** screen.
 
 ## License
 
