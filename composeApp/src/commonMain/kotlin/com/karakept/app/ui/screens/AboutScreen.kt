@@ -143,6 +143,34 @@ fun AboutContent(
                 }
 
                 item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { uriHandler.openUri("https://github.com/karakeep-app/karakeep") }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Public,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = "Powered by Karakeep",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Unofficial client for the Karakeep bookmark app (AGPL-3.0)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                item {
                     HorizontalDivider()
                 }
 
