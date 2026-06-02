@@ -126,7 +126,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Decode keystore
         env:
@@ -171,7 +171,7 @@ jobs:
       # Releases run on tags (non-default ref), where setup-gradle defaults to a
       # read-only cache. Allow writes so back-to-back releases reuse this runner's
       # compiled outputs. No extra job/run is added — only a cache-save step.
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
@@ -210,7 +210,7 @@ jobs:
 
       # See build-macos: allow cache writes on tag-triggered releases so
       # consecutive releases reuse compiled outputs. No extra run is added.
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
@@ -249,7 +249,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Build distributable and prepare Flatpak sources
         run: >
