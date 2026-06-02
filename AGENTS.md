@@ -7,7 +7,7 @@ targeting Android and JVM Desktop (Linux, macOS, Windows).
 The UI follows **Material Design 3 (MD3)** guidelines throughout.
 
 Key technologies:
-- Kotlin 2.2.0 / Compose Multiplatform 1.10.0
+- Kotlin 2.3.20 / Compose Multiplatform 1.11.0
 - Material3 (`androidx.compose.material3`)
 - Compose Navigation 3 (`androidx.navigation3` / `org.jetbrains.androidx.navigation3` 1.1.1) for navigation
 - `androidx.lifecycle` `ViewModel` (multiplatform) for per-screen state (MVVM)
@@ -201,6 +201,21 @@ Every new feature or bug fix **must** include new or updated tests. Tests that b
 | Common unit tests | `composeApp/src/commonTest/kotlin/com/karakept/app/` |
 | Desktop integration tests | `composeApp/src/desktopTest/kotlin/com/karakept/app/data/integration/` |
 | Android unit tests | `composeApp/src/androidUnitTest/kotlin/com/karakept/app/` |
+
+### Running the Desktop App
+
+```bash
+./gradlew :composeApp:run                    # Run desktop app
+./gradlew :composeApp:run -Pdev=true         # Run in dev mode (shows "(DEV)" in title)
+./gradlew :composeApp:hotRunDesktop          # Run with Compose Hot Reload (CMP 1.11+, requires JBR 21)
+./gradlew :composeApp:hotRunDesktop -Pdev=true  # Hot Reload + dev mode
+```
+
+**Hot Reload workflow** — two terminals required:
+1. Terminal 1: `./gradlew :composeApp:hotRunDesktop` — starts the app with the hot-reload agent
+2. Terminal 2: `./gradlew -t :composeApp:reload` — compiles and signals the agent on every save
+
+Save a `.kt` file → Terminal 2 compiles + notifies the agent → UI updates in-place in Terminal 1.
 
 ### Running Tests
 
