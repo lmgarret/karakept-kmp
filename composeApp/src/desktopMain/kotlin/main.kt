@@ -242,6 +242,9 @@ fun main(args: Array<String> = emptyArray()) {
         NotificationInitializer.configure(AppConfig(appName = "Karakept", smallIcon = iconUri))
     } catch (_: UnsatisfiedLinkError) {
         // libnotify.so not available — notifications will be silently skipped
+    } catch (_: Exception) {
+        // Resource extraction fails when running from a directory classpath (e.g. hotRunDesktop)
+        // rather than a JAR. Notifications are silently skipped in that case.
     }
 
     // Read persisted window state before entering composition
