@@ -8,7 +8,7 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 class HighlightRepository(
     private val highlightDao: HighlightDao,
