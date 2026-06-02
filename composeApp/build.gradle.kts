@@ -1,9 +1,11 @@
+import org.gradle.process.ExecOperations
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import java.awt.Color as AwtColor
 import java.awt.Graphics2D as AwtGraphics2D
 import java.awt.RenderingHints
 import java.awt.image.BufferedImage as AwtBufferedImage
 import javax.imageio.ImageIO
+import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -372,30 +374,40 @@ tasks.withType<Test> {
     }
 }
 
+// Gradle 9 removed Project.exec/javaexec; external processes must run through the
+// injected ExecOperations service. Obtaining it via an injected interface keeps the
+// task action configuration-cache compatible.
+interface ExecServiceInjection {
+    @get:Inject val execOps: ExecOperations
+}
+
 // Post-process DMG to set volume icon (fixes OpenJDK icon in Finder title bar)
 if (org.gradle.internal.os.OperatingSystem.current().isMacOsX) {
+    val execInjection = objects.newInstance<ExecServiceInjection>()
+    val dmgDir = layout.buildDirectory.dir("compose/binaries/main/dmg")
+    val iconFile = project.file("src/desktopMain/resources/icon.icns")
+
     val setDmgVolumeIcon = tasks.register("setDmgVolumeIcon") {
         group = "compose desktop"
         description = "Sets the volume icon on the packaged DMG"
 
         doLast {
-            val dmgDir = layout.buildDirectory.dir("compose/binaries/main/dmg").get().asFile
-            val iconFile = project.file("src/desktopMain/resources/icon.icns")
-            val dmg = dmgDir.listFiles()?.firstOrNull { it.extension == "dmg" }
-                ?: error("No DMG found in $dmgDir")
+            val execOps = execInjection.execOps
+            val dmg = dmgDir.get().asFile.listFiles()?.firstOrNull { it.extension == "dmg" }
+                ?: error("No DMG found in ${dmgDir.get().asFile}")
             val rwDmg = File(dmg.parentFile, "rw-${dmg.name}")
             val mountPoint = "/Volumes/KarakeptVolumeIcon"
 
-            project.exec { commandLine("hdiutil", "convert", dmg.absolutePath, "-format", "UDRW", "-o", rwDmg.absolutePath) }
-            project.exec { commandLine("hdiutil", "attach", rwDmg.absolutePath, "-mountpoint", mountPoint, "-nobrowse") }
+            execOps.exec { commandLine("hdiutil", "convert", dmg.absolutePath, "-format", "UDRW", "-o", rwDmg.absolutePath) }
+            execOps.exec { commandLine("hdiutil", "attach", rwDmg.absolutePath, "-mountpoint", mountPoint, "-nobrowse") }
             try {
                 iconFile.copyTo(File(mountPoint, ".VolumeIcon.icns"), overwrite = true)
-                project.exec { commandLine("SetFile", "-a", "C", mountPoint) }
+                execOps.exec { commandLine("SetFile", "-a", "C", mountPoint) }
             } finally {
-                project.exec { commandLine("hdiutil", "detach", mountPoint) }
+                execOps.exec { commandLine("hdiutil", "detach", mountPoint) }
             }
             dmg.delete()
-            project.exec { commandLine("hdiutil", "convert", rwDmg.absolutePath, "-format", "UDZO", "-o", dmg.absolutePath) }
+            execOps.exec { commandLine("hdiutil", "convert", rwDmg.absolutePath, "-format", "UDZO", "-o", dmg.absolutePath) }
             rwDmg.delete()
             println("Volume icon set on ${dmg.name}")
         }
