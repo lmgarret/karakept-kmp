@@ -291,7 +291,7 @@ configurations.all {
 // `run` task (plain java -cp) is affected.  Exclude it from `run`; FilePicker.jvm.kt
 // falls back to Swing JFileChooser when nativefiledialog classes aren't available.
 afterEvaluate {
-    listOf("run", "runHot").forEach { taskName ->
+    listOf("run", "hotRunDesktop").forEach { taskName ->
         tasks.findByName(taskName)?.let { task ->
             (task as? JavaExec)?.classpath = (task as JavaExec).classpath.filter { "nativefiledialog" !in it.name }
         }

@@ -205,10 +205,10 @@ Every new feature or bug fix **must** include new or updated tests. Tests that b
 ### Running the Desktop App
 
 ```bash
-./gradlew :composeApp:run                # Run desktop app
-./gradlew :composeApp:run -Pdev=true     # Run in dev mode (shows "(DEV)" in title)
-./gradlew :composeApp:runHot             # Run with Compose Hot Reload (CMP 1.11+)
-./gradlew :composeApp:runHot -Pdev=true  # Hot Reload + dev mode
+./gradlew :composeApp:run                    # Run desktop app
+./gradlew :composeApp:run -Pdev=true         # Run in dev mode (shows "(DEV)" in title)
+./gradlew :composeApp:hotRunDesktop          # Run with Compose Hot Reload (CMP 1.11+, requires JBR 21)
+./gradlew :composeApp:hotRunDesktop -Pdev=true  # Hot Reload + dev mode
 ```
 
 ### Running Tests

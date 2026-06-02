@@ -1,6 +1,12 @@
 rootProject.name = "Karakept"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
+plugins {
+    // Auto-provisions JVMs (including JetBrains Runtime) when a toolchain requests them.
+    // Required for `hotRunDesktop` which needs JBR 21 for the hot-reload DCEVM agent.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
+}
+
 pluginManagement {
     repositories {
         google {
