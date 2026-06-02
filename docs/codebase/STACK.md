@@ -150,7 +150,6 @@
 - JUnit 4.13.2 - Unit test framework
 - mockk 1.14.7 - Kotlin mocking library
 - kotlinx-coroutines-test - Coroutine testing utilities
-- Testcontainers 1.20.1 - Integration test containers (database isolation)
 
 **Kotlin Test Framework:**
 - kotlin-test - Standard library test assertions
