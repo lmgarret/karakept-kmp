@@ -213,9 +213,9 @@ Every new feature or bug fix **must** include new or updated tests. Tests that b
 
 **Hot Reload workflow** — two terminals required:
 1. Terminal 1: `./gradlew :composeApp:hotRunDesktop` — starts the app with the hot-reload agent
-2. Terminal 2: `./gradlew -t :composeApp:compileKotlinDesktop` — recompiles on every save
+2. Terminal 2: `./gradlew -t :composeApp:reload` — compiles and signals the agent on every save
 
-Save a `.kt` file → Terminal 2 recompiles → agent in Terminal 1 hot-swaps the classes.
+Save a `.kt` file → Terminal 2 compiles + notifies the agent → UI updates in-place in Terminal 1.
 
 ### Running Tests
 
