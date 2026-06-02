@@ -309,7 +309,7 @@ jobs:
 
       - name: Create versioned release
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.resolve-version.outputs.tag }}
           name: ${{ needs.resolve-version.outputs.tag }}
@@ -324,7 +324,7 @@ jobs:
 
       - name: Update nightly pre-release
         if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: nightly
           name: "Nightly (#${{ github.run_number }})"
