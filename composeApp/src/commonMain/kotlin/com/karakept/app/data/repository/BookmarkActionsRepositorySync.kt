@@ -263,7 +263,7 @@ internal suspend fun BookmarkActionsRepository.executeAction(action: PendingActi
                                 note = result.note,
                                 color = result.color?.value,
                                 createdAt = try {
-                                    kotlinx.datetime.Instant.parse(result.createdAt ?: "").toEpochMilliseconds()
+                                    kotlin.time.Instant.parse(result.createdAt ?: "").toEpochMilliseconds()
                                 } catch (e: Exception) { existingHighlight.createdAt }
                             ))
                         } else {

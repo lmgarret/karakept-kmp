@@ -45,7 +45,7 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.SortOption
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlin.math.min
 import kotlin.math.roundToInt
 

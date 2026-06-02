@@ -61,7 +61,7 @@ import com.karakept.app.data.model.AutoExportInterval
 import com.karakept.app.ui.components.rememberDirectoryPicker
 import com.karakept.app.ui.components.rememberJsonFilePicker
 import com.karakept.app.utils.FileUtils
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 

@@ -35,7 +35,7 @@ import com.karakept.app.ui.theme.HighlightBlue
 import com.karakept.app.ui.theme.HighlightGreen
 import com.karakept.app.ui.theme.HighlightRed
 import com.karakept.app.ui.theme.HighlightYellow
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
