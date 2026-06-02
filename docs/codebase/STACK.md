@@ -20,7 +20,7 @@
 - Java Desktop (JVM via Gradle Compose Desktop)
 
 **Package Manager:**
-- Gradle 8.x with Kotlin DSL
+- Gradle 9.x with Kotlin DSL
 - Gradle Wrapper (local versioning)
 - npm/pnpm 9.15.9 (for upstream monorepo)
 
@@ -118,7 +118,7 @@
 ## Build & Code Generation
 
 **Build System:**
-- Gradle 8.14.5 (wrapper) with AGP 8.13.0 (Android Gradle Plugin)
+- Gradle 9.5.1 (wrapper) with AGP 8.13.0 (Android Gradle Plugin); requires JDK 17+ to run the build
 
 **Code Generation:**
 - KSP 2.3.9 (Kotlin Symbol Processing) - Annotation processor
