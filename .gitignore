@@ -42,3 +42,6 @@ build/
 
 # Flatpak builder files
 .flatpak-builder
+
+# Internal planning workspace (local only)
+.planning/

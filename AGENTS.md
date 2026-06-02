@@ -282,7 +282,7 @@ Before adding any dependency:
 
 1. **Check the license.** Verify it is compatible with the project (MIT, Apache 2.0, and similar permissive licenses are fine; GPL/LGPL requires careful review).
 2. **Add it to the open-source licenses screen.** The in-app open-source credits screen must be updated to include the new library name, version, and license.
-3. **Document it.** Add the dependency to the relevant section in `.planning/codebase/STACK.md`.
+3. **Document it.** Add the dependency to the relevant section in `docs/codebase/STACK.md`.
 
 ---
 
@@ -294,8 +294,8 @@ Keep documentation current as the code evolves:
 - **New backup-related features** → update `docs/backup-restore.md`.
 - **New API integrations or architectural changes** → add/update a file in `docs/`.
 - **New reusable components** → document them in this file under "Reusable UI Components".
-- **Stack changes** → update `.planning/codebase/STACK.md`.
-- **Architecture changes** → update `.planning/codebase/ARCHITECTURE.md`.
+- **Stack changes** → update `docs/codebase/STACK.md`.
+- **Architecture changes** → update `docs/codebase/ARCHITECTURE.md`.
 
 ---
 
