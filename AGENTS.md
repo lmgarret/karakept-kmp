@@ -340,6 +340,9 @@ Releases (`.github/workflows/release.yml`):
 The `api-client/` module is **generated** from the Karakeep OpenAPI spec at
 `karakeep-upstream/packages/open-api/karakeep-openapi-spec.json` using OpenAPI Generator 7.10.0.
 
+- The spec lives in the `karakeep-upstream` git submodule. If a build fails with a
+  missing-spec error on `:api-client:openApiGenerate`, initialize it first:
+  `git submodule update --init`.
 - **Do not hand-edit** files under `api-client/src/` — they will be overwritten on regeneration.
 - Generated models live at `com.karakept.api.*`.
 - `RemoteDataSource.kt` is the only place that consumes the generated API clients.
