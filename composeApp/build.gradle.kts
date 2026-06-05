@@ -375,6 +375,20 @@ run {
     }
 }
 
+// The desktop test task is the PR CI entry point (./gradlew desktopTest). Two adjustments:
+//  1. Drop the nativefiledialog jar from the test runtime classpath. It bundles an outdated
+//     kotlin-stdlib that shadows the project's stdlib on the flat test classpath (same problem
+//     the `run` task works around below), causing NoSuchMethodError for kotlin.time.Clock.
+//     Tests never use the native picker (FilePicker falls back to Swing), so removing it is safe.
+//  2. Exclude the Docker-backed integration tests by default — they require a running backend
+//     and are meant to run locally / in a dedicated job. Pass -PwithIntegrationTests to include.
+tasks.named<Test>("desktopTest") {
+    classpath = classpath.filter { "nativefiledialog" !in it.name }
+    if (!project.hasProperty("withIntegrationTests")) {
+        exclude("**/data/integration/**")
+    }
+}
+
 tasks.withType<Test> {
     testLogging {
         events("passed", "skipped", "failed")
