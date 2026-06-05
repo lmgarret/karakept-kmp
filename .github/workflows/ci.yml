@@ -40,6 +40,6 @@ jobs:
       # PR CI runs only the desktop (JVM) suite: it covers all commonTest +
       # desktopTest tests — the bulk of coverage — without compiling the Android
       # target or paying the Robolectric bootstrap. The Android-only unit tests run
-      # nightly (nightly-android-tests.yml) and as a release gate (release.yml).
+      # as a release gate before any artifact is built (release.yml).
       - name: Run desktop tests
         run: ./gradlew desktopTest --rerun

@@ -55,8 +55,8 @@ jobs:
       # `desktopJar` warms the Linux release lane, whose createDistributable depends on it.
       #
       # The Android compile path is intentionally NOT warmed here: PR CI no longer
-      # compiles the Android target, and the Android unit tests run on their own
-      # schedule (nightly + release gate) which self-persist their caches.
+      # compiles the Android target, and the Android unit tests run only as a release
+      # gate (release.yml), which self-persists its cache.
       - name: Warm build & dependency cache
         run: ./gradlew desktopTest :composeApp:desktopJar
 
