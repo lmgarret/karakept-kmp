@@ -214,6 +214,16 @@ android {
     }
 }
 
+// The `release` and `devRelease` build types are non-minified (isMinifyEnabled = false),
+// so their unit tests exercise byte-for-byte the same code as `debug`. Running the
+// (Robolectric-backed) Android unit suite once per build type triples CI test time for
+// zero extra coverage, so only the `debug` variant's unit tests are kept. `./gradlew test`
+// then runs testDebugUnitTest + desktopTest instead of three Android variants + desktop.
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { it.enableUnitTest = false }
+    beforeVariants(selector().withBuildType("devRelease")) { it.enableUnitTest = false }
+}
+
 room {
     schemaDirectory("$projectDir/schemas")
 }
