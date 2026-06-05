@@ -27,8 +27,8 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.After
-import org.junit.Before
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -80,7 +80,7 @@ class BookmarkViewerProgressTest {
         readingProgress = 0f
     )
 
-    @Before
+    @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         mockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositorySyncKt")
@@ -123,7 +123,7 @@ class BookmarkViewerProgressTest {
         coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
         unmockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositorySyncKt")

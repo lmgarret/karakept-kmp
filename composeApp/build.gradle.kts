@@ -214,6 +214,16 @@ android {
     }
 }
 
+// The `release` and `devRelease` build types are non-minified (isMinifyEnabled = false),
+// so their unit tests exercise byte-for-byte the same code as `debug`. Running the
+// (Robolectric-backed) Android unit suite once per build type triples CI test time for
+// zero extra coverage, so only the `debug` variant's unit tests are kept. `./gradlew test`
+// then runs testDebugUnitTest + desktopTest instead of three Android variants + desktop.
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { it.enableUnitTest = false }
+    beforeVariants(selector().withBuildType("devRelease")) { it.enableUnitTest = false }
+}
+
 room {
     schemaDirectory("$projectDir/schemas")
 }
@@ -365,12 +375,38 @@ run {
     }
 }
 
+// The desktop test task is the PR CI entry point (./gradlew desktopTest). Two adjustments:
+//  1. Drop the nativefiledialog jar from the test runtime classpath. It bundles an outdated
+//     kotlin-stdlib that shadows the project's stdlib on the flat test classpath (same problem
+//     the `run` task works around below), causing NoSuchMethodError for kotlin.time.Clock.
+//     Tests never use the native picker (FilePicker falls back to Swing), so removing it is safe.
+//  2. Exclude the Docker-backed integration tests by default — they require a running backend
+//     and are meant to run locally / in a dedicated job. Pass -PwithIntegrationTests to include.
+tasks.named<Test>("desktopTest") {
+    classpath = classpath.filter { "nativefiledialog" !in it.name }
+    if (!project.hasProperty("withIntegrationTests")) {
+        exclude("**/data/integration/**")
+    }
+}
+
 tasks.withType<Test> {
     testLogging {
         events("passed", "skipped", "failed")
         showStandardStreams = true
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
+    // Log per-class durations and flag individual tests that take > 500ms.
+    // This gives the data needed to identify slow test classes and outliers.
+    afterTest(KotlinClosure2({ desc: TestDescriptor, result: TestResult ->
+        val ms = result.endTime - result.startTime
+        if (ms >= 500) println("  [SLOW ${ms}ms] ${desc.className} > ${desc.name}")
+    }))
+    afterSuite(KotlinClosure2({ desc: TestDescriptor, result: TestResult ->
+        if (desc.parent != null) {
+            val ms = result.endTime - result.startTime
+            println("  [suite ${ms}ms] ${desc.displayName}: ${result.testCount} tests")
+        }
+    }))
 }
 
 // Gradle 9 removed Project.exec/javaexec; external processes must run through the
