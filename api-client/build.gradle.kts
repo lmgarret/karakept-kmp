@@ -64,7 +64,10 @@ openApiGenerate {
         "dateLibrary" to "kotlinx-datetime",
         "useCoroutines" to "true",
         "omitGradleWrapper" to "true",
-        "enumPropertyNaming" to "UPPERCASE"
+        "enumPropertyNaming" to "UPPERCASE",
+        // Without this, every generated file embeds the current timestamp, busting the
+        // Gradle build cache for all downstream api-client compile tasks on every run.
+        "hideGenerationTimestamp" to "true"
     ))
     
     modelNameMappings.set(mapOf(
