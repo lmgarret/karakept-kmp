@@ -3,6 +3,12 @@ name: CI
 on:
   pull_request:
     branches: [ main ]
+    # Skip the test suite for changes that cannot affect it (docs/markdown only).
+    # Any source, Gradle, or workflow change still triggers a full run.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
 
 jobs:
   test:
