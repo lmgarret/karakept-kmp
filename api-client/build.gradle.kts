@@ -92,8 +92,13 @@ openApiGenerate {
 val patchOpenApiClient by tasks.registering {
     dependsOn("openApiGenerate")
 
+    // Resolve to a plain File at configuration time so the doLast closure captures only a
+    // serializable java.io.File, not the Provider/Project script objects (which the
+    // configuration cache cannot serialize).
+    val targetFile = generatedSourcesDir.get().asFile
+        .resolve("src/main/kotlin/com/karakept/api/model/BookmarksPostRequest.kt")
+
     doLast {
-        val targetFile = file("${generatedSourcesDir.get().asFile}/src/main/kotlin/com/karakept/api/model/BookmarksPostRequest.kt")
         if (!targetFile.exists()) {
             throw GradleException("Cannot patch Type enum: $targetFile not found")
         }

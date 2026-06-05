@@ -112,9 +112,37 @@ jobs:
             echo "BODY_EOF"
           } >> "$GITHUB_OUTPUT"
 
+  android-tests:
+    name: Run Android unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # basic = open-source (MIT) cache provider; v6's default 'enhanced'
+          # provider is proprietary under Gradle's commercial Terms of Use.
+          cache-provider: basic
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            wrapper
+
+      # PR CI only runs the desktop suite, so validate the Android-only unit tests
+      # here before any release artifact is built or published.
+      - name: Run Android unit tests
+        run: ./gradlew testDebugUnitTest --rerun
+
   build-android:
     name: Build Android APK
-    needs: resolve-version
+    needs: [resolve-version, android-tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -160,7 +188,7 @@ jobs:
 
   build-macos:
     name: Build macOS DMG
-    needs: resolve-version
+    needs: [resolve-version, android-tests]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -203,7 +231,7 @@ jobs:
 
   build-windows:
     name: Build Windows (MSI + EXE)
-    needs: resolve-version
+    needs: [resolve-version, android-tests]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -246,7 +274,7 @@ jobs:
 
   build-linux-dist:
     name: Build Linux distributable
-    needs: resolve-version
+    needs: [resolve-version, android-tests]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
