@@ -15,18 +15,15 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
@@ -34,16 +31,9 @@ import kotlin.test.assertEquals
  *
  * Guards against regressions of the scroll position restore bug fixed in Phase 03
  * (commit 5d4d2aa). savedScrollIndex and savedScrollOffset are hoisted in
- * MainScreenModel (Koin singleton) and must survive Voyager push/pop.
- *
- * Verifies:
- * - Defaults to zero
- * - saveScrollPosition persists index and offset
- * - Multiple calls overwrite previous values
+ * MainScreenModel (Koin singleton) and must survive Nav3 push/pop.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@org.robolectric.annotation.Config(application = android.app.Application::class)
 class ScrollPositionRegressionTest {
 
     private val testDispatcher = StandardTestDispatcher()
@@ -57,7 +47,7 @@ class ScrollPositionRegressionTest {
     private lateinit var snackbarManager: ActionSnackbarManager
     private lateinit var highlightRepository: HighlightRepository
 
-    @Before
+    @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
@@ -89,13 +79,11 @@ class ScrollPositionRegressionTest {
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        // Relaxed mocks for SharedFlow<T> emit Nothing values causing KotlinNothingValueException;
-        // replace with emptyFlow() to prevent crashes in the background coroutines.
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Long>()
         every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
     }

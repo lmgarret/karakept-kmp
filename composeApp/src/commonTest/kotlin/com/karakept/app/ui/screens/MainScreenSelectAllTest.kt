@@ -1,6 +1,5 @@
 package com.karakept.app.ui.screens
 
-import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.Server
@@ -13,36 +12,29 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
-import io.mockk.coVerify
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 /**
- * Regression tests for LIST-02: Smart lists do not update after quick actions that
- * change a bookmark's list membership.
- *
- * Verifies that after moveBookmarkToList and removeBookmarkFromList,
- * reconcileBookmarkSmartListMembership is called with SMART list IDs only.
+ * Tests for FILT-01: selectAll() behavior on MainScreenModel.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@org.robolectric.annotation.Config(application = android.app.Application::class)
-class List02RegressionTest {
+class MainScreenSelectAllTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -62,11 +54,7 @@ class List02RegressionTest {
         label = "Test"
     )
 
-    private val smartList1 = KarakeepList(id = "smart-1", name = "Unread", type = KarakeepList.Type.SMART)
-    private val smartList2 = KarakeepList(id = "smart-2", name = "Recent", type = KarakeepList.Type.SMART)
-    private val manualList = KarakeepList(id = "manual-1", name = "Read Later", type = KarakeepList.Type.MANUAL)
-
-    @Before
+    @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
@@ -79,7 +67,7 @@ class List02RegressionTest {
         snackbarManager = mockk(relaxed = true)
         highlightRepository = mockk(relaxed = true)
 
-        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
+        every { serverRepository.servers } returns flowOf(emptyList())
         every { settingsRepository.allListSettings } returns flowOf(emptyMap())
         every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
         every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
@@ -89,19 +77,20 @@ class List02RegressionTest {
         every { settingsRepository.dimReadBookmarks } returns flowOf(true)
         every { settingsRepository.defaultLayoutId } returns flowOf(null)
         every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(false)
+        every { settingsRepository.offlineMode } returns flowOf(true)
         every { settingsRepository.activeServerId } returns flowOf("server-1")
         every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
         every { settingsRepository.defaultListId } returns flowOf(null)
         every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
         every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns MutableStateFlow(listOf(smartList1, smartList2, manualList))
+        every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
-        every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Long>()
+        every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
     }
@@ -119,7 +108,8 @@ class List02RegressionTest {
 
     private fun createBookmarkEntity(
         remoteId: Long,
-        listIds: String = ""
+        isArchived: Boolean = false,
+        isStarred: Boolean = false
     ) = BookmarkEntity(
         localId = remoteId,
         remoteId = remoteId,
@@ -132,65 +122,83 @@ class List02RegressionTest {
         bannerImageAssetId = null,
         screenshotAssetId = null,
         description = null,
-        createdAt = System.currentTimeMillis(),
-        isArchived = false,
-        isStarred = false,
-        listIds = listIds
+        createdAt = 0L,
+        isArchived = isArchived,
+        isStarred = isStarred
     )
 
     @Test
-    fun `moveBookmarkToList calls moveToList on actions repository`() = runTest(testDispatcher) {
-        val bookmark = createBookmarkEntity(remoteId = 1L)
+    fun `selectAll selects accumulated bookmarks when all pages loaded`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model.moveBookmarkToList(bookmark, "manual-1")
+        val bookmarks = (1L..20L).map { createBookmarkEntity(it) }
+        model._hasMoreItems.value = false
+        model._accumulatedBookmarks.value = bookmarks
+
+        model.selectAll()
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+        assertEquals(20, model._selectedBookmarkIds.value.size)
     }
 
     @Test
-    fun `removeBookmarkFromList calls removeFromList on actions repository`() = runTest(testDispatcher) {
-        val bookmark = createBookmarkEntity(remoteId = 2L, listIds = "manual-1")
+    fun `selectAll fetches all items when hasMoreItems is true`() = runTest(testDispatcher) {
+        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
+        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
+
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model.removeBookmarkFromList(bookmark, "manual-1")
+        model._selectedServer.value = fakeServer
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+        model._hasMoreItems.value = true
+        model._accumulatedBookmarks.value = allBookmarks.take(20)
+
+        model.selectAll()
+        advanceUntilIdle()
+
+        assertEquals(50, model._selectedBookmarkIds.value.size)
     }
 
     @Test
-    fun `moveBookmarkToList works when no SMART lists exist`() = runTest(testDispatcher) {
-        every { listRepository.lists } returns MutableStateFlow(listOf(manualList))
+    fun `selectAll sets hasMoreItems to false after fetching all`() = runTest(testDispatcher) {
+        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
+        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
 
-        val bookmark = createBookmarkEntity(remoteId = 3L)
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model.moveBookmarkToList(bookmark, "manual-1")
+        model._selectedServer.value = fakeServer
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+        model._hasMoreItems.value = true
+        model._accumulatedBookmarks.value = allBookmarks.take(20)
+
+        model.selectAll()
+        advanceUntilIdle()
+
+        assertFalse(model._hasMoreItems.value)
     }
 
     @Test
-    fun `executeScrollAction with ADD_TO_LIST delegates to moveBookmarkToList`() = runTest(testDispatcher) {
-        val bookmark = createBookmarkEntity(remoteId = 4L)
-        val config = com.karakept.app.data.model.CustomSwipeActionConfig(
-            id = "cfg-1",
-            type = com.karakept.app.data.model.CustomSwipeActionType.ADD_TO_LIST,
-            listId = "manual-1"
-        )
+    fun `selectAll updates accumulated bookmarks with all fetched items`() = runTest(testDispatcher) {
+        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
+        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
+
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model.executeScrollAction(bookmark, SwipeAction.ADD_TO_LIST, config)
+        model._selectedServer.value = fakeServer
         advanceUntilIdle()
 
-        // Transitive: executeScrollAction → moveBookmarkToList → moveToList
-        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+        model._hasMoreItems.value = true
+        model._accumulatedBookmarks.value = allBookmarks.take(20)
+
+        model.selectAll()
+        advanceUntilIdle()
+
+        assertEquals(50, model._accumulatedBookmarks.value.size)
     }
 }

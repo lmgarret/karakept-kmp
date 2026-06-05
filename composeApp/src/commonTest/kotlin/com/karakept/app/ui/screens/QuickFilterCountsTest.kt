@@ -12,40 +12,28 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 
 /**
- * Tests for FILT-01: selectAll() behavior on MainScreenModel.
- *
- * Verifies:
- * - selectAll with all pages loaded selects only accumulated bookmarks
- * - selectAll with hasMoreItems=true fetches all from repository and selects all
- * - selectAll with hasMoreItems=true sets hasMoreItems to false
- * - selectAll with hasMoreItems=true updates accumulated bookmarks
+ * Tests for FILT-02: QuickFilterCounts computation in MainScreenModel.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@org.robolectric.annotation.Config(application = android.app.Application::class)
-class MainScreenSelectAllTest {
+class QuickFilterCountsTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -65,7 +53,7 @@ class MainScreenSelectAllTest {
         label = "Test"
     )
 
-    @Before
+    @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
@@ -78,8 +66,7 @@ class MainScreenSelectAllTest {
         snackbarManager = mockk(relaxed = true)
         highlightRepository = mockk(relaxed = true)
 
-        // Stub all SettingsRepository flows consumed via stateIn in MainScreenModel constructor
-        every { serverRepository.servers } returns flowOf(emptyList())
+        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
         every { settingsRepository.allListSettings } returns flowOf(emptyMap())
         every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
         every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
@@ -89,7 +76,7 @@ class MainScreenSelectAllTest {
         every { settingsRepository.dimReadBookmarks } returns flowOf(true)
         every { settingsRepository.defaultLayoutId } returns flowOf(null)
         every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(true)
+        every { settingsRepository.offlineMode } returns flowOf(false)
         every { settingsRepository.activeServerId } returns flowOf("server-1")
         every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
         every { settingsRepository.defaultListId } returns flowOf(null)
@@ -97,14 +84,12 @@ class MainScreenSelectAllTest {
         every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        // Relaxed mocks for SharedFlow<T> emit Nothing values causing KotlinNothingValueException;
-        // replace with emptyFlow() to prevent crashes in the background coroutines.
+        every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(0)
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Long>()
         every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
     }
@@ -136,85 +121,89 @@ class MainScreenSelectAllTest {
         bannerImageAssetId = null,
         screenshotAssetId = null,
         description = null,
-        createdAt = System.currentTimeMillis(),
+        createdAt = 0L,
         isArchived = isArchived,
         isStarred = isStarred
     )
 
     @Test
-    fun `selectAll selects accumulated bookmarks when all pages loaded`() = runTest(testDispatcher) {
+    fun `quickFilterCounts is zero when no bookmarks`() = runTest(testDispatcher) {
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+
         val model = createMainScreenModel()
+        val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 
-        val bookmarks = (1L..20L).map { createBookmarkEntity(it) }
-        model._hasMoreItems.value = false
-        model._accumulatedBookmarks.value = bookmarks
-
-        model.selectAll()
-        advanceUntilIdle()
-
-        assertEquals(20, model._selectedBookmarkIds.value.size)
+        assertEquals(QuickFilterCounts(0, 0, 0), model.quickFilterCounts.value)
+        job.cancel()
     }
 
     @Test
-    fun `selectAll fetches all items when hasMoreItems is true`() = runTest(testDispatcher) {
-        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
-        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
+    fun `quickFilterCounts computes correct values for mixed dataset`() = runTest(testDispatcher) {
+        val bookmarks = listOf(
+            createBookmarkEntity(1, isArchived = true),
+            createBookmarkEntity(2, isArchived = true),
+            createBookmarkEntity(3, isArchived = true),
+            createBookmarkEntity(4, isStarred = true),
+            createBookmarkEntity(5, isStarred = true),
+            createBookmarkEntity(6),
+            createBookmarkEntity(7),
+            createBookmarkEntity(8),
+            createBookmarkEntity(9),
+            createBookmarkEntity(10)
+        )
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
 
         val model = createMainScreenModel()
+        val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 
-        // Set server first and let resetPaginationAndLoad (triggered by _selectedServer change)
-        // finish before configuring test state — otherwise it races with selectAll() and overwrites.
-        model._selectedServer.value = fakeServer
-        advanceUntilIdle()
-
-        model._hasMoreItems.value = true
-        model._accumulatedBookmarks.value = allBookmarks.take(20)
-
-        model.selectAll()
-        advanceUntilIdle()
-
-        assertEquals(50, model._selectedBookmarkIds.value.size)
+        assertEquals(
+            QuickFilterCounts(all = 7, favorites = 2, archived = 3, offline = 0),
+            model.quickFilterCounts.value
+        )
+        job.cancel()
     }
 
     @Test
-    fun `selectAll sets hasMoreItems to false after fetching all`() = runTest(testDispatcher) {
-        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
-        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
+    fun `quickFilterCounts counts all archived when all bookmarks archived`() = runTest(testDispatcher) {
+        val bookmarks = (1L..5L).map { createBookmarkEntity(it, isArchived = true) }
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
 
         val model = createMainScreenModel()
+        val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 
-        model._selectedServer.value = fakeServer
-        advanceUntilIdle()
-
-        model._hasMoreItems.value = true
-        model._accumulatedBookmarks.value = allBookmarks.take(20)
-
-        model.selectAll()
-        advanceUntilIdle()
-
-        assertFalse(model._hasMoreItems.value)
+        assertEquals(
+            QuickFilterCounts(all = 0, favorites = 0, archived = 5, offline = 0),
+            model.quickFilterCounts.value
+        )
+        job.cancel()
     }
 
     @Test
-    fun `selectAll updates accumulated bookmarks with all fetched items`() = runTest(testDispatcher) {
-        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
-        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
+    fun `quickFilterCounts offline reflects repository count`() = runTest(testDispatcher) {
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+        every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(4)
 
         val model = createMainScreenModel()
+        val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 
-        model._selectedServer.value = fakeServer
+        assertEquals(4, model.quickFilterCounts.value.offline)
+        job.cancel()
+    }
+
+    @Test
+    fun `quickFilterCounts offline is zero when no server`() = runTest(testDispatcher) {
+        every { serverRepository.servers } returns flowOf(emptyList())
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+
+        val model = createMainScreenModel()
+        val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 
-        model._hasMoreItems.value = true
-        model._accumulatedBookmarks.value = allBookmarks.take(20)
-
-        model.selectAll()
-        advanceUntilIdle()
-
-        assertEquals(50, model._accumulatedBookmarks.value.size)
+        assertEquals(0, model.quickFilterCounts.value.offline)
+        job.cancel()
     }
 }

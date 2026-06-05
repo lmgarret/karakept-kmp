@@ -1,5 +1,6 @@
 package com.karakept.app.ui.screens
 
+import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.Server
@@ -12,38 +13,29 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import kotlin.test.assertEquals
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 
 /**
- * Tests for FILT-02: QuickFilterCounts computation in MainScreenModel.
- *
- * Verifies:
- * - Empty bookmark list yields zero counts
- * - Mixed dataset computes correct all/favorites/archived counts
- * - All archived yields zero for all and favorites
+ * Regression tests for LIST-02: Smart lists do not update after quick actions that
+ * change a bookmark's list membership.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@org.robolectric.annotation.Config(application = android.app.Application::class)
-class QuickFilterCountsTest {
+class List02RegressionTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -63,7 +55,11 @@ class QuickFilterCountsTest {
         label = "Test"
     )
 
-    @Before
+    private val smartList1 = KarakeepList(id = "smart-1", name = "Unread", type = KarakeepList.Type.SMART)
+    private val smartList2 = KarakeepList(id = "smart-2", name = "Recent", type = KarakeepList.Type.SMART)
+    private val manualList = KarakeepList(id = "manual-1", name = "Read Later", type = KarakeepList.Type.MANUAL)
+
+    @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
@@ -92,16 +88,13 @@ class QuickFilterCountsTest {
         every { settingsRepository.defaultListId } returns flowOf(null)
         every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
         every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns MutableStateFlow(emptyList())
+        every { listRepository.lists } returns MutableStateFlow(listOf(smartList1, smartList2, manualList))
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(0)
-        // Relaxed mocks for SharedFlow<T> emit Nothing values causing KotlinNothingValueException;
-        // replace with emptyFlow() to prevent crashes in the background coroutines.
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Long>()
-        every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
+        every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
     }
@@ -119,8 +112,7 @@ class QuickFilterCountsTest {
 
     private fun createBookmarkEntity(
         remoteId: Long,
-        isArchived: Boolean = false,
-        isStarred: Boolean = false
+        listIds: String = ""
     ) = BookmarkEntity(
         localId = remoteId,
         remoteId = remoteId,
@@ -133,92 +125,64 @@ class QuickFilterCountsTest {
         bannerImageAssetId = null,
         screenshotAssetId = null,
         description = null,
-        createdAt = System.currentTimeMillis(),
-        isArchived = isArchived,
-        isStarred = isStarred
+        createdAt = 0L,
+        isArchived = false,
+        isStarred = false,
+        listIds = listIds
     )
 
     @Test
-    fun `quickFilterCounts is zero when no bookmarks`() = runTest(testDispatcher) {
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-
+    fun `moveBookmarkToList calls moveToList on actions repository`() = runTest(testDispatcher) {
+        val bookmark = createBookmarkEntity(remoteId = 1L)
         val model = createMainScreenModel()
-        // Subscribe to trigger SharingStarted.WhileSubscribed — without a subscriber
-        // the upstream combine never runs and .value stays at the initial QuickFilterCounts().
-        val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 
-        assertEquals(QuickFilterCounts(0, 0, 0), model.quickFilterCounts.value)
-        job.cancel()
+        model.moveBookmarkToList(bookmark, "manual-1")
+        advanceUntilIdle()
+
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 
     @Test
-    fun `quickFilterCounts computes correct values for mixed dataset`() = runTest(testDispatcher) {
-        // 3 archived, 2 starred non-archived, 5 normal = 10 total
-        val bookmarks = listOf(
-            createBookmarkEntity(1, isArchived = true),
-            createBookmarkEntity(2, isArchived = true),
-            createBookmarkEntity(3, isArchived = true),
-            createBookmarkEntity(4, isStarred = true),
-            createBookmarkEntity(5, isStarred = true),
-            createBookmarkEntity(6),
-            createBookmarkEntity(7),
-            createBookmarkEntity(8),
-            createBookmarkEntity(9),
-            createBookmarkEntity(10)
+    fun `removeBookmarkFromList calls removeFromList on actions repository`() = runTest(testDispatcher) {
+        val bookmark = createBookmarkEntity(remoteId = 2L, listIds = "manual-1")
+        val model = createMainScreenModel()
+        advanceUntilIdle()
+
+        model.removeBookmarkFromList(bookmark, "manual-1")
+        advanceUntilIdle()
+
+        coVerify { bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+    }
+
+    @Test
+    fun `moveBookmarkToList works when no SMART lists exist`() = runTest(testDispatcher) {
+        every { listRepository.lists } returns MutableStateFlow(listOf(manualList))
+
+        val bookmark = createBookmarkEntity(remoteId = 3L)
+        val model = createMainScreenModel()
+        advanceUntilIdle()
+
+        model.moveBookmarkToList(bookmark, "manual-1")
+        advanceUntilIdle()
+
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+    }
+
+    @Test
+    fun `executeScrollAction with ADD_TO_LIST delegates to moveBookmarkToList`() = runTest(testDispatcher) {
+        val bookmark = createBookmarkEntity(remoteId = 4L)
+        val config = com.karakept.app.data.model.CustomSwipeActionConfig(
+            id = "cfg-1",
+            type = com.karakept.app.data.model.CustomSwipeActionType.ADD_TO_LIST,
+            listId = "manual-1"
         )
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
-
         val model = createMainScreenModel()
-        val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 
-        assertEquals(
-            QuickFilterCounts(all = 7, favorites = 2, archived = 3, offline = 0),
-            model.quickFilterCounts.value
-        )
-        job.cancel()
-    }
-
-    @Test
-    fun `quickFilterCounts counts all archived when all bookmarks archived`() = runTest(testDispatcher) {
-        val bookmarks = (1L..5L).map { createBookmarkEntity(it, isArchived = true) }
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
-
-        val model = createMainScreenModel()
-        val job = launch { model.quickFilterCounts.collect {} }
+        model.executeScrollAction(bookmark, SwipeAction.ADD_TO_LIST, config)
         advanceUntilIdle()
 
-        assertEquals(
-            QuickFilterCounts(all = 0, favorites = 0, archived = 5, offline = 0),
-            model.quickFilterCounts.value
-        )
-        job.cancel()
-    }
-
-    @Test
-    fun `quickFilterCounts offline reflects repository count`() = runTest(testDispatcher) {
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(4)
-
-        val model = createMainScreenModel()
-        val job = launch { model.quickFilterCounts.collect {} }
-        advanceUntilIdle()
-
-        assertEquals(4, model.quickFilterCounts.value.offline)
-        job.cancel()
-    }
-
-    @Test
-    fun `quickFilterCounts offline is zero when no server`() = runTest(testDispatcher) {
-        every { serverRepository.servers } returns flowOf(emptyList())
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-
-        val model = createMainScreenModel()
-        val job = launch { model.quickFilterCounts.collect {} }
-        advanceUntilIdle()
-
-        assertEquals(0, model.quickFilterCounts.value.offline)
-        job.cancel()
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 }

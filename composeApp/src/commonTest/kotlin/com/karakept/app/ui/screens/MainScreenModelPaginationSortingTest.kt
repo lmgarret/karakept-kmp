@@ -29,11 +29,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
@@ -46,8 +44,6 @@ import kotlin.test.assertEquals
  * in the DB's default createdAt-DESC order.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@org.robolectric.annotation.Config(application = android.app.Application::class)
 class MainScreenModelPaginationSortingTest {
 
     private val testDispatcher = StandardTestDispatcher()
@@ -68,7 +64,7 @@ class MainScreenModelPaginationSortingTest {
         label = "Test"
     )
 
-    @Before
+    @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
@@ -113,7 +109,7 @@ class MainScreenModelPaginationSortingTest {
         } returns emptyList()
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
     }
@@ -146,10 +142,6 @@ class MainScreenModelPaginationSortingTest {
         highlightRepository = highlightRepository
     )
 
-    /**
-     * On initialization the model uses the default filter (NEWEST), so the repository
-     * must be called with sort = NEWEST to get the DB cursor pointing at newest-first.
-     */
     @Test
     fun `NEWEST sort is passed to repository on initialization`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
@@ -163,11 +155,6 @@ class MainScreenModelPaginationSortingTest {
         }
     }
 
-    /**
-     * When the user switches to OLDEST sort, the repository call must carry
-     * sort = OLDEST so the DB cursor starts at the oldest bookmark rather than
-     * sorting an already-paginated slice in memory.
-     */
     @Test
     fun `OLDEST sort is forwarded to repository when filter changes`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
@@ -184,11 +171,6 @@ class MainScreenModelPaginationSortingTest {
         }
     }
 
-    /**
-     * When the user switches to TITLE_AZ sort, the repository call must carry
-     * sort = TITLE_AZ so the DB cursor yields bookmarks in alphabetical order
-     * from the very first page.
-     */
     @Test
     fun `TITLE_AZ sort is forwarded to repository when filter changes`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
@@ -205,10 +187,6 @@ class MainScreenModelPaginationSortingTest {
         }
     }
 
-    /**
-     * Each change to the sort option must produce a repository call with the new
-     * sort — including subsequent changes in the same session.
-     */
     @Test
     fun `sort option change is reflected in every subsequent repository call`() =
         runTest(testDispatcher) {
@@ -229,15 +207,10 @@ class MainScreenModelPaginationSortingTest {
             }
         }
 
-    /**
-     * Verifies that loadNextPage also forwards the current sort so that each
-     * successive page continues from the right position in the sorted DB cursor.
-     */
     @Test
     fun `subsequent pages are requested with the same sort as the first page`() =
         runTest(testDispatcher) {
             val pageSize = 20
-            // Page 0: full page so the model considers more data available
             val page0 = (1..pageSize).map { makeBookmark(id = it.toLong(), title = "A-$it") }
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
@@ -245,7 +218,6 @@ class MainScreenModelPaginationSortingTest {
                     sort = any(), listId = any()
                 )
             } returns page0
-            // Page 1: partial page to signal DB exhaustion
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
                     server = any(), status = any(), offset = pageSize, limit = any(),
@@ -262,7 +234,6 @@ class MainScreenModelPaginationSortingTest {
             model.loadNextPage()
             advanceUntilIdle()
 
-            // Both the initial load (offset=0) and the next page (offset=20) must use TITLE_AZ
             coVerify(atLeast = 2) {
                 bookmarkRepository.getBookmarksPaged(
                     server = any(), status = any(), offset = any(), limit = any(),
