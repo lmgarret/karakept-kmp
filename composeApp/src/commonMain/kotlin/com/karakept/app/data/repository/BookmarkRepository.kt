@@ -420,7 +420,7 @@ class BookmarkRepository(
     }
 
     companion object {
-        private const val BOOKMARK_SELECT = """localId, remoteId, originalRemoteId, serverId, title, url,
+        private const val BOOKMARK_SELECT = """localId, remoteId, originalRemoteId, serverId, title, url, type, sourceUrl,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                '' as content"""

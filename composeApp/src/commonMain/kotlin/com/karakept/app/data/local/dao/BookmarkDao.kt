@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface BookmarkDao {
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url, type, sourceUrl,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                '' as content
@@ -136,7 +136,7 @@ interface BookmarkDao {
     suspend fun getNotArchivedCount(serverId: String): Int
 
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url, type, sourceUrl,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                '' as content
@@ -154,7 +154,7 @@ interface BookmarkDao {
 
     // Query for sync that includes content length and reading time to determine if content exists
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url, type, sourceUrl,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                CASE WHEN length(content) > 0 THEN 'HAS_CONTENT' ELSE '' END as content
@@ -165,7 +165,7 @@ interface BookmarkDao {
 
     // Unpaged queries for select-all (no LIMIT/OFFSET)
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url, type, sourceUrl,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                '' as content
@@ -176,7 +176,7 @@ interface BookmarkDao {
     suspend fun getAllNotArchivedForServer(serverId: String): List<BookmarkEntity>
 
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url, type, sourceUrl,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                '' as content
@@ -187,7 +187,7 @@ interface BookmarkDao {
     suspend fun getAllFavoritesForServer(serverId: String): List<BookmarkEntity>
 
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url, type, sourceUrl,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                '' as content
@@ -198,7 +198,7 @@ interface BookmarkDao {
     suspend fun getAllArchivedForServer(serverId: String): List<BookmarkEntity>
 
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url, type, sourceUrl,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                '' as content
@@ -209,7 +209,7 @@ interface BookmarkDao {
     suspend fun getAllBookmarksForServerSuspend(serverId: String): List<BookmarkEntity>
 
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, originalRemoteId, serverId, title, url, type, sourceUrl,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                '' as content
