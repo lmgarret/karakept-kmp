@@ -381,6 +381,18 @@ tasks.withType<Test> {
         showStandardStreams = true
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
+    // Log per-class durations and flag individual tests that take > 500ms.
+    // This gives the data needed to identify slow test classes and outliers.
+    afterTest(KotlinClosure2({ desc: TestDescriptor, result: TestResult ->
+        val ms = result.endTime - result.startTime
+        if (ms >= 500) println("  [SLOW ${ms}ms] ${desc.className} > ${desc.name}")
+    }))
+    afterSuite(KotlinClosure2({ desc: TestDescriptor, result: TestResult ->
+        if (desc.parent != null) {
+            val ms = result.endTime - result.startTime
+            println("  [suite ${ms}ms] ${desc.displayName}: ${result.testCount} tests")
+        }
+    }))
 }
 
 // Gradle 9 removed Project.exec/javaexec; external processes must run through the
