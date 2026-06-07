@@ -63,11 +63,9 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.SyncKey
+import com.karakept.app.domain.ListHierarchyUtils
 import com.karakept.app.ui.screens.QuickFilterCounts
-import com.karakept.app.ui.utils.buildListHierarchy
 import com.karakept.app.ui.utils.modalDrawerWidth
-import com.karakept.app.ui.utils.filterExpandedHierarchy
-import com.karakept.app.ui.utils.listHasChildren
 import com.karakept.api.model.KarakeepList
 
 @Composable
@@ -166,13 +164,13 @@ internal fun DrawerContent(
                 Spacer(Modifier.height(16.dp))
                 Text("Lists", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
 
-                val hierarchy = buildListHierarchy(lists)
-                val visibleHierarchy = filterExpandedHierarchy(hierarchy, expandedLists)
+                val hierarchy = ListHierarchyUtils.buildListHierarchy(lists)
+                val visibleHierarchy = ListHierarchyUtils.filterExpandedHierarchy(hierarchy, expandedLists)
 
                 visibleHierarchy.forEach { (list, depth) ->
                     val listId = list.id ?: ""
                     key(listId) {
-                        val hasChildLists = listHasChildren(listId, lists)
+                        val hasChildLists = ListHierarchyUtils.listHasChildren(listId, lists)
                         ListDrawerItem(
                             list = list,
                             depth = depth,

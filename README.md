@@ -75,6 +75,12 @@
 - For Android: Android SDK
 - For Desktop: X11 or Wayland display
 
+> **Clone with submodules.** The `api-client` module is generated at build
+> time from the Karakeep OpenAPI spec, which lives in the `karakeep-upstream`
+> git submodule. Clone with `git clone --recurse-submodules <url>`, or if you
+> already cloned, run `git submodule update --init`. Without it the build fails
+> with a missing-spec error on `:api-client:openApiGenerate`.
+
 ### Android
 
 ```bash
@@ -172,7 +178,11 @@ Open the project in VS Code or any devcontainer-compatible editor and select **"
 
 1. Install Java 17+
 2. Install Android SDK
-3. Set environment variables:
+3. Initialize the OpenAPI submodule (required to build the generated `api-client`):
+   ```bash
+   git submodule update --init
+   ```
+4. Set environment variables:
    ```bash
    export ANDROID_HOME=/path/to/android-sdk
    export ANDROID_SDK_ROOT=$ANDROID_HOME

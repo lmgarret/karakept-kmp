@@ -50,7 +50,7 @@ import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.components.getIcon
 import com.karakept.app.ui.screens.SettingsScreenModel
-import com.karakept.app.ui.utils.buildListHierarchy
+import com.karakept.app.domain.ListHierarchyUtils
 import getPlatform
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -119,7 +119,7 @@ fun BookmarkListSettingsContent(
                         modifier = Modifier.padding(16.dp)
                     )
                 } else {
-                    val hierarchy = remember(availableLists) { buildListHierarchy(availableLists) }
+                    val hierarchy = remember(availableLists) { ListHierarchyUtils.buildListHierarchy(availableLists) }
                     LazyColumn {
                         items(hierarchy) { (list, depth) ->
                             ListItem(

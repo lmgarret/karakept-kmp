@@ -19,7 +19,7 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.SortOption
-import com.karakept.app.ui.utils.buildListHierarchy
+import com.karakept.app.domain.ListHierarchyUtils
 import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.delay
 
@@ -401,7 +401,7 @@ private fun FilterPanelContent(
     // Lists — shown in sorted hierarchical order matching the navigation drawer
     if (availableLists.isNotEmpty()) {
         Text("Lists", style = MaterialTheme.typography.titleMedium)
-        val hierarchy = remember(availableLists) { buildListHierarchy(availableLists) }
+        val hierarchy = remember(availableLists) { ListHierarchyUtils.buildListHierarchy(availableLists) }
         Column(modifier = Modifier.padding(vertical = 8.dp)) {
             hierarchy.forEach { (list, depth) ->
                 val listId = list.id ?: ""
