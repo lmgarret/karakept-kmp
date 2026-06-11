@@ -1,0 +1,48 @@
+# TEMPORARY: validates that the Windows branded installer tasks build cleanly
+# with the Gradle configuration cache enabled (gradle.properties sets
+# org.gradle.configuration-cache=true). Remove before merging.
+name: TMP Windows config-cache check
+
+on:
+  push:
+    branches:
+      - claude/busy-euler-5ci0rf
+  workflow_dispatch:
+
+jobs:
+  windows-cc-check:
+    name: Build Windows (MSI + EXE) with config cache
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: Build Windows installers (stores config cache)
+        run: >
+          .\gradlew.bat :composeApp:packageMsi :composeApp:packageExe
+          --configuration-cache
+          "-PversionName=1.0.0"
+
+      - name: Re-run to confirm config cache is reused
+        run: >
+          .\gradlew.bat :composeApp:packageMsi :composeApp:packageExe
+          --configuration-cache
+          "-PversionName=1.0.0"
+
+      - name: Upload config-cache report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: configuration-cache-report
+          path: build/reports/configuration-cache/
+          if-no-files-found: ignore
