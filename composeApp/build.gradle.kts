@@ -548,7 +548,11 @@ if (org.gradle.internal.os.OperatingSystem.current().isWindows) {
             val resDir = project.file("jpackage")
             val destDir = layout.buildDirectory.dir("compose/binaries/main/$type")
             val tmpDir = layout.buildDirectory.dir("jpackage/temp-$type")
-            val wixDir = rootProject.layout.buildDirectory.dir("wix311")
+            // Capture the root build dir as a Provider here (config time) so the doFirst
+            // action below closes over a serializable value rather than `rootProject`,
+            // which the configuration cache cannot store.
+            val rootBuildDir = rootProject.layout.buildDirectory
+            val wixDir = rootBuildDir.dir("wix311")
             val jpackageExe = File(System.getProperty("java.home"), "bin/jpackage.exe")
 
             commandLine(
@@ -575,9 +579,9 @@ if (org.gradle.internal.os.OperatingSystem.current().isWindows) {
                 destDir.get().asFile.resolve("Karakept-$winVersion.$type").delete()
                 // WiX (candle/light) is downloaded by :unzipWix; jpackage finds it via PATH.
                 val wixBin = wixDir.get().asFile.takeIf { File(it, "candle.exe").exists() }
-                    ?: rootProject.layout.buildDirectory.asFile.get().walkTopDown()
+                    ?: rootBuildDir.asFile.get().walkTopDown()
                         .firstOrNull { it.name.equals("candle.exe", ignoreCase = true) }?.parentFile
-                    ?: error("WiX candle.exe not found under ${rootProject.layout.buildDirectory.get()} (did :unzipWix run?)")
+                    ?: error("WiX candle.exe not found under ${rootBuildDir.get()} (did :unzipWix run?)")
                 environment("PATH", wixBin.absolutePath + File.pathSeparator + (System.getenv("PATH") ?: ""))
                 // Bitmap paths are injected here so the committed main.wxs stays machine-independent.
                 environment("KARAKEPT_BANNER_BMP", winResDir.get().file("banner.bmp").asFile.absolutePath)
