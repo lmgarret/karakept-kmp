@@ -425,6 +425,11 @@ if (org.gradle.internal.os.OperatingSystem.current().isMacOsX) {
     val setDmgVolumeIcon = tasks.register("setDmgVolumeIcon") {
         group = "compose desktop"
         description = "Sets the volume icon on the packaged DMG"
+        // The icon is the only external input; the DMG dir is both consumed (from
+        // packageDmg) and rewritten in place, so declaring it as the output lets Gradle
+        // skip the hdiutil round-trip when neither the icon nor the packaged DMG changed.
+        inputs.file(iconFile)
+        outputs.dir(dmgDir)
 
         doLast {
             val execOps = execInjection.execOps
