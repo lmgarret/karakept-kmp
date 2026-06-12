@@ -6,6 +6,7 @@ import java.awt.RenderingHints
 import java.awt.image.BufferedImage as AwtBufferedImage
 import javax.imageio.ImageIO
 import javax.inject.Inject
+import java.util.concurrent.ConcurrentLinkedQueue
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -539,73 +540,104 @@ if (org.gradle.internal.os.OperatingSystem.current().isWindows) {
         }
     }
 
-    // Registers a jpackage Exec task that builds a branded Windows installer of the given
-    // type ("msi" or "exe"). Both types run through the same WiX pipeline, so the custom
-    // main.wxs + bitmaps apply identically (the exe simply wraps the branded msi).
-    fun registerBrandedInstaller(taskName: String, type: String) =
-        tasks.register<Exec>(taskName) {
-            group = "compose desktop"
-            description = "Builds the Windows $type installer with the custom branded WiX wizard"
-            dependsOn("createDistributable", generateWindowsInstallerBitmaps, ":unzipWix")
+    // Builds the branded Windows installers. The MSI and EXE are fully independent jpackage
+    // runs — separate --temp and --dest dirs; they only *read* the shared app-image, WiX
+    // binaries and bitmaps — so we launch them concurrently from a single task instead of as
+    // two sequential Exec tasks. Same-project tasks never run in parallel under --parallel,
+    // and the two jpackage invocations are ~85s each (the build's critical-path tail), so
+    // running them on separate threads roughly halves that tail on multi-core machines.
+    // Both types share the same WiX pipeline, so the custom main.wxs + bitmaps apply
+    // identically (the exe simply wraps the branded msi).
+    val execInjection = objects.newInstance<ExecServiceInjection>()
+    val installerTypes = listOf("msi", "exe")
+    val appImage = layout.buildDirectory.dir("compose/binaries/main/app/Karakept")
+    val winIcon = project.file("src/desktopMain/resources/win-icon.ico")
+    val resDir = project.file("jpackage")
+    // Capture the root build dir as a Provider (config time) so the task action below closes
+    // over a serializable value rather than `rootProject`, which the configuration cache
+    // cannot store.
+    val rootBuildDir = rootProject.layout.buildDirectory
+    val wixDir = rootBuildDir.dir("wix311")
+    val jpackageExe = File(System.getProperty("java.home"), "bin/jpackage.exe")
+    val destDirs = installerTypes.associateWith { layout.buildDirectory.dir("compose/binaries/main/$it") }
+    val tmpDirs = installerTypes.associateWith { layout.buildDirectory.dir("jpackage/temp-$it") }
 
-            val appImage = layout.buildDirectory.dir("compose/binaries/main/app/Karakept")
-            val winIcon = project.file("src/desktopMain/resources/win-icon.ico")
-            val resDir = project.file("jpackage")
-            val destDir = layout.buildDirectory.dir("compose/binaries/main/$type")
-            val tmpDir = layout.buildDirectory.dir("jpackage/temp-$type")
-            // Capture the root build dir as a Provider here (config time) so the doFirst
-            // action below closes over a serializable value rather than `rootProject`,
-            // which the configuration cache cannot store.
-            val rootBuildDir = rootProject.layout.buildDirectory
-            val wixDir = rootBuildDir.dir("wix311")
-            val jpackageExe = File(System.getProperty("java.home"), "bin/jpackage.exe")
+    val packageWindowsInstallers = tasks.register("packageWindowsInstallersBranded") {
+        group = "compose desktop"
+        description = "Builds the branded Windows MSI + EXE installers in parallel with the custom WiX wizard"
+        dependsOn("createDistributable", generateWindowsInstallerBitmaps, ":unzipWix")
 
-            commandLine(
-                jpackageExe.absolutePath,
-                "--type", type,
-                "--name", "Karakept",
-                "--app-version", winVersion,
-                "--app-image", appImage.get().asFile.absolutePath,
-                // Multi-resolution app icon for the installer .exe, shortcuts and ARP entry.
-                "--icon", winIcon.absolutePath,
-                "--win-dir-chooser",
-                "--win-menu", "--win-menu-group", "Karakept",
-                "--win-shortcut", "--win-shortcut-prompt",
-                "--resource-dir", resDir.absolutePath,
-                "--dest", destDir.get().asFile.absolutePath,
-                "--temp", tmpDir.get().asFile.absolutePath,
-            )
+        inputs.dir(appImage)
+        inputs.file(winIcon)
+        inputs.dir(resDir)
+        inputs.dir(winResDir)
+        inputs.property("version", winVersion)
+        destDirs.values.forEach { outputs.dir(it) }
 
-            doFirst {
-                check(jpackageExe.exists()) { "jpackage not found at $jpackageExe — package with JDK 21." }
-                // jpackage requires --temp to be empty/absent and refuses to overwrite an existing installer.
-                tmpDir.get().asFile.deleteRecursively()
-                destDir.get().asFile.mkdirs()
-                destDir.get().asFile.resolve("Karakept-$winVersion.$type").delete()
-                // WiX (candle/light) is downloaded by :unzipWix; jpackage finds it via PATH.
-                val wixBin = wixDir.get().asFile.takeIf { File(it, "candle.exe").exists() }
-                    ?: rootBuildDir.asFile.get().walkTopDown()
-                        .firstOrNull { it.name.equals("candle.exe", ignoreCase = true) }?.parentFile
-                    ?: error("WiX candle.exe not found under ${rootBuildDir.get()} (did :unzipWix run?)")
-                environment("PATH", wixBin.absolutePath + File.pathSeparator + (System.getenv("PATH") ?: ""))
-                // Bitmap paths are injected here so the committed main.wxs stays machine-independent.
-                environment("KARAKEPT_BANNER_BMP", winResDir.get().file("banner.bmp").asFile.absolutePath)
-                environment("KARAKEPT_DIALOG_BMP", winResDir.get().file("dialog.bmp").asFile.absolutePath)
+        doLast {
+            check(jpackageExe.exists()) { "jpackage not found at $jpackageExe — package with JDK 21." }
+            // WiX (candle/light) is downloaded by :unzipWix; jpackage finds it via PATH.
+            val wixBin = wixDir.get().asFile.takeIf { File(it, "candle.exe").exists() }
+                ?: rootBuildDir.asFile.get().walkTopDown()
+                    .firstOrNull { it.name.equals("candle.exe", ignoreCase = true) }?.parentFile
+                ?: error("WiX candle.exe not found under ${rootBuildDir.get()} (did :unzipWix run?)")
+            val pathWithWix = wixBin.absolutePath + File.pathSeparator + (System.getenv("PATH") ?: "")
+            // Bitmap paths are injected via the environment so the committed main.wxs stays portable.
+            val bannerBmp = winResDir.get().file("banner.bmp").asFile.absolutePath
+            val dialogBmp = winResDir.get().file("dialog.bmp").asFile.absolutePath
+            val execOps = execInjection.execOps
+            val appImagePath = appImage.get().asFile.absolutePath
+            val iconPath = winIcon.absolutePath
+            val resDirPath = resDir.absolutePath
+
+            val failures = ConcurrentLinkedQueue<Throwable>()
+            val threads = installerTypes.map { type ->
+                val destDir = destDirs.getValue(type).get().asFile
+                val tmpDir = tmpDirs.getValue(type).get().asFile
+                Thread({
+                    try {
+                        // jpackage requires --temp absent/empty and refuses to overwrite an existing installer.
+                        tmpDir.deleteRecursively()
+                        destDir.mkdirs()
+                        destDir.resolve("Karakept-$winVersion.$type").delete()
+                        execOps.exec {
+                            commandLine(
+                                jpackageExe.absolutePath,
+                                "--type", type,
+                                "--name", "Karakept",
+                                "--app-version", winVersion,
+                                "--app-image", appImagePath,
+                                // Multi-resolution app icon for the installer .exe, shortcuts and ARP entry.
+                                "--icon", iconPath,
+                                "--win-dir-chooser",
+                                "--win-menu", "--win-menu-group", "Karakept",
+                                "--win-shortcut", "--win-shortcut-prompt",
+                                "--resource-dir", resDirPath,
+                                "--dest", destDir.absolutePath,
+                                "--temp", tmpDir.absolutePath,
+                            )
+                            environment("PATH", pathWithWix)
+                            environment("KARAKEPT_BANNER_BMP", bannerBmp)
+                            environment("KARAKEPT_DIALOG_BMP", dialogBmp)
+                        }
+                        println("Branded $type: ${destDir.resolve("Karakept-$winVersion.$type")}")
+                    } catch (t: Throwable) {
+                        failures.add(t)
+                    }
+                }, "jpackage-$type")
             }
-            doLast {
-                println("Branded $type: ${destDir.get().asFile.resolve("Karakept-$winVersion.$type")}")
-            }
+            threads.forEach { it.start() }
+            threads.forEach { it.join() }
+            failures.firstOrNull()?.let { throw it }
         }
-
-    val packageMsiBranded = registerBrandedInstaller("packageMsiBranded", "msi")
-    val packageExeBranded = registerBrandedInstaller("packageExeBranded", "exe")
+    }
 
     // Make the stock Compose tasks produce the BRANDED installers: disable their own
-    // (unbranded) jpackage action and route them to our tasks, which write to the same
-    // build/compose/binaries/main/{msi,exe} locations. This way `gradlew packageMsi` /
-    // `packageExe` (and the release CI that calls them) get branding with no other changes.
+    // (unbranded) jpackage action and route both to the combined task, which writes to the
+    // same build/compose/binaries/main/{msi,exe} locations. `gradlew packageMsi`/`packageExe`
+    // (and the release CI that calls them) thus get branding — and parallel packaging — free.
     afterEvaluate {
-        tasks.named("packageMsi") { enabled = false; dependsOn(packageMsiBranded) }
-        tasks.named("packageExe") { enabled = false; dependsOn(packageExeBranded) }
+        tasks.named("packageMsi") { enabled = false; dependsOn(packageWindowsInstallers) }
+        tasks.named("packageExe") { enabled = false; dependsOn(packageWindowsInstallers) }
     }
 }

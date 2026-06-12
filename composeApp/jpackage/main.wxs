@@ -14,8 +14,8 @@
     * Compose Desktop's packageMsi cannot enable the WiX dialog UI or pass a custom
       jpackage resource directory (JetBrains/compose-multiplatform issue 1972), and the
       default jpackage MSI ships no wizard dialogs at all, so msiexec falls back to its
-      basic UI (the generic "disk" icon). The :packageMsiBranded Gradle task runs
-      jpackage itself with the win-dir-chooser option (which emits the full
+      basic UI (the generic "disk" icon). The :packageWindowsInstallersBranded Gradle task
+      runs jpackage itself with the win-dir-chooser option (which emits the full
       WixUI_InstallDir dialog set) plus a resource-dir pointing at this folder.
     * The bitmap paths are supplied via the environment (env vars) so this committed
       file stays machine independent; the Gradle task generates the BMPs and sets
@@ -128,7 +128,7 @@
     <?endif?>
 
     <!-- Karakept: custom installer wizard imagery (absolute paths injected by the
-         :packageMsiBranded Gradle task via the environment, so this file stays portable). -->
+         :packageWindowsInstallersBranded Gradle task via the environment, so this file stays portable). -->
     <WixVariable Id="WixUIBannerBmp" Value="$(env.KARAKEPT_BANNER_BMP)" />
     <WixVariable Id="WixUIDialogBmp" Value="$(env.KARAKEPT_DIALOG_BMP)" />
 
