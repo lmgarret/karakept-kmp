@@ -2,7 +2,7 @@ package com.karakept.app.ui.screens
 
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.ui.screens.applyRemoveBookmarkTransform
-import org.junit.Test
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 

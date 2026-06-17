@@ -61,7 +61,7 @@ import com.karakept.app.data.model.CustomSwipeActionType
 import com.karakept.app.ui.components.TagChip
 import com.karakept.app.ui.components.TagEditorDialog
 import com.karakept.app.ui.screens.SettingsScreenModel
-import com.karakept.app.ui.utils.buildListHierarchy
+import com.karakept.app.domain.ListHierarchyUtils
 import com.karakept.api.model.KarakeepList
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -302,7 +302,7 @@ private fun CustomActionDialog(
 
     if (showListPicker) {
         val listSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        val hierarchy = remember(availableLists) { buildListHierarchy(availableLists) }
+        val hierarchy = remember(availableLists) { ListHierarchyUtils.buildListHierarchy(availableLists) }
         ModalBottomSheet(
             onDismissRequest = { showListPicker = false },
             sheetState = listSheetState

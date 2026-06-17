@@ -41,16 +41,22 @@ jobs:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
           cache-provider: basic
+          # Cache the wrapper distribution too (not in the action's defaults) so PR runs
+          # restore it instead of re-downloading the ~120MB Gradle dist every time.
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            wrapper
 
-      # `test` warms the exact compile tasks PR CI reuses: ci.yml runs `test --rerun`,
-      # which forces only the test tasks to re-run while the upstream compile/KSP/
-      # codegen tasks resolve FROM-CACHE. It also doubles as a main-branch smoke test
-      # (CI otherwise only runs on PRs). `desktopJar` warms the Linux release lane,
-      # whose createDistributable depends on it.
+      # `desktopTest` warms the exact compile tasks PR CI reuses: ci.yml runs
+      # `desktopTest --rerun`, which forces only the test tasks to re-run while the
+      # upstream commonMain/desktopMain/KSP/codegen tasks resolve FROM-CACHE. It also
+      # doubles as a main-branch smoke test (CI otherwise only runs on PRs).
+      # `desktopJar` warms the Linux release lane, whose createDistributable depends on it.
       #
-      # assembleDebug is intentionally NOT run: nothing reuses it. The Android release
-      # lane builds the *release* variant (different tasks), and the only shared
-      # upstream (compileDebugKotlinAndroid) is already warmed by `test`.
+      # The Android compile path is intentionally NOT warmed here: PR CI no longer
+      # compiles the Android target, and the Android unit tests run only as a release
+      # gate (release.yml), which self-persists its cache.
       - name: Warm build & dependency cache
-        run: ./gradlew test :composeApp:desktopJar
+        run: ./gradlew desktopTest :composeApp:desktopJar
 

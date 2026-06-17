@@ -54,7 +54,7 @@ import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.updateListSyncState
-import com.karakept.app.ui.utils.buildListHierarchy
+import com.karakept.app.domain.ListHierarchyUtils
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -93,7 +93,7 @@ class ListManagementScreen : NavKey {
 
         // Build hierarchy using shared utility
         val hierarchicalLists = remember(lists) {
-            buildListHierarchy(lists)
+            ListHierarchyUtils.buildListHierarchy(lists)
         }
 
         Scaffold(

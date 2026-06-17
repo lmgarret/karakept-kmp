@@ -1,8 +1,8 @@
 package com.karakept.app.utils
 
 import com.karakept.app.data.model.DateDisplayMode
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 

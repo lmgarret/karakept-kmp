@@ -23,7 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.karakept.api.model.KarakeepList
-import com.karakept.app.ui.utils.buildListHierarchy
+import com.karakept.app.domain.ListHierarchyUtils
 
 /**
  * Bottom sheet for selecting a list to move a bookmark to.
@@ -52,7 +52,7 @@ fun ListPickerDialog(
         HorizontalDivider()
 
         // Show lists in sorted hierarchical order (parents before children, alphabetical at each level)
-        val hierarchy = remember(lists) { buildListHierarchy(lists) }
+        val hierarchy = remember(lists) { ListHierarchyUtils.buildListHierarchy(lists) }
 
         LazyColumn {
             items(hierarchy) { (list, depth) ->

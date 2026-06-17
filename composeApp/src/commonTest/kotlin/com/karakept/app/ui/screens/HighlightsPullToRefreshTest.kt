@@ -17,19 +17,13 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 /**
  * Tests for FILT-03: Pull-to-refresh behavior on HighlightsScreenModel.
- *
- * Per RESEARCH.md Pitfall 6, tests exercise the ScreenModel directly rather than
- * simulating PullToRefreshBox gestures, which are unreliable in Robolectric.
  *
  * Verifies:
  * - syncHighlights transitions isSyncing to true then false
@@ -37,8 +31,6 @@ import kotlin.test.assertTrue
  * - syncHighlights reloads the initial page after sync
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@org.robolectric.annotation.Config(application = android.app.Application::class)
 class HighlightsPullToRefreshTest {
 
     private val testDispatcher = StandardTestDispatcher()
@@ -55,7 +47,7 @@ class HighlightsPullToRefreshTest {
         label = "Test"
     )
 
-    @Before
+    @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
@@ -70,7 +62,7 @@ class HighlightsPullToRefreshTest {
         coEvery { highlightRepository.syncHighlights(any()) } returns Unit
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
     }
@@ -85,14 +77,11 @@ class HighlightsPullToRefreshTest {
     @Test
     fun `syncHighlights sets isSyncing to true then false`() = runTest(testDispatcher) {
         val model = createScreenModel()
-        advanceUntilIdle() // let init complete
+        advanceUntilIdle()
 
         assertFalse(model.isSyncing.value)
 
         model.syncHighlights()
-        // isSyncing should be true before the coroutine completes
-        // We cannot reliably check mid-coroutine with StandardTestDispatcher,
-        // so we verify the end state
         advanceUntilIdle()
 
         assertFalse(model.isSyncing.value, "isSyncing should be false after sync completes")
@@ -117,8 +106,6 @@ class HighlightsPullToRefreshTest {
         model.syncHighlights()
         advanceUntilIdle()
 
-        // getHighlightsPaged should be called at least twice:
-        // once during init and once after sync (loadInitialPage)
         coVerify(atLeast = 2) { highlightRepository.getHighlightsPaged(any(), any(), 0) }
     }
 }

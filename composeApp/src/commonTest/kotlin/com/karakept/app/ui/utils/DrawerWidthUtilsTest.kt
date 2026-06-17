@@ -23,4 +23,17 @@ class DrawerWidthUtilsTest {
         assertEquals(360.dp, modalDrawerWidth(416.dp))
         assertEquals(359.dp, modalDrawerWidth(415.dp))
     }
+
+    @Test
+    fun `coerceExpandedDrawerWidth keeps in-range values unchanged`() {
+        assertEquals(280f, coerceExpandedDrawerWidth(280f))
+        assertEquals(ExpandedDrawerMinWidth.value, coerceExpandedDrawerWidth(ExpandedDrawerMinWidth.value))
+        assertEquals(ExpandedDrawerMaxWidth.value, coerceExpandedDrawerWidth(ExpandedDrawerMaxWidth.value))
+    }
+
+    @Test
+    fun `coerceExpandedDrawerWidth clamps to the allowed bounds`() {
+        assertEquals(ExpandedDrawerMinWidth.value, coerceExpandedDrawerWidth(50f))
+        assertEquals(ExpandedDrawerMaxWidth.value, coerceExpandedDrawerWidth(1000f))
+    }
 }

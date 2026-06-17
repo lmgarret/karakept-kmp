@@ -165,4 +165,74 @@ class ListHierarchyUtilsTest {
         assertEquals(setOf("root"), result)
         assertTrue("sibling-2" !in result)
     }
+
+    // -------------------------------------------------------------------------
+    // buildListHierarchy
+    // -------------------------------------------------------------------------
+
+    private fun makeNamedList(id: String, name: String, parentId: String? = null): KarakeepList =
+        mockk<KarakeepList>(relaxed = true) {
+            every { this@mockk.id } returns id
+            every { this@mockk.name } returns name
+            every { this@mockk.parentId } returns parentId
+        }
+
+    @Test
+    fun buildListHierarchy_ordersParentsBeforeChildrenAndSortsAlphabetically() {
+        val lists = listOf(
+            makeNamedList("b", "Beta"),
+            makeNamedList("a", "Alpha"),
+            makeNamedList("a-child", "Child", parentId = "a")
+        )
+        val result = ListHierarchyUtils.buildListHierarchy(lists)
+        assertEquals(
+            listOf("a" to 0, "a-child" to 1, "b" to 0),
+            result.map { (it.first.id ?: "") to it.second }
+        )
+    }
+
+    @Test
+    fun buildListHierarchy_appendsOrphansAtRootLevel() {
+        val lists = listOf(
+            makeNamedList("root", "Root"),
+            makeNamedList("orphan", "Orphan", parentId = "missing-parent")
+        )
+        val result = ListHierarchyUtils.buildListHierarchy(lists)
+        assertEquals(setOf("root", "orphan"), result.map { it.first.id }.toSet())
+        assertTrue(result.all { it.second == 0 })
+    }
+
+    // -------------------------------------------------------------------------
+    // filterExpandedHierarchy
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun filterExpandedHierarchy_hidesChildrenOfCollapsedParents() {
+        val lists = listOf(
+            makeNamedList("a", "Alpha"),
+            makeNamedList("a-child", "Child", parentId = "a")
+        )
+        val hierarchy = ListHierarchyUtils.buildListHierarchy(lists)
+
+        val collapsed = ListHierarchyUtils.filterExpandedHierarchy(hierarchy, emptySet())
+        assertEquals(listOf("a"), collapsed.map { it.first.id })
+
+        val expanded = ListHierarchyUtils.filterExpandedHierarchy(hierarchy, setOf("a"))
+        assertEquals(listOf("a", "a-child"), expanded.map { it.first.id })
+    }
+
+    // -------------------------------------------------------------------------
+    // listHasChildren
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun listHasChildren_returnsTrueOnlyWhenDirectChildExists() {
+        val lists = listOf(
+            makeList("parent"),
+            makeList("child", parentId = "parent"),
+            makeList("leaf")
+        )
+        assertTrue(ListHierarchyUtils.listHasChildren("parent", lists))
+        assertTrue(!ListHierarchyUtils.listHasChildren("leaf", lists))
+    }
 }

@@ -53,6 +53,10 @@ jobs:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
           cache-provider: basic
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            wrapper
 
       - name: Decode keystore
         if: ${{ env.DEV_KEYSTORE_BASE64 != '' }}

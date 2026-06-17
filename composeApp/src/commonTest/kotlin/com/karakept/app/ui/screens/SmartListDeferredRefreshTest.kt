@@ -32,9 +32,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -76,6 +76,8 @@ class SmartListDeferredRefreshTest {
     private val settingsRepository: SettingsRepository = mockk(relaxed = true) {
         every { defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
         every { defaultListId } returns flowOf(null)
+        every { lastActiveFilterStatus } returns flowOf(null)
+        every { lastActiveFilterListId } returns flowOf(null)
         every { offlineMode } returns flowOf(true)
         every { resetProgressOnMarkUnread } returns flowOf(false)
         every { allListSettings } returns flowOf(emptyMap())
@@ -92,7 +94,7 @@ class SmartListDeferredRefreshTest {
 
     private lateinit var model: MainScreenModel
 
-    @Before
+    @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
@@ -118,7 +120,7 @@ class SmartListDeferredRefreshTest {
         )
     }
 
-    @After
+    @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
         unmockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositorySyncKt")
@@ -226,7 +228,7 @@ class SmartListDeferredRefreshTest {
         model.applyFilter(FilterConfig(lists = listOf("smartA")))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) {
+        coVerify(timeout = 5000, exactly = 1) {
             bookmarkRepository.syncBookmarksForList(testServer, "smartA")
         }
     }
@@ -321,7 +323,7 @@ class SmartListDeferredRefreshTest {
         model.applyFilter(FilterConfig(lists = listOf("smartA")))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA") }
+        coVerify(timeout = 5000, exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA") }
         assertTrue(model._smartListsNeedingRefresh.value.isEmpty())
     }
 
@@ -387,7 +389,7 @@ class SmartListDeferredRefreshTest {
         advanceUntilIdle()
         assertTrue(model._smartListsNeedingRefresh.value.isEmpty())
 
-        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA") }
-        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartB") }
+        coVerify(timeout = 5000, exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA") }
+        coVerify(timeout = 5000, exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartB") }
     }
 }

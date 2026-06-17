@@ -3,6 +3,12 @@ name: CI
 on:
   pull_request:
     branches: [ main ]
+    # Skip the test suite for changes that cannot affect it (docs/markdown only).
+    # Any source, Gradle, or workflow change still triggers a full run.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
 
 jobs:
   test:
@@ -24,6 +30,16 @@ jobs:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
           cache-provider: basic
+          # Cache the wrapper distribution too (not in the action's defaults), so the
+          # ~120MB Gradle dist isn't re-downloaded every run once main has warmed it.
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            wrapper
 
-      - name: Run tests
-        run: ./gradlew test --rerun
+      # PR CI runs only the desktop (JVM) suite: it covers all commonTest +
+      # desktopTest tests — the bulk of coverage — without compiling the Android
+      # target or paying the Robolectric bootstrap. The Android-only unit tests run
+      # as a release gate before any artifact is built (release.yml).
+      - name: Run desktop tests
+        run: ./gradlew desktopTest --rerun
