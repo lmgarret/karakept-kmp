@@ -38,7 +38,7 @@ jobs:
             core.setOutput('ref', pr.head.ref);
             core.setOutput('sha', pr.head.sha);
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ steps.pr.outputs.sha }}
           submodules: true
