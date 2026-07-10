@@ -108,6 +108,24 @@ class KtorClientConfigTest {
     }
 
     @Test
+    fun unauthorizedResponse_carriesStatusCodeThroughWrapping() = runRealTime {
+        // fetchBookmarks re-wraps the checkedBody ApiException; the 401 must stay
+        // detectable so the UI can prompt for re-authentication instead of retrying (#173).
+        val engine = MockEngine {
+            respondError(HttpStatusCode.Unauthorized, "Unauthorized")
+        }
+        val remoteDataSource = RemoteDataSource(clientFor(engine))
+        val server = Server(id = "s1", url = "https://example.com", apiKey = "stale", label = "t")
+
+        val e = assertFailsWith<ApiException> {
+            remoteDataSource.fetchBookmarks(server)
+        }
+        assertEquals(401, e.statusCode)
+        kotlin.test.assertTrue(e.hasHttpStatus(401))
+        kotlin.test.assertFalse(e.hasHttpStatus(500))
+    }
+
+    @Test
     fun timeoutSurfacesAsApiExceptionThroughGuardedCall() = runRealTime {
         // A request exceeding the budget should surface as ApiException from
         // RemoteDataSource, not hang forever (pre-change there was no HttpTimeout at all).

@@ -16,6 +16,7 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ServerRepository
+import com.karakept.app.data.remote.hasHttpStatus
 import com.karakept.app.data.repository.setDefaultListType
 import com.karakept.app.data.repository.setDefaultListId
 import com.karakept.api.model.KarakeepList as KarakeepList
@@ -396,11 +397,19 @@ class MainScreenModel(
         // Coroutine A: keep _selectedServer in sync with the server list.
         viewModelScope.launch {
             servers.collect { serverList ->
-                if (_selectedServer.value == null && serverList.isNotEmpty()) {
-                    _selectedServer.value = serverList.first()
-                    loadLists()
-                } else if (serverList.isEmpty()) {
-                    _selectedServer.value = null
+                val current = _selectedServer.value
+                when {
+                    current == null && serverList.isNotEmpty() -> {
+                        _selectedServer.value = serverList.first()
+                        loadLists()
+                    }
+                    serverList.isEmpty() -> _selectedServer.value = null
+                    else -> {
+                        // Re-resolve so a re-authentication (same server id, new apiKey)
+                        // propagates immediately instead of persisting a stale snapshot
+                        // that 401s until app restart (#173).
+                        _selectedServer.value = serverList.find { it.id == current?.id } ?: serverList.first()
+                    }
                 }
             }
         }
@@ -543,8 +552,17 @@ class MainScreenModel(
                 throw e
             } catch (e: Exception) {
                 AppLogger.e("MainScreenModel", "Sync failed: ${e.message}", e)
-                snackbarManager.showErrorWithRetry("Couldn't sync bookmarks") {
-                    syncBookmarks()
+                if (e.hasHttpStatus(401)) {
+                    // Retrying with the same credentials can't succeed — point the user
+                    // at re-authentication instead (#173).
+                    snackbarManager.showSnackbar(
+                        "Authentication failed — check your API key in server settings",
+                        androidx.compose.material3.SnackbarDuration.Long
+                    )
+                } else {
+                    snackbarManager.showErrorWithRetry("Couldn't sync bookmarks") {
+                        syncBookmarks()
+                    }
                 }
             }
         }

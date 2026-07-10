@@ -39,7 +39,7 @@ class OfflineModeException(message: String = "Offline mode is enabled - network 
 private suspend fun <T : Any> ApiHttpResponse<T>.checkedBody(): T {
     if (!success) {
         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "(unreadable)" }
-        throw ApiException("HTTP $status: $errorBody")
+        throw ApiException("HTTP $status: $errorBody", statusCode = status)
     }
     return body()
 }
@@ -196,7 +196,7 @@ class RemoteDataSource(
             if (response.status.isSuccess()) {
                 response.body<ByteArray>()
             } else {
-                throw ApiException("Failed to download asset: ${response.status}")
+                throw ApiException("Failed to download asset: ${response.status}", statusCode = response.status.value)
             }
         } catch (e: Exception) {
             throw ApiException("Error downloading asset: ${e.message}", e)
@@ -300,7 +300,7 @@ class RemoteDataSource(
             val response = bookmarksApi(server).bookmarksPost(request)
             if (!response.success) {
                 val errorBody = response.response.bodyAsText()
-                throw ApiException("Bookmark creation failed with status ${response.status}: $errorBody")
+                throw ApiException("Bookmark creation failed with status ${response.status}: $errorBody", statusCode = response.status)
             }
             response.body() ?: throw ApiException("Empty success response from server")
         } catch (e: Exception) {
@@ -526,4 +526,21 @@ class RemoteDataSource(
     }
 }
 
-class ApiException(message: String, cause: Throwable? = null) : Exception(message, cause)
+class ApiException(
+    message: String,
+    cause: Throwable? = null,
+    statusCode: Int? = null
+) : Exception(message, cause) {
+    /** HTTP status of the failed response, preserved through re-wraps via [cause]. */
+    val statusCode: Int? = statusCode ?: (cause as? ApiException)?.statusCode
+}
+
+/** True when this failure chain contains an HTTP response with [code]. */
+fun Throwable.hasHttpStatus(code: Int): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is ApiException && current.statusCode == code) return true
+        current = current.cause
+    }
+    return false
+}
