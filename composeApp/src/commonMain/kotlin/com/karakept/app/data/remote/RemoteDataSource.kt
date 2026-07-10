@@ -46,7 +46,8 @@ private suspend fun <T : Any> ApiHttpResponse<T>.checkedBody(): T {
 
 class RemoteDataSource(
     private val client: HttpClient,
-    private val offlineModeProvider: (suspend () -> Boolean)? = null
+    private val offlineModeProvider: (suspend () -> Boolean)? = null,
+    private val onConnectivityChange: (suspend (isConnected: Boolean) -> Unit)? = null
 ) {
     /**
      * Guard function that blocks execution if offline mode is enabled.
@@ -57,7 +58,9 @@ class RemoteDataSource(
             throw OfflineModeException()
         }
         try {
-            return block()
+            val result = block()
+            onConnectivityChange?.invoke(true)
+            return result
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -65,7 +68,46 @@ class RemoteDataSource(
             // so coroutine cancellation propagates correctly.
             val cause = e.cause
             if (cause is kotlinx.coroutines.CancellationException) throw cause
+            if (isConnectivityError(e)) {
+                onConnectivityChange?.invoke(false)
+            }
             throw e
+        }
+    }
+
+    /**
+     * True when the failure chain indicates the server was unreachable (IO error,
+     * timeout) rather than a reached server returning an error status.
+     */
+    private fun isConnectivityError(e: Throwable): Boolean {
+        var current: Throwable? = e
+        while (current != null) {
+            // Any HTTP status means a response arrived — connectivity is fine.
+            if (current is ApiException && current.statusCode != null) return false
+            if (current is kotlinx.io.IOException) return true
+            current = current.cause
+        }
+        return false
+    }
+
+    /**
+     * Lightweight reachability check that intentionally bypasses the offline guard —
+     * it is what the recovery service uses to detect that connectivity returned
+     * while auto-offline is active.
+     */
+    suspend fun probeConnectivity(server: Server): Boolean {
+        return try {
+            val response: HttpResponse = client.get("${getBaseUrl(server)}/bookmarks") {
+                header("Authorization", getAuth(server))
+                parameter("limit", 1)
+            }
+            val reachable = response.status.value < 500
+            if (reachable) onConnectivityChange?.invoke(true)
+            reachable
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
         }
     }
     private val trpcJson = Json { ignoreUnknownKeys = true }

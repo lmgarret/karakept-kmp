@@ -93,6 +93,18 @@ fun App(
         val themeMode by settingsRepository.themeMode.collectAsState(initial = com.karakept.app.data.model.ThemeMode.SYSTEM)
         val accentColor by settingsRepository.accentColor.collectAsState(initial = com.karakept.app.data.model.AccentColor.PURPLE)
 
+        // Start reconnect detection: probes for connectivity while auto-offline and
+        // flushes queued actions when the network returns.
+        val connectivityRecoveryService =
+            org.koin.compose.koinInject<com.karakept.app.services.ConnectivityRecoveryService>()
+        val remoteDataSource =
+            org.koin.compose.koinInject<com.karakept.app.data.remote.RemoteDataSource>()
+        val bookmarkActionsRepository =
+            org.koin.compose.koinInject<com.karakept.app.data.repository.BookmarkActionsRepository>()
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            connectivityRecoveryService.start(remoteDataSource, bookmarkActionsRepository)
+        }
+
         // Run scheduled auto-export check on startup (best-effort)
         androidx.compose.runtime.LaunchedEffect(Unit) {
             try {

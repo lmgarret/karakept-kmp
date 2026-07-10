@@ -56,12 +56,18 @@ val appModule = module {
     single { HighlightsApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
     single { UsersApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
 
+    // Reconnect detection: wires the RemoteDataSource connectivity callback to the
+    // recovery service, which flips auto-offline and flushes the queue on recovery.
+    single { com.karakept.app.services.ConnectivityRecoveryService(get(), get()) }
+
     // RemoteDataSource with offline mode guard
     single {
         val settingsRepo = get<SettingsRepository>()
+        val recovery = get<com.karakept.app.services.ConnectivityRecoveryService>()
         RemoteDataSource(
             client = get(),
-            offlineModeProvider = { settingsRepo.effectiveOfflineMode.first() }
+            offlineModeProvider = { settingsRepo.effectiveOfflineMode.first() },
+            onConnectivityChange = { isConnected -> recovery.noteConnectivityChange(isConnected) }
         )
     }
 
