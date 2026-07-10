@@ -138,13 +138,28 @@ class MainScreenModel(
      * All code that reads-then-writes _accumulatedBookmarks MUST use this helper.
      * Uses Mutex (not MutableStateFlow.update{}) because some callers need to hold
      * the lock across suspension points (e.g., bookmarkChangedEvents DB lookup).
+     *
+     * The result is de-duplicated by remoteId: the list feeds a LazyColumn keyed on
+     * remoteId, and a duplicate key crashes the app (#274). Duplicates can slip in
+     * when a background sync inserts rows mid-pagination (OFFSET drift) or when an
+     * undo re-insertion races a concurrent transform.
      */
     internal suspend fun updateAccumulatedBookmarks(
         transform: (List<BookmarkEntity>) -> List<BookmarkEntity>
     ) {
         bookmarksMutex.withLock {
             _accumulatedBookmarks.value = transform(_accumulatedBookmarks.value)
+                .distinctBy { it.remoteId }
         }
+    }
+
+    /**
+     * Position of a bookmark in the accumulated list, read under the same mutex that
+     * guards mutations so action handlers capture a position consistent with the
+     * list they are about to modify.
+     */
+    internal suspend fun lockedPositionOf(remoteId: Long): Int = bookmarksMutex.withLock {
+        _accumulatedBookmarks.value.indexOfFirst { it.remoteId == remoteId }
     }
 
     internal val _bookmarkListVersion = MutableStateFlow(0)
@@ -347,7 +362,10 @@ class MainScreenModel(
         .flatMapLatest { query ->
             if (query.isBlank()) {
                 combine(_pendingBookmarks, _accumulatedBookmarks) { pending, accumulated ->
-                    pending + accumulated
+                    // Guard against a just-created bookmark appearing in both flows for a
+                    // frame — duplicate remoteIds crash the keyed LazyColumn (#274).
+                    val pendingIds = pending.map { it.remoteId }.toSet()
+                    pending + accumulated.filter { it.remoteId !in pendingIds }
                 }
             } else {
                 combine(allBookmarks, _currentFilter) { all, filter ->

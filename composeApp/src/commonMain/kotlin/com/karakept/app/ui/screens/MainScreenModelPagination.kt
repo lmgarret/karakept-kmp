@@ -103,7 +103,11 @@ fun MainScreenModel.loadNextPage() {
 
             if (newItems.isNotEmpty()) {
                 updateAccumulatedBookmarks { current ->
-                    BookmarkFilterUtils.applySorting(current + newItems, filter.sort)
+                    // A sync inserting rows mid-pagination shifts DB offsets, so a page can
+                    // re-return items already accumulated — drop them to keep keys unique (#274).
+                    val existingIds = current.map { it.remoteId }.toSet()
+                    val trulyNew = newItems.filter { it.remoteId !in existingIds }
+                    BookmarkFilterUtils.applySorting(current + trulyNew, filter.sort)
                 }
                 _currentPage.value = lastPage
             }

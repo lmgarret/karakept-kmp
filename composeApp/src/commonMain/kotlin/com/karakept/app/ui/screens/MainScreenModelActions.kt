@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 fun MainScreenModel.toggleBookmarkArchive(bookmark: BookmarkEntity) {
     viewModelScope.launch {
-        val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+        val position = lockedPositionOf(bookmark.remoteId)
         val event = if (bookmark.isArchived) {
             BookmarkActionEvent.Unarchive(bookmark)
         } else {
@@ -28,7 +28,7 @@ fun MainScreenModel.toggleBookmarkArchive(bookmark: BookmarkEntity) {
 
 fun MainScreenModel.toggleBookmarkFavorite(bookmark: BookmarkEntity) {
     viewModelScope.launch {
-        val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+        val position = lockedPositionOf(bookmark.remoteId)
         bookmarkActionController.executeAction(
             BookmarkActionEvent.ToggleFavorite(bookmark),
             originalPosition = position
@@ -73,7 +73,7 @@ fun MainScreenModel.toggleBookmarkRead(bookmark: BookmarkEntity) {
 
 fun MainScreenModel.deleteBookmark(bookmark: BookmarkEntity) {
     viewModelScope.launch {
-        val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+        val position = lockedPositionOf(bookmark.remoteId)
         bookmarkActionController.executeAction(
             BookmarkActionEvent.Delete(bookmark),
             originalPosition = position
