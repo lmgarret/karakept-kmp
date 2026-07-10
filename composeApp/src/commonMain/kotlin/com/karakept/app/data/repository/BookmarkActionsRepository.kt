@@ -74,7 +74,8 @@ class BookmarkActionsRepository(
                     bookmarkDao.insertBookmark(it.copy(isArchived = true))
                 }
 
-                // Queue action
+                // Queue action (last state wins: collapse prior archive/unarchive toggles)
+                dedupPairedActions(bookmarkRemoteId, serverId, PendingActionType.ARCHIVE, PendingActionType.UNARCHIVE)
                 queueAction(
                     bookmarkRemoteId = bookmarkRemoteId,
                     serverId = serverId,
@@ -101,6 +102,7 @@ class BookmarkActionsRepository(
                     bookmarkDao.insertBookmark(it.copy(isArchived = false))
                 }
 
+                dedupPairedActions(bookmarkRemoteId, serverId, PendingActionType.ARCHIVE, PendingActionType.UNARCHIVE)
                 queueAction(
                     bookmarkRemoteId = bookmarkRemoteId,
                     serverId = serverId,
@@ -131,6 +133,7 @@ class BookmarkActionsRepository(
                     bookmarkDao.insertBookmark(it.copy(isStarred = !currentlyFavourited))
                 }
 
+                dedupPairedActions(bookmarkRemoteId, serverId, PendingActionType.FAVOURITE, PendingActionType.UNFAVOURITE)
                 queueAction(
                     bookmarkRemoteId = bookmarkRemoteId,
                     serverId = serverId,
@@ -231,6 +234,9 @@ class BookmarkActionsRepository(
                     bookmarkDao.deleteBookmark(it)
                 }
 
+                // A delete supersedes every other queued action for this bookmark
+                pendingActionDao.deleteActionsForBookmark(bookmarkRemoteId, serverId)
+
                 // Queue action with the originalRemoteId stored in actionData
                 queueAction(
                     bookmarkRemoteId = bookmarkRemoteId,
@@ -264,6 +270,10 @@ class BookmarkActionsRepository(
                 ))
             }
 
+            // actionData carries the full desired tag list — only the latest matters
+            pendingActionDao.deleteActionsForBookmarkByType(
+                bookmarkRemoteId, serverId, PendingActionType.UPDATE_TAGS
+            )
             queueAction(
                 bookmarkRemoteId = bookmarkRemoteId,
                 serverId = serverId,
@@ -296,6 +306,9 @@ class BookmarkActionsRepository(
                 }
             }
 
+            // Last state wins per (bookmark, list): a move/remove toggle storm collapses
+            // to the single action matching the final local state
+            dedupListMembershipActions(bookmarkRemoteId, serverId, listId)
             queueAction(
                 bookmarkRemoteId = bookmarkRemoteId,
                 serverId = serverId,
@@ -328,6 +341,7 @@ class BookmarkActionsRepository(
                 bookmarkDao.insertBookmark(it.copy(listIds = newListIds.joinToString(",")))
             }
 
+            dedupListMembershipActions(bookmarkRemoteId, serverId, listId)
             queueAction(
                 bookmarkRemoteId = bookmarkRemoteId,
                 serverId = serverId,
@@ -459,16 +473,61 @@ class BookmarkActionsRepository(
             )
         )
     }
-    
+
     /**
-     * Trigger auto-sync if not in offline mode.
+     * Removes queued actions of either paired type for a bookmark so that only the
+     * action being enqueued next remains (last state wins — e.g. archive/unarchive
+     * toggles collapse to the final one instead of replaying the whole storm).
+     */
+    internal suspend fun dedupPairedActions(
+        bookmarkRemoteId: Long,
+        serverId: String,
+        typeA: String,
+        typeB: String
+    ) {
+        pendingActionDao.deleteActionsForBookmarkByType(bookmarkRemoteId, serverId, typeA)
+        pendingActionDao.deleteActionsForBookmarkByType(bookmarkRemoteId, serverId, typeB)
+    }
+
+    /**
+     * Removes queued move/remove actions targeting the same list for a bookmark,
+     * so only the latest membership intent for that (bookmark, list) pair survives.
+     */
+    internal suspend fun dedupListMembershipActions(
+        bookmarkRemoteId: Long,
+        serverId: String,
+        listId: String
+    ) {
+        val membershipTypes = setOf(PendingActionType.MOVE_TO_LIST, PendingActionType.REMOVE_FROM_LIST)
+        pendingActionDao.getPendingActionsList(serverId)
+            .filter { action ->
+                action.bookmarkRemoteId == bookmarkRemoteId &&
+                    action.actionType in membershipTypes &&
+                    runCatching {
+                        jsonSerializer.decodeFromString<Map<String, String>>(action.actionData)["listId"]
+                    }.getOrNull() == listId
+            }
+            .forEach { pendingActionDao.deleteAction(it) }
+    }
+
+    /**
+     * Actions that exhausted retries or hit a permanent server rejection. Exposed so
+     * the UI can offer retry/discard instead of silently losing the user's changes.
+     */
+    fun failedActionsCount(serverId: String): kotlinx.coroutines.flow.Flow<Int> =
+        pendingActionDao.countFailedActions(serverId)
+
+    /**
+     * Trigger auto-sync if not in offline mode (manual OR auto-detected).
      * Called after every action to sync changes to server automatically.
      */
     internal suspend fun triggerAutoSync(serverId: String) {
         repositoryScope.launch {
             try {
-                // Check if offline mode is enabled
-                if (!settingsRepository.offlineMode.first()) {
+                // effectiveOfflineMode includes auto-detected outages, so a dead network
+                // doesn't get hammered on every queued action — the recovery probe
+                // flushes the queue when connectivity returns.
+                if (!settingsRepository.effectiveOfflineMode.first()) {
                     // Get server and trigger sync
                     val servers = serverRepository.servers.first()
                     val server = servers.find { it.id == serverId }
