@@ -378,6 +378,7 @@ internal class BookmarkSyncPipeline(
 
         val newBookmarksCount = toInsert.size
 
+        var resultEntities = entities
         if (toInsert.isNotEmpty()) {
             bookmarkDao.insertBookmarks(toInsert)
 
@@ -388,7 +389,7 @@ internal class BookmarkSyncPipeline(
             val insertedRemoteIds = toInsert.map { it.remoteId }.toSet()
 
             // Update the entities list with correct localIds for inserted bookmarks
-            val updatedEntities = entities.map { entity ->
+            resultEntities = entities.map { entity ->
                 if (insertedRemoteIds.contains(entity.remoteId)) {
                     val dbEntity = afterInsert.find { it.remoteId == entity.remoteId }
                     if (dbEntity != null) {
@@ -403,21 +404,20 @@ internal class BookmarkSyncPipeline(
 
             // Expose newly inserted bookmarks for per-list notification counts
             newlyInsertedBookmarks = toInsert
-
-            // Return the updated entities list for content sync
-            return Pair(updatedEntities, newBookmarksCount)
         }
 
-        // Delete removed (conditional)
+        // Delete removed (conditional). Runs regardless of inserts — a sync that both
+        // inserts and removes must still reconcile server-side deletions. Bookmarks with
+        // pending local actions are kept so optimistic state isn't wiped before it syncs.
         if (config.shouldDeleteRemoved) {
             val incomingIds = entities.map { it.remoteId }.toSet()
-            val toDelete = existing.filter { it.remoteId !in incomingIds }
+            val toDelete = existing.filter { it.remoteId !in incomingIds && it.remoteId !in ignoredIds }
             if (toDelete.isNotEmpty()) {
                 toDelete.forEach { bookmarkDao.deleteBookmark(it) }
             }
         }
 
-        return Pair(entities, newBookmarksCount)
+        return Pair(resultEntities, newBookmarksCount)
     }
 
     // Phase 6: Sync reading progress from server for all synced bookmarks.

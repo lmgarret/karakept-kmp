@@ -231,6 +231,63 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     }
 
     @Test
+    fun fullSync_deletesRemovedBookmarksEvenWhenInserting() = runTest(testDispatcher) {
+        // Regression: deletions used to be skipped whenever the same sync inserted bookmarks
+        val existingRemoteId = "bk-removed".hashCode().toLong()
+        val existingEntity = makeBookmarkEntity(
+            localId = 10L,
+            remoteId = existingRemoteId,
+            originalRemoteId = "bk-removed"
+        )
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
+
+        // Remote no longer has bk-removed but has a brand-new bookmark
+        val newDto = makeBookmarkDto(id = "bk-new")
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(newDto), nextCursor = null)
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        coVerify { bookmarkDao.insertBookmarks(any()) }
+        coVerify { bookmarkDao.deleteBookmark(existingEntity) }
+    }
+
+    @Test
+    fun fullSync_doesNotDeleteBookmarksWithPendingActions() = runTest(testDispatcher) {
+        val pendingRemoteId = "bk-pending".hashCode().toLong()
+        val pendingEntity = makeBookmarkEntity(
+            localId = 11L,
+            remoteId = pendingRemoteId,
+            originalRemoteId = "bk-pending"
+        )
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(pendingEntity))
+        coEvery { pendingActionDao.getPendingActionsList("server1") } returns listOf(
+            com.karakept.app.data.local.entity.PendingActionEntity(
+                id = 1L,
+                bookmarkRemoteId = pendingRemoteId,
+                serverId = "server1",
+                actionType = com.karakept.app.data.local.entity.PendingActionType.ARCHIVE,
+                actionData = "",
+                createdAt = 0L,
+                retryCount = 0
+            )
+        )
+
+        // Remote no longer returns the bookmark (e.g. archived filter server-side),
+        // but a local action is still queued for it — it must survive the sync.
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = emptyList(), nextCursor = null)
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        coVerify(exactly = 0) { bookmarkDao.deleteBookmark(pendingEntity) }
+    }
+
+    @Test
     fun fullSync_updatesExistingBookmarks() = runTest(testDispatcher) {
         val dto = makeBookmarkDto(id = "bk-1", title = "Updated Title")
         val remoteId = "bk-1".hashCode().toLong()
