@@ -7,6 +7,7 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.utils.AppLogger
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -185,6 +186,11 @@ class RemoteDataSource(
 
             val response: HttpResponse = client.get("$url/assets/$assetId") {
                 header("Authorization", getAuth(server))
+                // Full-page archives can be large — allow more than the default budget.
+                timeout {
+                    requestTimeoutMillis = ASSET_REQUEST_TIMEOUT_MS
+                    socketTimeoutMillis = ASSET_SOCKET_TIMEOUT_MS
+                }
             }
 
             if (response.status.isSuccess()) {
