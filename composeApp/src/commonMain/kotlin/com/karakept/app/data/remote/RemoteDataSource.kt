@@ -338,7 +338,14 @@ class RemoteDataSource(
      */
     suspend fun fetchAllHighlights(server: Server): List<Highlight> = guardedCall {
         try {
-            highlightsApi(server).highlightsGet(limit = 100.0).checkedBody().highlights ?: emptyList()
+            val allHighlights = mutableListOf<Highlight>()
+            var cursor: String? = null
+            do {
+                val page = highlightsApi(server).highlightsGet(limit = 100.0, cursor = cursor).checkedBody()
+                allHighlights.addAll(page.highlights ?: emptyList())
+                cursor = page.nextCursor
+            } while (cursor != null)
+            allHighlights
         } catch (e: Exception) {
             throw ApiException("Error fetching all highlights: ${e.message}", e)
         }

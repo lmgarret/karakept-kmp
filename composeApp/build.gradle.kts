@@ -145,6 +145,7 @@ kotlin {
                 implementation(libs.kotlin.test)
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.mockk)
+                implementation(libs.ktor.client.mock)
             }
         }
     }
