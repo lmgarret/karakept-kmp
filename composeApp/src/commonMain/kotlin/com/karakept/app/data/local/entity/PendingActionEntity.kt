@@ -30,10 +30,21 @@ data class PendingActionEntity(
     
     /** Number of times this action has been retried */
     val retryCount: Int = 0,
-    
+
     /** Last error message if action failed */
-    val lastError: String? = null
-)
+    val lastError: String? = null,
+
+    /** [STATUS_PENDING] while retryable, [STATUS_FAILED] once given up — never silently dropped */
+    val status: String = STATUS_PENDING,
+
+    /** Earliest epoch-millis timestamp this action may be retried (exponential backoff) */
+    val nextAttemptAt: Long = 0
+) {
+    companion object {
+        const val STATUS_PENDING = "pending"
+        const val STATUS_FAILED = "failed"
+    }
+}
 
 /** Action types for bookmark operations */
 object PendingActionType {

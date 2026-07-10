@@ -22,6 +22,31 @@ interface PendingActionDao {
      */
     @Query("SELECT * FROM pending_actions WHERE serverId = :serverId ORDER BY createdAt ASC")
     suspend fun getPendingActionsList(serverId: String): List<PendingActionEntity>
+
+    /**
+     * Actions eligible for processing: still pending and past their backoff window.
+     */
+    @Query("SELECT * FROM pending_actions WHERE serverId = :serverId AND status = 'pending' AND nextAttemptAt <= :now ORDER BY createdAt ASC")
+    suspend fun getProcessableActions(serverId: String, now: Long): List<PendingActionEntity>
+
+    /**
+     * Actions that exhausted their retries (or hit a permanent error) — kept for the
+     * user to retry or discard rather than silently dropped.
+     */
+    @Query("SELECT * FROM pending_actions WHERE serverId = :serverId AND status = 'failed' ORDER BY createdAt ASC")
+    fun getFailedActionsForServer(serverId: String): Flow<List<PendingActionEntity>>
+
+    @Query("SELECT COUNT(*) FROM pending_actions WHERE serverId = :serverId AND status = 'failed'")
+    fun countFailedActions(serverId: String): Flow<Int>
+
+    /**
+     * Requeue all failed actions for another round of attempts.
+     */
+    @Query("UPDATE pending_actions SET status = 'pending', retryCount = 0, nextAttemptAt = 0 WHERE serverId = :serverId AND status = 'failed'")
+    suspend fun requeueFailedActions(serverId: String)
+
+    @Query("DELETE FROM pending_actions WHERE serverId = :serverId AND status = 'failed'")
+    suspend fun deleteFailedActions(serverId: String)
     
     /**
      * Insert a new pending action.

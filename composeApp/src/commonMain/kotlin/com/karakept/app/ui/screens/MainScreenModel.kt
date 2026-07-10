@@ -17,6 +17,8 @@ import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.remote.hasHttpStatus
+import com.karakept.app.data.repository.discardFailedActions
+import com.karakept.app.data.repository.retryFailedActions
 import com.karakept.app.data.repository.setDefaultListType
 import com.karakept.app.data.repository.setDefaultListId
 import com.karakept.api.model.KarakeepList as KarakeepList
@@ -260,6 +262,35 @@ class MainScreenModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    /**
+     * Number of queued changes that could not be synced (exhausted retries or a
+     * permanent server rejection). Surfaced so the user can retry or discard them
+     * instead of the change silently vanishing.
+     */
+    val failedActionCount: StateFlow<Int> = selectedServer
+        .flatMapLatest { server ->
+            if (server != null) bookmarkActionsRepository.failedActionsCount(server.id) else flowOf(0)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    fun retryFailedActions() {
+        viewModelScope.launch {
+            val server = _selectedServer.value ?: return@launch
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                bookmarkActionsRepository.retryFailedActions(server)
+            }
+        }
+    }
+
+    fun discardFailedActions() {
+        viewModelScope.launch {
+            val server = _selectedServer.value ?: return@launch
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                bookmarkActionsRepository.discardFailedActions(server.id)
+            }
+        }
+    }
+
     val quickFilterCounts: StateFlow<QuickFilterCounts> = combine(
         selectedServer, allBookmarks, offlineBookmarkCount
     ) { server, bookmarks, offline ->
@@ -464,6 +495,21 @@ class MainScreenModel(
             val isOffline: Boolean = settingsRepository.offlineMode.first()
             if (!isOffline) {
                 syncBookmarks()
+            }
+        }
+
+        // Surface queued changes that couldn't be synced (once, on the rising edge)
+        // so the user can retry them instead of the change silently disappearing.
+        viewModelScope.launch {
+            var previous = 0
+            failedActionCount.collect { count ->
+                if (count > previous && count > 0) {
+                    val label = if (count == 1) "1 change couldn't be synced" else "$count changes couldn't be synced"
+                    snackbarManager.showErrorWithRetry(label, androidx.compose.material3.SnackbarDuration.Long) {
+                        retryFailedActions()
+                    }
+                }
+                previous = count
             }
         }
 
