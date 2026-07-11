@@ -85,6 +85,14 @@ internal class BookmarkSyncPipeline(
     var newlyInsertedBookmarks: List<BookmarkEntity> = emptyList()
         private set
 
+    /** Non-fatal problems accumulated during the last execute() call (Group H). */
+    private val _warnings = mutableListOf<com.karakept.app.data.model.SyncWarning>()
+    val warnings: List<com.karakept.app.data.model.SyncWarning> get() = _warnings
+
+    private fun recordWarning(phase: String, message: String) {
+        _warnings.add(com.karakept.app.data.model.SyncWarning(phase, message))
+    }
+
     suspend fun execute(): Int {
         // Phase 1: Process pending actions
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Starting
@@ -96,7 +104,9 @@ internal class BookmarkSyncPipeline(
 
         // Phase 2.5: Sync Highlights (skip for ForList — membership reconciliation only)
         if (config !is SyncConfiguration.ForList) {
-            highlightRepository.syncHighlights(config.server)
+            if (!highlightRepository.syncHighlights(config.server)) {
+                recordWarning("highlights", "Couldn't sync highlights")
+            }
         }
 
         // Phase 3: Fetch list membership (conditional)
@@ -123,8 +133,11 @@ internal class BookmarkSyncPipeline(
         // lists explicitly configured for offline reading.
         syncContent(entitiesWithLocalIds)
 
-        // Phase 6: Sync reading progress for in-progress bookmarks
-        syncReadingProgress(entitiesWithLocalIds)
+        // Phase 6: Sync reading progress. Scoped to Full sync only — running it for
+        // every ForList pass multiplied the per-bookmark tRPC calls (up to lists×50).
+        if (config is SyncConfiguration.Full) {
+            syncReadingProgress()
+        }
 
         // Emit completion with count before returning to Idle
         if (newCount > 0) {
@@ -169,6 +182,7 @@ internal class BookmarkSyncPipeline(
             val response = remoteDataSource.fetchBookmarks(
                 server = config.server,
                 cursor = cursor,
+                limit = 100, // server max — halves request count vs the previous 50
                 includeContent = false,
                 archived = config.apiFilters.archived,
                 favourited = config.apiFilters.favourited
@@ -181,37 +195,19 @@ internal class BookmarkSyncPipeline(
         return allBookmarks
     }
 
-    // Phase 3: Fetch List Membership
+    // Phase 3: Fetch List Membership.
+    // Full sync no longer fetches every list's bookmarks here (the old O(lists) N+1).
+    // Membership is authored by the ForList passes that BookmarkRepository.syncAllWithLists
+    // (and MainScreenModel's syncOtherLists) run afterwards, so each list is fetched once.
+    // mapDtoToEntity preserves existing.listIds when the map is empty, so a standalone Full
+    // sync keeps membership intact for already-known bookmarks.
     private suspend fun fetchListMembership(
         remoteBookmarks: List<com.karakept.api.model.Bookmark>
     ): Map<String, List<String>> {
-        if (!config.shouldFetchLists) return emptyMap()
-
         return when (config) {
-            is SyncConfiguration.Full -> fetchAllListMembership()
             is SyncConfiguration.ForList -> buildSingleListMap(remoteBookmarks, config.listId)
             else -> emptyMap()
         }
-    }
-
-    private suspend fun fetchAllListMembership(): Map<String, List<String>> {
-        val bookmarkListMap = mutableMapOf<String, MutableList<String>>()
-        val lists = remoteDataSource.fetchLists(config.server)
-
-        lists.forEach { list ->
-            try {
-                val listBookmarks = remoteDataSource.fetchBookmarksForList(config.server, list.id ?: "", includeContent = false)
-                listBookmarks.forEach { bookmark ->
-                    bookmarkListMap.getOrPut(bookmark.id ?: "") { mutableListOf() }.add(list.id ?: "")
-                }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Skip failed lists
-            }
-        }
-
-        return bookmarkListMap
     }
 
     private fun buildSingleListMap(
@@ -259,6 +255,10 @@ internal class BookmarkSyncPipeline(
             Instant.parse(dto.createdAt ?: "").toEpochMilliseconds()
         } catch (e: Exception) {
             System.currentTimeMillis()
+        }
+
+        val modifiedAtMillis = dto.modifiedAt?.let {
+            try { Instant.parse(it).toEpochMilliseconds() } catch (e: Exception) { null }
         }
 
         val title = dto.title ?: dto.content?.title ?: "Untitled"
@@ -328,8 +328,26 @@ internal class BookmarkSyncPipeline(
             readingProgress = existing?.readingProgress ?: 0f,
             readingScrollIndex = existing?.readingScrollIndex ?: 0,
             readingScrollOffset = existing?.readingScrollOffset ?: 0,
+            modifiedAt = modifiedAtMillis,
+            progressSyncedAt = existing?.progressSyncedAt ?: 0,
             content = finalContent
         )
+    }
+
+    /**
+     * True when the incoming metadata matches what is already stored, so the DAO write
+     * (which invalidates every Room observer and recomposes the list) can be skipped.
+     * Requires a known server modifiedAt AND equal user-visible fields, because server
+     * modifiedAt does not always change on membership/flag-only edits.
+     */
+    private fun isUnchanged(current: BookmarkEntity, incoming: BookmarkEntity): Boolean {
+        val incomingModified = incoming.modifiedAt ?: return false
+        return current.modifiedAt == incomingModified &&
+            current.listIds == incoming.listIds &&
+            current.tags == incoming.tags &&
+            current.isArchived == incoming.isArchived &&
+            current.isStarred == incoming.isStarred &&
+            current.title == incoming.title
     }
 
     private suspend fun performDifferentialSync(
@@ -340,13 +358,16 @@ internal class BookmarkSyncPipeline(
         val pendingIds = bookmarkActionsRepository.getPendingActionBookmarkIds(config.server.id).toSet()
         val ignoredIds = processedIds + pendingIds
 
+        val existingByRemoteId = existing.associateBy { it.remoteId }
+
         // Update existing - need to handle metadata vs full update
         val toUpdate = entities.filter { incoming ->
-            existing.any { e -> e.remoteId == incoming.remoteId } &&
-            !ignoredIds.contains(incoming.remoteId)
+            val current = existingByRemoteId[incoming.remoteId]
+            current != null &&
+                !ignoredIds.contains(incoming.remoteId) &&
+                !isUnchanged(current, incoming)
         }.map { incoming ->
-            val localId = existing.first { e -> e.remoteId == incoming.remoteId }.localId
-            incoming.copy(localId = localId)
+            incoming.copy(localId = existingByRemoteId.getValue(incoming.remoteId).localId)
         }
 
         toUpdate.forEach { bookmark ->
@@ -366,7 +387,8 @@ internal class BookmarkSyncPipeline(
                     isStarred = bookmark.isStarred,
                     isArchived = bookmark.isArchived,
                     isRead = bookmark.isRead,
-                    readingTimeMinutes = bookmark.readingTimeMinutes
+                    readingTimeMinutes = bookmark.readingTimeMinutes,
+                    modifiedAt = bookmark.modifiedAt
                 )
             }
         }
@@ -424,10 +446,7 @@ internal class BookmarkSyncPipeline(
     // The karakeep server stores reading progress in a separate table, only
     // accessible via per-bookmark tRPC calls (no batch endpoint). To keep
     // sync time reasonable we pull concurrently and cap the total count.
-    private suspend fun syncReadingProgress(entities: List<BookmarkEntity>) {
-        // Keep the bar visible during Phase 6 — isRead changes can alter the displayed count.
-        // The executeSyncPipeline finally-block clears the key, no explicit reset needed.
-        onProgress?.invoke(ListSyncStatus.FetchingMetadata(entities.size))
+    private suspend fun syncReadingProgress() {
         val trackProgress = kotlinx.coroutines.withTimeoutOrNull(1000) {
             settingsRepository.trackReadingProgress.firstOrNull()
         } ?: true
@@ -437,10 +456,14 @@ internal class BookmarkSyncPipeline(
         } ?: false
         if (isOffline) return
 
-        val candidates = entities.take(50) // Cap to bound API cost
-
+        // Rotating cursor: pull the least-recently-synced bookmarks first (then most
+        // recently modified) so large libraries converge across successive syncs
+        // instead of forever re-pulling the same arbitrary first 50.
+        val candidates = bookmarkDao.getReadingProgressPullCandidates(config.server.id, limit = 50)
         if (candidates.isEmpty()) return
+        onProgress?.invoke(ListSyncStatus.FetchingMetadata(candidates.size))
 
+        val now = System.currentTimeMillis()
         // Pull concurrently (up to 5 at a time) to avoid blocking sync too long
         val semaphore = kotlinx.coroutines.sync.Semaphore(5)
         kotlinx.coroutines.coroutineScope {
@@ -451,6 +474,7 @@ internal class BookmarkSyncPipeline(
                         bookmarkActionsRepository.pullReadingProgressFromServer(
                             bookmark.remoteId, config.server.id
                         )
+                        bookmarkDao.updateProgressSyncedAt(bookmark.localId, now)
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (_: Exception) {
@@ -598,6 +622,7 @@ internal class BookmarkSyncPipeline(
                 throw e
             } catch (e: Exception) {
                 AppLogger.e("BookmarkRepo", "Failed to sync bookmark: ${e.message}", e)
+                recordWarning("content", "Couldn't download content for \"${entity.title}\"")
             }
             current++
             syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingContent(current, total)
@@ -634,7 +659,8 @@ internal class BookmarkSyncPipeline(
                 isStarred = bookmark.isStarred,
                 isArchived = bookmark.isArchived,
                 isRead = bookmark.isRead,
-                readingTimeMinutes = bookmark.readingTimeMinutes
+                readingTimeMinutes = bookmark.readingTimeMinutes,
+                modifiedAt = bookmark.modifiedAt
             )
         }
 

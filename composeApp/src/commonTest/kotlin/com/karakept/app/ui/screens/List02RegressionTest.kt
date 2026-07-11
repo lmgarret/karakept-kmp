@@ -92,6 +92,7 @@ class List02RegressionTest {
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
+        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
     }
 
     @AfterTest

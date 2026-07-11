@@ -96,7 +96,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(false)
         coEvery { settingsRepository.offlineMode } returns flowOf(false)
         coEvery { settingsRepository.allListSettings } returns flowOf(emptyMap())
-        coEvery { highlightRepository.syncHighlights(any()) } returns Unit
+        coEvery { highlightRepository.syncHighlights(any()) } returns true
         coEvery { remoteDataSource.fetchLists(any()) } returns emptyList()
         coEvery { listDao.getListsForServerOnce(any()) } returns emptyList()
     }
@@ -135,13 +135,16 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         content: String? = null,
         readingTimeMinutes: Int = 0,
         readingProgress: Float = 0f,
-        tags: String = ""
+        tags: String = "",
+        title: String = "Test Bookmark",
+        modifiedAt: Long? = null,
+        progressSyncedAt: Long = 0L
     ) = BookmarkEntity(
         localId = localId,
         remoteId = remoteId,
         originalRemoteId = originalRemoteId,
         serverId = serverId,
-        title = "Test Bookmark",
+        title = title,
         url = "https://example.com",
         description = null,
         imageUrl = null,
@@ -157,7 +160,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         readingProgress = readingProgress,
         readingScrollIndex = 0,
         readingScrollOffset = 0,
-        content = content
+        content = content,
+        modifiedAt = modifiedAt,
+        progressSyncedAt = progressSyncedAt
     )
 
     private fun makeBookmarkDto(
@@ -167,7 +172,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         favourited: Boolean = false,
         tags: List<String> = emptyList(),
         htmlContent: String? = null,
-        url: String = "https://example.com"
+        url: String = "https://example.com",
+        modifiedAt: String? = null
     ) = Bookmark(
         id = id,
         title = title,
@@ -179,7 +185,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
             url = url,
             htmlContent = htmlContent
         ),
-        createdAt = "2026-01-01T00:00:00Z"
+        createdAt = "2026-01-01T00:00:00Z",
+        modifiedAt = modifiedAt
     )
 
     // ──────────────────────────────────────────────────────────
@@ -320,7 +327,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isStarred = false,
                 isArchived = false,
                 isRead = false,
-                readingTimeMinutes = any()
+                readingTimeMinutes = any(),
+                modifiedAt = any()
             )
         }
     }
@@ -440,7 +448,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isStarred = any(),
                 isArchived = any(),
                 isRead = any(),
-                readingTimeMinutes = any()
+                readingTimeMinutes = any(),
+                modifiedAt = any()
             )
         }
         coVerify(exactly = 0) { bookmarkDao.updateBookmarks(any()) }
@@ -500,7 +509,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isStarred = false,
                 isArchived = false,
                 isRead = false,
-                readingTimeMinutes = 10
+                readingTimeMinutes = 10,
+                modifiedAt = any()
             )
         }
     }
@@ -549,12 +559,13 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
     @Test
     fun contentSync_strategyPerList_fetchesOnlyForTargetLists() = runTest(testDispatcher) {
+        // After the membership-fetch removal (G1), PER_LIST content is fetched during the
+        // ForList pass, where the bookmark's list membership is known.
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.PER_LIST)
         coEvery { settingsRepository.contentSyncConfig } returns flowOf(
             ListSyncConfig(selectedLists = setOf("list-1"), withChildrenMode = emptySet())
         )
 
-        val dto = makeBookmarkDto(id = "bk-1")
         coEvery { remoteDataSource.fetchLists(any()) } returns listOf(
             com.karakept.api.model.KarakeepList(id = "list-1", name = "My List")
         )
@@ -563,13 +574,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         } returns listOf(makeBookmarkDto(id = "bk-1"))
 
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(emptyList())
-        coEvery {
-            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
-        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
         coEvery { fetchRemoteContent(any(), any()) } returns "<p>Content</p>"
         coEvery { imageCacheManager.cacheImagesInHtml(any(), any()) } answers { firstArg() }
 
-        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        val pipeline = createPipeline(SyncConfiguration.ForList(testServer, "list-1"))
         pipeline.execute()
 
         // Bookmark is in list-1 which is in target lists -> should fetch content
@@ -638,7 +646,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isStarred = any(),
                 isArchived = any(),
                 isRead = any(),
-                readingTimeMinutes = 5
+                readingTimeMinutes = 5,
+                modifiedAt = any()
             )
         }
     }
@@ -791,7 +800,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isStarred = any(),
                 isArchived = any(),
                 isRead = any(),
-                readingTimeMinutes = any()
+                readingTimeMinutes = any(),
+                modifiedAt = any()
             )
         }
     }
@@ -841,7 +851,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isStarred = any(),
                 isArchived = any(),
                 isRead = any(),
-                readingTimeMinutes = any()
+                readingTimeMinutes = any(),
+                modifiedAt = any()
             )
         }
     }
@@ -925,27 +936,21 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isStarred = any(),
                 isArchived = any(),
                 isRead = any(),
-                readingTimeMinutes = any()
+                readingTimeMinutes = any(),
+                modifiedAt = any()
             )
         }
     }
 
     @Test
-    fun fullSync_fetchListsMembership() = runTest(testDispatcher) {
-        val dto = makeBookmarkDto(id = "bk-1")
-        coEvery { remoteDataSource.fetchLists(any()) } returns listOf(
-            com.karakept.api.model.KarakeepList(id = "list-A", name = "List A")
-        )
+    fun forListSync_populatesListMembership() = runTest(testDispatcher) {
+        // Membership is now authored by the ForList pass (Full no longer does the N+1).
         coEvery {
             remoteDataSource.fetchBookmarksForList(testServer, "list-A", false)
         } returns listOf(makeBookmarkDto(id = "bk-1"))
-
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(emptyList())
-        coEvery {
-            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
-        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
 
-        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        val pipeline = createPipeline(SyncConfiguration.ForList(testServer, "list-A"))
         pipeline.execute()
 
         // The inserted bookmark should have listIds containing "list-A"
@@ -1049,5 +1054,158 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
         // syncOffline = false → content must NOT be fetched
         coVerify(exactly = 0) { fetchRemoteContent(any(), any()) }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // Efficiency (Group G)
+    // ──────────────────────────────────────────────────────────
+
+    @Test
+    fun fullSync_doesNotFetchPerListMembership() = runTest(testDispatcher) {
+        // Full sync no longer does the O(lists) N+1 membership fetch; membership is
+        // authored by the ForList passes that run afterwards.
+        val dto = makeBookmarkDto(id = "bk-1")
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        coVerify(exactly = 0) { remoteDataSource.fetchBookmarksForList(any(), any(), any()) }
+    }
+
+    @Test
+    fun fullSync_skipsWriteWhenModifiedAtUnchanged() = runTest(testDispatcher) {
+        val remoteId = "bk-1".hashCode().toLong()
+        val existing = makeBookmarkEntity(
+            localId = 5L,
+            remoteId = remoteId,
+            originalRemoteId = "bk-1",
+            title = "Same",
+            modifiedAt = 1_700_000_000_000L
+        )
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existing))
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existing)
+        // DTO with the same modifiedAt and identical user-visible fields
+        val dto = makeBookmarkDto(id = "bk-1", title = "Same", modifiedAt = "2023-11-14T22:13:20Z")
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        coVerify(exactly = 0) { bookmarkDao.updateBookmarks(any()) }
+        coVerify(exactly = 0) {
+            bookmarkDao.updateBookmarkMetadata(
+                localId = 5L, title = any(), url = any(), description = any(), imageUrl = any(),
+                bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), listIds = any(),
+                isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(),
+                modifiedAt = any()
+            )
+        }
+    }
+
+    @Test
+    fun fullSync_writesWhenModifiedAtChanged() = runTest(testDispatcher) {
+        val remoteId = "bk-1".hashCode().toLong()
+        val existing = makeBookmarkEntity(
+            localId = 5L,
+            remoteId = remoteId,
+            originalRemoteId = "bk-1",
+            title = "Old",
+            modifiedAt = 1_600_000_000_000L
+        )
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existing))
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existing)
+        val dto = makeBookmarkDto(id = "bk-1", title = "New", modifiedAt = "2023-11-14T22:13:20Z")
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        coVerify {
+            bookmarkDao.updateBookmarkMetadata(
+                localId = 5L, title = "New", url = any(), description = any(), imageUrl = any(),
+                bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), listIds = any(),
+                isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(),
+                modifiedAt = any()
+            )
+        }
+    }
+
+    @Test
+    fun forListSync_doesNotPullReadingProgress() = runTest(testDispatcher) {
+        // Phase 6 is scoped to Full sync — ForList passes must not multiply tRPC calls.
+        val dto = makeBookmarkDto(id = "bk-1")
+        coEvery {
+            remoteDataSource.fetchBookmarksForList(testServer, "list-1", false)
+        } returns listOf(dto)
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+
+        val pipeline = createPipeline(SyncConfiguration.ForList(testServer, "list-1"))
+        pipeline.execute()
+
+        coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any()) }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // Sync warnings (Group H)
+    // ──────────────────────────────────────────────────────────
+
+    @Test
+    fun contentFetchFailure_recordedAsWarning_syncStillCompletes() = runTest(testDispatcher) {
+        val dto = makeBookmarkDto(id = "bk-1")
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+        coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
+        coEvery { fetchRemoteContent(any(), any()) } throws RuntimeException("network down")
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        val newCount = pipeline.execute()
+
+        assertEquals(1, newCount, "Sync completes despite the content failure")
+        assertTrue(pipeline.warnings.any { it.phase == "content" }, "Content failure should be recorded as a warning")
+    }
+
+    @Test
+    fun highlightSyncFailure_recordedAsWarning() = runTest(testDispatcher) {
+        coEvery { highlightRepository.syncHighlights(any()) } returns false
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        assertTrue(pipeline.warnings.any { it.phase == "highlights" }, "Highlight failure should be recorded as a warning")
+    }
+
+    @Test
+    fun successfulSync_hasNoWarnings() = runTest(testDispatcher) {
+        val dto = makeBookmarkDto(id = "bk-1")
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        assertTrue(pipeline.warnings.isEmpty(), "A clean sync must produce no warnings")
+    }
+
+    @Test
+    fun fullSync_readingProgressUsesRotatingCursor() = runTest(testDispatcher) {
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+        val candidate = makeBookmarkEntity(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur")
+        coEvery { bookmarkDao.getReadingProgressPullCandidates("server1", 50) } returns listOf(candidate)
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        // Candidates come from the rotating-cursor query and get stamped after the pull
+        coVerify { bookmarkDao.getReadingProgressPullCandidates("server1", 50) }
+        coVerify { bookmarkDao.updateProgressSyncedAt(7L, any()) }
     }
 }

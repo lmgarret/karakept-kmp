@@ -84,6 +84,7 @@ class MainScreenModelServerRefreshTest {
 
     private fun createMainScreenModel(): MainScreenModel {
         val listRepository = mockk<ListRepository>(relaxed = true)
+        val bookmarkRepository = mockk<BookmarkRepository>(relaxed = true)
         val bookmarkActionsRepository = mockk<BookmarkActionsRepository>(relaxed = true)
         val bookmarkActionController = mockk<BookmarkActionController>(relaxed = true)
         val highlightRepository = mockk<HighlightRepository>(relaxed = true)
@@ -91,9 +92,10 @@ class MainScreenModelServerRefreshTest {
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
+        every { bookmarkRepository.syncReports } returns MutableSharedFlow()
         return MainScreenModel(
             serverRepository = serverRepository,
-            bookmarkRepository = mockk<BookmarkRepository>(relaxed = true),
+            bookmarkRepository = bookmarkRepository,
             bookmarkActionsRepository = bookmarkActionsRepository,
             settingsRepository = settingsRepository,
             listRepository = listRepository,

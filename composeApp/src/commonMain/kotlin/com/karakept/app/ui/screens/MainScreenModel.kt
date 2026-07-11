@@ -493,8 +493,26 @@ class MainScreenModel(
             }
 
             val isOffline: Boolean = settingsRepository.offlineMode.first()
-            if (!isOffline) {
+            // Throttle the automatic startup sync so re-entering this screen (e.g. back
+            // from the reader) doesn't fire a full sync every time (#276). Manual
+            // pull-to-refresh and the sync button are never throttled.
+            if (!isOffline && bookmarkRepository.shouldAutoSync(server.id)) {
                 syncBookmarks()
+            }
+        }
+
+        // Surface non-fatal sync warnings (swallowed content/highlight failures) once per
+        // report, so the user isn't told "sync complete" when part of it failed (Group H).
+        viewModelScope.launch {
+            bookmarkRepository.syncReports.collect { report ->
+                if (report.hasWarnings) {
+                    val n = report.warnings.size
+                    val label = if (n == 1) "Sync finished — 1 item couldn't be synced"
+                                else "Sync finished — $n items couldn't be synced"
+                    snackbarManager.showErrorWithRetry(label, androidx.compose.material3.SnackbarDuration.Long) {
+                        syncBookmarks()
+                    }
+                }
             }
         }
 
@@ -592,6 +610,9 @@ class MainScreenModel(
                     val currentKey = resolveCurrentKey(capturedListContext, capturedFilter)
                     syncOtherLists(server, currentKey)
                 }
+
+                // Record completion so the startup auto-sync is throttled next time (#276).
+                bookmarkRepository.markAutoSyncCompleted(server.id)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Scope cancelled (e.g. screen navigated away) — not a sync error.
                 bookmarkRepository.resetSyncProgress()

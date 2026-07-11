@@ -84,6 +84,11 @@ class BookmarkRepository(
     private val _syncProgress = MutableStateFlow<com.karakept.app.data.model.SyncProgress>(com.karakept.app.data.model.SyncProgress.Idle)
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> = _syncProgress.asStateFlow()
 
+    // Emits a report whenever a pipeline finishes with non-fatal warnings, so partial
+    // failures are surfaced to the user instead of silently reporting "sync complete" (Group H).
+    private val _syncReports = kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.data.model.SyncReport>(extraBufferCapacity = 16)
+    val syncReports: kotlinx.coroutines.flow.SharedFlow<com.karakept.app.data.model.SyncReport> = _syncReports
+
     /** Bookmarks inserted during the last sync, used for per-list notification counts. */
     private var _lastSyncNewBookmarks: List<BookmarkEntity> = emptyList()
 
@@ -92,8 +97,59 @@ class BookmarkRepository(
         _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
     }
 
+    // Last successful top-level auto-sync per server (epoch millis). Lives here (Koin single)
+    // so it survives MainScreenModel recreation — the ScreenModel is rebuilt whenever its
+    // Nav3 entry re-enters the back stack (e.g. returning from the reader), which used to
+    // fire a fresh full sync every time (#276).
+    private val lastAutoSyncCompletedAt = mutableMapOf<String, Long>()
+    private val autoSyncMutex = Mutex()
+
+    /** True if enough time has elapsed since the last auto-sync to run another one. */
+    suspend fun shouldAutoSync(serverId: String, minIntervalMs: Long = 15 * 60_000L): Boolean =
+        autoSyncMutex.withLock {
+            val last = lastAutoSyncCompletedAt[serverId] ?: return@withLock true
+            System.currentTimeMillis() - last >= minIntervalMs
+        }
+
+    /** Records a successful auto-sync so [shouldAutoSync] throttles the next one. */
+    suspend fun markAutoSyncCompleted(serverId: String) = autoSyncMutex.withLock {
+        lastAutoSyncCompletedAt[serverId] = System.currentTimeMillis()
+    }
+
     suspend fun syncBookmarks(server: Server): Int =
         executeSyncPipeline(SyncConfiguration.Full(server))
+
+    /**
+     * Full sync followed by a per-list membership pass. Each list is fetched exactly once
+     * (Full no longer does the old O(lists) N+1 membership fetch). Used by callers that
+     * lack MainScreenModel's own syncOtherLists loop — e.g. background sync.
+     *
+     * @param skipKey a list id already synced by the caller, skipped to avoid re-fetching.
+     */
+    suspend fun syncAllWithLists(server: Server, skipKey: SyncKey = null): Int {
+        val newCount = syncBookmarks(server)
+        val lists = listDao.getListsForServerOnce(server.id)
+        val semaphore = kotlinx.coroutines.sync.Semaphore(3)
+        kotlinx.coroutines.coroutineScope {
+            lists.forEach { list ->
+                val listId = list.remoteId
+                if (listId == skipKey) return@forEach
+                launch {
+                    semaphore.acquire()
+                    try {
+                        syncBookmarksForList(server, listId)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        AppLogger.w("BookmarkRepo", "List membership sync failed for $listId: ${e.message}")
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }
+        }
+        return newCount
+    }
 
     /**
      * Syncs only favorited bookmarks.
@@ -256,7 +312,10 @@ class BookmarkRepository(
                 isStarred = dto.favourited ?: false,
                 isArchived = dto.archived ?: false,
                 isRead = existing.isRead,
-                readingTimeMinutes = existing.readingTimeMinutes // Will update if content is fetched
+                readingTimeMinutes = existing.readingTimeMinutes, // Will update if content is fetched
+                modifiedAt = dto.modifiedAt?.let {
+                    try { Instant.parse(it).toEpochMilliseconds() } catch (e: Exception) { null }
+                }
             )
 
             // Now handle content if needed
@@ -384,6 +443,7 @@ class BookmarkRepository(
         private const val BOOKMARK_SELECT = """localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
                '' as content"""
 
         private fun SortOption.toOrderBySql(): String = when (this) {
@@ -529,6 +589,11 @@ class BookmarkRepository(
             )
             val result = pipeline.execute()
             _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks
+            if (pipeline.warnings.isNotEmpty()) {
+                _syncReports.tryEmit(
+                    com.karakept.app.data.model.SyncReport(key, result, pipeline.warnings)
+                )
+            }
             return result
         } catch (e: kotlinx.coroutines.CancellationException) {
             _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
@@ -741,7 +806,8 @@ class BookmarkRepository(
                     isStarred = entity.isStarred,
                     isArchived = entity.isArchived,
                     isRead = entity.isRead,
-                    readingTimeMinutes = entity.readingTimeMinutes
+                    readingTimeMinutes = entity.readingTimeMinutes,
+                    modifiedAt = entity.modifiedAt
                 )
                 AppLogger.d("BookmarkRepository", "Reconciled list membership for bookmark $bookmarkLocalId: $updatedIds")
             }

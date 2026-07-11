@@ -81,6 +81,7 @@ class ScrollPositionRegressionTest {
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Long>()
         every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
+        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
     }
 
     @AfterTest
