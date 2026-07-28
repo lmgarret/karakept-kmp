@@ -55,7 +55,6 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.BlendMode
@@ -379,10 +378,13 @@ fun BookmarkViewerContent(
                         loadingState is BookmarkLoadingState.FullyLoaded &&
                         ((loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f || !serverProgressChecked)
                     val needsHighlightScroll = !highlightScrollDone
+                    // Only the article body waits on scroll restoration; the hero and
+                    // description render immediately so the screen is never blank.
+                    val contentRevealed = computeContentRevealed(needsScrollRestore, needsHighlightScroll)
 
                     LazyColumn(
                         state = scrollState,
-                        modifier = Modifier.fillMaxSize().then(if (needsScrollRestore || needsHighlightScroll) Modifier.alpha(0f) else Modifier),
+                        modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         val contentItemModifier = Modifier.widthIn(max = 900.dp)
@@ -427,6 +429,7 @@ fun BookmarkViewerContent(
                                     sourceContentOverride = sourceContentOverride,
                                     loadingState = state,
                                     contentFetchAttempted = contentFetchAttempted,
+                                    contentRevealed = contentRevealed,
                                     archiveAvailableOnServer = archiveAvailable,
                                     isLoadingArchive = isLoadingSource,
                                     onFetchArchive = { screenModel.fetchAndCacheArchive(state.bookmark) },
