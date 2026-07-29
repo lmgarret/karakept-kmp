@@ -5,6 +5,7 @@ import com.karakept.api.model.*
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.Server
 import com.karakept.app.utils.AppLogger
+import com.karakept.app.utils.TrpcPayloadUtils
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.timeout
@@ -29,6 +30,13 @@ import com.karakept.api.infrastructure.HttpResponse as ApiHttpResponse
  * Exception thrown when a network request is blocked due to offline mode being enabled.
  */
 class OfflineModeException(message: String = "Offline mode is enabled - network request blocked") : Exception(message)
+
+/**
+ * Thrown when the server does not expose a tRPC route Karakept relies on. tRPC is Karakeep's
+ * internal API, so routes can disappear or be renamed between versions — callers should report
+ * this as "your server doesn't support this" rather than as a transient failure worth retrying.
+ */
+class UnsupportedServerActionException(message: String) : Exception(message)
 
 /**
  * Extension that checks the HTTP status of a generated API response before deserializing.
@@ -229,6 +237,24 @@ class RemoteDataSource(
             bookmarksApi(server).bookmarksBookmarkIdDelete(bookmarkId)
         } catch (e: Exception) {
             throw ApiException("Error deleting bookmark: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Detach an asset from a bookmark, deleting it on the server.
+     * DELETE /api/v1/bookmarks/:bookmarkId/assets/:assetId
+     */
+    suspend fun detachAsset(server: Server, bookmarkId: String, assetId: String) = guardedCall {
+        try {
+            val response = bookmarksApi(server).bookmarksBookmarkIdAssetsAssetIdDelete(bookmarkId, assetId)
+            // 204 No Content, so there is no body to decode — check the status directly rather
+            // than going through checkedBody(). A silent failure here would wrongly tell the
+            // user their server-side copy is gone.
+            if (!response.success) {
+                throw ApiException("HTTP ${response.status}")
+            }
+        } catch (e: Exception) {
+            throw ApiException("Error deleting asset on server: ${e.message}", e)
         }
     }
 
@@ -451,7 +477,7 @@ class RemoteDataSource(
         try {
             val trpcBase = getTrpcBaseUrl(server)
             val url = "$trpcBase/api/trpc/bookmarks.updateReadingProgress?batch=1"
-            val body = """{"0":{"json":{"bookmarkId":"$bookmarkId","readingProgressOffset":0,"readingProgressAnchor":null,"readingProgressPercent":$progressPercent}}}"""
+            val body = TrpcPayloadUtils.updateReadingProgress(bookmarkId, progressPercent)
             val response: HttpResponse = client.post(url) {
                 header("Authorization", getAuth(server))
                 contentType(ContentType.Application.Json)
@@ -489,7 +515,7 @@ class RemoteDataSource(
             val response: HttpResponse = client.get(url) {
                 header("Authorization", getAuth(server))
                 parameter("batch", "1")
-                parameter("input", """{"0":{"json":{"bookmarkId":"$bookmarkId"}}}""")
+                parameter("input", TrpcPayloadUtils.getReadingProgress(bookmarkId))
             }
 
             if (!response.status.isSuccess()) {
@@ -514,6 +540,51 @@ class RemoteDataSource(
             // Non-critical – return null if fetch fails
             null
         }
+    }
+
+    /**
+     * Ask the server to re-crawl a link bookmark. The server enqueues a background job, so
+     * success here only means the request was accepted — the resulting metadata and assets
+     * appear on a later sync.
+     *
+     * [archiveFullPage] additionally stores a `fullPageArchive` asset, [storePdf] a `pdf` asset.
+     * These map to the "Refresh" / "Preserve offline archive" / "Preserve as PDF" actions in
+     * the Karakeep web UI.
+     *
+     * tRPC mutation: bookmarks.recrawlBookmark
+     * POST /api/trpc/bookmarks.recrawlBookmark?batch=1
+     *
+     * @throws UnsupportedServerActionException if the server has no such tRPC route.
+     */
+    suspend fun recrawlBookmark(
+        server: Server,
+        bookmarkId: String,
+        archiveFullPage: Boolean = false,
+        storePdf: Boolean = false
+    ): Unit = guardedCall {
+        val trpcBase = getTrpcBaseUrl(server)
+        val url = "$trpcBase/api/trpc/bookmarks.recrawlBookmark?batch=1"
+        val response: HttpResponse = try {
+            client.post(url) {
+                header("Authorization", getAuth(server))
+                contentType(ContentType.Application.Json)
+                setBody(TrpcPayloadUtils.recrawlBookmark(bookmarkId, archiveFullPage, storePdf))
+            }
+        } catch (e: Exception) {
+            throw ApiException("Error requesting recrawl: ${e.message}", e)
+        }
+
+        if (response.status.isSuccess()) return@guardedCall
+
+        val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+        // tRPC answers an unknown procedure with 404 "No procedure found on path …". A missing
+        // bookmark is also a 404, so match on the message rather than the status alone.
+        if (errorBody.contains("No procedure found", ignoreCase = true)) {
+            throw UnsupportedServerActionException(
+                "This Karakeep server doesn't support re-crawling from the app"
+            )
+        }
+        throw ApiException("HTTP ${response.status}: $errorBody")
     }
 }
 

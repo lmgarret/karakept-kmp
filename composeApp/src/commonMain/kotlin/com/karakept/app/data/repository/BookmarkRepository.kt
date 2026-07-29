@@ -247,7 +247,9 @@ class BookmarkRepository(
                 isRead = false,
                 createdAt = try { Instant.parse(dto.createdAt ?: "").toEpochMilliseconds() } catch (e: Exception) { System.currentTimeMillis() },
                 readingTimeMinutes = 0,
-                content = ""
+                content = "",
+                crawlStatus = dto.content?.crawlStatus?.value,
+                crawledAt = com.karakept.app.utils.parseIsoToEpochMillis(dto.content?.crawledAt)
             )
 
             // Insert into local DB
@@ -344,7 +346,10 @@ class BookmarkRepository(
                 readingTimeMinutes = existing.readingTimeMinutes, // Will update if content is fetched
                 modifiedAt = dto.modifiedAt?.let {
                     try { Instant.parse(it).toEpochMilliseconds() } catch (e: Exception) { null }
-                }
+                },
+                crawlStatus = dto.content?.crawlStatus?.value ?: existing.crawlStatus,
+                crawledAt = com.karakept.app.utils.parseIsoToEpochMillis(dto.content?.crawledAt)
+                    ?: existing.crawledAt
             )
 
             // Now handle content if needed
@@ -758,7 +763,8 @@ class BookmarkRepository(
         val typeStrings = mapOf(
             com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT to "linkHtmlContent",
             com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE to "fullPageArchive",
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE to "precrawledArchive"
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE to "precrawledArchive",
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PDF to "pdf"
         )
         val metadata = dto.assets?.mapNotNull { asset ->
             val typeStr = typeStrings[asset.assetType] ?: return@mapNotNull null
@@ -855,7 +861,9 @@ class BookmarkRepository(
                     isArchived = entity.isArchived,
                     isRead = entity.isRead,
                     readingTimeMinutes = entity.readingTimeMinutes,
-                    modifiedAt = entity.modifiedAt
+                    modifiedAt = entity.modifiedAt,
+                    crawlStatus = entity.crawlStatus,
+                    crawledAt = entity.crawledAt
                 )
                 AppLogger.d("BookmarkRepository", "Reconciled list membership for bookmark $bookmarkLocalId: $updatedIds")
             }

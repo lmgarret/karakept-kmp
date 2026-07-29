@@ -225,6 +225,10 @@ screen. Consequences worth knowing before touching this code:
 - Queued actions are flushed when the app returns to the foreground (see App.kt)
 - Sync mutex in BookmarkRepository prevents concurrent syncs
 - SettingsRepository.offlineMode (the user's manual toggle) checked before remote calls
+- Exception: server-side crawl actions (`ServerCrawlAction` — refresh / preserve archive /
+  preserve PDF, plus deleting an asset on the server) deliberately bypass the pending-action
+  queue. They ask the server to run a background job and have no optimistic local counterpart,
+  so there is nothing to apply offline or to undo; the UI disables them in offline mode instead.
 
 **Dependency Injection:**
 - Koin module configured in AppModule.kt (single instances for repositories, factories for ScreenModels)

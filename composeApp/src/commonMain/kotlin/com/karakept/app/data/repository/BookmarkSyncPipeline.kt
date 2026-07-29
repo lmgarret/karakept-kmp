@@ -387,7 +387,12 @@ internal class BookmarkSyncPipeline(
             readingScrollOffset = existing?.readingScrollOffset ?: 0,
             modifiedAt = modifiedAtMillis,
             progressSyncedAt = existing?.progressSyncedAt ?: 0,
-            content = finalContent
+            content = finalContent,
+            // Filtered syncs can omit content entirely — keep what we already knew rather
+            // than blanking the crawl state.
+            crawlStatus = dto.content?.crawlStatus?.value ?: existing?.crawlStatus,
+            crawledAt = com.karakept.app.utils.parseIsoToEpochMillis(dto.content?.crawledAt)
+                ?: existing?.crawledAt
         )
     }
 
@@ -445,7 +450,9 @@ internal class BookmarkSyncPipeline(
                     isArchived = bookmark.isArchived,
                     isRead = bookmark.isRead,
                     readingTimeMinutes = bookmark.readingTimeMinutes,
-                    modifiedAt = bookmark.modifiedAt
+                    modifiedAt = bookmark.modifiedAt,
+                    crawlStatus = bookmark.crawlStatus,
+                    crawledAt = bookmark.crawledAt
                 )
             }
         }
@@ -622,16 +629,13 @@ internal class BookmarkSyncPipeline(
     ) {
         val entityByOriginalId = entities.associateBy { it.originalRemoteId }
         val metadata = mutableListOf<AssetEntity>()
-        val trackableTypes = setOf(
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT,
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE,
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE
-        )
         val typeStrings = mapOf(
             com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT to "linkHtmlContent",
             com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE to "fullPageArchive",
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE to "precrawledArchive"
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE to "precrawledArchive",
+            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PDF to "pdf"
         )
+        val trackableTypes = typeStrings.keys
         for (dto in dtos) {
             val entity = entityByOriginalId[dto.id ?: ""] ?: continue
             dto.assets?.forEach { asset ->
@@ -719,7 +723,9 @@ internal class BookmarkSyncPipeline(
                 isArchived = bookmark.isArchived,
                 isRead = bookmark.isRead,
                 readingTimeMinutes = bookmark.readingTimeMinutes,
-                modifiedAt = bookmark.modifiedAt
+                modifiedAt = bookmark.modifiedAt,
+                crawlStatus = bookmark.crawlStatus,
+                crawledAt = bookmark.crawledAt
             )
         }
 

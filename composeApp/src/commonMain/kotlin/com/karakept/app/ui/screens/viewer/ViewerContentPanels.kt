@@ -159,11 +159,15 @@ fun ViewerContentPanels(
 
     // Bookmark Details Panel (slides from the right)
     val detailsBookmark = (loadingState as? BookmarkLoadingState.FullyLoaded)?.bookmark
+    val serverCrawlInFlight by screenModel.serverCrawlInFlight.collectAsState()
+    val offlineMode by screenModel.offlineMode.collectAsState()
     BookmarkDetailsPanel(
         visible = showDetailsPanel,
         bookmark = detailsBookmark,
         assets = assets,
         selectedSource = selectedSource,
+        serverCrawlInFlight = serverCrawlInFlight,
+        serverActionsEnabled = !offlineMode,
         onSourceSelected = { source ->
             screenModel.setContentSource(source, detailsBookmark)
         },
@@ -174,6 +178,12 @@ fun ViewerContentPanels(
             if (detailsBookmark != null) screenModel.downloadOrRefreshAsset(asset, detailsBookmark)
         },
         onDeleteAssetLocal = { asset -> screenModel.deleteAssetLocal(asset) },
+        onDeleteAssetOnServer = { asset ->
+            if (detailsBookmark != null) screenModel.deleteAssetOnServer(asset, detailsBookmark)
+        },
+        onRequestServerCrawl = { action ->
+            if (detailsBookmark != null) screenModel.requestServerCrawl(detailsBookmark, action)
+        },
         onDismiss = { onShowDetailsPanelChanged(false) }
     )
 }
