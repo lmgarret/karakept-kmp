@@ -9,6 +9,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -55,7 +56,6 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.BlendMode
@@ -379,10 +379,17 @@ fun BookmarkViewerContent(
                         loadingState is BookmarkLoadingState.FullyLoaded &&
                         ((loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f || !serverProgressChecked)
                     val needsHighlightScroll = !highlightScrollDone
+                    // Only the article body waits on scroll restoration; the hero and
+                    // description render immediately so the screen is never blank.
+                    val contentRevealed = computeContentRevealed(needsScrollRestore, needsHighlightScroll)
+                    // For bookmarks with a saved reading position, cover the whole screen
+                    // with a shimmer instead, so we land directly at that position rather
+                    // than flashing the hero and then auto-scrolling down.
+                    val restoringToSavedPosition = shouldShowRestoreOverlay(needsScrollRestore, state.bookmark.readingProgress)
 
                     LazyColumn(
                         state = scrollState,
-                        modifier = Modifier.fillMaxSize().then(if (needsScrollRestore || needsHighlightScroll) Modifier.alpha(0f) else Modifier),
+                        modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         val contentItemModifier = Modifier.widthIn(max = 900.dp)
@@ -427,6 +434,7 @@ fun BookmarkViewerContent(
                                     sourceContentOverride = sourceContentOverride,
                                     loadingState = state,
                                     contentFetchAttempted = contentFetchAttempted,
+                                    contentRevealed = contentRevealed,
                                     archiveAvailableOnServer = archiveAvailable,
                                     isLoadingArchive = isLoadingSource,
                                     onFetchArchive = { screenModel.fetchAndCacheArchive(state.bookmark) },
@@ -490,6 +498,20 @@ fun BookmarkViewerContent(
                                 )
                             }
                         }
+                    }
+
+                    // Full-page shimmer while restoring to a saved reading position. It sits
+                    // above the LazyColumn (which scrolls to the saved offset underneath) but
+                    // below the top bar, and fades out once restoration completes.
+                    AnimatedVisibility(
+                        visible = restoringToSavedPosition,
+                        exit = fadeOut(animationSpec = tween(300))
+                    ) {
+                        BookmarkContentLoader(
+                            loadingState = BookmarkLoadingState.Initial,
+                            modifier = Modifier.fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                        )
                     }
 
                     // Scroll-to-top button (READER-03)
