@@ -5,6 +5,7 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.utils.AppLogger
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class BackgroundSyncOrchestrator(
     private val settingsRepository: SettingsRepository,
@@ -22,9 +23,25 @@ class BackgroundSyncOrchestrator(
         val server = servers.find { it.id == activeServerId } ?: servers.first()
 
         return try {
-            val newCount = bookmarkRepository.syncBookmarks(server)
-            sendNotificationsIfNeeded(server.id, newCount)
-            SyncResult.SUCCESS
+            kotlinx.coroutines.coroutineScope {
+                // Track non-fatal warnings emitted during this run so the digest can report them.
+                val sawWarnings = kotlinx.coroutines.flow.MutableStateFlow(false)
+                val warningJob = launch {
+                    bookmarkRepository.syncReports.collect { if (it.hasWarnings) sawWarnings.value = true }
+                }
+                try {
+                    // syncAllWithLists (not plain syncBookmarks) so list membership is refreshed —
+                    // Full no longer fetches membership inline, and background sync has no
+                    // syncOtherLists loop of its own.
+                    val newCount = bookmarkRepository.syncAllWithLists(server)
+                    sendNotificationsIfNeeded(server.id, newCount)
+                    if (sawWarnings.value) SyncResult.SUCCESS_WITH_WARNINGS else SyncResult.SUCCESS
+                } finally {
+                    warningJob.cancel()
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             AppLogger.e("BackgroundSync", "Sync failed", e)
             SyncResult.ERROR
@@ -73,4 +90,4 @@ class BackgroundSyncOrchestrator(
     }
 }
 
-enum class SyncResult { SUCCESS, SKIPPED, ERROR }
+enum class SyncResult { SUCCESS, SUCCESS_WITH_WARNINGS, SKIPPED, ERROR }

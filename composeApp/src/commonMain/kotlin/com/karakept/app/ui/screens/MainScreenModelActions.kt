@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 
 fun MainScreenModel.toggleBookmarkArchive(bookmark: BookmarkEntity) {
     viewModelScope.launch {
-        val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+        val position = lockedPositionOf(bookmark.remoteId)
         val event = if (bookmark.isArchived) {
             BookmarkActionEvent.Unarchive(bookmark)
         } else {
@@ -28,7 +28,7 @@ fun MainScreenModel.toggleBookmarkArchive(bookmark: BookmarkEntity) {
 
 fun MainScreenModel.toggleBookmarkFavorite(bookmark: BookmarkEntity) {
     viewModelScope.launch {
-        val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+        val position = lockedPositionOf(bookmark.remoteId)
         bookmarkActionController.executeAction(
             BookmarkActionEvent.ToggleFavorite(bookmark),
             originalPosition = position
@@ -73,7 +73,7 @@ fun MainScreenModel.toggleBookmarkRead(bookmark: BookmarkEntity) {
 
 fun MainScreenModel.deleteBookmark(bookmark: BookmarkEntity) {
     viewModelScope.launch {
-        val position = _accumulatedBookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+        val position = lockedPositionOf(bookmark.remoteId)
         bookmarkActionController.executeAction(
             BookmarkActionEvent.Delete(bookmark),
             originalPosition = position
@@ -159,10 +159,14 @@ internal fun applyReconcileBookmarkTransform(
 
 fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
     _actedOnBookmarkIds.value += bookmark.remoteId
+    val smartListIds = listRepository.lists.value
+        .filter { it.type == KarakeepList.Type.SMART }
+        .mapNotNull { it.id }
+        .toSet()
     viewModelScope.launch {
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.moveToList(
-            bookmark.remoteId, bookmark.serverId, listId, isOnline
+            bookmark.remoteId, bookmark.serverId, listId, isOnline, smartListIds
         )
         updateAccumulatedBookmarks { list ->
             list.map {
@@ -171,8 +175,10 @@ fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String)
                         .split(",")
                         .map { id -> id.trim() }
                         .filter { id -> id.isNotBlank() }
-                    if (!currentListIds.contains(listId)) {
-                        it.copy(listIds = (currentListIds + listId).joinToString(","))
+                    // Add the target list and optimistically drop smart lists (see moveToList).
+                    val newListIds = (currentListIds - smartListIds) + listId
+                    if (newListIds.toSet() != currentListIds.toSet()) {
+                        it.copy(listIds = newListIds.distinct().joinToString(","))
                     } else {
                         it
                     }

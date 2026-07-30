@@ -56,12 +56,13 @@ val appModule = module {
     single { HighlightsApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
     single { UsersApi(baseUrl = defaultBaseUrl, httpClient = get<HttpClient>()) }
 
-    // RemoteDataSource with offline mode guard
+    // RemoteDataSource with offline mode guard (blocks requests only when the user has
+    // manually enabled offline mode).
     single {
         val settingsRepo = get<SettingsRepository>()
         RemoteDataSource(
             client = get(),
-            offlineModeProvider = { settingsRepo.effectiveOfflineMode.first() }
+            offlineModeProvider = { settingsRepo.offlineMode.first() }
         )
     }
 

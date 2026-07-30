@@ -111,7 +111,6 @@ fun MainScreenScaffoldContent(
     swipeRightConfigId: String?,
     trackReadingProgress: Boolean,
     offlineMode: Boolean,
-    isAutoOffline: Boolean,
     pendingBookmarkRemoteIds: Set<Long>,
     isSelectionMode: Boolean,
     selectedBookmarkIds: Set<Long>,
@@ -142,7 +141,9 @@ fun MainScreenScaffoldContent(
     onShowBatchTagEditor: () -> Unit,
     onShowBatchListPicker: () -> Unit,
     onShowBatchDeleteConfirm: () -> Unit,
-    navigateTo: (androidx.navigation3.runtime.NavKey) -> Unit
+    navigateTo: (androidx.navigation3.runtime.NavKey) -> Unit,
+    newBookmarksAbove: Int = 0,
+    onClearNewBookmarksAbove: () -> Unit = {}
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize().onKeyEvent { keyEvent ->
@@ -167,7 +168,6 @@ fun MainScreenScaffoldContent(
         topBar = {
             MainScreenTopBar(
                 offlineMode = offlineMode,
-                isAutoOffline = isAutoOffline,
                 onMenuClick = onMenuClick,
                 onFilterClick = onFilterClick,
                 onRefreshClick = { screenModel.syncBookmarks() },
@@ -203,7 +203,7 @@ fun MainScreenScaffoldContent(
             )
         },
         floatingActionButton = {
-            if (!isDesktop && !offlineMode && !isAutoOffline && !isSelectionMode) {
+            if (!isDesktop && !offlineMode && !isSelectionMode) {
                 FloatingActionButton(
                     onClick = onShowAddBookmarkDialog
                 ) {
@@ -265,7 +265,7 @@ fun MainScreenScaffoldContent(
                 urlPosition = displayConfig.urlPosition,
                 urlIconMode = displayConfig.urlIconMode,
                 faviconByLinkSize = displayConfig.faviconByLinkSize,
-                offlineMode = offlineMode || isAutoOffline,
+                offlineMode = offlineMode,
                 pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                 isSelectionMode = isSelectionMode,
                 selectedBookmarkIds = selectedBookmarkIds,
@@ -331,7 +331,9 @@ fun MainScreenScaffoldContent(
                             }
                         }
                     }
-                } else null
+                } else null,
+                newBookmarksAbove = newBookmarksAbove,
+                onClearNewBookmarksAbove = onClearNewBookmarksAbove
             )
         }
     }

@@ -7,6 +7,7 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.utils.AppLogger
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -38,7 +39,7 @@ class OfflineModeException(message: String = "Offline mode is enabled - network 
 private suspend fun <T : Any> ApiHttpResponse<T>.checkedBody(): T {
     if (!success) {
         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "(unreadable)" }
-        throw ApiException("HTTP $status: $errorBody")
+        throw ApiException("HTTP $status: $errorBody", statusCode = status)
     }
     return body()
 }
@@ -48,25 +49,16 @@ class RemoteDataSource(
     private val offlineModeProvider: (suspend () -> Boolean)? = null
 ) {
     /**
-     * Guard function that blocks execution if offline mode is enabled.
+     * Guard function that blocks execution when the user has enabled offline mode.
      * Throws OfflineModeException when offline.
      */
     private suspend fun <T> guardedCall(block: suspend () -> T): T {
         if (offlineModeProvider?.invoke() == true) {
             throw OfflineModeException()
         }
-        try {
-            return block()
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Inner catch blocks wrap CancellationException in ApiException — unwrap it
-            // so coroutine cancellation propagates correctly.
-            val cause = e.cause
-            if (cause is kotlinx.coroutines.CancellationException) throw cause
-            throw e
-        }
+        return block()
     }
+
     private val trpcJson = Json { ignoreUnknownKeys = true }
 
     private fun getBaseUrl(server: Server): String {
@@ -185,12 +177,17 @@ class RemoteDataSource(
 
             val response: HttpResponse = client.get("$url/assets/$assetId") {
                 header("Authorization", getAuth(server))
+                // Full-page archives can be large — allow more than the default budget.
+                timeout {
+                    requestTimeoutMillis = ASSET_REQUEST_TIMEOUT_MS
+                    socketTimeoutMillis = ASSET_SOCKET_TIMEOUT_MS
+                }
             }
 
             if (response.status.isSuccess()) {
                 response.body<ByteArray>()
             } else {
-                throw ApiException("Failed to download asset: ${response.status}")
+                throw ApiException("Failed to download asset: ${response.status}", statusCode = response.status.value)
             }
         } catch (e: Exception) {
             throw ApiException("Error downloading asset: ${e.message}", e)
@@ -294,7 +291,7 @@ class RemoteDataSource(
             val response = bookmarksApi(server).bookmarksPost(request)
             if (!response.success) {
                 val errorBody = response.response.bodyAsText()
-                throw ApiException("Bookmark creation failed with status ${response.status}: $errorBody")
+                throw ApiException("Bookmark creation failed with status ${response.status}: $errorBody", statusCode = response.status)
             }
             response.body() ?: throw ApiException("Empty success response from server")
         } catch (e: Exception) {
@@ -338,7 +335,14 @@ class RemoteDataSource(
      */
     suspend fun fetchAllHighlights(server: Server): List<Highlight> = guardedCall {
         try {
-            highlightsApi(server).highlightsGet(limit = 100.0).checkedBody().highlights ?: emptyList()
+            val allHighlights = mutableListOf<Highlight>()
+            var cursor: String? = null
+            do {
+                val page = highlightsApi(server).highlightsGet(limit = 100.0, cursor = cursor).checkedBody()
+                allHighlights.addAll(page.highlights ?: emptyList())
+                cursor = page.nextCursor
+            } while (cursor != null)
+            allHighlights
         } catch (e: Exception) {
             throw ApiException("Error fetching all highlights: ${e.message}", e)
         }
@@ -513,4 +517,21 @@ class RemoteDataSource(
     }
 }
 
-class ApiException(message: String, cause: Throwable? = null) : Exception(message, cause)
+class ApiException(
+    message: String,
+    cause: Throwable? = null,
+    statusCode: Int? = null
+) : Exception(message, cause) {
+    /** HTTP status of the failed response, preserved through re-wraps via [cause]. */
+    val statusCode: Int? = statusCode ?: (cause as? ApiException)?.statusCode
+}
+
+/** True when this failure chain contains an HTTP response with [code]. */
+fun Throwable.hasHttpStatus(code: Int): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is ApiException && current.statusCode == code) return true
+        current = current.cause
+    }
+    return false
+}

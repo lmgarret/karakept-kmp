@@ -76,10 +76,10 @@ object MainScreen : NavKey {
         val syncProgress by screenModel.syncProgress.collectAsState()
         val isLoadingMore by screenModel.isLoadingMore.collectAsState()
         val hasMoreItems by screenModel.hasMoreItems.collectAsState()
+        val newBookmarksAbove by screenModel.newBookmarksAbove.collectAsState()
         val currentFilter by screenModel.currentFilter.collectAsState()
         val tagFilterSourceBookmarkId by screenModel.tagFilterSourceBookmarkId.collectAsState()
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
-        val isAutoOffline by settingsScreenModel.isAutoOffline.collectAsState()
         val trackReadingProgress by settingsScreenModel.trackReadingProgress.collectAsState()
         val swipeLeftAction by screenModel.swipeLeftAction.collectAsState()
         val swipeRightAction by screenModel.swipeRightAction.collectAsState()
@@ -334,7 +334,7 @@ object MainScreen : NavKey {
                     displayConfig = displayConfig,
                     swipeLeftAction = swipeLeftAction, swipeRightAction = swipeRightAction,
                     customSwipeActionConfigs = customSwipeActionConfigs, swipeLeftConfigId = swipeLeftConfigId, swipeRightConfigId = swipeRightConfigId,
-                    trackReadingProgress = trackReadingProgress, offlineMode = offlineMode, isAutoOffline = isAutoOffline,
+                    trackReadingProgress = trackReadingProgress, offlineMode = offlineMode,
                     pendingBookmarkRemoteIds = pendingBookmarkRemoteIds, isSelectionMode = isSelectionMode,
                     selectedBookmarkIds = selectedBookmarkIds, activeBookmarkId = activeBmId,
                     isSearchActive = isSearchActive, searchQuery = searchQuery, listState = listState, isDesktop = isDesktop,
@@ -357,7 +357,9 @@ object MainScreen : NavKey {
                     onShowBatchTagEditor = { showBatchTagEditor = true },
                     onShowBatchListPicker = { showBatchListPicker = true },
                     onShowBatchDeleteConfirm = { showBatchDeleteConfirm = true },
-                    navigateTo = { screen -> navigator.push(screen) }
+                    navigateTo = { screen -> navigator.push(screen) },
+                    newBookmarksAbove = newBookmarksAbove,
+                    onClearNewBookmarksAbove = { screenModel.clearNewBookmarksAbove() }
                 )
             }
 
@@ -378,7 +380,7 @@ object MainScreen : NavKey {
                 MainScreenExpandedLayout(
                     maxWidth = maxWidth, lists = lists, listCounts = listCounts, expandedLists = expandedLists,
                     currentFilter = currentFilter, topTagsWithCounts = topTagsWithCounts, allAvailableTags = allAvailableTags,
-                    offlineMode = offlineMode, isAutoOffline = isAutoOffline,
+                    offlineMode = offlineMode,
                     isDrawerVisible = isDrawerVisible, onDrawerVisibilityChanged = { isDrawerVisible = it },
                     isReaderFullscreen = isReaderFullscreen, onReaderFullscreenChanged = { isReaderFullscreen = it },
                     selectedBookmarkId = selectedBookmarkId, onSelectedBookmarkIdChanged = { selectedBookmarkId = it },

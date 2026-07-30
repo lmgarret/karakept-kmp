@@ -137,7 +137,8 @@ class SmartListReconciliationTest {
                 isStarred = entity.isStarred,
                 isArchived = entity.isArchived,
                 isRead = entity.isRead,
-                readingTimeMinutes = entity.readingTimeMinutes
+                readingTimeMinutes = entity.readingTimeMinutes,
+                modifiedAt = any()
             )
         }
     }
@@ -172,7 +173,8 @@ class SmartListReconciliationTest {
                 isStarred = any(),
                 isArchived = any(),
                 isRead = any(),
-                readingTimeMinutes = any()
+                readingTimeMinutes = any(),
+                modifiedAt = any()
             )
         }
     }
@@ -210,7 +212,8 @@ class SmartListReconciliationTest {
                 isStarred = any(),
                 isArchived = any(),
                 isRead = any(),
-                readingTimeMinutes = any()
+                readingTimeMinutes = any(),
+                modifiedAt = any()
             )
         }
         // Both listA (from server) and listC (manual, preserved) should be present
@@ -232,7 +235,7 @@ class SmartListReconciliationTest {
         val smartListIds = setOf("listA")
         bookmarkRepository.reconcileBookmarkSmartListMembership(testServer, 4L, smartListIds)
 
-        coVerify(exactly = 0) { bookmarkDao.updateBookmarkMetadata(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { bookmarkDao.updateBookmarkMetadata(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -251,7 +254,7 @@ class SmartListReconciliationTest {
 
         // No DB write (server returned stale empty data)
         coVerify(exactly = 0) {
-            bookmarkDao.updateBookmarkMetadata(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            bookmarkDao.updateBookmarkMetadata(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         }
         // Returns false → caller should mark smart lists for deferred refresh
         assertEquals(false, result)
@@ -286,7 +289,8 @@ class SmartListReconciliationTest {
                 isStarred = any(),
                 isArchived = any(),
                 isRead = any(),
-                readingTimeMinutes = any()
+                readingTimeMinutes = any(),
+                modifiedAt = any()
             )
         }
     }
@@ -314,6 +318,7 @@ class SmartListReconciliationTest {
         )
 
         coEvery { pendingActionDao.getPendingActionsList(testServer.id) } returns listOf(pendingAction)
+        coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(pendingAction)
         coEvery { bookmarkDao.getBookmarkByRemoteId(5L, testServer.id) } returns bookmark
         coEvery { bookmarkDao.getBookmarkById(5L) } returns bookmark
         coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-5") } returns
@@ -342,7 +347,8 @@ class SmartListReconciliationTest {
                 isStarred = any(),
                 isArchived = any(),
                 isRead = any(),
-                readingTimeMinutes = any()
+                readingTimeMinutes = any(),
+                modifiedAt = any()
             )
         }
     }

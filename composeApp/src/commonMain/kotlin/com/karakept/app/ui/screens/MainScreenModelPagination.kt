@@ -103,7 +103,11 @@ fun MainScreenModel.loadNextPage() {
 
             if (newItems.isNotEmpty()) {
                 updateAccumulatedBookmarks { current ->
-                    BookmarkFilterUtils.applySorting(current + newItems, filter.sort)
+                    // A sync inserting rows mid-pagination shifts DB offsets, so a page can
+                    // re-return items already accumulated — drop them to keep keys unique (#274).
+                    val existingIds = current.map { it.remoteId }.toSet()
+                    val trulyNew = newItems.filter { it.remoteId !in existingIds }
+                    BookmarkFilterUtils.applySorting(current + trulyNew, filter.sort)
                 }
                 _currentPage.value = lastPage
             }
@@ -133,6 +137,8 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     _currentPage.value = 0
     _hasMoreItems.value = true
     _actedOnBookmarkIds.value = emptySet()
+    // Fresh view — any pending "N new" indicator no longer applies.
+    _newBookmarksAbove.value = 0
     // Block loadNextPage from launching while we are iterating through pages.
     _isLoadingMore.value = true
 
@@ -157,4 +163,53 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     // Scroll to top after data is ready, so plain back-navigation from the viewer
     // (which doesn't call resetPaginationAndLoad) never triggers an unwanted scroll.
     if (scrollToTop) scrollToTop()
+}
+
+/**
+ * Refreshes the currently-loaded pages in place after a sync, so newly synced bookmarks
+ * appear without the disruptive full reset.
+ *
+ * Unlike [resetPaginationAndLoad] this keeps the loaded window (reloads pages 0..currentPage
+ * instead of shrinking to page 0), does NOT bump [_bookmarkListVersion], and does NOT scroll
+ * to the top. Leaving the version untouched lets [PreserveListScrollAnchor] re-pin the viewport
+ * to the bookmark the user is looking at, so the list updates beneath them instead of blinking
+ * and jumping to the top when the background sync finishes on open.
+ */
+internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, filter: FilterConfig) {
+    paginationGeneration++
+    val myGeneration = paginationGeneration
+    val lastLoadedPage = _currentPage.value
+
+    _isLoadingMore.value = true
+    try {
+        val all = mutableListOf<BookmarkEntity>()
+        var page = 0
+        var reachedEnd = false
+        while (page <= lastLoadedPage) {
+            val (items, rawCount) = loadBookmarksPage(server, filter, page)
+            all += items
+            if (rawCount < pageSize) {
+                reachedEnd = true
+                break
+            }
+            page++
+        }
+
+        // A newer reset/refresh started while we were fetching — our results are stale.
+        if (paginationGeneration != myGeneration) return
+
+        // Count bookmarks the sync introduced (they land at the top for the default NEWEST sort),
+        // so the UI can surface a "N new" pill when the user is scrolled away from the top.
+        val previousIds = _accumulatedBookmarks.value.map { it.remoteId }.toSet()
+        val added = all.count { it.remoteId !in previousIds }
+        if (added > 0) _newBookmarksAbove.value += added
+
+        updateAccumulatedBookmarks { all }
+        _currentPage.value = if (reachedEnd) page else lastLoadedPage
+        _hasMoreItems.value = !reachedEnd
+    } finally {
+        if (paginationGeneration == myGeneration) {
+            _isLoadingMore.value = false
+        }
+    }
 }

@@ -360,22 +360,6 @@ suspend fun SettingsRepository.setActiveServerId(id: String) {
     dataStore.edit { it[ACTIVE_SERVER_ID_KEY] = id }
 }
 
-/**
- * Set the auto-detected offline state.
- * Call this when network requests fail to automatically switch to offline mode.
- */
-suspend fun SettingsRepository.setAutoOfflineDetected(detected: Boolean) {
-    dataStore.edit { it[AUTO_OFFLINE_DETECTED_KEY] = detected }
-}
-
-/**
- * Clear the auto-detected offline state.
- * Call this when the user manually goes online or when network is restored.
- */
-suspend fun SettingsRepository.clearAutoOfflineDetected() {
-    dataStore.edit { it[AUTO_OFFLINE_DETECTED_KEY] = false }
-}
-
 suspend fun SettingsRepository.setDrawerWidthDp(width: Float) {
     dataStore.edit { it[DRAWER_WIDTH_DP_KEY] = width }
 }

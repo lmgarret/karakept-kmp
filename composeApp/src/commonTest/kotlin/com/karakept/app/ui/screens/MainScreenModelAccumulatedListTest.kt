@@ -12,13 +12,14 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -28,13 +29,15 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 
 /**
- * Tests for FILT-01: selectAll() behavior on MainScreenModel.
+ * Regression tests for #274: the accumulated bookmark list feeds a LazyColumn keyed
+ * on remoteId, so any duplicate remoteId crashes the app. Duplicates used to slip in
+ * when a background sync inserted rows mid-pagination (page overlap via OFFSET drift)
+ * or when undo re-insertions raced other transforms.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class MainScreenSelectAllTest {
+class MainScreenModelAccumulatedListTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -67,7 +70,7 @@ class MainScreenSelectAllTest {
         snackbarManager = mockk(relaxed = true)
         highlightRepository = mockk(relaxed = true)
 
-        every { serverRepository.servers } returns flowOf(emptyList())
+        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
         every { settingsRepository.allListSettings } returns flowOf(emptyMap())
         every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
         every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
@@ -85,9 +88,8 @@ class MainScreenSelectAllTest {
         every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Long>()
-        every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
+        every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
         every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
     }
@@ -108,11 +110,7 @@ class MainScreenSelectAllTest {
         highlightRepository = highlightRepository
     )
 
-    private fun createBookmarkEntity(
-        remoteId: Long,
-        isArchived: Boolean = false,
-        isStarred: Boolean = false
-    ) = BookmarkEntity(
+    private fun bookmark(remoteId: Long) = BookmarkEntity(
         localId = remoteId,
         remoteId = remoteId,
         originalRemoteId = "remote-$remoteId",
@@ -125,82 +123,75 @@ class MainScreenSelectAllTest {
         screenshotAssetId = null,
         description = null,
         createdAt = 0L,
-        isArchived = isArchived,
-        isStarred = isStarred
+        isArchived = false,
+        isStarred = false
     )
 
+    private fun List<BookmarkEntity>.remoteIds() = map { it.remoteId }
+
     @Test
-    fun `selectAll selects accumulated bookmarks when all pages loaded`() = runTest(testDispatcher) {
+    fun updateAccumulatedBookmarks_dropsDuplicatesIntroducedByTransform() = runTest(testDispatcher) {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        val bookmarks = (1L..20L).map { createBookmarkEntity(it) }
-        model._hasMoreItems.value = false
-        model._accumulatedBookmarks.value = bookmarks
+        // Simulate a page overlap: the transform naively appends items already present
+        model.updateAccumulatedBookmarks { listOf(bookmark(1), bookmark(2)) }
+        model.updateAccumulatedBookmarks { current -> current + listOf(bookmark(2), bookmark(3)) }
 
-        model.selectAll()
-        advanceUntilIdle()
-
-        assertEquals(20, model._selectedBookmarkIds.value.size)
+        assertEquals(listOf(1L, 2L, 3L), model._accumulatedBookmarks.value.remoteIds())
     }
 
     @Test
-    fun `selectAll fetches all items when hasMoreItems is true`() = runTest(testDispatcher) {
-        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
-        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
-
+    fun updateAccumulatedBookmarks_undoReinsertionOfPresentBookmarkStaysUnique() = runTest(testDispatcher) {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model._selectedServer.value = fakeServer
-        advanceUntilIdle()
+        model.updateAccumulatedBookmarks { listOf(bookmark(1), bookmark(2)) }
+        // Undo restores a bookmark at its original position even though a concurrent
+        // sync already brought it back
+        model.updateAccumulatedBookmarks { current ->
+            val mutable = current.toMutableList()
+            mutable.add(0, bookmark(2))
+            mutable
+        }
 
-        model._hasMoreItems.value = true
-        model._accumulatedBookmarks.value = allBookmarks.take(20)
-
-        model.selectAll()
-        advanceUntilIdle()
-
-        assertEquals(50, model._selectedBookmarkIds.value.size)
+        assertEquals(listOf(2L, 1L), model._accumulatedBookmarks.value.remoteIds())
     }
 
     @Test
-    fun `selectAll sets hasMoreItems to false after fetching all`() = runTest(testDispatcher) {
-        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
-        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
-
+    fun updateAccumulatedBookmarks_concurrentAppendsNeverProduceDuplicates() = runTest(testDispatcher) {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model._selectedServer.value = fakeServer
-        advanceUntilIdle()
+        // Many concurrent appenders re-adding overlapping windows (sync + pagination + undo)
+        val jobs = (0 until 20).map { i ->
+            launch {
+                model.updateAccumulatedBookmarks { current ->
+                    current + (0L..10L).map { bookmark(it + i) }
+                }
+            }
+        }
+        jobs.forEach { it.join() }
 
-        model._hasMoreItems.value = true
-        model._accumulatedBookmarks.value = allBookmarks.take(20)
-
-        model.selectAll()
-        advanceUntilIdle()
-
-        assertFalse(model._hasMoreItems.value)
+        val ids = model._accumulatedBookmarks.value.remoteIds()
+        assertEquals(ids.toSet().size, ids.size, "Accumulated list must never contain duplicate remoteIds")
     }
 
     @Test
-    fun `selectAll updates accumulated bookmarks with all fetched items`() = runTest(testDispatcher) {
-        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
-        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
-
+    fun bookmarksFlow_pendingAndAccumulatedNeverOverlap() = runTest(testDispatcher) {
         val model = createMainScreenModel()
         advanceUntilIdle()
 
-        model._selectedServer.value = fakeServer
+        val collected = mutableListOf<List<BookmarkEntity>>()
+        val collector = launch { model.bookmarks.collect { collected.add(it) } }
+
+        // A just-created bookmark can briefly exist in both pending and accumulated
+        model._pendingBookmarks.value = listOf(bookmark(42))
+        model.updateAccumulatedBookmarks { listOf(bookmark(42), bookmark(43)) }
         advanceUntilIdle()
 
-        model._hasMoreItems.value = true
-        model._accumulatedBookmarks.value = allBookmarks.take(20)
-
-        model.selectAll()
-        advanceUntilIdle()
-
-        assertEquals(50, model._accumulatedBookmarks.value.size)
+        val latest = collected.last()
+        assertEquals(listOf(42L, 43L), latest.remoteIds())
+        collector.cancel()
     }
 }
