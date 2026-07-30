@@ -70,6 +70,7 @@ class SmartListDeferredRefreshTest {
     private val bookmarkRepository: BookmarkRepository = mockk(relaxed = true) {
         every { getBookmarks(any()) } returns flowOf(emptyList())
         every { syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        every { backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
     }
     private val bookmarkActionsRepository: BookmarkActionsRepository = mockk(relaxed = true) {
         every { bookmarkChangedEvents } returns this@SmartListDeferredRefreshTest.bookmarkChangedEvents

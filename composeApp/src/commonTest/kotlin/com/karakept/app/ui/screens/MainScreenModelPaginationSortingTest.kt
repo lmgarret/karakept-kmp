@@ -99,6 +99,7 @@ class MainScreenModelPaginationSortingTest {
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
         every { bookmarkRepository.syncProgress } returns MutableStateFlow(
             com.karakept.app.data.model.SyncProgress.Idle
         )
@@ -277,5 +278,33 @@ class MainScreenModelPaginationSortingTest {
             assertEquals(versionBefore, model.bookmarkListVersion.value)
             // Partial final page → DB exhausted.
             assertEquals(false, model.hasMoreItems.value)
+        }
+
+    @Test
+    fun `refreshLoadedPagesInPlace counts newly synced bookmarks for the N-new pill`() =
+        runTest(testDispatcher) {
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            // Existing loaded page 0 holds two bookmarks; no pending "new" indicator.
+            model._accumulatedBookmarks.value = listOf(makeBookmark(1, "b1"), makeBookmark(2, "b2"))
+            model._currentPage.value = 0
+            model.clearNewBookmarksAbove()
+
+            // Sync prepends two new bookmarks (ids 10, 11) to the top of page 0.
+            val page0 = listOf(
+                makeBookmark(10, "new1"), makeBookmark(11, "new2"),
+                makeBookmark(1, "b1"), makeBookmark(2, "b2")
+            )
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+            } returns page0
+
+            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
+            advanceUntilIdle()
+
+            assertEquals(2, model.newBookmarksAbove.value)
+
+            model.clearNewBookmarksAbove()
+            assertEquals(0, model.newBookmarksAbove.value)
         }
 }

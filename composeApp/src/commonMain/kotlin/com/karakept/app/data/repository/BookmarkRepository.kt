@@ -89,6 +89,11 @@ class BookmarkRepository(
     private val _syncReports = kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.data.model.SyncReport>(extraBufferCapacity = 16)
     val syncReports: kotlinx.coroutines.flow.SharedFlow<com.karakept.app.data.model.SyncReport> = _syncReports
 
+    // Emits once when a background full sync (syncAllWithLists) finishes, so a foreground screen
+    // can refresh its currently-displayed list in place to surface newly synced bookmarks.
+    private val _backgroundSyncCompleted = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val backgroundSyncCompleted: kotlinx.coroutines.flow.SharedFlow<Unit> = _backgroundSyncCompleted
+
     /** Bookmarks inserted during the last sync, used for per-list notification counts. */
     private var _lastSyncNewBookmarks: List<BookmarkEntity> = emptyList()
 
@@ -148,6 +153,7 @@ class BookmarkRepository(
                 }
             }
         }
+        _backgroundSyncCompleted.tryEmit(Unit)
         return newCount
     }
 

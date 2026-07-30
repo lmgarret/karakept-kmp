@@ -3,8 +3,10 @@ package com.karakept.app.ui.screens.main
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +29,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -130,7 +133,9 @@ internal fun BookmarkListContent(
     onShiftClick: ((Int) -> Unit)? = null,
     contextMenuLists: List<com.karakept.api.model.KarakeepList> = emptyList(),
     contextMenuTags: List<String> = emptyList(),
-    onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null
+    onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null,
+    newBookmarksAbove: Int = 0,
+    onClearNewBookmarksAbove: () -> Unit = {}
 ) {
     // Detect when scrolled near end
     LaunchedEffect(listState) {
@@ -151,6 +156,23 @@ internal fun BookmarkListContent(
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 3 }
+    }
+
+    // "N new" pill: shown only while the user is scrolled away from the top. Clear the counter
+    // once they reach the top (by scrolling or tapping the pill), or if new items arrive while
+    // they are already at the top (they can see them, so no pill is warranted).
+    // Only the scroll position goes through derivedStateOf (it reads snapshot state); the
+    // newBookmarksAbove parameter must be read directly so recomposition picks up its changes.
+    val scrolledAwayFromTop by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 }
+    }
+    val showNewBookmarksPill = newBookmarksAbove > 0 && scrolledAwayFromTop
+    LaunchedEffect(Unit) {
+        snapshotFlow { listState.firstVisibleItemIndex == 0 }
+            .collect { atTop -> if (atTop) onClearNewBookmarksAbove() }
+    }
+    LaunchedEffect(newBookmarksAbove) {
+        if (newBookmarksAbove > 0 && listState.firstVisibleItemIndex == 0) onClearNewBookmarksAbove()
     }
 
     val hapticFeedback = LocalHapticFeedback.current
@@ -588,6 +610,42 @@ internal fun BookmarkListContent(
                 progress = syncProgress,
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
             )
+        }
+
+        // "N new bookmarks" pill — tap to jump to the newly synced items at the top.
+        AnimatedVisibility(
+            visible = showNewBookmarksPill,
+            enter = fadeIn(animationSpec = tween(200)),
+            exit = fadeOut(animationSpec = tween(200)),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
+        ) {
+            Surface(
+                onClick = {
+                    scope.launch { listState.animateScrollToItem(0, 0) }
+                    onClearNewBookmarksAbove()
+                },
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowUpward,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = if (newBookmarksAbove == 1) "1 new bookmark"
+                               else "$newBookmarksAbove new bookmarks",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
         }
 
         // Scroll-to-top FAB

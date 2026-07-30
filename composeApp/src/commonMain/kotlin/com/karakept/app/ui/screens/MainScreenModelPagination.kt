@@ -137,6 +137,8 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     _currentPage.value = 0
     _hasMoreItems.value = true
     _actedOnBookmarkIds.value = emptySet()
+    // Fresh view — any pending "N new" indicator no longer applies.
+    _newBookmarksAbove.value = 0
     // Block loadNextPage from launching while we are iterating through pages.
     _isLoadingMore.value = true
 
@@ -195,6 +197,12 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
 
         // A newer reset/refresh started while we were fetching — our results are stale.
         if (paginationGeneration != myGeneration) return
+
+        // Count bookmarks the sync introduced (they land at the top for the default NEWEST sort),
+        // so the UI can surface a "N new" pill when the user is scrolled away from the top.
+        val previousIds = _accumulatedBookmarks.value.map { it.remoteId }.toSet()
+        val added = all.count { it.remoteId !in previousIds }
+        if (added > 0) _newBookmarksAbove.value += added
 
         updateAccumulatedBookmarks { all }
         _currentPage.value = if (reachedEnd) page else lastLoadedPage

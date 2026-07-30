@@ -171,6 +171,16 @@ class MainScreenModel(
     internal val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
+    // Count of bookmarks a background sync prepended above the current viewport, surfaced as a
+    // "N new" pill so the user notices new items instead of silently staying pinned in place.
+    // Reset on a full reload or when the user reaches the top of the list.
+    internal val _newBookmarksAbove = MutableStateFlow(0)
+    val newBookmarksAbove: StateFlow<Int> = _newBookmarksAbove
+
+    fun clearNewBookmarksAbove() {
+        _newBookmarksAbove.value = 0
+    }
+
     // RemoteIds of bookmarks on which the user has explicitly performed a list-membership
     // action (add/remove list). Prevents the scroll-triggered action from auto-firing on a
     // bookmark that is about to leave the list via async reconciliation — the reconcile
@@ -506,6 +516,25 @@ class MainScreenModel(
             // pull-to-refresh and the sync button are never throttled.
             if (!isOffline && bookmarkRepository.shouldAutoSync(server.id)) {
                 syncBookmarks()
+            }
+        }
+
+        // When a background sync finishes, refresh the currently-displayed list in place so
+        // newly synced bookmarks appear (and bump the "N new" pill) without the user having to
+        // navigate or pull-to-refresh. The foreground syncBookmarks() already refreshes itself.
+        viewModelScope.launch {
+            bookmarkRepository.backgroundSyncCompleted.collect {
+                val server = _selectedServer.value ?: return@collect
+                if (_initState.value == InitState.Ready) {
+                    val filter = _currentFilter.value
+                    try {
+                        refreshLoadedPagesInPlace(server, filter)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        AppLogger.w("MainScreenModel", "Post-background-sync refresh failed: ${e.message}")
+                    }
+                }
             }
         }
 

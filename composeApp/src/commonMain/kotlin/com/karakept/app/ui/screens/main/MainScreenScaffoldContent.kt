@@ -142,7 +142,9 @@ fun MainScreenScaffoldContent(
     onShowBatchTagEditor: () -> Unit,
     onShowBatchListPicker: () -> Unit,
     onShowBatchDeleteConfirm: () -> Unit,
-    navigateTo: (androidx.navigation3.runtime.NavKey) -> Unit
+    navigateTo: (androidx.navigation3.runtime.NavKey) -> Unit,
+    newBookmarksAbove: Int = 0,
+    onClearNewBookmarksAbove: () -> Unit = {}
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize().onKeyEvent { keyEvent ->
@@ -331,7 +333,9 @@ fun MainScreenScaffoldContent(
                             }
                         }
                     }
-                } else null
+                } else null,
+                newBookmarksAbove = newBookmarksAbove,
+                onClearNewBookmarksAbove = onClearNewBookmarksAbove
             )
         }
     }

@@ -76,6 +76,7 @@ object MainScreen : NavKey {
         val syncProgress by screenModel.syncProgress.collectAsState()
         val isLoadingMore by screenModel.isLoadingMore.collectAsState()
         val hasMoreItems by screenModel.hasMoreItems.collectAsState()
+        val newBookmarksAbove by screenModel.newBookmarksAbove.collectAsState()
         val currentFilter by screenModel.currentFilter.collectAsState()
         val tagFilterSourceBookmarkId by screenModel.tagFilterSourceBookmarkId.collectAsState()
         val offlineMode by settingsScreenModel.offlineMode.collectAsState()
@@ -357,7 +358,9 @@ object MainScreen : NavKey {
                     onShowBatchTagEditor = { showBatchTagEditor = true },
                     onShowBatchListPicker = { showBatchListPicker = true },
                     onShowBatchDeleteConfirm = { showBatchDeleteConfirm = true },
-                    navigateTo = { screen -> navigator.push(screen) }
+                    navigateTo = { screen -> navigator.push(screen) },
+                    newBookmarksAbove = newBookmarksAbove,
+                    onClearNewBookmarksAbove = { screenModel.clearNewBookmarksAbove() }
                 )
             }
 

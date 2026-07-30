@@ -93,6 +93,7 @@ class MainScreenModelServerRefreshTest {
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns MutableSharedFlow()
+        every { bookmarkRepository.backgroundSyncCompleted } returns MutableSharedFlow()
         return MainScreenModel(
             serverRepository = serverRepository,
             bookmarkRepository = bookmarkRepository,
