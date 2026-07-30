@@ -466,22 +466,30 @@ class MainScreenModel(
             launch {
                 _currentFilter.drop(1).collectLatest { filter ->
                     val currentServer = _selectedServer.value ?: return@collectLatest
-                    // If navigating to a smart list that needs refresh (stale after a
-                    // recent list-membership action), sync it from the server first.
-                    // GET /lists/{id}/bookmarks is always fresh, unlike the per-bookmark endpoint.
                     val listId = filter.lists.singleOrNull()
                     val needsRefresh = listId != null && listId in _smartListsNeedingRefresh.value
+
+                    // Switch to the new view immediately with local data so navigation feels
+                    // instant, instead of blocking on a network sync of the target list.
+                    resetPaginationAndLoad(currentServer, filter)
+
+                    // If the smart list is stale after a recent list-membership action, sync it
+                    // from the server (GET /lists/{id}/bookmarks is always fresh) and then refresh
+                    // the view in place so any corrected membership lands without a jump. If the
+                    // user navigates away meanwhile, collectLatest cancels this before it runs.
                     if (needsRefresh) {
                         _smartListsNeedingRefresh.value -= listId!!
                         try {
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                                 bookmarkRepository.syncBookmarksForList(currentServer, listId)
                             }
+                            if (_currentFilter.value == filter) {
+                                refreshLoadedPagesInPlace(currentServer, filter)
+                            }
                         } catch (e: Exception) {
                             AppLogger.e("MainScreenModel", "Smart list refresh failed for $listId: ${e.message}", e)
                         }
                     }
-                    resetPaginationAndLoad(currentServer, filter)
                 }
             }
             launch {

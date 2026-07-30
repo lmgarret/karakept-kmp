@@ -293,16 +293,22 @@ class BookmarkActionsRepository(
         bookmarkRemoteId: Long,
         serverId: String,
         listId: String,
-        isOnline: Boolean
+        isOnline: Boolean,
+        smartListIds: Set<String> = emptySet()
     ) {
         withContext(Dispatchers.IO) {
-            // Update local DB immediately (optimistic update)
+            // Update local DB immediately (optimistic update).
+            // Also strip smart-list membership: the server recomputes it from the bookmark's
+            // manual lists, so a smart list that excludes the target list (e.g. All Feeds
+            // excludes Read Later) must lose this bookmark right away — otherwise it flashes
+            // back into that smart list when the user navigates to it before the sync lands.
+            // Smart lists it still belongs to are re-added by the next ForList sync.
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
             bookmark?.let {
                 val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
-                if (!currentListIds.contains(listId)) {
-                    val newListIds = currentListIds + listId
-                    bookmarkDao.insertBookmark(it.copy(listIds = newListIds.joinToString(",")))
+                val newListIds = (currentListIds - smartListIds) + listId
+                if (newListIds.toSet() != currentListIds.toSet()) {
+                    bookmarkDao.insertBookmark(it.copy(listIds = newListIds.distinct().joinToString(",")))
                 }
             }
 
