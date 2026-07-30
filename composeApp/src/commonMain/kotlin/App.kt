@@ -43,6 +43,9 @@ fun App(
     saveErrorUrl: String? = null,
     saveErrorMessage: String? = null
 ) {
+    // Retain log lines in memory for the in-app log viewer (dev builds only).
+    remember { AppLogger.captureEnabled = isDevBuild }
+
     // Get ServerRepository to access API keys for authentication
     val serverRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.ServerRepository>()
 
