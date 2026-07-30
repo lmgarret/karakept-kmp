@@ -81,4 +81,27 @@ class ContentBodyRevealLogicTest {
             )
         )
     }
+
+    // shouldShowRestoreOverlay ---------------------------------------------------
+
+    @Test
+    fun restoreOverlay_shown_whenRestoringWithSavedProgress() {
+        assertTrue(shouldShowRestoreOverlay(needsScrollRestore = true, readingProgress = 0.5f))
+    }
+
+    @Test
+    fun restoreOverlay_hidden_forFreshOpenWithoutProgress() {
+        // The !serverProgressChecked wait keeps the hero-first behavior, not a full overlay.
+        assertFalse(shouldShowRestoreOverlay(needsScrollRestore = true, readingProgress = 0f))
+    }
+
+    @Test
+    fun restoreOverlay_hidden_forNegligibleProgress() {
+        assertFalse(shouldShowRestoreOverlay(needsScrollRestore = true, readingProgress = 0.02f))
+    }
+
+    @Test
+    fun restoreOverlay_hidden_whenRestoreAlreadyDone() {
+        assertFalse(shouldShowRestoreOverlay(needsScrollRestore = false, readingProgress = 0.5f))
+    }
 }

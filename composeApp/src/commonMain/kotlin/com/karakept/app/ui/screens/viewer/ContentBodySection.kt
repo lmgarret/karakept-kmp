@@ -267,3 +267,12 @@ internal fun shouldShowBodySkeleton(
     hasRenderableBody: Boolean,
     contentRevealed: Boolean
 ): Boolean = !htmlContentReady || (hasRenderableBody && !contentRevealed)
+
+/**
+ * Whether to cover the whole screen with a shimmer while restoring to a saved reading
+ * position, so the reader lands directly at that position instead of flashing the hero and
+ * then auto-scrolling. Only meaningful saved progress (matching the 0.02f threshold in
+ * [rememberScrollRestoration]) qualifies; fresh opens keep the hero-first behavior.
+ */
+internal fun shouldShowRestoreOverlay(needsScrollRestore: Boolean, readingProgress: Float): Boolean =
+    needsScrollRestore && readingProgress > 0.02f
