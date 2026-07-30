@@ -186,10 +186,10 @@
 - Server credentials stored in Room DB (ServerEntity), sensitive data protected by device encryption
 
 **Synchronization (Offline-First):**
-- Pending actions queued in PendingActionDao before network attempt
-- BookmarkActionsRepository handles sync retry on network recovery
+- Pending actions queued in PendingActionDao before network attempt, replayed with exponential backoff
+- Queued actions are flushed when the app returns to the foreground (see App.kt)
 - Sync mutex in BookmarkRepository prevents concurrent syncs
-- SettingsRepository.effectiveOfflineMode flow checked before remote calls
+- SettingsRepository.offlineMode (the user's manual toggle) checked before remote calls
 
 **Dependency Injection:**
 - Koin module configured in AppModule.kt (single instances for repositories, factories for ScreenModels)

@@ -44,7 +44,6 @@ class PendingActionDedupTest {
     init {
         coEvery { serverRepository.servers } returns flowOf(listOf(testServer))
         // Offline so triggerAutoSync does nothing and we only observe enqueue behavior
-        coEvery { settingsRepository.effectiveOfflineMode } returns flowOf(true)
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
     }
 

@@ -530,10 +530,9 @@ class BookmarkActionsRepository(
     internal suspend fun triggerAutoSync(serverId: String) {
         repositoryScope.launch {
             try {
-                // effectiveOfflineMode includes auto-detected outages, so a dead network
-                // doesn't get hammered on every queued action — the recovery probe
-                // flushes the queue when connectivity returns.
-                if (!settingsRepository.effectiveOfflineMode.first()) {
+                // Only the user's manual offline toggle blocks auto-sync now. A dead network
+                // is handled by the pending-action queue's backoff, not by pausing sync.
+                if (!settingsRepository.offlineMode.first()) {
                     // Get server and trigger sync
                     val servers = serverRepository.servers.first()
                     val server = servers.find { it.id == serverId }

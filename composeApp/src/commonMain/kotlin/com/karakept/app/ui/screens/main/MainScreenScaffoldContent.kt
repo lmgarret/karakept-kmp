@@ -111,7 +111,6 @@ fun MainScreenScaffoldContent(
     swipeRightConfigId: String?,
     trackReadingProgress: Boolean,
     offlineMode: Boolean,
-    isAutoOffline: Boolean,
     pendingBookmarkRemoteIds: Set<Long>,
     isSelectionMode: Boolean,
     selectedBookmarkIds: Set<Long>,
@@ -169,7 +168,6 @@ fun MainScreenScaffoldContent(
         topBar = {
             MainScreenTopBar(
                 offlineMode = offlineMode,
-                isAutoOffline = isAutoOffline,
                 onMenuClick = onMenuClick,
                 onFilterClick = onFilterClick,
                 onRefreshClick = { screenModel.syncBookmarks() },
@@ -205,7 +203,7 @@ fun MainScreenScaffoldContent(
             )
         },
         floatingActionButton = {
-            if (!isDesktop && !offlineMode && !isAutoOffline && !isSelectionMode) {
+            if (!isDesktop && !offlineMode && !isSelectionMode) {
                 FloatingActionButton(
                     onClick = onShowAddBookmarkDialog
                 ) {
@@ -267,7 +265,7 @@ fun MainScreenScaffoldContent(
                 urlPosition = displayConfig.urlPosition,
                 urlIconMode = displayConfig.urlIconMode,
                 faviconByLinkSize = displayConfig.faviconByLinkSize,
-                offlineMode = offlineMode || isAutoOffline,
+                offlineMode = offlineMode,
                 pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                 isSelectionMode = isSelectionMode,
                 selectedBookmarkIds = selectedBookmarkIds,
