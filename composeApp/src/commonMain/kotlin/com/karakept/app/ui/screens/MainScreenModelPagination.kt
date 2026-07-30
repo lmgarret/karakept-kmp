@@ -162,3 +162,46 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     // (which doesn't call resetPaginationAndLoad) never triggers an unwanted scroll.
     if (scrollToTop) scrollToTop()
 }
+
+/**
+ * Refreshes the currently-loaded pages in place after a sync, so newly synced bookmarks
+ * appear without the disruptive full reset.
+ *
+ * Unlike [resetPaginationAndLoad] this keeps the loaded window (reloads pages 0..currentPage
+ * instead of shrinking to page 0), does NOT bump [_bookmarkListVersion], and does NOT scroll
+ * to the top. Leaving the version untouched lets [PreserveListScrollAnchor] re-pin the viewport
+ * to the bookmark the user is looking at, so the list updates beneath them instead of blinking
+ * and jumping to the top when the background sync finishes on open.
+ */
+internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, filter: FilterConfig) {
+    paginationGeneration++
+    val myGeneration = paginationGeneration
+    val lastLoadedPage = _currentPage.value
+
+    _isLoadingMore.value = true
+    try {
+        val all = mutableListOf<BookmarkEntity>()
+        var page = 0
+        var reachedEnd = false
+        while (page <= lastLoadedPage) {
+            val (items, rawCount) = loadBookmarksPage(server, filter, page)
+            all += items
+            if (rawCount < pageSize) {
+                reachedEnd = true
+                break
+            }
+            page++
+        }
+
+        // A newer reset/refresh started while we were fetching — our results are stale.
+        if (paginationGeneration != myGeneration) return
+
+        updateAccumulatedBookmarks { all }
+        _currentPage.value = if (reachedEnd) page else lastLoadedPage
+        _hasMoreItems.value = !reachedEnd
+    } finally {
+        if (paginationGeneration == myGeneration) {
+            _isLoadingMore.value = false
+        }
+    }
+}

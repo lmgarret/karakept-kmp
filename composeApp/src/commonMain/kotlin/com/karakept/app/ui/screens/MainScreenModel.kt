@@ -599,9 +599,11 @@ class MainScreenModel(
                     syncCurrentView(server, capturedListContext, capturedFilter)
                 }
 
-                // Step 3: Reload the current view immediately after its metadata lands.
+                // Step 3: Refresh the current view in place after its metadata lands, so
+                // newly synced bookmarks appear without the list blinking and jumping to the
+                // top (which a full resetPaginationAndLoad would cause).
                 if (_currentFilter.value == capturedFilter) {
-                    resetPaginationAndLoad(server, capturedFilter)
+                    refreshLoadedPagesInPlace(server, capturedFilter)
                 }
 
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {

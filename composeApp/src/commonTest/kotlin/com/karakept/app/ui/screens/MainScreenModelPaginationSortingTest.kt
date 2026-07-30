@@ -243,4 +243,39 @@ class MainScreenModelPaginationSortingTest {
             }
             assertEquals(pageSize + 1, model._accumulatedBookmarks.value.size)
         }
+
+    @Test
+    fun `refreshLoadedPagesInPlace keeps the loaded window and does not bump the list version`() =
+        runTest(testDispatcher) {
+            val pageSize = 20
+            val page0 = (1..pageSize).map { makeBookmark(id = it.toLong(), title = "b$it") }
+            val page1 = (pageSize + 1..pageSize * 2).map { makeBookmark(id = it.toLong(), title = "b$it") }
+            val page2 = (pageSize * 2 + 1..pageSize * 2 + 10).map { makeBookmark(id = it.toLong(), title = "b$it") }
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+            } returns page0
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = pageSize, limit = any(), sort = any(), listId = any())
+            } returns page1
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = pageSize * 2, limit = any(), sort = any(), listId = any())
+            } returns page2  // partial page (10 < 20) → DB end
+
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            // Simulate the user having scrolled through pages 0..2.
+            model._currentPage.value = 2
+            val versionBefore = model.bookmarkListVersion.value
+
+            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
+            advanceUntilIdle()
+
+            // Window preserved (all 50 items reloaded), not shrunk to page 0.
+            assertEquals(50, model._accumulatedBookmarks.value.size)
+            // Version NOT bumped, so PreserveListScrollAnchor keeps the viewport pinned
+            // instead of jumping to the top (no blink).
+            assertEquals(versionBefore, model.bookmarkListVersion.value)
+            // Partial final page → DB exhausted.
+            assertEquals(false, model.hasMoreItems.value)
+        }
 }
