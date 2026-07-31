@@ -45,8 +45,12 @@ class BackupCryptoTest {
     fun `decrypt throws on corrupted ciphertext`() {
         val plaintext = "secret".encodeToByteArray()
         val encrypted = BackupCrypto.encrypt(plaintext, "1234")
-        // Flip a byte in the middle of the Base64 string
-        val corrupted = encrypted.replaceRange(encrypted.length / 2, encrypted.length / 2 + 1, "X")
+        // Flip a byte in the middle of the Base64 string. The replacement has to differ from
+        // the character already there: the salt and IV are random per run, so a fixed
+        // replacement is a no-op roughly one run in sixty and decryption then succeeds.
+        val mid = encrypted.length / 2
+        val replacement = if (encrypted[mid] == 'X') "Y" else "X"
+        val corrupted = encrypted.replaceRange(mid, mid + 1, replacement)
         assertFailsWith<Exception> {
             BackupCrypto.decrypt(corrupted, "1234")
         }

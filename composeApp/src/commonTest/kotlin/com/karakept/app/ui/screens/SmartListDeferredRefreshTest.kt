@@ -26,7 +26,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -385,13 +388,35 @@ class SmartListDeferredRefreshTest {
 
         model.applyFilter(FilterConfig(lists = listOf("smartA")))
         advanceUntilIdle()
-        assertEquals(setOf("smartB"), model._smartListsNeedingRefresh.value)
+        awaitSmartListsNeedingRefresh(setOf("smartB"))
 
         model.applyFilter(FilterConfig(lists = listOf("smartB")))
         advanceUntilIdle()
-        assertTrue(model._smartListsNeedingRefresh.value.isEmpty())
+        awaitSmartListsNeedingRefresh(emptySet())
 
         coVerify(timeout = 5000, exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA") }
         coVerify(timeout = 5000, exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartB") }
     }
+
+    /**
+     * Waits until the deferred-refresh set equals [expected], then asserts it.
+     *
+     * The refresh path hops to `Dispatchers.IO`, which the test scheduler does not control.
+     * Navigating on to a second flagged list makes `collectLatest` cancel and join the
+     * previous list's block while it is parked on a real thread, so [advanceUntilIdle] can
+     * return before the next block has even started. Waiting on the value rather than
+     * sampling it makes the assertion independent of that hop; the wait itself runs on
+     * `Dispatchers.Default` so its timeout is measured on the real clock instead of the
+     * scheduler's virtual one, and a genuine regression still fails as a plain assertion.
+     */
+    private suspend fun awaitSmartListsNeedingRefresh(expected: Set<String>) {
+        val settled = withContext(Dispatchers.Default) {
+            withTimeoutOrNull(SMART_LIST_SETTLE_TIMEOUT_MS) {
+                model._smartListsNeedingRefresh.first { it == expected }
+            }
+        }
+        assertEquals(expected, settled ?: model._smartListsNeedingRefresh.value)
+    }
 }
+
+private const val SMART_LIST_SETTLE_TIMEOUT_MS = 5_000L

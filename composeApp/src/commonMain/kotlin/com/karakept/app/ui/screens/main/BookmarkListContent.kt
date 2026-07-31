@@ -137,7 +137,12 @@ internal fun BookmarkListContent(
     newBookmarksAbove: Int = 0,
     onClearNewBookmarksAbove: () -> Unit = {}
 ) {
-    // Detect when scrolled near end
+    // Detect when scrolled near end. The effect outlives the values it guards on, so they are
+    // read through rememberUpdatedState — capturing them would freeze the guards at their
+    // first-composition values and keep firing load-more while a reload is in flight.
+    val currentHasMoreItems = rememberUpdatedState(hasMoreItems)
+    val currentIsLoadingMore = rememberUpdatedState(isLoadingMore)
+    val currentOnLoadMore = rememberUpdatedState(onLoadMore)
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo }
             .collect { layoutInfo ->
@@ -146,12 +151,17 @@ internal fun BookmarkListContent(
 
                 if (lastVisibleItem != null && totalItems > 0) {
                     val threshold = totalItems - 10  // Load when 10 items from end
-                    if (lastVisibleItem.index >= threshold && hasMoreItems && !isLoadingMore) {
-                        onLoadMore()
+                    if (lastVisibleItem.index >= threshold &&
+                        currentHasMoreItems.value && !currentIsLoadingMore.value
+                    ) {
+                        currentOnLoadMore.value()
                     }
                 }
             }
     }
+
+    val animationGate = remember { ItemAnimationGate(bookmarks) }
+    val animateItems = animationGate.update(bookmarks)
 
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember {
@@ -329,7 +339,13 @@ internal fun BookmarkListContent(
             ) { itemIndex, bookmark ->
                 Box(
                     modifier = Modifier
-                        .animateItem()
+                        // fadeOutSpec = null: a fading-out item is kept in the layout and drawn
+                        // over whatever replaces it, using the spec recorded on the *previous*
+                        // measure pass — so a dataset swap renders the outgoing list on top of
+                        // the incoming one, and no amount of switching animations off in time
+                        // can undo it. Removed rows disappear at once; the rest still slide up
+                        // via placementSpec.
+                        .then(if (animateItems) Modifier.animateItem(fadeOutSpec = null) else Modifier)
                         .then(
                             // Desktop: intercept Ctrl+Click and Shift+Click for multi-selection
                             if (isDesktop && (onCtrlClick != null || onShiftClick != null)) {
@@ -705,6 +721,35 @@ internal fun BookmarkListContent(
                 )
             }
         }
+    }
+}
+
+/**
+ * Decides whether the LazyColumn should animate its item changes.
+ *
+ * Item animations are for *surgical* changes — an item removed by smart-list reconciliation,
+ * an item updated in place by a sync, a page appended by load-more. Switching lists instead
+ * replaces the whole dataset, and animating that fades a whole list in over the one being
+ * replaced. The decision is derived from the data itself, and taken during composition, so it
+ * lands in the very frame that renders the swap; a flag delivered by a separate flow, or read
+ * from an effect, always arrives at least one frame too late to suppress anything.
+ *
+ * Plain fields rather than snapshot state: updating them must not invalidate the composition
+ * that is reading them.
+ */
+internal class ItemAnimationGate(initial: List<BookmarkEntity>) {
+    private var previous = initial
+    private var enabled = true
+
+    fun update(bookmarks: List<BookmarkEntity>): Boolean {
+        if (bookmarks === previous) return enabled
+        val previousIds = previous.mapTo(HashSet(previous.size)) { it.remoteId }
+        val survivors = bookmarks.count { it.remoteId in previousIds }
+        // Half of the shorter list surviving still reads as "the same list, changed".
+        enabled = previous.isEmpty() || bookmarks.isEmpty() ||
+            survivors * 2 >= minOf(previous.size, bookmarks.size)
+        previous = bookmarks
+        return enabled
     }
 }
 

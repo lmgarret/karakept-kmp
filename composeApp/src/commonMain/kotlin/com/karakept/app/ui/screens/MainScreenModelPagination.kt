@@ -85,21 +85,29 @@ internal suspend fun MainScreenModel.findPageWithItems(
  */
 fun MainScreenModel.loadNextPage() {
     if (_isLoadingMore.value || !_hasMoreItems.value || _searchQuery.value.isNotBlank()) return
+    // Pages may only be appended to a window that still belongs to the view on screen, and
+    // must be fetched with that window's own filter. Reading _currentFilter here instead would
+    // fetch the newly-selected list with the previous list's page offset and append the result
+    // to the previous list's items, rendering two lists interleaved in one LazyColumn.
+    val view = _loadedView.value ?: return
+    if (view != currentView()) return
+    val generation = paginationGeneration
     // Set before launching so rapid consecutive calls all see the flag immediately,
     // even before the coroutine body runs.
     _isLoadingMore.value = true
 
     viewModelScope.launch {
         try {
-            val generation = paginationGeneration
             val server = _selectedServer.value ?: return@launch
-            val filter = _currentFilter.value
             val nextPage = _currentPage.value + 1
 
-            val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, nextPage)
+            val (newItems, lastPage, dbExhausted) = findPageWithItems(server, view.filter, nextPage)
 
-            // Discard results if a resetPaginationAndLoad started while we were fetching.
-            if (paginationGeneration != generation) return@launch
+            // Discard results if a reset started, or the user switched view, while we fetched.
+            if (paginationGeneration != generation ||
+                _loadedView.value != view ||
+                currentView() != view
+            ) return@launch
 
             if (newItems.isNotEmpty()) {
                 updateAccumulatedBookmarks { current ->
@@ -107,7 +115,7 @@ fun MainScreenModel.loadNextPage() {
                     // re-return items already accumulated — drop them to keep keys unique (#274).
                     val existingIds = current.map { it.remoteId }.toSet()
                     val trulyNew = newItems.filter { it.remoteId !in existingIds }
-                    BookmarkFilterUtils.applySorting(current + trulyNew, filter.sort)
+                    BookmarkFilterUtils.applySorting(current + trulyNew, view.filter.sort)
                 }
                 _currentPage.value = lastPage
             }
@@ -120,7 +128,8 @@ fun MainScreenModel.loadNextPage() {
                 loadNextPage()
             }
         } finally {
-            _isLoadingMore.value = false
+            // A reset that overtook us owns the flag and clears it when its own page lands.
+            if (paginationGeneration == generation) _isLoadingMore.value = false
         }
     }
 }
@@ -133,6 +142,7 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     // Increment generation so any in-flight loadNextPage knows its results are stale.
     paginationGeneration++
     val myGeneration = paginationGeneration
+    val view = LoadedView(server.id, filter)
 
     _currentPage.value = 0
     _hasMoreItems.value = true
@@ -146,11 +156,19 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
         // Load items first, then swap atomically to avoid a blank flash.
         val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
 
-        // Another reset started while we were fetching — our results are stale.
-        if (paginationGeneration != myGeneration) return
+        // Another reset started, or the user switched away, while we were fetching.
+        if (paginationGeneration != myGeneration || currentView() != view) return
 
-        updateAccumulatedBookmarks { newItems }
+        _loadedView.value = view
+        // Announce the reload *before* publishing the items. The version bump makes the
+        // scroll anchor drop its anchor and the scroll request re-pins the viewport to the
+        // top; both are applied on the next measure, which is the one that renders the new
+        // items. Publishing first instead leaves the incoming list drawn at the outgoing
+        // list's scroll offset for a frame. Only resetPaginationAndLoad scrolls, so plain
+        // back-navigation from the viewer never triggers an unwanted scroll.
         _bookmarkListVersion.value++
+        if (scrollToTop) scrollToTop()
+        updateAccumulatedBookmarks { newItems }
         _currentPage.value = lastPage
         if (dbExhausted) {
             _hasMoreItems.value = false
@@ -160,9 +178,6 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
             _isLoadingMore.value = false
         }
     }
-    // Scroll to top after data is ready, so plain back-navigation from the viewer
-    // (which doesn't call resetPaginationAndLoad) never triggers an unwanted scroll.
-    if (scrollToTop) scrollToTop()
 }
 
 /**
@@ -176,8 +191,14 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
  * and jumping to the top when the background sync finishes on open.
  */
 internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, filter: FilterConfig) {
-    paginationGeneration++
+    // A refresh only *observes* paginationGeneration — bumping it would let a background
+    // refresh discard a reset the user just triggered, leaving the previous list on screen.
+    // refreshGeneration resolves two refreshes racing each other.
+    val view = LoadedView(server.id, filter)
+    if (currentView() != view) return
     val myGeneration = paginationGeneration
+    refreshGeneration++
+    val myRefreshGeneration = refreshGeneration
     val lastLoadedPage = _currentPage.value
 
     _isLoadingMore.value = true
@@ -195,8 +216,11 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
             page++
         }
 
-        // A newer reset/refresh started while we were fetching — our results are stale.
-        if (paginationGeneration != myGeneration) return
+        // A reset or a newer refresh started, or the user switched away, while we fetched.
+        if (paginationGeneration != myGeneration ||
+            refreshGeneration != myRefreshGeneration ||
+            currentView() != view
+        ) return
 
         // Count bookmarks the sync introduced (they land at the top for the default NEWEST sort),
         // so the UI can surface a "N new" pill when the user is scrolled away from the top.
@@ -204,11 +228,12 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
         val added = all.count { it.remoteId !in previousIds }
         if (added > 0) _newBookmarksAbove.value += added
 
+        _loadedView.value = view
         updateAccumulatedBookmarks { all }
         _currentPage.value = if (reachedEnd) page else lastLoadedPage
         _hasMoreItems.value = !reachedEnd
     } finally {
-        if (paginationGeneration == myGeneration) {
+        if (paginationGeneration == myGeneration && refreshGeneration == myRefreshGeneration) {
             _isLoadingMore.value = false
         }
     }

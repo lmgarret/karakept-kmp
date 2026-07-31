@@ -213,8 +213,10 @@ object MainScreen : NavKey {
             }
         }
 
-        // Listen for scroll-to-top trigger
-        LaunchedEffect(Unit) { screenModel.scrollToTopTrigger.collect { listState.animateScrollToItem(0, 0) } }
+        // Listen for scroll-to-top trigger. requestScrollToItem is applied during the next
+        // remeasure rather than animated from the current offset, so a reload never briefly
+        // renders the freshly loaded list at the previous list's scroll position.
+        LaunchedEffect(Unit) { screenModel.scrollToTopTrigger.collect { listState.requestScrollToItem(0, 0) } }
 
         // Keep the viewport pinned to the same bookmark when the list mutates beneath
         // the user (e.g. a bookmark removed by smart-list reconciliation after a quick
