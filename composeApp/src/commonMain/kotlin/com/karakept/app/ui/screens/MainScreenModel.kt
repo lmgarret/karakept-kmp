@@ -52,6 +52,9 @@ data class QuickFilterCounts(
     val offline: Int = 0
 )
 
+/** Identity of a bookmark view: the server plus the filter being displayed. */
+internal data class LoadedView(val serverId: String, val filter: FilterConfig)
+
 class MainScreenModel(
     private val serverRepository: ServerRepository,
     internal val bookmarkRepository: BookmarkRepository,
@@ -133,6 +136,23 @@ class MainScreenModel(
     // this value before its DB fetch and discards results if the value changed (i.e. a
     // reset overtook it), preventing duplicate entries in the LazyColumn.
     internal var paginationGeneration = 0
+
+    // Incremented by refreshLoadedPagesInPlace only, so two overlapping in-place refreshes
+    // resolve last-one-wins. Refreshes deliberately leave paginationGeneration alone: a
+    // reset is a user-initiated view switch and must always win over a background refresh,
+    // otherwise the refresh discards the reset's page and the list the user just left stays
+    // on screen under the new list's title.
+    internal var refreshGeneration = 0
+
+    // The view the accumulated window was loaded for. Every write into the window is rejected
+    // unless this still matches the view on screen: _currentFilter flips synchronously when
+    // the user taps a list while the reload it triggers runs on an observer coroutine, so
+    // without this a page fetched for the new list lands on top of the old list's items.
+    internal val _loadedView = MutableStateFlow<LoadedView?>(null)
+
+    /** The view the UI is currently asking for, or null while no server is selected. */
+    internal fun currentView(): LoadedView? =
+        _selectedServer.value?.let { LoadedView(it.id, _currentFilter.value) }
 
     internal val bookmarksMutex = Mutex()
 

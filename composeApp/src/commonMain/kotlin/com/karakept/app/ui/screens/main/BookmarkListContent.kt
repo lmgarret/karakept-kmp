@@ -44,7 +44,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -88,6 +92,7 @@ internal fun BookmarkListContent(
     syncProgress: com.karakept.app.data.model.SyncProgress?,
     isLoadingMore: Boolean,
     hasMoreItems: Boolean,
+    bookmarkListVersion: Int = 0,
     showScrollCursor: Boolean = false,
     sortOption: SortOption = SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
@@ -137,7 +142,12 @@ internal fun BookmarkListContent(
     newBookmarksAbove: Int = 0,
     onClearNewBookmarksAbove: () -> Unit = {}
 ) {
-    // Detect when scrolled near end
+    // Detect when scrolled near end. The effect outlives the values it guards on, so they are
+    // read through rememberUpdatedState — capturing them would freeze the guards at their
+    // first-composition values and keep firing load-more while a reload is in flight.
+    val currentHasMoreItems = rememberUpdatedState(hasMoreItems)
+    val currentIsLoadingMore = rememberUpdatedState(isLoadingMore)
+    val currentOnLoadMore = rememberUpdatedState(onLoadMore)
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo }
             .collect { layoutInfo ->
@@ -146,12 +156,16 @@ internal fun BookmarkListContent(
 
                 if (lastVisibleItem != null && totalItems > 0) {
                     val threshold = totalItems - 10  // Load when 10 items from end
-                    if (lastVisibleItem.index >= threshold && hasMoreItems && !isLoadingMore) {
-                        onLoadMore()
+                    if (lastVisibleItem.index >= threshold &&
+                        currentHasMoreItems.value && !currentIsLoadingMore.value
+                    ) {
+                        currentOnLoadMore.value()
                     }
                 }
             }
     }
+
+    val animateItems = rememberItemAnimationsEnabled(bookmarkListVersion, bookmarks)
 
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember {
@@ -329,7 +343,7 @@ internal fun BookmarkListContent(
             ) { itemIndex, bookmark ->
                 Box(
                     modifier = Modifier
-                        .animateItem()
+                        .then(if (animateItems) Modifier.animateItem() else Modifier)
                         .then(
                             // Desktop: intercept Ctrl+Click and Shift+Click for multi-selection
                             if (isDesktop && (onCtrlClick != null || onShiftClick != null)) {
@@ -707,6 +721,40 @@ internal fun BookmarkListContent(
         }
     }
 }
+
+/**
+ * Whether LazyColumn item animations should be active.
+ *
+ * They exist for *surgical* changes — an item removed by smart-list reconciliation, an item
+ * updated in place by a sync. A full reload (list/filter/server switch, which bumps
+ * [bookmarkListVersion]) instead swaps the entire dataset, and animating that leaves the
+ * outgoing list's items fading out on top of the incoming one and opens a gap at the top of
+ * the viewport while the new items animate into place.
+ *
+ * So: switch animations off when a reload is announced, and back on one frame after the new
+ * dataset has actually been laid out. The timeout covers a reload that yields an identical
+ * list — there is nothing to animate in that case anyway.
+ */
+@Composable
+private fun rememberItemAnimationsEnabled(
+    bookmarkListVersion: Int,
+    bookmarks: List<BookmarkEntity>
+): Boolean {
+    val currentBookmarks = rememberUpdatedState(bookmarks)
+    var enabled by remember { mutableStateOf(true) }
+    LaunchedEffect(bookmarkListVersion) {
+        if (bookmarkListVersion == 0) return@LaunchedEffect
+        enabled = false
+        withTimeoutOrNull(RELOAD_SETTLE_TIMEOUT_MS) {
+            snapshotFlow { currentBookmarks.value }.drop(1).first()
+        }
+        withFrameNanos { }
+        enabled = true
+    }
+    return enabled
+}
+
+private const val RELOAD_SETTLE_TIMEOUT_MS = 1_000L
 
 @Composable
 private fun SyncProgressBar(
