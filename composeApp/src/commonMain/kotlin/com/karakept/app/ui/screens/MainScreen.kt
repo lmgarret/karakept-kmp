@@ -330,7 +330,7 @@ object MainScreen : NavKey {
             { isExpanded, activeBmId, onBookmarkClick, onMenuClick ->
                 MainScreenScaffoldContent(
                     isExpandedLayout = isExpanded, bookmarks = bookmarks, isSyncing = isSyncing, syncProgress = syncProgress,
-                    isLoadingMore = isLoadingMore, hasMoreItems = hasMoreItems, bookmarkListVersion = bookmarkListVersion,
+                    isLoadingMore = isLoadingMore, hasMoreItems = hasMoreItems,
                     showScrollCursor = showScrollCursor, sortOption = currentFilter.sort,
                     totalBookmarkCount = totalBookmarkCount,
                     displayConfig = displayConfig,

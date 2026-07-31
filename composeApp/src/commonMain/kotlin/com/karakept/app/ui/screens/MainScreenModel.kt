@@ -812,10 +812,11 @@ class MainScreenModel(
         }
     }
 
+    // tryEmit rather than launch { emit }: the trigger is consumed alongside a list swap, and
+    // an extra coroutine hop is enough to push the scroll reset a frame past it. The flow has
+    // spare buffer capacity, so the emission always lands.
     fun scrollToTop() {
-        viewModelScope.launch {
-            _scrollToTopTrigger.emit(Unit)
-        }
+        _scrollToTopTrigger.tryEmit(Unit)
     }
 
     private fun loadLists() {

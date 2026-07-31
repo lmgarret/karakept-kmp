@@ -160,8 +160,15 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
         if (paginationGeneration != myGeneration || currentView() != view) return
 
         _loadedView.value = view
-        updateAccumulatedBookmarks { newItems }
+        // Announce the reload *before* publishing the items. The version bump makes the
+        // scroll anchor drop its anchor and the scroll request re-pins the viewport to the
+        // top; both are applied on the next measure, which is the one that renders the new
+        // items. Publishing first instead leaves the incoming list drawn at the outgoing
+        // list's scroll offset for a frame. Only resetPaginationAndLoad scrolls, so plain
+        // back-navigation from the viewer never triggers an unwanted scroll.
         _bookmarkListVersion.value++
+        if (scrollToTop) scrollToTop()
+        updateAccumulatedBookmarks { newItems }
         _currentPage.value = lastPage
         if (dbExhausted) {
             _hasMoreItems.value = false
@@ -171,9 +178,6 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
             _isLoadingMore.value = false
         }
     }
-    // Scroll to top after data is ready, so plain back-navigation from the viewer
-    // (which doesn't call resetPaginationAndLoad) never triggers an unwanted scroll.
-    if (scrollToTop) scrollToTop()
 }
 
 /**

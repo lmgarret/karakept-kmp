@@ -44,11 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -92,7 +88,6 @@ internal fun BookmarkListContent(
     syncProgress: com.karakept.app.data.model.SyncProgress?,
     isLoadingMore: Boolean,
     hasMoreItems: Boolean,
-    bookmarkListVersion: Int = 0,
     showScrollCursor: Boolean = false,
     sortOption: SortOption = SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
@@ -165,7 +160,8 @@ internal fun BookmarkListContent(
             }
     }
 
-    val animateItems = rememberItemAnimationsEnabled(bookmarkListVersion, bookmarks)
+    val animationGate = remember { ItemAnimationGate(bookmarks) }
+    val animateItems = animationGate.update(bookmarks)
 
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember {
@@ -343,7 +339,13 @@ internal fun BookmarkListContent(
             ) { itemIndex, bookmark ->
                 Box(
                     modifier = Modifier
-                        .then(if (animateItems) Modifier.animateItem() else Modifier)
+                        // fadeOutSpec = null: a fading-out item is kept in the layout and drawn
+                        // over whatever replaces it, using the spec recorded on the *previous*
+                        // measure pass — so a dataset swap renders the outgoing list on top of
+                        // the incoming one, and no amount of switching animations off in time
+                        // can undo it. Removed rows disappear at once; the rest still slide up
+                        // via placementSpec.
+                        .then(if (animateItems) Modifier.animateItem(fadeOutSpec = null) else Modifier)
                         .then(
                             // Desktop: intercept Ctrl+Click and Shift+Click for multi-selection
                             if (isDesktop && (onCtrlClick != null || onShiftClick != null)) {
@@ -723,38 +725,33 @@ internal fun BookmarkListContent(
 }
 
 /**
- * Whether LazyColumn item animations should be active.
+ * Decides whether the LazyColumn should animate its item changes.
  *
- * They exist for *surgical* changes — an item removed by smart-list reconciliation, an item
- * updated in place by a sync. A full reload (list/filter/server switch, which bumps
- * [bookmarkListVersion]) instead swaps the entire dataset, and animating that leaves the
- * outgoing list's items fading out on top of the incoming one and opens a gap at the top of
- * the viewport while the new items animate into place.
+ * Item animations are for *surgical* changes — an item removed by smart-list reconciliation,
+ * an item updated in place by a sync, a page appended by load-more. Switching lists instead
+ * replaces the whole dataset, and animating that fades a whole list in over the one being
+ * replaced. The decision is derived from the data itself, and taken during composition, so it
+ * lands in the very frame that renders the swap; a flag delivered by a separate flow, or read
+ * from an effect, always arrives at least one frame too late to suppress anything.
  *
- * So: switch animations off when a reload is announced, and back on one frame after the new
- * dataset has actually been laid out. The timeout covers a reload that yields an identical
- * list — there is nothing to animate in that case anyway.
+ * Plain fields rather than snapshot state: updating them must not invalidate the composition
+ * that is reading them.
  */
-@Composable
-private fun rememberItemAnimationsEnabled(
-    bookmarkListVersion: Int,
-    bookmarks: List<BookmarkEntity>
-): Boolean {
-    val currentBookmarks = rememberUpdatedState(bookmarks)
-    var enabled by remember { mutableStateOf(true) }
-    LaunchedEffect(bookmarkListVersion) {
-        if (bookmarkListVersion == 0) return@LaunchedEffect
-        enabled = false
-        withTimeoutOrNull(RELOAD_SETTLE_TIMEOUT_MS) {
-            snapshotFlow { currentBookmarks.value }.drop(1).first()
-        }
-        withFrameNanos { }
-        enabled = true
-    }
-    return enabled
-}
+internal class ItemAnimationGate(initial: List<BookmarkEntity>) {
+    private var previous = initial
+    private var enabled = true
 
-private const val RELOAD_SETTLE_TIMEOUT_MS = 1_000L
+    fun update(bookmarks: List<BookmarkEntity>): Boolean {
+        if (bookmarks === previous) return enabled
+        val previousIds = previous.mapTo(HashSet(previous.size)) { it.remoteId }
+        val survivors = bookmarks.count { it.remoteId in previousIds }
+        // Half of the shorter list surviving still reads as "the same list, changed".
+        enabled = previous.isEmpty() || bookmarks.isEmpty() ||
+            survivors * 2 >= minOf(previous.size, bookmarks.size)
+        previous = bookmarks
+        return enabled
+    }
+}
 
 @Composable
 private fun SyncProgressBar(
