@@ -10,6 +10,8 @@ import org.koin.dsl.module
 import org.koin.core.module.dsl.viewModel
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.ServerRepository
+import com.karakept.app.utils.AppDispatchers
+import com.karakept.app.utils.DefaultAppDispatchers
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -32,6 +34,8 @@ import com.karakept.app.ui.screens.HighlightsScreenModel
 import kotlinx.coroutines.flow.first
 
 val appModule = module {
+    single<AppDispatchers> { DefaultAppDispatchers() }
+
     single<AppDatabase> {
         getDatabaseBuilder()
             .setDriver(BundledSQLiteDriver())
@@ -80,17 +84,17 @@ val appModule = module {
     single { SecureCredentialStore() }
     single { ServerRepository(get(), get()) }
     single { SettingsRepository(get()) }
-    single { ListRepository(get(), get(), get()) }  // RemoteDataSource, ListDao, SettingsRepository
+    single { ListRepository(get(), get(), get(), get()) }  // RemoteDataSource, ListDao, SettingsRepository, AppDispatchers
 
-    // BookmarkActionsRepository depends on BookmarkDao, PendingActionDao, RemoteDataSource, ServerRepository, SettingsRepository
-    single { BookmarkActionsRepository(get(), get(), get(), get(), get()) }
+    // BookmarkActionsRepository depends on BookmarkDao, PendingActionDao, RemoteDataSource, ServerRepository, SettingsRepository, AppDispatchers
+    single { BookmarkActionsRepository(get(), get(), get(), get(), get(), get()) }
 
     // HighlightRepository
     single { HighlightRepository(get(), get(), get()) }
 
     // BookmarkRepository depends on BookmarkActionsRepository and HighlightRepository
     single {
-        BookmarkRepository(get(), get(), get(), get(), get(), get(), get(), get(), get()).also {
+        BookmarkRepository(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()).also {
             // Wire up circular dependencies
             val actionsRepo = get<BookmarkActionsRepository>()
             actionsRepo.setBookmarkRepository(it)
@@ -100,7 +104,7 @@ val appModule = module {
 
     // Action system - centralized action handling with undo support
     single { ActionSnackbarManager() }
-    single { BookmarkActionController(get(), get(), get(), get(), get()) }
+    single { BookmarkActionController(get(), get(), get(), get(), get(), get()) }
 
     // Background sync orchestrator — NotificationProvider is registered per-platform
     single { BackgroundSyncOrchestrator(get(), get(), get(), get()) }

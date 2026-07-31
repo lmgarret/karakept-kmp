@@ -36,7 +36,8 @@ class BatchOperationsTest : BaseRepositoryTest() {
         pendingActionDao = pendingActionDao,
         remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
-        settingsRepository = settingsRepository
+        settingsRepository = settingsRepository,
+        appDispatchers = testAppDispatchers
     )
 
     // ──────────────────────────────────────────────────────────

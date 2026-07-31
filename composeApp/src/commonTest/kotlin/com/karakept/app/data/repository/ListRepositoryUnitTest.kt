@@ -24,7 +24,7 @@ class ListRepositoryUnitTest : BaseRepositoryTest() {
     private val remoteDataSource = mockk<RemoteDataSource>(relaxed = true)
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
 
-    private val repository = ListRepository(remoteDataSource, listDao, settingsRepository)
+    private val repository = ListRepository(remoteDataSource, listDao, settingsRepository, testAppDispatchers)
 
     private val testServer = Server("server1", "http://localhost", "apikey", "Test Server")
 

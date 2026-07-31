@@ -5,9 +5,8 @@ import com.karakept.app.data.local.dao.PendingActionDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.utils.AppDispatchers
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -33,9 +32,10 @@ class BookmarkActionController(
     private val bookmarkDao: BookmarkDao,
     private val pendingActionDao: PendingActionDao,
     private val snackbarManager: ActionSnackbarManager,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val appDispatchers: AppDispatchers
 ) {
-    private val controllerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val controllerScope = CoroutineScope(appDispatchers.io + SupervisorJob())
 
     // Undo cache: stores last executed action for 5 seconds
     private val undoCache = mutableMapOf<String, UndoableActionState>()
@@ -51,7 +51,7 @@ class BookmarkActionController(
      * @param originalPosition Optional position of the bookmark in the UI list for undo restoration
      */
     suspend fun executeAction(event: BookmarkActionEvent, originalPosition: Int = -1): BookmarkActionResult {
-        return withContext(Dispatchers.IO) {
+        return withContext(appDispatchers.io) {
             try {
                 // 1. Capture current state for undo (before modification)
                 val undoState = if (event.requiresUndo) {
@@ -219,7 +219,7 @@ class BookmarkActionController(
     private suspend fun undoAction(key: String) {
         val undoState = undoCache[key] ?: return
 
-        withContext(Dispatchers.IO) {
+        withContext(appDispatchers.io) {
             try {
                 // 1. Restore original bookmark state in DB
                 bookmarkDao.insertBookmark(undoState.originalBookmark)

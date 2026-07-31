@@ -41,7 +41,8 @@ class SyncSingleBookmarkNotifyTest : BaseRepositoryTest() {
         serverRepository,
         highlightRepository,
         imageCacheManager,
-        listDao
+        listDao,
+        testAppDispatchers
     )
 
     private val testServer = Server("s1", "http://localhost", "key", "Label")

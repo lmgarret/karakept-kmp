@@ -6,8 +6,7 @@ import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.entity.PendingActionType
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
+import com.karakept.app.utils.AppDispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -26,7 +25,8 @@ class BookmarkActionsRepository(
     internal val pendingActionDao: PendingActionDao,
     internal val remoteDataSource: RemoteDataSource,
     internal val serverRepository: com.karakept.app.data.repository.ServerRepository,
-    private val settingsRepository: com.karakept.app.data.repository.SettingsRepository
+    private val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
+    internal val appDispatchers: AppDispatchers
 ) {
     internal val jsonSerializer = Json { ignoreUnknownKeys = true }
 
@@ -60,14 +60,15 @@ class BookmarkActionsRepository(
     }
 
     // Scope for background operations like auto-sync
-    private val repositoryScope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    private val repositoryScope =
+        kotlinx.coroutines.CoroutineScope(appDispatchers.io + kotlinx.coroutines.SupervisorJob())
 
     /**
      * Archive a bookmark. Updates locally and queues for sync.
      */
     suspend fun archiveBookmark(bookmarkRemoteId: Long, serverId: String) {
         performAction {
-            withContext(Dispatchers.IO) {
+            withContext(appDispatchers.io) {
                 // Update local copy immediately (optimistic update)
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
@@ -96,7 +97,7 @@ class BookmarkActionsRepository(
      */
     suspend fun unarchiveBookmark(bookmarkRemoteId: Long, serverId: String) {
         performAction {
-            withContext(Dispatchers.IO) {
+            withContext(appDispatchers.io) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
                     bookmarkDao.insertBookmark(it.copy(isArchived = false))
@@ -127,7 +128,7 @@ class BookmarkActionsRepository(
         currentlyFavourited: Boolean
     ) {
         performAction {
-            withContext(Dispatchers.IO) {
+            withContext(appDispatchers.io) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
                     bookmarkDao.insertBookmark(it.copy(isStarred = !currentlyFavourited))
@@ -156,7 +157,7 @@ class BookmarkActionsRepository(
      */
     suspend fun markAsRead(bookmarkRemoteId: Long, serverId: String) {
         performAction {
-            withContext(Dispatchers.IO) {
+            withContext(appDispatchers.io) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
                     bookmarkDao.insertBookmark(it.copy(isRead = true, readingProgress = 1f))
@@ -174,7 +175,7 @@ class BookmarkActionsRepository(
      */
     suspend fun markAsUnread(bookmarkRemoteId: Long, serverId: String, resetProgress: Boolean = false) {
         performAction {
-            withContext(Dispatchers.IO) {
+            withContext(appDispatchers.io) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
                 bookmark?.let {
                     val updated = if (resetProgress) {
@@ -202,7 +203,7 @@ class BookmarkActionsRepository(
         serverId: String,
         progressPercent: Int
     ) {
-        withContext(Dispatchers.IO) {
+        withContext(appDispatchers.io) {
             AppLogger.d("ReadProgressSync", "queueReadingProgressUpdate remoteId=$bookmarkRemoteId serverId=$serverId percent=$progressPercent")
             // Remove any stale pending update for this bookmark (keep only latest)
             pendingActionDao.deleteActionsForBookmarkByType(
@@ -224,7 +225,7 @@ class BookmarkActionsRepository(
      */
     suspend fun deleteBookmark(bookmarkLocalId: Long, bookmarkRemoteId: Long, serverId: String) {
         performAction {
-            withContext(Dispatchers.IO) {
+            withContext(appDispatchers.io) {
                 // Get the bookmark BEFORE deleting to preserve originalRemoteId for the API call
                 val bookmark = bookmarkDao.getBookmarkById(bookmarkLocalId)
                 val originalRemoteId = bookmark?.originalRemoteId
@@ -262,7 +263,7 @@ class BookmarkActionsRepository(
         newTags: List<String>,
         isOnline: Boolean
     ) {
-        withContext(Dispatchers.IO) {
+        withContext(appDispatchers.io) {
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
             bookmark?.let {
                 bookmarkDao.insertBookmark(it.copy(
@@ -296,7 +297,7 @@ class BookmarkActionsRepository(
         isOnline: Boolean,
         smartListIds: Set<String> = emptySet()
     ) {
-        withContext(Dispatchers.IO) {
+        withContext(appDispatchers.io) {
             // Update local DB immediately (optimistic update).
             // Also strip smart-list membership: the server recomputes it from the bookmark's
             // manual lists, so a smart list that excludes the target list (e.g. All Feeds
@@ -338,7 +339,7 @@ class BookmarkActionsRepository(
         listId: String,
         isOnline: Boolean
     ) {
-        withContext(Dispatchers.IO) {
+        withContext(appDispatchers.io) {
             // Update local DB immediately (optimistic update)
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
             bookmark?.let {
@@ -376,7 +377,7 @@ class BookmarkActionsRepository(
         color: String? = null,
         tempId: String? = null
     ) {
-        withContext(Dispatchers.IO) {
+        withContext(appDispatchers.io) {
             queueAction(
                 bookmarkRemoteId = bookmarkLocalId,
                 serverId = server.id,
@@ -406,7 +407,7 @@ class BookmarkActionsRepository(
         bookmarkLocalId: Long,
         highlightRemoteId: String
     ) {
-        withContext(Dispatchers.IO) {
+        withContext(appDispatchers.io) {
             queueAction(
                 bookmarkRemoteId = bookmarkLocalId,
                 serverId = server.id,
@@ -430,7 +431,7 @@ class BookmarkActionsRepository(
         color: String? = null
     ) {
         AppLogger.d("BookmarkActionsRepository", "queueUpdateHighlight called - highlightRemoteId=$highlightRemoteId, note=$note, color=$color")
-        withContext(Dispatchers.IO) {
+        withContext(appDispatchers.io) {
             val actionData = jsonSerializer.encodeToString(mapOf(
                 "highlightId" to highlightRemoteId,
                 "note" to note,
@@ -545,6 +546,33 @@ class BookmarkActionsRepository(
             } catch (e: Exception) {
                 AppLogger.e("BookmarkActionsRepository", "Error in auto-sync: ${e.message}")
                 // Don't propagate error - auto-sync is a best-effort operation
+            }
+        }
+    }
+
+    /**
+     * Persists a final reading position and queues it for sync, on this repository's own
+     * scope. Called from ViewModel disposal, where `viewModelScope` is already being
+     * cancelled: the write has to outlive the screen, but must stay bound to a scope the
+     * app owns (and tests can drain) rather than escaping into `GlobalScope`.
+     */
+    fun persistFinalReadingProgress(
+        bookmarkLocalId: Long,
+        bookmarkRemoteId: Long,
+        serverId: String?,
+        progress: Float,
+        scrollIndex: Int,
+        scrollOffset: Int
+    ) {
+        repositoryScope.launch {
+            bookmarkDao.updateReadingProgress(bookmarkLocalId, progress, scrollIndex, scrollOffset)
+            notifyBookmarkChanged(bookmarkRemoteId)
+            if (serverId != null) {
+                queueReadingProgressUpdate(
+                    bookmarkRemoteId = bookmarkRemoteId,
+                    serverId = serverId,
+                    progressPercent = (progress * 100).toInt()
+                )
             }
         }
     }

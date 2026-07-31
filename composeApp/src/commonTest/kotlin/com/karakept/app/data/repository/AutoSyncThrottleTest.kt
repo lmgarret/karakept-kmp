@@ -11,12 +11,17 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
 
 /**
  * Tests for the auto-sync throttle (#276): the startup sync must not re-fire every time
  * the main ScreenModel is recreated (e.g. returning from the reader).
  */
 class AutoSyncThrottleTest {
+
+    private val testDispatcher = StandardTestDispatcher()
+    private val testAppDispatchers = TestAppDispatchers(testDispatcher)
 
     private fun repository() = BookmarkRepository(
         mockk<BookmarkDao>(relaxed = true),
@@ -27,17 +32,18 @@ class AutoSyncThrottleTest {
         mockk<ServerRepository>(relaxed = true),
         mockk<HighlightRepository>(relaxed = true),
         mockk<ImageCacheManager>(relaxed = true),
-        mockk<ListDao>(relaxed = true)
+        mockk<ListDao>(relaxed = true),
+        testAppDispatchers
     )
 
     @Test
-    fun shouldAutoSync_trueBeforeAnySync() = runTest {
+    fun shouldAutoSync_trueBeforeAnySync() = runTest(testDispatcher) {
         val repo = repository()
         assertTrue(repo.shouldAutoSync("server-1"), "First sync should always be allowed")
     }
 
     @Test
-    fun shouldAutoSync_falseImmediatelyAfterCompletion() = runTest {
+    fun shouldAutoSync_falseImmediatelyAfterCompletion() = runTest(testDispatcher) {
         val repo = repository()
         repo.markAutoSyncCompleted("server-1")
         assertFalse(
@@ -47,7 +53,7 @@ class AutoSyncThrottleTest {
     }
 
     @Test
-    fun shouldAutoSync_trueAfterWindowElapses() = runTest {
+    fun shouldAutoSync_trueAfterWindowElapses() = runTest(testDispatcher) {
         val repo = repository()
         repo.markAutoSyncCompleted("server-1")
         // Zero interval → the window has already elapsed
@@ -58,7 +64,7 @@ class AutoSyncThrottleTest {
     }
 
     @Test
-    fun shouldAutoSync_isPerServer() = runTest {
+    fun shouldAutoSync_isPerServer() = runTest(testDispatcher) {
         val repo = repository()
         repo.markAutoSyncCompleted("server-1")
         assertTrue(
