@@ -69,6 +69,13 @@ class DefaultFilterResolverTest {
     }
 
     @Test
+    fun buildFilter_lastViewed_returnsEmptyFilter() {
+        // resolve() handles LAST_VIEWED via the persisted last-active filter;
+        // buildFilter only provides the empty fallback.
+        assertEquals(FilterConfig(), DefaultFilterResolver.buildFilter(DefaultListType.LAST_VIEWED, "list-1"))
+    }
+
+    @Test
     fun buildFilter_specificList_wrapsIdInSingleElementList() {
         val result = DefaultFilterResolver.buildFilter(DefaultListType.SPECIFIC_LIST, "abc")
         assertEquals(listOf("abc"), result.lists)
@@ -162,32 +169,52 @@ class DefaultFilterResolverTest {
     }
 
     // -------------------------------------------------------------------------
-    // resolve() — last-active filter takes priority
+    // resolve() — configured default wins over the last-active filter
     // -------------------------------------------------------------------------
 
     @Test
-    fun resolve_prefersLastActiveFilter_overConfiguredDefault() = runTest {
-        // Configured default is All Bookmarks, but last active was a specific list.
+    fun resolve_configuredHomeList_winsOverLastActiveFilter() = runTest {
+        // The user's home list is list-99 but they last browsed list-42:
+        // startup must open the home list.
         val resolver = DefaultFilterResolver(
-            makeRepo(DefaultListType.ALL_BOOKMARKS, null, lastStatus = "ALL", lastListId = "list-42")
+            makeRepo(DefaultListType.SPECIFIC_LIST, "list-99", lastStatus = "ALL", lastListId = "list-42")
+        )
+        assertEquals(FilterConfig(lists = listOf("list-99")), resolver.resolve())
+    }
+
+    @Test
+    fun resolve_configuredAllBookmarks_winsOverLastActiveFilter() = runTest {
+        val resolver = DefaultFilterResolver(
+            makeRepo(DefaultListType.ALL_BOOKMARKS, null, lastStatus = "FAVORITES", lastListId = null)
+        )
+        assertEquals(FilterConfig(), resolver.resolve())
+    }
+
+    // -------------------------------------------------------------------------
+    // resolve() — LAST_VIEWED opts into restoring the last-active filter
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun resolve_lastViewed_restoresLastActiveList() = runTest {
+        val resolver = DefaultFilterResolver(
+            makeRepo(DefaultListType.LAST_VIEWED, null, lastStatus = "ALL", lastListId = "list-42")
         )
         assertEquals(FilterConfig(lists = listOf("list-42")), resolver.resolve())
     }
 
     @Test
-    fun resolve_lastActiveFavorites_overridesDefault() = runTest {
+    fun resolve_lastViewed_restoresLastActiveStatus() = runTest {
         val resolver = DefaultFilterResolver(
-            makeRepo(DefaultListType.ALL_BOOKMARKS, null, lastStatus = "FAVORITES", lastListId = null)
+            makeRepo(DefaultListType.LAST_VIEWED, null, lastStatus = "FAVORITES", lastListId = null)
         )
         assertEquals(FilterConfig(status = FilterStatus.FAVORITES), resolver.resolve())
     }
 
     @Test
-    fun resolve_noLastActive_fallsBackToConfiguredDefault() = runTest {
-        // No last-active filter saved — uses configured default.
+    fun resolve_lastViewed_withNothingPersisted_fallsBackToAllBookmarks() = runTest {
         val resolver = DefaultFilterResolver(
-            makeRepo(DefaultListType.SPECIFIC_LIST, "list-99", lastStatus = null, lastListId = null)
+            makeRepo(DefaultListType.LAST_VIEWED, null, lastStatus = null, lastListId = null)
         )
-        assertEquals(FilterConfig(lists = listOf("list-99")), resolver.resolve())
+        assertEquals(FilterConfig(), resolver.resolve())
     }
 }

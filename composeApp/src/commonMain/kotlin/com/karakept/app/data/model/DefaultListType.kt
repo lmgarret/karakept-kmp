@@ -4,7 +4,8 @@ enum class DefaultListType {
     ALL_BOOKMARKS,
     FAVORITES,
     ARCHIVED,
-    SPECIFIC_LIST;
+    SPECIFIC_LIST,
+    LAST_VIEWED;
 
     companion object {
         fun fromString(value: String): DefaultListType =

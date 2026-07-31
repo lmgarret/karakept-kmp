@@ -18,28 +18,24 @@ import kotlinx.coroutines.flow.first
 class DefaultFilterResolver(private val settingsRepository: SettingsRepository) {
 
     /**
-     * Resolves the startup filter: prefers the last-active filter (persisted on
-     * every filter change) so the user returns to where they left off. Falls back
-     * to the configured "default list" setting on first launch or when the
-     * last-active filter has no data.
+     * Resolves the startup filter from the configured "default list" setting —
+     * the home view always wins on startup. Only when the user explicitly picked
+     * [DefaultListType.LAST_VIEWED] is the last-active filter (persisted on every
+     * filter change) restored instead.
      */
     suspend fun resolve(): FilterConfig {
-        // Try last-active filter first (survives process death).
-        val (lastStatus, lastListId) = combine(
-            settingsRepository.lastActiveFilterStatus,
-            settingsRepository.lastActiveFilterListId
-        ) { s, l -> s to l }.first()
-
-        if (lastStatus != null || lastListId != null) {
-            return buildLastActiveFilter(lastStatus, lastListId)
-        }
-
-        // Fallback: configured default list.
         val (type, id) = combine(
             settingsRepository.defaultListType,
             settingsRepository.defaultListId
         ) { type, id -> type to id }.first()
-        return buildFilter(type, id)
+
+        if (type != DefaultListType.LAST_VIEWED) return buildFilter(type, id)
+
+        val (lastStatus, lastListId) = combine(
+            settingsRepository.lastActiveFilterStatus,
+            settingsRepository.lastActiveFilterListId
+        ) { s, l -> s to l }.first()
+        return buildLastActiveFilter(lastStatus, lastListId)
     }
 
     companion object {
@@ -55,6 +51,9 @@ class DefaultFilterResolver(private val settingsRepository: SettingsRepository) 
             } else {
                 FilterConfig()
             }
+            // Resolved from the persisted last-active filter by [resolve]; the
+            // empty filter is the fallback when nothing has been persisted yet.
+            DefaultListType.LAST_VIEWED -> FilterConfig()
         }
 
         /**
