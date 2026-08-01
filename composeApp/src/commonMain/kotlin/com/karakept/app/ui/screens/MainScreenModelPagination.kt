@@ -203,16 +203,16 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
     val myRefreshGeneration = refreshGeneration
     val lastLoadedPage = _currentPage.value
 
+    val hadItems = _accumulatedBookmarks.value.isNotEmpty()
+
     _isLoadingMore.value = true
     try {
         val all = mutableListOf<BookmarkEntity>()
         var page = 0
-        var lastFetchedPage = 0
         var reachedEnd = false
         while (page <= lastLoadedPage) {
             val (items, rawCount) = loadBookmarksPage(server, filter, page)
             all += items
-            lastFetchedPage = page
             if (rawCount < pageSize) {
                 reachedEnd = true
                 break
@@ -220,25 +220,25 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
             page++
         }
 
-        // The window's effective query can widen under a refresh: a list with
-        // includeChildListBookmarks only expands into its children once the drawer's lists have
-        // loaded (which the startup sync does before this runs), and a multi-list filter is
-        // applied client-side on top of paged DB rows. The loaded window's pages can then hold
-        // nothing the filter keeps, even though the view's items are one page further down. Page
-        // on like the initial load does instead of publishing the empty window — otherwise the
-        // sync blanks the list the user is looking at, and only a re-tap brings it back.
-        if (all.isEmpty() && !reachedEnd) {
-            val (items, foundPage, dbExhausted) = findPageWithItems(server, filter, lastFetchedPage + 1)
-            all += items
-            lastFetchedPage = foundPage
-            reachedEnd = dbExhausted
-        }
-
         // A reset or a newer refresh started, or the user switched away, while we fetched.
         if (paginationGeneration != myGeneration ||
             refreshGeneration != myRefreshGeneration ||
             currentView() != view
         ) return
+
+        // The window's effective query can widen under a refresh: a list with
+        // includeChildListBookmarks only expands into its children once the drawer's lists have
+        // loaded (the startup sync refreshes them right before this runs), and a multi-list
+        // filter is applied client-side on top of paged DB rows — so every page of the window
+        // can come back empty while the view's items sit further down. Hand over to the full
+        // reload instead of publishing the blank window: it pages until it finds items and sizes
+        // the window to what it found. Paging on here instead would, for a view that really is
+        // empty, walk to the last page of the table and leave the window spanning all of it, so
+        // every later refresh re-sweeps the whole DB.
+        if (all.isEmpty() && !reachedEnd && hadItems) {
+            resetPaginationAndLoad(server, filter, scrollToTop = false)
+            return
+        }
 
         // Count bookmarks the sync introduced (they land at the top for the default NEWEST sort),
         // so the UI can surface a "N new" pill when the user is scrolled away from the top.
@@ -248,7 +248,7 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
 
         _loadedView.value = view
         updateAccumulatedBookmarks { all }
-        _currentPage.value = if (reachedEnd) lastFetchedPage else maxOf(lastLoadedPage, lastFetchedPage)
+        _currentPage.value = if (reachedEnd) page else lastLoadedPage
         _hasMoreItems.value = !reachedEnd
     } finally {
         if (paginationGeneration == myGeneration && refreshGeneration == myRefreshGeneration) {

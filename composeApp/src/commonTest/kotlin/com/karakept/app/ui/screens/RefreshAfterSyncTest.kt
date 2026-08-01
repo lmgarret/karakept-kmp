@@ -23,8 +23,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -34,6 +37,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * A list opened at startup must still show its bookmarks once the startup sync finishes.
@@ -69,6 +73,12 @@ class RefreshAfterSyncTest {
     private val homeList = KarakeepList(id = "list-a", name = "Home", type = KarakeepList.Type.MANUAL)
     private val childList =
         KarakeepList(id = "list-a-1", name = "Child", parentId = "list-a", type = KarakeepList.Type.MANUAL)
+
+    /** Lets a test drive the in-place refresh without the sync's hop to Dispatchers.IO. */
+    private val backgroundSyncCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Number of paged DB reads, so a refresh's cost can be asserted. */
+    private var queryCount = 0
 
     /** The drawer's lists, empty until the sync refreshes them — as on a cold start. */
     private val listsFlow = MutableStateFlow<List<KarakeepList>>(emptyList())
@@ -116,7 +126,7 @@ class RefreshAfterSyncTest {
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns MutableSharedFlow()
-        every { bookmarkRepository.backgroundSyncCompleted } returns MutableSharedFlow()
+        every { bookmarkRepository.backgroundSyncCompleted } returns backgroundSyncCompleted
         every { bookmarkRepository.syncProgress } returns MutableStateFlow(
             com.karakept.app.data.model.SyncProgress.Idle
         )
@@ -139,6 +149,7 @@ class RefreshAfterSyncTest {
             val offset = arg<Int>(2)
             val limit = arg<Int>(3)
             val listId = arg<String?>(5)
+            queryCount++
             allBookmarks
                 .sortedByDescending { it.createdAt }
                 .filter { bookmark ->
@@ -195,24 +206,70 @@ class RefreshAfterSyncTest {
 
         assertEquals(
             listOf(3L, 2L, 1L),
-            model.bookmarks.value.map { it.remoteId },
+            awaitBookmarks(model) { it.isNotEmpty() },
             "the home list's bookmarks must survive the sync that follows startup"
         )
+        // The window the refresh leaves behind is swept page by page by every later refresh,
+        // so it must stay sized to the items on screen — never grow to span the whole table.
+        assertEquals(1, model._currentPage.value, "loaded window's last page")
+        assertEquals(false, model._hasMoreItems.value, "more items available")
     }
 
     @Test
-    fun `a list emptied on the server is shown as empty after the sync`() = runTest(testDispatcher) {
-        // The sync drops every bookmark's membership in the home list, so the view really is
-        // empty afterwards — the refresh must publish that, not page on until it finds rows.
-        coEvery { listRepository.refreshLists(any()) } answers {
-            listsFlow.value = listOf(homeList, childList)
-            allBookmarks = allBookmarks.map { it.copy(listIds = "") }
-        }
+    fun `an empty view does not sweep the whole table on every refresh`() = runTest(testDispatcher) {
+        // Nothing is in the home list, so the view is legitimately empty, and the library is
+        // large: 400 bookmarks, 20 full pages. The refresh must settle for the empty first page
+        // instead of paging to the end of the table looking for something to show — the window
+        // it leaves behind is re-swept page by page by every later refresh.
+        allBookmarks = (1L..400L).map { makeBookmark(it, listIds = "") }
 
         val model = createMainScreenModel()
         backgroundScope.launch { model.bookmarks.collect { } }
         advanceUntilIdle()
 
-        assertEquals(emptyList(), model.bookmarks.value.map { it.remoteId }, "bookmarks after sync")
+        queryCount = 0
+        backgroundSyncCompleted.emit(Unit)
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), model.bookmarks.value.map { it.remoteId }, "bookmarks")
+        assertTrue(queryCount in 1..3, "DB pages fetched by the refresh: $queryCount")
+        assertEquals(0, model._currentPage.value, "loaded window's last page")
+    }
+
+    @Test
+    fun `a list emptied on the server is shown as empty after the refresh`() = runTest(testDispatcher) {
+        val model = createMainScreenModel()
+        backgroundScope.launch { model.bookmarks.collect { } }
+        advanceUntilIdle()
+        awaitBookmarks(model) { it.isNotEmpty() }
+
+        // Every bookmark loses its membership, so the view really is empty now — the refresh
+        // must publish that rather than page on until it finds rows to show.
+        allBookmarks = allBookmarks.map { it.copy(listIds = "") }
+        backgroundSyncCompleted.emit(Unit)
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), model.bookmarks.value.map { it.remoteId }, "bookmarks after refresh")
+    }
+
+    /**
+     * Waits for the rendered bookmarks to satisfy [predicate] and returns their ids.
+     *
+     * The startup sync hops to `Dispatchers.IO`, which the test scheduler does not control, so
+     * [advanceUntilIdle] can return before the refresh that follows it has run. Waiting on the
+     * value rather than sampling it makes the assertion independent of that hop; the wait runs
+     * on `Dispatchers.Default` so its timeout is measured on the real clock, and a genuine
+     * regression still fails as a plain assertion on the value that did settle.
+     */
+    private suspend fun awaitBookmarks(
+        model: MainScreenModel,
+        predicate: (List<BookmarkEntity>) -> Boolean
+    ): List<Long> {
+        val settled = withContext(Dispatchers.Default) {
+            withTimeoutOrNull(SETTLE_TIMEOUT_MS) { model.bookmarks.first(predicate) }
+        }
+        return (settled ?: model.bookmarks.value).map { it.remoteId }
     }
 }
+
+private const val SETTLE_TIMEOUT_MS = 5_000L
