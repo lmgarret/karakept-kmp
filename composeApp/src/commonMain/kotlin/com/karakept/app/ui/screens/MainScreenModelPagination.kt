@@ -207,15 +207,31 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
     try {
         val all = mutableListOf<BookmarkEntity>()
         var page = 0
+        var lastFetchedPage = 0
         var reachedEnd = false
         while (page <= lastLoadedPage) {
             val (items, rawCount) = loadBookmarksPage(server, filter, page)
             all += items
+            lastFetchedPage = page
             if (rawCount < pageSize) {
                 reachedEnd = true
                 break
             }
             page++
+        }
+
+        // The window's effective query can widen under a refresh: a list with
+        // includeChildListBookmarks only expands into its children once the drawer's lists have
+        // loaded (which the startup sync does before this runs), and a multi-list filter is
+        // applied client-side on top of paged DB rows. The loaded window's pages can then hold
+        // nothing the filter keeps, even though the view's items are one page further down. Page
+        // on like the initial load does instead of publishing the empty window — otherwise the
+        // sync blanks the list the user is looking at, and only a re-tap brings it back.
+        if (all.isEmpty() && !reachedEnd) {
+            val (items, foundPage, dbExhausted) = findPageWithItems(server, filter, lastFetchedPage + 1)
+            all += items
+            lastFetchedPage = foundPage
+            reachedEnd = dbExhausted
         }
 
         // A reset or a newer refresh started, or the user switched away, while we fetched.
@@ -232,7 +248,7 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
 
         _loadedView.value = view
         updateAccumulatedBookmarks { all }
-        _currentPage.value = if (reachedEnd) page else lastLoadedPage
+        _currentPage.value = if (reachedEnd) lastFetchedPage else maxOf(lastLoadedPage, lastFetchedPage)
         _hasMoreItems.value = !reachedEnd
     } finally {
         if (paginationGeneration == myGeneration && refreshGeneration == myRefreshGeneration) {
