@@ -24,8 +24,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -201,18 +201,46 @@ class RefreshAfterSyncTest {
     @Test
     fun `home list keeps its bookmarks across the startup sync`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
-        backgroundScope.launch { model.bookmarks.collect { } }
         advanceUntilIdle()
 
         assertEquals(
             listOf(3L, 2L, 1L),
-            awaitBookmarks(model) { it.isNotEmpty() },
+            awaitWindow(model) { it.isNotEmpty() },
             "the home list's bookmarks must survive the sync that follows startup"
         )
         // The window the refresh leaves behind is swept page by page by every later refresh,
         // so it must stay sized to the items on screen — never grow to span the whole table.
         assertEquals(1, model._currentPage.value, "loaded window's last page")
         assertEquals(false, model._hasMoreItems.value, "more items available")
+    }
+
+    @Test
+    fun `the rescued window is scrolled back to the top`() = runTest(testDispatcher) {
+        // Rescuing the window swaps the whole dataset, and the scroll anchor deliberately stands
+        // down for that (a reload bumps the list version, and a reload is expected to do its own
+        // scrolling). Without the scroll request the LazyColumn keeps the outgoing window's index
+        // into the incoming one, so the list sits on arbitrary items until it is re-tapped.
+        //
+        // No startup sync here, so the window is loaded while the lists are still unknown and
+        // the refresh below is the first thing to see them.
+        coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
+
+        val model = createMainScreenModel()
+        var scrollToTops = 0
+        val collector = launch { model.scrollToTopTrigger.collect { scrollToTops++ } }
+        advanceUntilIdle()
+        assertEquals(listOf(3L, 2L, 1L), window(model), "bookmarks at startup")
+
+        // The lists land, so the home list expands into its child and the window's own page no
+        // longer holds anything the filter keeps.
+        listsFlow.value = listOf(homeList, childList)
+        scrollToTops = 0
+        backgroundSyncCompleted.emit(Unit)
+        advanceUntilIdle()
+
+        assertEquals(listOf(3L, 2L, 1L), window(model), "bookmarks after refresh")
+        assertEquals(1, scrollToTops, "scroll-to-top requests")
+        collector.cancel()
     }
 
     @Test
@@ -224,14 +252,13 @@ class RefreshAfterSyncTest {
         allBookmarks = (1L..400L).map { makeBookmark(it, listIds = "") }
 
         val model = createMainScreenModel()
-        backgroundScope.launch { model.bookmarks.collect { } }
         advanceUntilIdle()
 
         queryCount = 0
         backgroundSyncCompleted.emit(Unit)
         advanceUntilIdle()
 
-        assertEquals(emptyList(), model.bookmarks.value.map { it.remoteId }, "bookmarks")
+        assertEquals(emptyList(), window(model), "bookmarks")
         assertTrue(queryCount in 1..3, "DB pages fetched by the refresh: $queryCount")
         assertEquals(0, model._currentPage.value, "loaded window's last page")
     }
@@ -239,9 +266,8 @@ class RefreshAfterSyncTest {
     @Test
     fun `a list emptied on the server is shown as empty after the refresh`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
-        backgroundScope.launch { model.bookmarks.collect { } }
         advanceUntilIdle()
-        awaitBookmarks(model) { it.isNotEmpty() }
+        awaitWindow(model) { it.isNotEmpty() }
 
         // Every bookmark loses its membership, so the view really is empty now — the refresh
         // must publish that rather than page on until it finds rows to show.
@@ -249,11 +275,15 @@ class RefreshAfterSyncTest {
         backgroundSyncCompleted.emit(Unit)
         advanceUntilIdle()
 
-        assertEquals(emptyList(), model.bookmarks.value.map { it.remoteId }, "bookmarks after refresh")
+        assertEquals(emptyList(), window(model), "bookmarks after refresh")
     }
 
+    /** The loaded window, read straight off the model — no collector needed. */
+    private fun window(model: MainScreenModel): List<Long> =
+        model._accumulatedBookmarks.value.map { it.remoteId }
+
     /**
-     * Waits for the rendered bookmarks to satisfy [predicate] and returns their ids.
+     * Waits for the loaded window to satisfy [predicate] and returns its bookmark ids.
      *
      * The startup sync hops to `Dispatchers.IO`, which the test scheduler does not control, so
      * [advanceUntilIdle] can return before the refresh that follows it has run. Waiting on the
@@ -261,14 +291,14 @@ class RefreshAfterSyncTest {
      * on `Dispatchers.Default` so its timeout is measured on the real clock, and a genuine
      * regression still fails as a plain assertion on the value that did settle.
      */
-    private suspend fun awaitBookmarks(
+    private suspend fun awaitWindow(
         model: MainScreenModel,
         predicate: (List<BookmarkEntity>) -> Boolean
     ): List<Long> {
-        val settled = withContext(Dispatchers.Default) {
-            withTimeoutOrNull(SETTLE_TIMEOUT_MS) { model.bookmarks.first(predicate) }
+        withContext(Dispatchers.Default) {
+            withTimeoutOrNull(SETTLE_TIMEOUT_MS) { model._accumulatedBookmarks.first(predicate) }
         }
-        return (settled ?: model.bookmarks.value).map { it.remoteId }
+        return window(model)
     }
 }
 

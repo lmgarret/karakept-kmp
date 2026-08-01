@@ -236,7 +236,12 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
         // empty, walk to the last page of the table and leave the window spanning all of it, so
         // every later refresh re-sweeps the whole DB.
         if (all.isEmpty() && !reachedEnd && hadItems) {
-            resetPaginationAndLoad(server, filter, scrollToTop = false)
+            // scrollToTop = true: this is a full reload, and a reload bumps the list version,
+            // which is exactly when the scroll anchor stands down (it must not fight a reload's
+            // own scroll). Reloading without asking for the scroll leaves the LazyColumn holding
+            // the outgoing window's index into the incoming one, so the list opens on arbitrary
+            // items and only re-tapping it recovers.
+            resetPaginationAndLoad(server, filter, scrollToTop = true)
             return
         }
 
