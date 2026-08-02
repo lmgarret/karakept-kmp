@@ -205,7 +205,7 @@ fun MainScreenModel.restoreAndMoveBookmarkToList(bookmark: BookmarkEntity, listI
         val isOnline = !_isSyncing.value
         bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
         val server = _selectedServer.value ?: return@launch
-        resetPaginationAndLoad(server, _currentFilter.value, scrollToTop = false)
+        resetPaginationAndLoad(server, effectiveFilterNow(), scrollToTop = false)
     }
 }
 

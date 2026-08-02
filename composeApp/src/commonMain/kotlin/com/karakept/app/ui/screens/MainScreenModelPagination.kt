@@ -7,22 +7,7 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.Server
 import com.karakept.app.domain.BookmarkFilterUtils
-import com.karakept.app.domain.ListHierarchyUtils
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-
-internal suspend fun MainScreenModel.expandListsWithChildren(listIds: List<String>): List<String> {
-    val result = listIds.toMutableList()
-    val allLists = lists.value
-    for (listId in listIds) {
-        val settings = settingsRepository.getListSettings(listId).first()
-        if (settings.includeChildListBookmarks) {
-            val childIds = ListHierarchyUtils.getAllDescendantIds(listId, allLists)
-            childIds.forEach { if (!result.contains(it)) result.add(it) }
-        }
-    }
-    return result
-}
 
 /**
  * Loads a single DB page and applies client-side filters.
@@ -35,34 +20,25 @@ internal suspend fun MainScreenModel.loadBookmarksPage(
     filter: FilterConfig,
     page: Int
 ): Pair<List<BookmarkEntity>, Int> {
-    val offset = page * pageSize
-
-    // Expand filter lists to include children for lists with
-    // includeChildListBookmarks enabled.
-    val expandedFilter = if (filter.lists.isNotEmpty()) {
-        val expandedLists = expandListsWithChildren(filter.lists)
-        if (expandedLists != filter.lists) filter.copy(lists = expandedLists) else filter
-    } else {
-        filter
-    }
-
-    val singleListId = if (expandedFilter.lists.size == 1) expandedFilter.lists.first() else null
+    // [filter] is the effective filter (see MainScreenModel.effectiveFilter), so a page's
+    // contents depend only on it and the page index — never on state that can change between
+    // the load of a window and its refresh.
+    val singleListId = filter.lists.singleOrNull()
 
     val pagedBookmarks = bookmarkRepository.getBookmarksPaged(
         server = server,
-        status = expandedFilter.status,
-        offset = offset,
+        status = filter.status,
+        offset = page * pageSize,
         limit = pageSize,
-        sort = expandedFilter.sort,
+        sort = filter.sort,
         listId = singleListId
     )
 
-    val rawCount = pagedBookmarks.size
     val filtered = BookmarkFilterUtils.applyClientSideFilters(
-        pagedBookmarks, expandedFilter, skipListFilter = singleListId != null
+        pagedBookmarks, filter, skipListFilter = singleListId != null
     )
 
-    return Pair(filtered, rawCount)
+    return Pair(filtered, pagedBookmarks.size)
 }
 
 /**
@@ -170,7 +146,11 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
         _bookmarkListVersion.value++
         if (scrollToTop) scrollToTop()
         updateAccumulatedBookmarks { newItems }
-        _currentPage.value = lastPage
+        // The window spans pages 0..currentPage and is re-read page by page on every refresh, so
+        // it must end at the page that *contributed* the items. Finding nothing means the search
+        // walked the table without loading a window — recording the page it gave up on would
+        // make every later refresh walk the whole table too.
+        _currentPage.value = if (newItems.isEmpty()) 0 else lastPage
         if (dbExhausted) {
             _hasMoreItems.value = false
         }
@@ -203,8 +183,6 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
     val myRefreshGeneration = refreshGeneration
     val lastLoadedPage = _currentPage.value
 
-    val hadItems = _accumulatedBookmarks.value.isNotEmpty()
-
     _isLoadingMore.value = true
     try {
         val all = mutableListOf<BookmarkEntity>()
@@ -225,25 +203,6 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
             refreshGeneration != myRefreshGeneration ||
             currentView() != view
         ) return
-
-        // The window's effective query can widen under a refresh: a list with
-        // includeChildListBookmarks only expands into its children once the drawer's lists have
-        // loaded (the startup sync refreshes them right before this runs), and a multi-list
-        // filter is applied client-side on top of paged DB rows — so every page of the window
-        // can come back empty while the view's items sit further down. Hand over to the full
-        // reload instead of publishing the blank window: it pages until it finds items and sizes
-        // the window to what it found. Paging on here instead would, for a view that really is
-        // empty, walk to the last page of the table and leave the window spanning all of it, so
-        // every later refresh re-sweeps the whole DB.
-        if (all.isEmpty() && !reachedEnd && hadItems) {
-            // scrollToTop = true: this is a full reload, and a reload bumps the list version,
-            // which is exactly when the scroll anchor stands down (it must not fight a reload's
-            // own scroll). Reloading without asking for the scroll leaves the LazyColumn holding
-            // the outgoing window's index into the incoming one, so the list opens on arbitrary
-            // items and only re-tapping it recovers.
-            resetPaginationAndLoad(server, filter, scrollToTop = true)
-            return
-        }
 
         // Count bookmarks the sync introduced (they land at the top for the default NEWEST sort),
         // so the UI can surface a "N new" pill when the user is scrolled away from the top.

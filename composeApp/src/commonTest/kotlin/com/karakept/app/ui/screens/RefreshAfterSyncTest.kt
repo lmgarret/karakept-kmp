@@ -103,7 +103,8 @@ class RefreshAfterSyncTest {
         highlightRepository = mockk(relaxed = true)
 
         every { serverRepository.servers } returns flowOf(listOf(fakeServer))
-        every { settingsRepository.allListSettings } returns flowOf(emptyMap())
+        every { settingsRepository.allListSettings } returns
+            flowOf(mapOf("list-a" to ListSettings(includeChildListBookmarks = true)))
         every { settingsRepository.getListSettings(any()) } returns
             flowOf(ListSettings(includeChildListBookmarks = true))
         every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
@@ -215,32 +216,34 @@ class RefreshAfterSyncTest {
     }
 
     @Test
-    fun `the rescued window is scrolled back to the top`() = runTest(testDispatcher) {
-        // Rescuing the window swaps the whole dataset, and the scroll anchor deliberately stands
-        // down for that (a reload bumps the list version, and a reload is expected to do its own
-        // scrolling). Without the scroll request the LazyColumn keeps the outgoing window's index
-        // into the incoming one, so the list sits on arbitrary items until it is re-tapped.
+    fun `the list reloads when its effective filter changes under it`() = runTest(testDispatcher) {
+        // The reload is what republishes the view: it bumps the list version, which is what makes
+        // the LazyColumn drop its scroll anchor and take resetPaginationAndLoad's scroll-to-top.
+        // Patching the window in place instead would leave the list holding the outgoing window's
+        // index into the incoming one, sitting on arbitrary items until it is re-tapped.
         //
-        // No startup sync here, so the window is loaded while the lists are still unknown and
-        // the refresh below is the first thing to see them.
+        // Neither the startup sync nor the drawer's own list load brings the lists in here, so
+        // the window is loaded while they are still unknown and the change below is the first
+        // thing to expand the home list into its child.
         coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
+        coEvery { listRepository.refreshLists(any()) } returns Unit
 
         val model = createMainScreenModel()
-        var scrollToTops = 0
-        val collector = launch { model.scrollToTopTrigger.collect { scrollToTops++ } }
         advanceUntilIdle()
         assertEquals(listOf(3L, 2L, 1L), window(model), "bookmarks at startup")
+        assertEquals(listOf("list-a"), model._loadedView.value?.filter?.lists, "loaded view at startup")
+        val versionAtStartup = model.bookmarkListVersion.value
 
-        // The lists land, so the home list expands into its child and the window's own page no
-        // longer holds anything the filter keeps.
         listsFlow.value = listOf(homeList, childList)
-        scrollToTops = 0
-        backgroundSyncCompleted.emit(Unit)
         advanceUntilIdle()
 
-        assertEquals(listOf(3L, 2L, 1L), window(model), "bookmarks after refresh")
-        assertEquals(1, scrollToTops, "scroll-to-top requests")
-        collector.cancel()
+        assertEquals(listOf(3L, 2L, 1L), window(model), "bookmarks after the reload")
+        assertEquals(
+            listOf("list-a", "list-a-1"),
+            model._loadedView.value?.filter?.lists,
+            "the window must be reloaded for the expanded filter"
+        )
+        assertEquals(versionAtStartup + 1, model.bookmarkListVersion.value, "list version")
     }
 
     @Test
