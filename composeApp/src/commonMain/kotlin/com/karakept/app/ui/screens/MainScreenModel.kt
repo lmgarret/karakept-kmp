@@ -758,6 +758,15 @@ class MainScreenModel(
                     syncOtherLists(server, currentKey)
                 }
 
+                // Step 5: Refresh once more now the whole sync is done. Step 3 only sees what
+                // the current view's own pass fetched; a bookmark this view has never seen is
+                // inserted by whichever pass returns it, which for a smart list is usually one
+                // of the passes above. Without this they stay invisible — and uncounted by the
+                // "N new" pill — until the user navigates away and back.
+                if (effectiveFilterNow() == capturedEffectiveFilter) {
+                    refreshLoadedPagesInPlace(server, capturedEffectiveFilter)
+                }
+
                 // Record completion so the startup auto-sync is throttled next time (#276).
                 bookmarkRepository.markAutoSyncCompleted(server.id)
             } catch (e: kotlinx.coroutines.CancellationException) {

@@ -281,6 +281,34 @@ class RefreshAfterSyncTest {
         assertEquals(emptyList(), window(model), "bookmarks after refresh")
     }
 
+    @Test
+    fun `bookmarks the sync adds to the current list appear without leaving it`() = runTest(testDispatcher) {
+        // The home list's own pass brings in bookmark 4...
+        coEvery { bookmarkRepository.syncBookmarksForList(any(), "list-a") } answers {
+            allBookmarks = allBookmarks + makeBookmark(4L, listIds = "list-a")
+            1
+        }
+        // ...and a later pass over the other lists brings in bookmark 5, which the smart list
+        // also matches. Both must land in the view while the user is still looking at it.
+        coEvery { bookmarkRepository.syncBookmarksForList(any(), "list-a-1") } answers {
+            allBookmarks = allBookmarks + makeBookmark(5L, listIds = "list-a")
+            1
+        }
+
+        val model = createMainScreenModel()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(5L, 4L, 3L, 2L, 1L),
+            awaitWindow(model) { window -> window.any { it.remoteId == 5L } },
+            "bookmarks synced into the current list must appear without navigating away"
+        )
+        assertTrue(
+            model.newBookmarksAbove.value >= 1,
+            "the sync's new bookmarks must be counted for the \"N new\" pill"
+        )
+    }
+
     /** The loaded window, read straight off the model — no collector needed. */
     private fun window(model: MainScreenModel): List<Long> =
         model._accumulatedBookmarks.value.map { it.remoteId }
