@@ -54,8 +54,9 @@ class DefaultFilterResolverTest {
 
     @Test
     fun buildFilter_specificList_withId_returnsListFilter() {
+        // Same filter tapping the list in the drawer produces, so startup lands on that view.
         assertEquals(
-            FilterConfig(lists = listOf("my-list")),
+            FilterConfig(status = FilterStatus.ALL_INCLUDING_ARCHIVED, lists = listOf("my-list")),
             DefaultFilterResolver.buildFilter(DefaultListType.SPECIFIC_LIST, "my-list")
         )
     }
@@ -147,7 +148,10 @@ class DefaultFilterResolverTest {
     @Test
     fun resolve_specificList_withId() = runTest {
         val resolver = DefaultFilterResolver(makeRepo(DefaultListType.SPECIFIC_LIST, "list-123"))
-        assertEquals(FilterConfig(lists = listOf("list-123")), resolver.resolve())
+        assertEquals(
+            FilterConfig(status = FilterStatus.ALL_INCLUDING_ARCHIVED, lists = listOf("list-123")),
+            resolver.resolve()
+        )
     }
 
     @Test
@@ -179,7 +183,10 @@ class DefaultFilterResolverTest {
         val resolver = DefaultFilterResolver(
             makeRepo(DefaultListType.SPECIFIC_LIST, "list-99", lastStatus = "ALL", lastListId = "list-42")
         )
-        assertEquals(FilterConfig(lists = listOf("list-99")), resolver.resolve())
+        assertEquals(
+            FilterConfig(status = FilterStatus.ALL_INCLUDING_ARCHIVED, lists = listOf("list-99")),
+            resolver.resolve()
+        )
     }
 
     @Test

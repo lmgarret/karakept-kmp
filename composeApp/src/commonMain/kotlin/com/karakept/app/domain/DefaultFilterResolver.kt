@@ -46,8 +46,11 @@ class DefaultFilterResolver(private val settingsRepository: SettingsRepository) 
             DefaultListType.ALL_BOOKMARKS -> FilterConfig()
             DefaultListType.FAVORITES     -> FilterConfig(status = FilterStatus.FAVORITES)
             DefaultListType.ARCHIVED      -> FilterConfig(status = FilterStatus.ARCHIVED)
+            // ALL_INCLUDING_ARCHIVED is what tapping the list in the drawer produces, so opening
+            // on it at startup lands on the same view rather than a near-identical one that
+            // hides the list's archived bookmarks and reloads the moment the list is tapped.
             DefaultListType.SPECIFIC_LIST -> if (listId != null) {
-                FilterConfig(lists = listOf(listId))
+                FilterConfig(status = FilterStatus.ALL_INCLUDING_ARCHIVED, lists = listOf(listId))
             } else {
                 FilterConfig()
             }

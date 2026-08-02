@@ -532,6 +532,10 @@ class MainScreenModel(
         viewModelScope.launch {
             _initState.value = InitState.ResolvingFilter
             val defaultFilter = defaultFilterResolver.resolve()
+            AppLogger.d(
+                "MainScreenModel",
+                "Startup filter: status=${defaultFilter.status} lists=${defaultFilter.lists}"
+            )
             _currentFilter.value = defaultFilter
             if (defaultFilter.lists.size == 1) {
                 _currentListContext.value = defaultFilter.lists.first()
@@ -555,6 +559,10 @@ class MainScreenModel(
 
                     // Switch to the new view immediately with local data so navigation feels
                     // instant, instead of blocking on a network sync of the target list.
+                    AppLogger.d(
+                        "MainScreenModel",
+                        "Loading view: status=${filter.status} lists=${filter.lists} tags=${filter.tags}"
+                    )
                     resetPaginationAndLoad(currentServer, filter)
                     refreshStaleSmartList(currentServer, filter)
                 }
@@ -829,6 +837,7 @@ class MainScreenModel(
     // Filter management
 
     fun applyFilter(filter: FilterConfig) {
+        AppLogger.d("MainScreenModel", "applyFilter: status=${filter.status} lists=${filter.lists} tags=${filter.tags}")
         _currentFilter.value = filter
         _currentListContext.value = if (filter.lists.size == 1) filter.lists.first() else null
         if (filter.lists.size == 1) {
@@ -851,6 +860,7 @@ class MainScreenModel(
     }
 
     fun clearFilter() {
+        AppLogger.d("MainScreenModel", "clearFilter")
         _currentFilter.value = FilterConfig()
         _currentListContext.value = null
         _tagFilterSourceBookmarkId.value = null
