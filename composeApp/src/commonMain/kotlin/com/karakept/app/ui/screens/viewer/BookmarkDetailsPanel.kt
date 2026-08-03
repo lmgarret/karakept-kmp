@@ -276,8 +276,8 @@ internal fun BookmarkDetailsPanel(
                                 )
                             }
 
-                            // PDFs can't be rendered in-app, so the row is informational plus
-                            // a way to reclaim the space on the server.
+                            // PDFs can't be rendered in-app, so the row reports what the server
+                            // holds and offers only the server-side delete.
                             assets.find { it.assetType == "pdf" }?.let { pdfAsset ->
                                 ContentSourceRow(
                                     icon = Icons.Default.PictureAsPdf,
@@ -285,6 +285,8 @@ internal fun BookmarkDetailsPanel(
                                     statusText = "On server",
                                     isActive = false,
                                     canActivate = false,
+                                    asset = pdfAsset,
+                                    supportsLocalCopy = false,
                                     canDeleteOnServer = serverActionsEnabled,
                                     onDeleteOnServer = { assetPendingServerDelete = pdfAsset }
                                 )
@@ -475,44 +477,92 @@ private fun ServerActionRow(
     }
 }
 
-/** Overflow menu holding the irreversible server-side delete, kept off a one-tap icon. */
+/**
+ * Every action for one asset, behind a single overflow button.
+ *
+ * The row previously carried up to three bare 15dp glyphs side by side — below the MD3
+ * touch-target minimum and hard to tell apart. One menu keeps the row compact and gives
+ * each action a text label.
+ *
+ * [hasLocalCopy] selects between the download and the re-download/delete pair;
+ * [supportsLocalCopy] is false for assets the app can't open (PDFs), which get the
+ * server-side delete only.
+ */
 @Composable
-private fun ServerAssetOverflowMenu(
-    enabled: Boolean,
+private fun AssetOverflowMenu(
+    hasLocalCopy: Boolean,
+    supportsLocalCopy: Boolean,
+    canDeleteOnServer: Boolean,
+    onDownload: () -> Unit,
+    onRefresh: () -> Unit,
+    onDeleteLocal: () -> Unit,
     onDeleteOnServer: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(
             onClick = { expanded = true },
-            enabled = enabled,
-            modifier = Modifier.size(28.dp)
+            modifier = Modifier.size(36.dp)
         ) {
             Icon(
                 Icons.Default.MoreVert,
-                contentDescription = "More asset actions",
-                modifier = Modifier.size(15.dp),
+                contentDescription = "Asset actions",
+                modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Delete from server") },
-                colors = MenuDefaults.itemColors(textColor = MaterialTheme.colorScheme.error),
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.DeleteForever,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                },
-                onClick = {
+            if (supportsLocalCopy) {
+                if (hasLocalCopy) {
+                    AssetMenuItem(Icons.Default.Refresh, "Re-download") {
+                        expanded = false
+                        onRefresh()
+                    }
+                    AssetMenuItem(Icons.Default.Delete, "Delete local copy") {
+                        expanded = false
+                        onDeleteLocal()
+                    }
+                } else {
+                    AssetMenuItem(Icons.Default.Download, "Download a copy") {
+                        expanded = false
+                        onDownload()
+                    }
+                }
+            }
+            if (canDeleteOnServer) {
+                if (supportsLocalCopy) HorizontalDivider()
+                AssetMenuItem(
+                    icon = Icons.Default.DeleteForever,
+                    label = "Delete from server",
+                    tint = MaterialTheme.colorScheme.error
+                ) {
                     expanded = false
                     onDeleteOnServer()
                 }
-            )
+            }
         }
     }
+}
+
+@Composable
+private fun AssetMenuItem(
+    icon: ImageVector,
+    label: String,
+    tint: Color? = null,
+    onClick: () -> Unit
+) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        colors = tint?.let { MenuDefaults.itemColors(textColor = it) } ?: MenuDefaults.itemColors(),
+        leadingIcon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint ?: MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        onClick = onClick
+    )
 }
 
 @Composable
@@ -523,6 +573,8 @@ private fun ContentSourceRow(
     isActive: Boolean,
     canActivate: Boolean,
     asset: AssetEntity? = null,
+    // False for assets nothing in the app can open (PDFs) — no point offering a local copy.
+    supportsLocalCopy: Boolean = true,
     canDeleteOnServer: Boolean = false,
     onSelect: () -> Unit = {},
     onDownload: () -> Unit = {},
@@ -587,31 +639,16 @@ private fun ContentSourceRow(
                     )
                 }
             }
-            // File management actions
+            // All file management lives in one menu so the row stays compact.
             if (asset != null) {
-                if (asset.localPath != null) {
-                    IconButton(onClick = onRefresh, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Refresh, "Re-download",
-                            modifier = Modifier.size(15.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Delete, "Delete local copy",
-                            modifier = Modifier.size(15.dp),
-                            tint = MaterialTheme.colorScheme.error)
-                    }
-                } else {
-                    IconButton(onClick = onDownload, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Download, "Download",
-                            modifier = Modifier.size(15.dp),
-                            tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
-            if (onDeleteOnServer != null) {
-                ServerAssetOverflowMenu(
-                    enabled = canDeleteOnServer,
-                    onDeleteOnServer = onDeleteOnServer
+                AssetOverflowMenu(
+                    hasLocalCopy = asset.localPath != null,
+                    supportsLocalCopy = supportsLocalCopy,
+                    canDeleteOnServer = canDeleteOnServer && onDeleteOnServer != null,
+                    onDownload = onDownload,
+                    onRefresh = onRefresh,
+                    onDeleteLocal = onDelete,
+                    onDeleteOnServer = { onDeleteOnServer?.invoke() }
                 )
             }
             if (isActive) {
@@ -661,30 +698,15 @@ private fun MediaAssetRow(
                     else MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.width(4.dp))
-        if (isCached) {
-            IconButton(onClick = onRefresh, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Refresh, null,
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Delete, null,
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.error)
-            }
-        } else {
-            IconButton(onClick = onDownload, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Download, null,
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.primary)
-            }
-        }
-        if (onDeleteOnServer != null) {
-            ServerAssetOverflowMenu(
-                enabled = canDeleteOnServer,
-                onDeleteOnServer = onDeleteOnServer
-            )
-        }
+        AssetOverflowMenu(
+            hasLocalCopy = isCached,
+            supportsLocalCopy = true,
+            canDeleteOnServer = canDeleteOnServer && onDeleteOnServer != null,
+            onDownload = onDownload,
+            onRefresh = onRefresh,
+            onDeleteLocal = onDelete,
+            onDeleteOnServer = { onDeleteOnServer?.invoke() }
+        )
     }
 }
 
