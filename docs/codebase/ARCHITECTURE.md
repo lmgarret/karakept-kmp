@@ -137,6 +137,23 @@ the DB. Instead `BookmarkSyncPipeline` commits each page as it arrives:
 - Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/model/FilterConfig.kt`
 - Used by: MainScreenModel and BookmarkFilterUtils
 
+**The effective filter identifies a view.** `MainScreenModel.currentFilter` is what the user
+picked; `effectiveFilter` is that plus the child lists it expands into for lists configured
+with `includeChildListBookmarks` (`ListHierarchyUtils.expandFilterLists`). The expansion
+depends on the drawer's lists, which load asynchronously, so it can change after a view is on
+screen. Consequences worth knowing before touching this code:
+
+- `LoadedView` records the **effective** filter, and `currentView()` compares it, so a change
+  to the expansion invalidates in-flight loads exactly like switching lists does.
+- Every load and refresh — `resetPaginationAndLoad`, `refreshLoadedPagesInPlace`,
+  `loadNextPage` — must be passed the effective filter (`effectiveFilterNow()`, or the value
+  captured for the window). Passing `currentFilter` names a different view, and the call is
+  rejected by the guards instead of doing anything.
+- A single observer over `(selectedServer, effectiveFilter)` is the only reload path, and the
+  initial load is its first emission, so startup cannot drift from later changes.
+- `loadBookmarksPage` therefore does no settings lookups: a page depends only on the filter it
+  is given and the page index. That is what lets a window be re-read safely later.
+
 **ScreenModel (`androidx.lifecycle.ViewModel` subclass):**
 - Purpose: Lifecycle-scoped state holder for a screen, survives configuration changes; scoped per Nav3 back-stack entry via `rememberViewModelStoreNavEntryDecorator`
 - Pattern: Each screen has a corresponding ScreenModel bound with `viewModel { }` in Koin (LoginScreenModel, MainScreenModel, BookmarkViewerScreenModel, etc.), obtained with `koinViewModel`

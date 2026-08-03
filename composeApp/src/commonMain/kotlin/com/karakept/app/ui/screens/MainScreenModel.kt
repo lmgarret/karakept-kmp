@@ -609,7 +609,9 @@ class MainScreenModel(
                 .collect {
                     val server = _selectedServer.value ?: return@collect
                     if (_initState.value != InitState.Ready) return@collect
-                    val filter = _currentFilter.value
+                    // The window is loaded with the effective filter, so a refresh must ask for
+                    // it too — the raw filter is a different view and would be rejected.
+                    val filter = effectiveFilterNow()
                     try {
                         refreshLoadedPagesInPlace(server, filter)
                     } catch (e: kotlinx.coroutines.CancellationException) {
