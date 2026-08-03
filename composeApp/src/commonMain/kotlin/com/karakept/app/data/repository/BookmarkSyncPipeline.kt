@@ -87,7 +87,13 @@ internal class BookmarkSyncPipeline(
      * (highlights, content download, reading progress) run. Lets the caller drop the
      * "syncing" indicator instead of holding it for work that doesn't affect the list.
      */
-    private val onForegroundComplete: (() -> Unit)? = null
+    private val onForegroundComplete: (suspend () -> Unit)? = null,
+    /**
+     * Gate for the enrichment phases. Returning false skips them — used to keep two
+     * overlapping syncs for the same key from downloading the same content twice, now
+     * that the key itself is released as soon as the foreground stage finishes.
+     */
+    private val shouldRunEnrichment: (suspend () -> Boolean)? = null
 ) {
     /** Bookmarks inserted during the last execute() call, available after completion. */
     var newlyInsertedBookmarks: List<BookmarkEntity> = emptyList()
@@ -172,6 +178,11 @@ internal class BookmarkSyncPipeline(
         }
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
         onForegroundComplete?.invoke()
+
+        if (shouldRunEnrichment?.invoke() == false) {
+            AppLogger.d("BookmarkRepo", "Enrichment already running for this key, skipping")
+            return newCount
+        }
 
         // Phase 2.5: Sync Highlights (skip for ForList — membership reconciliation only)
         if (config !is SyncConfiguration.ForList) {

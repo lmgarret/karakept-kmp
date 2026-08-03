@@ -70,10 +70,13 @@ the DB. Instead `BookmarkSyncPipeline` commits each page as it arrives:
   and `MainScreenModel` calls `refreshLoadedPagesInPlace` so the list fills in progressively.
 - Deletion reconciliation runs **only after the last page**, against the union of every
   page's ids. A fetch that fails part-way commits what it got and deletes nothing.
-- The *foreground* stage ends once those rows have landed; `onForegroundComplete` clears
-  the per-key `ListSyncStatus`, so the progress bar and pull-to-refresh spinner stop there.
-  *Enrichment* — highlights, content download, reading progress — runs afterwards under the
-  same held SyncKey (so it is still deduplicated) but without signalling "busy".
+- The *foreground* stage ends once those rows have landed; `onForegroundComplete` clears the
+  per-key `ListSyncStatus` **and releases the SyncKey**, so the progress bar and
+  pull-to-refresh spinner stop there and a new sync for the same key can start.
+- *Enrichment* — highlights, content download, reading progress — runs afterwards. It is
+  deduplicated by a **separate** `enrichmentKeys` set via the `shouldRunEnrichment` gate:
+  holding the sync key itself through enrichment meant a pull-to-refresh during a long
+  content download hit the dedup check and silently did nothing.
 
 **Bookmark Action Flow (with Undo):**
 

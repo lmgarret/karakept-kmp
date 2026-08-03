@@ -910,6 +910,66 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         coVerify { bookmarkDao.updateBookmarkMetadata(localId = 77L, listIds = "", title = any(), url = any(), description = any(), imageUrl = any(), bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(), modifiedAt = any()) }
     }
 
+    @Test
+    fun fullSync_skipsEnrichmentWhenGateDeclines() = runTest(testDispatcher) {
+        // The sync key is released once the foreground stage finishes, so a second sync can
+        // start while the first is still enriching. The gate is what stops the two of them
+        // downloading the same content twice.
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1")), nextCursor = null)
+
+        var foregroundCompleted = false
+        BookmarkSyncPipeline(
+            config = SyncConfiguration.Full(testServer),
+            bookmarkDao = bookmarkDao,
+            assetDao = assetDao,
+            remoteDataSource = remoteDataSource,
+            bookmarkActionsRepository = bookmarkActionsRepository,
+            settingsRepository = settingsRepository,
+            highlightRepository = highlightRepository,
+            imageCacheManager = imageCacheManager,
+            listDao = listDao,
+            syncProgress = syncProgress,
+            fetchRemoteContent = fetchRemoteContent,
+            cacheHeroAssetsForBookmark = cacheHeroAssetsForBookmark,
+            onForegroundComplete = { foregroundCompleted = true },
+            shouldRunEnrichment = { false }
+        ).execute()
+
+        // The visible rows still landed — only the enrichment tail was skipped.
+        assertTrue(foregroundCompleted)
+        coVerify { bookmarkDao.insertBookmarks(any()) }
+        coVerify(exactly = 0) { highlightRepository.syncHighlights(any()) }
+        coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any()) }
+    }
+
+    @Test
+    fun fullSync_runsEnrichmentWhenGateAllows() = runTest(testDispatcher) {
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1")), nextCursor = null)
+
+        BookmarkSyncPipeline(
+            config = SyncConfiguration.Full(testServer),
+            bookmarkDao = bookmarkDao,
+            assetDao = assetDao,
+            remoteDataSource = remoteDataSource,
+            bookmarkActionsRepository = bookmarkActionsRepository,
+            settingsRepository = settingsRepository,
+            highlightRepository = highlightRepository,
+            imageCacheManager = imageCacheManager,
+            listDao = listDao,
+            syncProgress = syncProgress,
+            fetchRemoteContent = fetchRemoteContent,
+            cacheHeroAssetsForBookmark = cacheHeroAssetsForBookmark,
+            shouldRunEnrichment = { true }
+        ).execute()
+
+        coVerify { highlightRepository.syncHighlights(any()) }
+    }
+
     // ──────────────────────────────────────────────────────────
     // Additional coverage
     // ──────────────────────────────────────────────────────────

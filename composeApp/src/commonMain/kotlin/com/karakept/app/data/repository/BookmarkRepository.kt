@@ -80,6 +80,20 @@ class BookmarkRepository(
 
     private suspend fun releaseKey(key: SyncKey) = keysMutex.withLock { activeKeys.remove(key) }
 
+    // Enrichment (highlights, content download, reading progress) outlives the foreground
+    // stage and is deduplicated separately, so releasing the sync key early doesn't let two
+    // syncs download the same content at once.
+    private val enrichmentKeys = mutableSetOf<SyncKey>()
+
+    private suspend fun tryAcquireEnrichmentKey(key: SyncKey): Boolean = keysMutex.withLock {
+        if (key in enrichmentKeys) return@withLock false
+        enrichmentKeys.add(key)
+        true
+    }
+
+    private suspend fun releaseEnrichmentKey(key: SyncKey) =
+        keysMutex.withLock { enrichmentKeys.remove(key) }
+
     // Kept for BackgroundSyncOrchestrator backward compatibility.
     private val _syncProgress = MutableStateFlow<com.karakept.app.data.model.SyncProgress>(com.karakept.app.data.model.SyncProgress.Idle)
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> = _syncProgress.asStateFlow()
@@ -588,6 +602,10 @@ class BookmarkRepository(
         }
 
         setKeyStatus(key, ListSyncStatus.FetchingMetadata())
+        // The key is handed off from the foreground stage to enrichment mid-run, so the
+        // finally block must not release a key a *newer* sync has since acquired.
+        var foregroundKeyReleased = false
+        var holdsEnrichmentKey = false
         try {
             val pipeline = BookmarkSyncPipeline(
                 config = config,
@@ -604,9 +622,17 @@ class BookmarkRepository(
                 cacheHeroAssetsForBookmark = ::cacheHeroAssetsForBookmark,
                 onProgress = { status -> setKeyStatus(key, status) },
                 onPageCommitted = { _pageCommitted.tryEmit(key) },
-                // Drop the busy indicator once the visible rows have landed. The key stays
-                // held until execute() returns, so enrichment is still deduplicated.
-                onForegroundComplete = { setKeyStatus(key, ListSyncStatus.Idle) }
+                // Drop the busy indicator AND release the key once the visible rows have
+                // landed. Holding it through enrichment made a pull-to-refresh during a long
+                // content download hit the dedup check and silently do nothing.
+                onForegroundComplete = {
+                    setKeyStatus(key, ListSyncStatus.Idle)
+                    releaseKey(key)
+                    foregroundKeyReleased = true
+                },
+                shouldRunEnrichment = {
+                    tryAcquireEnrichmentKey(key).also { holdsEnrichmentKey = it }
+                }
             )
             val result = pipeline.execute()
             _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks
@@ -624,7 +650,8 @@ class BookmarkRepository(
             _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
             throw e
         } finally {
-            releaseKey(key)
+            if (!foregroundKeyReleased) releaseKey(key)
+            if (holdsEnrichmentKey) releaseEnrichmentKey(key)
             setKeyStatus(key, ListSyncStatus.Idle)
             if (_syncProgress.value !is com.karakept.app.data.model.SyncProgress.Error) {
                 _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
