@@ -70,7 +70,6 @@ import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkContextMenu
 import com.karakept.app.ui.components.BookmarkListLayout
-import com.karakept.app.ui.components.BookmarkListSkeleton
 import com.karakept.app.ui.components.BookmarkPlaceholderItem
 import com.karakept.app.ui.components.QuickActionBookmarkItem
 import com.karakept.app.ui.components.ScrollCursorIndicator
@@ -591,18 +590,11 @@ internal fun BookmarkListContent(
                 }
             }
 
-            // Nothing to show yet. A skeleton while the first page is still resolving, an
-            // explicit empty state once it has resolved to nothing — previously both were
-            // an identical blank area.
-            if (bookmarks.isEmpty()) {
-                if (isLoadingInitialPage) {
-                    item(contentType = "skeleton") {
-                        BookmarkListSkeleton(layoutType = layoutType)
-                    }
-                } else {
-                    item(contentType = "empty") {
-                        EmptyBookmarkList()
-                    }
+            // An explicit empty state, but only once the first page has actually resolved —
+            // otherwise every cold start flashes "nothing here" before the list arrives.
+            if (bookmarks.isEmpty() && !isLoadingInitialPage) {
+                item(contentType = "empty") {
+                    EmptyBookmarkList()
                 }
             }
 

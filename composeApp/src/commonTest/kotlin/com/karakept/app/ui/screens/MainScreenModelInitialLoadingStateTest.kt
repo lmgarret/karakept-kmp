@@ -35,7 +35,8 @@ import kotlin.test.assertTrue
 /**
  * A cold start used to render an empty LazyColumn, which looks exactly like a list that has
  * genuinely resolved to zero bookmarks. [MainScreenModel.isLoadingInitialPage] is what lets
- * the UI tell those apart — skeleton while true, empty state once false.
+ * the UI tell those apart — it holds the empty state back until the first page has actually
+ * resolved, so a cold start doesn't flash "nothing here" before the list arrives.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenModelInitialLoadingStateTest {
@@ -155,7 +156,7 @@ class MainScreenModelInitialLoadingStateTest {
 
             assertFalse(
                 model.isLoadingInitialPage.value,
-                "an empty library must resolve to the empty state, not an endless skeleton"
+                "an empty library must resolve so the empty state can show, not stay loading forever"
             )
         }
 

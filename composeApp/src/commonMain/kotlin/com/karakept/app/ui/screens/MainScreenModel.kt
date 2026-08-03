@@ -462,10 +462,10 @@ class MainScreenModel(
     private val _initState = MutableStateFlow<InitState>(InitState.Idle)
 
     /**
-     * Nothing to render yet, but something is on its way — show a skeleton rather than a
-     * blank list. False once there are items (a view switch keeps the outgoing list on
-     * screen) and false when the view has genuinely resolved to empty, which is what
-     * distinguishes "still loading" from "no bookmarks here".
+     * Nothing to render yet, but something is on its way — so the empty state must stay
+     * hidden. False once there are items (a view switch keeps the outgoing list on screen)
+     * and false when the view has genuinely resolved to empty, which is what distinguishes
+     * "still loading" from "no bookmarks here".
      */
     val isLoadingInitialPage: StateFlow<Boolean> =
         combine(_initState, _isResettingPagination, _accumulatedBookmarks) { init, resetting, items ->

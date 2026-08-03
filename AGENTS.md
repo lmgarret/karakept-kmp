@@ -169,18 +169,13 @@ All hierarchy helpers live in the single `ListHierarchyUtils` object
 
 > **Rule:** Never implement custom tag-selection dialogs or text fields.
 
-### Loading and empty states
+### Empty states
 
-**`BookmarkListSkeleton`** (`ui/components/BookmarkListSkeleton.kt`)
-- Shimmering placeholder rows matching the active `LayoutType`, shown while the first page
-  is still resolving. Driven by `MainScreenModel.isLoadingInitialPage`.
-- **Use whenever a bookmark list has nothing to show yet.** A blank list is
-  indistinguishable from an empty one — always render a skeleton or an explicit empty state,
-  never nothing.
-
-**`rememberBookmarkShimmerColor()`** (`ui/components/BookmarkPlaceholderItem.kt`)
-- The shared pulsing tint. Reuse it for any new bookmark-shaped placeholder so every
-  skeleton in the app pulses identically.
+- A list with nothing in it needs an **explicit empty state**, never a blank area — the two
+  are indistinguishable to the user.
+- Gate it on `MainScreenModel.isLoadingInitialPage`, which is false only once the first page
+  has actually resolved. Rendering the empty state unconditionally flashes "nothing here" on
+  every cold start before the list arrives.
 
 ### Menus and bottom sheets
 
