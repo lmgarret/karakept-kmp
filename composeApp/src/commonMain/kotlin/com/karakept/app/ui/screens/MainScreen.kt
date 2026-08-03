@@ -75,6 +75,7 @@ object MainScreen : NavKey {
         val isSyncing by screenModel.isSyncing.collectAsState()
         val syncProgress by screenModel.syncProgress.collectAsState()
         val isLoadingMore by screenModel.isLoadingMore.collectAsState()
+        val isLoadingInitialPage by screenModel.isLoadingInitialPage.collectAsState()
         val hasMoreItems by screenModel.hasMoreItems.collectAsState()
         val newBookmarksAbove by screenModel.newBookmarksAbove.collectAsState()
         val currentFilter by screenModel.currentFilter.collectAsState()
@@ -330,7 +331,8 @@ object MainScreen : NavKey {
             { isExpanded, activeBmId, onBookmarkClick, onMenuClick ->
                 MainScreenScaffoldContent(
                     isExpandedLayout = isExpanded, bookmarks = bookmarks, isSyncing = isSyncing, syncProgress = syncProgress,
-                    isLoadingMore = isLoadingMore, hasMoreItems = hasMoreItems,
+                    isLoadingMore = isLoadingMore, isLoadingInitialPage = isLoadingInitialPage,
+                    hasMoreItems = hasMoreItems,
                     showScrollCursor = showScrollCursor, sortOption = currentFilter.sort,
                     totalBookmarkCount = totalBookmarkCount,
                     displayConfig = displayConfig,

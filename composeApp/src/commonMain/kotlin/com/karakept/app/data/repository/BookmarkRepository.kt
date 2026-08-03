@@ -94,6 +94,15 @@ class BookmarkRepository(
     private val _backgroundSyncCompleted = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val backgroundSyncCompleted: kotlinx.coroutines.flow.SharedFlow<Unit> = _backgroundSyncCompleted
 
+    // Emits the SyncKey of a pipeline that just committed a page of metadata. Lets a screen
+    // refresh in place while a long sync is still running, instead of only at the end.
+    // Conflates rather than buffers: a screen only needs to know "there is newer data".
+    private val _pageCommitted = kotlinx.coroutines.flow.MutableSharedFlow<SyncKey>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
+    val pageCommitted: kotlinx.coroutines.flow.SharedFlow<SyncKey> = _pageCommitted
+
     /** Bookmarks inserted during the last sync, used for per-list notification counts. */
     private var _lastSyncNewBookmarks: List<BookmarkEntity> = emptyList()
 
@@ -591,7 +600,11 @@ class BookmarkRepository(
                 syncProgress = _syncProgress,
                 fetchRemoteContent = ::fetchRemoteContent,
                 cacheHeroAssetsForBookmark = ::cacheHeroAssetsForBookmark,
-                onProgress = { status -> setKeyStatus(key, status) }
+                onProgress = { status -> setKeyStatus(key, status) },
+                onPageCommitted = { _pageCommitted.tryEmit(key) },
+                // Drop the busy indicator once the visible rows have landed. The key stays
+                // held until execute() returns, so enrichment is still deduplicated.
+                onForegroundComplete = { setKeyStatus(key, ListSyncStatus.Idle) }
             )
             val result = pipeline.execute()
             _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks

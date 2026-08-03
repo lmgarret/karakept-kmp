@@ -30,7 +30,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -124,7 +126,19 @@ class MainScreenModel(
     // Pagination state
     internal val pageSize = 20
     internal val _isLoadingMore = MutableStateFlow(false)
-    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
+
+    // resetPaginationAndLoad reuses _isLoadingMore to block loadNextPage while it walks to
+    // page 0. That is a mutex, not a UI signal — this flag separates the two so a view
+    // switch stops rendering the bottom "loading more" spinner.
+    internal val _isResettingPagination = MutableStateFlow(false)
+
+    /**
+     * Bottom-of-list spinner: genuine pagination only, never a view switch.
+     * Shared eagerly — this was a plain StateFlow, and callers still read `.value` directly.
+     */
+    val isLoadingMore: StateFlow<Boolean> =
+        combine(_isLoadingMore, _isResettingPagination) { loading, resetting -> loading && !resetting }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     internal val _hasMoreItems = MutableStateFlow(true)
     val hasMoreItems: StateFlow<Boolean> = _hasMoreItems
@@ -447,6 +461,17 @@ class MainScreenModel(
 
     private val _initState = MutableStateFlow<InitState>(InitState.Idle)
 
+    /**
+     * Nothing to render yet, but something is on its way — show a skeleton rather than a
+     * blank list. False once there are items (a view switch keeps the outgoing list on
+     * screen) and false when the view has genuinely resolved to empty, which is what
+     * distinguishes "still loading" from "no bookmarks here".
+     */
+    val isLoadingInitialPage: StateFlow<Boolean> =
+        combine(_initState, _isResettingPagination, _accumulatedBookmarks) { init, resetting, items ->
+            items.isEmpty() && (init != InitState.Ready || resetting)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     init {
         // Log init state transitions for auditability.
         viewModelScope.launch {
@@ -556,6 +581,27 @@ class MainScreenModel(
                     }
                 }
             }
+        }
+
+        // A long sync commits metadata page by page. Refresh in place as pages land, so a
+        // large library fills in progressively instead of appearing all at once at the end.
+        // Only for the key currently on screen — other lists syncing must not touch it.
+        viewModelScope.launch {
+            bookmarkRepository.pageCommitted
+                .filter { key -> key == resolveCurrentKey(_currentListContext.value, _currentFilter.value) }
+                .conflate()
+                .collect {
+                    val server = _selectedServer.value ?: return@collect
+                    if (_initState.value != InitState.Ready) return@collect
+                    val filter = _currentFilter.value
+                    try {
+                        refreshLoadedPagesInPlace(server, filter)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        AppLogger.w("MainScreenModel", "Per-page refresh failed: ${e.message}")
+                    }
+                }
         }
 
         // Surface non-fatal sync warnings (swallowed content/highlight failures) once per
@@ -717,15 +763,24 @@ class MainScreenModel(
         server: com.karakept.app.data.model.Server,
         skipKey: SyncKey
     ) {
+        // Bounded, like BookmarkRepository.syncAllWithLists. Unbounded fan-out here put one
+        // paginated fetch per list on the wire at once, starving the list the user is
+        // actually looking at (and its content downloads) of connections.
+        val semaphore = kotlinx.coroutines.sync.Semaphore(3)
         coroutineScope {
             listRepository.lists.value.forEach { list ->
                 val key = list.id ?: return@forEach
                 if (key == skipKey) return@forEach
                 launch {
+                    semaphore.acquire()
                     try {
                         bookmarkRepository.syncBookmarksForList(server, key)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         AppLogger.w("MainScreenModel", "Other-list sync failed for list $key: ${e.message}")
+                    } finally {
+                        semaphore.release()
                     }
                 }
             }

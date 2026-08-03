@@ -233,8 +233,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         val pipeline = createPipeline(SyncConfiguration.Full(testServer))
         pipeline.execute()
 
-        // Full sync should delete removed bookmarks
-        coVerify { bookmarkDao.deleteBookmark(existingEntity) }
+        // Full sync should delete removed bookmarks, in one batched call
+        coVerify { bookmarkDao.deleteBookmarks(listOf(existingEntity)) }
     }
 
     @Test
@@ -258,7 +258,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         pipeline.execute()
 
         coVerify { bookmarkDao.insertBookmarks(any()) }
-        coVerify { bookmarkDao.deleteBookmark(existingEntity) }
+        coVerify { bookmarkDao.deleteBookmarks(listOf(existingEntity)) }
     }
 
     @Test
@@ -735,7 +735,157 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         pipeline.execute()
 
         coVerify(exactly = 2) { remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any()) }
-        coVerify { bookmarkDao.insertBookmarks(match { it.size == 2 }) }
+        // Pages are committed as they arrive rather than accumulated, so each one is its
+        // own insert — that is what lets the first page reach the UI after one round trip.
+        coVerify(exactly = 1) { bookmarkDao.insertBookmarks(match { it.singleOrNull()?.originalRemoteId == "bk-1" }) }
+        coVerify(exactly = 1) { bookmarkDao.insertBookmarks(match { it.singleOrNull()?.originalRemoteId == "bk-2" }) }
+    }
+
+    @Test
+    fun fullSync_commitsEachPageBeforeTheNextIsFetched() = runTest(testDispatcher) {
+        // The point of streaming: rows from page 1 must be in the DB before page 2 is even
+        // requested, so a large library fills in progressively instead of all at the end.
+        val events = mutableListOf<String>()
+
+        coEvery {
+            remoteDataSource.fetchBookmarks(testServer, null, any(), false, null, null)
+        } coAnswers {
+            events += "fetch-page-1"
+            PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1")), nextCursor = "page2")
+        }
+        coEvery {
+            remoteDataSource.fetchBookmarks(testServer, "page2", any(), false, null, null)
+        } coAnswers {
+            events += "fetch-page-2"
+            PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-2")), nextCursor = null)
+        }
+        coEvery { bookmarkDao.insertBookmarks(any()) } coAnswers {
+            val batch = firstArg<List<BookmarkEntity>>()
+            events += "insert-${batch.single().originalRemoteId}"
+            listOf(1L)
+        }
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        assertEquals(
+            listOf("fetch-page-1", "insert-bk-1", "fetch-page-2", "insert-bk-2"),
+            events
+        )
+    }
+
+    @Test
+    fun fullSync_pageCommittedFiresPerPage() = runTest(testDispatcher) {
+        var pagesCommitted = 0
+        coEvery {
+            remoteDataSource.fetchBookmarks(testServer, null, any(), false, null, null)
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1")), nextCursor = "page2")
+        coEvery {
+            remoteDataSource.fetchBookmarks(testServer, "page2", any(), false, null, null)
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-2")), nextCursor = null)
+
+        BookmarkSyncPipeline(
+            config = SyncConfiguration.Full(testServer),
+            bookmarkDao = bookmarkDao,
+            assetDao = assetDao,
+            remoteDataSource = remoteDataSource,
+            bookmarkActionsRepository = bookmarkActionsRepository,
+            settingsRepository = settingsRepository,
+            highlightRepository = highlightRepository,
+            imageCacheManager = imageCacheManager,
+            listDao = listDao,
+            syncProgress = syncProgress,
+            fetchRemoteContent = fetchRemoteContent,
+            cacheHeroAssetsForBookmark = cacheHeroAssetsForBookmark,
+            onPageCommitted = { pagesCommitted++ }
+        ).execute()
+
+        assertEquals(2, pagesCommitted)
+    }
+
+    @Test
+    fun fullSync_failedMidFetch_keepsCommittedPagesAndDeletesNothing() = runTest(testDispatcher) {
+        // A fetch that dies part-way must not be read as "the server dropped everything we
+        // didn't see" — the pages that did land stay, and no deletion pass runs.
+        val existingEntity = makeBookmarkEntity(
+            localId = 10L,
+            remoteId = "bk-existing".hashCode().toLong(),
+            originalRemoteId = "bk-existing"
+        )
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
+
+        coEvery {
+            remoteDataSource.fetchBookmarks(testServer, null, any(), false, null, null)
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1")), nextCursor = "page2")
+        coEvery {
+            remoteDataSource.fetchBookmarks(testServer, "page2", any(), false, null, null)
+        } throws RuntimeException("connection reset")
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        var thrown: Exception? = null
+        try {
+            pipeline.execute()
+        } catch (e: Exception) {
+            thrown = e
+        }
+
+        assertEquals("connection reset", thrown?.message)
+        // Page 1 was committed before the failure...
+        coVerify { bookmarkDao.insertBookmarks(match { it.singleOrNull()?.originalRemoteId == "bk-1" }) }
+        // ...and nothing was deleted on the strength of a partial view of the server.
+        coVerify(exactly = 0) { bookmarkDao.deleteBookmarks(any()) }
+        coVerify(exactly = 0) { bookmarkDao.deleteBookmark(any()) }
+    }
+
+    @Test
+    fun fullSync_foregroundCompletesBeforeEnrichmentPhases() = runTest(testDispatcher) {
+        // The busy indicator is released once the visible rows land. Highlights and reading
+        // progress must run strictly after that, or the spinner outlives the useful work.
+        val events = mutableListOf<String>()
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+        coEvery { bookmarkDao.getReadingProgressPullCandidates(any(), any()) } coAnswers {
+            events += "reading-progress"
+            emptyList()
+        }
+        coEvery { highlightRepository.syncHighlights(any()) } coAnswers {
+            events += "highlights"
+            true
+        }
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1")), nextCursor = null)
+
+        BookmarkSyncPipeline(
+            config = SyncConfiguration.Full(testServer),
+            bookmarkDao = bookmarkDao,
+            assetDao = assetDao,
+            remoteDataSource = remoteDataSource,
+            bookmarkActionsRepository = bookmarkActionsRepository,
+            settingsRepository = settingsRepository,
+            highlightRepository = highlightRepository,
+            imageCacheManager = imageCacheManager,
+            listDao = listDao,
+            syncProgress = syncProgress,
+            fetchRemoteContent = fetchRemoteContent,
+            cacheHeroAssetsForBookmark = cacheHeroAssetsForBookmark,
+            onForegroundComplete = { events += "foreground-complete" }
+        ).execute()
+
+        assertEquals(listOf("foreground-complete", "highlights", "reading-progress"), events)
+    }
+
+    @Test
+    fun fullSync_readsLocalStateOncePerSyncNotOncePerPage() = runTest(testDispatcher) {
+        // Committing page by page must not turn one table read into one per page.
+        coEvery {
+            remoteDataSource.fetchBookmarks(testServer, null, any(), false, null, null)
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1")), nextCursor = "page2")
+        coEvery {
+            remoteDataSource.fetchBookmarks(testServer, "page2", any(), false, null, null)
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-2")), nextCursor = null)
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        coVerify(exactly = 1) { bookmarkDao.getBookmarksForServerWithContentInfo("server1") }
     }
 
     // ──────────────────────────────────────────────────────────

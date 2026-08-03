@@ -29,8 +29,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.LayoutType
 
+/** Pulsing placeholder tint shared by every bookmark-shaped skeleton. */
 @Composable
-fun BookmarkPlaceholderItem(url: String, layoutType: LayoutType = LayoutType.LIST) {
+internal fun rememberBookmarkShimmerColor(): Color {
     val infiniteTransition = rememberInfiniteTransition(label = "placeholder_shimmer")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.2f,
@@ -41,7 +42,12 @@ fun BookmarkPlaceholderItem(url: String, layoutType: LayoutType = LayoutType.LIS
         ),
         label = "shimmer_alpha"
     )
-    val shimmerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.2f)
+    return MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.2f)
+}
+
+@Composable
+fun BookmarkPlaceholderItem(url: String, layoutType: LayoutType = LayoutType.LIST) {
+    val shimmerColor = rememberBookmarkShimmerColor()
 
     when (layoutType) {
         LayoutType.LIST -> ListPlaceholder(url, shimmerColor)
