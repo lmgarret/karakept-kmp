@@ -60,6 +60,24 @@
 5. Flow<List<BookmarkEntity>> emitted back to UI
 6. ScreenModel collects and updates UI state
 
+**Sync is streamed, and split into two stages.** Cursor pagination is serial, so a large
+library would otherwise cost one round trip per 100 bookmarks before a single row reached
+the DB. Instead `BookmarkSyncPipeline` commits each page as it arrives:
+
+- Local state (`getBookmarksForServerWithContentInfo`) is read **once** per sync and
+  maintained in memory across pages — never re-read per page.
+- Each page is diffed and written immediately; `BookmarkRepository.pageCommitted` emits,
+  and `MainScreenModel` calls `refreshLoadedPagesInPlace` so the list fills in progressively.
+- Deletion reconciliation runs **only after the last page**, against the union of every
+  page's ids. A fetch that fails part-way commits what it got and deletes nothing.
+- The *foreground* stage ends once those rows have landed; `onForegroundComplete` clears the
+  per-key `ListSyncStatus` **and releases the SyncKey**, so the progress bar and
+  pull-to-refresh spinner stop there and a new sync for the same key can start.
+- *Enrichment* — highlights, content download, reading progress — runs afterwards. It is
+  deduplicated by a **separate** `enrichmentKeys` set via the `shouldRunEnrichment` gate:
+  holding the sync key itself through enrichment meant a pull-to-refresh during a long
+  content download hit the dedup check and silently did nothing.
+
 **Bookmark Action Flow (with Undo):**
 
 1. User triggers action in UI (delete, archive, favorite, etc.)

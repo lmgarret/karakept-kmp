@@ -40,15 +40,20 @@ interface BookmarkDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBookmark(bookmark: BookmarkEntity)
 
+    // Returns the generated localIds, in the order of [bookmarks]. Sync relies on this
+    // instead of re-reading the whole table to recover the ids it just inserted.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertBookmarks(bookmarks: List<BookmarkEntity>)
+    suspend fun insertBookmarks(bookmarks: List<BookmarkEntity>): List<Long>
 
     @Update
     suspend fun updateBookmarks(bookmarks: List<BookmarkEntity>)
 
     @Delete
     suspend fun deleteBookmark(bookmark: BookmarkEntity)
-    
+
+    @Delete
+    suspend fun deleteBookmarks(bookmarks: List<BookmarkEntity>)
+
     @Query("DELETE FROM bookmarks WHERE serverId = :serverId")
     suspend fun deleteAllBookmarksForServer(serverId: String)
 

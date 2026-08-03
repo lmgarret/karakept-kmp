@@ -80,6 +80,20 @@ class BookmarkRepository(
 
     private suspend fun releaseKey(key: SyncKey) = keysMutex.withLock { activeKeys.remove(key) }
 
+    // Enrichment (highlights, content download, reading progress) outlives the foreground
+    // stage and is deduplicated separately, so releasing the sync key early doesn't let two
+    // syncs download the same content at once.
+    private val enrichmentKeys = mutableSetOf<SyncKey>()
+
+    private suspend fun tryAcquireEnrichmentKey(key: SyncKey): Boolean = keysMutex.withLock {
+        if (key in enrichmentKeys) return@withLock false
+        enrichmentKeys.add(key)
+        true
+    }
+
+    private suspend fun releaseEnrichmentKey(key: SyncKey) =
+        keysMutex.withLock { enrichmentKeys.remove(key) }
+
     // Kept for BackgroundSyncOrchestrator backward compatibility.
     private val _syncProgress = MutableStateFlow<com.karakept.app.data.model.SyncProgress>(com.karakept.app.data.model.SyncProgress.Idle)
     val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> = _syncProgress.asStateFlow()
@@ -93,6 +107,15 @@ class BookmarkRepository(
     // can refresh its currently-displayed list in place to surface newly synced bookmarks.
     private val _backgroundSyncCompleted = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val backgroundSyncCompleted: kotlinx.coroutines.flow.SharedFlow<Unit> = _backgroundSyncCompleted
+
+    // Emits the SyncKey of a pipeline that just committed a page of metadata. Lets a screen
+    // refresh in place while a long sync is still running, instead of only at the end.
+    // Conflates rather than buffers: a screen only needs to know "there is newer data".
+    private val _pageCommitted = kotlinx.coroutines.flow.MutableSharedFlow<SyncKey>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
+    val pageCommitted: kotlinx.coroutines.flow.SharedFlow<SyncKey> = _pageCommitted
 
     /** Bookmarks inserted during the last sync, used for per-list notification counts. */
     private var _lastSyncNewBookmarks: List<BookmarkEntity> = emptyList()
@@ -572,11 +595,17 @@ class BookmarkRepository(
         }
 
         if (!tryAcquireKey(key)) {
-            AppLogger.d("BookmarkRepo", "Sync for key=$key already in progress, skipping")
+            // A skipped list pass is a silently missed membership reconcile — the caller
+            // gets 0 back and cannot tell it from "nothing to do".
+            AppLogger.d("BookmarkRepo", "SKIPPED sync for key=$key — already in progress")
             return 0
         }
 
         setKeyStatus(key, ListSyncStatus.FetchingMetadata())
+        // The key is handed off from the foreground stage to enrichment mid-run, so the
+        // finally block must not release a key a *newer* sync has since acquired.
+        var foregroundKeyReleased = false
+        var holdsEnrichmentKey = false
         try {
             val pipeline = BookmarkSyncPipeline(
                 config = config,
@@ -591,7 +620,19 @@ class BookmarkRepository(
                 syncProgress = _syncProgress,
                 fetchRemoteContent = ::fetchRemoteContent,
                 cacheHeroAssetsForBookmark = ::cacheHeroAssetsForBookmark,
-                onProgress = { status -> setKeyStatus(key, status) }
+                onProgress = { status -> setKeyStatus(key, status) },
+                onPageCommitted = { _pageCommitted.tryEmit(key) },
+                // Drop the busy indicator AND release the key once the visible rows have
+                // landed. Holding it through enrichment made a pull-to-refresh during a long
+                // content download hit the dedup check and silently do nothing.
+                onForegroundComplete = {
+                    setKeyStatus(key, ListSyncStatus.Idle)
+                    releaseKey(key)
+                    foregroundKeyReleased = true
+                },
+                shouldRunEnrichment = {
+                    tryAcquireEnrichmentKey(key).also { holdsEnrichmentKey = it }
+                }
             )
             val result = pipeline.execute()
             _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks
@@ -609,7 +650,8 @@ class BookmarkRepository(
             _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
             throw e
         } finally {
-            releaseKey(key)
+            if (!foregroundKeyReleased) releaseKey(key)
+            if (holdsEnrichmentKey) releaseEnrichmentKey(key)
             setKeyStatus(key, ListSyncStatus.Idle)
             if (_syncProgress.value !is com.karakept.app.data.model.SyncProgress.Error) {
                 _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle

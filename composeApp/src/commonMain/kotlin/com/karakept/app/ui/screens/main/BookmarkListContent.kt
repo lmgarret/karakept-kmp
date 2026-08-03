@@ -22,6 +22,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -87,6 +89,7 @@ internal fun BookmarkListContent(
     isSyncing: Boolean,
     syncProgress: com.karakept.app.data.model.SyncProgress?,
     isLoadingMore: Boolean,
+    isLoadingInitialPage: Boolean = false,
     hasMoreItems: Boolean,
     showScrollCursor: Boolean = false,
     sortOption: SortOption = SortOption.NEWEST,
@@ -587,6 +590,14 @@ internal fun BookmarkListContent(
                 }
             }
 
+            // An explicit empty state, but only once the first page has actually resolved —
+            // otherwise every cold start flashes "nothing here" before the list arrives.
+            if (bookmarks.isEmpty() && !isLoadingInitialPage) {
+                item(contentType = "empty") {
+                    EmptyBookmarkList()
+                }
+            }
+
             // Loading indicator at bottom
             if (isLoadingMore) {
                 item(contentType = "loading") {
@@ -781,5 +792,34 @@ private fun SyncProgressBar(
             }
             else -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
+    }
+}
+
+@Composable
+private fun EmptyBookmarkList() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.BookmarkBorder,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(48.dp)
+        )
+        Text(
+            text = "Nothing here yet",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Bookmarks you save will show up here.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }

@@ -79,11 +79,34 @@ internal class BookmarkSyncPipeline(
     private val syncProgress: MutableStateFlow<com.karakept.app.data.model.SyncProgress>,
     private val fetchRemoteContent: suspend (Server, String) -> String?,
     private val cacheHeroAssetsForBookmark: suspend (Server, Long, String, String?, String?) -> Unit,
-    private val onProgress: ((ListSyncStatus) -> Unit)? = null
+    private val onProgress: ((ListSyncStatus) -> Unit)? = null,
+    /** Invoked after each page of metadata has been committed to the DB. */
+    private val onPageCommitted: (suspend () -> Unit)? = null,
+    /**
+     * Invoked once the rows the user can see are in the DB, before the enrichment phases
+     * (highlights, content download, reading progress) run. Lets the caller drop the
+     * "syncing" indicator instead of holding it for work that doesn't affect the list.
+     */
+    private val onForegroundComplete: (suspend () -> Unit)? = null,
+    /**
+     * Gate for the enrichment phases. Returning false skips them — used to keep two
+     * overlapping syncs for the same key from downloading the same content twice, now
+     * that the key itself is released as soon as the foreground stage finishes.
+     */
+    private val shouldRunEnrichment: (suspend () -> Boolean)? = null
 ) {
     /** Bookmarks inserted during the last execute() call, available after completion. */
     var newlyInsertedBookmarks: List<BookmarkEntity> = emptyList()
         private set
+
+    // Local state for this server, read once and maintained across pages. Streaming the
+    // fetch would otherwise re-read the whole table for every page. Indexed both ways
+    // because mapping needs originalRemoteId and diffing needs remoteId — rebuilding
+    // either index per page would put back the O(rows) cost this is here to avoid.
+    private var existingByOriginalId: MutableMap<String, BookmarkEntity> = mutableMapOf()
+    private var existingByRemoteId: MutableMap<Long, BookmarkEntity> = mutableMapOf()
+    private var ignoredIds: Set<Long> = emptySet()
+    private var syncStrategy: SyncStrategy = SyncStrategy.NEVER
 
     /** Non-fatal problems accumulated during the last execute() call (Group H). */
     private val _warnings = mutableListOf<com.karakept.app.data.model.SyncWarning>()
@@ -99,8 +122,67 @@ internal class BookmarkSyncPipeline(
         onProgress?.invoke(ListSyncStatus.FetchingMetadata())
         val processedIds = processPendingActions()
 
-        // Phase 2: Fetch metadata
-        val remoteBookmarks = fetchBookmarkMetadata()
+        // Snapshot local state once. Each page is diffed against this map and the map is
+        // updated in place, so streaming doesn't turn one table read into one per page.
+        val localRows = bookmarkDao.getBookmarksForServerWithContentInfo(config.server.id)
+        existingByOriginalId = localRows.associateByTo(mutableMapOf()) { it.originalRemoteId }
+        existingByRemoteId = localRows.associateByTo(mutableMapOf()) { it.remoteId }
+        ignoredIds = processedIds +
+            bookmarkActionsRepository.getPendingActionBookmarkIds(config.server.id).toSet()
+        syncStrategy = settingsRepository.contentSyncStrategy.first()
+
+        // Phases 2 + 4 + 4.6, fused and streamed: each page is committed as it arrives so
+        // the list on screen converges after one round trip instead of after the whole
+        // library has been downloaded.
+        val syncedEntities = mutableListOf<BookmarkEntity>()
+        val inserted = mutableListOf<BookmarkEntity>()
+        val seenRemoteIds = mutableSetOf<String>()
+
+        fetchBookmarkMetadata { page, pageNumber ->
+            page.forEach { dto -> dto.id?.let(seenRemoteIds::add) }
+            syncProgress.value =
+                com.karakept.app.data.model.SyncProgress.FetchingMetadata(pageNumber, seenRemoteIds.size)
+
+            val entities = mapToEntities(page, fetchListMembership(page))
+            val (withLocalIds, pageInserted) = commitPage(entities)
+            syncedEntities += withLocalIds
+            inserted += pageInserted
+
+            insertAssetMetadata(page, withLocalIds)
+            onProgress?.invoke(ListSyncStatus.FetchingMetadata(seenRemoteIds.size))
+            onPageCommitted?.invoke()
+        }
+
+        newlyInsertedBookmarks = inserted
+        val newCount = inserted.size
+        syncProgress.value = com.karakept.app.data.model.SyncProgress.ProcessingMetadata
+
+        // Deletion reconciliation runs only once every page has landed. A fetch that fails
+        // part-way must never be read as "the server dropped everything we didn't see" —
+        // throwing out of the loop above skips this entirely and keeps the committed pages.
+        if (config.shouldDeleteRemoved) {
+            deleteRemoved(seenRemoteIds)
+        }
+
+        // Phase 4.5: Reconcile list membership for ForList syncs
+        if (config is SyncConfiguration.ForList) {
+            reconcileListMembership(seenRemoteIds, config.listId)
+        }
+
+        // Everything the user can see is now in the DB. Release the sync indicator here so
+        // it doesn't stay lit through the enrichment phases below, which can run for
+        // minutes on a large library and change nothing about the rendered list.
+        if (newCount > 0) {
+            syncProgress.value = com.karakept.app.data.model.SyncProgress.SyncComplete(newCount)
+            kotlinx.coroutines.delay(100)  // Give UI time to process
+        }
+        syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+        onForegroundComplete?.invoke()
+
+        if (shouldRunEnrichment?.invoke() == false) {
+            AppLogger.d("BookmarkRepo", "Enrichment already running for this key, skipping")
+            return newCount
+        }
 
         // Phase 2.5: Sync Highlights (skip for ForList — membership reconciliation only)
         if (config !is SyncConfiguration.ForList) {
@@ -109,29 +191,10 @@ internal class BookmarkSyncPipeline(
             }
         }
 
-        // Phase 3: Fetch list membership (conditional)
-        val bookmarkListMap = fetchListMembership(remoteBookmarks)
-
-        // Phase 4: Map DTOs to entities & perform differential sync
-        syncProgress.value = com.karakept.app.data.model.SyncProgress.ProcessingMetadata
-        onProgress?.invoke(ListSyncStatus.FetchingMetadata(remoteBookmarks.size))
-        val entities = mapToEntities(remoteBookmarks, bookmarkListMap)
-        val (entitiesWithLocalIds, newCount) = performDifferentialSync(entities, processedIds)
-
-        // Phase 4.5: Reconcile list membership for ForList syncs
-        if (config is SyncConfiguration.ForList) {
-            reconcileListMembership(remoteBookmarks, config.listId)
-        }
-
-        // Phase 4.6: Insert server-side asset metadata (linkHtmlContent, fullPageArchive,
-        // precrawledArchive) so the viewer knows what exists on the server even before
-        // downloading. Uses IGNORE conflict strategy to preserve existing localPath values.
-        insertAssetMetadata(remoteBookmarks, entitiesWithLocalIds)
-
         // Phase 5: Content sync. ForList syncs also run this phase — syncContent() is gated
         // internally by each list's syncOffline setting, so content is only downloaded for
         // lists explicitly configured for offline reading.
-        syncContent(entitiesWithLocalIds)
+        syncContent(syncedEntities)
 
         // Phase 6: Sync reading progress. Scoped to Full sync only — running it for
         // every ForList pass multiplied the per-bookmark tRPC calls (up to lists×50).
@@ -139,11 +202,6 @@ internal class BookmarkSyncPipeline(
             syncReadingProgress()
         }
 
-        // Emit completion with count before returning to Idle
-        if (newCount > 0) {
-            syncProgress.value = com.karakept.app.data.model.SyncProgress.SyncComplete(newCount)
-            kotlinx.coroutines.delay(100)  // Give UI time to process
-        }
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
 
         return newCount
@@ -162,23 +220,27 @@ internal class BookmarkSyncPipeline(
         }
     }
 
-    // Phase 2: Fetch Bookmark Metadata
-    private suspend fun fetchBookmarkMetadata(): List<com.karakept.api.model.Bookmark> {
-        val allBookmarks = mutableListOf<com.karakept.api.model.Bookmark>()
-        var cursor: String? = null
-        var pageCount = 0
-
-        // Special case for list sync - uses dedicated endpoint
+    // Phase 2: Fetch Bookmark Metadata, one page at a time.
+    // [onPage] is invoked for every page as soon as it arrives, so the caller can commit it
+    // instead of waiting for the last cursor. Cursor pagination is inherently serial, so a
+    // library of N bookmarks otherwise costs N/100 round trips before the first row lands.
+    private suspend fun fetchBookmarkMetadata(
+        onPage: suspend (page: List<com.karakept.api.model.Bookmark>, pageNumber: Int) -> Unit
+    ) {
+        // Special case for list sync - uses dedicated endpoint, which paginates internally
+        // and returns the whole list. A single list is small enough that the extra
+        // complexity of streaming it isn't worth it.
         if (config is SyncConfiguration.ForList) {
             val bookmarks = remoteDataSource.fetchBookmarksForList(config.server, config.listId, includeContent = false)
-            return bookmarks
+            onPage(bookmarks, 1)
+            return
         }
 
         // Standard paginated fetch for Full and Filtered syncs
+        var cursor: String? = null
+        var pageCount = 0
         do {
             pageCount++
-            syncProgress.value = com.karakept.app.data.model.SyncProgress.FetchingMetadata(pageCount, allBookmarks.size)
-
             val response = remoteDataSource.fetchBookmarks(
                 server = config.server,
                 cursor = cursor,
@@ -188,11 +250,9 @@ internal class BookmarkSyncPipeline(
                 favourited = config.apiFilters.favourited
             )
 
-            allBookmarks.addAll(response.bookmarks ?: emptyList())
+            onPage(response.bookmarks ?: emptyList(), pageCount)
             cursor = response.nextCursor
         } while (cursor != null)
-
-        return allBookmarks
     }
 
     // Phase 3: Fetch List Membership.
@@ -222,10 +282,7 @@ internal class BookmarkSyncPipeline(
         dtos: List<com.karakept.api.model.Bookmark>,
         bookmarkListMap: Map<String, List<String>>
     ): List<BookmarkEntity> {
-        // Use special query that includes content existence info (reading time + content flag)
-        val existingBookmarks = bookmarkDao.getBookmarksForServerWithContentInfo(config.server.id)
-            .associateBy { it.originalRemoteId }
-        val syncStrategy = settingsRepository.contentSyncStrategy.first()
+        val existingBookmarks = existingByOriginalId
 
         return dtos.mapNotNull { dto ->
             try {
@@ -350,16 +407,16 @@ internal class BookmarkSyncPipeline(
             current.title == incoming.title
     }
 
-    private suspend fun performDifferentialSync(
-        entities: List<BookmarkEntity>,
-        processedIds: Set<Long>
-    ): Pair<List<BookmarkEntity>, Int> {
-        val existing = bookmarkDao.getBookmarksForServer(config.server.id).first()
-        val pendingIds = bookmarkActionsRepository.getPendingActionBookmarkIds(config.server.id).toSet()
-        val ignoredIds = processedIds + pendingIds
-
-        val existingByRemoteId = existing.associateBy { it.remoteId }
-
+    /**
+     * Diffs one page of freshly fetched entities against the in-memory snapshot of local
+     * state and writes it. Returns the page's entities with real localIds attached, plus
+     * the subset that was newly inserted.
+     *
+     * Deletion is deliberately NOT handled here — see [deleteRemoved].
+     */
+    private suspend fun commitPage(
+        entities: List<BookmarkEntity>
+    ): Pair<List<BookmarkEntity>, List<BookmarkEntity>> {
         // Update existing - need to handle metadata vs full update
         val toUpdate = entities.filter { incoming ->
             val current = existingByRemoteId[incoming.remoteId]
@@ -395,51 +452,54 @@ internal class BookmarkSyncPipeline(
 
         // Insert new
         val toInsert = entities.filter { incoming ->
-            existing.none { e -> e.remoteId == incoming.remoteId }
+            existingByRemoteId[incoming.remoteId] == null
         }
-
-        val newBookmarksCount = toInsert.size
 
         var resultEntities = entities
+        var insertedWithIds = emptyList<BookmarkEntity>()
         if (toInsert.isNotEmpty()) {
-            bookmarkDao.insertBookmarks(toInsert)
+            // @Insert returns the generated rowIds in argument order, which for this table
+            // are the localIds. Recovering them this way avoids re-reading every row for
+            // the server — which, once pages are committed one at a time, would otherwise
+            // cost a full table scan per page.
+            val rowIds = bookmarkDao.insertBookmarks(toInsert)
+            insertedWithIds = toInsert.mapIndexed { index, entity ->
+                val rowId = rowIds.getOrNull(index) ?: -1L
+                if (rowId > 0) entity.copy(localId = rowId) else entity
+            }
 
-            // IMPORTANT: Re-query to get the generated localIds for newly inserted bookmarks
-            // Room doesn't return IDs when inserting a list, so we need to fetch them
-            // This is needed for content sync to work on new bookmarks
-            val afterInsert = bookmarkDao.getBookmarksForServer(config.server.id).first()
-            val insertedRemoteIds = toInsert.map { it.remoteId }.toSet()
-
-            // Update the entities list with correct localIds for inserted bookmarks
+            val insertedByRemoteId = insertedWithIds.associateBy { it.remoteId }
             resultEntities = entities.map { entity ->
-                if (insertedRemoteIds.contains(entity.remoteId)) {
-                    val dbEntity = afterInsert.find { it.remoteId == entity.remoteId }
-                    if (dbEntity != null) {
-                        entity.copy(localId = dbEntity.localId)
-                    } else {
-                        entity
-                    }
-                } else {
-                    entity
-                }
-            }
-
-            // Expose newly inserted bookmarks for per-list notification counts
-            newlyInsertedBookmarks = toInsert
-        }
-
-        // Delete removed (conditional). Runs regardless of inserts — a sync that both
-        // inserts and removes must still reconcile server-side deletions. Bookmarks with
-        // pending local actions are kept so optimistic state isn't wiped before it syncs.
-        if (config.shouldDeleteRemoved) {
-            val incomingIds = entities.map { it.remoteId }.toSet()
-            val toDelete = existing.filter { it.remoteId !in incomingIds && it.remoteId !in ignoredIds }
-            if (toDelete.isNotEmpty()) {
-                toDelete.forEach { bookmarkDao.deleteBookmark(it) }
+                insertedByRemoteId[entity.remoteId] ?: entity
             }
         }
 
-        return Pair(resultEntities, newBookmarksCount)
+        // Fold this page into the snapshot so later pages diff against current state.
+        for (entity in resultEntities) {
+            existingByOriginalId[entity.originalRemoteId] = entity
+            existingByRemoteId[entity.remoteId] = entity
+        }
+
+        return Pair(resultEntities, insertedWithIds)
+    }
+
+    /**
+     * Reconciles server-side deletions once the full fetch has completed.
+     *
+     * Split out of the per-page commit on purpose: with a streamed fetch, "not in this
+     * page" says nothing about whether the server still has a bookmark. Only the union of
+     * every page does. Bookmarks with pending local actions are kept so optimistic state
+     * isn't wiped before it syncs.
+     */
+    private suspend fun deleteRemoved(seenRemoteIds: Set<String>) {
+        val local = bookmarkDao.getBookmarksForServer(config.server.id).first()
+        val toDelete = local.filter {
+            it.originalRemoteId !in seenRemoteIds && it.remoteId !in ignoredIds
+        }
+        if (toDelete.isNotEmpty()) {
+            bookmarkDao.deleteBookmarks(toDelete)
+            AppLogger.d("BookmarkRepo", "Reconciled deletions: removed ${toDelete.size} bookmark(s)")
+        }
     }
 
     // Phase 6: Sync reading progress from server for all synced bookmarks.
@@ -636,10 +696,9 @@ internal class BookmarkSyncPipeline(
      * no longer matches a smart list's query, it must be removed from local membership.
      */
     private suspend fun reconcileListMembership(
-        remoteBookmarks: List<com.karakept.api.model.Bookmark>,
+        serverRemoteIds: Set<String>,
         listId: String
     ) {
-        val serverRemoteIds = remoteBookmarks.mapNotNull { it.id }.toSet()
         val localBookmarksInList = bookmarkDao.getAllBookmarksForList(config.server.id, listId)
 
         val removals = computeStaleListRemovals(localBookmarksInList, serverRemoteIds, listId)
@@ -664,9 +723,15 @@ internal class BookmarkSyncPipeline(
             )
         }
 
-        if (removals.isNotEmpty()) {
-            AppLogger.d("BookmarkRepo", "Reconciled list $listId: removed ${removals.size} stale bookmark(s)")
-        }
+        // Logged unconditionally, including the zero case. "No removals" and "reconcile
+        // never ran for this list" are indistinguishable otherwise, and telling them apart
+        // is the first question worth asking when a list shows bookmarks the server
+        // doesn't return for it.
+        AppLogger.d(
+            "BookmarkRepo",
+            "Reconciled list $listId: server=${serverRemoteIds.size}, " +
+                "local=${localBookmarksInList.size}, removed=${removals.size}"
+        )
     }
 
     /**

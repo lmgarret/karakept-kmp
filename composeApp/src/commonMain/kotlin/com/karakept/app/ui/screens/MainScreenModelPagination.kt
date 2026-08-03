@@ -151,6 +151,7 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     _newBookmarksAbove.value = 0
     // Block loadNextPage from launching while we are iterating through pages.
     _isLoadingMore.value = true
+    _isResettingPagination.value = true
 
     try {
         // Load items first, then swap atomically to avoid a blank flash.
@@ -176,6 +177,7 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     } finally {
         if (paginationGeneration == myGeneration) {
             _isLoadingMore.value = false
+            _isResettingPagination.value = false
         }
     }
 }
