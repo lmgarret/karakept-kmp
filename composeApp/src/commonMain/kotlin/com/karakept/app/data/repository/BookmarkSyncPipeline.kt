@@ -712,9 +712,15 @@ internal class BookmarkSyncPipeline(
             )
         }
 
-        if (removals.isNotEmpty()) {
-            AppLogger.d("BookmarkRepo", "Reconciled list $listId: removed ${removals.size} stale bookmark(s)")
-        }
+        // Logged unconditionally, including the zero case. "No removals" and "reconcile
+        // never ran for this list" are indistinguishable otherwise, and telling them apart
+        // is the first question worth asking when a list shows bookmarks the server
+        // doesn't return for it.
+        AppLogger.d(
+            "BookmarkRepo",
+            "Reconciled list $listId: server=${serverRemoteIds.size}, " +
+                "local=${localBookmarksInList.size}, removed=${removals.size}"
+        )
     }
 
     /**

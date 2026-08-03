@@ -767,8 +767,13 @@ class MainScreenModel(
         // paginated fetch per list on the wire at once, starving the list the user is
         // actually looking at (and its content downloads) of connections.
         val semaphore = kotlinx.coroutines.sync.Semaphore(3)
+        val allLists = listRepository.lists.value
+        AppLogger.d(
+            "MainScreenModel",
+            "syncOtherLists: ${allLists.size} known list(s), skipping key=$skipKey"
+        )
         coroutineScope {
-            listRepository.lists.value.forEach { list ->
+            allLists.forEach { list ->
                 val key = list.id ?: return@forEach
                 if (key == skipKey) return@forEach
                 launch {

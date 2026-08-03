@@ -581,7 +581,9 @@ class BookmarkRepository(
         }
 
         if (!tryAcquireKey(key)) {
-            AppLogger.d("BookmarkRepo", "Sync for key=$key already in progress, skipping")
+            // A skipped list pass is a silently missed membership reconcile — the caller
+            // gets 0 back and cannot tell it from "nothing to do".
+            AppLogger.d("BookmarkRepo", "SKIPPED sync for key=$key — already in progress")
             return 0
         }
 
