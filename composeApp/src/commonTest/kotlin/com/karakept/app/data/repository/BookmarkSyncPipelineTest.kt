@@ -888,6 +888,28 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         coVerify(exactly = 1) { bookmarkDao.getBookmarksForServerWithContentInfo("server1") }
     }
 
+    @Test
+    fun listSync_stripsListIdFromBookmarkRemovedOnServer() = runTest(testDispatcher) {
+        // computeStaleListRemovals is well covered as a pure function, but nothing asserted
+        // that the pipeline actually wires it up — that the fetched ids reach it and the
+        // stripped listIds reach the DAO. This pins the end-to-end path.
+        val stale = makeBookmarkEntity(
+            localId = 77L,
+            remoteId = "bk-stale".hashCode().toLong(),
+            originalRemoteId = "bk-stale",
+            listIds = "list-1"
+        )
+        // Server no longer returns bk-stale for list-1
+        coEvery { remoteDataSource.fetchBookmarksForList(testServer, "list-1", any()) } returns emptyList()
+        coEvery { bookmarkDao.getAllBookmarksForList("server1", "list-1") } returns listOf(stale)
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(stale)
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(stale))
+
+        createPipeline(SyncConfiguration.ForList(testServer, "list-1")).execute()
+
+        coVerify { bookmarkDao.updateBookmarkMetadata(localId = 77L, listIds = "", title = any(), url = any(), description = any(), imageUrl = any(), bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(), modifiedAt = any()) }
+    }
+
     // ──────────────────────────────────────────────────────────
     // Additional coverage
     // ──────────────────────────────────────────────────────────
