@@ -9,6 +9,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.automirrored.filled.MenuOpen
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
@@ -16,9 +18,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MenuOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -164,7 +164,7 @@ internal fun MainScreenTopBar(
                         )
                         DropdownMenuItem(
                             text = { Text("Set Tags") },
-                            leadingIcon = { Icon(Icons.Default.Label, null) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) },
                             onClick = { onBatchSetTags(); showBatchMenu = false }
                         )
                         HorizontalDivider()
@@ -225,7 +225,7 @@ internal fun MainScreenTopBar(
             } else {
                 IconButton(onClick = onMenuClick) {
                     Icon(
-                        imageVector = if (isExpandedLayout && isDrawerVisible) Icons.Default.MenuOpen
+                        imageVector = if (isExpandedLayout && isDrawerVisible) Icons.AutoMirrored.Filled.MenuOpen
                                       else Icons.Default.Menu,
                         contentDescription = if (isExpandedLayout) "Toggle drawer" else "Menu"
                     )

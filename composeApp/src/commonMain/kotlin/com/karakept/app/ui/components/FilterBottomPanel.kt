@@ -5,9 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -253,7 +253,7 @@ private fun FilterPanelContent(
                 ))
             },
             label = { Text("In Progress") },
-            leadingIcon = { Icon(Icons.Outlined.MenuBook, null, modifier = Modifier.size(18.dp)) }
+            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.MenuBook, null, modifier = Modifier.size(18.dp)) }
         )
         FilterChip(
             selected = filter.readFilter == ReadFilter.READ,
@@ -390,7 +390,7 @@ private fun FilterPanelContent(
                             .graphicsLayer { rotationZ = readingTimeRotation }
                     )
                 } else {
-                    Icon(Icons.Outlined.MenuBook, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.AutoMirrored.Outlined.MenuBook, null, modifier = Modifier.size(18.dp))
                 }
             }
         )

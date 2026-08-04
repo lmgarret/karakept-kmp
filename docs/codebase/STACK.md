@@ -1,11 +1,11 @@
 # Technology Stack
 
-**Analysis Date:** 2026-05-30
+**Analysis Date:** 2026-08-04
 
 ## Languages
 
 **Primary:**
-- Kotlin 2.3.20 - Core application logic, multiplatform targets (Android, JVM Desktop)
+- Kotlin 2.4.0 - Core application logic, multiplatform targets (Android, JVM Desktop)
 - JavaScript/TypeScript - Upstream monorepo (Node.js services and tooling)
 
 **Secondary:**
@@ -15,8 +15,8 @@
 ## Runtime
 
 **Environment:**
-- JVM 1.8+ (Android targets JVM 8, compiled down to Android bytecode)
-- Android Runtime (ART) - Android 6.0+ (API 24)
+- JVM 11 (both Android and Desktop targets compile to JVM 11 bytecode)
+- Android Runtime (ART) - Android 7.0+ (API 24)
 - Java Desktop (JVM via Gradle Compose Desktop)
 
 **Package Manager:**
@@ -27,7 +27,7 @@
 ## Frameworks
 
 **Core UI:**
-- Jetbrains Compose Multiplatform 1.11.0 - Cross-platform UI framework
+- Jetbrains Compose Multiplatform 1.11.1 - Cross-platform UI framework
 - Material Design 3 (androidx.compose.material3) - Material components and theme system
 - Compose Material 1.x (androidx.compose.material) - Base Material components
 
@@ -36,11 +36,11 @@
   - `androidx.navigation3:navigation3-runtime` (1.1.1): `NavKey`, `NavBackStack`, `rememberNavBackStack`, `entryProvider`
   - `org.jetbrains.androidx.navigation3:navigation3-ui` (1.1.1): `NavDisplay` (CMP build) + transition/predictive-back specs
   - `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (2.10.0): per-entry `ViewModelStore` scoping
-  - `io.insert-koin:koin-compose-navigation3` + `koin-compose-viewmodel` (4.2.1): `koinViewModel` injection per nav entry
+  - `io.insert-koin:koin-compose-navigation3` + `koin-compose-viewmodel` (4.2.2): `koinViewModel` injection per nav entry
   - App wiring lives in `ui/navigation/` (`AppNavigator`, `LocalNavigator`, `appEntryProvider`, `navKeySerializersModule`, Shared Axis Z specs)
 
 **Networking:**
-- Ktor Client 3.5.0 - HTTP client with multiplatform support
+- Ktor Client 3.5.1 - HTTP client with multiplatform support
   - ktor-client-core: Core HTTP client
   - ktor-client-okhttp: OkHttp engine for JVM (Android + Desktop)
   - ktor-client-content-negotiation: Content type negotiation
@@ -56,19 +56,19 @@
   - androidx-sqlite-bundled: Bundled SQLite driver for consistent behavior
 
 **State Management:**
-- Koin 4.2.1 - Dependency injection
+- Koin 4.2.2 - Dependency injection
   - koin-core: Core DI container
   - koin-compose: Compose integration
   - koin-android: Android-specific support
   - koin-androidx-workmanager: WorkManager task scheduling
 
 **Serialization:**
-- kotlinx-serialization 1.9.1 - Multiplatform serialization
+- kotlinx-serialization 1.11.0 - Multiplatform serialization
   - kotlinx-serialization-json: JSON codec
-- kotlinx-datetime 0.6.2 - Multiplatform date/time handling
+- kotlinx-datetime 0.8.0 - Multiplatform date/time handling
 
 **Image Loading:**
-- Coil 3.4.0 - Image loading and caching
+- Coil 3.5.0 - Image loading and caching
   - coil-compose: Compose integration with Image() composable
   - coil-network-ktor: Ktor HTTP client engine for image loading
 
@@ -89,12 +89,12 @@
 - Used for metadata extraction from bookmarked web content
 
 **Notifications:**
-- KMP Notifier 1.6.1 - Multiplatform local notifications
+- KNotify 0.4.3 - Multiplatform local notifications
   - Android: Native notifications via NotificationManager
   - Desktop: System notifications
 
 **Desktop-Specific:**
-- Compose Native Tray 1.3.0 - System tray integration
+- Compose Native Tray 1.3.3 - System tray integration
   - macOS: Native NSStatusBar
   - Windows: Native taskbar
   - Linux: D-Bus interface (via DBus-x11)
@@ -104,7 +104,7 @@
   - Windows: IFileOpenDialog
 
 **WebView:**
-- Compose WebView 1.0.0-beta-01 - Web content rendering
+- Compose WebView 1.0.0-beta-02 - Web content rendering
   - macOS: WKWebView
   - Windows: WebView2
   - Linux: WebKitGTK
@@ -122,14 +122,14 @@
 
 **Code Generation:**
 - KSP 2.3.9 (Kotlin Symbol Processing) - Annotation processor
-- OpenAPI Generator 7.22.0 - Generate API client from OpenAPI spec
+- OpenAPI Generator 7.24.0 - Generate API client from OpenAPI spec
   - Generates Kotlin multiplatform client to `com.karakept.api.*`
   - Located at: `api-client/` module
   - Source spec: `/karakeep-upstream/packages/open-api/karakeep-openapi-spec.json`
 
 **Kotlin Compiler Plugin:**
 - compose-compiler (bundled with kotlin-plugin-compose) - Compose IR compiler
-- org.jetbrains.compose.hot-reload (bundled with CMP 1.11.0) - Compose Hot Reload for desktop dev workflow; adds `hotRunDesktop` Gradle task (requires JBR 21, auto-provisioned via foojay toolchain resolver)
+- org.jetbrains.compose.hot-reload (bundled with CMP 1.11.1) - Compose Hot Reload for desktop dev workflow; adds `hotRunDesktop` Gradle task (requires JBR 21, auto-provisioned via foojay toolchain resolver)
 
 ## Key Dependencies
 
@@ -148,7 +148,7 @@
 
 **Testing:**
 - JUnit 4.13.2 - Unit test framework
-- mockk 1.14.7 - Kotlin mocking library
+- mockk 1.14.11 - Kotlin mocking library
 - kotlinx-coroutines-test - Coroutine testing utilities
 
 **Kotlin Test Framework:**
@@ -210,7 +210,7 @@
 - D-Bus (for system tray on Linux desktop)
 
 **Android Runtime:**
-- Android 6.0+ (API 24+)
+- Android 7.0+ (API 24+)
 - Minimum 2GB RAM recommended
 - Vibration permission required
 - POST_NOTIFICATIONS permission (Android 13+)

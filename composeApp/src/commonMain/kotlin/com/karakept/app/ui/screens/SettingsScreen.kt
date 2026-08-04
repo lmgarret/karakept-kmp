@@ -18,10 +18,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -76,7 +76,7 @@ private enum class SettingsSection(
     val icon: ImageVector
 ) {
     APPEARANCE("Appearance", "Theme, accent color, layouts", Icons.Default.Palette),
-    BEHAVIOR("Behavior", "Layout, gestures, reading speed, notifications", Icons.Default.ViewList),
+    BEHAVIOR("Behavior", "Layout, gestures, reading speed, notifications", Icons.AutoMirrored.Filled.ViewList),
     READER("Reader", "Viewer mode, progress, tags, link handling", Icons.Default.Visibility),
     SYNC_DATA("Sync & Data", "Offline mode, content sync, server, backup", Icons.Default.Sync),
     ABOUT("About", "App version and open source licenses", Icons.Default.Info)
@@ -279,7 +279,7 @@ class SettingsScreen : NavKey {
                             SettingsNavigationItem(
                                 title = "Behavior",
                                 description = "Layout, gestures, reading speed, notifications",
-                                icon = Icons.Default.ViewList,
+                                icon = Icons.AutoMirrored.Filled.ViewList,
                                 onClick = { navigator.push(BookmarkListSettingsScreen()) }
                             )
 

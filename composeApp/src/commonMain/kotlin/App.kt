@@ -17,7 +17,7 @@ import com.karakept.app.ui.navigation.navSavedStateConfiguration
 import com.karakept.app.ui.navigation.sharedAxisZBackward
 import com.karakept.app.ui.navigation.sharedAxisZForward
 import com.karakept.app.di.appModule
-import org.jetbrains.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.Preview
 import org.koin.compose.KoinApplication
 
 import coil3.ImageLoader

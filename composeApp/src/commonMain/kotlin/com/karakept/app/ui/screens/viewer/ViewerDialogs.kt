@@ -15,9 +15,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
+import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.Web
 import com.karakept.app.data.model.ContentSource
 import androidx.compose.material3.AlertDialog
@@ -135,7 +135,7 @@ internal fun ModeAndSourceDialog(
                     ViewerModeOptionCard(
                         title = "Extracted",
                         description = "Processed article HTML — clean reading view",
-                        icon = Icons.Outlined.Article,
+                        icon = Icons.AutoMirrored.Outlined.Article,
                         isSelected = pendingSource == ContentSource.EXTRACTED,
                         onClick = { pendingSource = ContentSource.EXTRACTED }
                     )

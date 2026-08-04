@@ -1,15 +1,15 @@
 package com.karakept.app.ui.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -23,7 +23,7 @@ fun SwipeAction.getIcon(): ImageVector {
         SwipeAction.DELETE -> Icons.Default.Delete
         SwipeAction.SHARE -> Icons.Default.Share
         SwipeAction.OPEN_IN_BROWSER -> Icons.Default.OpenInBrowser
-        SwipeAction.ADD_TAG -> Icons.Default.Label
+        SwipeAction.ADD_TAG -> Icons.AutoMirrored.Filled.Label
         SwipeAction.ADD_TO_LIST -> Icons.AutoMirrored.Filled.List
         SwipeAction.NONE -> Icons.Default.Close
     }
