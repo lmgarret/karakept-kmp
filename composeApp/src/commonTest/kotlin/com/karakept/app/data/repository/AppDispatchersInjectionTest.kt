@@ -1,5 +1,6 @@
 package com.karakept.app.data.repository
 
+import com.karakept.api.model.BookmarkContent
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
@@ -99,6 +100,9 @@ class AppDispatchersInjectionTest : BaseRepositoryTest() {
         val dto = mockk<com.karakept.api.model.Bookmark>(relaxed = true) {
             every { id } returns "remote-1"
             every { title } returns "Created"
+            every { content } returns mockk(relaxed = true) {
+                every { crawlStatus } returns BookmarkContent.CrawlStatus.SUCCESS
+            }
         }
         coEvery { remoteDataSource.createBookmark(any(), any()) } returns dto
         coEvery { remoteDataSource.fetchBookmark(any(), any()) } returns dto
