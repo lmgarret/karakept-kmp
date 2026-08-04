@@ -7,13 +7,13 @@ targeting Android and JVM Desktop (Linux, macOS, Windows).
 The UI follows **Material Design 3 (MD3)** guidelines throughout.
 
 Key technologies:
-- Kotlin 2.3.20 / Compose Multiplatform 1.11.0
+- Kotlin 2.4.0 / Compose Multiplatform 1.11.1
 - Material3 (`androidx.compose.material3`)
 - Compose Navigation 3 (`androidx.navigation3` / `org.jetbrains.androidx.navigation3` 1.1.1) for navigation
 - `androidx.lifecycle` `ViewModel` (multiplatform) for per-screen state (MVVM)
-- Koin 4.2.1 for dependency injection (incl. `koin-compose-viewmodel`, `koin-compose-navigation3`)
-- Room 2.7.0 for local SQLite storage
-- Ktor 3.3.2 for HTTP/API communication
+- Koin 4.2.2 for dependency injection (incl. `koin-compose-viewmodel`, `koin-compose-navigation3`)
+- Room 2.8.4 for local SQLite storage
+- Ktor 3.5.1 for HTTP/API communication
 - kotlinx-serialization, kotlinx-coroutines, kotlinx-datetime
 
 ---
