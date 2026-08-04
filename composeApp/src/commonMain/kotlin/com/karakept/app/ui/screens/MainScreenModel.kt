@@ -348,18 +348,14 @@ class MainScreenModel(
     fun retryFailedActions() {
         viewModelScope.launch {
             val server = _selectedServer.value ?: return@launch
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                bookmarkActionsRepository.retryFailedActions(server)
-            }
+            bookmarkActionsRepository.retryFailedActions(server)
         }
     }
 
     fun discardFailedActions() {
         viewModelScope.launch {
             val server = _selectedServer.value ?: return@launch
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                bookmarkActionsRepository.discardFailedActions(server.id)
-            }
+            bookmarkActionsRepository.discardFailedActions(server.id)
         }
     }
 
@@ -700,9 +696,7 @@ class MainScreenModel(
         if (listId !in _smartListsNeedingRefresh.value) return
         _smartListsNeedingRefresh.value -= listId
         try {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                bookmarkRepository.syncBookmarksForList(server, listId)
-            }
+            bookmarkRepository.syncBookmarksForList(server, listId)
             if (currentView() == LoadedView(server.id, filter)) {
                 refreshLoadedPagesInPlace(server, filter)
             }
@@ -737,14 +731,12 @@ class MainScreenModel(
             val server = selectedServer.value ?: return@launch
 
             try {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    // Step 1: Fetch lists first so the drawer updates immediately.
-                    listRepository.refreshLists(server)
+                // Step 1: Fetch lists first so the drawer updates immediately.
+                listRepository.refreshLists(server)
 
-                    // Step 2: Sync the currently-rendered list/filter first so the user
-                    // sees their bookmarks as soon as possible.
-                    syncCurrentView(server, capturedListContext, capturedFilter)
-                }
+                // Step 2: Sync the currently-rendered list/filter first so the user
+                // sees their bookmarks as soon as possible.
+                syncCurrentView(server, capturedListContext, capturedFilter)
 
                 // Step 3: Refresh the current view in place after its metadata lands, so
                 // newly synced bookmarks appear without the list blinking and jumping to the
@@ -753,12 +745,10 @@ class MainScreenModel(
                     refreshLoadedPagesInPlace(server, capturedEffectiveFilter)
                 }
 
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    // Step 4: Sync all other named lists concurrently.
-                    // Each call is independently deduplicated by BookmarkRepository.
-                    val currentKey = resolveCurrentKey(capturedListContext, capturedFilter)
-                    syncOtherLists(server, currentKey)
-                }
+                // Step 4: Sync all other named lists concurrently.
+                // Each call is independently deduplicated by BookmarkRepository.
+                val currentKey = resolveCurrentKey(capturedListContext, capturedFilter)
+                syncOtherLists(server, currentKey)
 
                 // Step 5: Refresh once more now the whole sync is done. Step 3 only sees what
                 // the current view's own pass fetched; a bookmark this view has never seen is

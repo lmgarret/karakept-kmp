@@ -20,6 +20,8 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
 
 /**
  * Unit tests for smart-list membership reconciliation after quick-action mutations.
@@ -34,6 +36,9 @@ import kotlin.test.assertTrue
  * the GET /bookmarks/{id}/lists call.
  */
 class SmartListReconciliationTest {
+
+    private val testDispatcher = StandardTestDispatcher()
+    private val testAppDispatchers = TestAppDispatchers(testDispatcher)
 
     // ---- Shared fixtures ----
 
@@ -59,7 +64,8 @@ class SmartListReconciliationTest {
         pendingActionDao = pendingActionDao,
         remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
-        settingsRepository = settingsRepository
+        settingsRepository = settingsRepository,
+        appDispatchers = testAppDispatchers
     )
 
     private val bookmarkRepository = BookmarkRepository(
@@ -71,7 +77,8 @@ class SmartListReconciliationTest {
         serverRepository = serverRepository,
         highlightRepository = highlightRepository,
         imageCacheManager = imageCacheManager,
-        listDao = listDao
+        listDao = listDao,
+        appDispatchers = testAppDispatchers
     )
 
     init {
@@ -114,7 +121,7 @@ class SmartListReconciliationTest {
      * Expected DB update: listIds = "listA"
      */
     @Test
-    fun removeFromManualList_bookmarkAppearsInSmartList() = runTest {
+    fun removeFromManualList_bookmarkAppearsInSmartList() = runTest(testDispatcher) {
         val entity = bookmarkEntity(localId = 1L, listIds = "")
         coEvery { bookmarkDao.getBookmarkById(1L) } returns entity
         coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-1") } returns
@@ -153,7 +160,7 @@ class SmartListReconciliationTest {
      * Expected DB update: listIds = "listB" (manual lists preserved, smart list A removed)
      */
     @Test
-    fun addToManualList_bookmarkLeavesSmartList() = runTest {
+    fun addToManualList_bookmarkLeavesSmartList() = runTest(testDispatcher) {
         val entity = bookmarkEntity(localId = 2L, listIds = "listA,listB")
         coEvery { bookmarkDao.getBookmarkById(2L) } returns entity
         coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-2") } returns emptyList()
@@ -191,7 +198,7 @@ class SmartListReconciliationTest {
      * Expected: listIds = "listA,listC" — manual list C kept, smart list A added
      */
     @Test
-    fun manualListMembershipPreservedDuringReconciliation() = runTest {
+    fun manualListMembershipPreservedDuringReconciliation() = runTest(testDispatcher) {
         val entity = bookmarkEntity(localId = 3L, listIds = "listC")
         coEvery { bookmarkDao.getBookmarkById(3L) } returns entity
         coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-3") } returns
@@ -232,7 +239,7 @@ class SmartListReconciliationTest {
      * No DB write occurs when the membership is already correct.
      */
     @Test
-    fun noDbWriteWhenMembershipUnchanged() = runTest {
+    fun noDbWriteWhenMembershipUnchanged() = runTest(testDispatcher) {
         val entity = bookmarkEntity(localId = 4L, listIds = "listA")
         coEvery { bookmarkDao.getBookmarkById(4L) } returns entity
         coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-4") } returns
@@ -250,7 +257,7 @@ class SmartListReconciliationTest {
      * so the caller can schedule a deferred smart list sync.
      */
     @Test
-    fun staleServerResponse_returnsFalseForDeferredSync() = runTest {
+    fun staleServerResponse_returnsFalseForDeferredSync() = runTest(testDispatcher) {
         val entity = bookmarkEntity(localId = 10L, listIds = "")
         coEvery { bookmarkDao.getBookmarkById(10L) } returns entity
         coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-10") } returns emptyList()
@@ -270,7 +277,7 @@ class SmartListReconciliationTest {
      * When server returns fresh smart list data, returns true.
      */
     @Test
-    fun freshServerResponse_returnsTrue() = runTest {
+    fun freshServerResponse_returnsTrue() = runTest(testDispatcher) {
         val entity = bookmarkEntity(localId = 11L, listIds = "")
         coEvery { bookmarkDao.getBookmarkById(11L) } returns entity
         coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-11") } returns
@@ -312,7 +319,7 @@ class SmartListReconciliationTest {
      * Without the flush, GET could return stale smart-list membership.
      */
     @Test
-    fun flushSendsActionBeforeGetListsIsCalled() = runTest {
+    fun flushSendsActionBeforeGetListsIsCalled() = runTest(testDispatcher) {
         val bookmark = bookmarkEntity(localId = 5L, listIds = "")
 
         // Pending REMOVE_FROM_LIST action for listB

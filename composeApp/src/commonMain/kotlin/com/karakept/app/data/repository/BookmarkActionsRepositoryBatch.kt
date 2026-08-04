@@ -2,8 +2,6 @@ package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.PendingActionType
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 
@@ -17,7 +15,7 @@ import kotlinx.serialization.encodeToString
  * Archive a list of bookmarks without showing individual snackbars.
  */
 suspend fun BookmarkActionsRepository.batchArchive(bookmarks: List<BookmarkEntity>) {
-    withContext(Dispatchers.IO) {
+    withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             current?.let { bookmarkDao.insertBookmark(it.copy(isArchived = true)) }
@@ -37,7 +35,7 @@ suspend fun BookmarkActionsRepository.batchArchive(bookmarks: List<BookmarkEntit
  * Unarchive a list of bookmarks without showing individual snackbars.
  */
 suspend fun BookmarkActionsRepository.batchUnarchive(bookmarks: List<BookmarkEntity>) {
-    withContext(Dispatchers.IO) {
+    withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             current?.let { bookmarkDao.insertBookmark(it.copy(isArchived = false)) }
@@ -57,7 +55,7 @@ suspend fun BookmarkActionsRepository.batchUnarchive(bookmarks: List<BookmarkEnt
  * Mark a list of bookmarks as read without showing individual snackbars.
  */
 suspend fun BookmarkActionsRepository.batchMarkRead(bookmarks: List<BookmarkEntity>) {
-    withContext(Dispatchers.IO) {
+    withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             current?.let {
@@ -74,7 +72,7 @@ suspend fun BookmarkActionsRepository.batchMarkRead(bookmarks: List<BookmarkEnti
  * Mark a list of bookmarks as unread without showing individual snackbars.
  */
 suspend fun BookmarkActionsRepository.batchMarkUnread(bookmarks: List<BookmarkEntity>, resetProgress: Boolean = false) {
-    withContext(Dispatchers.IO) {
+    withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             current?.let {
@@ -100,7 +98,7 @@ suspend fun BookmarkActionsRepository.batchMarkUnread(bookmarks: List<BookmarkEn
  * Set favourite status for a list of bookmarks without showing individual snackbars.
  */
 suspend fun BookmarkActionsRepository.batchSetFavourite(bookmarks: List<BookmarkEntity>, makeFavourite: Boolean) {
-    withContext(Dispatchers.IO) {
+    withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             current?.let { bookmarkDao.insertBookmark(it.copy(isStarred = makeFavourite)) }
@@ -120,7 +118,7 @@ suspend fun BookmarkActionsRepository.batchSetFavourite(bookmarks: List<Bookmark
  * Delete a list of bookmarks without showing individual snackbars.
  */
 suspend fun BookmarkActionsRepository.batchDelete(bookmarks: List<BookmarkEntity>) {
-    withContext(Dispatchers.IO) {
+    withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             if (current != null) {
@@ -143,7 +141,7 @@ suspend fun BookmarkActionsRepository.batchDelete(bookmarks: List<BookmarkEntity
  * Set the same tag list on all selected bookmarks without showing individual snackbars.
  */
 suspend fun BookmarkActionsRepository.batchUpdateTags(bookmarks: List<BookmarkEntity>, newTags: List<String>) {
-    withContext(Dispatchers.IO) {
+    withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             current?.let { bookmarkDao.insertBookmark(it.copy(tags = newTags.joinToString(","))) }
@@ -163,7 +161,7 @@ suspend fun BookmarkActionsRepository.batchUpdateTags(bookmarks: List<BookmarkEn
  * Add a list of bookmarks to a list without showing individual snackbars.
  */
 suspend fun BookmarkActionsRepository.batchMoveToList(bookmarks: List<BookmarkEntity>, listId: String) {
-    withContext(Dispatchers.IO) {
+    withContext(appDispatchers.io) {
         bookmarks.forEach { bookmark ->
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             current?.let {

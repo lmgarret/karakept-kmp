@@ -26,10 +26,7 @@ import com.karakept.app.data.repository.setHtmlFontSize
 import com.karakept.app.data.repository.setHtmlFontFamily
 import com.karakept.app.data.repository.resetReaderAppearance
 import com.karakept.app.data.repository.setScrollToTopEnabled
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -270,7 +267,6 @@ class BookmarkViewerScreenModel(
         readingStateUpdates.tryEmit(state)
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     override fun onCleared() {
         flushOnDispose()
     }
@@ -280,27 +276,20 @@ class BookmarkViewerScreenModel(
      * when this ViewModel's nav entry leaves, and manually by the expanded (inline) viewer
      * layout when the displayed bookmark changes without a nav-stack change.
      */
-    @OptIn(DelicateCoroutinesApi::class)
     fun flushOnDispose() {
         parsedDocumentCache.clear()
         val state = pendingReadingState ?: return
         val serverId = (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark?.serverId
-        // viewModelScope is being cancelled, so use GlobalScope for this
-        // fire-and-forget DB write that must complete.
-        GlobalScope.launch(Dispatchers.IO) {
-            bookmarkDao.updateReadingProgress(
-                state.localId, state.progress, state.scrollIndex, state.scrollOffset
-            )
-            bookmarkActionsRepository.notifyBookmarkChanged(state.remoteId)
-            // Queue the final reading progress sync so it is pushed on the next sync cycle.
-            if (serverId != null) {
-                bookmarkActionsRepository.queueReadingProgressUpdate(
-                    bookmarkRemoteId = state.remoteId,
-                    serverId = serverId,
-                    progressPercent = (state.progress * 100).toInt()
-                )
-            }
-        }
+        // viewModelScope is being cancelled here, so the repository owns this write: it is a
+        // Koin single whose scope outlives the screen without leaking into GlobalScope.
+        bookmarkActionsRepository.persistFinalReadingProgress(
+            bookmarkLocalId = state.localId,
+            bookmarkRemoteId = state.remoteId,
+            serverId = serverId,
+            progress = state.progress,
+            scrollIndex = state.scrollIndex,
+            scrollOffset = state.scrollOffset
+        )
     }
 
     /**

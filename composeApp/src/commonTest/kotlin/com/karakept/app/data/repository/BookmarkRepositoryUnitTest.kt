@@ -36,7 +36,8 @@ class BookmarkRepositoryUnitTest : BaseRepositoryTest() {
         serverRepository,
         highlightRepository,
         imageCacheManager,
-        listDao
+        listDao,
+        testAppDispatchers
     )
 
     @Test

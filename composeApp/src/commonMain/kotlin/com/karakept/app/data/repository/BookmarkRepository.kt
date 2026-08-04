@@ -18,6 +18,7 @@ import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.ReadingTimeCalculator
 import com.karakept.app.utils.ImageCacheManager
+import com.karakept.app.utils.AppDispatchers
 import com.karakept.app.data.local.entity.AssetEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,11 +26,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Instant
@@ -43,8 +44,14 @@ class BookmarkRepository(
     private val serverRepository: com.karakept.app.data.repository.ServerRepository,
     private val highlightRepository: com.karakept.app.data.repository.HighlightRepository,
     private val imageCacheManager: ImageCacheManager,
-    private val listDao: ListDao
+    private val listDao: ListDao,
+    private val appDispatchers: AppDispatchers
 ) {
+    // Outlives any one caller: a bookmark created by the user must finish fetching its full
+    // content even if the screen that created it goes away. Bound to the repository (a Koin
+    // single) rather than GlobalScope so the work stays cancellable and test-drainable.
+    private val repositoryScope = CoroutineScope(SupervisorJob() + appDispatchers.default)
+
     fun getBookmarks(server: Server): Flow<List<BookmarkEntity>> {
         return bookmarkDao.getBookmarksForServer(server.id)
     }
@@ -199,7 +206,6 @@ class BookmarkRepository(
     suspend fun syncBookmarksForList(server: Server, listId: String): Int =
         executeSyncPipeline(SyncConfiguration.ForList(server, listId))
 
-    @OptIn(DelicateCoroutinesApi::class)
     suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<BookmarkEntity> {
         onStatusChange?.invoke("Waiting for server response...")
         val serversList = serverRepository.servers.first()
@@ -260,7 +266,7 @@ class BookmarkRepository(
                 ?: entity
 
             // Trigger background sync for this single bookmark to get full content
-            GlobalScope.launch(Dispatchers.Default) {
+            repositoryScope.launch {
                 try {
                     syncSingleBookmark(inserted.remoteId, server.id)
                 } catch (e: Exception) {
@@ -294,7 +300,7 @@ class BookmarkRepository(
 
         try {
             // Note: intentionally NOT updating _syncProgress here. This method is called
-            // from a background GlobalScope.launch after createBookmark and should not
+            // from a background repositoryScope.launch after createBookmark and should not
             // interfere with the main sync progress state shown in the UI.
             val dto = remoteDataSource.fetchBookmark(server, existing.originalRemoteId)
 
@@ -592,7 +598,7 @@ class BookmarkRepository(
      * this call returns 0 immediately without starting a new pipeline.
      * Returns the number of new bookmarks inserted.
      */
-    private suspend fun executeSyncPipeline(config: SyncConfiguration): Int {
+    private suspend fun executeSyncPipeline(config: SyncConfiguration): Int = withContext(appDispatchers.io) {
         val key: SyncKey = when (config) {
             is SyncConfiguration.Full -> null
             is SyncConfiguration.Filtered -> if (config.favourited == true) SYNC_KEY_FAVORITES else SYNC_KEY_ARCHIVED
@@ -603,7 +609,7 @@ class BookmarkRepository(
             // A skipped list pass is a silently missed membership reconcile — the caller
             // gets 0 back and cannot tell it from "nothing to do".
             AppLogger.d("BookmarkRepo", "SKIPPED sync for key=$key — already in progress")
-            return 0
+            return@withContext 0
         }
 
         setKeyStatus(key, ListSyncStatus.FetchingMetadata())
@@ -646,7 +652,7 @@ class BookmarkRepository(
                     com.karakept.app.data.model.SyncReport(key, result, pipeline.warnings)
                 )
             }
-            return result
+            return@withContext result
         } catch (e: kotlinx.coroutines.CancellationException) {
             _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
             throw e

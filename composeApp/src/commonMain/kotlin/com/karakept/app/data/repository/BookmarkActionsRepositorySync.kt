@@ -6,8 +6,6 @@ import com.karakept.app.data.local.entity.PendingActionType
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.hasHttpStatus
 import com.karakept.api.model.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.IO
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.first
@@ -28,7 +26,7 @@ import kotlinx.serialization.encodeToString
  * @return true if local progress was updated from server data, false otherwise.
  */
 suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(bookmarkRemoteId: Long, serverId: String): Boolean {
-    return withContext(Dispatchers.IO) {
+    return withContext(appDispatchers.io) {
         try {
             AppLogger.d("ReadProgressSync", "pullReadingProgressFromServer remoteId=$bookmarkRemoteId serverId=$serverId")
             val servers = serverRepository.servers.first()
@@ -101,7 +99,7 @@ suspend fun BookmarkActionsRepository.flushPendingActions(server: Server) {
  */
 suspend fun BookmarkActionsRepository.processPendingActions(server: Server): List<Long> {
     return actionMutex.withLock {
-        withContext(Dispatchers.IO) {
+        withContext(appDispatchers.io) {
             val actions = pendingActionDao.getProcessableActions(server.id, System.currentTimeMillis())
             val processedIds = mutableListOf<Long>()
             AppLogger.d("BookmarkActionsRepositorySync", "Found ${actions.size} processable actions for server ${server.id}")
