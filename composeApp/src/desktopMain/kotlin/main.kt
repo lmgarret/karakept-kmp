@@ -256,6 +256,10 @@ fun main(args: Array<String> = emptyArray()) {
     val savedY = runBlocking { settingsRepo.windowY.first() }
 
     application {
+        // Guard against a Compose 1.11 desktop accessibility NPE that otherwise crashes the app
+        // during rapid list changes (e.g. bulk mark-as-unread). See installA11yCrashGuard.
+        LaunchedEffect(Unit) { installA11yCrashGuard() }
+
         val maxBounds = GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
         var isWindowVisible by remember { mutableStateOf(true) }
         val coroutineScope = rememberCoroutineScope()

@@ -1,6 +1,8 @@
 package com.karakept.app.domain
 
 import com.karakept.api.model.KarakeepList
+import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.model.ListSettings
 
 /**
  * Pure, stateless utility functions for traversing the bookmark-list hierarchy.
@@ -30,6 +32,32 @@ object ListHierarchyUtils {
             allDescendants.addAll(getAllDescendantIds(childId, allLists, newVisited))
         }
         return allDescendants
+    }
+
+    /**
+     * Expands [filter]'s list IDs with the descendants of every list configured with
+     * `includeChildListBookmarks`, returning [filter] unchanged when nothing expands.
+     *
+     * The result is the *effective* filter: what the DB query and the client-side filtering are
+     * both built from. It depends on [allLists], which loads asynchronously, so it can change
+     * after a view has been rendered — which is why it belongs to the view's identity rather
+     * than being recomputed per page.
+     */
+    fun expandFilterLists(
+        filter: FilterConfig,
+        allLists: List<KarakeepList>,
+        listSettings: Map<String, ListSettings>
+    ): FilterConfig {
+        if (filter.lists.isEmpty()) return filter
+        val expanded = LinkedHashSet<String>()
+        filter.lists.forEach { listId ->
+            expanded.add(listId)
+            if (listSettings[listId]?.includeChildListBookmarks == true) {
+                expanded.addAll(getAllDescendantIds(listId, allLists))
+            }
+        }
+        val result = expanded.toList()
+        return if (result == filter.lists) filter else filter.copy(lists = result)
     }
 
     /**

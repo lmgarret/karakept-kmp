@@ -34,6 +34,13 @@ expect object FileUtils {
 
     /** Shares / exports a backup file at [filePath] using the platform share sheet or save dialog. */
     fun shareBackupFile(filePath: String)
+
+    /**
+     * Hands the file at [path] to whichever app the platform has registered for [mimeType].
+     * Returns false when nothing can open it, so the caller can say so rather than failing
+     * silently. Used for assets the app cannot render itself, such as PDFs.
+     */
+    fun openFileExternally(path: String, mimeType: String): Boolean
 }
 
 data class StorageInfo(

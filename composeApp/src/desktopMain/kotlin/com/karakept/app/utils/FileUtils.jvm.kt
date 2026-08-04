@@ -1,5 +1,6 @@
 package com.karakept.app.utils
 
+import com.karakept.app.utils.AppLogger
 import java.awt.Desktop
 import java.io.File
 
@@ -84,6 +85,22 @@ actual object FileUtils {
             }
         } catch (e: Exception) {
             // Silently fail – user can navigate manually
+        }
+    }
+
+    actual fun openFileExternally(path: String, mimeType: String): Boolean {
+        // Desktop resolves the handler from the file extension, so mimeType is unused here.
+        val file = File(path)
+        if (!file.exists()) return false
+        return try {
+            if (!Desktop.isDesktopSupported()) return false
+            val desktop = Desktop.getDesktop()
+            if (!desktop.isSupported(Desktop.Action.OPEN)) return false
+            desktop.open(file)
+            true
+        } catch (e: Exception) {
+            AppLogger.e("FileUtils", "Failed to open $path externally: ${e.message}", e)
+            false
         }
     }
 

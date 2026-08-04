@@ -31,5 +31,9 @@ data class BookmarkEntity(
     val readingTimeMinutes: Int = 0, // Estimated reading time in minutes
     val readingProgress: Float = 0f, // Reading progress (0.0–1.0) for visual indicator
     val readingScrollIndex: Int = 0, // LazyList firstVisibleItemIndex for scroll restoration
-    val readingScrollOffset: Int = 0 // LazyList firstVisibleItemScrollOffset for scroll restoration
+    val readingScrollOffset: Int = 0, // LazyList firstVisibleItemScrollOffset for scroll restoration
+    val modifiedAt: Long? = null, // Server modifiedAt (epoch millis); used to skip unchanged writes
+    val progressSyncedAt: Long = 0, // Last time reading progress was pulled (epoch millis); rotating cursor
+    val crawlStatus: String? = null, // Server crawl state: "success" | "failure" | "pending"
+    val crawledAt: Long? = null // When the server last crawled this bookmark
 )

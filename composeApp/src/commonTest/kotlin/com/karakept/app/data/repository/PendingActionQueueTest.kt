@@ -104,7 +104,7 @@ class PendingActionQueueTest {
         val action2 = pendingAction(PendingActionType.FAVOURITE, bookmarkRemoteId = 2L, createdAt = 2000, id = 2)
         val action3 = pendingAction(PendingActionType.UNARCHIVE, bookmarkRemoteId = 3L, createdAt = 3000, id = 3)
 
-        coEvery { pendingActionDao.getPendingActionsList(testServer.id) } returns listOf(action1, action2, action3)
+        coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(action1, action2, action3)
 
         // Stub bookmark lookups so executeAction can resolve originalRemoteId
         stubBookmarkLookup(1L, "orig-1")
@@ -134,7 +134,7 @@ class PendingActionQueueTest {
             PendingActionType.UNARCHIVE, bookmarkRemoteId = 42L, createdAt = 2, id = 2
         )
 
-        coEvery { pendingActionDao.getPendingActionsList(testServer.id) } returns listOf(archiveAction, unarchiveAction)
+        coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(archiveAction, unarchiveAction)
         stubBookmarkLookup(42L, "orig-42")
 
         val requestSlot = mutableListOf<BookmarksBookmarkIdPatchRequest>()
@@ -152,52 +152,83 @@ class PendingActionQueueTest {
         assertEquals(false, requestSlot[1].archived, "Second call should unarchive (last wins)")
     }
 
-    // ---- Test 3: Timeout deletion after max retries ----
+    // ---- Test 3: Exhausted retries mark the action failed (never silently dropped) ----
 
     @Test
-    fun timeoutActionDeletedAfterMaxRetries() = runTest {
-        // Action with retryCount = 5 (meets the >= 5 threshold)
+    fun exhaustedRetriesMarkActionFailedInsteadOfDeleting() = runTest {
+        // Action with retryCount = 4: the next transient failure reaches the 5-retry cap
         val staleAction = pendingAction(
-            PendingActionType.ARCHIVE, bookmarkRemoteId = 99L, createdAt = 1000, retryCount = 5, id = 1
+            PendingActionType.ARCHIVE, bookmarkRemoteId = 99L, createdAt = 1000, retryCount = 4, id = 1
         )
 
-        coEvery { pendingActionDao.getPendingActionsList(testServer.id) } returns listOf(staleAction)
+        coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(staleAction)
         stubBookmarkLookup(99L, "orig-99")
 
-        // Simulate server failure so the catch block triggers the retry-threshold check
+        // Transient failure (no HTTP status) so it counts against the retry budget
         coEvery {
             remoteDataSource.updateBookmark(testServer, "orig-99", any())
         } throws RuntimeException("Server unavailable")
 
         repository.processPendingActions(testServer)
 
-        // retryCount is incremented first, then the action is deleted because retryCount >= 5
-        coVerify { pendingActionDao.updateAction(match { it.retryCount == 6 }) }
-        coVerify { pendingActionDao.deleteAction(staleAction) }
+        // Marked failed and preserved — the user can retry/discard, not silently lost
+        coVerify {
+            pendingActionDao.updateAction(match {
+                it.retryCount == 5 && it.status == PendingActionEntity.STATUS_FAILED
+            })
+        }
+        coVerify(exactly = 0) { pendingActionDao.deleteAction(any()) }
     }
 
-    // ---- Test 4: Server rejection increments retry ----
+    // ---- Test 4: Transient server rejection increments retry with backoff ----
 
     @Test
-    fun serverRejectionIncrementsRetry() = runTest {
+    fun transientRejectionIncrementsRetryWithBackoff() = runTest {
         val action = pendingAction(
             PendingActionType.FAVOURITE, bookmarkRemoteId = 55L, createdAt = 1000, retryCount = 1, id = 1
         )
 
-        coEvery { pendingActionDao.getPendingActionsList(testServer.id) } returns listOf(action)
+        coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(action)
         stubBookmarkLookup(55L, "orig-55")
 
         coEvery {
             remoteDataSource.updateBookmark(testServer, "orig-55", any())
-        } throws RuntimeException("500 Internal Server Error")
+        } throws RuntimeException("connection reset")
 
         repository.processPendingActions(testServer)
 
-        // retryCount should be incremented from 1 to 2
+        // retryCount 1 → 2, still pending, backoff window set into the future
         coVerify {
-            pendingActionDao.updateAction(match { it.retryCount == 2 && it.lastError != null })
+            pendingActionDao.updateAction(match {
+                it.retryCount == 2 && it.lastError != null &&
+                    it.status == PendingActionEntity.STATUS_PENDING && it.nextAttemptAt > 0
+            })
         }
-        // Action should NOT be deleted (retryCount 1 < 5)
+        coVerify(exactly = 0) { pendingActionDao.deleteAction(any()) }
+    }
+
+    // ---- Test 5: Permanent server rejection fails on the first attempt ----
+
+    @Test
+    fun permanentRejectionMarksFailedImmediately() = runTest {
+        val action = pendingAction(
+            PendingActionType.MOVE_TO_LIST, bookmarkRemoteId = 77L, createdAt = 1000, retryCount = 0, id = 1,
+            actionData = """{"listId":"list-1"}"""
+        )
+
+        coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(action)
+        stubBookmarkLookup(77L, "orig-77")
+
+        coEvery {
+            remoteDataSource.addBookmarkToList(testServer, "list-1", "orig-77")
+        } throws com.karakept.app.data.remote.ApiException("HTTP 422: unprocessable", statusCode = 422)
+
+        repository.processPendingActions(testServer)
+
+        // Permanent 4xx → failed on first attempt, no retry burn, not deleted
+        coVerify {
+            pendingActionDao.updateAction(match { it.status == PendingActionEntity.STATUS_FAILED })
+        }
         coVerify(exactly = 0) { pendingActionDao.deleteAction(any()) }
     }
 }
