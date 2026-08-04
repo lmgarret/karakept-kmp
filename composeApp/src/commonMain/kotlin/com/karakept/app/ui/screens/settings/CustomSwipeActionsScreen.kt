@@ -21,11 +21,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -218,7 +218,7 @@ fun CustomSwipeActionsContent(
                         ) {
                             Icon(
                                 imageVector = if (config.type == CustomSwipeActionType.ADD_TAG)
-                                    Icons.Default.Label else Icons.AutoMirrored.Filled.List,
+                                    Icons.AutoMirrored.Filled.Label else Icons.AutoMirrored.Filled.List,
                                 contentDescription = null,
                                 tint = config.colorHex?.let { parseColor(it) }
                                     ?: if (config.type == CustomSwipeActionType.ADD_TAG)
@@ -363,7 +363,7 @@ private fun CustomActionDialog(
                         onClick = { selectedType = CustomSwipeActionType.ADD_TAG }
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Icon(Icons.Default.Label, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Add Tag", style = MaterialTheme.typography.bodyLarge)
                     Spacer(modifier = Modifier.width(16.dp))
@@ -400,7 +400,7 @@ private fun CustomActionDialog(
                             onClick = { showTagEditor = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Label, contentDescription = null)
+                            Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Choose tag…")
                         }

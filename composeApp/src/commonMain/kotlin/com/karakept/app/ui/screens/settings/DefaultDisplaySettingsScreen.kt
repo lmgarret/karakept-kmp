@@ -15,12 +15,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 
+import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Window
-import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -131,7 +131,7 @@ class DefaultDisplaySettingsScreen : NavKey {
                         )
                         HorizontalDivider()
                         ToggleSetting(
-                            icon = Icons.Default.Label,
+                            icon = Icons.AutoMirrored.Filled.Label,
                             title = "Tags",
                             description = "Display tags on bookmark cards",
                             checked = showTags,
@@ -139,7 +139,7 @@ class DefaultDisplaySettingsScreen : NavKey {
                         )
                         HorizontalDivider()
                         ToggleSetting(
-                            icon = Icons.Outlined.MenuBook,
+                            icon = Icons.AutoMirrored.Outlined.MenuBook,
                             title = "Reading Time",
                             description = "Estimated reading time badge",
                             checked = showReadingTimeBadge,

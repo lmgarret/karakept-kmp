@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Archive
@@ -36,7 +37,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -212,7 +212,7 @@ internal fun BookmarkDetailsPanel(
                                 value = if (bookmark.isArchived) "Yes" else "No"
                             )
                             DetailsRow(
-                                icon = Icons.Default.MenuBook,
+                                icon = Icons.AutoMirrored.Filled.MenuBook,
                                 label = "Read",
                                 value = if (bookmark.isRead) "Yes" else "No"
                             )

@@ -15,17 +15,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
+import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ImageNotSupported
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Card
 import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -268,7 +268,7 @@ fun BookmarkViewSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Label,
+                        imageVector = Icons.AutoMirrored.Filled.Label,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -345,7 +345,7 @@ fun BookmarkViewSettingsContent(
             LayoutOption(
                 title = "Custom Tab",
                 description = "Open links in a custom tab using the default browser session",
-                icon = Icons.Default.OpenInNew,
+                icon = Icons.AutoMirrored.Filled.OpenInNew,
                 isSelected = currentLinkOpenMode == LinkOpenMode.CUSTOM_TAB,
                 onClick = { screenModel.setLinkOpenMode(LinkOpenMode.CUSTOM_TAB) }
             )

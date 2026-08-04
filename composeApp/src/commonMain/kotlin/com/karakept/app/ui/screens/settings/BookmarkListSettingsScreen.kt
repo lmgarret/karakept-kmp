@@ -14,7 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Switch
@@ -323,7 +323,7 @@ fun BookmarkListSettingsContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Label,
+                            imageVector = Icons.AutoMirrored.Filled.Label,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 12.dp),
                             tint = MaterialTheme.colorScheme.primary

@@ -14,19 +14,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.VerticalSplit
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Window
-import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -426,7 +426,7 @@ private fun LayoutEditorContent(
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             ToggleRow(
-                                icon = Icons.Default.Notes,
+                                icon = Icons.AutoMirrored.Filled.Notes,
                                 title = "Show description",
                                 checked = layout.showDescription,
                                 onCheckedChange = { screenModel.updateShowDescription(it) }
@@ -586,7 +586,7 @@ private fun LayoutEditorContent(
                 SettingsSection(title = "Reading Time") {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         ToggleRow(
-                            icon = Icons.Outlined.MenuBook,
+                            icon = Icons.AutoMirrored.Outlined.MenuBook,
                             title = "Show reading time",
                             checked = layout.showReadingTime,
                             onCheckedChange = { screenModel.updateShowReadingTime(it) }
@@ -599,7 +599,7 @@ private fun LayoutEditorContent(
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             ToggleRow(
-                                icon = Icons.Default.Label,
+                                icon = Icons.AutoMirrored.Filled.Label,
                                 title = "Show tags",
                                 checked = layout.showTags,
                                 onCheckedChange = { screenModel.updateShowTags(it) }
