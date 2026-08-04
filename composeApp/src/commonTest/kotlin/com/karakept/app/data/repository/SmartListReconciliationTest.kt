@@ -138,7 +138,9 @@ class SmartListReconciliationTest {
                 isArchived = entity.isArchived,
                 isRead = entity.isRead,
                 readingTimeMinutes = entity.readingTimeMinutes,
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -174,7 +176,9 @@ class SmartListReconciliationTest {
                 isArchived = any(),
                 isRead = any(),
                 readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -213,7 +217,9 @@ class SmartListReconciliationTest {
                 isArchived = any(),
                 isRead = any(),
                 readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
         // Both listA (from server) and listC (manual, preserved) should be present
@@ -235,7 +241,7 @@ class SmartListReconciliationTest {
         val smartListIds = setOf("listA")
         bookmarkRepository.reconcileBookmarkSmartListMembership(testServer, 4L, smartListIds)
 
-        coVerify(exactly = 0) { bookmarkDao.updateBookmarkMetadata(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { bookmarkDao.updateBookmarkMetadata(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -254,7 +260,7 @@ class SmartListReconciliationTest {
 
         // No DB write (server returned stale empty data)
         coVerify(exactly = 0) {
-            bookmarkDao.updateBookmarkMetadata(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            bookmarkDao.updateBookmarkMetadata(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         }
         // Returns false → caller should mark smart lists for deferred refresh
         assertEquals(false, result)
@@ -290,7 +296,9 @@ class SmartListReconciliationTest {
                 isArchived = any(),
                 isRead = any(),
                 readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -348,7 +356,9 @@ class SmartListReconciliationTest {
                 isArchived = any(),
                 isRead = any(),
                 readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }

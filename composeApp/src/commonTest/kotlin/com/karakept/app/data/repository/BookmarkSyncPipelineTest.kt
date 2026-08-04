@@ -3,6 +3,7 @@ package com.karakept.app.data.repository
 import com.karakept.api.model.Bookmark
 import com.karakept.api.model.BookmarkContent
 import com.karakept.api.model.BookmarkTagsInner
+import com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
 import com.karakept.api.model.PaginatedBookmarks
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
@@ -20,6 +21,8 @@ import com.karakept.app.utils.ImageCacheManager
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
+import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -328,7 +331,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isArchived = false,
                 isRead = false,
                 readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -449,7 +454,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isArchived = any(),
                 isRead = any(),
                 readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
         coVerify(exactly = 0) { bookmarkDao.updateBookmarks(any()) }
@@ -510,7 +517,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isArchived = false,
                 isRead = false,
                 readingTimeMinutes = 10,
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -647,7 +656,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isArchived = any(),
                 isRead = any(),
                 readingTimeMinutes = 5,
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -907,7 +918,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
         createPipeline(SyncConfiguration.ForList(testServer, "list-1")).execute()
 
-        coVerify { bookmarkDao.updateBookmarkMetadata(localId = 77L, listIds = "", title = any(), url = any(), description = any(), imageUrl = any(), bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(), modifiedAt = any()) }
+        coVerify { bookmarkDao.updateBookmarkMetadata(localId = 77L, listIds = "", title = any(), url = any(), description = any(), imageUrl = any(), bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(), modifiedAt = any(), crawlStatus = any(), crawledAt = any()) }
     }
 
     @Test
@@ -1033,7 +1044,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isArchived = any(),
                 isRead = any(),
                 readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -1084,7 +1097,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isArchived = any(),
                 isRead = any(),
                 readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -1169,7 +1184,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isArchived = any(),
                 isRead = any(),
                 readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -1334,7 +1351,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 localId = 5L, title = any(), url = any(), description = any(), imageUrl = any(),
                 bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), listIds = any(),
                 isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -1364,7 +1383,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 localId = 5L, title = "New", url = any(), description = any(), imageUrl = any(),
                 bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), listIds = any(),
                 isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(),
-                modifiedAt = any()
+                modifiedAt = any(),
+                crawlStatus = any(),
+                crawledAt = any()
             )
         }
     }
@@ -1439,5 +1460,113 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // Candidates come from the rotating-cursor query and get stamped after the pull
         coVerify { bookmarkDao.getReadingProgressPullCandidates("server1", 50) }
         coVerify { bookmarkDao.updateProgressSyncedAt(7L, any()) }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // Crawl metadata
+    // ──────────────────────────────────────────────────────────
+
+    @Test
+    fun fullSync_mapsCrawlStatusAndCrawledAt() = runTest(testDispatcher) {
+        val base = makeBookmarkDto(id = "bk-crawl")
+        val dto = base.copy(
+            content = base.content?.copy(
+                crawlStatus = BookmarkContent.CrawlStatus.FAILURE,
+                crawledAt = "2026-02-03T04:05:06Z"
+            )
+        )
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+
+        val inserted = slot<List<BookmarkEntity>>()
+        coEvery { bookmarkDao.insertBookmarks(capture(inserted)) } returns listOf(1L)
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        val entity = inserted.captured.single()
+        assertEquals("failure", entity.crawlStatus)
+        assertEquals(
+            Instant.parse("2026-02-03T04:05:06Z").toEpochMilliseconds(),
+            entity.crawledAt
+        )
+    }
+
+    @Test
+    fun fullSync_preservesCrawlMetadataWhenDtoOmitsIt() = runTest(testDispatcher) {
+        // Filtered/list syncs can come back without content, which must not blank the crawl state.
+        val existing = makeBookmarkEntity(
+            localId = 7L,
+            remoteId = "bk-crawl".hashCode().toLong(),
+            originalRemoteId = "bk-crawl"
+        ).copy(crawlStatus = "success", crawledAt = 999L)
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existing))
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existing)
+
+        val dto = makeBookmarkDto(id = "bk-crawl") // no crawlStatus / crawledAt
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        coVerify(exactly = 1) {
+            bookmarkDao.updateBookmarkMetadata(
+                localId = 7L,
+                title = any(),
+                url = any(),
+                description = any(),
+                imageUrl = any(),
+                bannerImageAssetId = any(),
+                screenshotAssetId = any(),
+                tags = any(),
+                listIds = any(),
+                isStarred = any(),
+                isArchived = any(),
+                isRead = any(),
+                readingTimeMinutes = any(),
+                modifiedAt = any(),
+                crawlStatus = "success",
+                crawledAt = 999L
+            )
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // Asset metadata
+    // ──────────────────────────────────────────────────────────
+
+    @Test
+    fun fullSync_tracksPdfAssetsAndIgnoresUntrackedTypes() = runTest(testDispatcher) {
+        val dto = makeBookmarkDto(id = "bk-assets").copy(
+            assets = listOf(
+                BookmarksBookmarkIdAssetsPost201Response(
+                    id = "pdf-1",
+                    assetType = BookmarksBookmarkIdAssetsPost201Response.AssetType.PDF
+                ),
+                BookmarksBookmarkIdAssetsPost201Response(
+                    id = "archive-1",
+                    assetType = BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE
+                ),
+                // Not persisted as an AssetEntity — banner/screenshot live on the bookmark row
+                BookmarksBookmarkIdAssetsPost201Response(
+                    id = "banner-1",
+                    assetType = BookmarksBookmarkIdAssetsPost201Response.AssetType.BANNER_IMAGE
+                )
+            )
+        )
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+
+        val metadata = slot<List<com.karakept.app.data.local.entity.AssetEntity>>()
+        coEvery { assetDao.insertAssetMetadataOnly(capture(metadata)) } returns Unit
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        assertEquals(
+            setOf("pdf" to "pdf-1", "fullPageArchive" to "archive-1"),
+            metadata.captured.map { it.assetType to it.id }.toSet()
+        )
     }
 }

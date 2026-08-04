@@ -90,7 +90,9 @@ interface BookmarkDao {
             isArchived = :isArchived,
             isRead = :isRead,
             readingTimeMinutes = :readingTimeMinutes,
-            modifiedAt = :modifiedAt
+            modifiedAt = :modifiedAt,
+            crawlStatus = :crawlStatus,
+            crawledAt = :crawledAt
         WHERE localId = :localId
     """)
     suspend fun updateBookmarkMetadata(
@@ -107,7 +109,9 @@ interface BookmarkDao {
         isArchived: Boolean,
         isRead: Boolean,
         readingTimeMinutes: Int,
-        modifiedAt: Long?
+        modifiedAt: Long?,
+        crawlStatus: String?,
+        crawledAt: Long?
     )
 
     // Stamp the reading-progress rotating cursor after a pull (G3).

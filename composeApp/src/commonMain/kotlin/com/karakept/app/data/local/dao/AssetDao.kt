@@ -22,6 +22,10 @@ interface AssetDao {
     @Query("UPDATE assets SET localPath = NULL WHERE id = :assetId")
     suspend fun clearLocalPath(assetId: String)
 
+    // Drop the row entirely — used when the asset is deleted on the server, not just locally
+    @Query("DELETE FROM assets WHERE id = :assetId")
+    suspend fun deleteAsset(assetId: String)
+
     @Query("DELETE FROM assets WHERE serverId = :serverId")
     suspend fun deleteAllAssetsForServer(serverId: String)
 }

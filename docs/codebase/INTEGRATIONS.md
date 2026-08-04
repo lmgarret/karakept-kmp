@@ -23,6 +23,28 @@
 - `HighlightsApi` - Text highlight annotations on bookmarks
 - `UsersApi` - User profile and auth operations
 
+**tRPC endpoints (not in the OpenAPI spec):**
+
+A few Karakeep operations are only reachable through the web app's internal tRPC API, so
+`RemoteDataSource` posts to them with raw Ktor instead of the generated client. Request
+bodies use the batch envelope `{"0":{"json":{…}}}`, built by
+`com/karakept/app/utils/TrpcPayloadUtils.kt`.
+
+| Route | Used for |
+|---|---|
+| `bookmarks.updateReadingProgress` | Push reading progress to the server |
+| `bookmarks.getReadingProgress` | Pull reading progress from the server |
+| `bookmarks.recrawlBookmark` | Refresh / preserve full page archive / preserve PDF |
+
+`recrawlBookmark` takes `{ bookmarkId, archiveFullPage, storePdf }` and enqueues a background
+job — a successful response only means the request was accepted, so callers re-sync the
+bookmark afterwards to pick up the result.
+
+> These are internal APIs with no compatibility guarantee across Karakeep versions. Every
+> call site must degrade to a user-visible error and leave local state untouched. A 404 whose
+> body says "No procedure found" is surfaced as `UnsupportedServerActionException` so the UI
+> can say the server doesn't support the action rather than offering a pointless retry.
+
 **HTTP Client Configuration:**
 - Library: `io.ktor:ktor-client-core` v3.3.2
 - Engine: `io.ktor:ktor-client-okhttp` (JVM/Android + Desktop)
