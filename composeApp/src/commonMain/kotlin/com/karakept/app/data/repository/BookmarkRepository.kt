@@ -214,12 +214,16 @@ class BookmarkRepository(
         return try {
             var dto = remoteDataSource.createBookmark(server, url)
 
-            // Polling for title/content (max 10 seconds)
-            // Karakeep API takes some time to parse the URL
+            // Polling for title/content, waiting for the crawl to reach a terminal status.
+            // Karakeep API takes some time to parse the URL, and can pass through an interim
+            // state (e.g. an anti-bot interstitial page) whose title looks valid but isn't final -
+            // only accept a title once the server itself reports the crawl as settled.
             var attempts = 0
-            while (attempts < 15) { // Increased to 15 attempts (30 seconds total)
+            while (attempts < 30) { // 30 attempts, 2s apart = 60 seconds total
                 val currentTitle = dto.title ?: dto.content?.title ?: ""
-                if (currentTitle.isNotBlank() && currentTitle != "Untitled") break
+                val crawlStatusValue = dto.content?.crawlStatus?.value
+                val crawlSettled = crawlStatusValue == null || crawlStatusValue == "success" || crawlStatusValue == "failure"
+                if (currentTitle.isNotBlank() && currentTitle != "Untitled" && crawlSettled) break
 
                 onStatusChange?.invoke("Waiting for bookmark to be parsed...")
                 delay(2000) // Increased to 2 seconds
