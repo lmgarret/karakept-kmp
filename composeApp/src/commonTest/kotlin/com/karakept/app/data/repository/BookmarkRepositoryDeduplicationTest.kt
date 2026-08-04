@@ -62,6 +62,17 @@ class BookmarkRepositoryDeduplicationTest : BaseRepositoryTest() {
 
     private val testServer = Server("server1", "https://example.com", "test-key", "Test Server")
 
+    private fun listEntity(remoteId: String, name: String) = com.karakept.app.data.local.entity.ListEntity(
+        remoteId = remoteId,
+        serverId = "server1",
+        name = name,
+        icon = null,
+        parentId = null,
+        description = null,
+        query = null,
+        updatedAt = 0L
+    )
+
     @BeforeTest
     override fun setup() {
         super.setup()
@@ -72,10 +83,14 @@ class BookmarkRepositoryDeduplicationTest : BaseRepositoryTest() {
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.NEVER)
         coEvery { settingsRepository.allListSettings } returns flowOf(emptyMap())
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(false)
-        coEvery { highlightRepository.syncHighlights(any()) } returns Unit
+        coEvery { highlightRepository.syncHighlights(any()) } returns true
         coEvery { remoteDataSource.fetchLists(any()) } returns emptyList()
         coEvery { listDao.getListsForServerOnce(any()) } returns emptyList()
         coEvery { remoteDataSource.fetchBookmarksForList(any(), any(), any()) } returns emptyList()
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns com.karakept.api.model.PaginatedBookmarks(bookmarks = emptyList(), nextCursor = null)
+        coEvery { highlightRepository.syncHighlights(any()) } returns true
     }
 
     /**
@@ -163,5 +178,40 @@ class BookmarkRepositoryDeduplicationTest : BaseRepositoryTest() {
 
         // Both calls must have reached fetchBookmarksForList (second was NOT blocked by dedup)
         coVerify(exactly = 2) { remoteDataSource.fetchBookmarksForList(any(), "list-1", any()) }
+    }
+
+    /**
+     * syncAllWithLists runs a Full sync then one ForList pass per list, so each list's
+     * bookmarks are fetched exactly once (the old Full N+1 + syncOtherLists fetched twice).
+     */
+    @Test
+    fun syncAllWithLists_fetchesEachListExactlyOnce() = runTest(testDispatcher) {
+        coEvery { listDao.getListsForServerOnce("server1") } returns listOf(
+            listEntity("list-1", "L1"),
+            listEntity("list-2", "L2")
+        )
+
+        repository.syncAllWithLists(testServer)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { remoteDataSource.fetchBookmarksForList(testServer, "list-1", any()) }
+        coVerify(exactly = 1) { remoteDataSource.fetchBookmarksForList(testServer, "list-2", any()) }
+    }
+
+    /**
+     * A list already synced by the caller (skipKey) is not re-fetched.
+     */
+    @Test
+    fun syncAllWithLists_skipsProvidedKey() = runTest(testDispatcher) {
+        coEvery { listDao.getListsForServerOnce("server1") } returns listOf(
+            listEntity("list-1", "L1"),
+            listEntity("list-2", "L2")
+        )
+
+        repository.syncAllWithLists(testServer, skipKey = "list-1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { remoteDataSource.fetchBookmarksForList(testServer, "list-1", any()) }
+        coVerify(exactly = 1) { remoteDataSource.fetchBookmarksForList(testServer, "list-2", any()) }
     }
 }

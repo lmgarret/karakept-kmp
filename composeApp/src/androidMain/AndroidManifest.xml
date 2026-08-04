@@ -4,6 +4,29 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      API 30+ filters which other apps we can see. Without this, anything that inspects
+      intent resolution reports "no app available" even when one is installed.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/pdf" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="text/html" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="image/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <application
         android:name=".KarakeptApp"
         android:allowBackup="true"
@@ -54,6 +77,21 @@
                 <action android:name="com.karakept.app.action.RETRY_SAVE" />
             </intent-filter>
         </receiver>
+
+        <!--
+          Grants other apps temporary read access to files we hand out, so a PDF asset can be
+          opened in an external reader and a backup can be shared. FileUtils already referenced
+          this authority but it was never declared, so those hand-offs silently fell back.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- Required for compose-ui-test createComposeRule() under Robolectric -->
         <activity android:name="androidx.activity.ComponentActivity" />

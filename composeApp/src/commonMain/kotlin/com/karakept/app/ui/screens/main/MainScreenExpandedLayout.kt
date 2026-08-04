@@ -80,7 +80,6 @@ fun MainScreenExpandedLayout(
     topTagsWithCounts: List<String>,
     allAvailableTags: List<String>,
     offlineMode: Boolean,
-    isAutoOffline: Boolean,
     isDrawerVisible: Boolean,
     onDrawerVisibilityChanged: (Boolean) -> Unit,
     isReaderFullscreen: Boolean,
@@ -205,7 +204,7 @@ fun MainScreenExpandedLayout(
                         onActiveHighlightIdChanged(null)
                     },
                     isHighlightsSelected = showHighlights,
-                    onAddBookmark = if (isDesktop && !offlineMode && !isAutoOffline) {
+                    onAddBookmark = if (isDesktop && !offlineMode) {
                         { onShowAddBookmarkDialogChanged(true) }
                     } else null,
                     quickFilterCounts = quickFilterCounts,

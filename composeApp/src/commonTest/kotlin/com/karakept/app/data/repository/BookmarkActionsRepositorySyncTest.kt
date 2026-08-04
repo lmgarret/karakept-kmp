@@ -75,7 +75,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
             actionType = PendingActionType.FAVOURITE,
             bookmarkRemoteId = 20L
         )
-        coEvery { pendingActionDao.getPendingActionsList("server1") } returns listOf(action1, action2)
+        coEvery { pendingActionDao.getProcessableActions("server1", any()) } returns listOf(action1, action2)
         coEvery {
             bookmarkDao.getBookmarkByRemoteId(10L, "server1")
         } returns makeBookmark(remoteId = 10L)
@@ -231,11 +231,11 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun executeAction_retryCountExceeded_deletesAction() = runTest {
-        // The code checks `action.retryCount >= 5` (original count), so use 5
+    fun executeAction_retryCountExceeded_marksFailedInsteadOfDeleting() = runTest {
+        // retryCount 4 → the next transient failure hits the 5-retry cap
         val action = makePendingAction(
             actionType = PendingActionType.ARCHIVE,
-            retryCount = 5
+            retryCount = 4
         )
         val bookmark = makeBookmark()
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
@@ -245,7 +245,13 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
         repository.executeAction(action, "server1")
 
-        coVerify { pendingActionDao.deleteAction(action) }
+        coVerify {
+            pendingActionDao.updateAction(match {
+                it.retryCount == 5 &&
+                    it.status == com.karakept.app.data.local.entity.PendingActionEntity.STATUS_FAILED
+            })
+        }
+        coVerify(exactly = 0) { pendingActionDao.deleteAction(action) }
     }
 
     @Test

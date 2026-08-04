@@ -41,6 +41,8 @@ class BackgroundSyncOrchestratorTest {
         every { settingsRepository.activeServerId } returns flowOf(activeServerId)
         every { serverRepository.servers } returns flowOf(servers)
         every { notificationProvider.canSendNotifications() } returns canSend
+        // No warnings by default; the orchestrator collects this during a run.
+        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
     }
 
     @Test
@@ -58,21 +60,21 @@ class BackgroundSyncOrchestratorTest {
     @Test
     fun runSync_returnsSuccess_afterSync() = runTest {
         setupDefaults()
-        coEvery { bookmarkRepository.syncBookmarks(any()) } returns 0
+        coEvery { bookmarkRepository.syncAllWithLists(any()) } returns 0
         assertEquals(SyncResult.SUCCESS, createOrchestrator().runSync())
     }
 
     @Test
     fun runSync_returnsError_whenSyncThrows() = runTest {
         setupDefaults()
-        coEvery { bookmarkRepository.syncBookmarks(any()) } throws RuntimeException("network error")
+        coEvery { bookmarkRepository.syncAllWithLists(any()) } throws RuntimeException("network error")
         assertEquals(SyncResult.ERROR, createOrchestrator().runSync())
     }
 
     @Test
     fun runSync_sendsDigestNotification_whenEnabled() = runTest {
         setupDefaults()
-        coEvery { bookmarkRepository.syncBookmarks(any()) } returns 3
+        coEvery { bookmarkRepository.syncAllWithLists(any()) } returns 3
         coEvery { bookmarkRepository.getListsNeedingNotification(any()) } returns emptyList()
 
         createOrchestrator().runSync()
@@ -83,7 +85,7 @@ class BackgroundSyncOrchestratorTest {
     @Test
     fun runSync_skipsDigest_whenDigestDisabled() = runTest {
         setupDefaults(digestEnabled = false)
-        coEvery { bookmarkRepository.syncBookmarks(any()) } returns 3
+        coEvery { bookmarkRepository.syncAllWithLists(any()) } returns 3
         coEvery { bookmarkRepository.getListsNeedingNotification(any()) } returns emptyList()
 
         createOrchestrator().runSync()
@@ -94,7 +96,7 @@ class BackgroundSyncOrchestratorTest {
     @Test
     fun runSync_skipsAllNotifications_whenNotificationsDisabled() = runTest {
         setupDefaults(notificationsEnabled = false)
-        coEvery { bookmarkRepository.syncBookmarks(any()) } returns 5
+        coEvery { bookmarkRepository.syncAllWithLists(any()) } returns 5
 
         createOrchestrator().runSync()
 
@@ -104,7 +106,7 @@ class BackgroundSyncOrchestratorTest {
     @Test
     fun runSync_skipsAllNotifications_whenProviderCannotSend() = runTest {
         setupDefaults(canSend = false)
-        coEvery { bookmarkRepository.syncBookmarks(any()) } returns 5
+        coEvery { bookmarkRepository.syncAllWithLists(any()) } returns 5
 
         createOrchestrator().runSync()
 
@@ -114,7 +116,7 @@ class BackgroundSyncOrchestratorTest {
     @Test
     fun runSync_sendsListNotification_whenListsNeedNotification() = runTest {
         setupDefaults()
-        coEvery { bookmarkRepository.syncBookmarks(any()) } returns 3
+        coEvery { bookmarkRepository.syncAllWithLists(any()) } returns 3
         coEvery { bookmarkRepository.getListsNeedingNotification("s1") } returns listOf(
             Triple("list1", "Reading", 2),
             Triple("list2", "Work", 1)
@@ -132,7 +134,7 @@ class BackgroundSyncOrchestratorTest {
     @Test
     fun runSync_skipsListNotification_whenNewCountIsZero() = runTest {
         setupDefaults()
-        coEvery { bookmarkRepository.syncBookmarks(any()) } returns 0
+        coEvery { bookmarkRepository.syncAllWithLists(any()) } returns 0
 
         createOrchestrator().runSync()
 
@@ -145,21 +147,21 @@ class BackgroundSyncOrchestratorTest {
     fun runSync_usesActiveServer() = runTest {
         val server2 = Server(id = "s2", url = "https://other.com", apiKey = "k2", label = "Other")
         setupDefaults(servers = listOf(fakeServer, server2), activeServerId = "s2")
-        coEvery { bookmarkRepository.syncBookmarks(any()) } returns 0
+        coEvery { bookmarkRepository.syncAllWithLists(any()) } returns 0
 
         createOrchestrator().runSync()
 
-        coVerify { bookmarkRepository.syncBookmarks(server2) }
+        coVerify { bookmarkRepository.syncAllWithLists(server2) }
     }
 
     @Test
     fun runSync_fallsBackToFirstServer_whenActiveNotFound() = runTest {
         setupDefaults(activeServerId = "nonexistent")
-        coEvery { bookmarkRepository.syncBookmarks(any()) } returns 0
+        coEvery { bookmarkRepository.syncAllWithLists(any()) } returns 0
 
         createOrchestrator().runSync()
 
-        coVerify { bookmarkRepository.syncBookmarks(fakeServer) }
+        coVerify { bookmarkRepository.syncAllWithLists(fakeServer) }
     }
 
     // ---- Message formatting tests ----

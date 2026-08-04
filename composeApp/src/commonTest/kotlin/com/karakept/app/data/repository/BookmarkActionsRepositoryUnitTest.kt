@@ -72,6 +72,25 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
     }
 
     @Test
+    fun moveToList_stripsSmartListMembershipOptimistically() = runTest(testDispatcher) {
+        // Bookmark is in a smart list ("all-feeds") and a manual list ("keep-manual").
+        val bookmark = makeBookmark(listIds = "all-feeds,keep-manual")
+        coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
+        coEvery { settingsRepository.offlineMode } returns flowOf(true)
+
+        repository.moveToList(
+            bookmark.remoteId, bookmark.serverId, "read-later",
+            isOnline = false, smartListIds = setOf("all-feeds")
+        )
+
+        val savedSlot = slot<BookmarkEntity>()
+        coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
+        val ids = savedSlot.captured.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        // Smart list dropped, manual list kept, target list added.
+        assertEquals(setOf("keep-manual", "read-later"), ids)
+    }
+
+    @Test
     fun moveToList_doesNotDuplicateExistingListId() = runTest(testDispatcher) {
         val bookmark = makeBookmark(listIds = "list-1")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark

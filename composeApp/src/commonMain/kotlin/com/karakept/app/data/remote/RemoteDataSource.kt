@@ -5,8 +5,11 @@ import com.karakept.api.model.*
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.Server
 import com.karakept.app.utils.AppLogger
+import com.karakept.app.utils.TrpcPayloadUtils
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.timeout
+import io.ktor.client.plugins.onDownload
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -30,6 +33,13 @@ import com.karakept.api.infrastructure.HttpResponse as ApiHttpResponse
 class OfflineModeException(message: String = "Offline mode is enabled - network request blocked") : Exception(message)
 
 /**
+ * Thrown when the server does not expose a tRPC route Karakept relies on. tRPC is Karakeep's
+ * internal API, so routes can disappear or be renamed between versions — callers should report
+ * this as "your server doesn't support this" rather than as a transient failure worth retrying.
+ */
+class UnsupportedServerActionException(message: String) : Exception(message)
+
+/**
  * Extension that checks the HTTP status of a generated API response before deserializing.
  * If the response is non-2xx, throws [ApiException] with the status code and response body,
  * preventing cryptic [io.ktor.client.call.NoTransformationFoundException] errors when the
@@ -38,7 +48,7 @@ class OfflineModeException(message: String = "Offline mode is enabled - network 
 private suspend fun <T : Any> ApiHttpResponse<T>.checkedBody(): T {
     if (!success) {
         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "(unreadable)" }
-        throw ApiException("HTTP $status: $errorBody")
+        throw ApiException("HTTP $status: $errorBody", statusCode = status)
     }
     return body()
 }
@@ -48,25 +58,16 @@ class RemoteDataSource(
     private val offlineModeProvider: (suspend () -> Boolean)? = null
 ) {
     /**
-     * Guard function that blocks execution if offline mode is enabled.
+     * Guard function that blocks execution when the user has enabled offline mode.
      * Throws OfflineModeException when offline.
      */
     private suspend fun <T> guardedCall(block: suspend () -> T): T {
         if (offlineModeProvider?.invoke() == true) {
             throw OfflineModeException()
         }
-        try {
-            return block()
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Inner catch blocks wrap CancellationException in ApiException — unwrap it
-            // so coroutine cancellation propagates correctly.
-            val cause = e.cause
-            if (cause is kotlinx.coroutines.CancellationException) throw cause
-            throw e
-        }
+        return block()
     }
+
     private val trpcJson = Json { ignoreUnknownKeys = true }
 
     private fun getBaseUrl(server: Server): String {
@@ -176,7 +177,18 @@ class RemoteDataSource(
         }
     }
 
-    suspend fun downloadAsset(server: Server, assetId: String): ByteArray = guardedCall {
+    /**
+     * Downloads an asset's bytes.
+     *
+     * [onProgress] is invoked with a 0f..1f fraction as bytes arrive, or with null when the
+     * response carries no Content-Length and the fraction can't be known — callers should
+     * show an indeterminate indicator in that case.
+     */
+    suspend fun downloadAsset(
+        server: Server,
+        assetId: String,
+        onProgress: ((Float?) -> Unit)? = null
+    ): ByteArray = guardedCall {
         try {
             // Reverting to direct Ktor client as the generated assetsApi returns HttpResponse<Unit> (void)
             // and doesn't seem to handle the binary download properly in this version.
@@ -185,12 +197,28 @@ class RemoteDataSource(
 
             val response: HttpResponse = client.get("$url/assets/$assetId") {
                 header("Authorization", getAuth(server))
+                // Full-page archives can be large — allow more than the default budget.
+                timeout {
+                    requestTimeoutMillis = ASSET_REQUEST_TIMEOUT_MS
+                    socketTimeoutMillis = ASSET_SOCKET_TIMEOUT_MS
+                }
+                if (onProgress != null) {
+                    onDownload { bytesSentTotal, contentLength ->
+                        // contentLength is null for chunked responses — report indeterminate
+                        // rather than inventing a fraction.
+                        onProgress(
+                            if (contentLength != null && contentLength > 0) {
+                                (bytesSentTotal.toFloat() / contentLength).coerceIn(0f, 1f)
+                            } else null
+                        )
+                    }
+                }
             }
 
             if (response.status.isSuccess()) {
                 response.body<ByteArray>()
             } else {
-                throw ApiException("Failed to download asset: ${response.status}")
+                throw ApiException("Failed to download asset: ${response.status}", statusCode = response.status.value)
             }
         } catch (e: Exception) {
             throw ApiException("Error downloading asset: ${e.message}", e)
@@ -232,6 +260,24 @@ class RemoteDataSource(
             bookmarksApi(server).bookmarksBookmarkIdDelete(bookmarkId)
         } catch (e: Exception) {
             throw ApiException("Error deleting bookmark: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Detach an asset from a bookmark, deleting it on the server.
+     * DELETE /api/v1/bookmarks/:bookmarkId/assets/:assetId
+     */
+    suspend fun detachAsset(server: Server, bookmarkId: String, assetId: String) = guardedCall {
+        try {
+            val response = bookmarksApi(server).bookmarksBookmarkIdAssetsAssetIdDelete(bookmarkId, assetId)
+            // 204 No Content, so there is no body to decode — check the status directly rather
+            // than going through checkedBody(). A silent failure here would wrongly tell the
+            // user their server-side copy is gone.
+            if (!response.success) {
+                throw ApiException("HTTP ${response.status}")
+            }
+        } catch (e: Exception) {
+            throw ApiException("Error deleting asset on server: ${e.message}", e)
         }
     }
 
@@ -294,7 +340,7 @@ class RemoteDataSource(
             val response = bookmarksApi(server).bookmarksPost(request)
             if (!response.success) {
                 val errorBody = response.response.bodyAsText()
-                throw ApiException("Bookmark creation failed with status ${response.status}: $errorBody")
+                throw ApiException("Bookmark creation failed with status ${response.status}: $errorBody", statusCode = response.status)
             }
             response.body() ?: throw ApiException("Empty success response from server")
         } catch (e: Exception) {
@@ -338,7 +384,14 @@ class RemoteDataSource(
      */
     suspend fun fetchAllHighlights(server: Server): List<Highlight> = guardedCall {
         try {
-            highlightsApi(server).highlightsGet(limit = 100.0).checkedBody().highlights ?: emptyList()
+            val allHighlights = mutableListOf<Highlight>()
+            var cursor: String? = null
+            do {
+                val page = highlightsApi(server).highlightsGet(limit = 100.0, cursor = cursor).checkedBody()
+                allHighlights.addAll(page.highlights ?: emptyList())
+                cursor = page.nextCursor
+            } while (cursor != null)
+            allHighlights
         } catch (e: Exception) {
             throw ApiException("Error fetching all highlights: ${e.message}", e)
         }
@@ -447,7 +500,7 @@ class RemoteDataSource(
         try {
             val trpcBase = getTrpcBaseUrl(server)
             val url = "$trpcBase/api/trpc/bookmarks.updateReadingProgress?batch=1"
-            val body = """{"0":{"json":{"bookmarkId":"$bookmarkId","readingProgressOffset":0,"readingProgressAnchor":null,"readingProgressPercent":$progressPercent}}}"""
+            val body = TrpcPayloadUtils.updateReadingProgress(bookmarkId, progressPercent)
             val response: HttpResponse = client.post(url) {
                 header("Authorization", getAuth(server))
                 contentType(ContentType.Application.Json)
@@ -485,7 +538,7 @@ class RemoteDataSource(
             val response: HttpResponse = client.get(url) {
                 header("Authorization", getAuth(server))
                 parameter("batch", "1")
-                parameter("input", """{"0":{"json":{"bookmarkId":"$bookmarkId"}}}""")
+                parameter("input", TrpcPayloadUtils.getReadingProgress(bookmarkId))
             }
 
             if (!response.status.isSuccess()) {
@@ -511,6 +564,68 @@ class RemoteDataSource(
             null
         }
     }
+
+    /**
+     * Ask the server to re-crawl a link bookmark. The server enqueues a background job, so
+     * success here only means the request was accepted — the resulting metadata and assets
+     * appear on a later sync.
+     *
+     * [archiveFullPage] additionally stores a `fullPageArchive` asset, [storePdf] a `pdf` asset.
+     * These map to the "Refresh" / "Preserve offline archive" / "Preserve as PDF" actions in
+     * the Karakeep web UI.
+     *
+     * tRPC mutation: bookmarks.recrawlBookmark
+     * POST /api/trpc/bookmarks.recrawlBookmark?batch=1
+     *
+     * @throws UnsupportedServerActionException if the server has no such tRPC route.
+     */
+    suspend fun recrawlBookmark(
+        server: Server,
+        bookmarkId: String,
+        archiveFullPage: Boolean = false,
+        storePdf: Boolean = false
+    ): Unit = guardedCall {
+        val trpcBase = getTrpcBaseUrl(server)
+        val url = "$trpcBase/api/trpc/bookmarks.recrawlBookmark?batch=1"
+        val response: HttpResponse = try {
+            client.post(url) {
+                header("Authorization", getAuth(server))
+                contentType(ContentType.Application.Json)
+                setBody(TrpcPayloadUtils.recrawlBookmark(bookmarkId, archiveFullPage, storePdf))
+            }
+        } catch (e: Exception) {
+            throw ApiException("Error requesting recrawl: ${e.message}", e)
+        }
+
+        if (response.status.isSuccess()) return@guardedCall
+
+        val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+        // tRPC answers an unknown procedure with 404 "No procedure found on path …". A missing
+        // bookmark is also a 404, so match on the message rather than the status alone.
+        if (errorBody.contains("No procedure found", ignoreCase = true)) {
+            throw UnsupportedServerActionException(
+                "This Karakeep server doesn't support re-crawling from the app"
+            )
+        }
+        throw ApiException("HTTP ${response.status}: $errorBody")
+    }
 }
 
-class ApiException(message: String, cause: Throwable? = null) : Exception(message, cause)
+class ApiException(
+    message: String,
+    cause: Throwable? = null,
+    statusCode: Int? = null
+) : Exception(message, cause) {
+    /** HTTP status of the failed response, preserved through re-wraps via [cause]. */
+    val statusCode: Int? = statusCode ?: (cause as? ApiException)?.statusCode
+}
+
+/** True when this failure chain contains an HTTP response with [code]. */
+fun Throwable.hasHttpStatus(code: Int): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is ApiException && current.statusCode == code) return true
+        current = current.cause
+    }
+    return false
+}

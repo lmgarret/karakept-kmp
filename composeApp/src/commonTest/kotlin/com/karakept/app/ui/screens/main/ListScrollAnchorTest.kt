@@ -147,4 +147,58 @@ class ListScrollAnchorTest {
         )
         assertNull(result)
     }
+
+    private fun snapshot(
+        bookmarks: List<BookmarkEntity>,
+        firstIndex: Int = 0,
+        firstOffset: Int = 0,
+        isScrolling: Boolean = false,
+        listVersion: Int = 0
+    ) = AnchorSnapshot(bookmarks, firstIndex, firstOffset, isScrolling, listVersion)
+
+    @Test
+    fun reloadAnnouncedBeforeDatasetArrives_doesNotRePinToThePreviousListsAnchor() {
+        // The version bump and the dataset swap travel through different flows, so a list
+        // switch normally lands as two snapshots. If the bump is forgotten by the time the
+        // swap shows up, the swap looks surgical and the viewport gets re-pinned to a
+        // bookmark carried over from the list the user just left.
+        val listA = listOfIds(1, 2, 3, 4, 5)
+        val listB = listOfIds(9, 8, 3, 7, 6)  // id 3 exists in both lists
+        val anchor = ListScrollAnchorState(initialVersion = 0)
+
+        // User is parked on bookmark 3 (index 2) in list A.
+        anchor.onSnapshot(snapshot(listA, firstIndex = 2, listVersion = 0))
+        // The reload is announced first, still showing list A.
+        assertNull(anchor.onSnapshot(snapshot(listA, firstIndex = 2, listVersion = 1)))
+        // The new dataset arrives in a later snapshot.
+        assertNull(anchor.onSnapshot(snapshot(listB, firstIndex = 2, listVersion = 1)))
+    }
+
+    @Test
+    fun reloadLatchIsConsumedByTheSwap_soLaterSurgicalChangesStillRePin() {
+        val listA = listOfIds(1, 2, 3, 4, 5)
+        val listB = listOfIds(9, 8, 3, 7, 6)
+        val anchor = ListScrollAnchorState(initialVersion = 0)
+
+        // Parked on bookmark 3 (index 2) of list A, then a reload swaps in list B.
+        anchor.onSnapshot(snapshot(listA, firstIndex = 2, firstOffset = 12, listVersion = 0))
+        anchor.onSnapshot(snapshot(listA, firstIndex = 2, firstOffset = 12, listVersion = 1))
+        assertNull(anchor.onSnapshot(snapshot(listB, firstIndex = 0, listVersion = 1)))
+
+        // The user scrolls to bookmark 3 (index 2) of the new list — the anchor re-records.
+        anchor.onSnapshot(snapshot(listB, firstIndex = 2, firstOffset = 12, listVersion = 1))
+
+        // An item above the anchor is then removed: a surgical change, still compensated.
+        val afterRemoval = listOfIds(9, 3, 7, 6)
+        assertEquals(
+            AnchorScrollTarget(index = 1, offset = 12),
+            anchor.onSnapshot(snapshot(afterRemoval, firstIndex = 2, listVersion = 1))
+        )
+    }
+
+    @Test
+    fun firstSnapshotNeverRePins() {
+        val anchor = ListScrollAnchorState(initialVersion = 3)
+        assertNull(anchor.onSnapshot(snapshot(listOfIds(1, 2, 3), firstIndex = 1, listVersion = 3)))
+    }
 }
