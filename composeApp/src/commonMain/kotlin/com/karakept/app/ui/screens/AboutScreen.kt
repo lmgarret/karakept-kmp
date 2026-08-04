@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.Card
@@ -42,6 +43,7 @@ import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import coil3.compose.AsyncImage
 import com.karakept.app.utils.FaviconUtils
+import isDevBuild
 
 data class FossLibrary(
     val name: String,
@@ -54,7 +56,10 @@ class AboutScreen : NavKey {
     @Composable
     fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        AboutContent(onBack = { navigator.pop() })
+        AboutContent(
+            onBack = { navigator.pop() },
+            onViewLogs = if (isDevBuild) ({ navigator.push(DevLogsScreen()) }) else null
+        )
     }
 }
 
@@ -62,7 +67,8 @@ class AboutScreen : NavKey {
 @Composable
 fun AboutContent(
     onBack: () -> Unit,
-    showBackButton: Boolean = true
+    showBackButton: Boolean = true,
+    onViewLogs: (() -> Unit)? = null
 ) {
     val uriHandler = LocalUriHandler.current
 
@@ -166,6 +172,39 @@ fun AboutContent(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                    }
+                }
+
+                onViewLogs?.let { viewLogs ->
+                    item {
+                        HorizontalDivider()
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewLogs() }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BugReport,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = "View Logs",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = "In-app log viewer (dev build)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }

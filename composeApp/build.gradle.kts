@@ -145,6 +145,7 @@ kotlin {
                 implementation(libs.kotlin.test)
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.mockk)
+                implementation(libs.ktor.client.mock)
             }
         }
     }
@@ -249,6 +250,11 @@ compose.desktop {
         // which improves throughput without sacrificing low-latency guarantees.
         jvmArgs += "-XX:+UseZGC"
         jvmArgs += "-XX:+ZGenerational"
+        // Keep full stack traces on repeated implicit exceptions (NPE/AIOOBE/etc.). HotSpot's
+        // "fast throw" optimization otherwise swaps in a preallocated, stackless copy after a
+        // site throws often — which defeats the a11y-crash guard, whose classification relies on
+        // seeing the androidx.compose.ui.platform.a11y frames. See A11yCrashGuard.
+        jvmArgs += "-XX:-OmitStackTraceInFastThrow"
         // SOFTWARE_FAST is only supported on Linux; on macOS use the default (Metal).
         // The actual property is set conditionally in main.kt at runtime.
         // jvmArgs += "-Dskiko.renderApi=SOFTWARE_FAST"

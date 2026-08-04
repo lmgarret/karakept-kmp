@@ -59,7 +59,7 @@ class HighlightsPullToRefreshTest {
         every { settingsRepository.activeServerId } returns flowOf("server-1")
         every { serverRepository.servers } returns flowOf(listOf(fakeServer))
         coEvery { highlightRepository.getHighlightsPaged(any(), any(), any()) } returns emptyList()
-        coEvery { highlightRepository.syncHighlights(any()) } returns Unit
+        coEvery { highlightRepository.syncHighlights(any()) } returns true
     }
 
     @AfterTest

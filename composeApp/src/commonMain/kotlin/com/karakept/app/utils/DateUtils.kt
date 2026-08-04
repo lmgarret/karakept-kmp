@@ -6,6 +6,16 @@ import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
+/** Parses an ISO-8601 timestamp from the API into epoch millis, or null if absent/malformed. */
+fun parseIsoToEpochMillis(iso: String?): Long? {
+    if (iso.isNullOrBlank()) return null
+    return try {
+        Instant.parse(iso).toEpochMilliseconds()
+    } catch (e: Exception) {
+        null
+    }
+}
+
 fun formatBookmarkDate(epochMillis: Long, mode: DateDisplayMode): String {
     return when (mode) {
         DateDisplayMode.ELAPSED -> formatElapsed(epochMillis)

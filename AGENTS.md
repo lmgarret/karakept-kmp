@@ -169,6 +169,14 @@ All hierarchy helpers live in the single `ListHierarchyUtils` object
 
 > **Rule:** Never implement custom tag-selection dialogs or text fields.
 
+### Empty states
+
+- A list with nothing in it needs an **explicit empty state**, never a blank area — the two
+  are indistinguishable to the user.
+- Gate it on `MainScreenModel.isLoadingInitialPage`, which is false only once the first page
+  has actually resolved. Rendering the empty state unconditionally flashes "nothing here" on
+  every cold start before the list arrives.
+
 ### Menus and bottom sheets
 
 - **`ModalBottomSheet`** + `DropdownMenuItem` → contextual bookmark action menus (see `BookmarkActionsMenu.kt`).

@@ -94,6 +94,8 @@ class Save02RegressionTest {
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
+        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
         every { bookmarkRepository.syncProgress } returns MutableStateFlow(
             com.karakept.app.data.model.SyncProgress.Idle
         )

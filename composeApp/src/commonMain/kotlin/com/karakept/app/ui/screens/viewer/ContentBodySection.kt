@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -55,6 +57,7 @@ internal fun ContentBodySection(
     sourceContentOverride: String? = null,
     loadingState: BookmarkLoadingState,
     contentFetchAttempted: Boolean = false,
+    contentRevealed: Boolean = true,
     archiveAvailableOnServer: Boolean = false,
     isLoadingArchive: Boolean = false,
     onFetchArchive: () -> Unit = {},
@@ -85,8 +88,15 @@ internal fun ContentBodySection(
         else -> null
     }
 
+    val hasRenderableBody = !effectiveContent.isNullOrBlank() || effectiveLocalFilePath != null
+
     // Track when HTML content is truly ready (processed + rendered)
     var htmlContentReady by remember { mutableStateOf(false) }
+
+    // The real article is only revealed once it is both parsed and cleared for reveal by
+    // the parent (scroll restoration / highlight scroll complete). Until then it stays
+    // composed but invisible so it lays out for scroll restoration without flashing.
+    val bodyRevealed = htmlContentReady && contentRevealed
 
     // Reset on new content; or mark ready immediately when fetch is done but no content exists,
     // so the skeleton is replaced by the content-unavailable message instead of spinning forever.
@@ -190,11 +200,13 @@ internal fun ContentBodySection(
                 }
             }
 
-            // Always render HtmlContent when data arrives (bottom layer)
-            if (!effectiveContent.isNullOrBlank() || effectiveLocalFilePath != null) {
+            // Always render HtmlContent when data arrives (bottom layer). Keep it composed
+            // (so it lays out for scroll restoration) but hold it invisible until revealed.
+            if (hasRenderableBody) {
                 HtmlContent(
                     html = effectiveContent,
                     viewerMode = viewerMode,
+                    modifier = Modifier.alpha(if (bodyRevealed) 1f else 0f),
                     removeFirstImage = removeFirstImage,
                     onLinkClick = onLinkClick,
                     onReady = { htmlContentReady = true },
@@ -218,17 +230,49 @@ internal fun ContentBodySection(
                 )
             }
 
-            // Show skeleton on top until content ready (top layer).
+            // Show skeleton on top until the body is ready AND revealed (top layer).
             // Always use Initial state so the shimmer skeleton is visible.
             // Using the actual loadingState would render nothing for FullyLoaded,
             // letting the CloudOff placeholder in HtmlContent flash briefly
-            // before the HTML is processed.
-            if (!htmlContentReady) {
+            // before the HTML is processed. No banner skeleton here: the real hero
+            // is already shown above this section.
+            if (shouldShowBodySkeleton(htmlContentReady, hasRenderableBody, contentRevealed)) {
                 BookmarkContentLoader(
                     loadingState = BookmarkLoadingState.Initial,
-                    modifier = Modifier.background(MaterialTheme.colorScheme.background)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 320.dp)
+                        .background(MaterialTheme.colorScheme.background),
+                    showBanner = false
                 )
             }
         }
     }
 }
+
+/**
+ * The article body is revealed only once both scroll restoration and highlight scrolling
+ * are done, so the hero can appear immediately while the body waits.
+ */
+internal fun computeContentRevealed(needsScrollRestore: Boolean, needsHighlightScroll: Boolean): Boolean =
+    !needsScrollRestore && !needsHighlightScroll
+
+/**
+ * Whether the shimmer skeleton should cover the body slot. It stays while the HTML is being
+ * parsed, and (for a renderable body) also while the parent has not yet cleared it for reveal.
+ * Blank/unavailable content is never held behind the skeleton, so its message surfaces at once.
+ */
+internal fun shouldShowBodySkeleton(
+    htmlContentReady: Boolean,
+    hasRenderableBody: Boolean,
+    contentRevealed: Boolean
+): Boolean = !htmlContentReady || (hasRenderableBody && !contentRevealed)
+
+/**
+ * Whether to cover the whole screen with a shimmer while restoring to a saved reading
+ * position, so the reader lands directly at that position instead of flashing the hero and
+ * then auto-scrolling. Only meaningful saved progress (matching the 0.02f threshold in
+ * [rememberScrollRestoration]) qualifies; fresh opens keep the hero-first behavior.
+ */
+internal fun shouldShowRestoreOverlay(needsScrollRestore: Boolean, readingProgress: Float): Boolean =
+    needsScrollRestore && readingProgress > 0.02f

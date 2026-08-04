@@ -1,5 +1,5 @@
 [versions]
-openapi-generator = "7.23.0"
+openapi-generator = "7.24.0"
 agp = "8.13.0"
 android-compileSdk = "36"
 android-minSdk = "24"
@@ -11,7 +11,7 @@ androidx-browser = "1.9.0"
 compose-plugin = "1.11.1"
 junit = "4.13.2"
 kotlin = "2.4.0"
-ktor = "3.5.0"
+ktor = "3.5.1"
 navigation3 = "1.1.1"
 navigation3-runtime = "1.1.1"
 coil = "3.5.0"
@@ -54,6 +54,7 @@ ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negoti
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
 ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor" }
 ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktor" }
+ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 
 # Coil
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }

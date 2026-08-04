@@ -14,7 +14,7 @@ class BackgroundSyncWorker(
     private val orchestrator: BackgroundSyncOrchestrator by inject()
 
     override suspend fun doWork(): Result = when (orchestrator.runSync()) {
-        SyncResult.SUCCESS, SyncResult.SKIPPED -> Result.success()
+        SyncResult.SUCCESS, SyncResult.SUCCESS_WITH_WARNINGS, SyncResult.SKIPPED -> Result.success()
         SyncResult.ERROR -> Result.retry()
     }
 

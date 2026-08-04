@@ -6,6 +6,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.savedstate.serialization.SavedStateConfiguration
 import com.karakept.app.ui.screens.AboutScreen
 import com.karakept.app.ui.screens.BookmarkViewerScreen
+import com.karakept.app.ui.screens.DevLogsScreen
 import com.karakept.app.ui.screens.HighlightsScreen
 import com.karakept.app.ui.screens.LoginScreen
 import com.karakept.app.ui.screens.MainScreen
@@ -50,6 +51,7 @@ val navKeySerializersModule: SerializersModule = SerializersModule {
         subclass(SettingsScreen::class)
         subclass(HighlightsScreen::class)
         subclass(AboutScreen::class)
+        subclass(DevLogsScreen::class)
         subclass(ShareBookmarkScreen::class)
         subclass(ShareMultipleBookmarksScreen::class)
         subclass(ServerSettingsScreen::class)
@@ -87,6 +89,7 @@ fun appEntryProvider(): (NavKey) -> NavEntry<NavKey> = entryProvider {
     entry<SettingsScreen> { it.Content() }
     entry<HighlightsScreen> { it.Content() }
     entry<AboutScreen> { it.Content() }
+    entry<DevLogsScreen> { it.Content() }
     entry<ShareBookmarkScreen> { it.Content() }
     entry<ShareMultipleBookmarksScreen> { it.Content() }
     entry<ServerSettingsScreen> { it.Content() }

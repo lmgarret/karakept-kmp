@@ -261,4 +261,33 @@ class HighlightRepositoryIntegrationTest : BaseDockerIntegrationTest() {
         assertTrue(allLocal.any { it.id == h1.id }, "Highlight for bookmark 1 should be in all highlights")
         assertTrue(allLocal.any { it.id == h2.id }, "Highlight for bookmark 2 should be in all highlights")
     }
+
+    @Test
+    fun testSyncHighlights_beyond100HighlightsSurviveRepeatedSyncs() = runTest(testDispatcher) {
+        assertTrue(isDockerRunning, "Docker should be running")
+
+        // Regression: the fetch used to stop at 100 highlights, and the sync's
+        // delete-reconciliation then wiped every local highlight beyond the first page.
+        val remoteId = seedBookmarkViaTrpc(
+            baseUrl, apiKey, "https://hl-pagination.example.com/${System.currentTimeMillis()}"
+        )
+        val createdIds = (1..120).map { i ->
+            remoteDataSource.createHighlight(testServer, remoteId, "pagination highlight $i", i * 40, i * 40 + 20).id
+        }
+
+        highlightRepository.syncHighlights(testServer)
+        val afterFirst = highlightRepository.getAllHighlights(testServer.id).first()
+        assertTrue(
+            createdIds.all { id -> afterFirst.any { it.id == id } },
+            "All 120 highlights should be local after first sync"
+        )
+
+        // A second sync must not delete anything (used to delete everything past page 1)
+        highlightRepository.syncHighlights(testServer)
+        val afterSecond = highlightRepository.getAllHighlights(testServer.id).first()
+        assertTrue(
+            createdIds.all { id -> afterSecond.any { it.id == id } },
+            "All 120 highlights should survive a repeated sync"
+        )
+    }
 }

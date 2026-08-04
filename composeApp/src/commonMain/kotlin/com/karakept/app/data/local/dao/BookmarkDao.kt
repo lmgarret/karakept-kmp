@@ -17,6 +17,7 @@ interface BookmarkDao {
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
                '' as content
         FROM bookmarks
         WHERE serverId = :serverId
@@ -39,15 +40,20 @@ interface BookmarkDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBookmark(bookmark: BookmarkEntity)
 
+    // Returns the generated localIds, in the order of [bookmarks]. Sync relies on this
+    // instead of re-reading the whole table to recover the ids it just inserted.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertBookmarks(bookmarks: List<BookmarkEntity>)
+    suspend fun insertBookmarks(bookmarks: List<BookmarkEntity>): List<Long>
 
     @Update
     suspend fun updateBookmarks(bookmarks: List<BookmarkEntity>)
 
     @Delete
     suspend fun deleteBookmark(bookmark: BookmarkEntity)
-    
+
+    @Delete
+    suspend fun deleteBookmarks(bookmarks: List<BookmarkEntity>)
+
     @Query("DELETE FROM bookmarks WHERE serverId = :serverId")
     suspend fun deleteAllBookmarksForServer(serverId: String)
 
@@ -83,7 +89,10 @@ interface BookmarkDao {
             isStarred = :isStarred,
             isArchived = :isArchived,
             isRead = :isRead,
-            readingTimeMinutes = :readingTimeMinutes
+            readingTimeMinutes = :readingTimeMinutes,
+            modifiedAt = :modifiedAt,
+            crawlStatus = :crawlStatus,
+            crawledAt = :crawledAt
         WHERE localId = :localId
     """)
     suspend fun updateBookmarkMetadata(
@@ -99,8 +108,25 @@ interface BookmarkDao {
         isStarred: Boolean,
         isArchived: Boolean,
         isRead: Boolean,
-        readingTimeMinutes: Int
+        readingTimeMinutes: Int,
+        modifiedAt: Long?,
+        crawlStatus: String?,
+        crawledAt: Long?
     )
+
+    // Stamp the reading-progress rotating cursor after a pull (G3).
+    @Query("UPDATE bookmarks SET progressSyncedAt = :syncedAt WHERE localId = :localId")
+    suspend fun updateProgressSyncedAt(localId: Long, syncedAt: Long)
+
+    // Reading-progress pull candidates: least-recently-pulled first, then most recently
+    // modified, so large libraries converge across successive syncs (G3).
+    @Query("""
+        SELECT * FROM bookmarks
+        WHERE serverId = :serverId
+        ORDER BY progressSyncedAt ASC, modifiedAt DESC
+        LIMIT :limit
+    """)
+    suspend fun getReadingProgressPullCandidates(serverId: String, limit: Int): List<BookmarkEntity>
 
     // Paginated query — ORDER BY is injected dynamically via RoomRawQuery so the
     // sort option from FilterConfig is applied at the DB level rather than in memory.
@@ -139,6 +165,7 @@ interface BookmarkDao {
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
                '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0
@@ -157,6 +184,7 @@ interface BookmarkDao {
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
                CASE WHEN length(content) > 0 THEN 'HAS_CONTENT' ELSE '' END as content
         FROM bookmarks
         WHERE serverId = :serverId
@@ -168,6 +196,7 @@ interface BookmarkDao {
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
                '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isArchived = 0
@@ -179,6 +208,7 @@ interface BookmarkDao {
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
                '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isStarred = 1
@@ -190,6 +220,7 @@ interface BookmarkDao {
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
                '' as content
         FROM bookmarks
         WHERE serverId = :serverId AND isArchived = 1
@@ -201,6 +232,7 @@ interface BookmarkDao {
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
                '' as content
         FROM bookmarks
         WHERE serverId = :serverId
@@ -212,6 +244,7 @@ interface BookmarkDao {
         SELECT localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
                '' as content
         FROM bookmarks
         WHERE serverId = :serverId

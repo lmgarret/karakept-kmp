@@ -27,7 +27,6 @@ import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.data.model.ViewerMode
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
@@ -52,7 +51,6 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     // ── Non-backed-up individual keys (permanent, never move to a category blob) ──
 
     internal val ACTIVE_SERVER_ID_KEY = stringPreferencesKey("active_server_id")
-    internal val AUTO_OFFLINE_DETECTED_KEY = booleanPreferencesKey("auto_offline_detected")
     internal val LAST_AUTO_EXPORT_TIME_KEY = longPreferencesKey("last_auto_export_time")
     internal val PER_LIST_SETTINGS_KEY = stringPreferencesKey("per_list_settings")
 
@@ -410,19 +408,6 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     // ── Non-backed-up flows (individual keys, unchanged) ─────────────────────
 
     val activeServerId: Flow<String?> = dataStore.data.map { it[ACTIVE_SERVER_ID_KEY] }
-
-    /**
-     * Auto-detected offline state – set when network requests fail.
-     */
-    val autoOfflineDetected: Flow<Boolean> =
-        dataStore.data.map { it[AUTO_OFFLINE_DETECTED_KEY] ?: false }
-
-    /**
-     * Effective offline mode – true if either manual offline mode OR auto-detected offline.
-     * Use this for blocking network requests.
-     */
-    val effectiveOfflineMode: Flow<Boolean> =
-        combine(offlineMode, autoOfflineDetected) { manual, auto -> manual || auto }
 
     val lastAutoExportTime: Flow<Long> =
         dataStore.data.map { it[LAST_AUTO_EXPORT_TIME_KEY] ?: 0L }

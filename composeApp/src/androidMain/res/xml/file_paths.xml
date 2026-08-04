@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Directories FileProvider may hand out URIs for. Kept to exactly the directories
+  FileUtils writes to, so nothing else in the app's storage becomes shareable.
+-->
+<paths>
+    <!-- getImageCacheDirectory() — cached assets, including downloaded PDFs -->
+    <files-path
+        name="image_cache"
+        path="image_cache/" />
+    <!-- getAssetsDirectory() -->
+    <files-path
+        name="assets"
+        path="assets/" />
+    <!-- getBackupDirectory() falls back here when external storage is unavailable -->
+    <files-path
+        name="internal_backups"
+        path="backups/" />
+    <!-- getBackupDirectory() — primary location -->
+    <external-files-path
+        name="backups"
+        path="backups/" />
+</paths>

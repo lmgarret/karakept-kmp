@@ -80,6 +80,32 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         assertTrue(after.none { it.originalRemoteId == remoteId }, "Deleted bookmark should be removed after re-sync")
     }
 
+    @Test
+    fun testSyncBookmarks_removesDeletedBookmarksEvenWhenNewOnesArrive() = runTest(testDispatcher) {
+        assertTrue(isDockerRunning, "Docker should be running")
+
+        // Regression for the early return that skipped deletion reconciliation
+        // whenever the same sync inserted new bookmarks.
+        val staleUrl = "https://delete-with-insert.example.com/${System.currentTimeMillis()}"
+        val staleId = seedBookmarkViaTrpc(baseUrl, apiKey, staleUrl)
+
+        bookmarkRepository.syncBookmarks(testServer)
+        assertTrue(
+            bookmarkRepository.getBookmarks(testServer).first().any { it.originalRemoteId == staleId },
+            "Bookmark should be local after first sync"
+        )
+
+        // Delete the synced bookmark AND create a new one before the next sync
+        remoteDataSource.deleteBookmark(testServer, staleId)
+        val freshUrl = "https://fresh-insert.example.com/${System.currentTimeMillis()}"
+        val freshId = seedBookmarkViaTrpc(baseUrl, apiKey, freshUrl)
+
+        bookmarkRepository.syncBookmarks(testServer)
+        val after = bookmarkRepository.getBookmarks(testServer).first()
+        assertTrue(after.any { it.originalRemoteId == freshId }, "New bookmark should be inserted")
+        assertTrue(after.none { it.originalRemoteId == staleId }, "Deleted bookmark should be removed even when the sync inserts")
+    }
+
     // -------------------------------------------------------------------------
     // Filtered sync
     // -------------------------------------------------------------------------

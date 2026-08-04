@@ -21,36 +21,18 @@ import androidx.compose.ui.unit.dp
  * Shows a colored dot and text to remind users that sync functionality is disabled
  * and actions are queued locally. Tapping navigates to offline settings.
  *
- * @param isAutoOffline True if offline mode was auto-detected (network unavailable)
  * @param onClick Called when the badge is tapped (navigates to settings)
  * @param modifier Modifier for positioning
  */
 @Composable
 fun OfflineModeBadge(
-    isAutoOffline: Boolean = false,
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // Different colors for manual vs auto-detected offline
-    val containerColor = if (isAutoOffline) {
-        MaterialTheme.colorScheme.secondaryContainer
-    } else {
-        MaterialTheme.colorScheme.errorContainer
-    }
-
-    val dotColor = if (isAutoOffline) {
-        MaterialTheme.colorScheme.secondary
-    } else {
-        MaterialTheme.colorScheme.error
-    }
-
-    val textColor = if (isAutoOffline) {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    } else {
-        MaterialTheme.colorScheme.onErrorContainer
-    }
-
-    val labelText = if (isAutoOffline) "Auto Offline" else "Offline"
+    val containerColor = MaterialTheme.colorScheme.errorContainer
+    val dotColor = MaterialTheme.colorScheme.error
+    val textColor = MaterialTheme.colorScheme.onErrorContainer
+    val labelText = "Offline"
 
     Surface(
         modifier = modifier.clickable(onClick = onClick),
