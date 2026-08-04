@@ -314,7 +314,8 @@ fun BookmarkViewerContent(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             AnimatedVisibility(
-                visible = fabVisible && !getPlatform().isDesktop,
+                visible = fabVisible && !getPlatform().isDesktop &&
+                    !showDetailsPanel && !showAppearancePanel && !showSearch,
                 enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
                 exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
             ) {
@@ -661,25 +662,27 @@ fun BookmarkViewerContent(
                 }
             }
         }
+
+        // Panels and dialogs. Inside the Scaffold content so the snackbar host, which the
+        // Scaffold lays out after content, draws above the details panel rather than under it.
+        ViewerContentPanels(
+            loadingState = loadingState, viewerMode = viewerMode,
+            htmlTextColor = htmlTextColor, htmlBackgroundColor = htmlBackgroundColor,
+            htmlFontSize = htmlFontSize, htmlFontFamily = htmlFontFamily, lists = lists,
+            showModeDialog = showModeDialog, onShowModeDialogChanged = { showModeDialog = it },
+            selectedSource = selectedSource,
+            showAppearancePanel = showAppearancePanel, onShowAppearancePanelChanged = { showAppearancePanel = it },
+            showDetailsPanel = showDetailsPanel, onShowDetailsPanelChanged = { showDetailsPanel = it },
+            showDeleteConfirmation = showDeleteConfirmation, onShowDeleteConfirmationChanged = { showDeleteConfirmation = it },
+            showListPicker = showListPicker, onShowListPickerChanged = { showListPicker = it },
+            showTagEditor = showTagEditor, onShowTagEditorChanged = { showTagEditor = it },
+            selectedHighlightId = selectedHighlightId, onSelectedHighlightIdChanged = { selectedHighlightId = it },
+            selectedHighlightText = selectedHighlightText, onSelectedHighlightTextChanged = { selectedHighlightText = it },
+            selectedHighlight = selectedHighlight,
+            assets = assets,
+            showSearch = showSearch, onShowSearchChanged = { showSearch = it },
+            screenModel = screenModel, scope = scope, onBack = onBack
+        )
     }
 
-    // Panels and dialogs
-    ViewerContentPanels(
-        loadingState = loadingState, viewerMode = viewerMode,
-        htmlTextColor = htmlTextColor, htmlBackgroundColor = htmlBackgroundColor,
-        htmlFontSize = htmlFontSize, htmlFontFamily = htmlFontFamily, lists = lists,
-        showModeDialog = showModeDialog, onShowModeDialogChanged = { showModeDialog = it },
-        selectedSource = selectedSource,
-        showAppearancePanel = showAppearancePanel, onShowAppearancePanelChanged = { showAppearancePanel = it },
-        showDetailsPanel = showDetailsPanel, onShowDetailsPanelChanged = { showDetailsPanel = it },
-        showDeleteConfirmation = showDeleteConfirmation, onShowDeleteConfirmationChanged = { showDeleteConfirmation = it },
-        showListPicker = showListPicker, onShowListPickerChanged = { showListPicker = it },
-        showTagEditor = showTagEditor, onShowTagEditorChanged = { showTagEditor = it },
-        selectedHighlightId = selectedHighlightId, onSelectedHighlightIdChanged = { selectedHighlightId = it },
-        selectedHighlightText = selectedHighlightText, onSelectedHighlightTextChanged = { selectedHighlightText = it },
-        selectedHighlight = selectedHighlight,
-        assets = assets,
-        showSearch = showSearch, onShowSearchChanged = { showSearch = it },
-        screenModel = screenModel, scope = scope, onBack = onBack
-    )
 }

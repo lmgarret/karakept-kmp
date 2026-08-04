@@ -55,6 +55,21 @@
             </intent-filter>
         </receiver>
 
+        <!--
+          Grants other apps temporary read access to files we hand out, so a PDF asset can be
+          opened in an external reader and a backup can be shared. FileUtils already referenced
+          this authority but it was never declared, so those hand-offs silently fell back.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Required for compose-ui-test createComposeRule() under Robolectric -->
         <activity android:name="androidx.activity.ComponentActivity" />
     </application>

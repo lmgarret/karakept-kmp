@@ -33,6 +33,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Tests for the server-side crawl/archive actions exposed in the bookmark details panel.
@@ -303,4 +304,114 @@ class BookmarkViewerServerActionsTest {
             screenModel.selectedSource.value
         )
     }
+
+    // -----------------------------------------------------------------------
+    // Waiting for the crawl job's output
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `preserve archive keeps re-syncing until the asset shows up`() = runTest(testDispatcher) {
+        // Server finishes the crawl on the third poll.
+        coEvery { assetDao.getAssetsForBookmark(any(), any()) } returnsMany listOf(
+            emptyList(),
+            emptyList(),
+            listOf(archiveAsset)
+        )
+        val screenModel = createScreenModel()
+
+        screenModel.requestServerCrawl(testBookmark, ServerCrawlAction.PRESERVE_ARCHIVE)
+        advanceUntilIdle()
+
+        // One sync per poll, stopping as soon as the asset lands rather than burning the budget.
+        coVerify(exactly = 3) { bookmarkRepository.syncSingleBookmark(100L, "server-1") }
+        coVerify(exactly = 1) { snackbarManager.showSnackbar("Archive ready") }
+        assertNull(screenModel.serverCrawlInFlight.value)
+    }
+
+    @Test
+    fun `preserve archive says so when the server is still working after the budget`() =
+        runTest(testDispatcher) {
+            coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
+            val screenModel = createScreenModel()
+
+            screenModel.requestServerCrawl(testBookmark, ServerCrawlAction.PRESERVE_ARCHIVE)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                snackbarManager.showSnackbar("Still processing on the server — pull to refresh later")
+            }
+            assertNull(screenModel.serverCrawlInFlight.value)
+        }
+
+    @Test
+    fun `refresh does not wait for an asset that will never appear`() = runTest(testDispatcher) {
+        coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
+        val screenModel = createScreenModel()
+
+        screenModel.requestServerCrawl(testBookmark, ServerCrawlAction.REFRESH)
+        advanceUntilIdle()
+
+        // REFRESH rewrites metadata rather than adding an asset, so one sync is the whole job.
+        coVerify(exactly = 1) { bookmarkRepository.syncSingleBookmark(100L, "server-1") }
+        coVerify(exactly = 0) {
+            snackbarManager.showSnackbar("Still processing on the server — pull to refresh later")
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Per-asset download
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `download requests the asset the user tapped`() = runTest(testDispatcher) {
+        // Regression: archives used to route through fetchAndCacheArchive, which re-resolved the
+        // asset from the server and could stamp the local path onto a different archive row —
+        // leaving the tapped row reading "On server" with no delete-local action.
+        val other = archiveAsset.copy(id = "asset-2", assetType = "precrawledArchive")
+        coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns listOf(archiveAsset, other)
+        coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } throws ApiException("stop here")
+        val screenModel = createScreenModel()
+
+        screenModel.downloadOrRefreshAsset(other, testBookmark)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { remoteDataSource.downloadAsset(testServer, "asset-2", any()) }
+        coVerify(exactly = 0) { remoteDataSource.downloadAsset(any(), "asset-1", any()) }
+    }
+
+    @Test
+    fun `a second download for the same asset is ignored while one is running`() =
+        runTest(testDispatcher) {
+            coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } throws ApiException("boom")
+            val screenModel = createScreenModel()
+
+            screenModel.downloadOrRefreshAsset(archiveAsset, testBookmark)
+            screenModel.downloadOrRefreshAsset(archiveAsset, testBookmark)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { remoteDataSource.downloadAsset(any(), "asset-1", any()) }
+        }
+
+    @Test
+    fun `a failed download clears the progress entry`() = runTest(testDispatcher) {
+        coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } throws ApiException("boom")
+        val screenModel = createScreenModel()
+
+        screenModel.downloadOrRefreshAsset(archiveAsset, testBookmark)
+        advanceUntilIdle()
+
+        assertTrue(screenModel.assetDownloads.value.isEmpty())
+        coVerify(exactly = 1) { snackbarManager.showSnackbar("Couldn't download asset") }
+    }
+
+    @Test
+    fun `opening an asset with no local copy tells the user to download it`() =
+        runTest(testDispatcher) {
+            val screenModel = createScreenModel()
+
+            screenModel.openAssetExternally(archiveAsset)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { snackbarManager.showSnackbar("Download it first") }
+        }
 }

@@ -192,6 +192,32 @@ actual object FileUtils {
         })
     }
 
+    actual fun openFileExternally(path: String, mimeType: String): Boolean {
+        val context = AndroidContext.context
+        return try {
+            val uri = if (path.startsWith("content://")) {
+                Uri.parse(path)
+            } else {
+                val file = File(path)
+                if (!file.exists()) return false
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            }
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            // Started from a non-Activity context, so an empty chooser would throw rather
+            // than showing "no app found" — check first and let the caller report it.
+            if (intent.resolveActivity(context.packageManager) == null) return false
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            AppLogger.e("FileUtils", "Failed to open $path externally: ${e.message}", e)
+            false
+        }
+    }
+
     private fun getFolderSize(file: File): Long {
         if (!file.exists()) return 0
         if (!file.isDirectory) return file.length()

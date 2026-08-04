@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CalendarToday
@@ -53,6 +54,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Surface
@@ -93,14 +95,20 @@ internal fun BookmarkDetailsPanel(
     selectedSource: ContentSource = ContentSource.EXTRACTED,
     serverCrawlInFlight: ServerCrawlAction? = null,
     serverActionsEnabled: Boolean = true,
+    // Asset id -> download fraction (null fraction = size unknown). Absent = not downloading.
+    assetDownloads: Map<String, Float?> = emptyMap(),
     onSourceSelected: (ContentSource) -> Unit = {},
     onDownloadAsset: (AssetEntity) -> Unit = {},
     onRefreshAsset: (AssetEntity) -> Unit = {},
+    onOpenAssetExternally: (AssetEntity) -> Unit = {},
     onDeleteAssetLocal: (AssetEntity) -> Unit = {},
     onDeleteAssetOnServer: (AssetEntity) -> Unit = {},
     onRequestServerCrawl: (ServerCrawlAction) -> Unit = {},
     onDismiss: () -> Unit
 ) {
+    fun progressFor(asset: AssetEntity): DownloadProgress? =
+        if (assetDownloads.containsKey(asset.id)) DownloadProgress(assetDownloads[asset.id]) else null
+
     // Confirmation gate for the irreversible server-side delete
     var assetPendingServerDelete by remember { mutableStateOf<AssetEntity?>(null) }
     // Scrim
@@ -217,6 +225,15 @@ internal fun BookmarkDetailsPanel(
                                 )
                             }
 
+                            if (bookmark.tags.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                DetailsSectionTitle("Tags")
+                                BookmarkTagsDisplay(
+                                    tags = bookmark.tags,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+
                             Spacer(modifier = Modifier.height(16.dp))
 
                             // Content Sources
@@ -250,9 +267,11 @@ internal fun BookmarkDetailsPanel(
                                         && selectedSource != ContentSource.FULL_PAGE_ARCHIVE,
                                     asset = fullPageArchiveAsset,
                                     canDeleteOnServer = serverActionsEnabled,
+                                    downloadProgress = progressFor(fullPageArchiveAsset),
                                     onSelect = { onSourceSelected(ContentSource.FULL_PAGE_ARCHIVE) },
                                     onDownload = { onDownloadAsset(fullPageArchiveAsset) },
                                     onRefresh = { onRefreshAsset(fullPageArchiveAsset) },
+                                    onOpenExternally = { onOpenAssetExternally(fullPageArchiveAsset) },
                                     onDelete = { onDeleteAssetLocal(fullPageArchiveAsset) },
                                     onDeleteOnServer = { assetPendingServerDelete = fullPageArchiveAsset }
                                 )
@@ -268,26 +287,34 @@ internal fun BookmarkDetailsPanel(
                                         && selectedSource != ContentSource.FULL_PAGE_ARCHIVE,
                                     asset = precrawledArchiveAsset,
                                     canDeleteOnServer = serverActionsEnabled,
+                                    downloadProgress = progressFor(precrawledArchiveAsset),
                                     onSelect = { onSourceSelected(ContentSource.FULL_PAGE_ARCHIVE) },
                                     onDownload = { onDownloadAsset(precrawledArchiveAsset) },
                                     onRefresh = { onRefreshAsset(precrawledArchiveAsset) },
+                                    onOpenExternally = { onOpenAssetExternally(precrawledArchiveAsset) },
                                     onDelete = { onDeleteAssetLocal(precrawledArchiveAsset) },
                                     onDeleteOnServer = { assetPendingServerDelete = precrawledArchiveAsset }
                                 )
                             }
 
-                            // PDFs can't be rendered in-app, so the row reports what the server
-                            // holds and offers only the server-side delete.
+                            // The app has no PDF renderer, so a downloaded PDF is handed to
+                            // whatever reader the platform has rather than shown inline.
                             assets.find { it.assetType == "pdf" }?.let { pdfAsset ->
                                 ContentSourceRow(
                                     icon = Icons.Default.PictureAsPdf,
                                     label = "PDF",
-                                    statusText = "On server",
+                                    statusText = if (pdfAsset.localPath != null) "Downloaded" else "On server",
                                     isActive = false,
                                     canActivate = false,
                                     asset = pdfAsset,
-                                    supportsLocalCopy = false,
+                                    canBeContentSource = false,
+                                    canOpenExternally = true,
                                     canDeleteOnServer = serverActionsEnabled,
+                                    downloadProgress = progressFor(pdfAsset),
+                                    onDownload = { onDownloadAsset(pdfAsset) },
+                                    onRefresh = { onRefreshAsset(pdfAsset) },
+                                    onOpenExternally = { onOpenAssetExternally(pdfAsset) },
+                                    onDelete = { onDeleteAssetLocal(pdfAsset) },
                                     onDeleteOnServer = { assetPendingServerDelete = pdfAsset }
                                 )
                             }
@@ -304,8 +331,10 @@ internal fun BookmarkDetailsPanel(
                                         label = "Banner image",
                                         isCached = asset.localPath != null,
                                         canDeleteOnServer = serverActionsEnabled,
+                                        downloadProgress = progressFor(asset),
                                         onDownload = { onDownloadAsset(asset) },
                                         onRefresh = { onRefreshAsset(asset) },
+                                        onOpenExternally = { onOpenAssetExternally(asset) },
                                         onDelete = { onDeleteAssetLocal(asset) },
                                         onDeleteOnServer = { assetPendingServerDelete = asset }
                                     )
@@ -316,8 +345,10 @@ internal fun BookmarkDetailsPanel(
                                         label = "Screenshot",
                                         isCached = asset.localPath != null,
                                         canDeleteOnServer = serverActionsEnabled,
+                                        downloadProgress = progressFor(asset),
                                         onDownload = { onDownloadAsset(asset) },
                                         onRefresh = { onRefreshAsset(asset) },
+                                        onOpenExternally = { onOpenAssetExternally(asset) },
                                         onDelete = { onDeleteAssetLocal(asset) },
                                         onDeleteOnServer = { assetPendingServerDelete = asset }
                                     )
@@ -361,15 +392,6 @@ internal fun BookmarkDetailsPanel(
                                 )
                             }
 
-                            // Tags
-                            if (bookmark.tags.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(16.dp))
-                                DetailsSectionTitle("Tags")
-                                BookmarkTagsDisplay(
-                                    tags = bookmark.tags,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                            }
                         }
                     }
                 }
@@ -485,16 +507,16 @@ private fun ServerActionRow(
  * each action a text label.
  *
  * [hasLocalCopy] selects between the download and the re-download/delete pair;
- * [supportsLocalCopy] is false for assets the app can't open (PDFs), which get the
- * server-side delete only.
+ * [canOpenExternally] adds a hand-off to another app for formats with no in-app renderer.
  */
 @Composable
 private fun AssetOverflowMenu(
     hasLocalCopy: Boolean,
-    supportsLocalCopy: Boolean,
+    canOpenExternally: Boolean,
     canDeleteOnServer: Boolean,
     onDownload: () -> Unit,
     onRefresh: () -> Unit,
+    onOpenExternally: () -> Unit,
     onDeleteLocal: () -> Unit,
     onDeleteOnServer: () -> Unit
 ) {
@@ -512,25 +534,29 @@ private fun AssetOverflowMenu(
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            if (supportsLocalCopy) {
-                if (hasLocalCopy) {
-                    AssetMenuItem(Icons.Default.Refresh, "Re-download") {
+            if (hasLocalCopy) {
+                if (canOpenExternally) {
+                    AssetMenuItem(Icons.AutoMirrored.Filled.OpenInNew, "Open") {
                         expanded = false
-                        onRefresh()
+                        onOpenExternally()
                     }
-                    AssetMenuItem(Icons.Default.Delete, "Delete local copy") {
-                        expanded = false
-                        onDeleteLocal()
-                    }
-                } else {
-                    AssetMenuItem(Icons.Default.Download, "Download a copy") {
-                        expanded = false
-                        onDownload()
-                    }
+                }
+                AssetMenuItem(Icons.Default.Refresh, "Re-download") {
+                    expanded = false
+                    onRefresh()
+                }
+                AssetMenuItem(Icons.Default.Delete, "Delete local copy") {
+                    expanded = false
+                    onDeleteLocal()
+                }
+            } else {
+                AssetMenuItem(Icons.Default.Download, "Download a copy") {
+                    expanded = false
+                    onDownload()
                 }
             }
             if (canDeleteOnServer) {
-                if (supportsLocalCopy) HorizontalDivider()
+                HorizontalDivider()
                 AssetMenuItem(
                     icon = Icons.Default.DeleteForever,
                     label = "Delete from server",
@@ -565,6 +591,14 @@ private fun AssetMenuItem(
     )
 }
 
+/**
+ * One asset or content source as a compact card.
+ *
+ * Tapping the card does the obvious next thing: download it if there is no local copy yet,
+ * otherwise make it the active content source. [downloadProgress] is non-null while a
+ * download is running — 0f..1f when the size is known, null inside the wrapper for an
+ * indeterminate bar.
+ */
 @Composable
 private fun ContentSourceRow(
     icon: ImageVector,
@@ -573,12 +607,15 @@ private fun ContentSourceRow(
     isActive: Boolean,
     canActivate: Boolean,
     asset: AssetEntity? = null,
-    // False for assets nothing in the app can open (PDFs) — no point offering a local copy.
-    supportsLocalCopy: Boolean = true,
+    // False for assets that can't be shown in-app and are only opened elsewhere (PDFs).
+    canBeContentSource: Boolean = true,
+    canOpenExternally: Boolean = false,
     canDeleteOnServer: Boolean = false,
+    downloadProgress: DownloadProgress? = null,
     onSelect: () -> Unit = {},
     onDownload: () -> Unit = {},
     onRefresh: () -> Unit = {},
+    onOpenExternally: () -> Unit = {},
     onDelete: () -> Unit = {},
     onDeleteOnServer: (() -> Unit)? = null
 ) {
@@ -587,11 +624,22 @@ private fun ContentSourceRow(
     else
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
 
+    val isDownloading = downloadProgress != null
+    val hasLocalCopy = asset?.localPath != null
+    // Tap = the obvious next step for this row's state.
+    val rowAction: (() -> Unit)? = when {
+        isDownloading -> null
+        asset != null && !hasLocalCopy -> onDownload
+        canActivate && canBeContentSource -> onSelect
+        hasLocalCopy && canOpenExternally -> onOpenExternally
+        else -> null
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 6.dp)
-            .then(if (canActivate) Modifier.clickable(onClick = onSelect) else Modifier),
+            .then(rowAction?.let { Modifier.clickable(onClick = it) } ?: Modifier),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isActive) 1.dp else 0.dp)
     ) {
@@ -617,36 +665,41 @@ private fun ContentSourceRow(
                     color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
                             else MaterialTheme.colorScheme.onSurface
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val dotColor = when {
-                        asset?.localPath != null -> MaterialTheme.colorScheme.primary
-                        statusText == "Available" -> MaterialTheme.colorScheme.primary
-                        statusText == "On server" -> MaterialTheme.colorScheme.tertiary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                if (isDownloading) {
+                    DownloadProgressBar(downloadProgress)
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val dotColor = when {
+                            hasLocalCopy -> MaterialTheme.colorScheme.primary
+                            statusText == "Available" -> MaterialTheme.colorScheme.primary
+                            statusText == "On server" -> MaterialTheme.colorScheme.tertiary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(dotColor)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(dotColor)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
             // All file management lives in one menu so the row stays compact.
-            if (asset != null) {
+            if (asset != null && !isDownloading) {
                 AssetOverflowMenu(
-                    hasLocalCopy = asset.localPath != null,
-                    supportsLocalCopy = supportsLocalCopy,
+                    hasLocalCopy = hasLocalCopy,
+                    canOpenExternally = canOpenExternally,
                     canDeleteOnServer = canDeleteOnServer && onDeleteOnServer != null,
                     onDownload = onDownload,
                     onRefresh = onRefresh,
+                    onOpenExternally = onOpenExternally,
                     onDeleteLocal = onDelete,
                     onDeleteOnServer = { onDeleteOnServer?.invoke() }
                 )
@@ -664,20 +717,57 @@ private fun ContentSourceRow(
     }
 }
 
+/**
+ * Wrapper so "not downloading" and "downloading, size unknown" stay distinguishable — a bare
+ * `Float?` would collapse both onto null.
+ */
+private data class DownloadProgress(val fraction: Float?)
+
+@Composable
+private fun DownloadProgressBar(progress: DownloadProgress?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val fraction = progress?.fraction
+        if (fraction != null) {
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier.weight(1f).height(4.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "${(fraction * 100).toInt()}%",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            LinearProgressIndicator(modifier = Modifier.weight(1f).height(4.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Downloading",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
 @Composable
 private fun MediaAssetRow(
     icon: ImageVector,
     label: String,
     isCached: Boolean,
     canDeleteOnServer: Boolean = false,
+    downloadProgress: DownloadProgress? = null,
     onDownload: () -> Unit,
     onRefresh: () -> Unit,
+    onOpenExternally: () -> Unit = {},
     onDelete: () -> Unit,
     onDeleteOnServer: (() -> Unit)? = null
 ) {
+    val isDownloading = downloadProgress != null
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (!isDownloading && !isCached) Modifier.clickable(onClick = onDownload) else Modifier)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -691,22 +781,27 @@ private fun MediaAssetRow(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface
         )
-        Text(
-            text = if (isCached) "Downloaded" else "Not downloaded",
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isCached) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        AssetOverflowMenu(
-            hasLocalCopy = isCached,
-            supportsLocalCopy = true,
-            canDeleteOnServer = canDeleteOnServer && onDeleteOnServer != null,
-            onDownload = onDownload,
-            onRefresh = onRefresh,
-            onDeleteLocal = onDelete,
-            onDeleteOnServer = { onDeleteOnServer?.invoke() }
-        )
+        if (isDownloading) {
+            Box(modifier = Modifier.width(96.dp)) { DownloadProgressBar(downloadProgress) }
+        } else {
+            Text(
+                text = if (isCached) "Downloaded" else "Not downloaded",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isCached) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            AssetOverflowMenu(
+                hasLocalCopy = isCached,
+                canOpenExternally = isCached,
+                canDeleteOnServer = canDeleteOnServer && onDeleteOnServer != null,
+                onDownload = onDownload,
+                onRefresh = onRefresh,
+                onOpenExternally = onOpenExternally,
+                onDeleteLocal = onDelete,
+                onDeleteOnServer = { onDeleteOnServer?.invoke() }
+            )
+        }
     }
 }
 

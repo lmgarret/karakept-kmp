@@ -9,6 +9,7 @@ import com.karakept.app.utils.TrpcPayloadUtils
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.timeout
+import io.ktor.client.plugins.onDownload
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -176,7 +177,18 @@ class RemoteDataSource(
         }
     }
 
-    suspend fun downloadAsset(server: Server, assetId: String): ByteArray = guardedCall {
+    /**
+     * Downloads an asset's bytes.
+     *
+     * [onProgress] is invoked with a 0f..1f fraction as bytes arrive, or with null when the
+     * response carries no Content-Length and the fraction can't be known — callers should
+     * show an indeterminate indicator in that case.
+     */
+    suspend fun downloadAsset(
+        server: Server,
+        assetId: String,
+        onProgress: ((Float?) -> Unit)? = null
+    ): ByteArray = guardedCall {
         try {
             // Reverting to direct Ktor client as the generated assetsApi returns HttpResponse<Unit> (void)
             // and doesn't seem to handle the binary download properly in this version.
@@ -189,6 +201,17 @@ class RemoteDataSource(
                 timeout {
                     requestTimeoutMillis = ASSET_REQUEST_TIMEOUT_MS
                     socketTimeoutMillis = ASSET_SOCKET_TIMEOUT_MS
+                }
+                if (onProgress != null) {
+                    onDownload { bytesSentTotal, contentLength ->
+                        // contentLength is null for chunked responses — report indeterminate
+                        // rather than inventing a fraction.
+                        onProgress(
+                            if (contentLength != null && contentLength > 0) {
+                                (bytesSentTotal.toFloat() / contentLength).coerceIn(0f, 1f)
+                            } else null
+                        )
+                    }
                 }
             }
 
