@@ -37,6 +37,7 @@ import com.kdroid.composetray.utils.IconRenderProperties
 import com.kdroid.composetray.utils.isMenuBarInDarkMode
 import io.github.kdroidfilter.knotify.builder.AppConfig
 import io.github.kdroidfilter.knotify.builder.ExperimentalNotificationsApi
+import io.github.kdroidfilter.knotify.builder.Notification
 import io.github.kdroidfilter.knotify.builder.NotificationInitializer
 import io.github.kdroidfilter.knotify.builder.notification
 import kotlinx.coroutines.CoroutineScope
@@ -395,9 +396,12 @@ fun main(args: Array<String> = emptyArray()) {
                                     notify(title = "Karakept", message = "No URL found in clipboard")
                                     return@launch
                                 }
-                                notify(title = "Karakept", message = "Saving bookmark...")
+                                // KNotify has no progress/silent API, so this is a plain toast
+                                // that gets hidden once the final notification is ready to show.
+                                val progressNotification = notify(title = "Karakept", message = "Saving bookmark…")
                                 try {
                                     val result = bookmarkRepo.createBookmark(url)
+                                    progressNotification?.hideSafely()
                                     if (result.isSuccess) {
                                         val bookmark = result.getOrThrow()
                                         notify(title = "Bookmark Saved", message = bookmark.title)
@@ -408,6 +412,7 @@ fun main(args: Array<String> = emptyArray()) {
                                         )
                                     }
                                 } catch (e: Exception) {
+                                    progressNotification?.hideSafely()
                                     notify(title = "Save Failed", message = e.message ?: "Unknown error")
                                 }
                             }
@@ -473,13 +478,29 @@ fun main(args: Array<String> = emptyArray()) {
     }
 }
 
-/** Send a native desktop notification, silently ignoring if libnotify is unavailable. */
+/**
+ * Send a native desktop notification, silently ignoring if libnotify is unavailable.
+ * Returns the sent [Notification] so the caller can [Notification.hide] it later
+ * (e.g. once replaced by a follow-up notification), or null if sending failed.
+ */
 @OptIn(ExperimentalNotificationsApi::class)
-private fun notify(title: String, message: String) {
-    try {
-        notification(title = title, message = message).send()
+private fun notify(title: String, message: String): Notification? {
+    return try {
+        val sent = notification(title = title, message = message)
+        sent.send()
+        sent
     } catch (_: UnsatisfiedLinkError) {
         // libnotify.so not available (e.g. devcontainer without libnotify-dev)
+        null
+    }
+}
+
+/** Hide a previously sent notification, ignoring any error so a stuck progress toast never crashes the caller. */
+private fun Notification.hideSafely() {
+    try {
+        hide()
+    } catch (_: Exception) {
+        // Best effort - the notification may already be gone.
     }
 }
 

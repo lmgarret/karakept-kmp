@@ -37,28 +37,35 @@ class SaveBookmarkWorker(
 
     override suspend fun doWork(): Result {
         val url = inputData.getString(KEY_URL) ?: return Result.failure()
+        // Shared across the progress and final notification so the final one replaces
+        // the progress one in place instead of stacking alongside it.
+        val notificationId = System.currentTimeMillis().toInt()
 
         return try {
+            postNotificationSafely {
+                showProgressNotification(notificationId)
+            }
+
             val result = bookmarkRepository.createBookmark(url)
 
             if (result.isSuccess) {
                 val bookmark = result.getOrNull()
                 if (bookmark != null) {
                     postNotificationSafely {
-                        showSuccessNotification(bookmark.localId.toString(), bookmark.title, bookmark.imageUrl)
+                        showSuccessNotification(notificationId, bookmark.localId.toString(), bookmark.title, bookmark.imageUrl)
                     }
                 }
                 Result.success()
             } else {
                 postNotificationSafely {
-                    showErrorNotification(url, result.exceptionOrNull()?.message ?: "Unknown error")
+                    showErrorNotification(notificationId, url, result.exceptionOrNull()?.message ?: "Unknown error")
                 }
                 Result.failure()
             }
         } catch (e: Exception) {
             AppLogger.e(TAG, "Failed to save bookmark: ${e.message}", e)
             postNotificationSafely {
-                showErrorNotification(url, e.message ?: "Unknown error")
+                showErrorNotification(notificationId, url, e.message ?: "Unknown error")
             }
             Result.failure()
         }
@@ -116,7 +123,23 @@ class SaveBookmarkWorker(
         }
     }
 
-    private suspend fun showSuccessNotification(bookmarkId: String, title: String, imageUrl: String?) {
+    private fun showProgressNotification(notificationId: Int) {
+        ensureNotificationChannel()
+
+        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val builder = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Saving bookmark…")
+            .setProgress(0, 0, true)
+            .setOngoing(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+
+        notificationManager.notify(notificationId, builder.build())
+    }
+
+    private suspend fun showSuccessNotification(notificationId: Int, bookmarkId: String, title: String, imageUrl: String?) {
         ensureNotificationChannel()
 
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -165,16 +188,13 @@ class SaveBookmarkWorker(
                 .bigLargeIcon(null as Bitmap?))
         }
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+        notificationManager.notify(notificationId, builder.build())
     }
 
-    private fun showErrorNotification(url: String, error: String) {
+    private fun showErrorNotification(notificationId: Int, url: String, error: String) {
         ensureNotificationChannel()
 
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // Unique id per failed save so distinct URLs don't overwrite each other's notification.
-        val notificationId = System.currentTimeMillis().toInt()
 
         // Tapping the notification opens the dedicated save-error screen.
         val contentIntent = Intent(applicationContext, MainActivity::class.java).apply {
