@@ -164,10 +164,10 @@ object MainScreen : NavKey {
         val snackbarHostState = rememberSnackbarHostState(snackbarManager)
 
         // Initialise LazyListState from the hoisted position stored in the ScreenModel.
-        // This survives Voyager push/pop even when rememberSaveable state is lost (e.g.
-        // object Screen singletons) or when background sync replaces the bookmarks list
-        // while the reader is open.
-        val listState = rememberSaveable(key = "main_screen_list_state", saver = LazyListState.Saver) {
+        // The ScreenModel is the durable source of truth here: it survives back-stack
+        // pop/push and background sync replacing the bookmarks list while the reader is
+        // open, both of which can discard the saveable state.
+        val listState = rememberSaveable(saver = LazyListState.Saver) {
             LazyListState(
                 firstVisibleItemIndex = screenModel.savedScrollIndex,
                 firstVisibleItemScrollOffset = screenModel.savedScrollOffset
