@@ -35,7 +35,8 @@ class HighlightRepository(
         return highlightDao.getHighlightsPagedForServer(serverId, limit, offset).map { it.toDomain() }
     }
 
-    suspend fun syncHighlights(server: Server) {
+    /** @return true on success, false if the sync failed (surfaced as a sync warning). */
+    suspend fun syncHighlights(server: Server): Boolean {
         // Full sync of all highlights - used for periodic background sync or All Highlights screen
         try {
             val remoteHighlights = remoteDataSource.fetchAllHighlights(server)
@@ -73,8 +74,12 @@ class HighlightRepository(
             }
             highlightDao.insertHighlights(entities)
             AppLogger.d("HighlightRepository", "Inserted ${entities.size} highlights into local DB")
+            return true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             AppLogger.e("HighlightRepository", "Error syncing highlights: ${e.message}")
+            return false
         }
     }
 

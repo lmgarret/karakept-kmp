@@ -31,7 +31,9 @@ import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.plugin
 import io.ktor.client.request.header
 import com.karakept.app.utils.AppLogger
+import com.karakept.app.data.repository.processPendingActions
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 
@@ -43,6 +45,9 @@ fun App(
     saveErrorUrl: String? = null,
     saveErrorMessage: String? = null
 ) {
+    // Retain log lines in memory for the in-app log viewer (dev builds only).
+    remember { AppLogger.captureEnabled = isDevBuild }
+
     // Get ServerRepository to access API keys for authentication
     val serverRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.ServerRepository>()
 
@@ -92,6 +97,33 @@ fun App(
         val backupRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.BackupRepository>()
         val themeMode by settingsRepository.themeMode.collectAsState(initial = com.karakept.app.data.model.ThemeMode.SYSTEM)
         val accentColor by settingsRepository.accentColor.collectAsState(initial = com.karakept.app.data.model.AccentColor.PURPLE)
+
+        // Flush any queued offline actions whenever the app comes to the foreground, so changes
+        // made while disconnected are pushed promptly on reconnect without a background service.
+        val bookmarkActionsRepository =
+            org.koin.compose.koinInject<com.karakept.app.data.repository.BookmarkActionsRepository>()
+        val foregroundFlushScope = androidx.compose.runtime.rememberCoroutineScope()
+        androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+            foregroundFlushScope.launch {
+                try {
+                    if (!settingsRepository.offlineMode.first()) {
+                        serverRepository.servers.first().forEach { server ->
+                            try {
+                                bookmarkActionsRepository.processPendingActions(server)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                AppLogger.w("App", "Foreground flush failed for ${server.id}: ${e.message}")
+                            }
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    AppLogger.w("App", "Foreground flush error: ${e.message}")
+                }
+            }
+        }
 
         // Run scheduled auto-export check on startup (best-effort)
         androidx.compose.runtime.LaunchedEffect(Unit) {

@@ -98,6 +98,8 @@ class MainScreenModelPaginationSortingTest {
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
+        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
         every { bookmarkRepository.syncProgress } returns MutableStateFlow(
             com.karakept.app.data.model.SyncProgress.Idle
         )
@@ -241,5 +243,68 @@ class MainScreenModelPaginationSortingTest {
                 )
             }
             assertEquals(pageSize + 1, model._accumulatedBookmarks.value.size)
+        }
+
+    @Test
+    fun `refreshLoadedPagesInPlace keeps the loaded window and does not bump the list version`() =
+        runTest(testDispatcher) {
+            val pageSize = 20
+            val page0 = (1..pageSize).map { makeBookmark(id = it.toLong(), title = "b$it") }
+            val page1 = (pageSize + 1..pageSize * 2).map { makeBookmark(id = it.toLong(), title = "b$it") }
+            val page2 = (pageSize * 2 + 1..pageSize * 2 + 10).map { makeBookmark(id = it.toLong(), title = "b$it") }
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+            } returns page0
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = pageSize, limit = any(), sort = any(), listId = any())
+            } returns page1
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = pageSize * 2, limit = any(), sort = any(), listId = any())
+            } returns page2  // partial page (10 < 20) → DB end
+
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            // Simulate the user having scrolled through pages 0..2.
+            model._currentPage.value = 2
+            val versionBefore = model.bookmarkListVersion.value
+
+            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
+            advanceUntilIdle()
+
+            // Window preserved (all 50 items reloaded), not shrunk to page 0.
+            assertEquals(50, model._accumulatedBookmarks.value.size)
+            // Version NOT bumped, so PreserveListScrollAnchor keeps the viewport pinned
+            // instead of jumping to the top (no blink).
+            assertEquals(versionBefore, model.bookmarkListVersion.value)
+            // Partial final page → DB exhausted.
+            assertEquals(false, model.hasMoreItems.value)
+        }
+
+    @Test
+    fun `refreshLoadedPagesInPlace counts newly synced bookmarks for the N-new pill`() =
+        runTest(testDispatcher) {
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            // Existing loaded page 0 holds two bookmarks; no pending "new" indicator.
+            model._accumulatedBookmarks.value = listOf(makeBookmark(1, "b1"), makeBookmark(2, "b2"))
+            model._currentPage.value = 0
+            model.clearNewBookmarksAbove()
+
+            // Sync prepends two new bookmarks (ids 10, 11) to the top of page 0.
+            val page0 = listOf(
+                makeBookmark(10, "new1"), makeBookmark(11, "new2"),
+                makeBookmark(1, "b1"), makeBookmark(2, "b2")
+            )
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+            } returns page0
+
+            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
+            advanceUntilIdle()
+
+            assertEquals(2, model.newBookmarksAbove.value)
+
+            model.clearNewBookmarksAbove()
+            assertEquals(0, model.newBookmarksAbove.value)
         }
 }

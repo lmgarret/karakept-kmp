@@ -3,8 +3,10 @@ package com.karakept.app.ui.screens.main
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +22,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +30,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -47,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -84,6 +89,7 @@ internal fun BookmarkListContent(
     isSyncing: Boolean,
     syncProgress: com.karakept.app.data.model.SyncProgress?,
     isLoadingMore: Boolean,
+    isLoadingInitialPage: Boolean = false,
     hasMoreItems: Boolean,
     showScrollCursor: Boolean = false,
     sortOption: SortOption = SortOption.NEWEST,
@@ -130,9 +136,16 @@ internal fun BookmarkListContent(
     onShiftClick: ((Int) -> Unit)? = null,
     contextMenuLists: List<com.karakept.api.model.KarakeepList> = emptyList(),
     contextMenuTags: List<String> = emptyList(),
-    onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null
+    onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null,
+    newBookmarksAbove: Int = 0,
+    onClearNewBookmarksAbove: () -> Unit = {}
 ) {
-    // Detect when scrolled near end
+    // Detect when scrolled near end. The effect outlives the values it guards on, so they are
+    // read through rememberUpdatedState — capturing them would freeze the guards at their
+    // first-composition values and keep firing load-more while a reload is in flight.
+    val currentHasMoreItems = rememberUpdatedState(hasMoreItems)
+    val currentIsLoadingMore = rememberUpdatedState(isLoadingMore)
+    val currentOnLoadMore = rememberUpdatedState(onLoadMore)
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo }
             .collect { layoutInfo ->
@@ -141,16 +154,38 @@ internal fun BookmarkListContent(
 
                 if (lastVisibleItem != null && totalItems > 0) {
                     val threshold = totalItems - 10  // Load when 10 items from end
-                    if (lastVisibleItem.index >= threshold && hasMoreItems && !isLoadingMore) {
-                        onLoadMore()
+                    if (lastVisibleItem.index >= threshold &&
+                        currentHasMoreItems.value && !currentIsLoadingMore.value
+                    ) {
+                        currentOnLoadMore.value()
                     }
                 }
             }
     }
 
+    val animationGate = remember { ItemAnimationGate(bookmarks) }
+    val animateItems = animationGate.update(bookmarks)
+
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 3 }
+    }
+
+    // "N new" pill: shown only while the user is scrolled away from the top. Clear the counter
+    // once they reach the top (by scrolling or tapping the pill), or if new items arrive while
+    // they are already at the top (they can see them, so no pill is warranted).
+    // Only the scroll position goes through derivedStateOf (it reads snapshot state); the
+    // newBookmarksAbove parameter must be read directly so recomposition picks up its changes.
+    val scrolledAwayFromTop by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 }
+    }
+    val showNewBookmarksPill = newBookmarksAbove > 0 && scrolledAwayFromTop
+    LaunchedEffect(Unit) {
+        snapshotFlow { listState.firstVisibleItemIndex == 0 }
+            .collect { atTop -> if (atTop) onClearNewBookmarksAbove() }
+    }
+    LaunchedEffect(newBookmarksAbove) {
+        if (newBookmarksAbove > 0 && listState.firstVisibleItemIndex == 0) onClearNewBookmarksAbove()
     }
 
     val hapticFeedback = LocalHapticFeedback.current
@@ -307,7 +342,13 @@ internal fun BookmarkListContent(
             ) { itemIndex, bookmark ->
                 Box(
                     modifier = Modifier
-                        .animateItem()
+                        // fadeOutSpec = null: a fading-out item is kept in the layout and drawn
+                        // over whatever replaces it, using the spec recorded on the *previous*
+                        // measure pass — so a dataset swap renders the outgoing list on top of
+                        // the incoming one, and no amount of switching animations off in time
+                        // can undo it. Removed rows disappear at once; the rest still slide up
+                        // via placementSpec.
+                        .then(if (animateItems) Modifier.animateItem(fadeOutSpec = null) else Modifier)
                         .then(
                             // Desktop: intercept Ctrl+Click and Shift+Click for multi-selection
                             if (isDesktop && (onCtrlClick != null || onShiftClick != null)) {
@@ -549,6 +590,14 @@ internal fun BookmarkListContent(
                 }
             }
 
+            // An explicit empty state, but only once the first page has actually resolved —
+            // otherwise every cold start flashes "nothing here" before the list arrives.
+            if (bookmarks.isEmpty() && !isLoadingInitialPage) {
+                item(contentType = "empty") {
+                    EmptyBookmarkList()
+                }
+            }
+
             // Loading indicator at bottom
             if (isLoadingMore) {
                 item(contentType = "loading") {
@@ -588,6 +637,42 @@ internal fun BookmarkListContent(
                 progress = syncProgress,
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
             )
+        }
+
+        // "N new bookmarks" pill — tap to jump to the newly synced items at the top.
+        AnimatedVisibility(
+            visible = showNewBookmarksPill,
+            enter = fadeIn(animationSpec = tween(200)),
+            exit = fadeOut(animationSpec = tween(200)),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
+        ) {
+            Surface(
+                onClick = {
+                    scope.launch { listState.animateScrollToItem(0, 0) }
+                    onClearNewBookmarksAbove()
+                },
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shadowElevation = 4.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowUpward,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = if (newBookmarksAbove == 1) "1 new bookmark"
+                               else "$newBookmarksAbove new bookmarks",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
         }
 
         // Scroll-to-top FAB
@@ -650,6 +735,35 @@ internal fun BookmarkListContent(
     }
 }
 
+/**
+ * Decides whether the LazyColumn should animate its item changes.
+ *
+ * Item animations are for *surgical* changes — an item removed by smart-list reconciliation,
+ * an item updated in place by a sync, a page appended by load-more. Switching lists instead
+ * replaces the whole dataset, and animating that fades a whole list in over the one being
+ * replaced. The decision is derived from the data itself, and taken during composition, so it
+ * lands in the very frame that renders the swap; a flag delivered by a separate flow, or read
+ * from an effect, always arrives at least one frame too late to suppress anything.
+ *
+ * Plain fields rather than snapshot state: updating them must not invalidate the composition
+ * that is reading them.
+ */
+internal class ItemAnimationGate(initial: List<BookmarkEntity>) {
+    private var previous = initial
+    private var enabled = true
+
+    fun update(bookmarks: List<BookmarkEntity>): Boolean {
+        if (bookmarks === previous) return enabled
+        val previousIds = previous.mapTo(HashSet(previous.size)) { it.remoteId }
+        val survivors = bookmarks.count { it.remoteId in previousIds }
+        // Half of the shorter list surviving still reads as "the same list, changed".
+        enabled = previous.isEmpty() || bookmarks.isEmpty() ||
+            survivors * 2 >= minOf(previous.size, bookmarks.size)
+        previous = bookmarks
+        return enabled
+    }
+}
+
 @Composable
 private fun SyncProgressBar(
     progress: com.karakept.app.data.model.SyncProgress?,
@@ -678,5 +792,34 @@ private fun SyncProgressBar(
             }
             else -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
+    }
+}
+
+@Composable
+private fun EmptyBookmarkList() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.BookmarkBorder,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(48.dp)
+        )
+        Text(
+            text = "Nothing here yet",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Bookmarks you save will show up here.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }

@@ -82,7 +82,6 @@ All backups are encrypted. Server connections are always restored after successf
 | Data | Reason |
 |---|---|
 | `activeServerId` | Session state; meaningless on another device |
-| `autoOfflineDetected` | Transient network state |
 | `lastAutoExportTime` | Tracks scheduler state; not a user preference |
 | `backup_pin` (raw PIN) | Stored locally only; never written to backup file |
 | Bookmarks | Live on the Karakeep server, not in the app |
@@ -198,7 +197,6 @@ DataStore<Preferences>
 ├── settings_sync_json     ← StoredSyncSettings    (sync strategy, target lists)
 ├── settings_app_json      ← StoredAppSettings     (notifications, offline, onboarding, auto-export)
 ├── active_server_id       ← Individual key (not backed up)
-├── auto_offline_detected  ← Individual key (not backed up)
 ├── last_auto_export_time  ← Individual key (not backed up)
 └── per_list_settings      ← Separate JSON blob (not backed up)
 ```

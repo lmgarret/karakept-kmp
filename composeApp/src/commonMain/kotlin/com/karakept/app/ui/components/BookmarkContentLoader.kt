@@ -30,18 +30,21 @@ import com.karakept.app.ui.screens.BookmarkLoadingState
 @Composable
 fun BookmarkContentLoader(
     loadingState: BookmarkLoadingState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showBanner: Boolean = true
 ) {
     when (loadingState) {
         is BookmarkLoadingState.Initial -> {
             // Full skeleton for everything
             Column(modifier = modifier.fillMaxWidth()) {
-                // Banner skeleton
-                ShimmerBox(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp)
-                )
+                // Banner skeleton (omitted when the real hero is already shown above)
+                if (showBanner) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(280.dp)
+                    )
+                }
 
                 // Content area skeleton
                 Column(modifier = Modifier.padding(16.dp)) {

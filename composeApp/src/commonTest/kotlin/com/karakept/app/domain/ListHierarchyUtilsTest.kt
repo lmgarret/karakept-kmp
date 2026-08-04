@@ -1,6 +1,9 @@
 package com.karakept.app.domain
 
 import com.karakept.api.model.KarakeepList
+import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.ListSettings
 import io.mockk.every
 import io.mockk.mockk
 import kotlin.test.Test
@@ -234,5 +237,71 @@ class ListHierarchyUtilsTest {
         )
         assertTrue(ListHierarchyUtils.listHasChildren("parent", lists))
         assertTrue(!ListHierarchyUtils.listHasChildren("leaf", lists))
+    }
+
+    // -------------------------------------------------------------------------
+    // expandFilterLists
+    // -------------------------------------------------------------------------
+
+    private val lists = listOf(
+        makeList("parent"),
+        makeList("child", parentId = "parent"),
+        makeList("grandchild", parentId = "child"),
+        makeList("other")
+    )
+
+    @Test
+    fun expandFilterLists_withoutTheSetting_returnsTheFilterUnchanged() {
+        val filter = FilterConfig(lists = listOf("parent"))
+        assertEquals(filter, ListHierarchyUtils.expandFilterLists(filter, lists, emptyMap()))
+    }
+
+    @Test
+    fun expandFilterLists_addsAllDescendantsOfAnIncludingList() {
+        val filter = FilterConfig(lists = listOf("parent"))
+        val settings = mapOf("parent" to ListSettings(includeChildListBookmarks = true))
+        assertEquals(
+            listOf("parent", "child", "grandchild"),
+            ListHierarchyUtils.expandFilterLists(filter, lists, settings).lists
+        )
+    }
+
+    @Test
+    fun expandFilterLists_expandsOnlyTheListsConfiguredForIt() {
+        val filter = FilterConfig(lists = listOf("parent", "other"))
+        val settings = mapOf("other" to ListSettings(includeChildListBookmarks = true))
+        assertEquals(
+            listOf("parent", "other"),
+            ListHierarchyUtils.expandFilterLists(filter, lists, settings).lists
+        )
+    }
+
+    @Test
+    fun expandFilterLists_keepsTheRestOfTheFilter() {
+        val filter = FilterConfig(status = FilterStatus.ARCHIVED, tags = listOf("kotlin"), lists = listOf("parent"))
+        val settings = mapOf("parent" to ListSettings(includeChildListBookmarks = true))
+        val expanded = ListHierarchyUtils.expandFilterLists(filter, lists, settings)
+        assertEquals(FilterStatus.ARCHIVED, expanded.status)
+        assertEquals(listOf("kotlin"), expanded.tags)
+    }
+
+    @Test
+    fun expandFilterLists_withoutListsIsANoOp() {
+        val filter = FilterConfig(status = FilterStatus.FAVORITES)
+        val settings = mapOf("parent" to ListSettings(includeChildListBookmarks = true))
+        assertEquals(filter, ListHierarchyUtils.expandFilterLists(filter, lists, settings))
+    }
+
+    @Test
+    fun expandFilterLists_doesNotDuplicateAListReachableTwice() {
+        val filter = FilterConfig(lists = listOf("parent", "child"))
+        val settings = mapOf(
+            "parent" to ListSettings(includeChildListBookmarks = true),
+            "child" to ListSettings(includeChildListBookmarks = true)
+        )
+        assertEquals(
+            listOf("parent", "child", "grandchild"),
+            ListHierarchyUtils.expandFilterLists(filter, lists, settings).lists
+        )
     }
 }

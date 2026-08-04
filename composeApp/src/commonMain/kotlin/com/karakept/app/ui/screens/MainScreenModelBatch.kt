@@ -83,16 +83,10 @@ fun MainScreenModel.selectAll() {
     // D-01: Fetch all matching entities from DB in one query
     viewModelScope.launch {
         val server = _selectedServer.value ?: return@launch
-        val filter = _currentFilter.value
-
-        // Expand list children (same as loadBookmarksPage per Pitfall 2)
-        val expandedFilter = if (filter.lists.isNotEmpty()) {
-            val expandedLists = expandListsWithChildren(filter.lists)
-            if (expandedLists != filter.lists) filter.copy(lists = expandedLists) else filter
-        } else filter
+        val expandedFilter = effectiveFilterNow()
 
         // D-04: Apply current filter to DB query
-        val singleListId = if (expandedFilter.lists.size == 1) expandedFilter.lists.first() else null
+        val singleListId = expandedFilter.lists.singleOrNull()
         val allEntities = bookmarkRepository.getAllBookmarks(server, expandedFilter.status, singleListId)
 
         // Apply client-side filters (tags, multi-list) per Pitfall 1
