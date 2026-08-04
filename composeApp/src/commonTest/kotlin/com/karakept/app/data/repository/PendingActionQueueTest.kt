@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.karakept.app.utils.TestAppDispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
 
 /**
  * Unit tests for the offline-first action queue in [BookmarkActionsRepository].
@@ -23,6 +25,9 @@ import kotlin.test.assertEquals
  * rejection retry-increment scenarios for [processPendingActions].
  */
 class PendingActionQueueTest {
+
+    private val testDispatcher = StandardTestDispatcher()
+    private val testAppDispatchers = TestAppDispatchers(testDispatcher)
 
     // ---- Shared test fixtures ----
 
@@ -44,7 +49,8 @@ class PendingActionQueueTest {
         pendingActionDao = pendingActionDao,
         remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
-        settingsRepository = settingsRepository
+        settingsRepository = settingsRepository,
+        appDispatchers = testAppDispatchers
     )
 
     init {
@@ -99,7 +105,7 @@ class PendingActionQueueTest {
     // ---- Test 1: Ordering ----
 
     @Test
-    fun actionsProcessedInCreationOrder() = runTest {
+    fun actionsProcessedInCreationOrder() = runTest(testDispatcher) {
         val action1 = pendingAction(PendingActionType.ARCHIVE, bookmarkRemoteId = 1L, createdAt = 1000, id = 1)
         val action2 = pendingAction(PendingActionType.FAVOURITE, bookmarkRemoteId = 2L, createdAt = 2000, id = 2)
         val action3 = pendingAction(PendingActionType.UNARCHIVE, bookmarkRemoteId = 3L, createdAt = 3000, id = 3)
@@ -126,7 +132,7 @@ class PendingActionQueueTest {
     // ---- Test 2: Conflict resolution (last wins) ----
 
     @Test
-    fun conflictingActionsLastWins() = runTest {
+    fun conflictingActionsLastWins() = runTest(testDispatcher) {
         val archiveAction = pendingAction(
             PendingActionType.ARCHIVE, bookmarkRemoteId = 42L, createdAt = 1, id = 1
         )
@@ -155,7 +161,7 @@ class PendingActionQueueTest {
     // ---- Test 3: Exhausted retries mark the action failed (never silently dropped) ----
 
     @Test
-    fun exhaustedRetriesMarkActionFailedInsteadOfDeleting() = runTest {
+    fun exhaustedRetriesMarkActionFailedInsteadOfDeleting() = runTest(testDispatcher) {
         // Action with retryCount = 4: the next transient failure reaches the 5-retry cap
         val staleAction = pendingAction(
             PendingActionType.ARCHIVE, bookmarkRemoteId = 99L, createdAt = 1000, retryCount = 4, id = 1
@@ -183,7 +189,7 @@ class PendingActionQueueTest {
     // ---- Test 4: Transient server rejection increments retry with backoff ----
 
     @Test
-    fun transientRejectionIncrementsRetryWithBackoff() = runTest {
+    fun transientRejectionIncrementsRetryWithBackoff() = runTest(testDispatcher) {
         val action = pendingAction(
             PendingActionType.FAVOURITE, bookmarkRemoteId = 55L, createdAt = 1000, retryCount = 1, id = 1
         )
@@ -210,7 +216,7 @@ class PendingActionQueueTest {
     // ---- Test 5: Permanent server rejection fails on the first attempt ----
 
     @Test
-    fun permanentRejectionMarksFailedImmediately() = runTest {
+    fun permanentRejectionMarksFailedImmediately() = runTest(testDispatcher) {
         val action = pendingAction(
             PendingActionType.MOVE_TO_LIST, bookmarkRemoteId = 77L, createdAt = 1000, retryCount = 0, id = 1,
             actionData = """{"listId":"list-1"}"""

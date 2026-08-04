@@ -100,7 +100,16 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 - `viewModelScope` in ScreenModels for lifecycle-aware launching.
 - `SharingStarted.WhileSubscribed(5000)` when converting `Flow` to `StateFlow`.
-- `runTest(testDispatcher)` in unit tests; base class `BaseRepositoryTest` provides the dispatcher.
+- `runTest(testDispatcher)` in unit tests; base class `BaseRepositoryTest` provides the dispatcher
+  and a matching `testAppDispatchers`.
+- **Never reference `Dispatchers.IO` / `Dispatchers.Default` directly** outside platform entry
+  points. Inject `AppDispatchers` (`utils/AppDispatchers.kt`) and use `appDispatchers.io` /
+  `appDispatchers.default`. A hardcoded dispatcher is invisible to `advanceUntilIdle()`, so any
+  test driving that code samples state the production code has not reached yet.
+- **Dispatchers belong to the data layer, not to ScreenModels.** A repository makes itself
+  main-safe; callers never wrap a repository call in `withContext`.
+- **Never use `GlobalScope`.** Work that must outlive a screen belongs on the scope of the
+  Koin `single` that owns it (see `BookmarkActionsRepository.persistFinalReadingProgress`).
 
 ### Where to Add New Code
 

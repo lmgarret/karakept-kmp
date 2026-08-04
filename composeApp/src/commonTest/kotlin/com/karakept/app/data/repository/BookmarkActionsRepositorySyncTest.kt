@@ -36,7 +36,8 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         pendingActionDao = pendingActionDao,
         remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
-        settingsRepository = settingsRepository
+        settingsRepository = settingsRepository,
+        appDispatchers = testAppDispatchers
     )
 
     private val testServer = Server(
@@ -57,7 +58,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     // ──────────────────────────────────────────────────────────
 
     @Test
-    fun processPendingActions_noPendingActions_returnsEmptyList() = runTest {
+    fun processPendingActions_noPendingActions_returnsEmptyList() = runTest(testDispatcher) {
         coEvery { pendingActionDao.getPendingActionsList("server1") } returns emptyList()
 
         val result = repository.processPendingActions(testServer)
@@ -66,7 +67,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun processPendingActions_withActions_returnsProcessedBookmarkIds() = runTest {
+    fun processPendingActions_withActions_returnsProcessedBookmarkIds() = runTest(testDispatcher) {
         val action1 = makePendingAction(
             actionType = PendingActionType.ARCHIVE,
             bookmarkRemoteId = 10L
@@ -95,7 +96,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     // ──────────────────────────────────────────────────────────
 
     @Test
-    fun getPendingActionBookmarkIds_returnsDistinctIds() = runTest {
+    fun getPendingActionBookmarkIds_returnsDistinctIds() = runTest(testDispatcher) {
         val actions = listOf(
             makePendingAction(bookmarkRemoteId = 10L, actionType = PendingActionType.ARCHIVE),
             makePendingAction(bookmarkRemoteId = 10L, actionType = PendingActionType.FAVOURITE),
@@ -115,7 +116,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     // ──────────────────────────────────────────────────────────
 
     @Test
-    fun pullReadingProgress_serverNotFound_returnsFalse() = runTest {
+    fun pullReadingProgress_serverNotFound_returnsFalse() = runTest(testDispatcher) {
         coEvery { serverRepository.servers } returns flowOf(emptyList())
 
         val result = repository.pullReadingProgressFromServer(42L, "server1")
@@ -124,7 +125,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun pullReadingProgress_bookmarkNotFound_returnsFalse() = runTest {
+    fun pullReadingProgress_bookmarkNotFound_returnsFalse() = runTest(testDispatcher) {
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns null
 
         val result = repository.pullReadingProgressFromServer(42L, "server1")
@@ -133,7 +134,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun pullReadingProgress_serverProgressHigher_updatesLocal_returnsTrue() = runTest {
+    fun pullReadingProgress_serverProgressHigher_updatesLocal_returnsTrue() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 0.2f)
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
         coEvery {
@@ -154,7 +155,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun pullReadingProgress_serverProgressLower_doesNotUpdate_returnsFalse() = runTest {
+    fun pullReadingProgress_serverProgressLower_doesNotUpdate_returnsFalse() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 0.8f)
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
         coEvery {
@@ -168,7 +169,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun pullReadingProgress_serverReturnsNull_returnsFalse() = runTest {
+    fun pullReadingProgress_serverReturnsNull_returnsFalse() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
         coEvery {
@@ -185,7 +186,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     // ──────────────────────────────────────────────────────────
 
     @Test
-    fun executeAction_archiveType_callsUpdateBookmarkWithArchivedTrue() = runTest {
+    fun executeAction_archiveType_callsUpdateBookmarkWithArchivedTrue() = runTest(testDispatcher) {
         val action = makePendingAction(actionType = PendingActionType.ARCHIVE)
         val bookmark = makeBookmark()
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
@@ -199,7 +200,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun executeAction_deleteType_callsDeleteBookmark() = runTest {
+    fun executeAction_deleteType_callsDeleteBookmark() = runTest(testDispatcher) {
         val action = makePendingAction(
             actionType = PendingActionType.DELETE,
             actionData = """{"originalRemoteId":"remote-42"}"""
@@ -212,7 +213,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun executeAction_actionFails_incrementsRetryCount() = runTest {
+    fun executeAction_actionFails_incrementsRetryCount() = runTest(testDispatcher) {
         val action = makePendingAction(
             actionType = PendingActionType.ARCHIVE,
             retryCount = 0
@@ -231,7 +232,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun executeAction_retryCountExceeded_marksFailedInsteadOfDeleting() = runTest {
+    fun executeAction_retryCountExceeded_marksFailedInsteadOfDeleting() = runTest(testDispatcher) {
         // retryCount 4 → the next transient failure hits the 5-retry cap
         val action = makePendingAction(
             actionType = PendingActionType.ARCHIVE,
@@ -255,7 +256,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun executeAction_bookmarkNotFound_deletesOrphanedAction() = runTest {
+    fun executeAction_bookmarkNotFound_deletesOrphanedAction() = runTest(testDispatcher) {
         val action = makePendingAction(actionType = PendingActionType.ARCHIVE)
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns null
 

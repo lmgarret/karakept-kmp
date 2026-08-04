@@ -5,11 +5,12 @@ import com.karakept.app.utils.AppLogger
 import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.utils.AppDispatchers
 import com.karakept.api.model.KarakeepList
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,9 +20,10 @@ import kotlinx.coroutines.launch
 class ListRepository(
     private val remoteDataSource: RemoteDataSource,
     private val listDao: ListDao,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val appDispatchers: AppDispatchers
 ) {
-    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val repositoryScope = CoroutineScope(SupervisorJob() + appDispatchers.default)
 
     // Prevent concurrent refreshLists calls from each issuing a redundant network request.
     private val refreshMutex = kotlinx.coroutines.sync.Mutex()
@@ -52,7 +54,7 @@ class ListRepository(
         }
     }
 
-    private suspend fun refreshListsInternal(server: Server) {
+    private suspend fun refreshListsInternal(server: Server) = withContext(appDispatchers.io) {
         currentServerId = server.id
 
         // Check if offline mode is enabled

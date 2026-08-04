@@ -13,12 +13,17 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import com.karakept.app.utils.TestAppDispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
 
 /**
  * Tests for enqueue-time deduplication of pending actions (D10): rapid toggles must
  * not enqueue N redundant rows that all replay to the server.
  */
 class PendingActionDedupTest {
+
+    private val testDispatcher = StandardTestDispatcher()
+    private val testAppDispatchers = TestAppDispatchers(testDispatcher)
 
     private val testServer = Server(
         id = "server-1",
@@ -38,7 +43,8 @@ class PendingActionDedupTest {
         pendingActionDao = pendingActionDao,
         remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
-        settingsRepository = settingsRepository
+        settingsRepository = settingsRepository,
+        appDispatchers = testAppDispatchers
     )
 
     init {
@@ -69,7 +75,7 @@ class PendingActionDedupTest {
     }
 
     @Test
-    fun archiveThenUnarchive_deletesBothPriorTypesBeforeEnqueue() = runTest {
+    fun archiveThenUnarchive_deletesBothPriorTypesBeforeEnqueue() = runTest(testDispatcher) {
         stubBookmark(1L)
 
         repository.archiveBookmark(1L, testServer.id)
@@ -81,7 +87,7 @@ class PendingActionDedupTest {
     }
 
     @Test
-    fun updateTags_deletesPriorTagUpdateBeforeEnqueue() = runTest {
+    fun updateTags_deletesPriorTagUpdateBeforeEnqueue() = runTest(testDispatcher) {
         stubBookmark(2L)
 
         repository.updateTags(2L, testServer.id, listOf("a", "b"), isOnline = false)
@@ -90,7 +96,7 @@ class PendingActionDedupTest {
     }
 
     @Test
-    fun delete_purgesAllOtherQueuedActionsFirst() = runTest {
+    fun delete_purgesAllOtherQueuedActionsFirst() = runTest(testDispatcher) {
         stubBookmark(3L)
 
         repository.deleteBookmark(3L, 3L, testServer.id)
@@ -99,7 +105,7 @@ class PendingActionDedupTest {
     }
 
     @Test
-    fun moveThenRemoveSameList_cancelsMatchingMembershipRow() = runTest {
+    fun moveThenRemoveSameList_cancelsMatchingMembershipRow() = runTest(testDispatcher) {
         stubBookmark(4L)
         // After the move enqueues, the queue contains a MOVE_TO_LIST for list-1.
         coEvery { pendingActionDao.getPendingActionsList(testServer.id) } returns listOf(

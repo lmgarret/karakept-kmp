@@ -29,6 +29,7 @@ import org.junit.Before
 import org.junit.BeforeClass
 import java.io.File
 import java.util.concurrent.TimeUnit
+import com.karakept.app.utils.DefaultAppDispatchers
 
 /**
  * Base class for integration tests that require a running Karakeep backend.
@@ -355,6 +356,9 @@ abstract class BaseDockerIntegrationTest {
             label = "Integration Test Server"
         )
 
+    // Integration tests exercise a real Docker backend on real threads.
+    protected val appDispatchers = DefaultAppDispatchers()
+
     @Before
     fun baseSetup() {
         db = Room.inMemoryDatabaseBuilder<AppDatabase>()
@@ -380,7 +384,8 @@ abstract class BaseDockerIntegrationTest {
             pendingActionDao = db.pendingActionDao(),
             remoteDataSource = remoteDataSource,
             serverRepository = serverRepository,
-            settingsRepository = settingsRepository
+            settingsRepository = settingsRepository,
+            appDispatchers = appDispatchers
         )
         bookmarkActionsRepository.setHighlightDao(db.highlightDao())
 
@@ -399,14 +404,16 @@ abstract class BaseDockerIntegrationTest {
             serverRepository = serverRepository,
             highlightRepository = highlightRepository,
             imageCacheManager = imageCacheManager,
-            listDao = db.listDao()
+            listDao = db.listDao(),
+            appDispatchers = appDispatchers
         )
         bookmarkActionsRepository.setBookmarkRepository(bookmarkRepository)
 
         listRepository = ListRepository(
             remoteDataSource = remoteDataSource,
             listDao = db.listDao(),
-            settingsRepository = settingsRepository
+            settingsRepository = settingsRepository,
+            appDispatchers = appDispatchers
         )
 
         every { serverRepository.servers } returns flowOf(listOf(testServer))

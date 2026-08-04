@@ -25,7 +25,7 @@ jobs:
           submodules: true
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         with:
           python-version: '3.11'
@@ -120,7 +120,7 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -149,7 +149,7 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -195,7 +195,7 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -242,7 +242,7 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -286,7 +286,7 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'

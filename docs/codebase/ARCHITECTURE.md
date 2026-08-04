@@ -154,6 +154,15 @@ screen. Consequences worth knowing before touching this code:
 - `loadBookmarksPage` therefore does no settings lookups: a page depends only on the filter it
   is given and the page index. That is what lets a window be re-read safely later.
 
+**AppDispatchers:**
+- Purpose: The dispatcher set used by the data layer, injected instead of referenced statically
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/utils/AppDispatchers.kt`
+- Bound as a Koin `single<AppDispatchers> { DefaultAppDispatchers() }`; tests bind
+  `TestAppDispatchers(testDispatcher)` so every coroutine the code starts stays on the test
+  scheduler and is drained by `advanceUntilIdle()`
+- Injected into `BookmarkRepository`, `BookmarkActionsRepository`, `ListRepository` and
+  `BookmarkActionController`
+
 **ScreenModel (`androidx.lifecycle.ViewModel` subclass):**
 - Purpose: Lifecycle-scoped state holder for a screen, survives configuration changes; scoped per Nav3 back-stack entry via `rememberViewModelStoreNavEntryDecorator`
 - Pattern: Each screen has a corresponding ScreenModel bound with `viewModel { }` in Koin (LoginScreenModel, MainScreenModel, BookmarkViewerScreenModel, etc.), obtained with `koinViewModel`
@@ -229,6 +238,17 @@ screen. Consequences worth knowing before touching this code:
   preserve PDF, plus deleting an asset on the server) deliberately bypass the pending-action
   queue. They ask the server to run a background job and have no optimistic local counterpart,
   so there is nothing to apply offline or to undo; the UI disables them in offline mode instead.
+
+**Threading:**
+- Repositories are main-safe: `BookmarkRepository.executeSyncPipeline` and
+  `ListRepository.refreshListsInternal` switch to `appDispatchers.io` themselves, so ScreenModels
+  never wrap a repository call in `withContext`
+- Background work that must outlive its caller runs on the owning `single`'s scope
+  (`BookmarkRepository.repositoryScope`, `BookmarkActionsRepository.repositoryScope`), never on
+  `GlobalScope`
+- The only remaining direct `Dispatchers` references are platform entry points
+  (`main.kt`, `KarakeptApp.kt`, the desktop `FilePicker`) and CPU-bound HTML parsing in
+  `ui/components/HtmlContent.kt`
 
 **Dependency Injection:**
 - Koin module configured in AppModule.kt (single instances for repositories, factories for ScreenModels)

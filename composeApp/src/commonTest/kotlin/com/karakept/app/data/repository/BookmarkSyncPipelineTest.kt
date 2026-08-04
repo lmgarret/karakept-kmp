@@ -67,7 +67,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         pendingActionDao = pendingActionDao,
         remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
-        settingsRepository = settingsRepository
+        settingsRepository = settingsRepository,
+        appDispatchers = testAppDispatchers
     )
 
     private val testServer = Server(

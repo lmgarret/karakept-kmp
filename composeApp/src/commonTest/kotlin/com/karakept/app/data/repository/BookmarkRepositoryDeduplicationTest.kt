@@ -45,7 +45,8 @@ class BookmarkRepositoryDeduplicationTest : BaseRepositoryTest() {
         pendingActionDao = pendingActionDao,
         remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
-        settingsRepository = settingsRepository
+        settingsRepository = settingsRepository,
+        appDispatchers = testAppDispatchers
     )
 
     private val repository = BookmarkRepository(
@@ -57,7 +58,8 @@ class BookmarkRepositoryDeduplicationTest : BaseRepositoryTest() {
         serverRepository,
         highlightRepository,
         imageCacheManager,
-        listDao
+        listDao,
+        testAppDispatchers
     )
 
     private val testServer = Server("server1", "https://example.com", "test-key", "Test Server")
