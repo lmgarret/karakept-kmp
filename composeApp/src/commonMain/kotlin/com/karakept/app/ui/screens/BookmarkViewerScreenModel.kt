@@ -822,7 +822,10 @@ class BookmarkViewerScreenModel(
      */
     fun downloadOrRefreshAsset(
         asset: com.karakept.app.data.local.entity.AssetEntity,
-        bookmark: com.karakept.app.data.local.entity.BookmarkEntity
+        bookmark: com.karakept.app.data.local.entity.BookmarkEntity,
+        // True when the download was started by tapping the row rather than by picking
+        // "Download a copy" from the menu: finish the job the tap implied.
+        useWhenDone: Boolean = false
     ) {
         // Claim the slot synchronously — two taps in the same frame would both pass a check
         // made inside the coroutine and start the download twice.
@@ -852,15 +855,25 @@ class BookmarkViewerScreenModel(
                     cacheFileNameFor(asset),
                     bytes
                 )
-                assetDao.insertAssets(listOf(asset.copy(localPath = localPath)))
+                val downloaded = asset.copy(localPath = localPath)
+                assetDao.insertAssets(listOf(downloaded))
                 reloadAssets(bookmark)
 
-                // If the reader is already showing this archive, swap in the fresh bytes.
                 val isArchive = asset.assetType == "fullPageArchive" || asset.assetType == "precrawledArchive"
-                if (isArchive && _selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE &&
-                    viewerMode.value == ViewerMode.READER
-                ) {
-                    _sourceContentOverride.value = bytes.decodeToString()
+                when {
+                    // Tapping the row meant "I want to use this", so finish the thought once
+                    // the bytes are here rather than making the user tap again.
+                    useWhenDone && isArchive -> {
+                        _sourceContentOverride.value = bytes.decodeToString()
+                        _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
+                    }
+                    useWhenDone && asset.assetType == "pdf" -> openAssetExternally(downloaded)
+                    // Not a tap, but the reader is already showing this archive — swap in the
+                    // fresh bytes so a re-download is reflected immediately.
+                    isArchive && _selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE &&
+                        viewerMode.value == ViewerMode.READER -> {
+                        _sourceContentOverride.value = bytes.decodeToString()
+                    }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

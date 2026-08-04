@@ -179,6 +179,11 @@ fun ViewerContentPanels(
         onRefreshAsset = { asset ->
             if (detailsBookmark != null) screenModel.downloadOrRefreshAsset(asset, detailsBookmark)
         },
+        onDownloadAndUseAsset = { asset ->
+            if (detailsBookmark != null) {
+                screenModel.downloadOrRefreshAsset(asset, detailsBookmark, useWhenDone = true)
+            }
+        },
         onOpenAssetExternally = { asset -> screenModel.openAssetExternally(asset) },
         onDeleteAssetLocal = { asset -> screenModel.deleteAssetLocal(asset) },
         onDeleteAssetOnServer = { asset ->

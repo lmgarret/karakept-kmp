@@ -207,11 +207,20 @@ actual object FileUtils {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            // Started from a non-Activity context, so an empty chooser would throw rather
-            // than showing "no app found" — check first and let the caller report it.
-            if (intent.resolveActivity(context.packageManager) == null) return false
-            context.startActivity(intent)
+            // Deliberately no resolveActivity() pre-check: from API 30 package visibility
+            // filtering makes it return null even when a capable app is installed, which
+            // reported "no app available" on phones that had several PDF readers. Wrapping in
+            // a chooser guarantees the grant reaches whichever app the user picks.
+            val chooser = Intent.createChooser(intent, null).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(chooser)
             true
+        } catch (e: android.content.ActivityNotFoundException) {
+            // The genuine "nothing can open this" case.
+            AppLogger.e("FileUtils", "No activity to open $path ($mimeType)", e)
+            false
         } catch (e: Exception) {
             AppLogger.e("FileUtils", "Failed to open $path externally: ${e.message}", e)
             false

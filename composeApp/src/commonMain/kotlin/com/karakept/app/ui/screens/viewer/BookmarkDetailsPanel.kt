@@ -99,6 +99,8 @@ internal fun BookmarkDetailsPanel(
     assetDownloads: Map<String, Float?> = emptyMap(),
     onSourceSelected: (ContentSource) -> Unit = {},
     onDownloadAsset: (AssetEntity) -> Unit = {},
+    // Tap on the row: download and then use it (select as source / open externally).
+    onDownloadAndUseAsset: (AssetEntity) -> Unit = {},
     onRefreshAsset: (AssetEntity) -> Unit = {},
     onOpenAssetExternally: (AssetEntity) -> Unit = {},
     onDeleteAssetLocal: (AssetEntity) -> Unit = {},
@@ -270,6 +272,7 @@ internal fun BookmarkDetailsPanel(
                                     downloadProgress = progressFor(fullPageArchiveAsset),
                                     onSelect = { onSourceSelected(ContentSource.FULL_PAGE_ARCHIVE) },
                                     onDownload = { onDownloadAsset(fullPageArchiveAsset) },
+                                    onDownloadAndUse = { onDownloadAndUseAsset(fullPageArchiveAsset) },
                                     onRefresh = { onRefreshAsset(fullPageArchiveAsset) },
                                     onOpenExternally = { onOpenAssetExternally(fullPageArchiveAsset) },
                                     onDelete = { onDeleteAssetLocal(fullPageArchiveAsset) },
@@ -290,6 +293,7 @@ internal fun BookmarkDetailsPanel(
                                     downloadProgress = progressFor(precrawledArchiveAsset),
                                     onSelect = { onSourceSelected(ContentSource.FULL_PAGE_ARCHIVE) },
                                     onDownload = { onDownloadAsset(precrawledArchiveAsset) },
+                                    onDownloadAndUse = { onDownloadAndUseAsset(precrawledArchiveAsset) },
                                     onRefresh = { onRefreshAsset(precrawledArchiveAsset) },
                                     onOpenExternally = { onOpenAssetExternally(precrawledArchiveAsset) },
                                     onDelete = { onDeleteAssetLocal(precrawledArchiveAsset) },
@@ -312,6 +316,7 @@ internal fun BookmarkDetailsPanel(
                                     canDeleteOnServer = serverActionsEnabled,
                                     downloadProgress = progressFor(pdfAsset),
                                     onDownload = { onDownloadAsset(pdfAsset) },
+                                    onDownloadAndUse = { onDownloadAndUseAsset(pdfAsset) },
                                     onRefresh = { onRefreshAsset(pdfAsset) },
                                     onOpenExternally = { onOpenAssetExternally(pdfAsset) },
                                     onDelete = { onDeleteAssetLocal(pdfAsset) },
@@ -614,6 +619,7 @@ private fun ContentSourceRow(
     downloadProgress: DownloadProgress? = null,
     onSelect: () -> Unit = {},
     onDownload: () -> Unit = {},
+    onDownloadAndUse: () -> Unit = {},
     onRefresh: () -> Unit = {},
     onOpenExternally: () -> Unit = {},
     onDelete: () -> Unit = {},
@@ -629,7 +635,7 @@ private fun ContentSourceRow(
     // Tap = the obvious next step for this row's state.
     val rowAction: (() -> Unit)? = when {
         isDownloading -> null
-        asset != null && !hasLocalCopy -> onDownload
+        asset != null && !hasLocalCopy -> onDownloadAndUse
         canActivate && canBeContentSource -> onSelect
         hasLocalCopy && canOpenExternally -> onOpenExternally
         else -> null
@@ -665,29 +671,32 @@ private fun ContentSourceRow(
                     color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer
                             else MaterialTheme.colorScheme.onSurface
                 )
-                if (isDownloading) {
-                    DownloadProgressBar(downloadProgress)
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val dotColor = when {
-                            hasLocalCopy -> MaterialTheme.colorScheme.primary
-                            statusText == "Available" -> MaterialTheme.colorScheme.primary
-                            statusText == "On server" -> MaterialTheme.colorScheme.tertiary
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(dotColor)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = statusText,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val dotColor = when {
+                        isDownloading -> MaterialTheme.colorScheme.tertiary
+                        hasLocalCopy -> MaterialTheme.colorScheme.primary
+                        statusText == "Available" -> MaterialTheme.colorScheme.primary
+                        statusText == "On server" -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(dotColor)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (isDownloading) "Downloading" else statusText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    // The bar sits beside the status rather than replacing it, so the row
+                    // keeps its shape and the label still says what is happening.
+                    if (isDownloading) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        DownloadProgressBar(downloadProgress, modifier = Modifier.weight(1f))
                     }
                 }
             }
@@ -724,29 +733,19 @@ private fun ContentSourceRow(
 private data class DownloadProgress(val fraction: Float?)
 
 @Composable
-private fun DownloadProgressBar(progress: DownloadProgress?) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        val fraction = progress?.fraction
-        if (fraction != null) {
-            LinearProgressIndicator(
-                progress = { fraction },
-                modifier = Modifier.weight(1f).height(4.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "${(fraction * 100).toInt()}%",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            LinearProgressIndicator(modifier = Modifier.weight(1f).height(4.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Downloading",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+private fun DownloadProgressBar(
+    progress: DownloadProgress?,
+    modifier: Modifier = Modifier
+) {
+    val fraction = progress?.fraction
+    if (fraction != null) {
+        LinearProgressIndicator(
+            progress = { fraction },
+            modifier = modifier.height(4.dp)
+        )
+    } else {
+        // No Content-Length on the response, so the fraction is unknowable.
+        LinearProgressIndicator(modifier = modifier.height(4.dp))
     }
 }
 
@@ -781,15 +780,20 @@ private fun MediaAssetRow(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface
         )
+        Text(
+            text = when {
+                isDownloading -> "Downloading"
+                isCached -> "Downloaded"
+                else -> "Not downloaded"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isCached) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+        )
         if (isDownloading) {
-            Box(modifier = Modifier.width(96.dp)) { DownloadProgressBar(downloadProgress) }
+            Spacer(modifier = Modifier.width(8.dp))
+            DownloadProgressBar(downloadProgress, modifier = Modifier.width(64.dp))
         } else {
-            Text(
-                text = if (isCached) "Downloaded" else "Not downloaded",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (isCached) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-            )
             Spacer(modifier = Modifier.width(4.dp))
             AssetOverflowMenu(
                 hasLocalCopy = isCached,

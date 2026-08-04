@@ -414,4 +414,18 @@ class BookmarkViewerServerActionsTest {
 
             coVerify(exactly = 1) { snackbarManager.showSnackbar("Download it first") }
         }
+
+    @Test
+    fun `a menu download does not switch the content source`() = runTest(testDispatcher) {
+        coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } throws ApiException("boom")
+        val screenModel = createScreenModel()
+
+        screenModel.downloadOrRefreshAsset(archiveAsset, testBookmark, useWhenDone = false)
+        advanceUntilIdle()
+
+        assertEquals(
+            com.karakept.app.data.model.ContentSource.EXTRACTED,
+            screenModel.selectedSource.value
+        )
+    }
 }
