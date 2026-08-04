@@ -40,13 +40,25 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import com.karakept.app.data.remote.OfflineModeException
+import com.karakept.app.data.remote.UnsupportedServerActionException
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
+import com.karakept.app.domain.action.ServerCrawlAction
 import com.karakept.app.ui.utils.ParsedDocumentCache
 import getPlatform
+
+// Crawl jobs are queued server-side, so the result is polled rather than waited for once.
+// Five attempts four seconds apart covers the ~20s a typical page takes without pinning the
+// spinner indefinitely on a slow one.
+private const val CRAWL_POLL_INTERVAL_MS = 4_000L
+private const val CRAWL_POLL_ATTEMPTS = 5
 
 class BookmarkViewerScreenModel(
     private val bookmarkDao: BookmarkDao,
@@ -136,6 +148,15 @@ class BookmarkViewerScreenModel(
     // True while archive is being downloaded for source switching
     private val _isLoadingSource = MutableStateFlow(false)
     val isLoadingSource: StateFlow<Boolean> = _isLoadingSource.asStateFlow()
+
+    // Non-null while a server-side crawl request is being sent and re-synced
+    private val _serverCrawlInFlight = MutableStateFlow<ServerCrawlAction?>(null)
+    val serverCrawlInFlight: StateFlow<ServerCrawlAction?> = _serverCrawlInFlight.asStateFlow()
+
+    // Assets currently downloading, keyed by asset id. The value is the 0f..1f progress
+    // fraction, or null when the response has no Content-Length (indeterminate).
+    private val _assetDownloads = MutableStateFlow<Map<String, Float?>>(emptyMap())
+    val assetDownloads: StateFlow<Map<String, Float?>> = _assetDownloads.asStateFlow()
 
     private val _bannerImageLocalPath = MutableStateFlow<String?>(null)
     val bannerImageLocalPath: StateFlow<String?> = _bannerImageLocalPath.asStateFlow()
@@ -470,31 +491,7 @@ class BookmarkViewerScreenModel(
                             _contentFetchAttempted.value = true
                         }
 
-                        // Load all asset entities and expose them for the details panel
-                        val assets = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
-                        _assets.value = assets
-
-                        val archive = assets.find { it.assetType == "precrawledArchive" }
-                            ?: assets.find { it.assetType == "fullPageArchive" }
-                        _precrawledAssetPath.value = archive?.localPath
-                        val archiveCached = archive?.localPath != null
-                        // Archive is "available" if ANY archive row exists (even without localPath),
-                        // so the "Load full page archive" button appears when the server has it.
-                        _archiveAvailable.value = archive != null
-                        // Default to FULL_PAGE_ARCHIVE only when the user has explicitly opted in.
-                        // Without the setting, extracted content is always the default so that
-                        // "Extracted" source selection reliably shows extracted HTML (or no content).
-                        val preferArchive = settingsRepository.preferFullPageHtml.first()
-                        if (archiveCached && preferArchive && _selectedSource.value == ContentSource.EXTRACTED) {
-                            _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
-                        }
-
-                        // Load hero assets if exist
-                        val bannerAsset = assets.find { it.assetType == "bannerImage" }
-                        _bannerImageLocalPath.value = bannerAsset?.localPath
-
-                        val screenshotAsset = assets.find { it.assetType == "screenshot" }
-                        _screenshotLocalPath.value = screenshotAsset?.localPath
+                        reloadAssets(bookmark, applyPreferredSource = true)
                     } else if (!hasLoadedOnce) {
                         // Only show error if we never loaded the bookmark
                         // Don't show error during disposal/navigation
@@ -636,6 +633,45 @@ class BookmarkViewerScreenModel(
         }
     }
 
+    /**
+     * Re-reads this bookmark's asset rows and republishes every piece of state derived from
+     * them. Called after anything that adds, removes, or caches an asset.
+     *
+     * [applyPreferredSource] is only true on initial load — later reloads must not yank the
+     * user out of the content source they picked.
+     */
+    private suspend fun reloadAssets(
+        bookmark: BookmarkEntity,
+        applyPreferredSource: Boolean = false
+    ) {
+        val assets = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+        _assets.value = assets
+
+        val archive = assets.find { it.assetType == "precrawledArchive" }
+            ?: assets.find { it.assetType == "fullPageArchive" }
+        _precrawledAssetPath.value = archive?.localPath
+        // Archive is "available" if ANY archive row exists (even without localPath),
+        // so the "Load full page archive" button appears when the server has it.
+        _archiveAvailable.value = archive != null
+
+        if (applyPreferredSource) {
+            // Default to FULL_PAGE_ARCHIVE only when the user has explicitly opted in.
+            // Without the setting, extracted content is always the default so that
+            // "Extracted" source selection reliably shows extracted HTML (or no content).
+            val preferArchive = settingsRepository.preferFullPageHtml.first()
+            if (archive?.localPath != null && preferArchive && _selectedSource.value == ContentSource.EXTRACTED) {
+                _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
+            }
+        } else if (_selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE && archive?.localPath == null) {
+            // The archive we were displaying is gone (deleted locally or on the server).
+            _selectedSource.value = ContentSource.EXTRACTED
+            _sourceContentOverride.value = null
+        }
+
+        _bannerImageLocalPath.value = assets.find { it.assetType == "bannerImage" }?.localPath
+        _screenshotLocalPath.value = assets.find { it.assetType == "screenshot" }?.localPath
+    }
+
     fun deleteAssetLocal(asset: com.karakept.app.data.local.entity.AssetEntity) {
         viewModelScope.launch {
             try {
@@ -644,23 +680,8 @@ class BookmarkViewerScreenModel(
                     try { com.karakept.app.utils.FileUtils.deleteFile(localPath) } catch (_: Exception) {}
                 }
                 assetDao.clearLocalPath(asset.id)
-                // Reload asset list
                 val bookmark = (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark ?: return@launch
-                val updated = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
-                _assets.value = updated
-                // If this was the cached archive and user was viewing it, revert to EXTRACTED
-                if ((asset.assetType == "fullPageArchive" || asset.assetType == "precrawledArchive") && localPath != null) {
-                    val stillCached = updated.any {
-                        (it.assetType == "fullPageArchive" || it.assetType == "precrawledArchive") && it.localPath != null
-                    }
-                    if (!stillCached) {
-                        _precrawledAssetPath.value = null
-                        if (_selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE) {
-                            _selectedSource.value = ContentSource.EXTRACTED
-                            _sourceContentOverride.value = null
-                        }
-                    }
-                }
+                reloadAssets(bookmark)
             } catch (e: Exception) {
                 AppLogger.e("ViewerModel", "Failed to delete asset local copy: ${e.message}", e)
                 snackbarManager.showSnackbar("Couldn't delete local file")
@@ -668,48 +689,229 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun downloadOrRefreshAsset(asset: com.karakept.app.data.local.entity.AssetEntity, bookmark: com.karakept.app.data.local.entity.BookmarkEntity) {
+    /**
+     * Delete an asset on the server (not just the local copy). Irreversible — the UI gates
+     * this behind a confirmation dialog.
+     */
+    fun deleteAssetOnServer(
+        asset: com.karakept.app.data.local.entity.AssetEntity,
+        bookmark: BookmarkEntity
+    ) {
         viewModelScope.launch {
-            when (asset.assetType) {
-                "fullPageArchive", "precrawledArchive" -> {
-                    // fetchAndCacheArchive manages _isLoadingSource itself; just clear the
-                    // local file first if this is a refresh, then delegate.
-                    if (asset.localPath != null) {
-                        try { com.karakept.app.utils.FileUtils.deleteFile(asset.localPath) } catch (_: Exception) {}
-                        assetDao.clearLocalPath(asset.id)
-                        _precrawledAssetPath.value = null
-                        val updated = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
-                        _assets.value = updated
-                    }
-                    fetchAndCacheArchive(bookmark)
+            try {
+                val server = serverRepository.servers.first().find { it.id == bookmark.serverId }
+                if (server == null) {
+                    snackbarManager.showSnackbar("Server not found")
+                    return@launch
                 }
-                "bannerImage", "screenshot" -> {
-                    _isLoadingSource.value = true
-                    try {
-                        val servers = serverRepository.servers.first()
-                        val server = servers.find { it.id == bookmark.serverId } ?: return@launch
-                        if (asset.localPath != null) {
-                            try { com.karakept.app.utils.FileUtils.deleteFile(asset.localPath) } catch (_: Exception) {}
-                            assetDao.clearLocalPath(asset.id)
-                        }
-                        val bytes = remoteDataSource.downloadAsset(server, asset.id)
-                        val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
-                        val prefix = if (asset.assetType == "bannerImage") "hero_banner_" else "hero_screenshot_"
-                        val localPath = com.karakept.app.utils.FileUtils.saveFile(cacheDir, "$prefix${asset.id}", bytes)
-                        assetDao.insertAssets(listOf(asset.copy(localPath = localPath)))
-                        if (asset.assetType == "bannerImage") _bannerImageLocalPath.value = localPath
-                        else _screenshotLocalPath.value = localPath
-                        val updated = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
-                        _assets.value = updated
-                    } catch (e: Exception) {
-                        AppLogger.e("ViewerModel", "Failed to download asset: ${e.message}", e)
-                        snackbarManager.showSnackbar("Couldn't download asset")
-                    } finally {
-                        _isLoadingSource.value = false
-                    }
+                remoteDataSource.detachAsset(server, bookmark.originalRemoteId, asset.id)
+                asset.localPath?.let {
+                    try { com.karakept.app.utils.FileUtils.deleteFile(it) } catch (_: Exception) {}
                 }
+                assetDao.deleteAsset(asset.id)
+                reloadAssets(bookmark)
+                snackbarManager.showSnackbar("Deleted from server")
+            } catch (e: OfflineModeException) {
+                snackbarManager.showSnackbar("Not available in offline mode")
+            } catch (e: Exception) {
+                AppLogger.e("ViewerModel", "Failed to delete asset on server: ${e.message}", e)
+                snackbarManager.showSnackbar("Couldn't delete from server")
             }
         }
+    }
+
+    /**
+     * Ask the server to re-crawl this bookmark. The server runs the crawl as a background job,
+     * so we re-sync the bookmark after a short delay to pick up whatever it produced.
+     */
+    fun requestServerCrawl(bookmark: BookmarkEntity, action: ServerCrawlAction) {
+        // Claim the slot before launching — two taps in the same frame would both see null
+        // if the check happened inside the coroutine.
+        if (!_serverCrawlInFlight.compareAndSet(null, action)) return
+        viewModelScope.launch {
+            try {
+                val server = serverRepository.servers.first().find { it.id == bookmark.serverId }
+                if (server == null) {
+                    snackbarManager.showSnackbar("Server not found")
+                    return@launch
+                }
+                remoteDataSource.recrawlBookmark(
+                    server = server,
+                    bookmarkId = bookmark.originalRemoteId,
+                    archiveFullPage = action.archiveFullPage,
+                    storePdf = action.storePdf
+                )
+                snackbarManager.showSnackbar(
+                    when (action) {
+                        ServerCrawlAction.REFRESH -> "Refresh requested"
+                        ServerCrawlAction.PRESERVE_ARCHIVE -> "Archive requested"
+                        ServerCrawlAction.PRESERVE_PDF -> "PDF requested"
+                    }
+                )
+                awaitCrawlResult(bookmark, action)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: OfflineModeException) {
+                snackbarManager.showSnackbar("Not available in offline mode")
+            } catch (e: UnsupportedServerActionException) {
+                snackbarManager.showSnackbar(e.message ?: "Not supported by this server")
+            } catch (e: Exception) {
+                AppLogger.e("ViewerModel", "Server crawl request failed: ${e.message}", e)
+                snackbarManager.showErrorWithRetry("Couldn't reach the server") {
+                    requestServerCrawl(bookmark, action)
+                }
+            } finally {
+                _serverCrawlInFlight.value = null
+            }
+        }
+    }
+
+    /**
+     * Re-syncs the bookmark until the crawl job's output shows up, or the budget runs out.
+     *
+     * A single fixed delay was never enough: the server enqueues the crawl, so a page of any
+     * size finished well after we had already re-synced, and the new asset only appeared when
+     * the user ran the action a second time.
+     */
+    private suspend fun awaitCrawlResult(bookmark: BookmarkEntity, action: ServerCrawlAction) {
+        // The asset type the job is expected to produce. REFRESH rewrites metadata rather than
+        // adding an asset, so there is nothing to wait for beyond the first sync.
+        val expectedAssetType = when (action) {
+            ServerCrawlAction.REFRESH -> null
+            ServerCrawlAction.PRESERVE_ARCHIVE -> "fullPageArchive"
+            ServerCrawlAction.PRESERVE_PDF -> "pdf"
+        }
+
+        repeat(CRAWL_POLL_ATTEMPTS) { attempt ->
+            delay(CRAWL_POLL_INTERVAL_MS)
+            bookmarkRepository.syncSingleBookmark(bookmark.remoteId, bookmark.serverId)
+            reloadAssets(bookmark)
+
+            if (expectedAssetType == null) return
+            if (_assets.value.any { it.assetType == expectedAssetType }) {
+                snackbarManager.showSnackbar(
+                    if (action == ServerCrawlAction.PRESERVE_PDF) "PDF ready" else "Archive ready"
+                )
+                return
+            }
+            if (attempt == CRAWL_POLL_ATTEMPTS - 1) {
+                // Still running server-side. Say so rather than leaving the user staring at a
+                // row that never changed.
+                snackbarManager.showSnackbar("Still processing on the server — pull to refresh later")
+            }
+        }
+    }
+
+    /** Cache filename for an asset. PDFs keep the extension so the OS picks a reader. */
+    private fun cacheFileNameFor(asset: com.karakept.app.data.local.entity.AssetEntity): String =
+        when (asset.assetType) {
+            "fullPageArchive", "precrawledArchive" -> "archive_${asset.id}"
+            "bannerImage" -> "hero_banner_${asset.id}"
+            "screenshot" -> "hero_screenshot_${asset.id}"
+            "pdf" -> "asset_${asset.id}.pdf"
+            else -> "asset_${asset.id}"
+        }
+
+    /**
+     * Downloads [asset] and stores the local path against that exact row.
+     *
+     * Archives used to route through [fetchAndCacheArchive], which re-resolved the asset from
+     * the server and could stamp the local path onto a *different* archive row — leaving the
+     * one the user tapped still reading "On server" with no way to delete its local copy.
+     * Downloading by id is also what lets any asset type work here, PDFs included.
+     */
+    fun downloadOrRefreshAsset(
+        asset: com.karakept.app.data.local.entity.AssetEntity,
+        bookmark: com.karakept.app.data.local.entity.BookmarkEntity,
+        // True when the download was started by tapping the row rather than by picking
+        // "Download a copy" from the menu: finish the job the tap implied.
+        useWhenDone: Boolean = false
+    ) {
+        // Claim the slot synchronously — two taps in the same frame would both pass a check
+        // made inside the coroutine and start the download twice.
+        val before = _assetDownloads.getAndUpdate { current ->
+            if (current.containsKey(asset.id)) current else current + (asset.id to null)
+        }
+        if (before.containsKey(asset.id)) return
+
+        viewModelScope.launch {
+            try {
+                val server = serverRepository.servers.first().find { it.id == bookmark.serverId }
+                if (server == null) {
+                    snackbarManager.showSnackbar("Server not found")
+                    return@launch
+                }
+                // Refresh: drop the stale copy first so a failure can't leave both around.
+                asset.localPath?.let { previous ->
+                    try { com.karakept.app.utils.FileUtils.deleteFile(previous) } catch (_: Exception) {}
+                    assetDao.clearLocalPath(asset.id)
+                }
+
+                val bytes = remoteDataSource.downloadAsset(server, asset.id) { fraction ->
+                    _assetDownloads.update { it + (asset.id to fraction) }
+                }
+                val localPath = com.karakept.app.utils.FileUtils.saveFile(
+                    com.karakept.app.utils.FileUtils.getImageCacheDirectory(),
+                    cacheFileNameFor(asset),
+                    bytes
+                )
+                val downloaded = asset.copy(localPath = localPath)
+                assetDao.insertAssets(listOf(downloaded))
+                reloadAssets(bookmark)
+
+                val isArchive = asset.assetType == "fullPageArchive" || asset.assetType == "precrawledArchive"
+                when {
+                    // Tapping the row meant "I want to use this", so finish the thought once
+                    // the bytes are here rather than making the user tap again.
+                    useWhenDone && isArchive -> {
+                        _sourceContentOverride.value = bytes.decodeToString()
+                        _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
+                    }
+                    useWhenDone && asset.assetType == "pdf" -> openAssetExternally(downloaded)
+                    // Not a tap, but the reader is already showing this archive — swap in the
+                    // fresh bytes so a re-download is reflected immediately.
+                    isArchive && _selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE &&
+                        viewerMode.value == ViewerMode.READER -> {
+                        _sourceContentOverride.value = bytes.decodeToString()
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: OfflineModeException) {
+                snackbarManager.showSnackbar("Not available in offline mode")
+            } catch (e: Exception) {
+                AppLogger.e("ViewerModel", "Failed to download asset: ${e.message}", e)
+                snackbarManager.showSnackbar("Couldn't download asset")
+            } finally {
+                _assetDownloads.update { it - asset.id }
+            }
+        }
+    }
+
+    /**
+     * Hands a downloaded asset to whatever app the platform has registered for it — the app
+     * has no PDF renderer of its own.
+     */
+    fun openAssetExternally(asset: com.karakept.app.data.local.entity.AssetEntity) {
+        val localPath = asset.localPath
+        if (localPath == null) {
+            viewModelScope.launch { snackbarManager.showSnackbar("Download it first") }
+            return
+        }
+        viewModelScope.launch {
+            val opened = com.karakept.app.utils.FileUtils.openFileExternally(
+                localPath,
+                mimeTypeFor(asset.assetType)
+            )
+            if (!opened) snackbarManager.showSnackbar("No app available to open this file")
+        }
+    }
+
+    private fun mimeTypeFor(assetType: String): String = when (assetType) {
+        "pdf" -> "application/pdf"
+        "fullPageArchive", "precrawledArchive", "linkHtmlContent" -> "text/html"
+        "bannerImage", "screenshot" -> "image/*"
+        else -> "*/*"
     }
 
     fun loadLists(server: Server) {

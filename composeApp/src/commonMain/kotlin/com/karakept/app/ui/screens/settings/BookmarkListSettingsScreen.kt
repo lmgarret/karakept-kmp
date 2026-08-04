@@ -50,7 +50,7 @@ import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.components.getIcon
 import com.karakept.app.ui.screens.SettingsScreenModel
-import com.karakept.app.ui.utils.buildListHierarchy
+import com.karakept.app.domain.ListHierarchyUtils
 import getPlatform
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -119,7 +119,7 @@ fun BookmarkListSettingsContent(
                         modifier = Modifier.padding(16.dp)
                     )
                 } else {
-                    val hierarchy = remember(availableLists) { buildListHierarchy(availableLists) }
+                    val hierarchy = remember(availableLists) { ListHierarchyUtils.buildListHierarchy(availableLists) }
                     LazyColumn {
                         items(hierarchy) { (list, depth) ->
                             ListItem(
@@ -261,6 +261,16 @@ fun BookmarkListSettingsContent(
                                 contentDescription = "Select list"
                             )
                         }
+                        HorizontalDivider()
+                        DefaultViewOption(
+                            title = "Continue where I left off",
+                            subtitle = "Reopen the list or filter you were last viewing",
+                            isSelected = defaultListType == DefaultListType.LAST_VIEWED,
+                            onClick = {
+                                screenModel.setDefaultListType(DefaultListType.LAST_VIEWED)
+                                screenModel.setDefaultListId(null)
+                            }
+                        )
                     }
                 }
 
@@ -461,7 +471,8 @@ fun BookmarkListSettingsContent(
 private fun DefaultViewOption(
     title: String,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    subtitle: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -474,11 +485,19 @@ private fun DefaultViewOption(
             selected = isSelected,
             onClick = onClick
         )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(start = 8.dp)
-        )
+        Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 

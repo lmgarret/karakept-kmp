@@ -8,6 +8,7 @@ import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.SYNC_KEY_ARCHIVED
 import com.karakept.app.data.model.SYNC_KEY_FAVORITES
@@ -16,6 +17,9 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ServerRepository
+import com.karakept.app.data.remote.hasHttpStatus
+import com.karakept.app.data.repository.discardFailedActions
+import com.karakept.app.data.repository.retryFailedActions
 import com.karakept.app.data.repository.setDefaultListType
 import com.karakept.app.data.repository.setDefaultListId
 import com.karakept.api.model.KarakeepList as KarakeepList
@@ -27,7 +31,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -48,6 +53,9 @@ data class QuickFilterCounts(
     val archived: Int = 0,
     val offline: Int = 0
 )
+
+/** Identity of a bookmark view: the server plus the filter being displayed. */
+internal data class LoadedView(val serverId: String, val filter: FilterConfig)
 
 class MainScreenModel(
     private val serverRepository: ServerRepository,
@@ -111,6 +119,34 @@ class MainScreenModel(
     private val _expandedLists = MutableStateFlow<Set<String>>(emptySet())
     val expandedLists: StateFlow<Set<String>> = _expandedLists
 
+    private val listSettings: StateFlow<Map<String, ListSettings>> = settingsRepository.allListSettings
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /**
+     * The filter the data layer is queried with: [currentFilter] plus the child lists it expands
+     * into for lists configured with `includeChildListBookmarks`.
+     *
+     * The expansion depends on the drawer's lists, which load asynchronously, so it can change
+     * after a view has been rendered. It is therefore part of the view's identity (see
+     * [currentView]) and drives the reload path: when it changes, the view reloads like any
+     * other view switch, instead of the query quietly changing under a loaded window.
+     *
+     * [effectiveFilterNow] is the same value read synchronously. The flow drives the reload;
+     * the synchronous read is for the guards, which must flip in the same breath as the tap
+     * that changed [currentFilter] rather than a dispatch later.
+     */
+    val effectiveFilter: StateFlow<FilterConfig> = combine(
+        _currentFilter,
+        lists,
+        listSettings
+    ) { filter, allLists, settings ->
+        ListHierarchyUtils.expandFilterLists(filter, allLists, settings)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, FilterConfig())
+
+    /** The effective filter for [filter] against the lists and settings known right now. */
+    internal fun effectiveFilterNow(filter: FilterConfig = _currentFilter.value): FilterConfig =
+        ListHierarchyUtils.expandFilterLists(filter, lists.value, listSettings.value)
+
     // Smart lists that may have stale membership after a recent list-action.
     // Cleared per-list after a successful sync when the user navigates to one.
     internal val _smartListsNeedingRefresh = MutableStateFlow<Set<String>>(emptySet())
@@ -118,7 +154,19 @@ class MainScreenModel(
     // Pagination state
     internal val pageSize = 20
     internal val _isLoadingMore = MutableStateFlow(false)
-    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
+
+    // resetPaginationAndLoad reuses _isLoadingMore to block loadNextPage while it walks to
+    // page 0. That is a mutex, not a UI signal — this flag separates the two so a view
+    // switch stops rendering the bottom "loading more" spinner.
+    internal val _isResettingPagination = MutableStateFlow(false)
+
+    /**
+     * Bottom-of-list spinner: genuine pagination only, never a view switch.
+     * Shared eagerly — this was a plain StateFlow, and callers still read `.value` directly.
+     */
+    val isLoadingMore: StateFlow<Boolean> =
+        combine(_isLoadingMore, _isResettingPagination) { loading, resetting -> loading && !resetting }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     internal val _hasMoreItems = MutableStateFlow(true)
     val hasMoreItems: StateFlow<Boolean> = _hasMoreItems
@@ -131,6 +179,23 @@ class MainScreenModel(
     // reset overtook it), preventing duplicate entries in the LazyColumn.
     internal var paginationGeneration = 0
 
+    // Incremented by refreshLoadedPagesInPlace only, so two overlapping in-place refreshes
+    // resolve last-one-wins. Refreshes deliberately leave paginationGeneration alone: a
+    // reset is a user-initiated view switch and must always win over a background refresh,
+    // otherwise the refresh discards the reset's page and the list the user just left stays
+    // on screen under the new list's title.
+    internal var refreshGeneration = 0
+
+    // The view the accumulated window was loaded for. Every write into the window is rejected
+    // unless this still matches the view on screen: the requested view flips synchronously when
+    // the user taps a list while the reload it triggers runs on an observer coroutine, so
+    // without this a page fetched for the new list lands on top of the old list's items.
+    internal val _loadedView = MutableStateFlow<LoadedView?>(null)
+
+    /** The view the UI is currently asking for, or null while no server is selected. */
+    internal fun currentView(): LoadedView? =
+        _selectedServer.value?.let { LoadedView(it.id, effectiveFilterNow()) }
+
     internal val bookmarksMutex = Mutex()
 
     /**
@@ -138,13 +203,28 @@ class MainScreenModel(
      * All code that reads-then-writes _accumulatedBookmarks MUST use this helper.
      * Uses Mutex (not MutableStateFlow.update{}) because some callers need to hold
      * the lock across suspension points (e.g., bookmarkChangedEvents DB lookup).
+     *
+     * The result is de-duplicated by remoteId: the list feeds a LazyColumn keyed on
+     * remoteId, and a duplicate key crashes the app (#274). Duplicates can slip in
+     * when a background sync inserts rows mid-pagination (OFFSET drift) or when an
+     * undo re-insertion races a concurrent transform.
      */
     internal suspend fun updateAccumulatedBookmarks(
         transform: (List<BookmarkEntity>) -> List<BookmarkEntity>
     ) {
         bookmarksMutex.withLock {
             _accumulatedBookmarks.value = transform(_accumulatedBookmarks.value)
+                .distinctBy { it.remoteId }
         }
+    }
+
+    /**
+     * Position of a bookmark in the accumulated list, read under the same mutex that
+     * guards mutations so action handlers capture a position consistent with the
+     * list they are about to modify.
+     */
+    internal suspend fun lockedPositionOf(remoteId: Long): Int = bookmarksMutex.withLock {
+        _accumulatedBookmarks.value.indexOfFirst { it.remoteId == remoteId }
     }
 
     internal val _bookmarkListVersion = MutableStateFlow(0)
@@ -152,6 +232,16 @@ class MainScreenModel(
 
     internal val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
+
+    // Count of bookmarks a background sync prepended above the current viewport, surfaced as a
+    // "N new" pill so the user notices new items instead of silently staying pinned in place.
+    // Reset on a full reload or when the user reaches the top of the list.
+    internal val _newBookmarksAbove = MutableStateFlow(0)
+    val newBookmarksAbove: StateFlow<Int> = _newBookmarksAbove
+
+    fun clearNewBookmarksAbove() {
+        _newBookmarksAbove.value = 0
+    }
 
     // RemoteIds of bookmarks on which the user has explicitly performed a list-membership
     // action (add/remove list). Prevents the scroll-triggered action from auto-firing on a
@@ -243,6 +333,35 @@ class MainScreenModel(
             else flowOf(0)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    /**
+     * Number of queued changes that could not be synced (exhausted retries or a
+     * permanent server rejection). Surfaced so the user can retry or discard them
+     * instead of the change silently vanishing.
+     */
+    val failedActionCount: StateFlow<Int> = selectedServer
+        .flatMapLatest { server ->
+            if (server != null) bookmarkActionsRepository.failedActionsCount(server.id) else flowOf(0)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    fun retryFailedActions() {
+        viewModelScope.launch {
+            val server = _selectedServer.value ?: return@launch
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                bookmarkActionsRepository.retryFailedActions(server)
+            }
+        }
+    }
+
+    fun discardFailedActions() {
+        viewModelScope.launch {
+            val server = _selectedServer.value ?: return@launch
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                bookmarkActionsRepository.discardFailedActions(server.id)
+            }
+        }
+    }
 
     val quickFilterCounts: StateFlow<QuickFilterCounts> = combine(
         selectedServer, allBookmarks, offlineBookmarkCount
@@ -347,10 +466,13 @@ class MainScreenModel(
         .flatMapLatest { query ->
             if (query.isBlank()) {
                 combine(_pendingBookmarks, _accumulatedBookmarks) { pending, accumulated ->
-                    pending + accumulated
+                    // Guard against a just-created bookmark appearing in both flows for a
+                    // frame — duplicate remoteIds crash the keyed LazyColumn (#274).
+                    val pendingIds = pending.map { it.remoteId }.toSet()
+                    pending + accumulated.filter { it.remoteId !in pendingIds }
                 }
             } else {
-                combine(allBookmarks, _currentFilter) { all, filter ->
+                combine(allBookmarks, effectiveFilter) { all, filter ->
                     BookmarkFilterUtils.applySearchFilter(all, filter, query)
                 }
             }
@@ -367,6 +489,17 @@ class MainScreenModel(
 
     private val _initState = MutableStateFlow<InitState>(InitState.Idle)
 
+    /**
+     * Nothing to render yet, but something is on its way — so the empty state must stay
+     * hidden. False once there are items (a view switch keeps the outgoing list on screen)
+     * and false when the view has genuinely resolved to empty, which is what distinguishes
+     * "still loading" from "no bookmarks here".
+     */
+    val isLoadingInitialPage: StateFlow<Boolean> =
+        combine(_initState, _isResettingPagination, _accumulatedBookmarks) { init, resetting, items ->
+            items.isEmpty() && (init != InitState.Ready || resetting)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     init {
         // Log init state transitions for auditability.
         viewModelScope.launch {
@@ -378,11 +511,19 @@ class MainScreenModel(
         // Coroutine A: keep _selectedServer in sync with the server list.
         viewModelScope.launch {
             servers.collect { serverList ->
-                if (_selectedServer.value == null && serverList.isNotEmpty()) {
-                    _selectedServer.value = serverList.first()
-                    loadLists()
-                } else if (serverList.isEmpty()) {
-                    _selectedServer.value = null
+                val current = _selectedServer.value
+                when {
+                    current == null && serverList.isNotEmpty() -> {
+                        _selectedServer.value = serverList.first()
+                        loadLists()
+                    }
+                    serverList.isEmpty() -> _selectedServer.value = null
+                    else -> {
+                        // Re-resolve so a re-authentication (same server id, new apiKey)
+                        // propagates immediately instead of persisting a stale snapshot
+                        // that 401s until app restart (#173).
+                        _selectedServer.value = serverList.find { it.id == current?.id } ?: serverList.first()
+                    }
                 }
             }
         }
@@ -391,6 +532,10 @@ class MainScreenModel(
         viewModelScope.launch {
             _initState.value = InitState.ResolvingFilter
             val defaultFilter = defaultFilterResolver.resolve()
+            AppLogger.d(
+                "MainScreenModel",
+                "Startup filter: status=${defaultFilter.status} lists=${defaultFilter.lists}"
+            )
             _currentFilter.value = defaultFilter
             if (defaultFilter.lists.size == 1) {
                 _currentListContext.value = defaultFilter.lists.first()
@@ -398,45 +543,112 @@ class MainScreenModel(
 
             _initState.value = InitState.WaitingForServer(defaultFilter)
             val server = selectedServer.first { it != null } ?: return@launch
-
             _initState.value = InitState.LoadingInitialPage(server, defaultFilter)
-            resetPaginationAndLoad(server, defaultFilter)
 
+            // One reload path for every input the query is built from — the server and the
+            // effective filter. The initial load is simply this observer's first emission, so
+            // startup and later changes cannot drift apart: whatever changes the requested view
+            // (tapping a list, switching server, the drawer's lists arriving and expanding the
+            // current list into its children) reloads it the same way.
+            launch {
+                combine(_selectedServer, effectiveFilter) { currentServer, filter ->
+                    currentServer?.let { it to filter }
+                }.collectLatest { request ->
+                    val (currentServer, filter) = request ?: return@collectLatest
+                    if (_loadedView.value == LoadedView(currentServer.id, filter)) return@collectLatest
+
+                    // Switch to the new view immediately with local data so navigation feels
+                    // instant, instead of blocking on a network sync of the target list.
+                    AppLogger.d(
+                        "MainScreenModel",
+                        "Loading view: status=${filter.status} lists=${filter.lists} tags=${filter.tags}"
+                    )
+                    resetPaginationAndLoad(currentServer, filter)
+                    refreshStaleSmartList(currentServer, filter)
+                }
+            }
+
+            _loadedView.first { it != null }
             _initState.value = InitState.Ready
 
-            // Start observers (unchanged from original code)
-            launch {
-                _currentFilter.drop(1).collectLatest { filter ->
-                    val currentServer = _selectedServer.value ?: return@collectLatest
-                    // If navigating to a smart list that needs refresh (stale after a
-                    // recent list-membership action), sync it from the server first.
-                    // GET /lists/{id}/bookmarks is always fresh, unlike the per-bookmark endpoint.
-                    val listId = filter.lists.singleOrNull()
-                    val needsRefresh = listId != null && listId in _smartListsNeedingRefresh.value
-                    if (needsRefresh) {
-                        _smartListsNeedingRefresh.value -= listId!!
-                        try {
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                bookmarkRepository.syncBookmarksForList(currentServer, listId)
-                            }
-                        } catch (e: Exception) {
-                            AppLogger.e("MainScreenModel", "Smart list refresh failed for $listId: ${e.message}", e)
-                        }
-                    }
-                    resetPaginationAndLoad(currentServer, filter)
-                }
-            }
-            launch {
-                _selectedServer.drop(1).collectLatest { newServer ->
-                    if (newServer != null) {
-                        resetPaginationAndLoad(newServer, _currentFilter.value)
-                    }
-                }
-            }
-
             val isOffline: Boolean = settingsRepository.offlineMode.first()
-            if (!isOffline) {
+            // Throttle the automatic startup sync so re-entering this screen (e.g. back
+            // from the reader) doesn't fire a full sync every time (#276). Manual
+            // pull-to-refresh and the sync button are never throttled.
+            if (!isOffline && bookmarkRepository.shouldAutoSync(server.id)) {
                 syncBookmarks()
+            }
+        }
+
+        // When a background sync finishes, refresh the currently-displayed list in place so
+        // newly synced bookmarks appear (and bump the "N new" pill) without the user having to
+        // navigate or pull-to-refresh. The foreground syncBookmarks() already refreshes itself.
+        viewModelScope.launch {
+            bookmarkRepository.backgroundSyncCompleted.collect {
+                val server = _selectedServer.value ?: return@collect
+                if (_initState.value == InitState.Ready) {
+                    val filter = effectiveFilterNow()
+                    try {
+                        refreshLoadedPagesInPlace(server, filter)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        AppLogger.w("MainScreenModel", "Post-background-sync refresh failed: ${e.message}")
+                    }
+                }
+            }
+        }
+
+        // A long sync commits metadata page by page. Refresh in place as pages land, so a
+        // large library fills in progressively instead of appearing all at once at the end.
+        // Only for the key currently on screen — other lists syncing must not touch it.
+        viewModelScope.launch {
+            bookmarkRepository.pageCommitted
+                .filter { key -> key == resolveCurrentKey(_currentListContext.value, _currentFilter.value) }
+                .conflate()
+                .collect {
+                    val server = _selectedServer.value ?: return@collect
+                    if (_initState.value != InitState.Ready) return@collect
+                    // The window is loaded with the effective filter, so a refresh must ask for
+                    // it too — the raw filter is a different view and would be rejected.
+                    val filter = effectiveFilterNow()
+                    try {
+                        refreshLoadedPagesInPlace(server, filter)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        AppLogger.w("MainScreenModel", "Per-page refresh failed: ${e.message}")
+                    }
+                }
+        }
+
+        // Surface non-fatal sync warnings (swallowed content/highlight failures) once per
+        // report, so the user isn't told "sync complete" when part of it failed (Group H).
+        viewModelScope.launch {
+            bookmarkRepository.syncReports.collect { report ->
+                if (report.hasWarnings) {
+                    val n = report.warnings.size
+                    val label = if (n == 1) "Sync finished — 1 item couldn't be synced"
+                                else "Sync finished — $n items couldn't be synced"
+                    snackbarManager.showErrorWithRetry(label, androidx.compose.material3.SnackbarDuration.Long) {
+                        syncBookmarks()
+                    }
+                }
+            }
+        }
+
+        // Surface queued changes that couldn't be synced (once, on the rising edge)
+        // so the user can retry them instead of the change silently disappearing.
+        viewModelScope.launch {
+            var previous = 0
+            failedActionCount.collect { count ->
+                if (count > previous && count > 0) {
+                    val label = if (count == 1) "1 change couldn't be synced" else "$count changes couldn't be synced"
+                    snackbarManager.showErrorWithRetry(label, androidx.compose.material3.SnackbarDuration.Long) {
+                        retryFailedActions()
+                    }
+                }
+                previous = count
             }
         }
 
@@ -476,6 +688,31 @@ class MainScreenModel(
         }
     }
 
+    /**
+     * Syncs the list just navigated to when a recent list-membership action may have left its
+     * smart-list membership stale (GET /lists/{id}/bookmarks is always fresh), then folds the
+     * result into the view in place so the correction lands without the list jumping.
+     *
+     * Called from the reload observer, so navigating away cancels it before it runs.
+     */
+    private suspend fun refreshStaleSmartList(server: Server, filter: FilterConfig) {
+        val listId = _currentListContext.value ?: return
+        if (listId !in _smartListsNeedingRefresh.value) return
+        _smartListsNeedingRefresh.value -= listId
+        try {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                bookmarkRepository.syncBookmarksForList(server, listId)
+            }
+            if (currentView() == LoadedView(server.id, filter)) {
+                refreshLoadedPagesInPlace(server, filter)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLogger.e("MainScreenModel", "Smart list refresh failed for $listId: ${e.message}", e)
+        }
+    }
+
     // Pagination — see MainScreenModelPagination.kt
 
     /** Maps the current view (list context + filter) to a [SyncKey] for progress tracking. */
@@ -492,6 +729,7 @@ class MainScreenModel(
             // post-sync reload always use the same consistent snapshot.
             val capturedListContext = _currentListContext.value
             val capturedFilter = _currentFilter.value
+            val capturedEffectiveFilter = effectiveFilterNow()
 
             val isOffline: Boolean = settingsRepository.offlineMode.first()
             if (isOffline) return@launch
@@ -508,9 +746,11 @@ class MainScreenModel(
                     syncCurrentView(server, capturedListContext, capturedFilter)
                 }
 
-                // Step 3: Reload the current view immediately after its metadata lands.
-                if (_currentFilter.value == capturedFilter) {
-                    resetPaginationAndLoad(server, capturedFilter)
+                // Step 3: Refresh the current view in place after its metadata lands, so
+                // newly synced bookmarks appear without the list blinking and jumping to the
+                // top (which a full resetPaginationAndLoad would cause).
+                if (effectiveFilterNow() == capturedEffectiveFilter) {
+                    refreshLoadedPagesInPlace(server, capturedEffectiveFilter)
                 }
 
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -519,14 +759,35 @@ class MainScreenModel(
                     val currentKey = resolveCurrentKey(capturedListContext, capturedFilter)
                     syncOtherLists(server, currentKey)
                 }
+
+                // Step 5: Refresh once more now the whole sync is done. Step 3 only sees what
+                // the current view's own pass fetched; a bookmark this view has never seen is
+                // inserted by whichever pass returns it, which for a smart list is usually one
+                // of the passes above. Without this they stay invisible — and uncounted by the
+                // "N new" pill — until the user navigates away and back.
+                if (effectiveFilterNow() == capturedEffectiveFilter) {
+                    refreshLoadedPagesInPlace(server, capturedEffectiveFilter)
+                }
+
+                // Record completion so the startup auto-sync is throttled next time (#276).
+                bookmarkRepository.markAutoSyncCompleted(server.id)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Scope cancelled (e.g. screen navigated away) — not a sync error.
                 bookmarkRepository.resetSyncProgress()
                 throw e
             } catch (e: Exception) {
                 AppLogger.e("MainScreenModel", "Sync failed: ${e.message}", e)
-                snackbarManager.showErrorWithRetry("Couldn't sync bookmarks") {
-                    syncBookmarks()
+                if (e.hasHttpStatus(401)) {
+                    // Retrying with the same credentials can't succeed — point the user
+                    // at re-authentication instead (#173).
+                    snackbarManager.showSnackbar(
+                        "Authentication failed — check your API key in server settings",
+                        androidx.compose.material3.SnackbarDuration.Long
+                    )
+                } else {
+                    snackbarManager.showErrorWithRetry("Couldn't sync bookmarks") {
+                        syncBookmarks()
+                    }
                 }
             }
         }
@@ -555,15 +816,29 @@ class MainScreenModel(
         server: com.karakept.app.data.model.Server,
         skipKey: SyncKey
     ) {
+        // Bounded, like BookmarkRepository.syncAllWithLists. Unbounded fan-out here put one
+        // paginated fetch per list on the wire at once, starving the list the user is
+        // actually looking at (and its content downloads) of connections.
+        val semaphore = kotlinx.coroutines.sync.Semaphore(3)
+        val allLists = listRepository.lists.value
+        AppLogger.d(
+            "MainScreenModel",
+            "syncOtherLists: ${allLists.size} known list(s), skipping key=$skipKey"
+        )
         coroutineScope {
-            listRepository.lists.value.forEach { list ->
+            allLists.forEach { list ->
                 val key = list.id ?: return@forEach
                 if (key == skipKey) return@forEach
                 launch {
+                    semaphore.acquire()
                     try {
                         bookmarkRepository.syncBookmarksForList(server, key)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         AppLogger.w("MainScreenModel", "Other-list sync failed for list $key: ${e.message}")
+                    } finally {
+                        semaphore.release()
                     }
                 }
             }
@@ -573,6 +848,7 @@ class MainScreenModel(
     // Filter management
 
     fun applyFilter(filter: FilterConfig) {
+        AppLogger.d("MainScreenModel", "applyFilter: status=${filter.status} lists=${filter.lists} tags=${filter.tags}")
         _currentFilter.value = filter
         _currentListContext.value = if (filter.lists.size == 1) filter.lists.first() else null
         if (filter.lists.size == 1) {
@@ -595,6 +871,7 @@ class MainScreenModel(
     }
 
     fun clearFilter() {
+        AppLogger.d("MainScreenModel", "clearFilter")
         _currentFilter.value = FilterConfig()
         _currentListContext.value = null
         _tagFilterSourceBookmarkId.value = null
@@ -650,10 +927,11 @@ class MainScreenModel(
         }
     }
 
+    // tryEmit rather than launch { emit }: the trigger is consumed alongside a list swap, and
+    // an extra coroutine hop is enough to push the scroll reset a frame past it. The flow has
+    // spare buffer capacity, so the emission always lands.
     fun scrollToTop() {
-        viewModelScope.launch {
-            _scrollToTopTrigger.emit(Unit)
-        }
+        _scrollToTopTrigger.tryEmit(Unit)
     }
 
     private fun loadLists() {

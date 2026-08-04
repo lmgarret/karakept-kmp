@@ -56,6 +56,8 @@ import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.ui.screens.SettingsScreen
 import com.karakept.app.ui.screens.settings.PerListSettingsScreen
+import com.karakept.app.ui.utils.ExpandedDrawerDefaultWidth
+import com.karakept.app.ui.utils.coerceExpandedDrawerWidth
 import com.karakept.api.model.KarakeepList
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
@@ -78,7 +80,6 @@ fun MainScreenExpandedLayout(
     topTagsWithCounts: List<String>,
     allAvailableTags: List<String>,
     offlineMode: Boolean,
-    isAutoOffline: Boolean,
     isDrawerVisible: Boolean,
     onDrawerVisibilityChanged: (Boolean) -> Unit,
     isReaderFullscreen: Boolean,
@@ -107,7 +108,7 @@ fun MainScreenExpandedLayout(
 ) {
     // Column width state -- persisted via SettingsRepository
     val layoutSettingsRepository = koinInject<SettingsRepository>()
-    var drawerWidthDp by remember { mutableFloatStateOf(280f) }
+    var drawerWidthDp by remember { mutableFloatStateOf(ExpandedDrawerDefaultWidth.value) }
     var listFraction by remember { mutableFloatStateOf(0.4f) }
 
     // Load persisted column widths once
@@ -203,7 +204,7 @@ fun MainScreenExpandedLayout(
                         onActiveHighlightIdChanged(null)
                     },
                     isHighlightsSelected = showHighlights,
-                    onAddBookmark = if (isDesktop && !offlineMode && !isAutoOffline) {
+                    onAddBookmark = if (isDesktop && !offlineMode) {
                         { onShowAddBookmarkDialogChanged(true) }
                     } else null,
                     quickFilterCounts = quickFilterCounts,
@@ -223,7 +224,7 @@ fun MainScreenExpandedLayout(
             DraggableDivider(
                 lineAlignment = Alignment.CenterStart,
                 onDrag = { delta ->
-                    drawerWidthDp = (drawerWidthDp + delta).coerceIn(200f, 400f)
+                    drawerWidthDp = coerceExpandedDrawerWidth(drawerWidthDp + delta)
                 }
             )
         }

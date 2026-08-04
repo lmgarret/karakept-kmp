@@ -192,6 +192,41 @@ actual object FileUtils {
         })
     }
 
+    actual fun openFileExternally(path: String, mimeType: String): Boolean {
+        val context = AndroidContext.context
+        return try {
+            val uri = if (path.startsWith("content://")) {
+                Uri.parse(path)
+            } else {
+                val file = File(path)
+                if (!file.exists()) return false
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            }
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            // Deliberately no resolveActivity() pre-check: from API 30 package visibility
+            // filtering makes it return null even when a capable app is installed, which
+            // reported "no app available" on phones that had several PDF readers. Wrapping in
+            // a chooser guarantees the grant reaches whichever app the user picks.
+            val chooser = Intent.createChooser(intent, null).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(chooser)
+            true
+        } catch (e: android.content.ActivityNotFoundException) {
+            // The genuine "nothing can open this" case.
+            AppLogger.e("FileUtils", "No activity to open $path ($mimeType)", e)
+            false
+        } catch (e: Exception) {
+            AppLogger.e("FileUtils", "Failed to open $path externally: ${e.message}", e)
+            false
+        }
+    }
+
     private fun getFolderSize(file: File): Long {
         if (!file.exists()) return 0
         if (!file.isDirectory) return file.length()

@@ -4,6 +4,7 @@ import com.karakept.app.utils.AppLogger
 import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.entity.PendingActionType
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.remote.hasHttpStatus
 import com.karakept.api.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -78,7 +79,7 @@ suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(bookmarkRemo
  * Process all pending actions for a specific bookmark.
  */
 internal suspend fun BookmarkActionsRepository.processPendingActionsForBookmark(serverId: String, bookmarkRemoteId: Long) {
-    val actions = pendingActionDao.getPendingActionsList(serverId)
+    val actions = pendingActionDao.getProcessableActions(serverId, System.currentTimeMillis())
         .filter { it.bookmarkRemoteId == bookmarkRemoteId }
 
     for (action in actions) {
@@ -101,9 +102,9 @@ suspend fun BookmarkActionsRepository.flushPendingActions(server: Server) {
 suspend fun BookmarkActionsRepository.processPendingActions(server: Server): List<Long> {
     return actionMutex.withLock {
         withContext(Dispatchers.IO) {
-            val actions = pendingActionDao.getPendingActionsList(server.id)
+            val actions = pendingActionDao.getProcessableActions(server.id, System.currentTimeMillis())
             val processedIds = mutableListOf<Long>()
-            AppLogger.d("BookmarkActionsRepositorySync", "Found ${actions.size} pending actions for server ${server.id}")
+            AppLogger.d("BookmarkActionsRepositorySync", "Found ${actions.size} processable actions for server ${server.id}")
 
             for (action in actions) {
                 executeAction(action, server.id)
@@ -114,6 +115,21 @@ suspend fun BookmarkActionsRepository.processPendingActions(server: Server): Lis
             processedIds
         }
     }
+}
+
+/**
+ * Requeue failed actions and immediately attempt to process them.
+ */
+suspend fun BookmarkActionsRepository.retryFailedActions(server: Server) {
+    pendingActionDao.requeueFailedActions(server.id)
+    processPendingActions(server)
+}
+
+/**
+ * Discard all failed actions for a server (explicit user choice).
+ */
+suspend fun BookmarkActionsRepository.discardFailedActions(serverId: String) {
+    pendingActionDao.deleteFailedActions(serverId)
 }
 
 /**
@@ -185,7 +201,16 @@ internal suspend fun BookmarkActionsRepository.executeAction(action: PendingActi
                 remoteDataSource.updateBookmark(server, bookmarkId, BookmarksBookmarkIdPatchRequest(favourited = false))
             }
             PendingActionType.DELETE -> {
-                remoteDataSource.deleteBookmark(server, bookmarkId)
+                try {
+                    remoteDataSource.deleteBookmark(server, bookmarkId)
+                } catch (e: Exception) {
+                    // Already gone on the server — the desired end state is achieved.
+                    if (e.hasHttpStatus(404)) {
+                        AppLogger.w("BookmarkActionsRepositorySync", "Bookmark $bookmarkId not found on server, treating delete as done")
+                    } else {
+                        throw e
+                    }
+                }
             }
             PendingActionType.UPDATE_TAGS -> {
                 val data = jsonSerializer.decodeFromString<Map<String, List<String>>>(action.actionData)
@@ -317,21 +342,61 @@ internal suspend fun BookmarkActionsRepository.executeAction(action: PendingActi
         pendingActionDao.deleteAction(action)
         AppLogger.d("BookmarkActionsRepositorySync", "executeAction SUCCESS ${action.actionType} bookmark=${action.bookmarkRemoteId}")
 
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
     } catch (e: Exception) {
         AppLogger.e("BookmarkActionsRepo", "Failed to execute pending action: ${e.message}", e)
-        // Update retry count and error message
+        recordActionFailure(action, e)
+    }
+}
+
+private const val MAX_ACTION_RETRIES = 5
+private val PERMANENT_HTTP_STATUSES = listOf(400, 404, 409, 422)
+
+/**
+ * Classifies a pending-action failure. Permanent server rejections and exhausted
+ * retries mark the action failed — preserved for the user to retry or discard —
+ * instead of the old behavior of silently deleting it. Transient failures get an
+ * exponential backoff window so a flaky network can't burn through the retry budget.
+ */
+internal suspend fun BookmarkActionsRepository.recordActionFailure(action: PendingActionEntity, e: Exception) {
+    val permanent = PERMANENT_HTTP_STATUSES.any { e.hasHttpStatus(it) }
+    // A 401 can't succeed until the user re-authenticates — park the action without
+    // burning retries; retryFailedActions() requeues it after re-auth.
+    val unauthorized = e.hasHttpStatus(401)
+
+    if (permanent || unauthorized) {
+        pendingActionDao.updateAction(
+            action.copy(status = PendingActionEntity.STATUS_FAILED, lastError = e.message)
+        )
+        AppLogger.e(
+            "BookmarkActionsRepositorySync",
+            "Action ${action.actionType} for bookmark ${action.bookmarkRemoteId} marked failed (${if (unauthorized) "auth" else "permanent"}): ${e.message}"
+        )
+        return
+    }
+
+    val newRetryCount = action.retryCount + 1
+    if (newRetryCount >= MAX_ACTION_RETRIES) {
         pendingActionDao.updateAction(
             action.copy(
-                retryCount = action.retryCount + 1,
-                lastError = e.message
+                retryCount = newRetryCount,
+                lastError = e.message,
+                status = PendingActionEntity.STATUS_FAILED
             )
         )
-
-        // If too many retries, we might want to delete it or alert user
-        if (action.retryCount >= 5) {
-            // Could delete or mark as failed
-            AppLogger.e("BookmarkActionsRepositorySync", "Action failed after 5 retries: ${action.actionType} for bookmark ${action.bookmarkRemoteId}")
-            pendingActionDao.deleteAction(action) // Give up after 5 retries to prevent blocking
-        }
+        AppLogger.e(
+            "BookmarkActionsRepositorySync",
+            "Action failed after $newRetryCount retries: ${action.actionType} for bookmark ${action.bookmarkRemoteId}"
+        )
+    } else {
+        val backoffMinutes = minOf(1L shl newRetryCount, 60L)
+        pendingActionDao.updateAction(
+            action.copy(
+                retryCount = newRetryCount,
+                lastError = e.message,
+                nextAttemptAt = System.currentTimeMillis() + backoffMinutes * 60_000L
+            )
+        )
     }
 }

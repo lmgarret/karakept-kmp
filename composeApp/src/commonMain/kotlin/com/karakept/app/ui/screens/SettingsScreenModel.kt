@@ -45,7 +45,6 @@ import com.karakept.app.data.repository.setDefaultListType
 import com.karakept.app.data.repository.setDefaultListId
 import com.karakept.app.data.repository.setShowDateInList
 import com.karakept.app.data.repository.setDateDisplayMode
-import com.karakept.app.data.repository.clearAutoOfflineDetected
 import com.karakept.app.data.repository.toggleContentSyncTargetList
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -132,18 +131,6 @@ class SettingsScreenModel(
     )
     
     val offlineMode: StateFlow<Boolean> = settingsRepository.offlineMode.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
-    )
-
-    val isAutoOffline: StateFlow<Boolean> = settingsRepository.autoOfflineDetected.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
-    )
-
-    val effectiveOfflineMode: StateFlow<Boolean> = settingsRepository.effectiveOfflineMode.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = false
@@ -242,28 +229,13 @@ class SettingsScreenModel(
     fun setOfflineMode(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setOfflineMode(enabled)
-            // Clear auto-detected offline state when manually going online
-            if (!enabled) {
-                settingsRepository.clearAutoOfflineDetected()
-            }
         }
     }
 
-    /**
-     * Toggle offline mode. If currently offline (manual or auto), go online.
-     * If online, go offline (manual).
-     */
+    /** Toggle the user's manual offline mode. */
     fun toggleOfflineMode() {
         viewModelScope.launch {
-            val currentEffectiveOffline = settingsRepository.effectiveOfflineMode.first()
-            if (currentEffectiveOffline) {
-                // Going online - clear both manual and auto offline
-                settingsRepository.setOfflineMode(false)
-                settingsRepository.clearAutoOfflineDetected()
-            } else {
-                // Going offline - set manual offline mode
-                settingsRepository.setOfflineMode(true)
-            }
+            settingsRepository.setOfflineMode(!settingsRepository.offlineMode.first())
         }
     }
 

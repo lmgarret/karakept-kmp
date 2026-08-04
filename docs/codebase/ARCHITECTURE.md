@@ -60,6 +60,24 @@
 5. Flow<List<BookmarkEntity>> emitted back to UI
 6. ScreenModel collects and updates UI state
 
+**Sync is streamed, and split into two stages.** Cursor pagination is serial, so a large
+library would otherwise cost one round trip per 100 bookmarks before a single row reached
+the DB. Instead `BookmarkSyncPipeline` commits each page as it arrives:
+
+- Local state (`getBookmarksForServerWithContentInfo`) is read **once** per sync and
+  maintained in memory across pages — never re-read per page.
+- Each page is diffed and written immediately; `BookmarkRepository.pageCommitted` emits,
+  and `MainScreenModel` calls `refreshLoadedPagesInPlace` so the list fills in progressively.
+- Deletion reconciliation runs **only after the last page**, against the union of every
+  page's ids. A fetch that fails part-way commits what it got and deletes nothing.
+- The *foreground* stage ends once those rows have landed; `onForegroundComplete` clears the
+  per-key `ListSyncStatus` **and releases the SyncKey**, so the progress bar and
+  pull-to-refresh spinner stop there and a new sync for the same key can start.
+- *Enrichment* — highlights, content download, reading progress — runs afterwards. It is
+  deduplicated by a **separate** `enrichmentKeys` set via the `shouldRunEnrichment` gate:
+  holding the sync key itself through enrichment meant a pull-to-refresh during a long
+  content download hit the dedup check and silently did nothing.
+
 **Bookmark Action Flow (with Undo):**
 
 1. User triggers action in UI (delete, archive, favorite, etc.)
@@ -118,6 +136,23 @@
 - Purpose: Encapsulates all active filters (tags, lists, archived, favorited, search query)
 - Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/model/FilterConfig.kt`
 - Used by: MainScreenModel and BookmarkFilterUtils
+
+**The effective filter identifies a view.** `MainScreenModel.currentFilter` is what the user
+picked; `effectiveFilter` is that plus the child lists it expands into for lists configured
+with `includeChildListBookmarks` (`ListHierarchyUtils.expandFilterLists`). The expansion
+depends on the drawer's lists, which load asynchronously, so it can change after a view is on
+screen. Consequences worth knowing before touching this code:
+
+- `LoadedView` records the **effective** filter, and `currentView()` compares it, so a change
+  to the expansion invalidates in-flight loads exactly like switching lists does.
+- Every load and refresh — `resetPaginationAndLoad`, `refreshLoadedPagesInPlace`,
+  `loadNextPage` — must be passed the effective filter (`effectiveFilterNow()`, or the value
+  captured for the window). Passing `currentFilter` names a different view, and the call is
+  rejected by the guards instead of doing anything.
+- A single observer over `(selectedServer, effectiveFilter)` is the only reload path, and the
+  initial load is its first emission, so startup cannot drift from later changes.
+- `loadBookmarksPage` therefore does no settings lookups: a page depends only on the filter it
+  is given and the page index. That is what lets a window be re-read safely later.
 
 **ScreenModel (`androidx.lifecycle.ViewModel` subclass):**
 - Purpose: Lifecycle-scoped state holder for a screen, survives configuration changes; scoped per Nav3 back-stack entry via `rememberViewModelStoreNavEntryDecorator`
@@ -186,10 +221,14 @@
 - Server credentials stored in Room DB (ServerEntity), sensitive data protected by device encryption
 
 **Synchronization (Offline-First):**
-- Pending actions queued in PendingActionDao before network attempt
-- BookmarkActionsRepository handles sync retry on network recovery
+- Pending actions queued in PendingActionDao before network attempt, replayed with exponential backoff
+- Queued actions are flushed when the app returns to the foreground (see App.kt)
 - Sync mutex in BookmarkRepository prevents concurrent syncs
-- SettingsRepository.effectiveOfflineMode flow checked before remote calls
+- SettingsRepository.offlineMode (the user's manual toggle) checked before remote calls
+- Exception: server-side crawl actions (`ServerCrawlAction` — refresh / preserve archive /
+  preserve PDF, plus deleting an asset on the server) deliberately bypass the pending-action
+  queue. They ask the server to run a background job and have no optimistic local counterpart,
+  so there is nothing to apply offline or to undo; the UI disables them in offline mode instead.
 
 **Dependency Injection:**
 - Koin module configured in AppModule.kt (single instances for repositories, factories for ScreenModels)

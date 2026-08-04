@@ -142,15 +142,21 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 ### List hierarchy
 
-**`buildListHierarchy(lists)`** (`domain/ListHierarchyUtils.kt`)
+All hierarchy helpers live in the single `ListHierarchyUtils` object
+(`domain/ListHierarchyUtils.kt`) and are called as `ListHierarchyUtils.<fn>(…)`.
+
+**`ListHierarchyUtils.buildListHierarchy(lists)`**
 - Converts a flat `List<KarakeepList>` into `List<Pair<KarakeepList, Int>>` sorted parents-before-children, alphabetically at each level.
 - **Use everywhere lists are displayed** (pickers, filter panels, sync settings, navigation drawer).
 
-**`filterExpandedHierarchy(hierarchy, expandedIds)`** (`domain/ListHierarchyUtils.kt`)
+**`ListHierarchyUtils.filterExpandedHierarchy(hierarchy, expandedIds)`**
 - Filters hierarchy to branches whose ancestors are all expanded. Use with `buildListHierarchy` for collapsible trees.
 
-**`listHasChildren(listId, allLists)`** (`domain/ListHierarchyUtils.kt`)
+**`ListHierarchyUtils.listHasChildren(listId, allLists)`**
 - Checks if a list has direct children.
+
+**`ListHierarchyUtils.getAllDescendantIds(parentId, allLists)`** / **`ListHierarchyUtils.getAncestorIds(listId, allLists)`**
+- Depth-first descendant / ancestor traversal (cycle-safe). Used for counting nested bookmarks and auto-expanding parent nodes.
 
 > **Rule:** Never sort lists manually or display them in a flat unordered layout.
 
@@ -162,6 +168,14 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 - Always pass `availableTags` from the screen's state for suggestions.
 
 > **Rule:** Never implement custom tag-selection dialogs or text fields.
+
+### Empty states
+
+- A list with nothing in it needs an **explicit empty state**, never a blank area — the two
+  are indistinguishable to the user.
+- Gate it on `MainScreenModel.isLoadingInitialPage`, which is false only once the first page
+  has actually resolved. Rendering the empty state unconditionally flashes "nothing here" on
+  every cold start before the list arrives.
 
 ### Menus and bottom sheets
 
@@ -334,6 +348,9 @@ Releases (`.github/workflows/release.yml`):
 The `api-client/` module is **generated** from the Karakeep OpenAPI spec at
 `karakeep-upstream/packages/open-api/karakeep-openapi-spec.json` using OpenAPI Generator 7.10.0.
 
+- The spec lives in the `karakeep-upstream` git submodule. If a build fails with a
+  missing-spec error on `:api-client:openApiGenerate`, initialize it first:
+  `git submodule update --init`.
 - **Do not hand-edit** files under `api-client/src/` — they will be overwritten on regeneration.
 - Generated models live at `com.karakept.api.*`.
 - `RemoteDataSource.kt` is the only place that consumes the generated API clients.

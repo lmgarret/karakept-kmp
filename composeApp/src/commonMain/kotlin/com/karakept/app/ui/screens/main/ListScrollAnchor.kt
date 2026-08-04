@@ -36,10 +36,7 @@ internal fun PreserveListScrollAnchor(
     val currentBookmarks = rememberUpdatedState(bookmarks)
     val currentVersion = rememberUpdatedState(bookmarkListVersion)
     LaunchedEffect(listState) {
-        var anchorKey: Long? = null
-        var anchorOffset = 0
-        var lastList: List<BookmarkEntity>? = null
-        var lastVersion = currentVersion.value
+        val anchor = ListScrollAnchorState(initialVersion = currentVersion.value)
 
         snapshotFlow {
             AnchorSnapshot(
@@ -50,37 +47,66 @@ internal fun PreserveListScrollAnchor(
                 listVersion = currentVersion.value
             )
         }.collect { snap ->
-            val listChanged = lastList != null && snap.bookmarks !== lastList
-            val versionChanged = snap.listVersion != lastVersion
-            if (listChanged) {
-                val target = resolveAnchorScrollTarget(
-                    anchorKey = anchorKey,
-                    isScrolling = snap.isScrolling,
-                    versionChanged = versionChanged,
-                    currentFirstIndex = snap.firstIndex,
-                    newBookmarks = snap.bookmarks
-                )
-                if (target != null) {
-                    listState.requestScrollToItem(target, anchorOffset)
-                }
-            } else {
-                // List is stable: record the bookmark currently at the top of the viewport.
-                anchorKey = snap.bookmarks.getOrNull(snap.firstIndex)?.remoteId
-                anchorOffset = snap.firstOffset
+            val target = anchor.onSnapshot(snap)
+            if (target != null) {
+                listState.requestScrollToItem(target.index, target.offset)
             }
-            lastList = snap.bookmarks
-            lastVersion = snap.listVersion
         }
     }
 }
 
-private data class AnchorSnapshot(
+internal data class AnchorSnapshot(
     val bookmarks: List<BookmarkEntity>,
     val firstIndex: Int,
     val firstOffset: Int,
     val isScrolling: Boolean,
     val listVersion: Int
 )
+
+internal data class AnchorScrollTarget(val index: Int, val offset: Int)
+
+/**
+ * Stateful half of [PreserveListScrollAnchor], extracted so the anchor bookkeeping can be
+ * unit-tested without a composition.
+ */
+internal class ListScrollAnchorState(initialVersion: Int) {
+    private var anchorKey: Long? = null
+    private var anchorOffset = 0
+    private var lastList: List<BookmarkEntity>? = null
+    private var lastVersion = initialVersion
+
+    // A full reload bumps the version *and* swaps the dataset, but the two reach the UI
+    // through different flows and usually land in separate snapshots. Latch the bump until
+    // the swap actually arrives — otherwise the swap looks like a surgical change and we
+    // re-pin the viewport to a bookmark carried over from the list the user just left,
+    // which leaves the new list scrolled to an arbitrary position.
+    private var reloadPending = false
+
+    fun onSnapshot(snap: AnchorSnapshot): AnchorScrollTarget? {
+        if (snap.listVersion != lastVersion) reloadPending = true
+        lastVersion = snap.listVersion
+
+        val listChanged = lastList != null && snap.bookmarks !== lastList
+        lastList = snap.bookmarks
+
+        if (!listChanged) {
+            // List is stable: record the bookmark currently at the top of the viewport.
+            anchorKey = snap.bookmarks.getOrNull(snap.firstIndex)?.remoteId
+            anchorOffset = snap.firstOffset
+            return null
+        }
+
+        val target = resolveAnchorScrollTarget(
+            anchorKey = anchorKey,
+            isScrolling = snap.isScrolling,
+            versionChanged = reloadPending,
+            currentFirstIndex = snap.firstIndex,
+            newBookmarks = snap.bookmarks
+        )
+        reloadPending = false
+        return target?.let { AnchorScrollTarget(it, anchorOffset) }
+    }
+}
 
 /**
  * Pure decision function for [PreserveListScrollAnchor].

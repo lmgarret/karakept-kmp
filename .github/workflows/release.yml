@@ -20,7 +20,7 @@ jobs:
       name: ${{ steps.version.outputs.name }}
       body: ${{ steps.body.outputs.body }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
           fetch-depth: 0
@@ -116,7 +116,7 @@ jobs:
     name: Run Android unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -145,7 +145,7 @@ jobs:
     needs: [resolve-version, android-tests]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -191,7 +191,7 @@ jobs:
     needs: [resolve-version, android-tests]
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -232,9 +232,13 @@ jobs:
   build-windows:
     name: Build Windows (MSI + EXE)
     needs: [resolve-version, android-tests]
+    # Windows release builds are temporarily disabled. To re-enable: remove this
+    # `if: false`, re-add `build-windows` to create-release's `needs`, and restore the
+    # `msi-release/*.msi` + `exe-release/*.exe` lines in create-release's file lists.
+    if: false
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -278,7 +282,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -314,7 +318,7 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
       options: --privileged
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -341,7 +345,8 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: [resolve-version, build-android, build-macos, build-windows, build-linux-flatpak]
+    # build-windows temporarily removed from needs (Windows release builds disabled)
+    needs: [resolve-version, build-android, build-macos, build-linux-flatpak]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -358,8 +363,6 @@ jobs:
           files: |
             apk-release/*.apk
             dmg-release/*.dmg
-            msi-release/*.msi
-            exe-release/*.exe
             flatpak-release/*.flatpak
           body: ${{ needs.resolve-version.outputs.body }}
           generate_release_notes: false
@@ -373,8 +376,6 @@ jobs:
           files: |
             apk-release/*.apk
             dmg-release/*.dmg
-            msi-release/*.msi
-            exe-release/*.exe
           body: ${{ needs.resolve-version.outputs.body }}
           prerelease: true
           make_latest: false
