@@ -73,4 +73,69 @@ class ZoomableImageDialogTest {
     fun clampImagePan_zeroContainerDimension_clampsToZero() {
         assertEquals(0f, clampImagePan(100f, 2f, 0f))
     }
+
+    // --- dismissDragProgress ---
+
+    @Test
+    fun dismissDragProgress_atRest_isZero() {
+        assertEquals(0f, dismissDragProgress(0f, 300f))
+    }
+
+    @Test
+    fun dismissDragProgress_halfwayToThreshold_isHalf() {
+        assertEquals(0.5f, dismissDragProgress(-150f, 300f))
+    }
+
+    @Test
+    fun dismissDragProgress_atThreshold_isOne() {
+        assertEquals(1f, dismissDragProgress(-300f, 300f))
+    }
+
+    @Test
+    fun dismissDragProgress_pastThreshold_clampsToOne() {
+        assertEquals(1f, dismissDragProgress(-500f, 300f))
+    }
+
+    @Test
+    fun dismissDragProgress_downwardDrag_clampsToZero() {
+        // Downward drags are clamped to 0 before reaching this function in practice, but the
+        // math itself must not report negative progress if a positive offset ever arrives.
+        assertEquals(0f, dismissDragProgress(150f, 300f))
+    }
+
+    @Test
+    fun dismissDragProgress_zeroOrNegativeThreshold_isZero() {
+        // Threshold isn't known yet (e.g. before the first layout pass) — never report progress.
+        assertEquals(0f, dismissDragProgress(-150f, 0f))
+        assertEquals(0f, dismissDragProgress(-150f, -10f))
+    }
+
+    // --- shouldDismissFromDrag ---
+
+    @Test
+    fun shouldDismissFromDrag_belowThreshold_isFalse() {
+        assertEquals(false, shouldDismissFromDrag(-200f, 300f))
+    }
+
+    @Test
+    fun shouldDismissFromDrag_pastThreshold_isTrue() {
+        assertEquals(true, shouldDismissFromDrag(-350f, 300f))
+    }
+
+    @Test
+    fun shouldDismissFromDrag_exactlyAtThreshold_isFalse() {
+        // Must travel strictly past the threshold, not just reach it.
+        assertEquals(false, shouldDismissFromDrag(-300f, 300f))
+    }
+
+    @Test
+    fun shouldDismissFromDrag_downwardDrag_isFalse() {
+        assertEquals(false, shouldDismissFromDrag(300f, 300f))
+    }
+
+    @Test
+    fun shouldDismissFromDrag_zeroOrNegativeThreshold_isFalse() {
+        assertEquals(false, shouldDismissFromDrag(-500f, 0f))
+        assertEquals(false, shouldDismissFromDrag(-500f, -10f))
+    }
 }
