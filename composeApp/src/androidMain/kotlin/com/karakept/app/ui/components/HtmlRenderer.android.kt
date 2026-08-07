@@ -117,6 +117,15 @@ actual fun HtmlRenderer(
     // lambda even when linkOpenMode changes after the AndroidView factory has run.
     val onLinkClickState = remember { mutableStateOf(onLinkClick) }
 
+    // Wrap localFilePath in a MutableState for the same reason: the archive path handler
+    // below is built once via `remember` and closed over by the WebViewClient created in the
+    // AndroidView factory (which itself only runs once), so a plain closure over the parameter
+    // would stay frozen at whatever it was on first composition — null when the user views a
+    // bookmark before its archive has been downloaded. Reading `.value` instead always sees the
+    // path from the most recent recomposition, e.g. once "Load full page archive" completes.
+    val localFilePathState = remember { mutableStateOf(localFilePath) }
+    localFilePathState.value = localFilePath
+
     // Track selection bounds for ActionMode positioning
     val selectionRect = remember { mutableStateOf<android.graphics.Rect?>(null) }
 
@@ -653,7 +662,7 @@ actual fun HtmlRenderer(
     val webViewAssetLoader = remember(highlightStyles, highlightScripts) {
         WebViewAssetLoader.Builder()
             .addPathHandler(ARCHIVE_PATH_PREFIX) { _ ->
-                val path = localFilePath ?: return@addPathHandler null
+                val path = localFilePathState.value ?: return@addPathHandler null
                 try {
                     val raw = File(path).readText(Charsets.UTF_8)
                     val injected = injectArchiveScripts(raw, highlightStyles, highlightScripts)
