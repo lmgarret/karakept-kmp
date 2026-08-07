@@ -112,6 +112,7 @@
 **Android Integration:**
 - androidx-activity-compose 1.12.4 - Activity + Compose integration
 - androidx-browser 1.9.0 - Custom Chrome tabs for opening web content
+- androidx-webkit 1.16.0 - WebSettingsCompat/WebViewFeature (algorithmic darkening control for Web mode archive rendering)
 - androidx-core-splashscreen 1.2.0 - Splash screen API
 - androidx-work-runtime-ktx 2.10.5 - Background task scheduling
 
