@@ -2,6 +2,7 @@ package com.karakept.app.ui.components.reader
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -904,6 +905,7 @@ private fun RenderResolvedImage(urls: List<String>, alt: String, dimensions: Ima
     var idx by remember(urls) { mutableIntStateOf(0) }
     // Resets to true on every new URL attempt (idx change) and on new image (urls change).
     var isLoading by remember(urls, idx) { mutableStateOf(true) }
+    var showFullscreen by remember(urls) { mutableStateOf(false) }
 
     val sizeModifier = if (dimensions != null) {
         Modifier
@@ -935,7 +937,12 @@ private fun RenderResolvedImage(urls: List<String>, alt: String, dimensions: Ima
         return
     }
 
-    Box(modifier = baseModifier) {
+    Box(
+        modifier = baseModifier.clickable(
+            enabled = !isLoading,
+            onClickLabel = "View image full-screen"
+        ) { showFullscreen = true }
+    ) {
         // Skeleton shown while the current URL is loading.
         if (isLoading) {
             ImageLoadingSkeleton(
@@ -957,6 +964,14 @@ private fun RenderResolvedImage(urls: List<String>, alt: String, dimensions: Ima
                 .fillMaxWidth()
                 .clip(shape)
                 .alpha(if (isLoading) 0f else 1f)
+        )
+    }
+
+    if (showFullscreen) {
+        ZoomableImageDialog(
+            url = urls[idx],
+            alt = alt,
+            onDismiss = { showFullscreen = false }
         )
     }
 }
