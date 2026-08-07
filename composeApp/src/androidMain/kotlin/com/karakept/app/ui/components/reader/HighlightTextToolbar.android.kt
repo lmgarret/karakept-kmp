@@ -17,6 +17,7 @@ import androidx.compose.ui.text.AnnotatedString
 
 private const val TAG = "HighlightToolbar"
 private const val MENU_ID_HIGHLIGHT = 1001
+private const val MENU_LABEL_HIGHLIGHT = "Highlight"
 
 // ─── Reflection helpers to extract selected text from Compose internals ──────
 
@@ -105,36 +106,58 @@ internal fun Context.findActivity(): Activity? {
 }
 
 /**
+ * Adds the "Highlight" item to [menu] unless it is already there, and reports
+ * whether it had to be added.
+ *
+ * Compose rebuilds the whole menu (`Menu.clear()`) every time its context menu
+ * data changes, so this runs on every create *and* prepare pass. Order 0 keeps
+ * the item ahead of Compose's own items, which are numbered from 1, and
+ * [MenuItem.SHOW_AS_ACTION_ALWAYS] matches what Compose sets on each of its
+ * items — without it the entry is only reachable through the floating toolbar's
+ * overflow.
+ */
+private fun addHighlightItem(menu: Menu): Boolean {
+    if (menu.findItem(MENU_ID_HIGHLIGHT) != null) return false
+    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 0, MENU_LABEL_HIGHLIGHT)
+        .setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+    return true
+}
+
+/**
  * Wraps an [ActionMode.Callback] to inject a "Highlight" menu item and
  * delegate all other items to the [original] callback.
  */
-private fun createHighlightCallback(
+internal fun createHighlightCallback(
     original: ActionMode.Callback,
     onHighlight: (ActionMode, ActionMode.Callback) -> Unit
 ): ActionMode.Callback {
+    fun onCreate(mode: ActionMode, menu: Menu): Boolean {
+        val handled = original.onCreateActionMode(mode, menu)
+        addHighlightItem(menu)
+        return handled || menu.size() > 0
+    }
+
+    fun onPrepare(mode: ActionMode, menu: Menu): Boolean {
+        val updated = original.onPrepareActionMode(mode, menu)
+        return addHighlightItem(menu) || updated
+    }
+
+    fun onItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+        if (item.itemId != MENU_ID_HIGHLIGHT) {
+            return original.onActionItemClicked(mode, item)
+        }
+        onHighlight(mode, original)
+        return true
+    }
+
     return if (original is ActionMode.Callback2) {
         object : ActionMode.Callback2() {
-            override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-                val result = original.onCreateActionMode(mode, menu)
-                menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
-                return result
-            }
+            override fun onCreateActionMode(mode: ActionMode, menu: Menu) = onCreate(mode, menu)
 
-            override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
-                val result = original.onPrepareActionMode(mode, menu)
-                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
-                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
-                }
-                return true
-            }
+            override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = onPrepare(mode, menu)
 
-            override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-                if (item.itemId == MENU_ID_HIGHLIGHT) {
-                    onHighlight(mode, original)
-                    return true
-                }
-                return original.onActionItemClicked(mode, item)
-            }
+            override fun onActionItemClicked(mode: ActionMode, item: MenuItem) =
+                onItemClicked(mode, item)
 
             override fun onDestroyActionMode(mode: ActionMode) =
                 original.onDestroyActionMode(mode)
@@ -147,31 +170,47 @@ private fun createHighlightCallback(
         }
     } else {
         object : ActionMode.Callback {
-            override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-                val result = original.onCreateActionMode(mode, menu)
-                menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
-                return result
-            }
+            override fun onCreateActionMode(mode: ActionMode, menu: Menu) = onCreate(mode, menu)
 
-            override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
-                val result = original.onPrepareActionMode(mode, menu)
-                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
-                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
-                }
-                return true
-            }
+            override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = onPrepare(mode, menu)
 
-            override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-                if (item.itemId == MENU_ID_HIGHLIGHT) {
-                    onHighlight(mode, original)
-                    return true
-                }
-                return original.onActionItemClicked(mode, item)
-            }
+            override fun onActionItemClicked(mode: ActionMode, item: MenuItem) =
+                onItemClicked(mode, item)
 
             override fun onDestroyActionMode(mode: ActionMode) =
                 original.onDestroyActionMode(mode)
         }
+    }
+}
+
+/**
+ * Swaps the `ActionMode.Callback` that [wrapper] delegates to for one that also
+ * offers "Highlight".
+ *
+ * [wrapper] is `DecorView$ActionModeCallback2Wrapper`, whose `mWrapped` field
+ * holds Compose's callback. Both the class and the field are non-SDK, so this
+ * can fail on a platform build that blocks them — the reason is logged so the
+ * failure is diagnosable from logcat rather than silently dropping the item.
+ *
+ * Returns true when the swap succeeded.
+ */
+internal fun injectHighlightCallback(
+    wrapper: ActionMode.Callback,
+    onHighlight: (ActionMode, ActionMode.Callback) -> Unit
+): Boolean {
+    return try {
+        val field = wrapper.javaClass.getDeclaredField("mWrapped")
+        field.isAccessible = true
+        val original = field.get(wrapper) as ActionMode.Callback
+        field.set(wrapper, createHighlightCallback(original, onHighlight))
+        true
+    } catch (e: Exception) {
+        Log.e(
+            TAG,
+            "ActionMode callback injection failed on ${wrapper.javaClass.name}: " +
+                "${e.javaClass.name}: ${e.message}"
+        )
+        false
     }
 }
 
@@ -217,24 +256,14 @@ actual fun rememberHighlightTextToolbar(
                     return originalCallback.onWindowStartingActionMode(callback, type)
                 }
 
-                try {
-                    val field = callback.javaClass.getDeclaredField("mWrapped")
-                    field.isAccessible = true
-                    val original = field.get(callback) as ActionMode.Callback
-
-                    val wrapped = createHighlightCallback(original) { mode, composeCb ->
-                        val selectedText = extractSelectedText(composeCb)
-                        if (selectedText != null) {
-                            latestOnHighlight.value(selectedText)
-                        } else {
-                            Log.e(TAG, "Failed to extract selected text")
-                        }
-                        mode.finish()
+                injectHighlightCallback(callback) { mode, composeCb ->
+                    val selectedText = extractSelectedText(composeCb)
+                    if (selectedText != null) {
+                        latestOnHighlight.value(selectedText)
+                    } else {
+                        Log.e(TAG, "Failed to extract selected text")
                     }
-
-                    field.set(callback, wrapped)
-                } catch (e: Exception) {
-                    Log.e(TAG, "ActionMode callback injection failed: $e")
+                    mode.finish()
                 }
 
                 return originalCallback.onWindowStartingActionMode(callback, type)
