@@ -103,6 +103,7 @@ kotlin {
                 implementation(libs.androidx.datastore.preferences.android)
                 implementation(libs.androidx.core.splashscreen)
                 implementation(libs.androidx.browser)
+                implementation(libs.androidx.webkit)
                 implementation(libs.androidx.work.runtime)
                 implementation(libs.koin.androidx.workmanager)
             }

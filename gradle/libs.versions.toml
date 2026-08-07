@@ -8,6 +8,7 @@ androidx-activityCompose = "1.12.4"
 androidx-lifecycle = "2.10.0"
 androidx-core-splashscreen = "1.2.0"
 androidx-browser = "1.9.0"
+androidx-webkit = "1.16.0"
 compose-plugin = "1.11.1"
 junit = "4.13.2"
 kotlin = "2.4.0"
@@ -42,6 +43,7 @@ androidx-lifecycle-runtime-compose = { group = "org.jetbrains.androidx.lifecycle
 androidx-lifecycle-viewmodel-navigation3 = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel-navigation3", version.ref = "androidx-lifecycle" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidx-core-splashscreen" }
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "androidx-browser" }
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "androidx-webkit" }
 
 # Navigation 3
 navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "navigation3-runtime" }

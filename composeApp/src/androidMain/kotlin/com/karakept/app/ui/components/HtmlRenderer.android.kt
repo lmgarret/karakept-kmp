@@ -31,6 +31,8 @@ import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
@@ -44,7 +46,7 @@ import java.io.File
 private fun injectArchiveScripts(html: String, highlightStyles: String, highlightScripts: String): String {
     return html
         .replace("</head>", """
-            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data: file:; style-src 'unsafe-inline' http: https:; script-src 'unsafe-inline';">
             <style>
                 $highlightStyles
@@ -805,13 +807,36 @@ actual fun HtmlRenderer(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
-                // Start invisible to prevent white flash
-                setBackgroundColor(Color.TRANSPARENT)
-                
+                if (viewerMode == ViewerMode.WEB) {
+                    // Archived pages assume an opaque canvas (usually white) to paint over.
+                    // A transparent background can also register as a "dark" signal for
+                    // WebView's automatic darkening heuristic below, producing badly
+                    // contrasted (dark-on-dark) rendering, so give it a real background instead.
+                    setBackgroundColor(Color.WHITE)
+
+                    // Web mode preserves the original page's styling exactly; letting WebView
+                    // auto-darken it produces mismatched colors the page was never designed
+                    // for, so opt out explicitly (covering both the current and legacy APIs).
+                    if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                        WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false)
+                    } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                        @Suppress("DEPRECATION")
+                        WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_OFF)
+                    }
+
+                    // Respect the page's own layout width and zoom-to-fit on load instead of
+                    // clamping to device width, since archived pages are often not mobile-responsive.
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                } else {
+                    // Start invisible to prevent white flash
+                    setBackgroundColor(Color.TRANSPARENT)
+                }
+
                 // Security settings
                 settings.javaScriptEnabled = true
                 addJavascriptInterface(webInterface, "Android")
-                
+
                 // Allow file access for local images (cached content)
                 settings.allowFileAccess = true
                 settings.allowContentAccess = false
