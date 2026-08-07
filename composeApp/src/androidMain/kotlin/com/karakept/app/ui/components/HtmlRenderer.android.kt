@@ -33,6 +33,29 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color as ComposeColor
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.io.File
+
+/**
+ * Injects the viewport/CSP meta tags and highlight styles/scripts into a full-page
+ * archive document (Web mode), which is already a complete `<html>` document as
+ * downloaded from the server.
+ */
+private fun injectArchiveScripts(html: String, highlightStyles: String, highlightScripts: String): String {
+    return html
+        .replace("</head>", """
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data: file:; style-src 'unsafe-inline' http: https:; script-src 'unsafe-inline';">
+            <style>
+                $highlightStyles
+            </style>
+        </head>""".trimIndent())
+        .replace("</body>", """
+            <script>
+                $highlightScripts
+            </script>
+        </body>""".trimIndent())
+}
 
 /**
  * Android implementation of HtmlRenderer using WebView.
@@ -591,20 +614,10 @@ actual fun HtmlRenderer(
                 """.trimIndent()
             }
             ViewerMode.WEB -> {
-                // Archive mode: inject our scripts and styles into the existing HTML
-                html
-                    .replace("</head>", """
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data: file:; style-src 'unsafe-inline' http: https:; script-src 'unsafe-inline';">
-                        <style>
-                            $highlightStyles
-                        </style>
-                    </head>""".trimIndent())
-                    .replace("</body>", """
-                        <script>
-                            $highlightScripts
-                        </script>
-                    </body>""".trimIndent())
+                // Archive mode: inject our scripts and styles into the existing HTML.
+                // Only used for the inline (non-file) archive path; file-based archives are
+                // injected on the fly in shouldInterceptRequest instead.
+                injectArchiveScripts(html, highlightStyles, highlightScripts)
             }
         }
     }
@@ -845,6 +858,37 @@ actual fun HtmlRenderer(
                             }
                         }
                         return false
+                    }
+
+                    override fun shouldInterceptRequest(
+                        view: WebView?,
+                        request: WebResourceRequest?
+                    ): WebResourceResponse? {
+                        // Serving a file-based archive via loadUrl("file://...") leaves MIME
+                        // detection to WebView's extension sniffing, and skips the viewport/CSP/
+                        // highlight injection applied to inline archive HTML. Intercept the main
+                        // document request so we can explicitly declare text/html and inject the
+                        // same scripts, without ever holding the (potentially large) archive as a
+                        // loadDataWithBaseURL argument, which has an undocumented IPC size limit.
+                        if (localFilePath != null &&
+                            viewerMode == ViewerMode.WEB &&
+                            request?.isForMainFrame == true &&
+                            request.url.scheme == "file" &&
+                            request.url.path == localFilePath
+                        ) {
+                            try {
+                                val raw = File(localFilePath).readText(Charsets.UTF_8)
+                                val injected = injectArchiveScripts(raw, highlightStyles, highlightScripts)
+                                return WebResourceResponse(
+                                    "text/html",
+                                    "UTF-8",
+                                    ByteArrayInputStream(injected.toByteArray(Charsets.UTF_8))
+                                )
+                            } catch (e: Exception) {
+                                AppLogger.e("HtmlRenderer", "Failed to intercept archive request: ${e.message}", e)
+                            }
+                        }
+                        return super.shouldInterceptRequest(view, request)
                     }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
