@@ -32,11 +32,33 @@ import com.karakept.app.data.model.ViewerMode
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewFeature
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.File
+
+/**
+ * Virtual URL a cached full-page archive is served from. `file://` requests are not reliably
+ * interceptable by [WebViewClient.shouldInterceptRequest] on every WebView build, so the archive
+ * is instead served through [WebViewAssetLoader] on this reserved, network-never-touched domain
+ * (the same technique Google recommends over direct `file://` navigation), which guarantees the
+ * request is intercepted and lets us declare the correct MIME type.
+ */
+private const val ARCHIVE_VIRTUAL_URL = "https://appassets.androidplatform.net/archive/index.html"
+private const val ARCHIVE_PATH_PREFIX = "/archive/"
+private const val ARCHIVE_VIRTUAL_HOST = "appassets.androidplatform.net"
+
+/**
+ * Whether [uri] is an in-page anchor link (has a fragment) within a document we ourselves
+ * loaded, either a legacy `file://` archive load or the current WebViewAssetLoader virtual URL,
+ * so the WebView should be left to scroll to it internally instead of treating it as navigation.
+ */
+private fun isSameDocumentAnchor(uri: android.net.Uri): Boolean {
+    if (uri.fragment == null) return false
+    return uri.scheme == "file" || (uri.scheme == "https" && uri.host == ARCHIVE_VIRTUAL_HOST)
+}
 
 /**
  * Injects the viewport/CSP meta tags and highlight styles/scripts into a full-page
@@ -617,11 +639,35 @@ actual fun HtmlRenderer(
             }
             ViewerMode.WEB -> {
                 // Archive mode: inject our scripts and styles into the existing HTML.
-                // Only used for the inline (non-file) archive path; file-based archives are
-                // injected on the fly in shouldInterceptRequest instead.
+                // Only used for the inline (non-file) archive path; cached archives are
+                // injected on the fly by the WebViewAssetLoader path handler instead.
                 injectArchiveScripts(html, highlightStyles, highlightScripts)
             }
         }
+    }
+
+    // Serves a cached archive file at ARCHIVE_VIRTUAL_URL with an explicit text/html MIME type
+    // and the viewport/CSP/highlight injection, however the request path itself is ignored:
+    // archives are self-contained (all resources inlined by the crawler), so there's only ever
+    // one document to serve, regardless of what sub-path is requested under the prefix.
+    val webViewAssetLoader = remember(highlightStyles, highlightScripts) {
+        WebViewAssetLoader.Builder()
+            .addPathHandler(ARCHIVE_PATH_PREFIX) { _ ->
+                val path = localFilePath ?: return@addPathHandler null
+                try {
+                    val raw = File(path).readText(Charsets.UTF_8)
+                    val injected = injectArchiveScripts(raw, highlightStyles, highlightScripts)
+                    WebResourceResponse(
+                        "text/html",
+                        "UTF-8",
+                        ByteArrayInputStream(injected.toByteArray(Charsets.UTF_8))
+                    )
+                } catch (e: Exception) {
+                    AppLogger.e("HtmlRenderer", "Failed to load archive via asset loader: ${e.message}", e)
+                    null
+                }
+            }
+            .build()
     }
 
     class WebAppInterface(
@@ -856,8 +902,9 @@ actual fun HtmlRenderer(
                         val url = request?.url?.toString()
                         if (url != null) {
                             // Let the WebView handle local anchor links internally (US4)
-                            // Anchor links within the same document have a file:// scheme and a non-null fragment
-                            if (request.url.scheme == "file" && request.url.fragment != null) {
+                            // Anchor links within the same document have a file:// or archive
+                            // virtual-domain scheme and a non-null fragment
+                            if (isSameDocumentAnchor(request.url)) {
                                 return false
                             }
                             val handler = onLinkClickState.value
@@ -873,7 +920,7 @@ actual fun HtmlRenderer(
                     override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                         if (url != null) {
                             // Let the WebView handle local anchor links internally (US4)
-                            if (url.startsWith("file://") && url.contains("#")) {
+                            if (isSameDocumentAnchor(android.net.Uri.parse(url))) {
                                 return false
                             }
                             val handler = onLinkClickState.value
@@ -889,31 +936,9 @@ actual fun HtmlRenderer(
                         view: WebView?,
                         request: WebResourceRequest?
                     ): WebResourceResponse? {
-                        // Serving a file-based archive via loadUrl("file://...") leaves MIME
-                        // detection to WebView's extension sniffing, and skips the viewport/CSP/
-                        // highlight injection applied to inline archive HTML. Intercept the main
-                        // document request so we can explicitly declare text/html and inject the
-                        // same scripts, without ever holding the (potentially large) archive as a
-                        // loadDataWithBaseURL argument, which has an undocumented IPC size limit.
-                        if (localFilePath != null &&
-                            viewerMode == ViewerMode.WEB &&
-                            request?.isForMainFrame == true &&
-                            request.url.scheme == "file" &&
-                            request.url.path == localFilePath
-                        ) {
-                            try {
-                                val raw = File(localFilePath).readText(Charsets.UTF_8)
-                                val injected = injectArchiveScripts(raw, highlightStyles, highlightScripts)
-                                return WebResourceResponse(
-                                    "text/html",
-                                    "UTF-8",
-                                    ByteArrayInputStream(injected.toByteArray(Charsets.UTF_8))
-                                )
-                            } catch (e: Exception) {
-                                AppLogger.e("HtmlRenderer", "Failed to intercept archive request: ${e.message}", e)
-                            }
-                        }
-                        return super.shouldInterceptRequest(view, request)
+                        val url = request?.url ?: return super.shouldInterceptRequest(view, request)
+                        return webViewAssetLoader.shouldInterceptRequest(url)
+                            ?: super.shouldInterceptRequest(view, request)
                     }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -953,9 +978,10 @@ actual fun HtmlRenderer(
                     }
                 }
 
-                // Load the HTML content or local file
+                // Load the archive through the asset loader (see shouldInterceptRequest above) or
+                // inline HTML content directly.
                 if (localFilePath != null) {
-                    loadUrl("file://$localFilePath")
+                    loadUrl(ARCHIVE_VIRTUAL_URL)
                 } else {
                     loadDataWithBaseURL("file:///", themedHtml, "text/html", "UTF-8", null)
                 }
@@ -971,8 +997,8 @@ actual fun HtmlRenderer(
                 pageLoaded.value = false
                 lastAppliedHighlights.value = emptyList()
                 if (localFilePath != null) {
-                    if (webView.url != "file://$localFilePath") {
-                        webView.loadUrl("file://$localFilePath")
+                    if (webView.url != ARCHIVE_VIRTUAL_URL) {
+                        webView.loadUrl(ARCHIVE_VIRTUAL_URL)
                         lastLoadedHtml.value = themedHtml
                     }
                 } else {
