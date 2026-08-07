@@ -109,16 +109,21 @@ internal fun rememberReadingProgress(
 }
 
 /**
- * Remembers FAB visibility state based on scroll direction.
- * Hides the FAB when scrolling down and shows it when scrolling up.
+ * Remembers FAB visibility state based on scroll direction, plus a manual toggle so tapping
+ * the reader content can show/hide the FAB independent of scrolling. Hides the FAB when
+ * scrolling down and shows it when scrolling up; any scroll movement re-asserts that
+ * scroll-driven visibility, so a manual toggle only persists until the next scroll.
+ *
+ * @return the current visibility paired with a function that toggles it.
  */
 @Composable
 internal fun rememberFabVisibilityState(
     scrollState: LazyListState,
     fabExpanded: Boolean
-): Boolean {
+): Pair<Boolean, () -> Unit> {
     var previousScrollOffset by remember { mutableStateOf(0) }
     var fabVisible by remember { mutableStateOf(true) }
+    val toggleFabVisible = remember { { fabVisible = !fabVisible } }
 
     LaunchedEffect(scrollState.firstVisibleItemScrollOffset, scrollState.firstVisibleItemIndex) {
         val currentOffset = scrollState.firstVisibleItemIndex * 1000 + scrollState.firstVisibleItemScrollOffset
@@ -134,7 +139,7 @@ internal fun rememberFabVisibilityState(
         previousScrollOffset = currentOffset
     }
 
-    return fabVisible
+    return fabVisible to toggleFabVisible
 }
 
 /**
