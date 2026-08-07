@@ -681,7 +681,10 @@ fun BookmarkViewerContent(
             selectedHighlight = selectedHighlight,
             assets = assets,
             showSearch = showSearch, onShowSearchChanged = { showSearch = it },
-            screenModel = screenModel, scope = scope, onBack = onBack
+            screenModel = screenModel, scope = scope, onBack = onBack,
+            onLinkCopied = {
+                scope.launch { snackbarManager.showSnackbar("Copied to clipboard") }
+            }
         )
     }
 

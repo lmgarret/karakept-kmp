@@ -5,8 +5,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,10 +35,12 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -70,6 +74,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.AssetEntity
@@ -106,6 +114,7 @@ internal fun BookmarkDetailsPanel(
     onDeleteAssetLocal: (AssetEntity) -> Unit = {},
     onDeleteAssetOnServer: (AssetEntity) -> Unit = {},
     onRequestServerCrawl: (ServerCrawlAction) -> Unit = {},
+    onLinkCopied: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     fun progressFor(asset: AssetEntity): DownloadProgress? =
@@ -183,6 +192,10 @@ internal fun BookmarkDetailsPanel(
                         ) {
                             // General
                             DetailsSectionTitle("General")
+                            LinkDetailsRow(
+                                url = bookmark.url,
+                                onCopy = onLinkCopied
+                            )
                             DetailsRow(
                                 icon = Icons.Default.CalendarToday,
                                 label = "Created",
@@ -818,6 +831,55 @@ private fun DetailsSectionTitle(title: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(bottom = 8.dp)
     )
+}
+
+/**
+ * Shows the bookmark's full URL (never truncated) with a copy-to-clipboard action:
+ * an explicit button for discoverability, plus long-press on the row itself.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun LinkDetailsRow(url: String, onCopy: () -> Unit) {
+    val clipboardManager = LocalClipboardManager.current
+    val hapticFeedback = LocalHapticFeedback.current
+    val copyToClipboard = {
+        clipboardManager.setText(AnnotatedString(url))
+        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        onCopy()
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .combinedClickable(onClick = {}, onLongClick = copyToClipboard)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Link,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = url,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(
+            onClick = copyToClipboard,
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ContentCopy,
+                contentDescription = "Copy link",
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 @Composable

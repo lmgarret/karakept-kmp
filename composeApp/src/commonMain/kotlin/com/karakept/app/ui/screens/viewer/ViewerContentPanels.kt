@@ -50,7 +50,8 @@ fun ViewerContentPanels(
     onShowSearchChanged: (Boolean) -> Unit = {},
     screenModel: BookmarkViewerScreenModel,
     scope: CoroutineScope,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onLinkCopied: () -> Unit = {}
 ) {
     // Back Handler for panels
     com.karakept.app.ui.components.BackHandler(
@@ -192,6 +193,7 @@ fun ViewerContentPanels(
         onRequestServerCrawl = { action ->
             if (detailsBookmark != null) screenModel.requestServerCrawl(detailsBookmark, action)
         },
+        onLinkCopied = onLinkCopied,
         onDismiss = { onShowDetailsPanelChanged(false) }
     )
 }
