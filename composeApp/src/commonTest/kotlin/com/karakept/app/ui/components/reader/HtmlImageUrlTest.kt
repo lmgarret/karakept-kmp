@@ -323,4 +323,57 @@ class HtmlImageUrlTest {
         assertEquals(48, dims.width)
         assertEquals(48, dims.height)
     }
+
+    // --- findFigureCaption ---
+
+    @Test
+    fun findFigureCaption_directParentFigure_returnsCaptionText() {
+        val html = "<figure><img src='https://x'><figcaption>A cat</figcaption></figure>"
+        val img = Ksoup.parse(html).selectFirst("img")!!
+        assertEquals("A cat", findFigureCaption(img))
+    }
+
+    @Test
+    fun findFigureCaption_imageWrappedInAnchorLightboxLink_walksUpToFigure() {
+        // Matches the <figure><a><picture>...</picture></a><figcaption>...</figcaption></figure>
+        // lightbox-link pattern isBlockElement() special-cases.
+        val html = "<figure><a href='https://x/full.jpg'><img src='https://x'></a><figcaption>Caption text</figcaption></figure>"
+        val img = Ksoup.parse(html).selectFirst("img")!!
+        assertEquals("Caption text", findFigureCaption(img))
+    }
+
+    @Test
+    fun findFigureCaption_pictureElement_returnsCaptionText() {
+        val html = "<figure><picture><source srcset='https://x.webp'><img src='https://x.jpg'></picture><figcaption>Photo caption</figcaption></figure>"
+        val picture = Ksoup.parse(html).selectFirst("picture")!!
+        assertEquals("Photo caption", findFigureCaption(picture))
+    }
+
+    @Test
+    fun findFigureCaption_noFigureAncestor_returnsNull() {
+        val html = "<div><img src='https://x'></div>"
+        val img = Ksoup.parse(html).selectFirst("img")!!
+        assertTrue(findFigureCaption(img) == null)
+    }
+
+    @Test
+    fun findFigureCaption_figureWithoutFigcaption_returnsNull() {
+        val html = "<figure><img src='https://x'></figure>"
+        val img = Ksoup.parse(html).selectFirst("img")!!
+        assertTrue(findFigureCaption(img) == null)
+    }
+
+    @Test
+    fun findFigureCaption_blankFigcaption_returnsNull() {
+        val html = "<figure><img src='https://x'><figcaption>   </figcaption></figure>"
+        val img = Ksoup.parse(html).selectFirst("img")!!
+        assertTrue(findFigureCaption(img) == null)
+    }
+
+    @Test
+    fun findFigureCaption_trimsWhitespace() {
+        val html = "<figure><img src='https://x'><figcaption>  Padded caption  </figcaption></figure>"
+        val img = Ksoup.parse(html).selectFirst("img")!!
+        assertEquals("Padded caption", findFigureCaption(img))
+    }
 }

@@ -854,6 +854,20 @@ internal fun extractImageDimensions(element: Element): ImageDimensions? {
 }
 
 /**
+ * Finds the caption for an image, if it sits inside a `<figure>` with a `<figcaption>`.
+ * Walks up from [element] to the nearest `<figure>` ancestor rather than only checking the
+ * immediate parent, since the image may be wrapped in an `<a>` lightbox link (see
+ * [isBlockElement]'s handling of anchor-wrapped pictures).
+ */
+internal fun findFigureCaption(element: Element): String? {
+    var ancestor: Element? = element.parent()
+    while (ancestor != null && ancestor.tagName().lowercase() != "figure") {
+        ancestor = ancestor.parent()
+    }
+    return ancestor?.selectFirst("figcaption")?.text()?.trim()?.takeIf { it.isNotBlank() }
+}
+
+/**
  * Returns all usable URLs from a `srcset` string in their original order.
  * Skips SVG placeholder data URIs; passes non-SVG base64 data URIs through to Coil.
  *
@@ -901,7 +915,12 @@ internal fun resolveImageUrls(element: Element): List<String> {
  * when all URLs fail. Capping width to declared dimensions prevents upscaling small icons.
  */
 @Composable
-private fun RenderResolvedImage(urls: List<String>, alt: String, dimensions: ImageDimensions?) {
+private fun RenderResolvedImage(
+    urls: List<String>,
+    alt: String,
+    dimensions: ImageDimensions?,
+    caption: String? = null
+) {
     var idx by remember(urls) { mutableIntStateOf(0) }
     // Resets to true on every new URL attempt (idx change) and on new image (urls change).
     var isLoading by remember(urls, idx) { mutableStateOf(true) }
@@ -971,6 +990,7 @@ private fun RenderResolvedImage(urls: List<String>, alt: String, dimensions: Ima
         ZoomableImageDialog(
             url = urls[idx],
             alt = alt,
+            caption = caption,
             onDismiss = { showFullscreen = false }
         )
     }
@@ -998,7 +1018,8 @@ private fun RenderImage(element: Element) {
     RenderResolvedImage(
         urls = urls,
         alt = element.attr("alt"),
-        dimensions = extractImageDimensions(element)
+        dimensions = extractImageDimensions(element),
+        caption = findFigureCaption(element)
     )
 }
 
@@ -1017,7 +1038,8 @@ private fun RenderPicture(element: Element) {
     RenderResolvedImage(
         urls = urls,
         alt = img?.attr("alt").orEmpty(),
-        dimensions = img?.let { extractImageDimensions(it) }
+        dimensions = img?.let { extractImageDimensions(it) },
+        caption = findFigureCaption(element)
     )
 }
 

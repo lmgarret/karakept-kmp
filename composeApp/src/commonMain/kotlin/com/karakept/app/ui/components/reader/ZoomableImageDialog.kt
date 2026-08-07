@@ -12,12 +12,16 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,9 +29,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -84,12 +90,14 @@ internal fun shouldDismissFromDrag(dragOffsetY: Float, thresholdPx: Float): Bool
  * Full-screen dialog that shows [url] on a dimmed scrim — the same dimming used when a
  * highlight is selected, for visual consistency — supporting pinch-to-zoom, double-tap zoom,
  * mouse scroll-wheel zoom (desktop), drag-to-pan once zoomed in, and swipe-up-to-dismiss when
- * not zoomed. Tapping the image at [MIN_IMAGE_ZOOM] also dismisses it.
+ * not zoomed. Tapping the image at [MIN_IMAGE_ZOOM] also dismisses it. When [caption] is
+ * non-blank (the image's `<figcaption>`, if any) it's shown in a bar at the bottom.
  */
 @Composable
 fun ZoomableImageDialog(
     url: String,
     alt: String,
+    caption: String? = null,
     onDismiss: () -> Unit
 ) {
     Dialog(
@@ -110,7 +118,10 @@ fun ZoomableImageDialog(
             targetValue = dragOffsetY,
             animationSpec = if (isDismissDragging) snap() else tween(250)
         )
-        val scrimAlpha = SCRIM_ALPHA * (1f - dismissDragProgress(animatedDragOffsetY, dismissThresholdPx()))
+        val dismissProgress = dismissDragProgress(animatedDragOffsetY, dismissThresholdPx())
+        val scrimAlpha = SCRIM_ALPHA * (1f - dismissProgress)
+        // Close button and caption fade out together as the dismiss-drag progresses.
+        val chromeAlpha = 1f - dismissProgress
 
         fun applyZoom(newScale: Float) {
             scale = clampImageZoom(newScale)
@@ -193,12 +204,32 @@ fun ZoomableImageDialog(
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
                     .padding(8.dp)
+                    .alpha(chromeAlpha)
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Close",
                     tint = Color.White
                 )
+            }
+
+            if (!caption.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .alpha(chromeAlpha)
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = caption,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        fontStyle = FontStyle.Italic
+                    )
+                }
             }
         }
     }
