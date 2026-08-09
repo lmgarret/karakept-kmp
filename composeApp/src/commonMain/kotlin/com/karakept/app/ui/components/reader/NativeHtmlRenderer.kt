@@ -118,6 +118,10 @@ fun NativeHtmlRenderer(
     val body = document.body()
     val textOffset = remember(html) { TextOffsetTracker() }
 
+    // Pre-scanned once per document so the full-screen viewer can swipe between all of a
+    // page's images, not just the one that was tapped — see LocalGalleryImages.
+    val galleryImages = remember(document) { collectGalleryImages(document) }
+
     // Compute search matches whenever query or document changes
     val searchMatches = remember(document, searchQuery) {
         if (searchQuery.length < 2) emptyList()
@@ -155,7 +159,8 @@ fun NativeHtmlRenderer(
         CompositionLocalProvider(
             LocalTextToolbar provides textToolbar,
             LocalSearchState provides searchState,
-            LocalSearchMatchScrollCallback provides searchScrollCallback
+            LocalSearchMatchScrollCallback provides searchScrollCallback,
+            LocalGalleryImages provides galleryImages
         ) {
             // Block bringIntoView from propagating to the parent LazyColumn.
             // SelectionContainer initiates bringIntoView at its OWN layout level
