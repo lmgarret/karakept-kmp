@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.calculateCentroidSize
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,12 +95,13 @@ internal fun shouldDismissFromDrag(dragOffsetY: Float, thresholdPx: Float): Bool
 /**
  * Full-screen dialog that shows [url] on a dimmed scrim — the same dimming used when a
  * highlight is selected, for visual consistency — supporting pinch-to-zoom, double-tap zoom,
- * mouse scroll-wheel zoom (desktop), drag-to-pan once zoomed in, and swipe-up-to-dismiss when
- * not zoomed. Tapping the image at [MIN_IMAGE_ZOOM] also dismisses it. When [caption] is
- * non-blank (the image's `<figcaption>`, if any) it's shown centered directly below the
- * image — the image+caption group is sized to the image's aspect ratio (from [dimensions]
- * when declared in the HTML, else the loaded image's intrinsic size) rather than stretched
- * to fill the screen, and is centered as a unit.
+ * mouse scroll-wheel zoom (desktop), and drag-to-pan once zoomed in over the image. Swiping up
+ * or tapping *anywhere* — on the image or on the surrounding scrim/caption — dismisses the
+ * viewer when the image isn't zoomed in. When [caption] is non-blank (the image's
+ * `<figcaption>`, if any) it's shown centered directly below the image and moves together
+ * with it while swiping up to dismiss. The image+caption group is sized to the image's aspect
+ * ratio (from [dimensions] when declared in the HTML, else the loaded image's intrinsic size)
+ * rather than stretched to fill the screen, and is centered as a unit.
  */
 @Composable
 internal fun ZoomableImageDialog(
@@ -133,7 +135,8 @@ internal fun ZoomableImageDialog(
         )
         val dismissProgress = dismissDragProgress(animatedDragOffsetY, dismissThresholdPx())
         val scrimAlpha = SCRIM_ALPHA * (1f - dismissProgress)
-        // Close button and caption fade out together as the dismiss-drag progresses.
+        // The close button fades out as the dismiss-drag progresses; the caption doesn't — it
+        // stays fully visible, riding along with the image instead (see the Column below).
         val chromeAlpha = 1f - dismissProgress
 
         fun applyZoom(newScale: Float) {
@@ -144,16 +147,64 @@ internal fun ZoomableImageDialog(
             )
         }
 
+        // Shared by the image's own gesture detector and the whole-screen one below, so a
+        // swipe up dismisses consistently whether it starts on the image or outside it.
+        fun applyDismissDrag(deltaY: Float) {
+            isDismissDragging = true
+            dragOffsetY = (dragOffsetY + deltaY).coerceAtMost(0f)
+        }
+
+        fun resetDismissDrag() {
+            isDismissDragging = false
+            dragOffsetY = 0f
+        }
+
+        fun endDismissDrag() {
+            if (shouldDismissFromDrag(dragOffsetY, dismissThresholdPx())) {
+                onDismiss()
+            } else {
+                resetDismissDrag()
+            }
+        }
+
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = scrimAlpha))
+                // Whole-screen swipe-up-to-dismiss: only reached by drags that start outside
+                // the image's own bounds (the image's detector below consumes its own drags
+                // first), so this and the image's pan/pinch handling never fight over the
+                // same touch.
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragEnd = { endDismissDrag() },
+                        onDragCancel = { resetDismissDrag() },
+                        onVerticalDrag = { change, dragAmount ->
+                            applyDismissDrag(dragAmount)
+                            change.consume()
+                        }
+                    )
+                }
+                // Whole-screen tap-to-dismiss: detectTapGestures doesn't consume movement, so
+                // it defers to the drag detector above for anything past a tap, and to the
+                // image's own tap/double-tap detector (and the close button) for taps that
+                // land on them, since those consume first.
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { onDismiss() })
+                }
         ) {
             val maxImageHeight = maxHeight * 0.8f
 
             // Centered as a group so the image+caption block sits in the middle of the
             // screen rather than the image alone being top-anchored above a stray caption.
-            Column(modifier = Modifier.align(Alignment.Center).fillMaxWidth()) {
+            // The dismiss-drag offset is applied here (not just on the image) so the caption
+            // stays stuck directly under the image as the whole group is swiped up.
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .graphicsLayer(translationY = animatedDragOffsetY)
+            ) {
                 // Only the image area drives zoom/pan/dismiss gestures and their bounds, so
                 // the caption below stays a normal, non-interactive block of text. Sized to
                 // the image's aspect ratio (capped so a very tall image still leaves room
@@ -174,8 +225,7 @@ internal fun ZoomableImageDialog(
                                         // Not zoomed and single-finger: track upward drag only,
                                         // for swipe-to-dismiss. Downward drags are clamped away
                                         // since only swiping up should close the viewer.
-                                        isDismissDragging = true
-                                        dragOffsetY = (dragOffsetY + pan.y).coerceAtMost(0f)
+                                        applyDismissDrag(pan.y)
                                     }
                                     scale = newScale
                                     offset = Offset(
@@ -183,14 +233,7 @@ internal fun ZoomableImageDialog(
                                         clampImagePan(offset.y + pan.y, scale, containerSize.height.toFloat())
                                     )
                                 },
-                                onGestureEnd = {
-                                    if (shouldDismissFromDrag(dragOffsetY, dismissThresholdPx())) {
-                                        onDismiss()
-                                    } else {
-                                        isDismissDragging = false
-                                        dragOffsetY = 0f
-                                    }
-                                }
+                                onGestureEnd = { endDismissDrag() }
                             )
                         }
                         .pointerInput(Unit) {
@@ -232,12 +275,15 @@ internal fun ZoomableImageDialog(
                                 scaleX = scale,
                                 scaleY = scale,
                                 translationX = offset.x,
-                                translationY = offset.y + animatedDragOffsetY
+                                translationY = offset.y
                             )
                     )
                 }
 
                 if (!caption.isNullOrBlank()) {
+                    // Stays fully visible (no fade) while swiping to dismiss — it's carried
+                    // along with the image via the Column's graphicsLayer above, not left
+                    // behind, and only disappears once the dialog actually closes.
                     Text(
                         text = caption,
                         style = MaterialTheme.typography.bodyMedium,
@@ -246,7 +292,6 @@ internal fun ZoomableImageDialog(
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .alpha(chromeAlpha)
                             .background(Color.Black.copy(alpha = 0.5f))
                             .navigationBarsPadding()
                             .padding(horizontal = 16.dp, vertical = 12.dp)
