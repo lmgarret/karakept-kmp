@@ -186,6 +186,15 @@ All hierarchy helpers live in the single `ListHierarchyUtils` object
   has actually resolved. Rendering the empty state unconditionally flashes "nothing here" on
   every cold start before the list arrives.
 
+### Full-screen image viewer
+
+**`ZoomableImageDialog`** (`ui/components/reader/ZoomableImageDialog.kt`)
+- Full-screen `Dialog` on a black scrim: pinch-to-zoom, double-tap zoom, mouse scroll-wheel
+  zoom (desktop), and drag-to-pan once zoomed in. Tapping the image at 1x dismisses it.
+- Wired into `RenderResolvedImage` (`HtmlBlockRenderer.kt`) — every `<img>`/`<picture>`
+  rendered in Reader mode is tappable to open it full-screen.
+- **Use whenever an image needs a tap-to-enlarge full-screen view.**
+
 ### Menus and bottom sheets
 
 - **`ModalBottomSheet`** + `DropdownMenuItem` → contextual bookmark action menus (see `BookmarkActionsMenu.kt`).
