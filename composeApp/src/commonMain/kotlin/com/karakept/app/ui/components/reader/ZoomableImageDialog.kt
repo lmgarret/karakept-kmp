@@ -10,7 +10,6 @@ import androidx.compose.foundation.gestures.calculateCentroidSize
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,10 +93,11 @@ internal fun shouldDismissFromDrag(dragOffsetY: Float, thresholdPx: Float): Bool
 
 /**
  * Full-screen dialog that shows [url] on a dimmed scrim — the same dimming used when a
- * highlight is selected, for visual consistency — supporting pinch-to-zoom, double-tap zoom,
- * mouse scroll-wheel zoom (desktop), and drag-to-pan once zoomed in over the image. Swiping up
- * or tapping *anywhere* — on the image or on the surrounding scrim/caption — dismisses the
- * viewer when the image isn't zoomed in. When [caption] is non-blank (the image's
+ * highlight is selected, for visual consistency. Pinch-to-zoom, double-tap zoom, mouse
+ * scroll-wheel zoom (desktop), drag-to-pan once zoomed in, and swipe-up/tap-to-dismiss are all
+ * recognized anywhere on screen — not just over the image's own (unzoomed) layout bounds —
+ * since a zoomed-in image's visual size outgrows those bounds but its hit-test area doesn't.
+ * When [caption] is non-blank (the image's
  * `<figcaption>`, if any) it's shown centered directly below the image and moves together
  * with it while swiping up to dismiss, but fades out while zoomed in so it doesn't compete
  * with the picture for visibility. The image+caption group is sized to the image's aspect
@@ -177,26 +177,50 @@ internal fun ZoomableImageDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = scrimAlpha))
-                // Whole-screen swipe-up-to-dismiss: only reached by drags that start outside
-                // the image's own bounds (the image's detector below consumes its own drags
-                // first), so this and the image's pan/pinch handling never fight over the
-                // same touch.
+                // Gestures are handled on the whole screen, not just the image's own layout
+                // bounds. The image's hit-test area doesn't grow when it's zoomed in — only its
+                // paint bounds do (graphicsLayer scaling is purely visual) — so fingers placed
+                // on the now-visually-larger picture can easily land outside its original,
+                // still-small box. Listening here instead means a pinch/pan/tap/swipe lands
+                // correctly regardless of current zoom, and it doubles as "outside the picture"
+                // handling for swipe-up/tap-to-dismiss.
                 .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragEnd = { endDismissDrag() },
-                        onDragCancel = { resetDismissDrag() },
-                        onVerticalDrag = { change, dragAmount ->
-                            applyDismissDrag(dragAmount)
-                            change.consume()
-                        }
+                    detectImageTransformGestures(
+                        onGesture = { pan, zoom ->
+                            val newScale = clampImageZoom(scale * zoom)
+                            if (newScale <= MIN_IMAGE_ZOOM && zoom == 1f) {
+                                // Not zoomed and single-finger: track upward drag only, for
+                                // swipe-to-dismiss. Downward drags are clamped away since only
+                                // swiping up should close the viewer.
+                                applyDismissDrag(pan.y)
+                            }
+                            scale = newScale
+                            offset = Offset(
+                                clampImagePan(offset.x + pan.x, scale, containerSize.width.toFloat()),
+                                clampImagePan(offset.y + pan.y, scale, containerSize.height.toFloat())
+                            )
+                        },
+                        onGestureEnd = { endDismissDrag() }
                     )
                 }
-                // Whole-screen tap-to-dismiss: detectTapGestures doesn't consume movement, so
-                // it defers to the drag detector above for anything past a tap, and to the
-                // image's own tap/double-tap detector (and the close button) for taps that
-                // land on them, since those consume first.
                 .pointerInput(Unit) {
-                    detectTapGestures(onTap = { onDismiss() })
+                    detectTapGestures(
+                        onDoubleTap = {
+                            applyZoom(if (scale > MIN_IMAGE_ZOOM) MIN_IMAGE_ZOOM else DOUBLE_TAP_ZOOM)
+                        },
+                        onTap = { if (scale <= MIN_IMAGE_ZOOM) onDismiss() }
+                    )
+                }
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.type == PointerEventType.Scroll) {
+                                val scrollDelta = event.changes.first().scrollDelta.y
+                                applyZoom(scale - scrollDelta * SCROLL_ZOOM_SENSITIVITY)
+                            }
+                        }
+                    }
                 }
         ) {
             val maxImageHeight = maxHeight * 0.8f
@@ -211,56 +235,17 @@ internal fun ZoomableImageDialog(
                     .fillMaxWidth()
                     .graphicsLayer(translationY = animatedDragOffsetY)
             ) {
-                // Only the image area drives zoom/pan/dismiss gestures and their bounds, so
-                // the caption below stays a normal, non-interactive block of text. Sized to
-                // the image's aspect ratio (capped so a very tall image still leaves room
-                // for the caption) instead of stretching to fill the screen — unless the
+                // Sized to the image's aspect ratio (capped so a very tall image still leaves
+                // room for the caption) instead of stretching to fill the screen — unless the
                 // ratio isn't known yet, in which case it fills the available space like a
-                // loading skeleton until [onSuccess] resolves it.
+                // loading skeleton until [onSuccess] resolves it. Gestures are handled on the
+                // outer BoxWithConstraints above, not here — see the comment there.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = maxImageHeight)
                         .then(if (aspectRatio != null) Modifier.aspectRatio(aspectRatio) else Modifier)
-                        .onSizeChanged { containerSize = it }
-                        .pointerInput(Unit) {
-                            detectImageTransformGestures(
-                                onGesture = { pan, zoom ->
-                                    val newScale = clampImageZoom(scale * zoom)
-                                    if (newScale <= MIN_IMAGE_ZOOM && zoom == 1f) {
-                                        // Not zoomed and single-finger: track upward drag only,
-                                        // for swipe-to-dismiss. Downward drags are clamped away
-                                        // since only swiping up should close the viewer.
-                                        applyDismissDrag(pan.y)
-                                    }
-                                    scale = newScale
-                                    offset = Offset(
-                                        clampImagePan(offset.x + pan.x, scale, containerSize.width.toFloat()),
-                                        clampImagePan(offset.y + pan.y, scale, containerSize.height.toFloat())
-                                    )
-                                },
-                                onGestureEnd = { endDismissDrag() }
-                            )
-                        }
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onDoubleTap = {
-                                    applyZoom(if (scale > MIN_IMAGE_ZOOM) MIN_IMAGE_ZOOM else DOUBLE_TAP_ZOOM)
-                                },
-                                onTap = { if (scale <= MIN_IMAGE_ZOOM) onDismiss() }
-                            )
-                        }
-                        .pointerInput(Unit) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    if (event.type == PointerEventType.Scroll) {
-                                        val scrollDelta = event.changes.first().scrollDelta.y
-                                        applyZoom(scale - scrollDelta * SCROLL_ZOOM_SENSITIVITY)
-                                    }
-                                }
-                            }
-                        },
+                        .onSizeChanged { containerSize = it },
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
