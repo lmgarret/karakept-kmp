@@ -99,7 +99,8 @@ internal fun shouldDismissFromDrag(dragOffsetY: Float, thresholdPx: Float): Bool
  * or tapping *anywhere* — on the image or on the surrounding scrim/caption — dismisses the
  * viewer when the image isn't zoomed in. When [caption] is non-blank (the image's
  * `<figcaption>`, if any) it's shown centered directly below the image and moves together
- * with it while swiping up to dismiss. The image+caption group is sized to the image's aspect
+ * with it while swiping up to dismiss, but fades out while zoomed in so it doesn't compete
+ * with the picture for visibility. The image+caption group is sized to the image's aspect
  * ratio (from [dimensions] when declared in the HTML, else the loaded image's intrinsic size)
  * rather than stretched to fill the screen, and is centered as a unit.
  */
@@ -138,6 +139,11 @@ internal fun ZoomableImageDialog(
         // The close button fades out as the dismiss-drag progresses; the caption doesn't — it
         // stays fully visible, riding along with the image instead (see the Column below).
         val chromeAlpha = 1f - dismissProgress
+        // Zoomed-in image content isn't clipped to its own frame, so at scale > 1 it can paint
+        // past the caption's edge and get covered by its opaque background. Fading the caption
+        // out while zoomed (like most photo viewers do with their overlays) keeps it from
+        // fighting the picture for visibility; it fades back in once zoomed back out.
+        val captionZoomAlpha by animateFloatAsState(if (scale > MIN_IMAGE_ZOOM) 0f else 1f)
 
         fun applyZoom(newScale: Float) {
             scale = clampImageZoom(newScale)
@@ -283,7 +289,8 @@ internal fun ZoomableImageDialog(
                 if (!caption.isNullOrBlank()) {
                     // Stays fully visible (no fade) while swiping to dismiss — it's carried
                     // along with the image via the Column's graphicsLayer above, not left
-                    // behind, and only disappears once the dialog actually closes.
+                    // behind, and only disappears once the dialog actually closes. It does
+                    // fade out while zoomed in, though — see captionZoomAlpha above.
                     Text(
                         text = caption,
                         style = MaterialTheme.typography.bodyMedium,
@@ -292,6 +299,7 @@ internal fun ZoomableImageDialog(
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .alpha(captionZoomAlpha)
                             .background(Color.Black.copy(alpha = 0.5f))
                             .navigationBarsPadding()
                             .padding(horizontal = 16.dp, vertical = 12.dp)
