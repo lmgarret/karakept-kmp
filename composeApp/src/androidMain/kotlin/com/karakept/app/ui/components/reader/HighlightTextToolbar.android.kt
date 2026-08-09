@@ -14,6 +14,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.text.AnnotatedString
+import java.lang.reflect.Field
+import java.lang.reflect.Modifier
 
 private const val TAG = "HighlightToolbar"
 private const val MENU_ID_HIGHLIGHT = 1001
@@ -184,13 +186,49 @@ internal fun createHighlightCallback(
 }
 
 /**
+ * Finds the field on [wrapper] that holds the callback it delegates to.
+ *
+ * The field is located by type rather than by name: the platform has shipped
+ * this wrapper as `DecorView$ActionModeCallback2Wrapper` (field `mWrapped`) and
+ * as `ActionModeController$ActionModeCallback2Wrapper`, which names it something
+ * else. Matching on "a non-static field whose value is some other
+ * [ActionMode.Callback]" survives that rename, and the `mWrapped` preference
+ * keeps the older platforms on the exact field they have always used.
+ */
+private fun findDelegateCallbackField(wrapper: ActionMode.Callback): Field? {
+    var cls: Class<*>? = wrapper.javaClass
+    while (cls != null && cls != Any::class.java) {
+        val candidates = cls.declaredFields.filter { field ->
+            if (Modifier.isStatic(field.modifiers)) return@filter false
+            field.isAccessible = true
+            val value = try {
+                field.get(wrapper)
+            } catch (_: Exception) {
+                null
+            }
+            value is ActionMode.Callback && value !== wrapper
+        }
+
+        candidates.firstOrNull { it.name == "mWrapped" }?.let { return it }
+        if (candidates.size > 1) {
+            Log.w(TAG, "Several delegate candidates on ${cls.name}: ${candidates.map { it.name }}")
+        }
+        candidates.firstOrNull()?.let { return it }
+
+        cls = cls.superclass
+    }
+    return null
+}
+
+/**
  * Swaps the `ActionMode.Callback` that [wrapper] delegates to for one that also
  * offers "Highlight".
  *
- * [wrapper] is `DecorView$ActionModeCallback2Wrapper`, whose `mWrapped` field
- * holds Compose's callback. Both the class and the field are non-SDK, so this
- * can fail on a platform build that blocks them — the reason is logged so the
- * failure is diagnosable from logcat rather than silently dropping the item.
+ * [wrapper] is the platform's action-mode callback wrapper and holds Compose's
+ * callback. Both the class and the field are non-SDK, so this can fail on a
+ * platform build that renames or blocks them — the reason is logged, including
+ * the fields actually present, so the next such change is diagnosable from
+ * logcat rather than silently dropping the item.
  *
  * Returns true when the swap succeeded.
  */
@@ -198,16 +236,24 @@ internal fun injectHighlightCallback(
     wrapper: ActionMode.Callback,
     onHighlight: (ActionMode, ActionMode.Callback) -> Unit
 ): Boolean {
+    val field = findDelegateCallbackField(wrapper)
+    if (field == null) {
+        Log.e(
+            TAG,
+            "No delegate callback field on ${wrapper.javaClass.name}; " +
+                "fields: ${wrapper.javaClass.declaredFields.joinToString { "${it.name}: ${it.type.name}" }}"
+        )
+        return false
+    }
+
     return try {
-        val field = wrapper.javaClass.getDeclaredField("mWrapped")
-        field.isAccessible = true
         val original = field.get(wrapper) as ActionMode.Callback
         field.set(wrapper, createHighlightCallback(original, onHighlight))
         true
     } catch (e: Exception) {
         Log.e(
             TAG,
-            "ActionMode callback injection failed on ${wrapper.javaClass.name}: " +
+            "ActionMode callback injection failed on ${wrapper.javaClass.name}.${field.name}: " +
                 "${e.javaClass.name}: ${e.message}"
         )
         false
@@ -221,8 +267,8 @@ internal fun injectHighlightCallback(
  * inject a "Highlight" menu item into the native text-selection ActionMode.
  *
  * Strategy:
- * 1. Replace `mWrapped` inside `DecorView$ActionModeCallback2Wrapper` via
- *    reflection so the system creates a **single** ActionMode with our
+ * 1. Replace the callback the platform's `ActionModeCallback2Wrapper` delegates
+ *    to, via reflection, so the system creates a **single** ActionMode with our
  *    augmented callback (avoids the double-ActionMode / blinking issue).
  * 2. When "Highlight" is tapped, walk the `FloatingTextActionModeCallback`'s
  *    closure graph to find `SelectionManager` and call its internal

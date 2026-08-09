@@ -20,6 +20,7 @@ import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -30,11 +31,14 @@ private const val MENU_ID_HIGHLIGHT = 1001
  * "Highlight" action on Android.
  *
  * The item is injected into the platform text-selection `ActionMode` by swapping
- * the callback that `DecorView$ActionModeCallback2Wrapper.mWrapped` points at.
- * Every link in that chain used to fail silently, so these tests pin it down:
- * composition installs the window callback, the swap happens, the item survives
- * the menu rebuilds Compose performs, and it asks to be shown on the bar rather
- * than in the overflow.
+ * the callback the platform's `ActionModeCallback2Wrapper` delegates to. That
+ * wrapper is not a stable API — it has shipped both as
+ * `DecorView$ActionModeCallback2Wrapper`, holding the callback in `mWrapped`,
+ * and as `ActionModeController$ActionModeCallback2Wrapper`, which renamed the
+ * field and so silently dropped the item. These tests pin the whole chain down:
+ * composition installs the window callback, the swap finds the delegate under
+ * either shape, the item survives the menu rebuilds Compose performs, and it
+ * asks to be shown on the bar rather than in the overflow.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
@@ -43,9 +47,38 @@ class HighlightActionModeInjectionTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    /** Stands in for `DecorView$ActionModeCallback2Wrapper`. */
-    private class WrapperCallback(@JvmField var mWrapped: ActionMode.Callback) :
-        ActionMode.Callback by mWrapped
+    /** Stands in for `DecorView$ActionModeCallback2Wrapper`, which names its field `mWrapped`. */
+    private class WrapperCallback(@JvmField var mWrapped: ActionMode.Callback) : ActionMode.Callback {
+        override fun onCreateActionMode(mode: ActionMode, menu: Menu) =
+            mWrapped.onCreateActionMode(mode, menu)
+
+        override fun onPrepareActionMode(mode: ActionMode, menu: Menu) =
+            mWrapped.onPrepareActionMode(mode, menu)
+
+        override fun onActionItemClicked(mode: ActionMode, item: MenuItem) =
+            mWrapped.onActionItemClicked(mode, item)
+
+        override fun onDestroyActionMode(mode: ActionMode) = mWrapped.onDestroyActionMode(mode)
+    }
+
+    /**
+     * Stands in for `ActionModeController$ActionModeCallback2Wrapper`, the newer
+     * platform wrapper that holds the callback under a different name — the
+     * shape that broke #295 in the first place.
+     */
+    private class RenamedFieldWrapperCallback(@JvmField var mCallback: ActionMode.Callback) :
+        ActionMode.Callback {
+        override fun onCreateActionMode(mode: ActionMode, menu: Menu) =
+            mCallback.onCreateActionMode(mode, menu)
+
+        override fun onPrepareActionMode(mode: ActionMode, menu: Menu) =
+            mCallback.onPrepareActionMode(mode, menu)
+
+        override fun onActionItemClicked(mode: ActionMode, item: MenuItem) =
+            mCallback.onActionItemClicked(mode, item)
+
+        override fun onDestroyActionMode(mode: ActionMode) = mCallback.onDestroyActionMode(mode)
+    }
 
     /**
      * Stand-in for Compose's `TextActionModeCallbackImpl`: it clears and
@@ -90,7 +123,7 @@ class HighlightActionModeInjectionTest {
         val wrapper = startFloatingActionMode()
         val menu = realMenu()
 
-        assertTrue(wrapper.mWrapped.onCreateActionMode(actionMode(), menu))
+        assertTrue(wrapper.onCreateActionMode(actionMode(), menu))
 
         val item = menu.findItem(MENU_ID_HIGHLIGHT)
         assertNotNull(item, "Highlight item missing from the selection menu")
@@ -104,11 +137,11 @@ class HighlightActionModeInjectionTest {
         val menu = realMenu()
         val mode = actionMode()
 
-        wrapper.mWrapped.onCreateActionMode(mode, menu)
+        wrapper.onCreateActionMode(mode, menu)
 
         // Selection changed: Compose clears the menu and repopulates it.
         compose.menuVersion++
-        assertTrue(wrapper.mWrapped.onPrepareActionMode(mode, menu))
+        assertTrue(wrapper.onPrepareActionMode(mode, menu))
 
         assertNotNull(menu.findItem(MENU_ID_HIGHLIGHT), "Highlight lost after a menu rebuild")
         assertNotNull(menu.findItem(1), "Compose's own items should still be present")
@@ -120,10 +153,10 @@ class HighlightActionModeInjectionTest {
         val menu = realMenu()
         val mode = actionMode()
 
-        wrapper.mWrapped.onCreateActionMode(mode, menu)
+        wrapper.onCreateActionMode(mode, menu)
 
         // No data change: Compose returns false without touching the menu.
-        assertFalse(wrapper.mWrapped.onPrepareActionMode(mode, menu))
+        assertFalse(wrapper.onPrepareActionMode(mode, menu))
         assertNotNull(menu.findItem(MENU_ID_HIGHLIGHT))
     }
 
@@ -135,7 +168,7 @@ class HighlightActionModeInjectionTest {
         every { menu.findItem(MENU_ID_HIGHLIGHT) } returns null
         every { menu.add(any(), MENU_ID_HIGHLIGHT, any(), any<CharSequence>()) } returns item
 
-        wrapper.mWrapped.onCreateActionMode(actionMode(), menu)
+        wrapper.onCreateActionMode(actionMode(), menu)
 
         verify { item.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS) }
     }
@@ -150,7 +183,7 @@ class HighlightActionModeInjectionTest {
             menu.add(any(), MENU_ID_HIGHLIGHT, capture(order), any<CharSequence>())
         } returns mockk(relaxed = true)
 
-        wrapper.mWrapped.onCreateActionMode(actionMode(), menu)
+        wrapper.onCreateActionMode(actionMode(), menu)
 
         assertEquals(0, order.captured)
     }
@@ -161,12 +194,12 @@ class HighlightActionModeInjectionTest {
         val wrapper = startFloatingActionMode(compose)
         val menu = realMenu()
         val mode = actionMode()
-        wrapper.mWrapped.onCreateActionMode(mode, menu)
+        wrapper.onCreateActionMode(mode, menu)
 
         val item = mockk<MenuItem>(relaxed = true)
         every { item.itemId } returns MENU_ID_HIGHLIGHT
 
-        assertTrue(wrapper.mWrapped.onActionItemClicked(mode, item))
+        assertTrue(wrapper.onActionItemClicked(mode, item))
         assertTrue(compose.clickedItemIds.isEmpty(), "Highlight must not fall through to Compose")
         verify { mode.finish() }
     }
@@ -177,11 +210,11 @@ class HighlightActionModeInjectionTest {
         val wrapper = startFloatingActionMode(compose)
         val menu = realMenu()
         val mode = actionMode()
-        wrapper.mWrapped.onCreateActionMode(mode, menu)
+        wrapper.onCreateActionMode(mode, menu)
 
         val item = mockk<MenuItem>(relaxed = true)
         every { item.itemId } returns 1
-        wrapper.mWrapped.onActionItemClicked(mode, item)
+        wrapper.onActionItemClicked(mode, item)
 
         assertEquals(listOf(1), compose.clickedItemIds)
     }
@@ -191,7 +224,7 @@ class HighlightActionModeInjectionTest {
         val compose = FakeComposeCallback()
         val wrapper = startFloatingActionMode(compose)
 
-        wrapper.mWrapped.onDestroyActionMode(actionMode())
+        wrapper.onDestroyActionMode(actionMode())
 
         assertTrue(compose.destroyed)
     }
@@ -208,7 +241,20 @@ class HighlightActionModeInjectionTest {
     }
 
     @Test
-    fun `injection reports failure when the wrapper exposes no mWrapped field`() {
+    fun `injection finds the delegate when the platform renames the field`() {
+        val compose = FakeComposeCallback()
+        val wrapper = RenamedFieldWrapperCallback(compose)
+
+        assertTrue(injectHighlightCallback(wrapper) { _, _ -> })
+        assertNotSame(compose, wrapper.mCallback, "Delegate should have been swapped")
+
+        val menu = realMenu()
+        wrapper.onCreateActionMode(actionMode(), menu)
+        assertNotNull(menu.findItem(MENU_ID_HIGHLIGHT))
+    }
+
+    @Test
+    fun `injection reports failure when the wrapper holds no delegate callback`() {
         val opaque = object : ActionMode.Callback {
             override fun onCreateActionMode(mode: ActionMode, menu: Menu) = true
             override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = false
