@@ -991,6 +991,7 @@ private fun RenderResolvedImage(
             url = urls[idx],
             alt = alt,
             caption = caption,
+            dimensions = dimensions,
             onDismiss = { showFullscreen = false }
         )
     }

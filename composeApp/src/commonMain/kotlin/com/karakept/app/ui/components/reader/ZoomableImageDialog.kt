@@ -10,10 +10,13 @@ import androidx.compose.foundation.gestures.calculateCentroidSize
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -93,13 +96,17 @@ internal fun shouldDismissFromDrag(dragOffsetY: Float, thresholdPx: Float): Bool
  * highlight is selected, for visual consistency — supporting pinch-to-zoom, double-tap zoom,
  * mouse scroll-wheel zoom (desktop), drag-to-pan once zoomed in, and swipe-up-to-dismiss when
  * not zoomed. Tapping the image at [MIN_IMAGE_ZOOM] also dismisses it. When [caption] is
- * non-blank (the image's `<figcaption>`, if any) it's shown centered below the image.
+ * non-blank (the image's `<figcaption>`, if any) it's shown centered directly below the
+ * image — the image+caption group is sized to the image's aspect ratio (from [dimensions]
+ * when declared in the HTML, else the loaded image's intrinsic size) rather than stretched
+ * to fill the screen, and is centered as a unit.
  */
 @Composable
-fun ZoomableImageDialog(
+internal fun ZoomableImageDialog(
     url: String,
     alt: String,
     caption: String? = null,
+    dimensions: ImageDimensions? = null,
     onDismiss: () -> Unit
 ) {
     Dialog(
@@ -111,6 +118,10 @@ fun ZoomableImageDialog(
         var containerSize by remember { mutableStateOf(IntSize.Zero) }
         var dragOffsetY by remember { mutableStateOf(0f) }
         var isDismissDragging by remember { mutableStateOf(false) }
+        // Falls back to the loaded image's own intrinsic size when the HTML declares no
+        // width/height, so the viewer can still hug the image instead of filling the screen.
+        var loadedAspectRatio by remember(url) { mutableStateOf<Float?>(null) }
+        val aspectRatio = dimensions?.aspectRatio ?: loadedAspectRatio
 
         fun dismissThresholdPx(): Float = containerSize.height.toFloat() * DISMISS_DRAG_THRESHOLD_FRACTION
 
@@ -133,18 +144,27 @@ fun ZoomableImageDialog(
             )
         }
 
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = scrimAlpha))
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            val maxImageHeight = maxHeight * 0.8f
+
+            // Centered as a group so the image+caption block sits in the middle of the
+            // screen rather than the image alone being top-anchored above a stray caption.
+            Column(modifier = Modifier.align(Alignment.Center).fillMaxWidth()) {
                 // Only the image area drives zoom/pan/dismiss gestures and their bounds, so
-                // the caption below stays a normal, non-interactive block of text.
+                // the caption below stays a normal, non-interactive block of text. Sized to
+                // the image's aspect ratio (capped so a very tall image still leaves room
+                // for the caption) instead of stretching to fill the screen — unless the
+                // ratio isn't known yet, in which case it fills the available space like a
+                // loading skeleton until [onSuccess] resolves it.
                 Box(
                     modifier = Modifier
-                        .weight(1f)
                         .fillMaxWidth()
+                        .heightIn(max = maxImageHeight)
+                        .then(if (aspectRatio != null) Modifier.aspectRatio(aspectRatio) else Modifier)
                         .onSizeChanged { containerSize = it }
                         .pointerInput(Unit) {
                             detectImageTransformGestures(
@@ -198,6 +218,14 @@ fun ZoomableImageDialog(
                         model = url,
                         contentDescription = alt.ifBlank { null },
                         contentScale = ContentScale.Fit,
+                        onSuccess = { state ->
+                            if (dimensions == null) {
+                                val image = state.result.image
+                                if (image.width > 0 && image.height > 0) {
+                                    loadedAspectRatio = image.width.toFloat() / image.height.toFloat()
+                                }
+                            }
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer(
