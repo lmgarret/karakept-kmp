@@ -72,6 +72,7 @@ internal data class AnchorScrollTarget(val index: Int, val offset: Int)
 internal class ListScrollAnchorState(initialVersion: Int) {
     private var anchorKey: Long? = null
     private var anchorOffset = 0
+    private var anchorAtTop = false
     private var lastList: List<BookmarkEntity>? = null
     private var lastVersion = initialVersion
 
@@ -93,7 +94,17 @@ internal class ListScrollAnchorState(initialVersion: Int) {
             // List is stable: record the bookmark currently at the top of the viewport.
             anchorKey = snap.bookmarks.getOrNull(snap.firstIndex)?.remoteId
             anchorOffset = snap.firstOffset
+            anchorAtTop = snap.firstIndex == 0 && snap.firstOffset == 0
             return null
+        }
+
+        // Someone parked at the very top has not scrolled at all, so bookmarks a sync brings
+        // in belong on screen rather than pushed above the viewport — pinning them out of
+        // sight is what raises a "N new" pill for a user who is already looking at the top.
+        // Compose re-anchors by key on a prepend, so holding position takes an explicit
+        // request to index 0; returning null here would let the viewport drift down.
+        if (anchorAtTop && anchorKey != null && !snap.isScrolling && !reloadPending) {
+            return AnchorScrollTarget(0, 0)
         }
 
         val target = resolveAnchorScrollTarget(

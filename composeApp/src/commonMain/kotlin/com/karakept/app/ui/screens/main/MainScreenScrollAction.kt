@@ -13,224 +13,189 @@ import com.karakept.app.ui.screens.executeScrollAction
 
 /**
  * Scroll-triggered action: apply the active list's scroll action silently (no snackbar)
- * when bookmarks scroll off the top, or when reaching the bottom of the list.
+ * when bookmarks scroll off the top, or when the user reaches the bottom of the list.
  *
- * How we distinguish real scrolling from list mutations:
- * LazyList uses stable keys (bookmark remoteIds). When items are prepended above the
- * viewport, Compose adjusts firstVisibleItemIndex so the same item stays on screen --
- * the key at the current position is unchanged, only the index grows. When the user
- * actually scrolls down, a new item becomes first-visible (different key). We track
- * the "anchor" (key + index of the first visible item) and compare it on each emission.
+ * The whole difficulty is telling a real scroll gesture apart from the list mutating
+ * underneath the viewport. A sync does the latter constantly — `refreshLoadedPagesInPlace`
+ * runs once per committed page plus twice more per `syncBookmarks()` — and each pass can
+ * prepend rows, which makes Compose re-index every item below them. Comparing raw indices
+ * across such a swap reads the re-indexing as a scroll and fires the action on bookmarks
+ * the user never saw.
  *
- * Prepend at absolute top (firstVisibleItemIndex stays 0):
- * When the user is at index 0 with no scroll offset, Compose does NOT shift the index
- * on prepend -- the new items appear above and the key at index 0 changes. We detect this
- * by searching the full bookmarks list for the old anchor key: if it moved to a higher
- * index, N items were prepended. We record this as newItemsUntil so the fire loop skips
- * those slots until the user explicitly scrolls past them.
+ * [ScrollActionTracker] therefore re-baselines its anchor whenever the dataset changes and
+ * fires nothing for that snapshot: the shift belongs to the mutation, not to the user. Only
+ * while the dataset is stable can a change in the first visible index mean a scroll, and
+ * only then is anything fired.
  *
- * List switch:
- * The LaunchedEffect is keyed on currentListId so it restarts whenever the user
- * navigates to a different list. This guarantees a fresh processedIds set and anchor
- * state, preventing the scroll action from leaking across lists.
- *
- * List replacement (sync / filter change within the same list):
- * MainScreenModel increments bookmarkListVersion on every resetPaginationAndLoad. When
- * the version changes we run the same old-anchor search so newly inserted items are
- * protected by newItemsUntil -- preventing them from being bulk-fired before the user
- * has scrolled past them individually. processedIds persists across replacements to
- * avoid double-firing on bookmarks that survive the swap.
+ * The effect is keyed on [currentListId] so it restarts on list switch, guaranteeing a
+ * fresh tracker and preventing the action from leaking across lists.
  */
 @Composable
 fun MainScreenScrollAction(
     listState: LazyListState,
     bookmarks: List<BookmarkEntity>,
-    bookmarkListVersion: Int,
     currentListId: String?,
     currentListScrollAction: SwipeAction,
     currentListScrollActionConfig: CustomSwipeActionConfig?,
     screenModel: MainScreenModel
 ) {
-    // Wrap plain parameters as Compose State so snapshotFlow can detect changes.
-    // Without this, the snapshotFlow lambda captures the initial parameter values and
-    // never sees updates (bookmarks would stay empty, listVersion would stay at 0).
+    // Wrap plain parameters as Compose State so snapshotFlow can detect changes. Without this
+    // the snapshotFlow lambda captures the initial parameter value and never sees updates,
+    // leaving `bookmarks` frozen at its first-composition value.
     val currentBookmarksState = rememberUpdatedState(bookmarks)
-    val currentListVersionState = rememberUpdatedState(bookmarkListVersion)
 
     LaunchedEffect(currentListId, currentListScrollAction, currentListScrollActionConfig) {
-        if (currentListScrollAction != SwipeAction.NONE) {
-            var anchorKey: Any? = null   // key of the first visible item we're tracking
-            var anchorIndex = 0          // current index of that anchor item
-            var bottomReached = false
-            var wasScrolling = false
-            // Indices [0, newItemsUntil) contain items that appeared via prepend/sync.
-            // The fire loop skips those slots so the action isn't triggered on bookmarks
-            // the user hasn't explicitly scrolled past.
-            var newItemsUntil = 0
-            var lastSeenListVersion = bookmarkListVersion
-            // Guard against double-firing: tracks remoteIds we've already acted on.
-            // Cleared for items that become visible again when the user scrolls back up,
-            // so a manually-unread bookmark can be re-triggered on the next scroll-down.
-            // Kept across list replacements so surviving bookmarks are not re-fired by sync.
-            val processedIds = mutableSetOf<Long>()
+        if (currentListScrollAction == SwipeAction.NONE) return@LaunchedEffect
+        val tracker = ScrollActionTracker()
 
-            data class ScrollSnapshot(
-                val firstIndex: Int,
-                val firstKey: Any?,
-                val lastVisibleIndex: Int,
-                val currentBookmarks: List<BookmarkEntity>,
-                val isScrolling: Boolean,
-                val listVersion: Int
+        snapshotFlow {
+            val visibleItems = listState.layoutInfo.visibleItemsInfo
+            ScrollActionSnapshot(
+                firstIndex = visibleItems.firstOrNull()?.index ?: 0,
+                // The trailing empty/loading/end rows are unkeyed, so their key is not a
+                // remoteId — treat anything that isn't one as "no anchor".
+                firstKey = visibleItems.firstOrNull()?.key as? Long,
+                firstOffset = listState.firstVisibleItemScrollOffset,
+                lastVisibleIndex = visibleItems.lastOrNull()?.index ?: -1,
+                bookmarks = currentBookmarksState.value,
+                isScrolling = listState.isScrollInProgress,
+                actedOnIds = screenModel.actedOnBookmarkIds.value
             )
-
-            snapshotFlow {
-                ScrollSnapshot(
-                    firstIndex = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0,
-                    firstKey = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key,
-                    lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
-                    currentBookmarks = currentBookmarksState.value,
-                    isScrolling = listState.isScrollInProgress,
-                    listVersion = currentListVersionState.value
+        }.collect { snapshot ->
+            tracker.onSnapshot(snapshot).forEach { bookmark ->
+                screenModel.executeScrollAction(
+                    bookmark, currentListScrollAction, currentListScrollActionConfig
                 )
-            }.collect { snapshot ->
-                val currentBookmarks = snapshot.currentBookmarks
-                val totalBookmarks = currentBookmarks.size
-                val newFirstIndex = snapshot.firstIndex
-                val newFirstKey = snapshot.firstKey
-                val isScrolling = snapshot.isScrolling
-
-                // scrollJustStopped is used only for the short-list bottom case below.
-                val scrollJustStopped = wasScrolling && !isScrolling
-                wasScrolling = isScrolling
-
-                // List replacement detection: bookmarkListVersion is incremented on every
-                // resetPaginationAndLoad (sync, filter change, server switch). When it
-                // changes we must re-initialize the anchor AND apply the same prepend-
-                // detection logic used in the else branch below: if the old anchor survived
-                // in the new list at a higher index, new items were inserted above it and
-                // must be protected by newItemsUntil so they aren't bulk-fired before the
-                // user has scrolled past each one individually. processedIds is kept intact
-                // so bookmarks that survived the swap are never acted on twice.
-                if (snapshot.listVersion != lastSeenListVersion) {
-                    lastSeenListVersion = snapshot.listVersion
-                    val oldAnchorNewIndex = if (anchorKey != null) {
-                        currentBookmarks.indexOfFirst { it.remoteId == anchorKey }
-                    } else -1
-                    if (oldAnchorNewIndex > anchorIndex) {
-                        // Items were inserted above the old anchor -- protect the new slots.
-                        newItemsUntil = maxOf(newItemsUntil, oldAnchorNewIndex)
-                    } else {
-                        // Full replacement or anchor not found -- reset all guards.
-                        newItemsUntil = 0
-                    }
-                    anchorKey = newFirstKey
-                    anchorIndex = newFirstIndex
-                    bottomReached = false
-                    return@collect
-                }
-
-                if (anchorKey == null) {
-                    // First emission: initialise anchor without firing any actions.
-                    anchorKey = newFirstKey
-                    anchorIndex = newFirstIndex
-                    return@collect
-                }
-
-                when {
-                    newFirstIndex > anchorIndex -> {
-                        if (newFirstKey == anchorKey) {
-                            // Same item at a higher index: Compose shifted the index because
-                            // items were prepended above the viewport. Protect those new slots.
-                            newItemsUntil = maxOf(newItemsUntil, newFirstIndex)
-                            anchorIndex = newFirstIndex
-                        } else {
-                            // A different item is now first-visible -- the user actually
-                            // scrolled down. Items [anchorIndex, newFirstIndex) left the top.
-                            for (i in anchorIndex until newFirstIndex) {
-                                if (i < newItemsUntil) continue  // skip newly prepended items
-                                val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
-                                if (scrolledBookmark.remoteId in processedIds) continue
-                                if (scrolledBookmark.remoteId in screenModel.actedOnBookmarkIds.value) {
-                                    // User explicitly acted on this bookmark (e.g. moved it to a
-                                    // list that will remove it via async reconciliation). Absorb
-                                    // into processedIds so we never fire on it.
-                                    processedIds.add(scrolledBookmark.remoteId)
-                                    continue
-                                }
-                                processedIds.add(scrolledBookmark.remoteId)
-                                screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
-                            }
-                            anchorIndex = newFirstIndex
-                            anchorKey = newFirstKey
-                            bottomReached = false
-                            if (anchorIndex >= newItemsUntil) newItemsUntil = 0
-                        }
-                    }
-                    newFirstIndex < anchorIndex -> {
-                        // Scrolled back up. Items [newFirstIndex, anchorIndex) are now
-                        // visible again -- remove them from processedIds so a bookmark that
-                        // was manually marked as unread can be re-triggered on the next
-                        // scroll-down.
-                        for (i in newFirstIndex until anchorIndex) {
-                            val bookmark = currentBookmarks.getOrNull(i) ?: continue
-                            processedIds.remove(bookmark.remoteId)
-                        }
-                        anchorIndex = newFirstIndex
-                        anchorKey = newFirstKey ?: anchorKey
-                        bottomReached = false
-                    }
-                    else -> {
-                        // firstVisibleItemIndex is unchanged. The key may have changed if
-                        // items were prepended while the user was at the absolute top
-                        // (index 0, zero scroll offset): Compose keeps the index at 0 and
-                        // the new items slide in above, making a different key appear at 0.
-                        if (newFirstKey != null && newFirstKey != anchorKey) {
-                            // Search the FULL bookmarks list for the old anchor -- not just
-                            // visible items -- so we catch prepends larger than the viewport.
-                            val oldAnchorNewIndex = currentBookmarks.indexOfFirst {
-                                it.remoteId == anchorKey
-                            }
-                            if (oldAnchorNewIndex > anchorIndex) {
-                                // Old anchor moved down: N items were prepended. Protect
-                                // those new slots so they are skipped until intentionally
-                                // scrolled past.
-                                newItemsUntil = maxOf(newItemsUntil, oldAnchorNewIndex)
-                            } else {
-                                // Old anchor not found or unchanged -- unexpected state;
-                                // reset the skip guard conservatively.
-                                newItemsUntil = 0
-                            }
-                            anchorKey = newFirstKey
-                        }
-                    }
-                }
-
-                // When the last visible item is the last bookmark, apply the action to all
-                // remaining visible items that haven't been processed yet.
-                // For long lists: anchorIndex > 0 means the user has scrolled at least one
-                // item off the top in the current direction. This naturally resets to false
-                // when the user scrolls back to the top (anchorIndex returns to 0), preventing
-                // newly prepended items from being fired when the user hasn't scrolled.
-                // For short lists where no item ever leaves the top: fires when the user
-                // finishes a scroll gesture at the bottom (scrollJustStopped).
-                val atBottom = totalBookmarks > 0 && snapshot.lastVisibleIndex >= totalBookmarks - 1
-                if (!bottomReached && atBottom && (anchorIndex > 0 || scrollJustStopped)) {
-                    for (i in anchorIndex until totalBookmarks) {
-                        if (i < newItemsUntil) continue
-                        val scrolledBookmark = currentBookmarks.getOrNull(i) ?: continue
-                        if (scrolledBookmark.remoteId in processedIds) continue
-                        if (scrolledBookmark.remoteId in screenModel.actedOnBookmarkIds.value) {
-                            processedIds.add(scrolledBookmark.remoteId)
-                            continue
-                        }
-                        processedIds.add(scrolledBookmark.remoteId)
-                        screenModel.executeScrollAction(scrolledBookmark, currentListScrollAction, currentListScrollActionConfig)
-                    }
-                    anchorIndex = totalBookmarks
-                    bottomReached = true
-                    if (anchorIndex >= newItemsUntil) newItemsUntil = 0
-                }
             }
+        }
+    }
+}
+
+internal data class ScrollActionSnapshot(
+    val firstIndex: Int,
+    val firstKey: Long?,
+    val firstOffset: Int,
+    val lastVisibleIndex: Int,
+    val bookmarks: List<BookmarkEntity>,
+    val isScrolling: Boolean,
+    val actedOnIds: Set<Long> = emptySet()
+)
+
+/**
+ * Stateful half of [MainScreenScrollAction], extracted so the bookkeeping can be unit-tested
+ * without a composition.
+ *
+ * [onSnapshot] returns the bookmarks whose scroll action should fire for that snapshot.
+ */
+internal class ScrollActionTracker {
+    private var anchorKey: Long? = null
+    private var anchorIndex = 0
+    private var bottomReached = false
+
+    // Set only by an observed scroll gesture that actually moved the list. A mutation can
+    // never set it, which is what stops a sync from unlocking the bottom sweep.
+    private var userHasScrolled = false
+
+    private var lastBookmarks: List<BookmarkEntity>? = null
+    private var lastIndex = 0
+    private var lastOffset = 0
+
+    // Guard against double-firing. Entries are dropped for items that become visible again
+    // when the user scrolls back up, so a manually-unread bookmark can be re-triggered on the
+    // next scroll-down. Kept across dataset swaps so a sync never re-fires a surviving item.
+    private val processedIds = mutableSetOf<Long>()
+
+    fun onSnapshot(snapshot: ScrollActionSnapshot): List<BookmarkEntity> {
+        val previousBookmarks = lastBookmarks
+        val moved = snapshot.firstIndex != lastIndex || snapshot.firstOffset != lastOffset
+        lastBookmarks = snapshot.bookmarks
+        lastIndex = snapshot.firstIndex
+        lastOffset = snapshot.firstOffset
+
+        if (previousBookmarks != null && snapshot.bookmarks !== previousBookmarks) {
+            // The dataset and layoutInfo update in separate snapshots, so this snapshot's
+            // indices still describe the outgoing list. Re-baseline only, fire nothing.
+            rebaseline(snapshot)
+            return emptyList()
+        }
+
+        // Requiring actual movement keeps an overscroll gesture — a pull-to-refresh at the top
+        // of a list that already fits on screen — from counting as a scroll.
+        if (snapshot.isScrolling && moved) userHasScrolled = true
+
+        if (anchorKey == null) {
+            // Nothing to compare against yet — adopt the current position silently.
+            anchorKey = snapshot.firstKey
+            anchorIndex = snapshot.firstIndex
+            return emptyList()
+        }
+
+        val fired = mutableListOf<BookmarkEntity>()
+
+        // The dataset is stable, so a change in the first visible index is a genuine scroll:
+        // no re-indexing can have happened.
+        when {
+            snapshot.firstIndex > anchorIndex -> {
+                collectRange(anchorIndex, snapshot.firstIndex, snapshot, fired)
+                anchorIndex = snapshot.firstIndex
+                anchorKey = snapshot.firstKey ?: anchorKey
+                bottomReached = false
+            }
+            snapshot.firstIndex < anchorIndex -> {
+                // Scrolled back up: those items are on screen again, so let them re-fire.
+                for (i in snapshot.firstIndex until anchorIndex) {
+                    snapshot.bookmarks.getOrNull(i)?.let { processedIds.remove(it.remoteId) }
+                }
+                anchorIndex = snapshot.firstIndex
+                anchorKey = snapshot.firstKey ?: anchorKey
+            }
+        }
+
+        // The last screenful never leaves the top, so it needs its own rule. Requiring a real
+        // gesture is what keeps a sync — which can make the list end at the viewport by
+        // prepending rows or by dropping rows off the tail — from firing this on its own.
+        val total = snapshot.bookmarks.size
+        val atBottom = total > 0 && snapshot.lastVisibleIndex >= total - 1
+        if (!bottomReached && atBottom && userHasScrolled) {
+            collectRange(anchorIndex, total, snapshot, fired)
+            bottomReached = true
+        }
+
+        return fired
+    }
+
+    /**
+     * Follows the anchor bookmark to its index in the new dataset so the next comparison is
+     * made in the new list's coordinates. [bottomReached] is deliberately preserved: a
+     * mutation is not a reason to sweep the bottom again, only a fresh scroll down is.
+     */
+    private fun rebaseline(snapshot: ScrollActionSnapshot) {
+        val key = anchorKey ?: return
+        val newIndex = snapshot.bookmarks.indexOfFirst { it.remoteId == key }
+        if (newIndex >= 0) {
+            anchorIndex = newIndex
+        } else {
+            // Anchor gone — a full reload replaced the dataset, or the anchor itself was
+            // removed. Re-adopt from the next stable snapshot rather than guessing an index
+            // from layout info that still describes the old list.
+            anchorKey = null
+            anchorIndex = 0
+        }
+    }
+
+    private fun collectRange(
+        from: Int,
+        until: Int,
+        snapshot: ScrollActionSnapshot,
+        into: MutableList<BookmarkEntity>
+    ) {
+        for (i in from until until) {
+            val bookmark = snapshot.bookmarks.getOrNull(i) ?: continue
+            if (!processedIds.add(bookmark.remoteId)) continue
+            // The user explicitly acted on this bookmark (e.g. moved it to a list that will
+            // remove it via async reconciliation) — absorbed above so we never fire on it.
+            if (bookmark.remoteId in snapshot.actedOnIds) continue
+            into.add(bookmark)
         }
     }
 }

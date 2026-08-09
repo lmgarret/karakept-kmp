@@ -201,4 +201,58 @@ class ListScrollAnchorTest {
         val anchor = ListScrollAnchorState(initialVersion = 3)
         assertNull(anchor.onSnapshot(snapshot(listOfIds(1, 2, 3), firstIndex = 1, listVersion = 3)))
     }
+
+    @Test
+    fun parkedAtTheTop_prependHoldsTheTopInsteadOfPinningTheOldAnchor() {
+        // Someone at the very top has not scrolled, so a sync's new bookmarks belong on
+        // screen. Pinning to the old anchor pushes them above the viewport and raises a
+        // "N new" pill for a user who is already looking at the top of the list.
+        val anchor = ListScrollAnchorState(initialVersion = 0)
+        val before = listOfIds(10, 11, 12)
+        anchor.onSnapshot(snapshot(before, firstIndex = 0, firstOffset = 0))
+
+        val after = listOfIds(20, 21, 10, 11, 12)
+        assertEquals(
+            AnchorScrollTarget(index = 0, offset = 0),
+            anchor.onSnapshot(snapshot(after, firstIndex = 0))
+        )
+    }
+
+    @Test
+    fun parkedJustBelowTheTop_stillRePinsToTheAnchor() {
+        // Only the absolute top is special — a user who scrolled keeps their position.
+        val anchor = ListScrollAnchorState(initialVersion = 0)
+        val before = listOfIds(10, 11, 12)
+        anchor.onSnapshot(snapshot(before, firstIndex = 1, firstOffset = 8))
+
+        val after = listOfIds(20, 21, 10, 11, 12)
+        assertEquals(
+            AnchorScrollTarget(index = 3, offset = 8),
+            anchor.onSnapshot(snapshot(after, firstIndex = 1))
+        )
+    }
+
+    @Test
+    fun atTopButPartiallyScrolledWithinTheFirstItem_stillRePinsToTheAnchor() {
+        val anchor = ListScrollAnchorState(initialVersion = 0)
+        val before = listOfIds(10, 11, 12)
+        anchor.onSnapshot(snapshot(before, firstIndex = 0, firstOffset = 30))
+
+        val after = listOfIds(20, 10, 11, 12)
+        assertEquals(
+            AnchorScrollTarget(index = 1, offset = 30),
+            anchor.onSnapshot(snapshot(after, firstIndex = 0))
+        )
+    }
+
+    @Test
+    fun atTopDuringAFullReload_leavesTheReloadsOwnScrollAlone() {
+        val anchor = ListScrollAnchorState(initialVersion = 0)
+        val before = listOfIds(10, 11, 12)
+        anchor.onSnapshot(snapshot(before, firstIndex = 0, listVersion = 0))
+        anchor.onSnapshot(snapshot(before, firstIndex = 0, listVersion = 1))
+
+        val other = listOfIds(50, 51, 52)
+        assertNull(anchor.onSnapshot(snapshot(other, firstIndex = 0, listVersion = 1)))
+    }
 }
