@@ -46,5 +46,5 @@ build/
 # Internal planning workspace (local only)
 .planning/
 
-# Local SDK path, machine-specific
+# Local machine-specific Android SDK path
 local.properties

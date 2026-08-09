@@ -31,8 +31,55 @@ import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewFeature
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.io.File
+
+/**
+ * Virtual URL a cached full-page archive is served from. `file://` requests are not reliably
+ * interceptable by [WebViewClient.shouldInterceptRequest] on every WebView build, so the archive
+ * is instead served through [WebViewAssetLoader] on this reserved, network-never-touched domain
+ * (the same technique Google recommends over direct `file://` navigation), which guarantees the
+ * request is intercepted and lets us declare the correct MIME type.
+ */
+private const val ARCHIVE_VIRTUAL_URL = "https://appassets.androidplatform.net/archive/index.html"
+private const val ARCHIVE_PATH_PREFIX = "/archive/"
+private const val ARCHIVE_VIRTUAL_HOST = "appassets.androidplatform.net"
+
+/**
+ * Whether [uri] is an in-page anchor link (has a fragment) within a document we ourselves
+ * loaded, either a legacy `file://` archive load or the current WebViewAssetLoader virtual URL,
+ * so the WebView should be left to scroll to it internally instead of treating it as navigation.
+ */
+private fun isSameDocumentAnchor(uri: android.net.Uri): Boolean {
+    if (uri.fragment == null) return false
+    return uri.scheme == "file" || (uri.scheme == "https" && uri.host == ARCHIVE_VIRTUAL_HOST)
+}
+
+/**
+ * Injects the viewport/CSP meta tags and highlight styles/scripts into a full-page
+ * archive document (Web mode), which is already a complete `<html>` document as
+ * downloaded from the server.
+ */
+private fun injectArchiveScripts(html: String, highlightStyles: String, highlightScripts: String): String {
+    return html
+        .replace("</head>", """
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data: file:; style-src 'unsafe-inline' http: https:; script-src 'unsafe-inline';">
+            <style>
+                $highlightStyles
+            </style>
+        </head>""".trimIndent())
+        .replace("</body>", """
+            <script>
+                $highlightScripts
+            </script>
+        </body>""".trimIndent())
+}
 
 /**
  * Android implementation of HtmlRenderer using WebView.
@@ -69,6 +116,15 @@ actual fun HtmlRenderer(
     // Wrap onLinkClick in a MutableState so the WebViewClient always invokes the latest
     // lambda even when linkOpenMode changes after the AndroidView factory has run.
     val onLinkClickState = remember { mutableStateOf(onLinkClick) }
+
+    // Wrap localFilePath in a MutableState for the same reason: the archive path handler
+    // below is built once via `remember` and closed over by the WebViewClient created in the
+    // AndroidView factory (which itself only runs once), so a plain closure over the parameter
+    // would stay frozen at whatever it was on first composition — null when the user views a
+    // bookmark before its archive has been downloaded. Reading `.value` instead always sees the
+    // path from the most recent recomposition, e.g. once "Load full page archive" completes.
+    val localFilePathState = remember { mutableStateOf(localFilePath) }
+    localFilePathState.value = localFilePath
 
     // Track selection bounds for ActionMode positioning
     val selectionRect = remember { mutableStateOf<android.graphics.Rect?>(null) }
@@ -591,22 +647,36 @@ actual fun HtmlRenderer(
                 """.trimIndent()
             }
             ViewerMode.WEB -> {
-                // Archive mode: inject our scripts and styles into the existing HTML
-                html
-                    .replace("</head>", """
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-                        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data: file:; style-src 'unsafe-inline' http: https:; script-src 'unsafe-inline';">
-                        <style>
-                            $highlightStyles
-                        </style>
-                    </head>""".trimIndent())
-                    .replace("</body>", """
-                        <script>
-                            $highlightScripts
-                        </script>
-                    </body>""".trimIndent())
+                // Archive mode: inject our scripts and styles into the existing HTML.
+                // Only used for the inline (non-file) archive path; cached archives are
+                // injected on the fly by the WebViewAssetLoader path handler instead.
+                injectArchiveScripts(html, highlightStyles, highlightScripts)
             }
         }
+    }
+
+    // Serves a cached archive file at ARCHIVE_VIRTUAL_URL with an explicit text/html MIME type
+    // and the viewport/CSP/highlight injection, however the request path itself is ignored:
+    // archives are self-contained (all resources inlined by the crawler), so there's only ever
+    // one document to serve, regardless of what sub-path is requested under the prefix.
+    val webViewAssetLoader = remember(highlightStyles, highlightScripts) {
+        WebViewAssetLoader.Builder()
+            .addPathHandler(ARCHIVE_PATH_PREFIX) { _ ->
+                val path = localFilePathState.value ?: return@addPathHandler null
+                try {
+                    val raw = File(path).readText(Charsets.UTF_8)
+                    val injected = injectArchiveScripts(raw, highlightStyles, highlightScripts)
+                    WebResourceResponse(
+                        "text/html",
+                        "UTF-8",
+                        ByteArrayInputStream(injected.toByteArray(Charsets.UTF_8))
+                    )
+                } catch (e: Exception) {
+                    AppLogger.e("HtmlRenderer", "Failed to load archive via asset loader: ${e.message}", e)
+                    null
+                }
+            }
+            .build()
     }
 
     class WebAppInterface(
@@ -792,13 +862,36 @@ actual fun HtmlRenderer(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
-                // Start invisible to prevent white flash
-                setBackgroundColor(Color.TRANSPARENT)
-                
+                if (viewerMode == ViewerMode.WEB) {
+                    // Archived pages assume an opaque canvas (usually white) to paint over.
+                    // A transparent background can also register as a "dark" signal for
+                    // WebView's automatic darkening heuristic below, producing badly
+                    // contrasted (dark-on-dark) rendering, so give it a real background instead.
+                    setBackgroundColor(Color.WHITE)
+
+                    // Web mode preserves the original page's styling exactly; letting WebView
+                    // auto-darken it produces mismatched colors the page was never designed
+                    // for, so opt out explicitly (covering both the current and legacy APIs).
+                    if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                        WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false)
+                    } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                        @Suppress("DEPRECATION")
+                        WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_OFF)
+                    }
+
+                    // Respect the page's own layout width and zoom-to-fit on load instead of
+                    // clamping to device width, since archived pages are often not mobile-responsive.
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                } else {
+                    // Start invisible to prevent white flash
+                    setBackgroundColor(Color.TRANSPARENT)
+                }
+
                 // Security settings
                 settings.javaScriptEnabled = true
                 addJavascriptInterface(webInterface, "Android")
-                
+
                 // Allow file access for local images (cached content)
                 settings.allowFileAccess = true
                 settings.allowContentAccess = false
@@ -818,8 +911,9 @@ actual fun HtmlRenderer(
                         val url = request?.url?.toString()
                         if (url != null) {
                             // Let the WebView handle local anchor links internally (US4)
-                            // Anchor links within the same document have a file:// scheme and a non-null fragment
-                            if (request.url.scheme == "file" && request.url.fragment != null) {
+                            // Anchor links within the same document have a file:// or archive
+                            // virtual-domain scheme and a non-null fragment
+                            if (isSameDocumentAnchor(request.url)) {
                                 return false
                             }
                             val handler = onLinkClickState.value
@@ -835,7 +929,7 @@ actual fun HtmlRenderer(
                     override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
                         if (url != null) {
                             // Let the WebView handle local anchor links internally (US4)
-                            if (url.startsWith("file://") && url.contains("#")) {
+                            if (isSameDocumentAnchor(android.net.Uri.parse(url))) {
                                 return false
                             }
                             val handler = onLinkClickState.value
@@ -845,6 +939,15 @@ actual fun HtmlRenderer(
                             }
                         }
                         return false
+                    }
+
+                    override fun shouldInterceptRequest(
+                        view: WebView?,
+                        request: WebResourceRequest?
+                    ): WebResourceResponse? {
+                        val url = request?.url ?: return super.shouldInterceptRequest(view, request)
+                        return webViewAssetLoader.shouldInterceptRequest(url)
+                            ?: super.shouldInterceptRequest(view, request)
                     }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -884,9 +987,10 @@ actual fun HtmlRenderer(
                     }
                 }
 
-                // Load the HTML content or local file
+                // Load the archive through the asset loader (see shouldInterceptRequest above) or
+                // inline HTML content directly.
                 if (localFilePath != null) {
-                    loadUrl("file://$localFilePath")
+                    loadUrl(ARCHIVE_VIRTUAL_URL)
                 } else {
                     loadDataWithBaseURL("file:///", themedHtml, "text/html", "UTF-8", null)
                 }
@@ -902,8 +1006,8 @@ actual fun HtmlRenderer(
                 pageLoaded.value = false
                 lastAppliedHighlights.value = emptyList()
                 if (localFilePath != null) {
-                    if (webView.url != "file://$localFilePath") {
-                        webView.loadUrl("file://$localFilePath")
+                    if (webView.url != ARCHIVE_VIRTUAL_URL) {
+                        webView.loadUrl(ARCHIVE_VIRTUAL_URL)
                         lastLoadedHtml.value = themedHtml
                     }
                 } else {

@@ -264,7 +264,7 @@ fun BookmarkViewerContent(
     }
     val displayState = if (loadingState is BookmarkLoadingState.Error && lastValidState is BookmarkLoadingState.FullyLoaded) lastValidState else loadingState
 
-    val fabVisible = rememberFabVisibilityState(scrollState = scrollState, fabExpanded = fabExpanded)
+    val (fabVisible, toggleFabVisible) = rememberFabVisibilityState(scrollState = scrollState, fabExpanded = fabExpanded)
     val scrollToTopEnabled by screenModel.scrollToTopEnabled.collectAsState()
     val scrollToTopVisible = rememberScrollToTopVisibility(scrollState = scrollState, fabVisible = fabVisible)
     val showStickyTitle = rememberStickyTitleVisibility(scrollState = scrollState, bannerHeight = bannerHeight, toolbarHeight = toolbarHeight)
@@ -390,7 +390,19 @@ fun BookmarkViewerContent(
 
                     LazyColumn(
                         state = scrollState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize()
+                            .then(
+                                if (!getPlatform().isDesktop) {
+                                    // Tap the reading surface to show/hide the FAB. Taps consumed by
+                                    // links, highlights, or the highlight-dimming overlay never reach
+                                    // here, so this only fires on plain content taps.
+                                    Modifier.pointerInput(Unit) {
+                                        detectTapGestures(onTap = {
+                                            if (selectedHighlightId == null) toggleFabVisible()
+                                        })
+                                    }
+                                } else Modifier
+                            ),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         val contentItemModifier = Modifier.widthIn(max = 900.dp)

@@ -242,6 +242,7 @@ fun AboutContent(
                     FossLibrary("nativefiledialog-java", "zlib", "https://github.com/WonderzGmbH/nativefiledialog-java"),
                     FossLibrary("AndroidX Activity Compose", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/activity"),
                     FossLibrary("AndroidX Browser", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/browser"),
+                    FossLibrary("AndroidX WebKit", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/webkit"),
                     FossLibrary("AndroidX Core SplashScreen", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/core"),
                     FossLibrary("JavaFX", "GPL 2.0 with Classpath Exception", "https://github.com/openjdk/jfx"),
                     FossLibrary("OkHttp", "Apache 2.0", "https://github.com/square/okhttp"),
