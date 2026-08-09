@@ -684,6 +684,9 @@ fun BookmarkViewerContent(
             screenModel = screenModel, scope = scope, onBack = onBack,
             onLinkCopied = {
                 scope.launch { snackbarManager.showSnackbar("Copied to clipboard") }
+            },
+            onOpenLink = {
+                scope.launch { snackbarManager.showSnackbar("Opening in browser") }
             }
         )
     }

@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -115,6 +116,7 @@ internal fun BookmarkDetailsPanel(
     onDeleteAssetOnServer: (AssetEntity) -> Unit = {},
     onRequestServerCrawl: (ServerCrawlAction) -> Unit = {},
     onLinkCopied: () -> Unit = {},
+    onOpenLink: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     fun progressFor(asset: AssetEntity): DownloadProgress? =
@@ -194,6 +196,7 @@ internal fun BookmarkDetailsPanel(
                             DetailsSectionTitle("General")
                             LinkDetailsRow(
                                 url = bookmark.url,
+                                onOpen = onOpenLink,
                                 onCopy = onLinkCopied
                             )
                             DetailsRow(
@@ -834,14 +837,20 @@ private fun DetailsSectionTitle(title: String) {
 }
 
 /**
- * Shows the bookmark's full URL (never truncated) with a copy-to-clipboard action:
- * an explicit button for discoverability, plus long-press on the row itself.
+ * Shows the bookmark's full URL (never truncated). Tapping opens it in the browser;
+ * copying is available via an explicit button (for discoverability) or a long-press
+ * on the row.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun LinkDetailsRow(url: String, onCopy: () -> Unit) {
+private fun LinkDetailsRow(url: String, onOpen: () -> Unit, onCopy: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
     val clipboardManager = LocalClipboardManager.current
     val hapticFeedback = LocalHapticFeedback.current
+    val openInBrowser = {
+        uriHandler.openUri(url)
+        onOpen()
+    }
     val copyToClipboard = {
         clipboardManager.setText(AnnotatedString(url))
         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -851,7 +860,7 @@ private fun LinkDetailsRow(url: String, onCopy: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
-            .combinedClickable(onClick = {}, onLongClick = copyToClipboard)
+            .combinedClickable(onClick = openInBrowser, onLongClick = copyToClipboard)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

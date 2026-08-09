@@ -1,6 +1,9 @@
 package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -16,7 +19,8 @@ import kotlin.test.assertEquals
 
 /**
  * Regression coverage for #278: the details panel must show the bookmark's full,
- * untruncated URL and support copying it to the clipboard.
+ * untruncated URL, open it in the browser on tap, and support copying it to the
+ * clipboard.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
@@ -58,6 +62,34 @@ class BookmarkDetailsPanelTest {
         }
 
         composeTestRule.onNodeWithText(longUrl).assertIsDisplayed()
+    }
+
+    @Test
+    fun `tapping the link opens it in the browser`() {
+        val openedUris = mutableListOf<String>()
+        val fakeUriHandler = object : UriHandler {
+            override fun openUri(uri: String) {
+                openedUris += uri
+            }
+        }
+        var openedCount = 0
+        composeTestRule.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalUriHandler provides fakeUriHandler) {
+                    BookmarkDetailsPanel(
+                        visible = true,
+                        bookmark = bookmark,
+                        onOpenLink = { openedCount++ },
+                        onDismiss = {}
+                    )
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText(longUrl).performClick()
+
+        assertEquals(listOf(longUrl), openedUris)
+        assertEquals(1, openedCount)
     }
 
     @Test
