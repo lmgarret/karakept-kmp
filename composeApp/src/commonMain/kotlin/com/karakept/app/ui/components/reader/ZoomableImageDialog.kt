@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -34,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -91,7 +93,7 @@ internal fun shouldDismissFromDrag(dragOffsetY: Float, thresholdPx: Float): Bool
  * highlight is selected, for visual consistency — supporting pinch-to-zoom, double-tap zoom,
  * mouse scroll-wheel zoom (desktop), drag-to-pan once zoomed in, and swipe-up-to-dismiss when
  * not zoomed. Tapping the image at [MIN_IMAGE_ZOOM] also dismisses it. When [caption] is
- * non-blank (the image's `<figcaption>`, if any) it's shown in a bar at the bottom.
+ * non-blank (the image's `<figcaption>`, if any) it's shown centered below the image.
  */
 @Composable
 fun ZoomableImageDialog(
@@ -135,68 +137,94 @@ fun ZoomableImageDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = scrimAlpha))
-                .onSizeChanged { containerSize = it }
-                .pointerInput(Unit) {
-                    detectImageTransformGestures(
-                        onGesture = { pan, zoom ->
-                            val newScale = clampImageZoom(scale * zoom)
-                            if (newScale <= MIN_IMAGE_ZOOM && zoom == 1f) {
-                                // Not zoomed and single-finger: track upward drag only, for
-                                // swipe-to-dismiss. Downward drags are clamped away since only
-                                // swiping up should close the viewer.
-                                isDismissDragging = true
-                                dragOffsetY = (dragOffsetY + pan.y).coerceAtMost(0f)
-                            }
-                            scale = newScale
-                            offset = Offset(
-                                clampImagePan(offset.x + pan.x, scale, containerSize.width.toFloat()),
-                                clampImagePan(offset.y + pan.y, scale, containerSize.height.toFloat())
-                            )
-                        },
-                        onGestureEnd = {
-                            if (shouldDismissFromDrag(dragOffsetY, dismissThresholdPx())) {
-                                onDismiss()
-                            } else {
-                                isDismissDragging = false
-                                dragOffsetY = 0f
-                            }
-                        }
-                    )
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onDoubleTap = {
-                            applyZoom(if (scale > MIN_IMAGE_ZOOM) MIN_IMAGE_ZOOM else DOUBLE_TAP_ZOOM)
-                        },
-                        onTap = { if (scale <= MIN_IMAGE_ZOOM) onDismiss() }
-                    )
-                }
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            if (event.type == PointerEventType.Scroll) {
-                                val scrollDelta = event.changes.first().scrollDelta.y
-                                applyZoom(scale - scrollDelta * SCROLL_ZOOM_SENSITIVITY)
-                            }
-                        }
-                    }
-                },
-            contentAlignment = Alignment.Center
         ) {
-            AsyncImage(
-                model = url,
-                contentDescription = alt.ifBlank { null },
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offset.x,
-                        translationY = offset.y + animatedDragOffsetY
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Only the image area drives zoom/pan/dismiss gestures and their bounds, so
+                // the caption below stays a normal, non-interactive block of text.
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .onSizeChanged { containerSize = it }
+                        .pointerInput(Unit) {
+                            detectImageTransformGestures(
+                                onGesture = { pan, zoom ->
+                                    val newScale = clampImageZoom(scale * zoom)
+                                    if (newScale <= MIN_IMAGE_ZOOM && zoom == 1f) {
+                                        // Not zoomed and single-finger: track upward drag only,
+                                        // for swipe-to-dismiss. Downward drags are clamped away
+                                        // since only swiping up should close the viewer.
+                                        isDismissDragging = true
+                                        dragOffsetY = (dragOffsetY + pan.y).coerceAtMost(0f)
+                                    }
+                                    scale = newScale
+                                    offset = Offset(
+                                        clampImagePan(offset.x + pan.x, scale, containerSize.width.toFloat()),
+                                        clampImagePan(offset.y + pan.y, scale, containerSize.height.toFloat())
+                                    )
+                                },
+                                onGestureEnd = {
+                                    if (shouldDismissFromDrag(dragOffsetY, dismissThresholdPx())) {
+                                        onDismiss()
+                                    } else {
+                                        isDismissDragging = false
+                                        dragOffsetY = 0f
+                                    }
+                                }
+                            )
+                        }
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    applyZoom(if (scale > MIN_IMAGE_ZOOM) MIN_IMAGE_ZOOM else DOUBLE_TAP_ZOOM)
+                                },
+                                onTap = { if (scale <= MIN_IMAGE_ZOOM) onDismiss() }
+                            )
+                        }
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    if (event.type == PointerEventType.Scroll) {
+                                        val scrollDelta = event.changes.first().scrollDelta.y
+                                        applyZoom(scale - scrollDelta * SCROLL_ZOOM_SENSITIVITY)
+                                    }
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = url,
+                        contentDescription = alt.ifBlank { null },
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y + animatedDragOffsetY
+                            )
                     )
-            )
+                }
+
+                if (!caption.isNullOrBlank()) {
+                    Text(
+                        text = caption,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        fontStyle = FontStyle.Italic,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .alpha(chromeAlpha)
+                            .background(Color.Black.copy(alpha = 0.5f))
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    )
+                }
+            }
 
             IconButton(
                 onClick = onDismiss,
@@ -211,25 +239,6 @@ fun ZoomableImageDialog(
                     contentDescription = "Close",
                     tint = Color.White
                 )
-            }
-
-            if (!caption.isNullOrBlank()) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .alpha(chromeAlpha)
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    Text(
-                        text = caption,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White,
-                        fontStyle = FontStyle.Italic
-                    )
-                }
             }
         }
     }
