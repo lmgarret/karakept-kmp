@@ -215,12 +215,18 @@ full-bleed and its divider reaches both edges.
 
 ### Full-screen image viewer
 
-**`ZoomableImageDialog`** (`ui/components/reader/ZoomableImageDialog.kt`)
-- Full-screen `Dialog` on a black scrim: pinch-to-zoom, double-tap zoom, mouse scroll-wheel
-  zoom (desktop), and drag-to-pan once zoomed in. Tapping the image at 1x dismisses it.
+**`ImageGalleryDialog`** (`ui/components/reader/ImageGalleryDialog.kt`)
+- Full-screen `Dialog` on a black scrim wrapping a `HorizontalPager`: swipe left/right between
+  every image on the page. Each page (`ZoomableImagePage`) owns its own independent pinch-to-zoom,
+  double-tap zoom, mouse scroll-wheel zoom (desktop), and drag-to-pan once zoomed in. Tapping an
+  image at 1x dismisses the whole dialog; swiping up does too.
+- The pager's own swipe-to-change-image gesture is disabled while the active page is zoomed in
+  above 1x, so panning a zoomed image never gets mistaken for a page flip.
+- The page-wide image list comes from `LocalGalleryImages` (`ReaderGalleryState.kt`), pre-scanned
+  once per document by `NativeHtmlRenderer` via `collectGalleryImages`.
 - Wired into `RenderResolvedImage` (`HtmlBlockRenderer.kt`) — every `<img>`/`<picture>`
-  rendered in Reader mode is tappable to open it full-screen.
-- **Use whenever an image needs a tap-to-enlarge full-screen view.**
+  rendered in Reader mode is tappable to open the gallery positioned on that exact image.
+- **Use whenever an image needs a tap-to-enlarge, swipe-between-siblings full-screen view.**
 
 ### E-ink mode
 

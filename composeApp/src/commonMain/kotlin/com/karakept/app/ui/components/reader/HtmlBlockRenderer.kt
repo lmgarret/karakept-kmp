@@ -913,9 +913,13 @@ internal fun resolveImageUrls(element: Element): List<String> {
  * Renders an image trying each URL in [urls] in order, falling back to the next on
  * Coil error. Shows a pulsing skeleton while loading and a broken-image placeholder
  * when all URLs fail. Capping width to declared dimensions prevents upscaling small icons.
+ *
+ * [element] identifies this image within [LocalGalleryImages] so tapping it opens the
+ * full-screen gallery viewer positioned on this exact image, swipeable to its siblings.
  */
 @Composable
 private fun RenderResolvedImage(
+    element: Element,
     urls: List<String>,
     alt: String,
     dimensions: ImageDimensions?,
@@ -987,11 +991,15 @@ private fun RenderResolvedImage(
     }
 
     if (showFullscreen) {
-        ZoomableImageDialog(
-            url = urls[idx],
-            alt = alt,
-            caption = caption,
-            dimensions = dimensions,
+        val galleryImages = LocalGalleryImages.current
+        val initialIndex = remember(galleryImages, element) {
+            galleryImages.indexOfFirst { it.element === element }.coerceAtLeast(0)
+        }
+        ImageGalleryDialog(
+            images = galleryImages.ifEmpty {
+                listOf(GalleryImage(element, urls, alt, caption, dimensions))
+            },
+            initialIndex = initialIndex,
             onDismiss = { showFullscreen = false }
         )
     }
@@ -1014,33 +1022,25 @@ private fun ImageLoadingSkeleton(modifier: Modifier) {
 
 @Composable
 private fun RenderImage(element: Element) {
-    val urls = resolveImageUrls(element)
-    if (urls.isEmpty()) return
+    val galleryImage = remember(element) { resolveImgGalleryImage(element) } ?: return
     RenderResolvedImage(
-        urls = urls,
-        alt = element.attr("alt"),
-        dimensions = extractImageDimensions(element),
-        caption = findFigureCaption(element)
+        element = element,
+        urls = galleryImage.urls,
+        alt = galleryImage.alt,
+        dimensions = galleryImage.dimensions,
+        caption = galleryImage.caption
     )
 }
 
 @Composable
 private fun RenderPicture(element: Element) {
-    val img = element.selectFirst("img")
-    // Collect all candidates: <source> srcsets first, then <img> src/data-src/srcset.
-    val candidates = mutableListOf<String>()
-    for (source in element.select("source")) {
-        val srcset = source.attr("srcset").ifBlank { source.attr("data-srcset") }
-        candidates += pickUrlsFromSrcset(srcset)
-    }
-    if (img != null) candidates += resolveImageUrls(img)
-    val urls = candidates.distinct()
-    if (urls.isEmpty()) return
+    val galleryImage = remember(element) { resolvePictureGalleryImage(element) } ?: return
     RenderResolvedImage(
-        urls = urls,
-        alt = img?.attr("alt").orEmpty(),
-        dimensions = img?.let { extractImageDimensions(it) },
-        caption = findFigureCaption(element)
+        element = element,
+        urls = galleryImage.urls,
+        alt = galleryImage.alt,
+        dimensions = galleryImage.dimensions,
+        caption = galleryImage.caption
     )
 }
 
