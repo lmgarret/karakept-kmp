@@ -70,6 +70,63 @@ fun findTextOffsets(html: String, searchText: String): TextOffsetResult? {
     )
 }
 
+/**
+ * A direct child of the rendered root, paired with where its text begins in the
+ * document's text stream.
+ *
+ * @param isRenderable whether the reader draws this node. Nodes that are not
+ *   drawn — whitespace between tags, stray inline content — still occupy the
+ *   stream, so they have to be measured even though nothing is emitted for them.
+ */
+data class ReaderTextSpan(
+    val node: com.fleeksoft.ksoup.nodes.Node,
+    val startOffset: Int,
+    val isRenderable: Boolean
+)
+
+/**
+ * Computes the start offset of every direct child of [root] in the same text
+ * stream [findTextOffsets] searches.
+ *
+ * The reader renders the document's top-level children one at a time, so it has
+ * to know where each one starts. Deriving those offsets here, from the same walk
+ * that resolves a selection to offsets, is what keeps a highlight rendering
+ * where it was created: the two used to be maintained separately, and the
+ * renderer's copy left out both the newline that joins block elements and the
+ * whitespace between them, so highlights drifted one character earlier per
+ * block (#295).
+ */
+fun computeReaderTextSpans(root: Element): List<ReaderTextSpan> {
+    val spans = mutableListOf<ReaderTextSpan>()
+    var offset = 0
+
+    for (child in root.childNodes()) {
+        when (child) {
+            is TextNode -> {
+                val text = child.getWholeText()
+                spans += ReaderTextSpan(child, offset, isRenderable = text.isNotBlank())
+                offset += text.length
+            }
+
+            is Element -> {
+                val isBlock = isBlockElement(child)
+                if (isBlock && offset > 0) offset++
+                spans += ReaderTextSpan(child, offset, isRenderable = isBlock)
+                offset += readerTextLength(child)
+            }
+        }
+    }
+
+    return spans
+}
+
+/** Length of [node]'s subtree in the document text stream. */
+private fun readerTextLength(node: com.fleeksoft.ksoup.nodes.Node): Int {
+    val sb = StringBuilder()
+    collectTextNodes(node, sb)
+    return sb.length
+}
+
 private fun collectTextNodes(node: com.fleeksoft.ksoup.nodes.Node, sb: StringBuilder) {
     for (child in node.childNodes()) {
         when (child) {

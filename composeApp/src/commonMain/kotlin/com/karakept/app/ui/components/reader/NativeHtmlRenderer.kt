@@ -190,17 +190,11 @@ fun NativeHtmlRenderer(
                 // Reset offset at start of rendering
                 textOffset.offset = 0
 
-                // Build list of renderable children once
+                // Build list of renderable children once, each carrying the offset
+                // its text starts at, so a block's position never depends on how
+                // much of the document has been revealed so far.
                 val renderableChildren = remember(html) {
-                    val result = mutableListOf<com.fleeksoft.ksoup.nodes.Node>()
-                    for (child in body.childNodes()) {
-                        if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
-                            result.add(child)
-                        } else if (child is com.fleeksoft.ksoup.nodes.TextNode && child.getWholeText().isNotBlank()) {
-                            result.add(child)
-                        }
-                    }
-                    result
+                    computeReaderTextSpans(body).filter { it.isRenderable }
                 }
 
                 // Progressive rendering: show first 20 blocks immediately, reveal rest in batches
@@ -217,13 +211,16 @@ fun NativeHtmlRenderer(
                 }
 
                 // Render visible children
-                for (child in renderableChildren.take(visibleCount)) {
+                for (span in renderableChildren.take(visibleCount)) {
+                    // Absolute, so partially revealed documents place highlights
+                    // exactly where a fully revealed one does.
+                    textOffset.offset = span.startOffset
+                    val child = span.node
                     if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
                         RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
                     } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
                         val text = child.getWholeText()
                         val currentTheme = LocalReaderTheme.current
-                        val blockStart = textOffset.offset
                         textOffset.advance(text.length)
                         AnnotatedClickableText(
                             text = AnnotatedString(text),
@@ -240,15 +237,6 @@ fun NativeHtmlRenderer(
                     }
                 }
 
-                // Advance text offset for not-yet-visible nodes to keep highlight
-                // offsets consistent once they become visible in subsequent frames
-                for (child in renderableChildren.drop(visibleCount)) {
-                    if (child is com.fleeksoft.ksoup.nodes.TextNode) {
-                        textOffset.advance(child.getWholeText().length)
-                    } else if (child is com.fleeksoft.ksoup.nodes.Element) {
-                        textOffset.advance(child.text().length)
-                    }
-                }
 
                 // Bottom spacing
                 Spacer(Modifier.height(16.dp))
