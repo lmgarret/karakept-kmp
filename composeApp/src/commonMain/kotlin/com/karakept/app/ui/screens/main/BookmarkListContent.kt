@@ -786,6 +786,12 @@ internal fun BookmarkListContent(
  * lands in the very frame that renders the swap; a flag delivered by a separate flow, or read
  * from an effect, always arrives at least one frame too late to suppress anything.
  *
+ * A prepend is excluded too. Rows inserted at the head displace every row below them, and
+ * the viewport is held at the top for a user who has not scrolled — so the placement spring
+ * animates the whole visible list down from the top edge, which reads as the order shuffling
+ * and settling back rather than as new items arriving. Landing them in place is what looks
+ * like an insertion.
+ *
  * Plain fields rather than snapshot state: updating them must not invalidate the composition
  * that is reading them.
  */
@@ -798,10 +804,17 @@ internal class ItemAnimationGate(initial: List<BookmarkEntity>) {
         val previousIds = previous.mapTo(HashSet(previous.size)) { it.remoteId }
         val survivors = bookmarks.count { it.remoteId in previousIds }
         // Half of the shorter list surviving still reads as "the same list, changed".
-        enabled = previous.isEmpty() || bookmarks.isEmpty() ||
+        val sameList = previous.isEmpty() || bookmarks.isEmpty() ||
             survivors * 2 >= minOf(previous.size, bookmarks.size)
+        enabled = sameList && !isPrepend(bookmarks)
         previous = bookmarks
         return enabled
+    }
+
+    /** True when rows were inserted above the row that used to be first. */
+    private fun isPrepend(bookmarks: List<BookmarkEntity>): Boolean {
+        val previousFirstId = previous.firstOrNull()?.remoteId ?: return false
+        return bookmarks.indexOfFirst { it.remoteId == previousFirstId } > 0
     }
 }
 
