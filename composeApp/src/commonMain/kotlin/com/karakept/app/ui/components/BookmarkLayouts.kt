@@ -648,12 +648,20 @@ private fun BookmarkRowContainer(
     content: @Composable () -> Unit
 ) {
     if (isFlat) {
-        val background = when {
+        // An opaque page-colour backing, painted before the selection/active tint. Without it the
+        // row is transparent and swiping shows the action colour through the whole line instead of
+        // only in the gutter the row has slid away from — SwipeableBookmarkItem's action layer sits
+        // directly behind this content.
+        val tint = when {
             isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
             isActive -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-            else -> Color.Transparent
+            else -> null
         }
-        Column(modifier = modifier.background(background)) {
+        Column(
+            modifier = modifier
+                .background(MaterialTheme.colorScheme.background)
+                .then(if (tint != null) Modifier.background(tint) else Modifier)
+        ) {
             content()
             if (showDivider) {
                 HorizontalDivider(
