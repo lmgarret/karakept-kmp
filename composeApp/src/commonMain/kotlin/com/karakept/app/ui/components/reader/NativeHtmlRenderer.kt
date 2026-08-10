@@ -35,6 +35,7 @@ import com.fleeksoft.ksoup.nodes.Element
 import com.fleeksoft.ksoup.nodes.TextNode
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.ui.theme.rememberFontFamily
 import com.karakept.app.ui.components.HighlightPosition
 
@@ -57,6 +58,7 @@ fun NativeHtmlRenderer(
     backgroundColor: Color? = null,
     fontSize: Int = 16,
     fontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
+    typography: ReaderTypography = ReaderTypography(),
     onLinkClick: (String) -> Unit = {},
     onHighlightClick: (String) -> Unit = {},
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
@@ -80,13 +82,17 @@ fun NativeHtmlRenderer(
 
     val resolvedFont = fontFamily.rememberFontFamily()
 
-    val theme = remember(resolvedTextColor, resolvedBackgroundColor, fontSize, resolvedFont, primaryColor) {
+    val theme = remember(
+        resolvedTextColor, resolvedBackgroundColor, fontSize, resolvedFont, primaryColor,
+        typography.lineHeightScale
+    ) {
         ReaderThemeData(
             textColor = resolvedTextColor,
             backgroundColor = resolvedBackgroundColor,
             fontSize = fontSize.sp,
             fontFamily = resolvedFont,
             linkColor = primaryColor,
+            lineHeightScale = typography.lineHeightScale,
             codeBackgroundColor = if (resolvedBackgroundColor.luminance() > 0.5f) {
                 Color(0x1A7F7F7F) // rgba(127,127,127,0.1) on light
             } else {
@@ -173,7 +179,7 @@ fun NativeHtmlRenderer(
                 Column(
                     modifier = modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 28.dp, vertical = 0.dp)
+                        .padding(horizontal = typography.horizontalMarginDp.dp, vertical = 0.dp)
                         .padding(bottom = 28.dp)
                 ) {
                 // Reset offset at start of rendering
@@ -222,7 +228,7 @@ fun NativeHtmlRenderer(
                             color = currentTheme.textColor,
                             fontSize = currentTheme.fontSize,
                             fontFamily = currentTheme.fontFamily,
-                            lineHeight = (currentTheme.fontSize.value * 1.6f).sp,
+                            lineHeight = currentTheme.bodyLineHeight,
                             selectedHighlightId = selectedHighlightId,
                             highlights = highlights
                         )

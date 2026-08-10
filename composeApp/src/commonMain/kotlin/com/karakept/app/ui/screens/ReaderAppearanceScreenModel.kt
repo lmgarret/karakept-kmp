@@ -4,12 +4,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setHtmlTextColor
 import com.karakept.app.data.repository.setHtmlBackgroundColor
 import com.karakept.app.data.repository.setHtmlFontSize
 import com.karakept.app.data.repository.setHtmlFontFamily
 import com.karakept.app.data.repository.resetReaderAppearance
+import com.karakept.app.data.repository.setReaderHorizontalMarginDp
+import com.karakept.app.data.repository.setReaderLineHeightScale
+import com.karakept.app.data.repository.setReaderMaxWidthDp
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -41,6 +45,24 @@ class ReaderAppearanceScreenModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = ReaderFontFamily.SYSTEM
     )
+
+    val readerTypography: StateFlow<ReaderTypography> = settingsRepository.readerTypography.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ReaderTypography()
+    )
+
+    fun setReaderLineHeightScale(scale: Float) {
+        viewModelScope.launch { settingsRepository.setReaderLineHeightScale(scale) }
+    }
+
+    fun setReaderHorizontalMarginDp(margin: Int) {
+        viewModelScope.launch { settingsRepository.setReaderHorizontalMarginDp(margin) }
+    }
+
+    fun setReaderMaxWidthDp(width: Int) {
+        viewModelScope.launch { settingsRepository.setReaderMaxWidthDp(width) }
+    }
 
     fun setHtmlTextColor(color: Color?) {
         viewModelScope.launch {

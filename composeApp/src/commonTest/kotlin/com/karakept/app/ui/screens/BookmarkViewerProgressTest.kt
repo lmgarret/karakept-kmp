@@ -19,11 +19,15 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -251,5 +255,54 @@ class BookmarkViewerProgressTest {
         coVerify(exactly = 0) {
             bookmarkActionsRepository.pullReadingProgressFromServer(any(), any())
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Regression: a hanging server pull must not hold the reader on a skeleton
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `serverProgressChecked flips even when the server pull never returns`() = runTest(testDispatcher) {
+        // The reader keeps a skeleton up until this flag is true. The HTTP client allows two
+        // minutes, so without a grace period a stalled connection means two minutes of skeleton.
+        coEvery {
+            bookmarkActionsRepository.pullReadingProgressFromServer(any(), any())
+        } coAnswers {
+            awaitCancellation()
+        }
+
+        val screenModel = createScreenModel()
+        screenModel.loadBookmark(1L)
+
+        advanceTimeBy(BookmarkViewerScreenModel.PROGRESS_PULL_GRACE_MILLIS - 100)
+        runCurrent()
+        assertFalse(
+            screenModel.serverProgressChecked.value,
+            "should still be waiting on the pull before the grace period elapses"
+        )
+
+        advanceTimeBy(200)
+        runCurrent()
+        assertTrue(
+            screenModel.serverProgressChecked.value,
+            "should reveal the article once the grace period has passed"
+        )
+    }
+
+    @Test
+    fun `a slow but successful pull inside the grace period is still awaited`() = runTest(testDispatcher) {
+        coEvery {
+            bookmarkActionsRepository.pullReadingProgressFromServer(any(), any())
+        } coAnswers {
+            delay(BookmarkViewerScreenModel.PROGRESS_PULL_GRACE_MILLIS / 2)
+            true
+        }
+
+        val screenModel = createScreenModel()
+        screenModel.loadBookmark(1L)
+        advanceUntilIdle()
+
+        assertTrue(screenModel.serverProgressChecked.value)
+        coVerify { bookmarkActionsRepository.pullReadingProgressFromServer(any(), any()) }
     }
 }

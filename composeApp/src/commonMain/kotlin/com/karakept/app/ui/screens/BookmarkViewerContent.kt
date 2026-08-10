@@ -70,6 +70,12 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
+import com.karakept.app.ui.components.scrollToTop
+import com.karakept.app.ui.input.PageTurnDispatcher
+import com.karakept.app.ui.input.PageTurnScrollEffect
+import com.karakept.app.ui.input.handleDesktopPageKey
+import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.components.reader.SearchMatch
 import com.karakept.app.ui.components.rememberCustomTabOpener
 import com.karakept.app.ui.screens.viewer.*
@@ -99,6 +105,7 @@ fun BookmarkViewerContent(
     val uriHandler = LocalUriHandler.current
     val openInCustomTab = rememberCustomTabOpener()
     val snackbarManager = koinInject<ActionSnackbarManager>()
+    val pageTurnDispatcher = koinInject<PageTurnDispatcher>()
 
     val loadingState by screenModel.loadingState.collectAsState()
     val viewerMode by screenModel.viewerMode.collectAsState()
@@ -123,6 +130,8 @@ fun BookmarkViewerContent(
     val trackReadingProgress by screenModel.trackReadingProgress.collectAsState()
     val serverProgressChecked by screenModel.serverProgressChecked.collectAsState()
     val contentFetchAttempted by screenModel.contentFetchAttempted.collectAsState()
+    val readerTypography by screenModel.readerTypography.collectAsState()
+    val showHeroImage by screenModel.showHeroImage.collectAsState()
 
     var showModeDialog by remember { mutableStateOf(false) }
     var showAppearancePanel by remember { mutableStateOf(false) }
@@ -227,7 +236,9 @@ fun BookmarkViewerContent(
 
     var highlightPositionReceived by remember { mutableStateOf(false) }
     var highlightScrollDone by remember { mutableStateOf(scrollToHighlightId == null) }
-    val bannerHeight = 320.dp
+    // Only an estimate, and only the sticky-title threshold uses it: rememberReadingProgress
+    // measures the real hero once it has been laid out. A text-only header is roughly this tall.
+    val bannerHeight = if (showHeroImage) 320.dp else 120.dp
     val toolbarHeight = 56.dp
     val isNativeRenderer = viewerMode == com.karakept.app.data.model.ViewerMode.READER
 
@@ -264,6 +275,8 @@ fun BookmarkViewerContent(
     }
     val displayState = if (loadingState is BookmarkLoadingState.Error && lastValidState is BookmarkLoadingState.FullyLoaded) lastValidState else loadingState
 
+    val einkMode = LocalEinkMode.current
+    PageTurnScrollEffect(listState = scrollState)
     val (fabVisible, toggleFabVisible) = rememberFabVisibilityState(scrollState = scrollState, fabExpanded = fabExpanded)
     val scrollToTopEnabled by screenModel.scrollToTopEnabled.collectAsState()
     val scrollToTopVisible = rememberScrollToTopVisibility(scrollState = scrollState, fabVisible = fabVisible)
@@ -307,17 +320,19 @@ fun BookmarkViewerContent(
                         scope.launch { kotlinx.coroutines.delay(100); contentFocusRequester.requestFocus() }
                         true
                     }
+                    // Keyboard equivalents of the e-ink facade buttons, so page turning can be
+                    // exercised on desktop without the device.
+                    !showSearch && pageTurnDispatcher.handleDesktopPageKey(keyEvent) -> true
                     else -> false
                 }
             } else false
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
-            AnimatedVisibility(
+            AnimatedVisibilityOrPlain(
                 visible = fabVisible && !getPlatform().isDesktop &&
                     !showDetailsPanel && !showAppearancePanel && !showSearch,
-                enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
-                exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(300)) + fadeOut(animationSpec = tween(300))
+                animated = !einkMode.animationsDisabled
             ) {
                 if (loadingState is BookmarkLoadingState.FullyLoaded) {
                     val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
@@ -405,7 +420,7 @@ fun BookmarkViewerContent(
                             ),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        val contentItemModifier = Modifier.widthIn(max = 900.dp)
+                        val contentItemModifier = Modifier.widthIn(max = readerTypography.maxWidthDp.dp)
 
                         item(key = "hero_banner") {
                             Box(modifier = contentItemModifier) {
@@ -414,6 +429,7 @@ fun BookmarkViewerContent(
                                     readingTimeMinutes = readingTimeMinutes, showTags = showTags,
                                     scrollState = scrollState, createdAt = state.bookmark.createdAt,
                                     dateDisplayMode = dateDisplayMode,
+                                    showImage = showHeroImage,
                                     onUrlClick = if (url.isNotEmpty()) { {
                                         try { when (linkOpenMode) { LinkOpenMode.CUSTOM_TAB -> openInCustomTab(url); LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(url) } }
                                         catch (e: Exception) { AppLogger.e("ViewerScreen", "Failed to handle reader action: ${e.message}", e) }
@@ -438,6 +454,7 @@ fun BookmarkViewerContent(
                         item(key = "content_body") {
                             Box(modifier = contentItemModifier) {
                                 ContentBodySection(
+                                    readerTypography = readerTypography,
                                     content = state.bookmark.content, viewerMode = viewerMode,
                                     removeFirstImage = hideArticleThumbnails,
                                     htmlTextColor = htmlTextColor, htmlBackgroundColor = htmlBackgroundColor,
@@ -516,9 +533,9 @@ fun BookmarkViewerContent(
                     // Full-page shimmer while restoring to a saved reading position. It sits
                     // above the LazyColumn (which scrolls to the saved offset underneath) but
                     // below the top bar, and fades out once restoration completes.
-                    AnimatedVisibility(
+                    AnimatedVisibilityOrPlain(
                         visible = restoringToSavedPosition,
-                        exit = fadeOut(animationSpec = tween(300))
+                        animated = !einkMode.animationsDisabled
                     ) {
                         BookmarkContentLoader(
                             loadingState = BookmarkLoadingState.Initial,
@@ -528,15 +545,17 @@ fun BookmarkViewerContent(
                     }
 
                     // Scroll-to-top button (READER-03)
-                    val scrollToTopBottomPadding by animateDpAsState(
-                        targetValue = if (showSearch && !getPlatform().isDesktop) 76.dp else 16.dp,
+                    val scrollToTopTarget = if (showSearch && !getPlatform().isDesktop) 76.dp else 16.dp
+                    val animatedScrollToTopPadding by animateDpAsState(
+                        targetValue = scrollToTopTarget,
                         animationSpec = tween(300),
                         label = "scrollToTopBottomPadding"
                     )
-                    AnimatedVisibility(
+                    val scrollToTopBottomPadding =
+                        if (einkMode.animationsDisabled) scrollToTopTarget else animatedScrollToTopPadding
+                    AnimatedVisibilityOrPlain(
                         visible = scrollToTopVisible && scrollToTopEnabled,
-                        enter = fadeIn(animationSpec = tween(300)),
-                        exit = fadeOut(animationSpec = tween(300)),
+                        animated = !einkMode.animationsDisabled,
                         modifier = Modifier.align(Alignment.BottomStart)
                             .navigationBarsPadding()
                             .padding(start = 16.dp, bottom = scrollToTopBottomPadding)
@@ -544,7 +563,7 @@ fun BookmarkViewerContent(
                         SmallFloatingActionButton(
                             onClick = {
                                 scope.launch {
-                                    scrollState.animateScrollToItem(0, 0)
+                                    scrollState.scrollToTop(einkMode.animationsDisabled)
                                     // Use safeScrollToItem to update the scroll guard's
                                     // approved position — without this, the guard detects
                                     // an "unintended jump" and snaps back to the old position

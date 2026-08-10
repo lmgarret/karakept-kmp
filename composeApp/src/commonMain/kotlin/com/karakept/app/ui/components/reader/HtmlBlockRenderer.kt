@@ -366,7 +366,7 @@ private fun RenderInlineGroup(
             color = theme.textColor,
             fontSize = theme.fontSize,
             fontFamily = theme.fontFamily,
-            lineHeight = (theme.fontSize.value * 1.6f).sp,
+            lineHeight = theme.bodyLineHeight,
             modifier = inlineScrollMod,
             selectedHighlightId = selectedHighlightId,
             highlights = highlights
@@ -463,7 +463,7 @@ private fun RenderParagraph(
                 color = theme.textColor,
                 fontSize = theme.fontSize,
                 fontFamily = theme.fontFamily,
-                lineHeight = (theme.fontSize.value * 1.6f).sp,
+                lineHeight = theme.bodyLineHeight,
                 modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth().then(scrollMod),
                 selectedHighlightId = selectedHighlightId,
                 highlights = highlights
@@ -505,7 +505,7 @@ private fun RenderDiv(
                 color = theme.textColor,
                 fontSize = theme.fontSize,
                 fontFamily = theme.fontFamily,
-                lineHeight = (theme.fontSize.value * 1.6f).sp,
+                lineHeight = theme.bodyLineHeight,
                 modifier = modifier.then(scrollMod),
                 selectedHighlightId = selectedHighlightId,
                 highlights = highlights
@@ -550,7 +550,7 @@ private fun RenderHeading(
             fontSize = (theme.fontSize.value * scaleFactor).sp,
             fontFamily = theme.fontFamily,
             fontWeight = FontWeight.Bold,
-            lineHeight = (theme.fontSize.value * scaleFactor * 1.4f).sp,
+            lineHeight = theme.tightLineHeight(scaleFactor),
             modifier = Modifier.padding(top = 12.dp, bottom = 8.dp).fillMaxWidth().then(scrollMod),
             selectedHighlightId = selectedHighlightId,
             highlights = highlights
@@ -608,7 +608,7 @@ private fun RenderBlockquote(
                         fontSize = theme.fontSize,
                         fontFamily = theme.fontFamily,
                         fontStyle = FontStyle.Italic,
-                        lineHeight = (theme.fontSize.value * 1.6f).sp,
+                        lineHeight = theme.bodyLineHeight,
                         modifier = scrollMod,
                         selectedHighlightId = selectedHighlightId,
                         highlights = highlights
@@ -671,7 +671,7 @@ private fun RenderCodeBlock(
                 color = theme.textColor,
                 fontSize = (theme.fontSize.value * 0.875f).sp,
                 fontFamily = FontFamily.Monospace,
-                lineHeight = (theme.fontSize.value * 0.875f * 1.4f).sp,
+                lineHeight = theme.tightLineHeight(0.875f),
                 modifier = scrollMod,
                 selectedHighlightId = selectedHighlightId,
                 highlights = highlights
@@ -769,7 +769,7 @@ private fun RenderListItem(
                     color = theme.textColor,
                     fontSize = theme.fontSize,
                     fontFamily = theme.fontFamily,
-                    lineHeight = (theme.fontSize.value * 1.6f).sp,
+                    lineHeight = theme.bodyLineHeight,
                     modifier = scrollMod,
                     selectedHighlightId = selectedHighlightId,
                     highlights = highlights
@@ -1261,7 +1261,7 @@ private fun RenderTableCell(
             fontSize = theme.fontSize,
             fontFamily = theme.fontFamily,
             fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
-            lineHeight = (theme.fontSize.value * 1.4f).sp,
+            lineHeight = theme.tightLineHeight(),
             modifier = scrollMod,
             selectedHighlightId = selectedHighlightId,
             highlights = highlights

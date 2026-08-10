@@ -21,9 +21,27 @@ data class ReaderThemeData(
     val fontFamily: FontFamily,
     val linkColor: Color,
     val codeBackgroundColor: Color,
-    val highlightColors: Map<String, Color> = defaultHighlightColors
+    val highlightColors: Map<String, Color> = defaultHighlightColors,
+    /**
+     * Multiplies the per-block line-height ratios below. A scale rather than an absolute line
+     * height, so body / heading / code stay proportional to one another.
+     */
+    val lineHeightScale: Float = 1.0f
 ) {
+    /** Line height for body-sized text, in sp. */
+    val bodyLineHeight: TextUnit get() = (fontSize.value * BODY_LINE_RATIO * lineHeightScale).sp
+
+    /** Line height for a block whose font size is [fontSize] × [sizeRatio], in sp. */
+    fun tightLineHeight(sizeRatio: Float = 1f): TextUnit =
+        (fontSize.value * sizeRatio * TIGHT_LINE_RATIO * lineHeightScale).sp
+
     companion object {
+        /** Body copy: generous leading for long-form reading. */
+        const val BODY_LINE_RATIO = 1.6f
+
+        /** Headings, code blocks, blockquotes and tables: tighter than body copy. */
+        const val TIGHT_LINE_RATIO = 1.4f
+
         val defaultHighlightColors = mapOf(
             "yellow" to HighlightYellow,
             "blue" to HighlightBlue,
