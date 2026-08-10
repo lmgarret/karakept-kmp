@@ -16,7 +16,11 @@ import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncConfig
+import com.karakept.app.data.model.PageTurnDirection
+import com.karakept.app.data.model.PageTurnKeyBindings
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.ReaderTypography
+import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.model.ThemeMode
@@ -64,6 +68,12 @@ internal suspend fun SettingsRepository.updateAppSettings(transform: StoredAppSe
     }
 }
 
+internal suspend fun SettingsRepository.updateEinkSettings(transform: StoredEinkSettings.() -> StoredEinkSettings) {
+    dataStore.edit { prefs ->
+        prefs[EINK_SETTINGS_KEY] = settingsJson.encodeToString(prefs.readEinkSettings().transform())
+    }
+}
+
 /**
  * Returns a one-shot snapshot of all backed-up settings as a flat [BackupSettings].
  * Reads all category blobs plus the per-list-settings key in a single DataStore snapshot.
@@ -77,6 +87,7 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
     val swipe = prefs.readSwipeSettings()
     val sync = prefs.readSyncSettings()
     val app = prefs.readAppSettings()
+    val eink = prefs.readEinkSettings()
     val listSettingsMap: Map<String, ListSettings> = runCatching {
         settingsJson.decodeFromString<Map<String, ListSettings>>(prefs[PER_LIST_SETTINGS_KEY] ?: "{}")
     }.getOrDefault(emptyMap())
@@ -99,11 +110,24 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         resetProgressOnMarkUnread = reader.resetProgressOnMarkUnread,
         linkOpenMode = reader.linkOpenMode,
         preferFullPageHtml = reader.preferFullPageHtml,
+        readerLineHeightScale = reader.readerLineHeightScale,
+        readerHorizontalMarginDp = reader.readerHorizontalMarginDp,
+        readerMaxWidthDp = reader.readerMaxWidthDp,
+        showReaderHeroImage = reader.showReaderHeroImage,
+        einkModeEnabled = eink.einkModeEnabled,
+        einkDisableAnimations = eink.disableAnimations,
+        einkHighContrast = eink.highContrast,
+        einkInstantPageScroll = eink.instantPageScroll,
+        pageTurnKeysEnabled = eink.hardwareKeysEnabled,
+        pageTurnPreviousKeyCode = eink.previousPageKeyCode,
+        pageTurnNextKeyCode = eink.nextPageKeyCode,
+        pageTurnOverlapPercent = eink.pageTurnOverlapPercent,
         swipeLeftAction = swipe.swipeLeftAction,
         swipeRightAction = swipe.swipeRightAction,
         customSwipeConfigsJson = swipe.customSwipeConfigsJson,
         swipeLeftConfigId = swipe.swipeLeftConfigId,
         swipeRightConfigId = swipe.swipeRightConfigId,
+        rowActionMode = swipe.rowActionMode,
         contentSyncStrategy = sync.contentSyncStrategy,
         contentSyncTargetLists = sync.contentSyncTargetLists,
         contentSyncWithChildren = sync.contentSyncWithChildren,
@@ -152,7 +176,23 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                 trackReadingProgress = s.trackReadingProgress,
                 resetProgressOnMarkUnread = s.resetProgressOnMarkUnread,
                 linkOpenMode = s.linkOpenMode,
-                preferFullPageHtml = s.preferFullPageHtml
+                preferFullPageHtml = s.preferFullPageHtml,
+                readerLineHeightScale = s.readerLineHeightScale,
+                readerHorizontalMarginDp = s.readerHorizontalMarginDp,
+                readerMaxWidthDp = s.readerMaxWidthDp,
+                showReaderHeroImage = s.showReaderHeroImage
+            )
+        )
+        prefs[EINK_SETTINGS_KEY] = settingsJson.encodeToString(
+            StoredEinkSettings(
+                einkModeEnabled = s.einkModeEnabled,
+                disableAnimations = s.einkDisableAnimations,
+                highContrast = s.einkHighContrast,
+                instantPageScroll = s.einkInstantPageScroll,
+                hardwareKeysEnabled = s.pageTurnKeysEnabled,
+                previousPageKeyCode = s.pageTurnPreviousKeyCode,
+                nextPageKeyCode = s.pageTurnNextKeyCode,
+                pageTurnOverlapPercent = s.pageTurnOverlapPercent
             )
         )
         prefs[SWIPE_SETTINGS_KEY] = settingsJson.encodeToString(
@@ -161,7 +201,8 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                 swipeRightAction = s.swipeRightAction,
                 customSwipeConfigsJson = s.customSwipeConfigsJson,
                 swipeLeftConfigId = s.swipeLeftConfigId,
-                swipeRightConfigId = s.swipeRightConfigId
+                swipeRightConfigId = s.swipeRightConfigId,
+                rowActionMode = s.rowActionMode
             )
         )
         prefs[SYNC_SETTINGS_KEY] = settingsJson.encodeToString(
@@ -260,12 +301,87 @@ suspend fun SettingsRepository.setScrollToTopEnabled(enabled: Boolean) =
 suspend fun SettingsRepository.setPreferFullPageHtml(enabled: Boolean) =
     updateReaderSettings { copy(preferFullPageHtml = enabled) }
 
+suspend fun SettingsRepository.setReaderLineHeightScale(scale: Float) = updateReaderSettings {
+    copy(
+        readerLineHeightScale = scale.coerceIn(
+            ReaderTypography.MIN_LINE_HEIGHT_SCALE,
+            ReaderTypography.MAX_LINE_HEIGHT_SCALE
+        )
+    )
+}
+
+suspend fun SettingsRepository.setReaderHorizontalMarginDp(margin: Int) = updateReaderSettings {
+    copy(
+        readerHorizontalMarginDp = margin.coerceIn(
+            ReaderTypography.MIN_HORIZONTAL_MARGIN_DP,
+            ReaderTypography.MAX_HORIZONTAL_MARGIN_DP
+        )
+    )
+}
+
+suspend fun SettingsRepository.setReaderMaxWidthDp(width: Int) = updateReaderSettings {
+    copy(
+        readerMaxWidthDp = width.coerceIn(
+            ReaderTypography.MIN_MAX_WIDTH_DP,
+            ReaderTypography.MAX_MAX_WIDTH_DP
+        )
+    )
+}
+
+suspend fun SettingsRepository.setShowReaderHeroImage(show: Boolean) =
+    updateReaderSettings { copy(showReaderHeroImage = show) }
+
 suspend fun SettingsRepository.resetReaderAppearance() = updateReaderSettings {
     copy(
         htmlTextColor = null,
         htmlBackgroundColor = null,
         htmlFontSize = 16,
-        htmlFontFamily = ReaderFontFamily.SYSTEM.name
+        htmlFontFamily = ReaderFontFamily.SYSTEM.name,
+        readerLineHeightScale = ReaderTypography.DEFAULT_LINE_HEIGHT_SCALE,
+        readerHorizontalMarginDp = ReaderTypography.DEFAULT_HORIZONTAL_MARGIN_DP,
+        readerMaxWidthDp = ReaderTypography.DEFAULT_MAX_WIDTH_DP
+    )
+}
+
+suspend fun SettingsRepository.setEinkModeEnabled(enabled: Boolean) =
+    updateEinkSettings { copy(einkModeEnabled = enabled) }
+
+suspend fun SettingsRepository.setEinkDisableAnimations(disable: Boolean) =
+    updateEinkSettings { copy(disableAnimations = disable) }
+
+suspend fun SettingsRepository.setEinkHighContrast(enabled: Boolean) =
+    updateEinkSettings { copy(highContrast = enabled) }
+
+suspend fun SettingsRepository.setEinkInstantPageScroll(enabled: Boolean) =
+    updateEinkSettings { copy(instantPageScroll = enabled) }
+
+suspend fun SettingsRepository.setPageTurnKeysEnabled(enabled: Boolean) =
+    updateEinkSettings { copy(hardwareKeysEnabled = enabled) }
+
+/**
+ * Binds a hardware key to a page-turn direction. Passing null clears the binding. A key code
+ * already bound to the other direction is released first, so the two can never collide.
+ */
+suspend fun SettingsRepository.setPageTurnKeyCode(direction: PageTurnDirection, keyCode: Int?) =
+    updateEinkSettings {
+        when (direction) {
+            PageTurnDirection.PREVIOUS -> copy(
+                previousPageKeyCode = keyCode,
+                nextPageKeyCode = if (keyCode != null && nextPageKeyCode == keyCode) null else nextPageKeyCode
+            )
+            PageTurnDirection.NEXT -> copy(
+                nextPageKeyCode = keyCode,
+                previousPageKeyCode = if (keyCode != null && previousPageKeyCode == keyCode) null else previousPageKeyCode
+            )
+        }
+    }
+
+suspend fun SettingsRepository.setPageTurnOverlapPercent(percent: Int) = updateEinkSettings {
+    copy(
+        pageTurnOverlapPercent = percent.coerceIn(
+            PageTurnKeyBindings.MIN_OVERLAP_PERCENT,
+            PageTurnKeyBindings.MAX_OVERLAP_PERCENT
+        )
     )
 }
 
@@ -283,6 +399,9 @@ suspend fun SettingsRepository.setSwipeLeftConfigId(id: String?) =
 
 suspend fun SettingsRepository.setSwipeRightConfigId(id: String?) =
     updateSwipeSettings { copy(swipeRightConfigId = id) }
+
+suspend fun SettingsRepository.setRowActionMode(mode: RowActionMode) =
+    updateSwipeSettings { copy(rowActionMode = mode.name) }
 
 suspend fun SettingsRepository.setContentSyncStrategy(strategy: SyncStrategy) =
     updateSyncSettings { copy(contentSyncStrategy = strategy.name) }

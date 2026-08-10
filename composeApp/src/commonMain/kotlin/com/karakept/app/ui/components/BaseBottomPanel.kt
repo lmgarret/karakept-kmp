@@ -1,6 +1,9 @@
 package com.karakept.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.slideInVertically
@@ -28,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.karakept.app.ui.theme.LocalEinkMode
 import kotlin.math.roundToInt
 
 /**
@@ -48,17 +52,18 @@ fun BaseBottomPanel(
     content: @Composable () -> Unit
 ) {
     var offsetY by remember { mutableFloatStateOf(0f) }
+    val einkMode = LocalEinkMode.current
 
     AnimatedVisibility(
         visible = visible,
-        enter = slideInVertically(
+        enter = if (einkMode.animationsDisabled) EnterTransition.None else slideInVertically(
             animationSpec = spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium
             ),
             initialOffsetY = { it }
         ),
-        exit = slideOutVertically(
+        exit = if (einkMode.animationsDisabled) ExitTransition.None else slideOutVertically(
             animationSpec = spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium
@@ -88,7 +93,12 @@ fun BaseBottomPanel(
                     }
                 },
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-            shadowElevation = 8.dp,
+            // The 8dp shadow is what separates the panel from the page; on e-ink it renders as
+            // nothing, so the panel needs a drawn edge instead.
+            shadowElevation = if (einkMode.highContrast) 0.dp else 8.dp,
+            border = if (einkMode.highContrast) {
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            } else null,
             color = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             Column {

@@ -70,6 +70,20 @@ data class BackupSettings(
     val resetProgressOnMarkUnread: Boolean = true,
     val linkOpenMode: String = LinkOpenMode.CUSTOM_TAB.name,
     val preferFullPageHtml: Boolean = false,
+    val readerLineHeightScale: Float = 1.0f,
+    val readerHorizontalMarginDp: Int = 28,
+    val readerMaxWidthDp: Int = 900,
+    val showReaderHeroImage: Boolean = true,
+
+    // E-ink display mode and hardware page-turn buttons
+    val einkModeEnabled: Boolean = false,
+    val einkDisableAnimations: Boolean = true,
+    val einkHighContrast: Boolean = true,
+    val einkInstantPageScroll: Boolean = true,
+    val pageTurnKeysEnabled: Boolean = true,
+    val pageTurnPreviousKeyCode: Int? = null,
+    val pageTurnNextKeyCode: Int? = null,
+    val pageTurnOverlapPercent: Int = PageTurnKeyBindings.DEFAULT_OVERLAP_PERCENT,
 
     // Theme
     val themeMode: String = ThemeMode.SYSTEM.name,
@@ -81,6 +95,7 @@ data class BackupSettings(
     val customSwipeConfigsJson: String = "[]",
     val swipeLeftConfigId: String? = null,
     val swipeRightConfigId: String? = null,
+    val rowActionMode: String = RowActionMode.SWIPE.name,
 
     // Content sync
     val contentSyncStrategy: String = SyncStrategy.PER_BOOKMARK.name,

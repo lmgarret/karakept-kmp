@@ -23,6 +23,7 @@ import com.karakept.app.ui.screens.settings.BookmarkListSettingsScreen
 import com.karakept.app.ui.screens.settings.BookmarkViewSettingsScreen
 import com.karakept.app.ui.screens.settings.CustomSwipeActionsScreen
 import com.karakept.app.ui.screens.settings.DefaultDisplaySettingsScreen
+import com.karakept.app.ui.screens.settings.EinkSettingsScreen
 import com.karakept.app.ui.screens.settings.LayoutEditorScreen
 import com.karakept.app.ui.screens.settings.LayoutsScreen
 import com.karakept.app.ui.screens.settings.ListManagementScreen
@@ -58,6 +59,7 @@ val navKeySerializersModule: SerializersModule = SerializersModule {
         subclass(ThemeSettingsScreen::class)
         subclass(AppearanceSettingsScreen::class)
         subclass(DefaultDisplaySettingsScreen::class)
+        subclass(EinkSettingsScreen::class)
         subclass(BookmarkViewSettingsScreen::class)
         subclass(BookmarkListSettingsScreen::class)
         subclass(NotificationSettingsScreen::class)
@@ -96,6 +98,7 @@ fun appEntryProvider(): (NavKey) -> NavEntry<NavKey> = entryProvider {
     entry<ThemeSettingsScreen> { it.Content() }
     entry<AppearanceSettingsScreen> { it.Content() }
     entry<DefaultDisplaySettingsScreen> { it.Content() }
+    entry<EinkSettingsScreen> { it.Content() }
     entry<BookmarkViewSettingsScreen> { it.Content() }
     entry<BookmarkListSettingsScreen> { it.Content() }
     entry<NotificationSettingsScreen> { it.Content() }

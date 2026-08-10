@@ -147,7 +147,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 - Accepts `style` (`COMPACT` / `READER`), optional `onTagClick`, and `modifier`.
 - **Use whenever a bookmark's full tag list needs to be rendered.**
 
-> **Rule:** Tags must look the same everywhere. Never use `AssistChip`, `FilterChip`, plain `Text`, or custom surfaces for displaying tags.
+> **Rule:** Tags must look the same everywhere. Never use `AssistChip`, `FilterChip`, plain `Text`, or custom surfaces for displaying tags. `BookmarkTagsDisplay` delegates to `TagChip` — keep it that way, or e-ink and theming fixes land in one place and not the other.
 
 ### List hierarchy
 
@@ -168,6 +168,33 @@ All hierarchy helpers live in the single `ListHierarchyUtils` object
 - Depth-first descendant / ancestor traversal (cycle-safe). Used for counting nested bookmarks and auto-expanding parent nodes.
 
 > **Rule:** Never sort lists manually or display them in a flat unordered layout.
+
+### Bookmark row styles
+
+`BookmarkLayout` (`data/model/BookmarkLayout.kt`) drives how a bookmark row renders. Three fields
+control its container rather than its content:
+
+| Field | Effect |
+|---|---|
+| `itemContainerStyle` | `CARD` (Material default) or `FLAT` (no container, `HorizontalDivider` between rows) |
+| `showThumbnail` | `false` omits the thumbnail box entirely — `thumbnailSize` has no "off" value |
+| `readIndicatorStyle` | `DIM` (50% alpha) or `MARKER` (bullet + weight, full contrast throughout) |
+| `showRowDivider` | Flat rows only — a card already separates itself |
+| `titlePosition` | `BESIDE_THUMBNAIL` or `ABOVE_THUMBNAIL` (title spans the row, image below). No effect without a thumbnail |
+
+| `descriptionMaxLines` | Line cap, or `DESCRIPTION_LINES_AUTO` to fill the space the thumbnail leaves over |
+
+Built-ins run densest to richest — **Compact, Rows, Cards, Digest, Magazine** — and that is the
+order the picker shows. `Rows` (flat + divider) is the one to reach for on e-ink; turn its
+thumbnail off and it collapses to plain text rows. Enabling E-ink mode never changes the active
+layout.
+
+The automatic description count measures the title with a `TextMeasurer` and needs the row's
+width, which `BookmarkListContent` measures **once for the whole list** — a row cannot ask for its
+own width without a subcomposition, and doing that per row in a `LazyColumn` is what this avoids.
+
+A row wrapper (`SwipeableBookmarkItem`, `QuickActionBookmarkItem`) takes `flat` so the row goes
+full-bleed and its divider reaches both edges.
 
 ### Tag editing and filtering
 
@@ -194,6 +221,36 @@ All hierarchy helpers live in the single `ListHierarchyUtils` object
 - Wired into `RenderResolvedImage` (`HtmlBlockRenderer.kt`) — every `<img>`/`<picture>`
   rendered in Reader mode is tappable to open it full-screen.
 - **Use whenever an image needs a tap-to-enlarge full-screen view.**
+
+### E-ink mode
+
+The app runs on electronic-paper readers, where every animated frame is a full-panel refresh
+that ghosts, and MD3's tonal surface steps collapse into indistinguishable greys.
+`LocalEinkMode` (`ui/theme/EinkMode.kt`) carries two flags — `animationsDisabled` and
+`highContrast` — both already folded together with the master "E-ink mode" setting.
+
+**New UI must respect it:**
+- No animation gated only on itself. Use `AnimatedVisibilityOrPlain`
+  (`ui/components/EinkAware.kt`) instead of `AnimatedVisibility`, and
+  `LazyListState.scrollToTop(instant)` instead of `animateScrollToItem(0, 0)`.
+- Never rely on a tonal fill or `shadowElevation` alone to separate an element from the page —
+  under `highContrast` every surface role is the same colour. Add
+  `border(1.dp, colorScheme.outline)` in that case, as `TagChip`, `BookmarkLayouts` and
+  `BaseBottomPanel` do.
+- No shimmer or indeterminate spinner as the only "busy" signal; fall back to static text
+  (`BusyIndicator` in `ui/components/EinkAware.kt` does this).
+- `secondaryContainer` is the scheme's one deliberate grey, for small repeated elements like tag
+  chips. Every other surface role is the page colour — do not reintroduce tonal steps.
+- Gestures that track a finger across many frames (swipe-to-act) smear on e-ink. `RowActionMode`
+  lets the bookmark list swap them for the always-visible button cluster desktop uses.
+
+### Hardware page-turn buttons
+
+`PageTurnDispatcher` (`ui/input/PageTurnDispatcher.kt`, a Koin `single`) maps device key codes to
+page turns. Key codes are *learned from the device* in the E-ink settings screen, not hardcoded.
+A scrollable screen opts in with `PageTurnScrollEffect(listState)`; pass `enabled = false` when
+another pane owns the buttons. Android intercepts in `MainActivity.dispatchKeyEvent` so a bound
+volume key never reaches the system volume overlay.
 
 ### Menus and bottom sheets
 

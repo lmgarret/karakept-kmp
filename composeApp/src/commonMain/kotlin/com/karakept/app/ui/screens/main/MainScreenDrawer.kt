@@ -2,7 +2,9 @@ package com.karakept.app.ui.screens.main
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerState
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -49,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +60,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpOffset
+import com.karakept.app.ui.theme.LocalEinkMode
+import kotlinx.coroutines.launch
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.DefaultListType
@@ -238,36 +244,69 @@ internal fun MainScreenDrawer(
     listSyncStatuses: Map<SyncKey, ListSyncStatus> = emptyMap(),
     content: @Composable () -> Unit
 ) {
+    val einkMode = LocalEinkMode.current
+    val scope = rememberCoroutineScope()
+
     BoxWithConstraints {
         val drawerWidth = modalDrawerWidth(maxWidth)
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
-                    DrawerContent(
-                        lists = lists,
-                        listCounts = listCounts,
-                        expandedLists = expandedLists,
-                        currentFilter = currentFilter,
-                        onFilterApply = onFilterApply,
-                        onClearFilter = onClearFilter,
-                        onToggleListExpanded = onToggleListExpanded,
-                        onMarkAllAsRead = onMarkAllAsRead,
-                        onRenameList = onRenameList,
-                        onNavigateToListSettings = onNavigateToListSettings,
-                        onSetAsDefault = onSetAsDefault,
-                        onSetAsDefaultType = onSetAsDefaultType,
-                        onNavigateToSettings = onNavigateToSettings,
-                        onNavigateToHighlights = onNavigateToHighlights,
-                        isHighlightsSelected = isHighlightsSelected,
-                        quickFilterCounts = quickFilterCounts,
-                        highlightsCount = highlightsCount,
-                        listSyncStatuses = listSyncStatuses
+        val sheet: @Composable () -> Unit = {
+            ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
+                DrawerContent(
+                    lists = lists,
+                    listCounts = listCounts,
+                    expandedLists = expandedLists,
+                    currentFilter = currentFilter,
+                    onFilterApply = onFilterApply,
+                    onClearFilter = onClearFilter,
+                    onToggleListExpanded = onToggleListExpanded,
+                    onMarkAllAsRead = onMarkAllAsRead,
+                    onRenameList = onRenameList,
+                    onNavigateToListSettings = onNavigateToListSettings,
+                    onSetAsDefault = onSetAsDefault,
+                    onSetAsDefaultType = onSetAsDefaultType,
+                    onNavigateToSettings = onNavigateToSettings,
+                    onNavigateToHighlights = onNavigateToHighlights,
+                    isHighlightsSelected = isHighlightsSelected,
+                    quickFilterCounts = quickFilterCounts,
+                    highlightsCount = highlightsCount,
+                    listSyncStatuses = listSyncStatuses
+                )
+            }
+        }
+
+        if (einkMode.animationsDisabled) {
+            // ModalNavigationDrawer closes itself on a scrim tap or a back press by calling its
+            // own animated close(), which no caller can intercept — so snapping the state from
+            // the outside only ever fixes opening. Rendering the sheet directly is the only way
+            // to make closing instant too.
+            //
+            // The trade-off is the edge-swipe-to-open gesture, which lives inside that component.
+            // On e-ink a dragged drawer is continuous animation anyway, so it is no real loss.
+            Box(modifier = Modifier.fillMaxSize()) {
+                content()
+                if (drawerState.isOpen) {
+                    val close: () -> Unit = { scope.launch { drawerState.snapTo(DrawerValue.Closed) } }
+                    com.karakept.app.ui.components.BackHandler(enabled = true, onBack = close)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = close
+                            )
                     )
+                    sheet()
                 }
             }
-        ) {
-            content()
+        } else {
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = sheet
+            ) {
+                content()
+            }
         }
     }
 }
@@ -379,11 +418,21 @@ private fun ListCountOrSyncIndicator(
             }
         }
         is ListSyncStatus.FetchingMetadata -> {
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.primary
-            )
+            // Indeterminate spinners never stop animating; the determinate one below is fine on
+            // e-ink because it only redraws when progress moves.
+            if (LocalEinkMode.current.animationsDisabled) {
+                Text(
+                    text = "…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
         is ListSyncStatus.FetchingContent -> {
             CircularProgressIndicator(

@@ -312,6 +312,86 @@ class StoredSettingsSerializationTest {
         assertNull(deserialized.backupPinHash)
     }
 
+    @Test
+    fun `StoredSwipeSettings defaults to swipe so phones are unaffected`() {
+        val settings = json.decodeFromString<StoredSwipeSettings>("{}")
+        assertEquals("SWIPE", settings.rowActionMode)
+    }
+
+    @Test
+    fun `StoredSwipeSettings rowActionMode round-trips`() {
+        val original = StoredSwipeSettings(rowActionMode = "BUTTONS")
+        assertEquals(original, json.decodeFromString<StoredSwipeSettings>(json.encodeToString(original)))
+    }
+
+    // ── StoredEinkSettings ────────────────────────────────────────────────────
+
+    @Test
+    fun `default StoredEinkSettings round-trips through JSON`() {
+        val original = StoredEinkSettings()
+        assertEquals(original, json.decodeFromString<StoredEinkSettings>(json.encodeToString(original)))
+    }
+
+    @Test
+    fun `StoredEinkSettings with non-default values round-trips`() {
+        val original = StoredEinkSettings(
+            einkModeEnabled = true,
+            disableAnimations = false,
+            highContrast = false,
+            instantPageScroll = false,
+            hardwareKeysEnabled = false,
+            previousPageKeyCode = 24,
+            nextPageKeyCode = 25,
+            pageTurnOverlapPercent = 20
+        )
+        assertEquals(original, json.decodeFromString<StoredEinkSettings>(json.encodeToString(original)))
+    }
+
+    @Test
+    fun `StoredEinkSettings is off by default so existing installs are unaffected`() {
+        val settings = json.decodeFromString<StoredEinkSettings>("{}")
+        assertEquals(false, settings.einkModeEnabled)
+        assertNull(settings.previousPageKeyCode)
+        assertNull(settings.nextPageKeyCode)
+    }
+
+    @Test
+    fun `StoredEinkSettings null key codes survive a JSON round-trip`() {
+        val original = StoredEinkSettings(previousPageKeyCode = null, nextPageKeyCode = 25)
+        val deserialized = json.decodeFromString<StoredEinkSettings>(json.encodeToString(original))
+        assertNull(deserialized.previousPageKeyCode)
+        assertEquals(25, deserialized.nextPageKeyCode)
+    }
+
+    @Test
+    fun `StoredEinkSettings ignores unknown fields from future versions`() {
+        val jsonStr = """{"einkModeEnabled":true,"someFutureToggle":false}"""
+        val settings = json.decodeFromString<StoredEinkSettings>(jsonStr)
+        assertTrue(settings.einkModeEnabled)
+    }
+
+    // ── Reader typography ─────────────────────────────────────────────────────
+
+    @Test
+    fun `StoredReaderSettings typography fields round-trip`() {
+        val original = StoredReaderSettings(
+            readerLineHeightScale = 1.35f,
+            readerHorizontalMarginDp = 12,
+            readerMaxWidthDp = 560
+        )
+        assertEquals(original, json.decodeFromString<StoredReaderSettings>(json.encodeToString(original)))
+    }
+
+    @Test
+    fun `StoredReaderSettings typography defaults preserve the previous hardcoded layout`() {
+        val settings = json.decodeFromString<StoredReaderSettings>("{}")
+        assertEquals(1.0f, settings.readerLineHeightScale)
+        assertEquals(28, settings.readerHorizontalMarginDp)
+        assertEquals(900, settings.readerMaxWidthDp)
+        // The hero image predates the toggle, so an upgrading install must keep seeing it.
+        assertTrue(settings.showReaderHeroImage)
+    }
+
     // ── Cross-category isolation ──────────────────────────────────────────────
 
     @Test

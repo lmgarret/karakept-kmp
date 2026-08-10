@@ -48,6 +48,7 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.utils.isExpandedWidth
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.ui.screens.settings.AppearanceSettingsContent
 import com.karakept.app.ui.screens.settings.AppearanceSettingsScreen
@@ -103,7 +104,7 @@ class SettingsScreen : NavKey {
         }
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val isExpandedLayout = maxWidth >= 840.dp
+            val isExpandedLayout = isExpandedWidth(maxWidth)
 
             if (isExpandedLayout) {
                 // Expanded: settings list + section content + sub-screen content

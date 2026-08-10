@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
 import com.karakept.app.ui.components.HighlightDetailsBottomPanel
@@ -236,10 +237,14 @@ internal fun ReaderAppearancePanel(
     backgroundColor: Color?,
     fontSize: Int,
     fontFamily: ReaderFontFamily,
+    typography: ReaderTypography,
     onTextColorChange: (Color?) -> Unit,
     onBackgroundColorChange: (Color?) -> Unit,
     onFontSizeChange: (Int) -> Unit,
     onFontFamilyChange: (ReaderFontFamily) -> Unit,
+    onLineHeightScaleChange: (Float) -> Unit,
+    onHorizontalMarginChange: (Int) -> Unit,
+    onMaxWidthChange: (Int) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit,
     scrollToTopEnabled: Boolean = true,
@@ -275,10 +280,14 @@ internal fun ReaderAppearancePanel(
             backgroundColor = backgroundColor,
             fontSize = fontSize,
             fontFamily = fontFamily,
+            typography = typography,
             onTextColorChange = onTextColorChange,
             onBackgroundColorChange = onBackgroundColorChange,
             onFontSizeChange = onFontSizeChange,
             onFontFamilyChange = onFontFamilyChange,
+            onLineHeightScaleChange = onLineHeightScaleChange,
+            onHorizontalMarginChange = onHorizontalMarginChange,
+            onMaxWidthChange = onMaxWidthChange,
             onReset = onReset,
             onDismiss = onDismiss,
             scrollToTopEnabled = scrollToTopEnabled,

@@ -112,6 +112,10 @@ val appModule = module {
     // Backup & Restore
     single { BackupRepository(get(), get()) }
 
+    // Hardware page-turn buttons. A single so the platform key-dispatch entry point and the
+    // screens that scroll share one instance.
+    single { com.karakept.app.ui.input.PageTurnDispatcher(get(), get()) }
+
     viewModel { LoginScreenModel(get(), get(), get()) }
     viewModel { OnboardingScreenModel(get(), get(), get(), get()) }
     // viewModel (not single) so each Nav3 back-stack entry gets a fresh instance scoped
@@ -127,6 +131,7 @@ val appModule = module {
     viewModel { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }
     viewModel { params -> com.karakept.app.ui.screens.settings.PerListSettingsScreenModel(params.get(), get()) }
     viewModel { ReaderAppearanceScreenModel(get()) }
+    viewModel { com.karakept.app.ui.screens.settings.EinkSettingsScreenModel(get(), get()) }
     viewModel { com.karakept.app.ui.screens.settings.BackupRestoreScreenModel(get(), get()) }
     viewModel { com.karakept.app.ui.screens.settings.LayoutsScreenModel(get()) }
     viewModel { com.karakept.app.ui.screens.settings.LayoutEditorScreenModel(get()) }

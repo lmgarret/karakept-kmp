@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import com.karakept.app.ui.theme.LocalEinkMode
 import kotlin.math.abs
 
 internal const val MIN_IMAGE_ZOOM = 1f
@@ -129,10 +130,12 @@ internal fun ZoomableImageDialog(
         fun dismissThresholdPx(): Float = containerSize.height.toFloat() * DISMISS_DRAG_THRESHOLD_FRACTION
 
         // Tracks the finger 1:1 while dragging (snap), then eases back to 0 once released
-        // below the dismiss threshold.
+        // below the dismiss threshold. On e-ink the ease-back is a burst of full-panel
+        // refreshes for a position the reader can simply be put back at.
+        val einkMode = LocalEinkMode.current
         val animatedDragOffsetY by animateFloatAsState(
             targetValue = dragOffsetY,
-            animationSpec = if (isDismissDragging) snap() else tween(250)
+            animationSpec = if (isDismissDragging || einkMode.animationsDisabled) snap() else tween(250)
         )
         val dismissProgress = dismissDragProgress(animatedDragOffsetY, dismissThresholdPx())
         val scrimAlpha = SCRIM_ALPHA * (1f - dismissProgress)
@@ -143,7 +146,10 @@ internal fun ZoomableImageDialog(
         // past the caption's edge and get covered by its opaque background. Fading the caption
         // out while zoomed (like most photo viewers do with their overlays) keeps it from
         // fighting the picture for visibility; it fades back in once zoomed back out.
-        val captionZoomAlpha by animateFloatAsState(if (scale > MIN_IMAGE_ZOOM) 0f else 1f)
+        val captionZoomAlpha by animateFloatAsState(
+            targetValue = if (scale > MIN_IMAGE_ZOOM) 0f else 1f,
+            animationSpec = if (einkMode.animationsDisabled) snap() else tween()
+        )
 
         fun applyZoom(newScale: Float) {
             scale = clampImageZoom(newScale)

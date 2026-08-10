@@ -78,16 +78,21 @@ fun ViewerContentPanels(
 
     // Reader appearance panel
     val scrollToTopEnabled by screenModel.scrollToTopEnabled.collectAsState()
+    val readerTypography by screenModel.readerTypography.collectAsState()
     ReaderAppearancePanel(
         visible = showAppearancePanel,
         textColor = htmlTextColor,
         backgroundColor = htmlBackgroundColor,
         fontSize = htmlFontSize,
         fontFamily = htmlFontFamily,
+        typography = readerTypography,
         onTextColorChange = { screenModel.setHtmlTextColor(it) },
         onBackgroundColorChange = { screenModel.setHtmlBackgroundColor(it) },
         onFontSizeChange = { screenModel.setHtmlFontSize(it) },
         onFontFamilyChange = { screenModel.setHtmlFontFamily(it) },
+        onLineHeightScaleChange = { screenModel.setReaderLineHeightScale(it) },
+        onHorizontalMarginChange = { screenModel.setReaderHorizontalMarginDp(it) },
+        onMaxWidthChange = { screenModel.setReaderMaxWidthDp(it) },
         onReset = { scope.launch { screenModel.resetReaderAppearance() } },
         onDismiss = { onShowAppearancePanelChanged(false) },
         scrollToTopEnabled = scrollToTopEnabled,

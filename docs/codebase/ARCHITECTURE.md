@@ -250,6 +250,27 @@ screen. Consequences worth knowing before touching this code:
   (`main.kt`, `KarakeptApp.kt`, the desktop `FilePicker`) and CPU-bound HTML parsing in
   `ui/components/HtmlContent.kt`
 
+**E-ink display mode:**
+- `LocalEinkMode` (`ui/theme/EinkMode.kt`) is a `staticCompositionLocalOf` resolved once in
+  `App.kt` from `SettingsRepository.einkDisplaySettings` and provided by `AppTheme`. It carries
+  `animationsDisabled`, `highContrast` and `instantScroll`, each already ANDed with the master
+  "E-ink mode" setting so consumers check only the flag they care about.
+- A CompositionLocal rather than parameters: the sites that must change behaviour (nav
+  transitions, list item animation, image crossfades, skeletons, progress indicators, ripple,
+  every elevation-separated surface) are spread across the whole tree, and threading a flag
+  through them all would touch far more signatures than it is worth.
+- `getColorScheme(…, highContrast = true)` swaps the accent palette for `einkColorScheme()`,
+  which flattens every surface role to the page colour and moves all separation onto `outline`.
+  It stays orthogonal to `ThemeMode` so it composes with LIGHT/DARK/SYSTEM.
+
+**Hardware key input:**
+- `PageTurnDispatcher` (`ui/input/`, a Koin `single`) owns the key-code → page-turn mapping and
+  broadcasts `PageTurnDirection` over a `SharedFlow`. Screens opt in with `PageTurnScrollEffect`.
+- It lives outside Compose because Android must intercept in `MainActivity.dispatchKeyEvent` to
+  beat the system volume overlay to a bound volume key — a Compose key modifier runs too late.
+- It mirrors bindings into a `StateFlow` on its own scope (built from `appDispatchers.default`),
+  because the platform key callback cannot suspend to read them.
+
 **Dependency Injection:**
 - Koin module configured in AppModule.kt (single instances for repositories, factories for ScreenModels)
 - Circular dependency between BookmarkActionsRepository and BookmarkRepository resolved manually in AppModule via setBookmarkRepository()

@@ -15,7 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.CircularProgressIndicator
+import com.karakept.app.ui.components.BusyIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -104,7 +104,7 @@ fun HighlightsListContent(
                     contentAlignment = Alignment.Center
                 ) {
                     if (isSyncing) {
-                        CircularProgressIndicator()
+                        BusyIndicator()
                     } else {
                         Text("No highlights yet", style = MaterialTheme.typography.bodyLarge)
                     }
@@ -143,7 +143,7 @@ fun HighlightsListContent(
                                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                CircularProgressIndicator()
+                                BusyIndicator()
                             }
                         }
                     }

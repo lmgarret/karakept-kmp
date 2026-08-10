@@ -26,6 +26,10 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.components.closeDrawer
+import com.karakept.app.ui.components.openDrawer
+import com.karakept.app.ui.theme.LocalEinkMode
+import com.karakept.app.ui.utils.isExpandedWidth
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DefaultListType
@@ -87,6 +91,7 @@ object MainScreen : NavKey {
         val customSwipeActionConfigs by screenModel.customSwipeActionConfigs.collectAsState()
         val swipeLeftConfigId by screenModel.swipeLeftConfigId.collectAsState()
         val swipeRightConfigId by screenModel.swipeRightConfigId.collectAsState()
+        val rowActionMode by screenModel.rowActionMode.collectAsState()
         val activeLayout by screenModel.activeLayout.collectAsState()
 
         // Bundle effective display settings (active layout overrides global settings)
@@ -131,6 +136,19 @@ object MainScreen : NavKey {
                     ?.let { UrlIconMode.fromString(it) }
                     ?: UrlIconMode.GLOBE_ONLY,
                 faviconByLinkSize = activeLayout?.faviconByLinkSize ?: 16,
+                showThumbnail = activeLayout?.showThumbnail ?: true,
+                itemContainerStyle = activeLayout?.itemContainerStyle
+                    ?.let { com.karakept.app.data.model.ItemContainerStyle.fromString(it) }
+                    ?: com.karakept.app.data.model.ItemContainerStyle.CARD,
+                readIndicatorStyle = activeLayout?.readIndicatorStyle
+                    ?.let { com.karakept.app.data.model.ReadIndicatorStyle.fromString(it) }
+                    ?: com.karakept.app.data.model.ReadIndicatorStyle.DIM,
+                showRowDivider = activeLayout?.showRowDivider ?: true,
+                titlePosition = activeLayout?.titlePosition
+                    ?.let { com.karakept.app.data.model.TitlePosition.fromString(it) }
+                    ?: com.karakept.app.data.model.TitlePosition.BESIDE_THUMBNAIL,
+                descriptionMaxLines = activeLayout?.descriptionMaxLines
+                    ?: com.karakept.app.data.model.BookmarkLayout.DESCRIPTION_LINES_DEFAULT,
             )
         }
 
@@ -194,6 +212,7 @@ object MainScreen : NavKey {
         var isReaderFullscreen by remember { mutableStateOf(false) }
 
         val drawerState = rememberDrawerState(DrawerValue.Closed)
+        val einkMode = LocalEinkMode.current
         val scope = rememberCoroutineScope()
 
         // Observe sync completion and show "new bookmarks" snackbar
@@ -338,6 +357,7 @@ object MainScreen : NavKey {
                     displayConfig = displayConfig,
                     swipeLeftAction = swipeLeftAction, swipeRightAction = swipeRightAction,
                     customSwipeActionConfigs = customSwipeActionConfigs, swipeLeftConfigId = swipeLeftConfigId, swipeRightConfigId = swipeRightConfigId,
+                    rowActionMode = rowActionMode,
                     trackReadingProgress = trackReadingProgress, offlineMode = offlineMode,
                     pendingBookmarkRemoteIds = pendingBookmarkRemoteIds, isSelectionMode = isSelectionMode,
                     selectedBookmarkIds = selectedBookmarkIds, activeBookmarkId = activeBmId,
@@ -379,7 +399,7 @@ object MainScreen : NavKey {
         // Adaptive layout: compact (modal drawer) vs expanded (3-column)
         var isExpandedLayout by remember { mutableStateOf(false) }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            isExpandedLayout = maxWidth >= 840.dp
+            isExpandedLayout = isExpandedWidth(maxWidth)
             if (isExpandedLayout) {
                 MainScreenExpandedLayout(
                     maxWidth = maxWidth, lists = lists, listCounts = listCounts, expandedLists = expandedLists,
@@ -409,16 +429,16 @@ object MainScreen : NavKey {
                 MainScreenDrawer(
                     drawerState = drawerState, lists = lists, listCounts = listCounts, expandedLists = expandedLists,
                     currentFilter = currentFilter,
-                    onFilterApply = { filter -> showHighlights = false; screenModel.applyFilter(filter); scope.launch { drawerState.close() } },
-                    onClearFilter = { showHighlights = false; screenModel.clearFilter(); scope.launch { drawerState.close() } },
+                    onFilterApply = { filter -> showHighlights = false; screenModel.applyFilter(filter); scope.launch { drawerState.closeDrawer(einkMode.animationsDisabled) } },
+                    onClearFilter = { showHighlights = false; screenModel.clearFilter(); scope.launch { drawerState.closeDrawer(einkMode.animationsDisabled) } },
                     onToggleListExpanded = { screenModel.toggleListExpanded(it) },
-                    onMarkAllAsRead = { screenModel.markAllBookmarksInListAsRead(it); scope.launch { drawerState.close() } },
-                    onRenameList = { listId, listName -> val t = lists.find { it.id == listId }; renameListTarget = Triple(listId, listName, t?.icon); scope.launch { drawerState.close() } },
-                    onNavigateToListSettings = { listId, listName -> navigator.push(PerListSettingsScreen(listId, listName)); scope.launch { drawerState.close() } },
-                    onSetAsDefault = { screenModel.setDefaultList(it); scope.launch { drawerState.close() } },
-                    onSetAsDefaultType = { screenModel.setDefaultListType(it); scope.launch { drawerState.close() } },
-                    onNavigateToSettings = { navigator.push(SettingsScreen()); scope.launch { drawerState.close() } },
-                    onNavigateToHighlights = { showHighlights = true; scope.launch { drawerState.close() } },
+                    onMarkAllAsRead = { screenModel.markAllBookmarksInListAsRead(it); scope.launch { drawerState.closeDrawer(einkMode.animationsDisabled) } },
+                    onRenameList = { listId, listName -> val t = lists.find { it.id == listId }; renameListTarget = Triple(listId, listName, t?.icon); scope.launch { drawerState.closeDrawer(einkMode.animationsDisabled) } },
+                    onNavigateToListSettings = { listId, listName -> navigator.push(PerListSettingsScreen(listId, listName)); scope.launch { drawerState.closeDrawer(einkMode.animationsDisabled) } },
+                    onSetAsDefault = { screenModel.setDefaultList(it); scope.launch { drawerState.closeDrawer(einkMode.animationsDisabled) } },
+                    onSetAsDefaultType = { screenModel.setDefaultListType(it); scope.launch { drawerState.closeDrawer(einkMode.animationsDisabled) } },
+                    onNavigateToSettings = { navigator.push(SettingsScreen()); scope.launch { drawerState.closeDrawer(einkMode.animationsDisabled) } },
+                    onNavigateToHighlights = { showHighlights = true; scope.launch { drawerState.closeDrawer(einkMode.animationsDisabled) } },
                     isHighlightsSelected = showHighlights,
                     quickFilterCounts = quickFilterCounts,
                     highlightsCount = highlightsCount,
@@ -451,14 +471,14 @@ object MainScreen : NavKey {
                             onLoadMore = { highlightsScreenModel.loadNextPage() },
                             onBack = { showHighlights = false },
                             onRefresh = { highlightsScreenModel.syncHighlights() },
-                            onOpenDrawer = { scope.launch { drawerState.open() } }
+                            onOpenDrawer = { scope.launch { drawerState.openDrawer(einkMode.animationsDisabled) } }
                         )
                     } else {
                         scaffoldContent(false, null, { bookmark ->
                             val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
                             if (idx >= 0) screenModel.trackLastClickedIndex(idx)
                             navigator.push(BookmarkViewerScreen(bookmark.localId))
-                        }, { scope.launch { drawerState.open() } })
+                        }, { scope.launch { drawerState.openDrawer(einkMode.animationsDisabled) } })
                     }
                 }
             }
