@@ -318,8 +318,11 @@ class MainScreenModel(
         listItems.associate { list ->
             val listId = list.id ?: ""
             val settings = allSettings[listId] ?: com.karakept.app.data.model.ListSettings()
-            val descendantIds = ListHierarchyUtils.getAllDescendantIds(listId, listItems)
-            val relevantIds = setOf(listId) + descendantIds
+            val relevantIds = if (settings.includeChildListBookmarks) {
+                setOf(listId) + ListHierarchyUtils.getAllDescendantIds(listId, listItems)
+            } else {
+                setOf(listId)
+            }
             val count = bookmarks.count { bookmark ->
                 val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
                 bookmarkLists.any { it in relevantIds } && (!settings.countOnlyUnread || !bookmark.isRead)
