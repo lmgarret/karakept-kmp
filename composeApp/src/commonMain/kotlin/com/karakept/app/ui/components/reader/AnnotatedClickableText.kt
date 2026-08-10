@@ -81,6 +81,10 @@ fun AnnotatedClickableText(
 
     var rootOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
+    // Identifies this block's contribution to a highlight's mask across the
+    // re-reports that scrolling triggers.
+    val positionSourceKey = remember { Any() }
+
     // Report position when layout or root position changes
     LaunchedEffect(selectionRange, layoutResult.value, rootOffset) {
         val layout = layoutResult.value ?: return@LaunchedEffect
@@ -129,7 +133,8 @@ fun AnnotatedClickableText(
                 scrollX = 0f,
                 scrollY = 0f,
                 path = path,
-                rootOffset = androidx.compose.ui.geometry.Offset.Zero
+                rootOffset = androidx.compose.ui.geometry.Offset.Zero,
+                sourceKey = positionSourceKey
             )
         )
     }
