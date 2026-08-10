@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.HtmlContent
@@ -52,6 +53,7 @@ internal fun ContentBodySection(
     htmlBackgroundColor: Color?,
     htmlFontSize: Int,
     htmlFontFamily: ReaderFontFamily,
+    readerTypography: ReaderTypography,
     precrawledAssetPath: String? = null,
     selectedSource: ContentSource = ContentSource.EXTRACTED,
     sourceContentOverride: String? = null,
@@ -214,6 +216,7 @@ internal fun ContentBodySection(
                     customBackgroundColor = htmlBackgroundColor,
                     customFontSize = htmlFontSize,
                     customFontFamily = htmlFontFamily,
+                    readerTypography = readerTypography,
                     localFilePath = effectiveLocalFilePath,
                     highlights = highlights,
                     onCreateHighlight = onCreateHighlight,

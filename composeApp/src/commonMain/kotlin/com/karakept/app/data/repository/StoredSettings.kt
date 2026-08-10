@@ -4,7 +4,9 @@ import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.AutoExportInterval
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.LinkOpenMode
+import com.karakept.app.data.model.PageTurnKeyBindings
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.model.ThemeMode
@@ -60,7 +62,31 @@ internal data class StoredReaderSettings(
     val linkOpenMode: String = LinkOpenMode.CUSTOM_TAB.name,
     val showTagsInViewer: Boolean = true,
     val scrollToTopEnabled: Boolean = true,
-    val preferFullPageHtml: Boolean = false
+    val preferFullPageHtml: Boolean = false,
+    /** Multiplies the per-block line-height ratios baked into the HTML renderer. */
+    val readerLineHeightScale: Float = 1.0f,
+    val readerHorizontalMarginDp: Int = 28,
+    val readerMaxWidthDp: Int = 900,
+    val showReaderHeroImage: Boolean = true
+)
+
+/**
+ * E-ink display settings.
+ *
+ * [einkModeEnabled] is the master switch; the three toggles below it are escape hatches that only
+ * take effect while it is on. The page-turn key bindings are deliberately *not* gated on it —
+ * hardware buttons are useful on any device that has them.
+ */
+@Serializable
+internal data class StoredEinkSettings(
+    val einkModeEnabled: Boolean = false,
+    val disableAnimations: Boolean = true,
+    val highContrast: Boolean = true,
+    val instantPageScroll: Boolean = true,
+    val hardwareKeysEnabled: Boolean = true,
+    val previousPageKeyCode: Int? = null,
+    val nextPageKeyCode: Int? = null,
+    val pageTurnOverlapPercent: Int = PageTurnKeyBindings.DEFAULT_OVERLAP_PERCENT
 )
 
 /** Swipe-action settings: left/right actions and custom swipe configurations. */
@@ -70,7 +96,8 @@ internal data class StoredSwipeSettings(
     val swipeRightAction: String = SwipeAction.ARCHIVE.name,
     val customSwipeConfigsJson: String = "[]",
     val swipeLeftConfigId: String? = null,
-    val swipeRightConfigId: String? = null
+    val swipeRightConfigId: String? = null,
+    val rowActionMode: String = RowActionMode.SWIPE.name
 )
 
 /** Content-sync settings: sync strategy and target lists. */

@@ -17,11 +17,15 @@ import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.data.model.EinkDisplaySettings
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncConfig
+import com.karakept.app.data.model.PageTurnKeyBindings
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.ReaderTypography
+import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.model.ThemeMode
@@ -47,6 +51,7 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     internal val SWIPE_SETTINGS_KEY = stringPreferencesKey("settings_swipe_json")
     internal val SYNC_SETTINGS_KEY = stringPreferencesKey("settings_sync_json")
     internal val APP_SETTINGS_KEY = stringPreferencesKey("settings_app_json")
+    internal val EINK_SETTINGS_KEY = stringPreferencesKey("settings_eink_json")
 
     // ── Non-backed-up individual keys (permanent, never move to a category blob) ──
 
@@ -175,7 +180,12 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
                     readingSpeedWpm = all.readingSpeedWpm,
                     trackReadingProgress = all.trackReadingProgress,
                     resetProgressOnMarkUnread = all.resetProgressOnMarkUnread,
-                    linkOpenMode = all.linkOpenMode
+                    linkOpenMode = all.linkOpenMode,
+                    preferFullPageHtml = all.preferFullPageHtml,
+                    readerLineHeightScale = all.readerLineHeightScale,
+                    readerHorizontalMarginDp = all.readerHorizontalMarginDp,
+                    readerMaxWidthDp = all.readerMaxWidthDp,
+                    showReaderHeroImage = all.showReaderHeroImage
                 )
             }
         }
@@ -203,7 +213,8 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
                     swipeRightAction = all.swipeRightAction,
                     customSwipeConfigsJson = all.customSwipeConfigsJson,
                     swipeLeftConfigId = all.swipeLeftConfigId,
-                    swipeRightConfigId = all.swipeRightConfigId
+                    swipeRightConfigId = all.swipeRightConfigId,
+                    rowActionMode = all.rowActionMode
                 )
             }
         }
@@ -260,6 +271,17 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
         )
     }
 
+    /**
+     * E-ink settings were introduced after the per-category refactor, so there is no legacy
+     * generation to fall through to — a missing key simply means the defaults.
+     */
+    internal fun Preferences.readEinkSettings(): StoredEinkSettings {
+        this[EINK_SETTINGS_KEY]?.let { json ->
+            runCatching { settingsJson.decodeFromString<StoredEinkSettings>(json) }.getOrNull()?.let { return it }
+        }
+        return StoredEinkSettings()
+    }
+
     // ── Per-category flows ────────────────────────────────────────────────────
     //
     // Each category flow uses `distinctUntilChanged()` so that a write to an
@@ -287,6 +309,10 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
 
     private val appSettingsFlow: Flow<StoredAppSettings> = dataStore.data
         .map { it.readAppSettings() }
+        .distinctUntilChanged()
+
+    private val einkSettingsFlow: Flow<StoredEinkSettings> = dataStore.data
+        .map { it.readEinkSettings() }
         .distinctUntilChanged()
 
     // ── Derived flows (theme) ─────────────────────────────────────────────────
@@ -341,6 +367,47 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     val preferFullPageHtml: Flow<Boolean> =
         readerSettingsFlow.map { it.preferFullPageHtml }.distinctUntilChanged()
 
+    val showReaderHeroImage: Flow<Boolean> =
+        readerSettingsFlow.map { it.showReaderHeroImage }.distinctUntilChanged()
+
+    val readerTypography: Flow<ReaderTypography> = readerSettingsFlow.map {
+        ReaderTypography(
+            lineHeightScale = it.readerLineHeightScale,
+            horizontalMarginDp = it.readerHorizontalMarginDp,
+            maxWidthDp = it.readerMaxWidthDp
+        )
+    }.distinctUntilChanged()
+
+    // ── Derived flows (e-ink) ─────────────────────────────────────────────────
+
+    /**
+     * The sub-toggles are folded into the master switch here so no consumer has to remember to
+     * check both.
+     */
+    val einkDisplaySettings: Flow<EinkDisplaySettings> = einkSettingsFlow.map {
+        EinkDisplaySettings(
+            enabled = it.einkModeEnabled,
+            animationsDisabled = it.einkModeEnabled && it.disableAnimations,
+            highContrast = it.einkModeEnabled && it.highContrast,
+            instantPageScroll = it.einkModeEnabled && it.instantPageScroll
+        )
+    }.distinctUntilChanged()
+
+    /** Raw stored values, for the settings screen — sub-toggles are not folded into the master. */
+    val einkModeEnabled: Flow<Boolean> = einkSettingsFlow.map { it.einkModeEnabled }.distinctUntilChanged()
+    val einkDisableAnimations: Flow<Boolean> = einkSettingsFlow.map { it.disableAnimations }.distinctUntilChanged()
+    val einkHighContrast: Flow<Boolean> = einkSettingsFlow.map { it.highContrast }.distinctUntilChanged()
+    val einkInstantPageScroll: Flow<Boolean> = einkSettingsFlow.map { it.instantPageScroll }.distinctUntilChanged()
+
+    val pageTurnKeyBindings: Flow<PageTurnKeyBindings> = einkSettingsFlow.map {
+        PageTurnKeyBindings(
+            enabled = it.hardwareKeysEnabled,
+            previousKeyCode = it.previousPageKeyCode,
+            nextKeyCode = it.nextPageKeyCode,
+            overlapPercent = it.pageTurnOverlapPercent
+        )
+    }.distinctUntilChanged()
+
     // ── Derived flows (swipe) ─────────────────────────────────────────────────
 
     val swipeLeftAction: Flow<SwipeAction> =
@@ -359,6 +426,9 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
 
     val swipeRightConfigId: Flow<String?> =
         swipeSettingsFlow.map { it.swipeRightConfigId }.distinctUntilChanged()
+
+    val rowActionMode: Flow<RowActionMode> =
+        swipeSettingsFlow.map { RowActionMode.fromString(it.rowActionMode) }.distinctUntilChanged()
 
     // ── Derived flows (sync) ──────────────────────────────────────────────────
 

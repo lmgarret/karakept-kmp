@@ -59,10 +59,11 @@ Pick the category that best fits the setting and add the field with the **same d
 |---|---|
 | `StoredThemeSettings` | Theme mode, accent color |
 | `StoredDisplaySettings` | Layout, badges, list visual toggles |
-| `StoredReaderSettings` | Viewer mode, fonts, colors, reading speed, progress |
+| `StoredReaderSettings` | Viewer mode, fonts, colors, reading speed, progress, typography |
 | `StoredSwipeSettings` | Swipe actions and custom swipe configs |
 | `StoredSyncSettings` | Content sync strategy and target lists |
 | `StoredAppSettings` | Notifications, offline mode, onboarding, auto-export |
+| `StoredEinkSettings` | E-ink display mode and hardware page-turn key bindings |
 
 ```kotlin
 @Serializable

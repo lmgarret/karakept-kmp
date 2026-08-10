@@ -2,6 +2,7 @@ package com.karakept.app.ui.screens.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,9 +22,15 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Circle
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Reorder
+import androidx.compose.material.icons.filled.Title
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VerticalSplit
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Window
@@ -64,7 +71,10 @@ import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.QuickActionPosition
+import com.karakept.app.data.model.ItemContainerStyle
+import com.karakept.app.data.model.ReadIndicatorStyle
 import com.karakept.app.data.model.ThumbnailSide
+import com.karakept.app.data.model.TitlePosition
 import com.karakept.app.data.model.UrlDisplayMode
 import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
@@ -116,9 +126,26 @@ class LayoutEditorScreenModel(
     fun updateDimReadBookmarks(dim: Boolean) { _layout.value = _layout.value.copy(dimReadBookmarks = dim) }
     fun updateDateDisplayMode(mode: DateDisplayMode) { _layout.value = _layout.value.copy(dateDisplayMode = mode.name) }
     fun updateThumbnailSide(side: ThumbnailSide) { _layout.value = _layout.value.copy(thumbnailSide = side.name) }
+    fun updateShowThumbnail(show: Boolean) { _layout.value = _layout.value.copy(showThumbnail = show) }
+    fun updateItemContainerStyle(style: ItemContainerStyle) {
+        _layout.value = _layout.value.copy(itemContainerStyle = style.name)
+    }
+    fun updateReadIndicatorStyle(style: ReadIndicatorStyle) {
+        _layout.value = _layout.value.copy(readIndicatorStyle = style.name)
+    }
+    fun updateShowRowDivider(show: Boolean) { _layout.value = _layout.value.copy(showRowDivider = show) }
+    fun updateTitlePosition(position: TitlePosition) {
+        _layout.value = _layout.value.copy(titlePosition = position.name)
+    }
     fun updateThumbnailSize(size: Int) { _layout.value = _layout.value.copy(thumbnailSize = size) }
     fun updateMetadataPosition(position: MetadataPosition) { _layout.value = _layout.value.copy(metadataPosition = position.name) }
     fun updateTagsScrollable(v: Boolean) { _layout.value = _layout.value.copy(tagsScrollable = v) }
+    fun updateDescriptionMaxLines(lines: Int) {
+        _layout.value = _layout.value.copy(
+            descriptionMaxLines = if (lines == BookmarkLayout.DESCRIPTION_LINES_AUTO) lines
+            else lines.coerceIn(1, BookmarkLayout.DESCRIPTION_LINES_MAX)
+        )
+    }
     fun updateQuickActionPosition(pos: QuickActionPosition) { _layout.value = _layout.value.copy(quickActionPosition = pos.name) }
     fun updateShowDescription(show: Boolean) { _layout.value = _layout.value.copy(showDescription = show) }
     fun updateDescriptionPosition(pos: DescriptionPosition) { _layout.value = _layout.value.copy(descriptionPosition = pos.name) }
@@ -362,11 +389,103 @@ private fun LayoutEditorContent(
                     }
                 }
 
+                // ── Row style (list only) ─────────────────────────────────────
+                if (isList) {
+                    SettingsSection(title = "Row Style") {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column {
+                                LayoutRadioOption(
+                                    title = "Card",
+                                    description = "Each bookmark in its own raised container",
+                                    icon = Icons.Default.Window,
+                                    isSelected = layout.itemContainerStyle == ItemContainerStyle.CARD.name,
+                                    onClick = { screenModel.updateItemContainerStyle(ItemContainerStyle.CARD) }
+                                )
+                                HorizontalDivider()
+                                LayoutRadioOption(
+                                    title = "Flat rows",
+                                    description = "No container — rows separated by a divider. Best on e-ink",
+                                    icon = Icons.Default.Reorder,
+                                    isSelected = layout.itemContainerStyle == ItemContainerStyle.FLAT.name,
+                                    onClick = { screenModel.updateItemContainerStyle(ItemContainerStyle.FLAT) }
+                                )
+                                // A card already separates itself; the divider is flat-only.
+                                if (layout.itemContainerStyle == ItemContainerStyle.FLAT.name) {
+                                    HorizontalDivider()
+                                    ToggleRow(
+                                        icon = Icons.Default.Remove,
+                                        title = "Divider between rows",
+                                        checked = layout.showRowDivider,
+                                        onCheckedChange = { screenModel.updateShowRowDivider(it) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (layout.showThumbnail) {
+                        SettingsSection(title = "Title Position") {
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column {
+                                    LayoutRadioOption(
+                                        title = "Beside thumbnail",
+                                        description = "Title shares the row with the image",
+                                        icon = Icons.Default.VerticalSplit,
+                                        isSelected = layout.titlePosition == TitlePosition.BESIDE_THUMBNAIL.name,
+                                        onClick = {
+                                            screenModel.updateTitlePosition(TitlePosition.BESIDE_THUMBNAIL)
+                                        }
+                                    )
+                                    HorizontalDivider()
+                                    LayoutRadioOption(
+                                        title = "Above thumbnail",
+                                        description = "Title spans the full width, image sits below it",
+                                        icon = Icons.Default.Title,
+                                        isSelected = layout.titlePosition == TitlePosition.ABOVE_THUMBNAIL.name,
+                                        onClick = {
+                                            screenModel.updateTitlePosition(TitlePosition.ABOVE_THUMBNAIL)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    SettingsSection(title = "Read Indicator") {
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column {
+                                LayoutRadioOption(
+                                    title = "Dim",
+                                    description = "Fade read bookmarks",
+                                    icon = Icons.Default.Visibility,
+                                    isSelected = layout.readIndicatorStyle == ReadIndicatorStyle.DIM.name,
+                                    onClick = { screenModel.updateReadIndicatorStyle(ReadIndicatorStyle.DIM) }
+                                )
+                                HorizontalDivider()
+                                LayoutRadioOption(
+                                    title = "Marker",
+                                    description = "Bullet beside unread titles, full contrast throughout",
+                                    icon = Icons.Default.Circle,
+                                    isSelected = layout.readIndicatorStyle == ReadIndicatorStyle.MARKER.name,
+                                    onClick = { screenModel.updateReadIndicatorStyle(ReadIndicatorStyle.MARKER) }
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // ── Thumbnail (list only) ─────────────────────────────────────
                 if (isList) {
                     SettingsSection(title = "Thumbnail") {
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Column {
+                                ToggleRow(
+                                    icon = Icons.Default.Image,
+                                    title = "Show thumbnail",
+                                    checked = layout.showThumbnail,
+                                    onCheckedChange = { screenModel.updateShowThumbnail(it) }
+                                )
+                                HorizontalDivider()
                                 LayoutRadioOption(
                                     title = "Left",
                                     description = "Thumbnail on the left side",
@@ -444,6 +563,38 @@ private fun LayoutEditorContent(
                                     isSelected = DescriptionPosition.fromString(layout.descriptionPosition) == DescriptionPosition.ABOVE_METADATA,
                                     onClick = { screenModel.updateDescriptionPosition(DescriptionPosition.ABOVE_METADATA) }
                                 )
+
+                                HorizontalDivider()
+                                val isAuto = layout.descriptionMaxLines == BookmarkLayout.DESCRIPTION_LINES_AUTO
+                                // Auto has nothing to measure against without a thumbnail setting
+                                // the row height, so it is only offered when there is one.
+                                if (layout.showThumbnail) {
+                                    ToggleRow(
+                                        icon = null,
+                                        title = "Fill space beside thumbnail",
+                                        checked = isAuto,
+                                        onCheckedChange = {
+                                            screenModel.updateDescriptionMaxLines(
+                                                if (it) BookmarkLayout.DESCRIPTION_LINES_AUTO
+                                                else BookmarkLayout.DESCRIPTION_LINES_DEFAULT
+                                            )
+                                        }
+                                    )
+                                }
+                                if (!isAuto || !layout.showThumbnail) {
+                                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                        Text(
+                                            text = "Maximum lines: ${layout.descriptionMaxLines.coerceAtLeast(1)}",
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Slider(
+                                            value = layout.descriptionMaxLines.coerceAtLeast(1).toFloat(),
+                                            onValueChange = { screenModel.updateDescriptionMaxLines(it.toInt()) },
+                                            valueRange = 1f..BookmarkLayout.DESCRIPTION_LINES_MAX.toFloat(),
+                                            steps = BookmarkLayout.DESCRIPTION_LINES_MAX - 2
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -606,9 +757,10 @@ private fun LayoutEditorContent(
                             )
                             if (layout.showTags) {
                                 HorizontalDivider()
-                                ToggleRow(
-                                    icon = null,
-                                    title = "Scrollable",
+                                ToggleRowWithDescription(
+                                    title = "Tags on one line",
+                                    description = "Keep tags in a single row that scrolls sideways, " +
+                                        "instead of wrapping onto more lines",
                                     checked = layout.tagsScrollable,
                                     onCheckedChange = { screenModel.updateTagsScrollable(it) }
                                 )
@@ -690,6 +842,9 @@ private fun LayoutEditorContent(
 
 @Composable
 private fun PreviewBookmarkItem(layout: BookmarkLayout) {
+    // The preview pane's own width, so an auto line count previews the way it will render.
+    BoxWithConstraints {
+    val previewRowWidth = maxWidth
     val layoutType = LayoutType.fromString(layout.layoutType)
     val dateMode = DateDisplayMode.fromString(layout.dateDisplayMode)
     val thumbnailSide = ThumbnailSide.fromString(layout.thumbnailSide)
@@ -743,7 +898,14 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             urlDisplayMode = urlMode,
             urlPosition = urlPos,
             urlIconMode = urlIconMode,
-            faviconByLinkSize = layout.faviconByLinkSize
+            faviconByLinkSize = layout.faviconByLinkSize,
+            showThumbnail = layout.showThumbnail,
+            itemContainerStyle = ItemContainerStyle.fromString(layout.itemContainerStyle),
+            readIndicatorStyle = ReadIndicatorStyle.fromString(layout.readIndicatorStyle),
+            showRowDivider = layout.showRowDivider,
+            titlePosition = TitlePosition.fromString(layout.titlePosition),
+            descriptionMaxLines = layout.descriptionMaxLines,
+            rowWidth = previewRowWidth
         )
         @Suppress("DEPRECATION")
         LayoutType.COMPACT_LIST -> BookmarkListLayout(
@@ -769,8 +931,16 @@ private fun PreviewBookmarkItem(layout: BookmarkLayout) {
             urlDisplayMode = urlMode,
             urlPosition = urlPos,
             urlIconMode = urlIconMode,
-            faviconByLinkSize = layout.faviconByLinkSize
+            faviconByLinkSize = layout.faviconByLinkSize,
+            showThumbnail = layout.showThumbnail,
+            itemContainerStyle = ItemContainerStyle.fromString(layout.itemContainerStyle),
+            readIndicatorStyle = ReadIndicatorStyle.fromString(layout.readIndicatorStyle),
+            showRowDivider = layout.showRowDivider,
+            titlePosition = TitlePosition.fromString(layout.titlePosition),
+            descriptionMaxLines = layout.descriptionMaxLines,
+            rowWidth = previewRowWidth
         )
+    }
     }
 }
 
@@ -852,6 +1022,31 @@ private fun SimpleRadioOption(
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+@Composable
+private fun ToggleRowWithDescription(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+            Text(text = title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

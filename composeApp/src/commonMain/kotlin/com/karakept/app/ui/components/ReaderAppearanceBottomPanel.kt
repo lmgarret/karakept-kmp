@@ -30,6 +30,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.FormatLineSpacing
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -48,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.ui.theme.rememberFontFamily
 
 @Composable
@@ -57,10 +61,14 @@ fun ReaderAppearanceBottomPanel(
     backgroundColor: Color?,
     fontSize: Int,
     fontFamily: ReaderFontFamily,
+    typography: ReaderTypography = ReaderTypography(),
     onTextColorChange: (Color?) -> Unit,
     onBackgroundColorChange: (Color?) -> Unit,
     onFontSizeChange: (Int) -> Unit,
     onFontFamilyChange: (ReaderFontFamily) -> Unit,
+    onLineHeightScaleChange: (Float) -> Unit = {},
+    onHorizontalMarginChange: (Int) -> Unit = {},
+    onMaxWidthChange: (Int) -> Unit = {},
     onReset: () -> Unit,
     onDismiss: () -> Unit,
     allowDismiss: Boolean = true,
@@ -104,11 +112,16 @@ fun ReaderAppearanceBottomPanel(
             Tab(
                 selected = selectedTab == 4,
                 onClick = { selectedTab = 4 },
-                icon = { Icon(Icons.Default.Tune, contentDescription = "Behaviour") }
+                icon = { Icon(Icons.Default.FormatLineSpacing, contentDescription = "Layout") }
             )
             Tab(
                 selected = selectedTab == 5,
                 onClick = { selectedTab = 5 },
+                icon = { Icon(Icons.Default.Tune, contentDescription = "Behaviour") }
+            )
+            Tab(
+                selected = selectedTab == 6,
+                onClick = { selectedTab = 6 },
                 icon = { Icon(Icons.Default.RestartAlt, contentDescription = "Reset") }
             )
         }
@@ -125,8 +138,14 @@ fun ReaderAppearanceBottomPanel(
                 1 -> FontTab(fontFamily, onFontFamilyChange)
                 2 -> TextColorTab(textColor, onTextColorChange)
                 3 -> BackgroundColorTab(backgroundColor, onBackgroundColorChange)
-                4 -> BehaviourTab(scrollToTopEnabled, onScrollToTopToggle)
-                5 -> ResetTab(onReset = { showResetDialog = true })
+                4 -> LayoutTab(
+                    typography = typography,
+                    onLineHeightScaleChange = onLineHeightScaleChange,
+                    onHorizontalMarginChange = onHorizontalMarginChange,
+                    onMaxWidthChange = onMaxWidthChange
+                )
+                5 -> BehaviourTab(scrollToTopEnabled, onScrollToTopToggle)
+                6 -> ResetTab(onReset = { showResetDialog = true })
             }
         }
 
@@ -151,6 +170,57 @@ fun ReaderAppearanceBottomPanel(
                     Text("Cancel")
                 }
             }
+        )
+    }
+}
+
+/**
+ * Line height, side margin and measure. These matter most on small or unusually shaped screens —
+ * the 900dp default measure is wider than a 7-inch panel, so the text runs edge to edge.
+ */
+@Composable
+private fun LayoutTab(
+    typography: ReaderTypography,
+    onLineHeightScaleChange: (Float) -> Unit,
+    onHorizontalMarginChange: (Int) -> Unit,
+    onMaxWidthChange: (Int) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+    ) {
+        Text(
+            text = "Line height: ${(typography.lineHeightScale * 100).toInt()}%",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Slider(
+            value = typography.lineHeightScale,
+            onValueChange = onLineHeightScaleChange,
+            valueRange = ReaderTypography.MIN_LINE_HEIGHT_SCALE..ReaderTypography.MAX_LINE_HEIGHT_SCALE,
+            steps = 11
+        )
+
+        Text(
+            text = "Side margin: ${typography.horizontalMarginDp}dp",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Slider(
+            value = typography.horizontalMarginDp.toFloat(),
+            onValueChange = { onHorizontalMarginChange(it.toInt()) },
+            valueRange = ReaderTypography.MIN_HORIZONTAL_MARGIN_DP.toFloat()..
+                ReaderTypography.MAX_HORIZONTAL_MARGIN_DP.toFloat(),
+            steps = 6
+        )
+
+        Text(
+            text = "Max width: ${typography.maxWidthDp}dp",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Slider(
+            value = typography.maxWidthDp.toFloat(),
+            onValueChange = { onMaxWidthChange(it.toInt()) },
+            valueRange = ReaderTypography.MIN_MAX_WIDTH_DP.toFloat()..
+                ReaderTypography.MAX_MAX_WIDTH_DP.toFloat(),
+            steps = 15
         )
     }
 }

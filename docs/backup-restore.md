@@ -45,9 +45,10 @@ All user-configurable preferences stored in the `settings_json` DataStore blob:
 | Group | Settings |
 |---|---|
 | Layout | `layoutType`, `hideArticleThumbnails`, `showReadingTimeBadge`, `showTags`, `dimReadBookmarks` |
-| Viewer / reader | `viewerMode`, `htmlTextColor`, `htmlBackgroundColor`, `htmlFontSize`, `htmlFontFamily`, `readingSpeedWpm`, `trackReadingProgress`, `resetProgressOnMarkUnread`, `linkOpenMode` |
+| Viewer / reader | `viewerMode`, `htmlTextColor`, `htmlBackgroundColor`, `htmlFontSize`, `htmlFontFamily`, `readingSpeedWpm`, `trackReadingProgress`, `resetProgressOnMarkUnread`, `linkOpenMode`, `preferFullPageHtml`, `readerLineHeightScale`, `readerHorizontalMarginDp`, `readerMaxWidthDp`, `showReaderHeroImage` |
+| E-ink | `einkModeEnabled`, `einkDisableAnimations`, `einkHighContrast`, `einkInstantPageScroll`, `pageTurnKeysEnabled`, `pageTurnPreviousKeyCode`, `pageTurnNextKeyCode`, `pageTurnOverlapPercent` |
 | Theme | `themeMode`, `accentColor` |
-| Swipe actions | `swipeLeftAction`, `swipeRightAction`, `customSwipeConfigsJson`, `swipeLeftConfigId`, `swipeRightConfigId` |
+| Swipe actions | `swipeLeftAction`, `swipeRightAction`, `customSwipeConfigsJson`, `swipeLeftConfigId`, `swipeRightConfigId`, `rowActionMode` |
 | Content sync | `contentSyncStrategy`, `contentSyncTargetLists`, `contentSyncWithChildren` |
 | Notifications | `notificationsEnabled` |
 | Offline mode | `offlineMode` |
@@ -152,6 +153,19 @@ All fields have defaults — missing fields (from older backups) fall back to th
   "trackReadingProgress": true,
   "resetProgressOnMarkUnread": true,
   "linkOpenMode": "CUSTOM_TAB",
+  "preferFullPageHtml": false,
+  "readerLineHeightScale": 1.0,
+  "readerHorizontalMarginDp": 28,
+  "readerMaxWidthDp": 900,
+  "showReaderHeroImage": true,
+  "einkModeEnabled": false,
+  "einkDisableAnimations": true,
+  "einkHighContrast": true,
+  "einkInstantPageScroll": true,
+  "pageTurnKeysEnabled": true,
+  "pageTurnPreviousKeyCode": null,
+  "pageTurnNextKeyCode": null,
+  "pageTurnOverlapPercent": 8,
   "themeMode": "SYSTEM",
   "accentColor": "PURPLE",
   "swipeLeftAction": "MARK_READ",
@@ -159,6 +173,7 @@ All fields have defaults — missing fields (from older backups) fall back to th
   "customSwipeConfigsJson": "[]",
   "swipeLeftConfigId": null,
   "swipeRightConfigId": null,
+  "rowActionMode": "SWIPE",
   "contentSyncStrategy": "PER_BOOKMARK",
   "contentSyncTargetLists": [],
   "contentSyncWithChildren": [],
@@ -186,7 +201,7 @@ All fields have defaults — missing fields (from older backups) fall back to th
 
 ## Storage Architecture
 
-Settings are stored as **six per-category JSON blobs** in DataStore. Each category has its own key and corresponding internal data class in `StoredSettings.kt`. This is distinct from the backup file format (`BackupSettings`), which remains a flat data class for backward compatibility with existing backup files.
+Settings are stored as **seven per-category JSON blobs** in DataStore. Each category has its own key and corresponding internal data class in `StoredSettings.kt`. This is distinct from the backup file format (`BackupSettings`), which remains a flat data class for backward compatibility with existing backup files.
 
 ```
 DataStore<Preferences>
@@ -196,6 +211,7 @@ DataStore<Preferences>
 ├── settings_swipe_json    ← StoredSwipeSettings   (swipe actions, custom configs)
 ├── settings_sync_json     ← StoredSyncSettings    (sync strategy, target lists)
 ├── settings_app_json      ← StoredAppSettings     (notifications, offline, onboarding, auto-export)
+├── settings_eink_json     ← StoredEinkSettings    (e-ink display mode, page-turn key bindings)
 ├── active_server_id       ← Individual key (not backed up)
 ├── last_auto_export_time  ← Individual key (not backed up)
 └── per_list_settings      ← Separate JSON blob (not backed up)

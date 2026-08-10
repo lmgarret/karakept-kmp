@@ -1,6 +1,8 @@
 package com.karakept.app.ui.navigation
 
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -35,6 +37,12 @@ fun sharedAxisZForward(): ContentTransform =
             animationSpec = tween(durationMillis = 75, easing = FastOutLinearInEasing),
         ),
     )
+
+/**
+ * No transition at all. Used in e-ink mode, where every animated frame is a full-panel refresh
+ * that ghosts the outgoing screen into the incoming one.
+ */
+fun noTransition(): ContentTransform = EnterTransition.None togetherWith ExitTransition.None
 
 fun sharedAxisZBackward(): ContentTransform =
     (scaleIn(

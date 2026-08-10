@@ -58,19 +58,7 @@ fun BookmarkTagsDisplay(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(tagList) { tag ->
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
-                    shape = MaterialTheme.shapes.small,
-                    shadowElevation = 2.dp,
-                    modifier = if (onTagClick != null) Modifier.clickable { onTagClick(tag) } else Modifier
-                ) {
-                    Text(
-                        text = tag,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+                TagChip(tag = tag, onClick = onTagClick?.let { { it(tag) } })
             }
         }
     } else {
@@ -80,19 +68,7 @@ fun BookmarkTagsDisplay(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             tagList.forEach { tag ->
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f),
-                    shape = MaterialTheme.shapes.small,
-                    shadowElevation = 2.dp,
-                    modifier = if (onTagClick != null) Modifier.clickable { onTagClick(tag) } else Modifier
-                ) {
-                    Text(
-                        text = tag,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+                TagChip(tag = tag, onClick = onTagClick?.let { { it(tag) } })
             }
         }
     }

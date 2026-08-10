@@ -66,6 +66,7 @@ fun ReaderAppearanceContent(
     val backgroundColor by screenModel.htmlBackgroundColor.collectAsState()
     val fontSize by screenModel.htmlFontSize.collectAsState()
     val fontFamily by screenModel.htmlFontFamily.collectAsState()
+    val typography by screenModel.readerTypography.collectAsState()
 
     var showBottomPanel by remember { mutableStateOf(true) }
 
@@ -113,7 +114,7 @@ fun ReaderAppearanceContent(
                         color = textColor ?: MaterialTheme.colorScheme.onSurface,
                         fontSize = fontSize.sp,
                         fontFamily = getFontFamily(fontFamily),
-                        lineHeight = (fontSize * 1.6f).sp
+                        lineHeight = (fontSize * 1.6f * typography.lineHeightScale).sp
                     )
 
                     Text(
@@ -165,10 +166,14 @@ fun ReaderAppearanceContent(
                     backgroundColor = backgroundColor,
                     fontSize = fontSize,
                     fontFamily = fontFamily,
+                    typography = typography,
                     onTextColorChange = { screenModel.setHtmlTextColor(it) },
                     onBackgroundColorChange = { screenModel.setHtmlBackgroundColor(it) },
                     onFontSizeChange = { screenModel.setHtmlFontSize(it) },
                     onFontFamilyChange = { screenModel.setHtmlFontFamily(it) },
+                    onLineHeightScaleChange = { screenModel.setReaderLineHeightScale(it) },
+                    onHorizontalMarginChange = { screenModel.setReaderHorizontalMarginDp(it) },
+                    onMaxWidthChange = { screenModel.setReaderMaxWidthDp(it) },
                     onReset = {
                         scope.launch {
                             screenModel.resetReaderAppearance()

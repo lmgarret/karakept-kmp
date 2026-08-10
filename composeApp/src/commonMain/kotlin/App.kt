@@ -14,6 +14,7 @@ import com.karakept.app.ui.navigation.AppNavigator
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.appEntryProvider
 import com.karakept.app.ui.navigation.navSavedStateConfiguration
+import com.karakept.app.ui.navigation.noTransition
 import com.karakept.app.ui.navigation.sharedAxisZBackward
 import com.karakept.app.ui.navigation.sharedAxisZForward
 import com.karakept.app.di.appModule
@@ -97,6 +98,9 @@ fun App(
         val backupRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.BackupRepository>()
         val themeMode by settingsRepository.themeMode.collectAsState(initial = com.karakept.app.data.model.ThemeMode.SYSTEM)
         val accentColor by settingsRepository.accentColor.collectAsState(initial = com.karakept.app.data.model.AccentColor.PURPLE)
+        val einkSettings by settingsRepository.einkDisplaySettings.collectAsState(
+            initial = com.karakept.app.data.model.EinkDisplaySettings()
+        )
 
         // Flush any queued offline actions whenever the app comes to the foreground, so changes
         // made while disconnected are pushed promptly on reconnect without a background service.
@@ -149,7 +153,8 @@ fun App(
 
         com.karakept.app.ui.theme.AppTheme(
             themeMode = themeMode,
-            accentColor = accentColor
+            accentColor = accentColor,
+            einkSettings = einkSettings
         ) {
             com.karakept.app.ui.theme.SyncWindowTheme()
 
@@ -213,9 +218,9 @@ fun App(
                             rememberSaveableStateHolderNavEntryDecorator(),
                             rememberViewModelStoreNavEntryDecorator(),
                         ),
-                        transitionSpec = { sharedAxisZForward() },
-                        popTransitionSpec = { sharedAxisZBackward() },
-                        predictivePopTransitionSpec = { sharedAxisZBackward() },
+                        transitionSpec = { if (einkSettings.animationsDisabled) noTransition() else sharedAxisZForward() },
+                        popTransitionSpec = { if (einkSettings.animationsDisabled) noTransition() else sharedAxisZBackward() },
+                        predictivePopTransitionSpec = { if (einkSettings.animationsDisabled) noTransition() else sharedAxisZBackward() },
                         entryProvider = remember { appEntryProvider() },
                     )
                 }

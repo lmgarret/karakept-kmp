@@ -61,15 +61,82 @@ private val PinkSecondaryDark = Color(0xFFCE93D8)
 private val PinkTertiaryDark = Color(0xFFB39DDB)
 
 /**
+ * Pure black-on-white (or white-on-black) scheme for e-ink panels.
+ *
+ * MD3 separates elements with tonal surface steps, which an e-ink panel renders as a handful of
+ * indistinguishable greys. This flattens every surface role to the page colour and pushes all
+ * separation onto `outline`, so components draw a visible 1dp border instead of relying on fill or
+ * elevation — see the `LocalEinkMode` borders in TagChip and the bookmark layouts.
+ *
+ * Kept orthogonal to [ThemeMode] so it composes with LIGHT / DARK / SYSTEM rather than replacing
+ * them; e-ink devices with an inverted mode still want dark.
+ */
+fun einkColorScheme(isDark: Boolean): androidx.compose.material3.ColorScheme {
+    val page = if (isDark) Color.Black else Color.White
+    val ink = if (isDark) Color.White else Color.Black
+    val base = if (isDark) darkColorScheme() else lightColorScheme()
+    return base.copy(
+        primary = ink,
+        onPrimary = page,
+        primaryContainer = page,
+        onPrimaryContainer = ink,
+        secondary = ink,
+        onSecondary = page,
+        // The one deliberate mid-tone. Small repeated elements — tag chips above all — need to
+        // read as a group without each one drawing a full-strength outline, which is a lot of ink
+        // for a handful of words. Chosen several steps off the page so it survives the panel's
+        // ~16-level greyscale, unlike MD3's tonal steps.
+        secondaryContainer = if (isDark) EinkChipDark else EinkChipLight,
+        onSecondaryContainer = ink,
+        tertiary = ink,
+        onTertiary = page,
+        tertiaryContainer = page,
+        onTertiaryContainer = ink,
+        background = page,
+        onBackground = ink,
+        surface = page,
+        onSurface = ink,
+        surfaceVariant = page,
+        onSurfaceVariant = ink,
+        surfaceTint = ink,
+        surfaceContainer = page,
+        surfaceContainerLow = page,
+        surfaceContainerLowest = page,
+        surfaceContainerHigh = page,
+        surfaceContainerHighest = page,
+        inverseSurface = ink,
+        inverseOnSurface = page,
+        inversePrimary = page,
+        outline = ink,
+        outlineVariant = ink,
+        // Errors stay distinguishable by staying ink-coloured rather than a mid-grey red.
+        error = ink,
+        onError = page,
+        errorContainer = page,
+        onErrorContainer = ink,
+        scrim = ink
+    )
+}
+
+/**
  * Generate a ColorScheme based on theme mode and accent color.
+ *
+ * [highContrast] overrides the accent palette entirely with [einkColorScheme].
  */
 @androidx.compose.runtime.Composable
-fun getColorScheme(themeMode: ThemeMode, accentColor: AccentColor, isDarkTheme: Boolean): androidx.compose.material3.ColorScheme {
+fun getColorScheme(
+    themeMode: ThemeMode,
+    accentColor: AccentColor,
+    isDarkTheme: Boolean,
+    highContrast: Boolean = false
+): androidx.compose.material3.ColorScheme {
     val isDark = when (themeMode) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK, ThemeMode.AMOLED -> true
         ThemeMode.SYSTEM -> isDarkTheme
     }
+
+    if (highContrast) return einkColorScheme(isDark)
 
     val isAmoled = themeMode == ThemeMode.AMOLED
 
@@ -159,6 +226,11 @@ fun getColorScheme(themeMode: ThemeMode, accentColor: AccentColor, isDarkTheme: 
         }
     }
 }
+
+// E-ink chip fill — the only mid-tone in the monochrome scheme. Far enough from the page that a
+// 16-level greyscale panel still separates the two, and light enough that ink text stays readable.
+private val EinkChipLight = Color(0xFFC9C9C9)
+private val EinkChipDark = Color(0xFF3D3D3D)
 
 // Highlight Colors (Used in Reader and Panels)
 val HighlightYellow = Color(0xFFFFEB3B)

@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -16,16 +17,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -54,19 +50,26 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DescriptionPosition
+import com.karakept.app.data.model.ItemContainerStyle
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.data.model.ReadIndicatorStyle
+import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.ThumbnailSide
+import com.karakept.app.data.model.TitlePosition
 import com.karakept.app.data.model.UrlDisplayMode
 import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.components.BookmarkAction
+import com.karakept.app.ui.components.BusyIndicator
+import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkContextMenu
 import com.karakept.app.ui.components.BookmarkListLayout
@@ -75,6 +78,9 @@ import com.karakept.app.ui.components.QuickActionBookmarkItem
 import com.karakept.app.ui.components.ScrollCursorIndicator
 import com.karakept.app.ui.components.SwipeableBookmarkItem
 import com.karakept.app.ui.components.getEffectiveColor
+import com.karakept.app.ui.components.scrollToTop
+import com.karakept.app.ui.input.PageTurnScrollEffect
+import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.utils.onDesktopModifiedClick
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
 import com.karakept.app.utils.FileUtils
@@ -118,6 +124,12 @@ internal fun BookmarkListContent(
     urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
     urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
     faviconByLinkSize: Int = 16,
+    showThumbnail: Boolean = true,
+    itemContainerStyle: ItemContainerStyle = ItemContainerStyle.CARD,
+    readIndicatorStyle: ReadIndicatorStyle = ReadIndicatorStyle.DIM,
+    showRowDivider: Boolean = true,
+    titlePosition: TitlePosition = TitlePosition.BESIDE_THUMBNAIL,
+    descriptionMaxLines: Int = BookmarkLayout.DESCRIPTION_LINES_DEFAULT,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<Long> = emptySet(),
     isSelectionMode: Boolean = false,
@@ -138,7 +150,17 @@ internal fun BookmarkListContent(
     contextMenuTags: List<String> = emptyList(),
     onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null,
     newBookmarksAbove: Int = 0,
-    onClearNewBookmarksAbove: () -> Unit = {}
+    onClearNewBookmarksAbove: () -> Unit = {},
+    /**
+     * False when a reader pane is open beside the list (wide layout) — the reader owns the
+     * hardware page buttons in that case, and both panes would otherwise scroll at once.
+     */
+    pageTurnEnabled: Boolean = true,
+    /**
+     * Whether quick actions are triggered by a swipe or by an always-visible button cluster.
+     * Desktop always uses buttons regardless — there is nothing to swipe with.
+     */
+    rowActionMode: RowActionMode = RowActionMode.SWIPE
 ) {
     // Detect when scrolled near end. The effect outlives the values it guards on, so they are
     // read through rememberUpdatedState — capturing them would freeze the guards at their
@@ -163,8 +185,10 @@ internal fun BookmarkListContent(
             }
     }
 
+    val einkMode = LocalEinkMode.current
+    PageTurnScrollEffect(listState = listState, enabled = pageTurnEnabled)
     val animationGate = remember { ItemAnimationGate(bookmarks) }
-    val animateItems = animationGate.update(bookmarks)
+    val animateItems = animationGate.update(bookmarks) && !einkMode.animationsDisabled
 
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember {
@@ -331,6 +355,11 @@ internal fun BookmarkListContent(
                     )
                 }
         ) {
+        // One measurement for the whole list: a row cannot ask for its own width without a
+        // subcomposition, and the width is identical for every one of them. Only the automatic
+        // description line count needs it.
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val rowWidth = maxWidth
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState
@@ -456,8 +485,11 @@ internal fun BookmarkListContent(
                     }
 
                     val wrapper: @Composable (@Composable () -> Unit) -> Unit = { innerContent ->
-                        if (isDesktop) {
+                        if (isDesktop || rowActionMode == RowActionMode.BUTTONS) {
                             QuickActionBookmarkItem(
+                                flat = itemContainerStyle == ItemContainerStyle.FLAT,
+                                // On touch there is no hover to reveal them.
+                                alwaysVisible = !isDesktop,
                                 leftAction = effectiveLeftAction,
                                 rightAction = effectiveRightAction,
                                 leftIcon = leftIcon,
@@ -470,6 +502,7 @@ internal fun BookmarkListContent(
                             )
                         } else {
                             SwipeableBookmarkItem(
+                                flat = itemContainerStyle == ItemContainerStyle.FLAT,
                                 leftSwipeAction = effectiveLeftAction,
                                 rightSwipeAction = effectiveRightAction,
                                 leftIcon = leftIcon,
@@ -584,6 +617,13 @@ internal fun BookmarkListContent(
                                 urlPosition = urlPosition,
                                 urlIconMode = urlIconMode,
                                 faviconByLinkSize = faviconByLinkSize,
+                                showThumbnail = showThumbnail,
+                                itemContainerStyle = itemContainerStyle,
+                                readIndicatorStyle = readIndicatorStyle,
+                                showRowDivider = showRowDivider,
+                                titlePosition = titlePosition,
+                                descriptionMaxLines = descriptionMaxLines,
+                                rowWidth = rowWidth,
                             )
                         }
                     }
@@ -607,7 +647,7 @@ internal fun BookmarkListContent(
                             .padding(16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        BusyIndicator()
                     }
                 }
             }
@@ -630,6 +670,7 @@ internal fun BookmarkListContent(
                 }
             }
         }
+        } // end row-width BoxWithConstraints
         } // end drag-selection container Box
 
         if (isSyncing) {
@@ -640,21 +681,21 @@ internal fun BookmarkListContent(
         }
 
         // "N new bookmarks" pill — tap to jump to the newly synced items at the top.
-        AnimatedVisibility(
+        AnimatedVisibilityOrPlain(
             visible = showNewBookmarksPill,
-            enter = fadeIn(animationSpec = tween(200)),
-            exit = fadeOut(animationSpec = tween(200)),
+            animated = !einkMode.animationsDisabled,
+            durationMillis = 200,
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
         ) {
             Surface(
                 onClick = {
-                    scope.launch { listState.animateScrollToItem(0, 0) }
+                    scope.launch { listState.scrollToTop(einkMode.animationsDisabled) }
                     onClearNewBookmarksAbove()
                 },
                 shape = MaterialTheme.shapes.large,
                 color = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                shadowElevation = 4.dp
+                shadowElevation = if (einkMode.highContrast) 0.dp else 4.dp
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -676,14 +717,14 @@ internal fun BookmarkListContent(
         }
 
         // Scroll-to-top FAB
-        AnimatedVisibility(
+        AnimatedVisibilityOrPlain(
             visible = showScrollToTop,
-            enter = fadeIn(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(300)),
+            animated = !einkMode.animationsDisabled,
+            durationMillis = 300,
             modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
         ) {
             SmallFloatingActionButton(
-                onClick = { scope.launch { listState.animateScrollToItem(0, 0) } },
+                onClick = { scope.launch { listState.scrollToTop(einkMode.animationsDisabled) } },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 contentColor = MaterialTheme.colorScheme.onSurface
             ) {
@@ -769,6 +810,9 @@ private fun SyncProgressBar(
     progress: com.karakept.app.data.model.SyncProgress?,
     modifier: Modifier = Modifier
 ) {
+    // Only the *indeterminate* bar is a problem on e-ink: it animates continuously. The
+    // determinate one redraws once per progress change, which the panel handles fine.
+    val einkMode = LocalEinkMode.current
     Column(modifier = modifier) {
         when (progress) {
             is com.karakept.app.data.model.SyncProgress.FetchingContent -> {
@@ -784,14 +828,25 @@ private fun SyncProgressBar(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
                     )
                 } else {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    IndeterminateSyncIndicator(einkMode.animationsDisabled)
                 }
             }
-            is com.karakept.app.data.model.SyncProgress.FetchingMetadata -> {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-            else -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            else -> IndeterminateSyncIndicator(einkMode.animationsDisabled)
         }
+    }
+}
+
+@Composable
+private fun IndeterminateSyncIndicator(animationsDisabled: Boolean) {
+    if (animationsDisabled) {
+        Text(
+            text = "Syncing…",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+    } else {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
     }
 }
 

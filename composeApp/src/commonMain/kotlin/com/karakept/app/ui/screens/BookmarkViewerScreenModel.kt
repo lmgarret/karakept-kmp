@@ -11,6 +11,7 @@ import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.remote.RemoteDataSource
@@ -25,6 +26,10 @@ import com.karakept.app.data.repository.setHtmlBackgroundColor
 import com.karakept.app.data.repository.setHtmlFontSize
 import com.karakept.app.data.repository.setHtmlFontFamily
 import com.karakept.app.data.repository.resetReaderAppearance
+import com.karakept.app.data.repository.setReaderHorizontalMarginDp
+import com.karakept.app.data.repository.setShowReaderHeroImage
+import com.karakept.app.data.repository.setReaderLineHeightScale
+import com.karakept.app.data.repository.setReaderMaxWidthDp
 import com.karakept.app.data.repository.setScrollToTopEnabled
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.BufferOverflow
@@ -40,7 +45,9 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import com.karakept.app.data.remote.OfflineModeException
 import com.karakept.app.data.remote.UnsupportedServerActionException
@@ -109,6 +116,12 @@ class BookmarkViewerScreenModel(
 
     val htmlFontFamily: StateFlow<ReaderFontFamily> = settingsRepository.htmlFontFamily
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReaderFontFamily.SYSTEM)
+
+    val showHeroImage: StateFlow<Boolean> = settingsRepository.showReaderHeroImage
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val readerTypography: StateFlow<ReaderTypography> = settingsRepository.readerTypography
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReaderTypography())
 
     val showTags: StateFlow<Boolean> = settingsRepository.showTagsInViewer
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -271,6 +284,14 @@ class BookmarkViewerScreenModel(
         flushOnDispose()
     }
 
+    companion object {
+        /**
+         * How long the reader waits for the cross-device reading-progress pull before showing the
+         * article regardless. Revealing content must not depend on a network round-trip.
+         */
+        const val PROGRESS_PULL_GRACE_MILLIS = 2_000L
+    }
+
     /**
      * Flushes pending reading progress and clears caches. Called automatically by [onCleared]
      * when this ViewModel's nav entry leaves, and manually by the expanded (inline) viewer
@@ -397,16 +418,27 @@ class BookmarkViewerScreenModel(
                             if (!settingsRepository.offlineMode.first()) {
                                 // Pull reading progress from server for cross-device sync
                                 viewModelScope.launch {
-                                    val updated = bookmarkActionsRepository.pullReadingProgressFromServer(
-                                        bookmark.remoteId, bookmark.serverId
-                                    )
-                                    // If server had newer progress, yield for DB propagation
+                                    val pull = async {
+                                        bookmarkActionsRepository.pullReadingProgressFromServer(
+                                            bookmark.remoteId, bookmark.serverId
+                                        )
+                                    }
+                                    // The reader keeps a skeleton up until this flag flips, so it
+                                    // cannot wait on the request indefinitely — the HTTP client
+                                    // allows two minutes, which on a flaky connection is two
+                                    // minutes of skeleton. Wait briefly, then reveal the content
+                                    // anyway and let the pull land on its own; if it does bring
+                                    // newer progress, the DB update flows through
+                                    // observeBookmarkById like any other change.
+                                    val updated = withTimeoutOrNull(PROGRESS_PULL_GRACE_MILLIS) {
+                                        pull.await()
+                                    }
                                     // If the server had newer progress, yield once so the DB
                                     // update can propagate through observeBookmarkById and
                                     // update loadingState before we signal serverProgressChecked.
                                     // This prevents a race where the UI sees serverProgressChecked=true
                                     // but loadingState still holds the old 0% progress.
-                                    if (updated) kotlinx.coroutines.yield()
+                                    if (updated == true) kotlinx.coroutines.yield()
                                     _serverProgressChecked.value = true
                                 }
                             } else {
@@ -525,6 +557,22 @@ class BookmarkViewerScreenModel(
         viewModelScope.launch {
             settingsRepository.setHtmlFontFamily(family)
         }
+    }
+
+    fun setShowHeroImage(show: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowReaderHeroImage(show) }
+    }
+
+    fun setReaderLineHeightScale(scale: Float) {
+        viewModelScope.launch { settingsRepository.setReaderLineHeightScale(scale) }
+    }
+
+    fun setReaderHorizontalMarginDp(margin: Int) {
+        viewModelScope.launch { settingsRepository.setReaderHorizontalMarginDp(margin) }
+    }
+
+    fun setReaderMaxWidthDp(width: Int) {
+        viewModelScope.launch { settingsRepository.setReaderMaxWidthDp(width) }
     }
 
     suspend fun resetReaderAppearance() {

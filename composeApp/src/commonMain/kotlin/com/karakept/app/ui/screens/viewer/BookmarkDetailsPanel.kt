@@ -1,6 +1,11 @@
 package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.BorderStroke
+import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
+import com.karakept.app.ui.theme.LocalEinkMode
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -124,11 +129,12 @@ internal fun BookmarkDetailsPanel(
 
     // Confirmation gate for the irreversible server-side delete
     var assetPendingServerDelete by remember { mutableStateOf<AssetEntity?>(null) }
+    val einkMode = LocalEinkMode.current
+
     // Scrim
-    AnimatedVisibility(
+    AnimatedVisibilityOrPlain(
         visible = visible,
-        enter = fadeIn(),
-        exit = fadeOut()
+        animated = !einkMode.animationsDisabled
     ) {
         Box(
             modifier = Modifier
@@ -149,15 +155,22 @@ internal fun BookmarkDetailsPanel(
     ) {
         AnimatedVisibility(
             visible = visible,
-            enter = slideInHorizontally(initialOffsetX = { it }),
-            exit = slideOutHorizontally(targetOffsetX = { it })
+            enter = if (einkMode.animationsDisabled) EnterTransition.None
+                    else slideInHorizontally(initialOffsetX = { it }),
+            exit = if (einkMode.animationsDisabled) ExitTransition.None
+                   else slideOutHorizontally(targetOffsetX = { it })
         ) {
             Surface(
                 modifier = Modifier
                     .fillMaxHeight()
                     .width(360.dp),
                 shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
-                shadowElevation = 8.dp,
+                // The shadow is the panel's only edge against the article behind it, and it does
+                // not render on e-ink.
+                shadowElevation = if (einkMode.highContrast) 0.dp else 8.dp,
+                border = if (einkMode.highContrast) {
+                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                } else null,
                 color = MaterialTheme.colorScheme.surface
             ) {
                 if (bookmark != null) {

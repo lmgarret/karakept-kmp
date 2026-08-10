@@ -21,15 +21,20 @@ import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DescriptionPosition
+import com.karakept.app.data.model.ItemContainerStyle
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.data.model.ReadIndicatorStyle
+import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.SyncProgress
 import com.karakept.app.data.model.ThumbnailSide
+import com.karakept.app.data.model.TitlePosition
 import com.karakept.app.data.model.UrlDisplayMode
 import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
@@ -57,6 +62,9 @@ import com.karakept.app.ui.screens.updateBookmarkTags
 import com.karakept.app.ui.screens.accumulatedBookmarkPosition
 import com.karakept.app.ui.screens.restoreAndRemoveBookmarkFromList
 import com.karakept.app.domain.action.ActionSnackbarManager
+import com.karakept.app.ui.input.PageTurnDispatcher
+import com.karakept.app.ui.input.handleDesktopPageKey
+import org.koin.compose.koinInject
 import com.karakept.app.domain.action.undoableAction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -85,6 +93,12 @@ data class MainScreenDisplayConfig(
     val urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
     val urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
     val faviconByLinkSize: Int = 16,
+    val showThumbnail: Boolean = true,
+    val itemContainerStyle: ItemContainerStyle = ItemContainerStyle.CARD,
+    val readIndicatorStyle: ReadIndicatorStyle = ReadIndicatorStyle.DIM,
+    val showRowDivider: Boolean = true,
+    val titlePosition: TitlePosition = TitlePosition.BESIDE_THUMBNAIL,
+    val descriptionMaxLines: Int = BookmarkLayout.DESCRIPTION_LINES_DEFAULT,
 )
 
 /**
@@ -110,6 +124,7 @@ fun MainScreenScaffoldContent(
     customSwipeActionConfigs: List<CustomSwipeActionConfig>,
     swipeLeftConfigId: String?,
     swipeRightConfigId: String?,
+    rowActionMode: RowActionMode,
     trackReadingProgress: Boolean,
     offlineMode: Boolean,
     pendingBookmarkRemoteIds: Set<Long>,
@@ -146,9 +161,13 @@ fun MainScreenScaffoldContent(
     newBookmarksAbove: Int = 0,
     onClearNewBookmarksAbove: () -> Unit = {}
 ) {
+    val pageTurnDispatcher = koinInject<PageTurnDispatcher>()
     Scaffold(
         modifier = Modifier.fillMaxSize().onKeyEvent { keyEvent ->
-            if (keyEvent.type == KeyEventType.KeyDown && keyEvent.keyboardKey == Key.Escape && isSearchActive) {
+            if (activeBookmarkId == null && !isSearchActive &&
+                pageTurnDispatcher.handleDesktopPageKey(keyEvent)) {
+                true
+            } else if (keyEvent.type == KeyEventType.KeyDown && keyEvent.keyboardKey == Key.Escape && isSearchActive) {
                 onSearchClose()
                 true
             } else if (keyEvent.type == KeyEventType.KeyDown &&
@@ -267,11 +286,21 @@ fun MainScreenScaffoldContent(
                 urlPosition = displayConfig.urlPosition,
                 urlIconMode = displayConfig.urlIconMode,
                 faviconByLinkSize = displayConfig.faviconByLinkSize,
+                showThumbnail = displayConfig.showThumbnail,
+                itemContainerStyle = displayConfig.itemContainerStyle,
+                readIndicatorStyle = displayConfig.readIndicatorStyle,
+                showRowDivider = displayConfig.showRowDivider,
+                titlePosition = displayConfig.titlePosition,
+                descriptionMaxLines = displayConfig.descriptionMaxLines,
                 offlineMode = offlineMode,
                 pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                 isSelectionMode = isSelectionMode,
                 selectedBookmarkIds = selectedBookmarkIds,
                 activeBookmarkId = activeBookmarkId,
+                // A non-null activeBookmarkId means the wide layout has the reader pane open
+                // beside the list; the reader takes the page buttons then.
+                pageTurnEnabled = activeBookmarkId == null,
+                rowActionMode = rowActionMode,
                 onBookmarkSelectionToggle = { bookmark ->
                     screenModel.toggleBookmarkSelection(bookmark)
                 },

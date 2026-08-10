@@ -1,6 +1,8 @@
 package com.karakept.app.ui.screens.main
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
@@ -57,6 +59,7 @@ import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.ui.screens.SettingsScreen
 import com.karakept.app.ui.screens.settings.PerListSettingsContent
 import com.karakept.app.ui.screens.settings.PerListSettingsScreenModel
+import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.utils.ExpandedDrawerDefaultWidth
 import com.karakept.app.ui.utils.coerceExpandedDrawerWidth
 import org.koin.core.parameter.parametersOf
@@ -66,6 +69,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * Three-column expanded layout for wide screens (>= 840dp):
@@ -146,6 +150,11 @@ fun MainScreenExpandedLayout(
         if (selectedBookmarkId == null) onReaderFullscreenChanged(false)
     }
 
+    // Panes slide open and shut; on e-ink that is a full-panel refresh per frame.
+    val einkMode = LocalEinkMode.current
+    val paneEnter = if (einkMode.animationsDisabled) EnterTransition.None else expandHorizontally()
+    val paneExit = if (einkMode.animationsDisabled) ExitTransition.None else shrinkHorizontally()
+
     var activeListSettings by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     val scope = rememberCoroutineScope()
@@ -165,8 +174,8 @@ fun MainScreenExpandedLayout(
         // Drawer column (collapsible)
         AnimatedVisibility(
             visible = isDrawerVisible && !isReaderFullscreen,
-            enter = expandHorizontally(),
-            exit = shrinkHorizontally()
+            enter = paneEnter,
+            exit = paneExit
         ) {
             Surface(
                 modifier = Modifier.width(drawerWidth).fillMaxHeight(),
@@ -228,8 +237,8 @@ fun MainScreenExpandedLayout(
         // Line aligned to start so it sits flush against the drawer edge.
         AnimatedVisibility(
             visible = isDrawerVisible && !isReaderFullscreen,
-            enter = expandHorizontally(),
-            exit = shrinkHorizontally()
+            enter = paneEnter,
+            exit = paneExit
         ) {
             DraggableDivider(
                 lineAlignment = Alignment.CenterStart,
@@ -242,8 +251,8 @@ fun MainScreenExpandedLayout(
         // Middle column: bookmark list or highlights list
         AnimatedVisibility(
             visible = !isReaderFullscreen,
-            enter = expandHorizontally(),
-            exit = shrinkHorizontally()
+            enter = paneEnter,
+            exit = paneExit
         ) {
             Box(modifier = Modifier.width(listWidth).fillMaxHeight()) {
                 val listSettingsTarget = activeListSettings
@@ -307,8 +316,8 @@ fun MainScreenExpandedLayout(
         // Divider between list and reader (draggable)
         AnimatedVisibility(
             visible = !isReaderFullscreen,
-            enter = expandHorizontally(),
-            exit = shrinkHorizontally()
+            enter = paneEnter,
+            exit = paneExit
         ) {
             DraggableDivider(
                 onDrag = { delta ->
@@ -350,7 +359,14 @@ fun MainScreenExpandedLayout(
                 if (currentBookmarkId != null) {
                     // Use key() to force fresh composition when bookmark or highlight changes
                     androidx.compose.runtime.key(currentBookmarkId, currentScrollToHighlightId) {
-                        val viewerScreenModel = koinInject<BookmarkViewerScreenModel>()
+                        // koinViewModel, not koinInject: an injected ViewModel is never put in
+                        // a ViewModelStore, so onCleared never runs and its viewModelScope is
+                        // never cancelled — every bookmark opened here would leave its
+                        // observeBookmarkById collector and any in-flight request running for
+                        // the rest of the process.
+                        val viewerScreenModel = koinViewModel<BookmarkViewerScreenModel>(
+                            key = "viewer-$currentBookmarkId-$currentScrollToHighlightId"
+                        )
                         DisposableEffect(currentBookmarkId) {
                             onDispose { viewerScreenModel.flushOnDispose() }
                         }

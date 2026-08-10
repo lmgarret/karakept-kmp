@@ -31,8 +31,10 @@ import androidx.compose.animation.Crossfade
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.reader.NativeHtmlRenderer
+import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.HtmlArchiveProcessor
 import com.karakept.app.utils.HtmlCache
@@ -71,6 +73,7 @@ fun HtmlContent(
     customBackgroundColor: Color? = null,
     customFontSize: Int = 16,
     customFontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
+    readerTypography: ReaderTypography = ReaderTypography(),
     localFilePath: String? = null,
     onHighlightClick: ((String) -> Unit)? = null,
     onHighlightPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit = { _, _ -> },
@@ -181,6 +184,7 @@ fun HtmlContent(
                                 backgroundColor = customBackgroundColor,
                                 fontSize = customFontSize,
                                 fontFamily = customFontFamily,
+                                typography = readerTypography,
                                 onLinkClick = onLinkClick,
                                 onHighlightClick = { highlightId ->
                                     onHighlightClick?.invoke(highlightId)
@@ -228,9 +232,9 @@ fun HtmlContent(
 
                 // Show SkeletonLoader until content is fully loaded
                 // Use a crossfade for smoother transition
-                androidx.compose.animation.AnimatedVisibility(
+                AnimatedVisibilityOrPlain(
                     visible = !isContentLoaded || (processedHtml == null && localFilePath == null),
-                    exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(300))
+                    animated = !LocalEinkMode.current.animationsDisabled
                 ) {
                     SkeletonLoader(
                         modifier = Modifier.fillMaxWidth()

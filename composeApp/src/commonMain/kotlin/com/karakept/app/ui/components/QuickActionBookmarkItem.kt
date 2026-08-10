@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.SwipeAction
+import com.karakept.app.ui.theme.LocalEinkMode
 
 /**
  * Desktop replacement for [SwipeableBookmarkItem].
@@ -46,6 +48,16 @@ fun QuickActionBookmarkItem(
     position: QuickActionPosition = QuickActionPosition.RIGHT,
     onActionTriggered: (SwipeAction, Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Full-bleed rows with no gutter, for [com.karakept.app.data.model.ItemContainerStyle.FLAT].
+     * The row supplies its own text inset and a divider that must reach both edges.
+     */
+    flat: Boolean = false,
+    /**
+     * Show the buttons unconditionally instead of on hover. Required on touch, where a hover
+     * event never arrives and the cluster would otherwise never appear.
+     */
+    alwaysVisible: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val hasActions = leftAction != SwipeAction.NONE || rightAction != SwipeAction.NONE
@@ -54,7 +66,7 @@ fun QuickActionBookmarkItem(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .then(if (flat) Modifier else Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         ) {
             content()
         }
@@ -68,16 +80,15 @@ fun QuickActionBookmarkItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .then(if (flat) Modifier else Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             .hoverable(itemInteractionSource)
     ) {
         content()
 
         // Buttons overlay on top of card, only visible on hover
-        AnimatedVisibility(
-            visible = isItemHovered,
-            enter = fadeIn(),
-            exit = fadeOut(),
+        AnimatedVisibilityOrPlain(
+            visible = alwaysVisible || isItemHovered,
+            animated = !LocalEinkMode.current.animationsDisabled,
             modifier = Modifier
                 .align(
                     if (position == QuickActionPosition.LEFT) Alignment.CenterStart
@@ -116,6 +127,13 @@ private fun ActionButtons(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f))
+            .then(
+                // surfaceContainerHigh is the page colour in high contrast, so the cluster would
+                // float over the row with no edge of its own.
+                if (LocalEinkMode.current.highContrast) {
+                    Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                } else Modifier
+            )
             .padding(2.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally

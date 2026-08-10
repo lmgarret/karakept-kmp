@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.karakept.app.ui.theme.LocalEinkMode
 
 /**
  * Reusable tag chip matching the BookmarkTagsDisplay surface design.
@@ -40,16 +41,33 @@ fun TagChip(
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
-                         else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f)
-    val contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                       else MaterialTheme.colorScheme.onSecondaryContainer
-    val border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+    // On e-ink the 2dp shadow renders as nothing and the tonal container is flattened to the page,
+    // so a chip would be invisible. The scheme keeps one grey for exactly this: it separates the
+    // chip from the page on its own, without an outline per tag. "Selected" inverts to ink-on-page
+    // rather than shifting hue, since hue does not survive a monochrome panel.
+    val highContrast = LocalEinkMode.current.highContrast
+    val containerColor = when {
+        highContrast && selected -> MaterialTheme.colorScheme.onSurface
+        highContrast -> MaterialTheme.colorScheme.secondaryContainer
+        selected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+        else -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f)
+    }
+    val contentColor = when {
+        highContrast && selected -> MaterialTheme.colorScheme.surface
+        highContrast -> MaterialTheme.colorScheme.onSecondaryContainer
+        selected -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSecondaryContainer
+    }
+    val border = when {
+        highContrast -> null
+        selected -> BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+        else -> null
+    }
 
     Surface(
         color = containerColor,
         shape = MaterialTheme.shapes.small,
-        shadowElevation = 2.dp,
+        shadowElevation = if (highContrast) 0.dp else 2.dp,
         border = border,
         modifier = modifier
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)

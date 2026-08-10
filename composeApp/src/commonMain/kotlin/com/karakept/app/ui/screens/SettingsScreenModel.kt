@@ -3,6 +3,7 @@ package com.karakept.app.ui.screens
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LayoutType
@@ -36,6 +37,8 @@ import com.karakept.app.data.repository.setDimReadBookmarks
 import com.karakept.app.data.repository.setShowScrollCursor
 import com.karakept.app.data.repository.setTrackReadingProgress
 import com.karakept.app.data.repository.setResetProgressOnMarkUnread
+import com.karakept.app.data.repository.setRowActionMode
+import com.karakept.app.data.repository.setShowReaderHeroImage
 import com.karakept.app.data.repository.setShowTagsInViewer
 import com.karakept.app.data.repository.setPreferFullPageHtml
 import com.karakept.app.data.repository.setNotificationsEnabled
@@ -377,6 +380,30 @@ class SettingsScreenModel(
     fun setResetProgressOnMarkUnread(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setResetProgressOnMarkUnread(enabled)
+        }
+    }
+
+    val showHeroImage: StateFlow<Boolean> = settingsRepository.showReaderHeroImage.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setShowHeroImage(show: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setShowReaderHeroImage(show)
+        }
+    }
+
+    val rowActionMode: StateFlow<RowActionMode> = settingsRepository.rowActionMode.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = RowActionMode.SWIPE
+    )
+
+    fun setRowActionMode(mode: RowActionMode) {
+        viewModelScope.launch {
+            settingsRepository.setRowActionMode(mode)
         }
     }
 
