@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Timeline
@@ -250,6 +251,44 @@ fun BookmarkViewSettingsContent(
                     Switch(
                         checked = hideArticleThumbnails,
                         onCheckedChange = { screenModel.setHideArticleThumbnails(it) }
+                    )
+                }
+            }
+
+            val showHeroImage by screenModel.showHeroImage.collectAsState()
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Photo,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Show Hero Image",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Large banner above the article. Turning it off starts the text " +
+                                "a screenful sooner and avoids a dithered photo on e-ink",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = showHeroImage,
+                        onCheckedChange = { screenModel.setShowHeroImage(it) }
                     )
                 }
             }

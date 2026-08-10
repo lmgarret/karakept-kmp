@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import com.karakept.app.utils.AppLogger
 import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.FilterConfig
@@ -403,6 +404,11 @@ class MainScreenModel(
     val swipeRightConfigId: StateFlow<String?> =
         settingsRepository.swipeRightConfigId.stateIn(
             viewModelScope, SharingStarted.WhileSubscribed(5000), null
+        )
+
+    val rowActionMode: StateFlow<RowActionMode> =
+        settingsRepository.rowActionMode.stateIn(
+            viewModelScope, SharingStarted.WhileSubscribed(5000), RowActionMode.SWIPE
         )
 
     val dimReadBookmarks: StateFlow<Boolean> =

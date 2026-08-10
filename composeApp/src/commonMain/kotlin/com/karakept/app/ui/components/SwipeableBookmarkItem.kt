@@ -74,6 +74,11 @@ fun SwipeableBookmarkItem(
     rightIsApplied: Boolean = false, // When true, shows crossed icon + faded color (action already applied)
     onActionTriggered: (SwipeAction, Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Full-bleed rows with no gutter, for [com.karakept.app.data.model.ItemContainerStyle.FLAT].
+     * The row supplies its own text inset and a divider that must reach both edges.
+     */
+    flat: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val currentOnActionTriggered by androidx.compose.runtime.rememberUpdatedState(onActionTriggered)
@@ -95,7 +100,10 @@ fun SwipeableBookmarkItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp) // Match bookmark layout padding
+            .then(
+                // Match bookmark layout padding; flat rows are full-bleed instead.
+                if (flat) Modifier else Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
     ) {
         // Background layer showing action icons
         Row(

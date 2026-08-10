@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Switch
@@ -46,6 +47,7 @@ import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.CustomSwipeActionType
 import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.ReadingSpeedDialog
 import com.karakept.app.ui.components.getIcon
@@ -283,6 +285,41 @@ fun BookmarkListSettingsContent(
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
+
+                if (!isDesktopPlatform) {
+                    val rowActionMode by screenModel.rowActionMode.collectAsState()
+                    Card(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.TouchApp,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Action Buttons", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    text = "Show buttons on each bookmark instead of swiping. A swipe " +
+                                        "has to be tracked across many frames, which e-ink panels " +
+                                        "smear or drop",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = rowActionMode == RowActionMode.BUTTONS,
+                                onCheckedChange = {
+                                    screenModel.setRowActionMode(
+                                        if (it) RowActionMode.BUTTONS else RowActionMode.SWIPE
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
 
                 SwipeActionSettingItem(
                     title = if (isDesktopPlatform) "Primary Quick Action" else "Swipe Right (Left to Right)",
