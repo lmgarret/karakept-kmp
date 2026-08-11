@@ -116,5 +116,10 @@ data class HighlightPosition(
     val scrollX: Float,
     val scrollY: Float,
     val path: Path? = null,
-    val rootOffset: Offset = Offset.Zero
+    val rootOffset: Offset = Offset.Zero,
+    /**
+     * Identifies the text block that reported this piece, so a block that moves
+     * replaces its own contribution to the mask instead of adding a second one.
+     */
+    val sourceKey: Any? = null
 )

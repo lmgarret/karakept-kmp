@@ -143,6 +143,7 @@ fun BookmarkViewerContent(
     var showListPicker by remember { mutableStateOf(false) }
     var selectedHighlightId by remember { mutableStateOf<String?>(null) }
     var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
+    val highlightMask = remember { com.karakept.app.ui.components.HighlightMaskAccumulator() }
     var selectedHighlightText by remember { mutableStateOf<String?>(null) }
 
     // Search state
@@ -182,7 +183,10 @@ fun BookmarkViewerContent(
         }
     }
 
-    LaunchedEffect(selectedHighlightId) { highlightPosition = null }
+    LaunchedEffect(selectedHighlightId) {
+        highlightMask.clear()
+        highlightPosition = null
+    }
 
     // Snackbar: embedded mode skips collection (parent handles it)
     val snackbarHostState = if (isEmbedded) {
@@ -481,19 +485,7 @@ fun BookmarkViewerContent(
                                     onDeleteHighlight = { highlightId -> screenModel.deleteHighlight(state.bookmark, highlightId) },
                                     onHighlightClick = { id -> selectedHighlightId = id },
                                     onHighlightPosition = { id, position ->
-                                        val current = highlightPosition
-                                        val currentPath = current?.path
-                                        val positionPath = position.path
-                                        if (currentPath != null && positionPath != null) {
-                                            val mergedPath = androidx.compose.ui.graphics.Path().apply { addPath(currentPath); addPath(positionPath) }
-                                            val mergedBounds = mergedPath.getBounds()
-                                            highlightPosition = com.karakept.app.ui.components.HighlightPosition(
-                                                x = mergedBounds.left, y = mergedBounds.top,
-                                                width = mergedBounds.width, height = mergedBounds.height,
-                                                scrollX = 0f, scrollY = 0f, path = mergedPath,
-                                                rootOffset = androidx.compose.ui.geometry.Offset.Zero
-                                            )
-                                        } else { highlightPosition = position }
+                                        highlightPosition = highlightMask.accumulate(position, fallbackKey = id)
                                         if (id == scrollToHighlightId && !highlightPositionReceived) highlightPositionReceived = true
                                     },
                                     onContentReady = { scrollRestoration.onContentRendered() },

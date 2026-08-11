@@ -1,24 +1,25 @@
 package com.karakept.app.ui.components.reader
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.util.Log
-import android.view.ActionMode
-import android.view.Menu
-import android.view.MenuItem
-import android.view.Window
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.text.contextmenu.builder.item
+import androidx.compose.foundation.text.contextmenu.data.TextContextMenuItem
+import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
+import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.text.AnnotatedString
 
 private const val TAG = "HighlightToolbar"
-private const val MENU_ID_HIGHLIGHT = 1001
+private const val MENU_LABEL_HIGHLIGHT = "Highlight"
 
-// ─── Reflection helpers to extract selected text from Compose internals ──────
+private object HighlightMenuKey
+
+// ─── Reading the selection out of Compose ────────────────────────────────────
 
 /**
  * Returns true if [cls] is the real SelectionManager class, not a synthetic
@@ -35,8 +36,12 @@ private fun isSelectionManagerClass(cls: Class<*>): Boolean {
  * Recursively searches [root]'s field tree for Compose's internal
  * `SelectionManager` instance. Skips JDK / Android framework types and avoids
  * cycles via an identity-hash visited set.
+ *
+ * `SelectionManager` ships inside the app, not the platform, so unlike the
+ * framework internals this reflection is not subject to the non-SDK interface
+ * restrictions.
  */
-private fun findSelectionManager(
+internal fun findSelectionManager(
     root: Any,
     maxDepth: Int = 6,
     visited: MutableSet<Int> = mutableSetOf()
@@ -67,203 +72,102 @@ private fun findSelectionManager(
 }
 
 /**
- * Extracts the currently selected text from Compose's `SelectionManager` by
- * navigating the [actionModeCallback]'s field tree via reflection.
+ * Calls `SelectionManager.getSelectedText$<module>()` on [selectionManager].
  *
- * The callback is the `FloatingTextActionModeCallback` from Compose's
- * `contextmenu.internal` package. Its closure graph ultimately references
- * `SelectionManager`, on which we call `getSelectedText$<module>()`.
+ * Compose exposes no public accessor for the current selection's text, so the
+ * internal one is reached by reflection.
  */
-private fun extractSelectedText(actionModeCallback: ActionMode.Callback): String? {
+internal fun readSelectedText(selectionManager: Any): String? {
     return try {
-        val manager = findSelectionManager(actionModeCallback) ?: run {
-            Log.w(TAG, "SelectionManager not found in callback closure tree")
-            return null
-        }
-        val method = manager.javaClass.methods
+        val method = selectionManager.javaClass.methods
             .find { it.name.startsWith("getSelectedText") }
             ?: run {
-                Log.w(TAG, "getSelectedText method not found on ${manager.javaClass.name}")
+                Log.w(TAG, "No getSelectedText on ${selectionManager.javaClass.name}")
                 return null
             }
-        (method.invoke(manager) as? AnnotatedString)?.text
+        (method.invoke(selectionManager) as? AnnotatedString)?.text?.takeIf { it.isNotEmpty() }
     } catch (e: Exception) {
-        Log.w(TAG, "Failed to extract selected text: $e")
+        Log.w(TAG, "Failed to read selected text: ${e.javaClass.name}: ${e.message}")
         null
     }
 }
 
-// ─── ActionMode injection ────────────────────────────────────────────────────
-
-internal fun Context.findActivity(): Activity? {
-    var context = this
-    while (context is ContextWrapper) {
-        if (context is Activity) return context
-        context = context.baseContext
-    }
-    return null
-}
-
 /**
- * Wraps an [ActionMode.Callback] to inject a "Highlight" menu item and
- * delegate all other items to the [original] callback.
- */
-private fun createHighlightCallback(
-    original: ActionMode.Callback,
-    onHighlight: (ActionMode, ActionMode.Callback) -> Unit
-): ActionMode.Callback {
-    return if (original is ActionMode.Callback2) {
-        object : ActionMode.Callback2() {
-            override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-                val result = original.onCreateActionMode(mode, menu)
-                menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
-                return result
-            }
-
-            override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
-                val result = original.onPrepareActionMode(mode, menu)
-                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
-                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
-                }
-                return true
-            }
-
-            override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-                if (item.itemId == MENU_ID_HIGHLIGHT) {
-                    onHighlight(mode, original)
-                    return true
-                }
-                return original.onActionItemClicked(mode, item)
-            }
-
-            override fun onDestroyActionMode(mode: ActionMode) =
-                original.onDestroyActionMode(mode)
-
-            override fun onGetContentRect(
-                mode: ActionMode,
-                view: android.view.View,
-                outRect: android.graphics.Rect
-            ) = original.onGetContentRect(mode, view, outRect)
-        }
-    } else {
-        object : ActionMode.Callback {
-            override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-                val result = original.onCreateActionMode(mode, menu)
-                menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
-                return result
-            }
-
-            override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
-                val result = original.onPrepareActionMode(mode, menu)
-                if (menu.findItem(MENU_ID_HIGHLIGHT) == null) {
-                    menu.add(Menu.NONE, MENU_ID_HIGHLIGHT, 100, "Highlight")
-                }
-                return true
-            }
-
-            override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-                if (item.itemId == MENU_ID_HIGHLIGHT) {
-                    onHighlight(mode, original)
-                    return true
-                }
-                return original.onActionItemClicked(mode, item)
-            }
-
-            override fun onDestroyActionMode(mode: ActionMode) =
-                original.onDestroyActionMode(mode)
-        }
-    }
-}
-
-// ─── Composable entry point ──────────────────────────────────────────────────
-
-/**
- * Android implementation that intercepts the Activity's `Window.Callback` to
- * inject a "Highlight" menu item into the native text-selection ActionMode.
+ * Holds the `SelectionManager` behind the context menu currently being built.
  *
- * Strategy:
- * 1. Replace `mWrapped` inside `DecorView$ActionModeCallback2Wrapper` via
- *    reflection so the system creates a **single** ActionMode with our
- *    augmented callback (avoids the double-ActionMode / blinking issue).
- * 2. When "Highlight" is tapped, walk the `FloatingTextActionModeCallback`'s
- *    closure graph to find `SelectionManager` and call its internal
- *    `getSelectedText()` — no clipboard involved.
+ * Compose hands the menu builder no reference to the selection, but every item
+ * `SelectionContainer` contributes — Copy, Select all — closes over the
+ * `SelectionManager` to perform its action. Reading one back out of those
+ * closures is the only way to learn what the user selected.
+ */
+internal class SelectionManagerHolder {
+    var current: Any? = null
+        private set
+
+    /** Records the `SelectionManager` reachable from [item], if any. */
+    fun observe(item: TextContextMenuItem) {
+        if (current != null) return
+        current = findSelectionManager(item.onClick)
+    }
+
+    fun selectedText(): String? {
+        val manager = current ?: run {
+            Log.e(TAG, "No SelectionManager captured from the context menu components")
+            return null
+        }
+        return readSelectedText(manager)
+    }
+}
+
+// ─── Composable entry points ─────────────────────────────────────────────────
+
+/**
+ * Android does not need a custom [TextToolbar]. Compose's context menu drives
+ * the selection toolbar through `LocalTextContextMenuToolbarProvider`, and
+ * `LocalTextToolbar` is never consulted.
  */
 @Composable
 actual fun rememberHighlightTextToolbar(
     onHighlightRequested: (selectedText: String) -> Unit
-): TextToolbar? {
-    val context = LocalContext.current
-    val latestOnHighlight = rememberUpdatedState(onHighlightRequested)
-
-    DisposableEffect(context) {
-        val activity = context.findActivity()
-        if (activity == null) {
-            Log.e(TAG, "No activity found, cannot intercept Window.Callback")
-            return@DisposableEffect onDispose {}
-        }
-
-        val originalCallback = activity.window.callback ?: run {
-            Log.e(TAG, "No Window.Callback found")
-            return@DisposableEffect onDispose {}
-        }
-
-        val wrapperCallback = object : Window.Callback by originalCallback {
-            override fun onWindowStartingActionMode(
-                callback: ActionMode.Callback?,
-                type: Int
-            ): ActionMode? {
-                if (callback == null || type != ActionMode.TYPE_FLOATING) {
-                    return originalCallback.onWindowStartingActionMode(callback, type)
-                }
-
-                try {
-                    val field = callback.javaClass.getDeclaredField("mWrapped")
-                    field.isAccessible = true
-                    val original = field.get(callback) as ActionMode.Callback
-
-                    val wrapped = createHighlightCallback(original) { mode, composeCb ->
-                        val selectedText = extractSelectedText(composeCb)
-                        if (selectedText != null) {
-                            latestOnHighlight.value(selectedText)
-                        } else {
-                            Log.e(TAG, "Failed to extract selected text")
-                        }
-                        mode.finish()
-                    }
-
-                    field.set(callback, wrapped)
-                } catch (e: Exception) {
-                    Log.e(TAG, "ActionMode callback injection failed: $e")
-                }
-
-                return originalCallback.onWindowStartingActionMode(callback, type)
-            }
-
-            override fun onWindowStartingActionMode(callback: ActionMode.Callback?): ActionMode? {
-                return originalCallback.onWindowStartingActionMode(callback)
-            }
-        }
-
-        activity.window.callback = wrapperCallback
-
-        onDispose {
-            if (activity.window.callback === wrapperCallback) {
-                activity.window.callback = originalCallback
-            }
-        }
-    }
-
-    return null
-}
+): TextToolbar? = null
 
 /**
- * Android: no-op wrapper. Android uses ActionMode interception (above) instead.
+ * Adds a "Highlight" entry to the text selection menu.
+ *
+ * The entry is contributed through Compose's public text context menu API, so
+ * the platform renders it alongside Copy and Select all in the native selection
+ * toolbar. Menu data is collected by traversing *ancestors* of the
+ * `SelectionContainer`, which is why the modifiers sit on a wrapper around
+ * [content] rather than inside it.
+ *
+ * Nothing here touches `com.android.internal`: an earlier implementation
+ * injected the item by reflecting into the platform's ActionMode callback
+ * wrapper, which the non-SDK interface restrictions block outright on recent
+ * builds — `getDeclaredFields()` comes back empty — so the entry silently
+ * disappeared (#295).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 actual fun HighlightContextMenuProvider(
     onHighlightRequested: (selectedText: String) -> Unit,
     content: @Composable () -> Unit
 ) {
-    content()
+    val latestOnHighlight = rememberUpdatedState(onHighlightRequested)
+    val holder = remember { SelectionManagerHolder() }
+
+    Box(
+        modifier = Modifier
+            .filterTextContextMenuComponents { component ->
+                if (component is TextContextMenuItem) holder.observe(component)
+                true
+            }
+            .appendTextContextMenuComponents {
+                item(key = HighlightMenuKey, label = MENU_LABEL_HIGHLIGHT) {
+                    holder.selectedText()?.let { latestOnHighlight.value(it) }
+                    close()
+                }
+            }
+    ) {
+        content()
+    }
 }
