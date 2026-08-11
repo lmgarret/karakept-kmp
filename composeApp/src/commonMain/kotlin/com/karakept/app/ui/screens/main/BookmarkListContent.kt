@@ -41,7 +41,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -160,7 +162,12 @@ internal fun BookmarkListContent(
      * Whether quick actions are triggered by a swipe or by an always-visible button cluster.
      * Desktop always uses buttons regardless — there is nothing to swipe with.
      */
-    rowActionMode: RowActionMode = RowActionMode.SWIPE
+    rowActionMode: RowActionMode = RowActionMode.SWIPE,
+    /**
+     * Reports the bookmarks currently on screen, so their reading progress can be fetched
+     * ahead of the sync rotation reaching them. Debounced — this fires on scroll.
+     */
+    onBookmarksVisible: (List<Long>) -> Unit = {}
 ) {
     // Detect when scrolled near end. The effect outlives the values it guards on, so they are
     // read through rememberUpdatedState — capturing them would freeze the guards at their
@@ -182,6 +189,23 @@ internal fun BookmarkListContent(
                         currentOnLoadMore.value()
                     }
                 }
+            }
+    }
+
+    // Report what is on screen once scrolling settles. Debounced rather than per-frame: the
+    // callback issues one network request per never-pulled row, and a fling crosses hundreds.
+    val currentBookmarks = rememberUpdatedState(bookmarks)
+    val currentOnBookmarksVisible = rememberUpdatedState(onBookmarksVisible)
+    @OptIn(FlowPreview::class)
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            listState.layoutInfo.visibleItemsInfo.map { info -> info.index }
+        }
+            .debounce(400)
+            .collect { indices ->
+                val visible = currentBookmarks.value
+                val ids = indices.mapNotNull { visible.getOrNull(it)?.remoteId }
+                if (ids.isNotEmpty()) currentOnBookmarksVisible.value(ids)
             }
     }
 

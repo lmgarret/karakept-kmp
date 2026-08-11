@@ -80,6 +80,18 @@ interface PendingActionDao {
     suspend fun deleteActionsForBookmarkByType(bookmarkRemoteId: Long, serverId: String, actionType: String)
     
     /**
+     * Whether this bookmark has an unsynced action of [actionType] waiting. Used by the
+     * reading-progress pull to tell "the server is authoritative" from "we have a newer
+     * local value that simply has not been pushed yet".
+     */
+    @Query("SELECT COUNT(*) FROM pending_actions WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId AND actionType = :actionType")
+    suspend fun countActionsForBookmarkByType(
+        bookmarkRemoteId: Long,
+        serverId: String,
+        actionType: String
+    ): Int
+
+    /**
      * Delete all pending actions for a server.
      */
     @Query("DELETE FROM pending_actions WHERE serverId = :serverId")

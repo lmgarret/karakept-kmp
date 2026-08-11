@@ -128,6 +128,52 @@ interface BookmarkDao {
     """)
     suspend fun getReadingProgressPullCandidates(serverId: String, limit: Int): List<BookmarkEntity>
 
+    // Bookmarks whose progress has never been pulled. Drained in full on a freshly connected
+    // server so the library does not converge 50 rows per sync. A projection rather than
+    // SELECT *: the pull only needs the two ids, and the row carries article content.
+    @Query("""
+        SELECT localId, remoteId FROM bookmarks
+        WHERE serverId = :serverId AND progressSyncedAt = 0
+        ORDER BY modifiedAt DESC
+        LIMIT :limit
+    """)
+    suspend fun getNeverProgressSyncedTargets(serverId: String, limit: Int): List<ProgressPullTarget>
+
+    // Same projection for an explicit set of bookmarks whose progress is missing or stale —
+    // the rows the user is actually looking at, refreshed ahead of the rotating cursor
+    // reaching them. Staleness rather than "never pulled" so that progress changed on
+    // another device shows up on the list being looked at, not one rotation later.
+    @Query("""
+        SELECT localId, remoteId FROM bookmarks
+        WHERE serverId = :serverId AND progressSyncedAt < :staleBefore AND remoteId IN (:remoteIds)
+    """)
+    suspend fun getStaleProgressTargetsIn(
+        serverId: String,
+        remoteIds: List<Long>,
+        staleBefore: Long
+    ): List<ProgressPullTarget>
+
+    /**
+     * Writes progress that came from the server. Unlike [updateReadingProgress] this also
+     * *clears* the read flag below 100%: read state is local-only in this app, and the
+     * percentage is the only thing that carries it between devices, so a bookmark marked
+     * unread elsewhere has to be able to come back as unread here.
+     */
+    @Query("""
+        UPDATE bookmarks SET
+            readingProgress = :progress,
+            readingScrollIndex = :scrollIndex,
+            readingScrollOffset = :scrollOffset,
+            isRead = CASE WHEN :progress >= 1.0 THEN 1 ELSE 0 END
+        WHERE localId = :localId
+    """)
+    suspend fun applyServerReadingProgress(
+        localId: Long,
+        progress: Float,
+        scrollIndex: Int,
+        scrollOffset: Int
+    )
+
     // Paginated query — ORDER BY is injected dynamically via RoomRawQuery so the
     // sort option from FilterConfig is applied at the DB level rather than in memory.
     @RawQuery

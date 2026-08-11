@@ -144,7 +144,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
         assertEquals(ReadingProgressPullResult.APPLIED, result)
         coVerify {
-            bookmarkDao.updateReadingProgress(
+            bookmarkDao.applyServerReadingProgress(
                 localId = bookmark.localId,
                 progress = 0.5f,
                 scrollIndex = 0,
@@ -153,9 +153,51 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         }
     }
 
+    // Read state has no server-side field: the percentage carries it, so a bookmark marked
+    // unread elsewhere arrives as a *lower* value and must still be applied.
     @Test
-    fun pullReadingProgress_serverProgressLower_doesNotUpdate_reportsSkipped() = runTest(testDispatcher) {
+    fun pullReadingProgress_serverProgressLower_stillApplied() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 0.8f)
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery {
+            remoteDataSource.getReadingProgress(testServer, bookmark.originalRemoteId)
+        } returns 0
+
+        val result = repository.pullReadingProgressFromServer(42L, "server1")
+
+        assertEquals(ReadingProgressPullResult.APPLIED, result)
+        coVerify {
+            bookmarkDao.applyServerReadingProgress(
+                localId = bookmark.localId,
+                progress = 0f,
+                scrollIndex = 0,
+                scrollOffset = 0
+            )
+        }
+    }
+
+    // ...but only when this device has nothing of its own still queued, which is the one
+    // signal that the local value is the newer of the two.
+    @Test
+    fun pullReadingProgress_unsyncedLocalProgress_keepsLocal() = runTest(testDispatcher) {
+        val bookmark = makeBookmark(readingProgress = 0.8f)
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery {
+            pendingActionDao.countActionsForBookmarkByType(
+                42L, "server1", PendingActionType.UPDATE_READING_PROGRESS
+            )
+        } returns 1
+
+        val result = repository.pullReadingProgressFromServer(42L, "server1")
+
+        assertEquals(ReadingProgressPullResult.SKIPPED, result)
+        coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { remoteDataSource.getReadingProgress(any(), any()) }
+    }
+
+    @Test
+    fun pullReadingProgress_serverMatchesLocal_reportsSkipped() = runTest(testDispatcher) {
+        val bookmark = makeBookmark(readingProgress = 0.3f)
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
         coEvery {
             remoteDataSource.getReadingProgress(testServer, bookmark.originalRemoteId)
@@ -164,7 +206,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         val result = repository.pullReadingProgressFromServer(42L, "server1")
 
         assertEquals(ReadingProgressPullResult.SKIPPED, result)
-        coVerify(exactly = 0) { bookmarkDao.updateReadingProgress(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(any(), any(), any(), any()) }
     }
 
     @Test
@@ -193,7 +235,51 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         val result = repository.pullReadingProgressFromServer(42L, "server1")
 
         assertEquals(ReadingProgressPullResult.FAILED, result)
-        coVerify(exactly = 0) { bookmarkDao.updateReadingProgress(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(any(), any(), any(), any()) }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // markAsUnread
+    // ──────────────────────────────────────────────────────────
+
+    // Read state has no field of its own on the server; the reading percentage is the only
+    // thing carrying it, so an unread that clears the position is the one that can travel.
+    @Test
+    fun markAsUnread_withResetProgress_pushesClearedProgress() = runTest(testDispatcher) {
+        val bookmark = makeBookmark(readingProgress = 1f, isRead = true)
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+
+        repository.markAsUnread(42L, "server1", resetProgress = true)
+
+        coVerify {
+            pendingActionDao.insertAction(match {
+                it.actionType == PendingActionType.UPDATE_READING_PROGRESS &&
+                    it.actionData.contains("\"0\"")
+            })
+        }
+        coVerify {
+            bookmarkDao.insertBookmark(match {
+                !it.isRead && it.readingProgress == 0f &&
+                    it.readingScrollIndex == 0 && it.readingScrollOffset == 0
+            })
+        }
+    }
+
+    // Keeping the position is an explicit user setting, and it is incompatible with telling
+    // the server: there is no value meaning "unread but 80% in". The unread stays local.
+    @Test
+    fun markAsUnread_keepingProgress_staysLocal() = runTest(testDispatcher) {
+        val bookmark = makeBookmark(readingProgress = 1f, isRead = true)
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+
+        repository.markAsUnread(42L, "server1", resetProgress = false)
+
+        coVerify { bookmarkDao.insertBookmark(match { !it.isRead && it.readingProgress == 1f }) }
+        coVerify(exactly = 0) {
+            pendingActionDao.insertAction(match {
+                it.actionType == PendingActionType.UPDATE_READING_PROGRESS
+            })
+        }
     }
 
     // ──────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.dao.PendingActionDao
+import com.karakept.app.data.local.dao.ProgressPullTarget
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncConfig
@@ -1486,6 +1487,45 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // Candidates come from the rotating-cursor query and get stamped after the pull
         coVerify { bookmarkDao.getReadingProgressPullCandidates("server1", 50) }
         coVerify { bookmarkDao.updateProgressSyncedAt(7L, any()) }
+    }
+
+    @Test
+    fun fullSync_backfillsEveryNeverPulledBookmark() = runTest(testDispatcher) {
+        // The rotating cursor alone converged 50 rows per sync, so a library of hundreds
+        // needed hundreds of syncs before the unread count was right.
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+        val firstBatch = (1..50).map { ProgressPullTarget(localId = it.toLong(), remoteId = it.toLong()) }
+        val secondBatch = (51..70).map { ProgressPullTarget(localId = it.toLong(), remoteId = it.toLong()) }
+        coEvery {
+            bookmarkDao.getNeverProgressSyncedTargets("server1", PROGRESS_PULL_BATCH)
+        } returnsMany listOf(firstBatch, secondBatch, emptyList())
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        coVerify { bookmarkDao.updateProgressSyncedAt(1L, any()) }
+        coVerify { bookmarkDao.updateProgressSyncedAt(70L, any()) }
+        // The rotation is for steady state — a backfill pass does not also run it.
+        coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any()) }
+    }
+
+    @Test
+    fun fullSync_backfillStopsWhenEveryPullInABatchFails() = runTest(testDispatcher) {
+        // Nothing gets stamped when the whole batch fails, so the same rows come back —
+        // without this guard the loop would never end.
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+        val batch = listOf(ProgressPullTarget(localId = 7L, remoteId = 99L))
+        coEvery { bookmarkDao.getNeverProgressSyncedTargets("server1", PROGRESS_PULL_BATCH) } returns batch
+        coEvery { bookmarkDao.getBookmarkByRemoteId(99L, "server1") } returns
+            makeBookmarkEntity(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur")
+        coEvery {
+            remoteDataSource.getReadingProgress(testServer, "bk-cur")
+        } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        coVerify(exactly = 0) { bookmarkDao.updateProgressSyncedAt(any(), any()) }
     }
 
     @Test

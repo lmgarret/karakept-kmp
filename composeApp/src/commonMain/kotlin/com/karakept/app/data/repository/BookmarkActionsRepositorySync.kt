@@ -36,9 +36,16 @@ enum class ReadingProgressPullResult {
 }
 
 /**
- * Fetch reading progress from the server and apply it locally if it is higher than the
- * current local progress. Used when opening a bookmark on a new device to restore
- * cross-device reading position.
+ * Fetch reading progress from the server and apply it locally. Used when opening a bookmark
+ * on another device to restore the cross-device reading position.
+ *
+ * The server value wins unless this device has a progress push of its own still queued, which
+ * is the one signal that local state is newer. The older rule — apply only a *higher* value —
+ * protected the furthest-read position, but it also made "mark as unread" structurally unable
+ * to travel: read state is local-only in this app, so the percentage is the only thing
+ * carrying it, and a reset to 0% is by definition lower than what the other device holds.
+ * Karakeep's `getReadingProgress` returns no timestamp, so there is no way to have both; the
+ * cost is that two devices reading the same article settle on the last one to push.
  */
 suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(
     bookmarkRemoteId: Long,
@@ -59,6 +66,16 @@ suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(
                 return@withContext ReadingProgressPullResult.FAILED
             }
 
+            // A queued push is this device saying "my value is newer and on its way" —
+            // taking the server's answer would undo it before it was ever sent.
+            val hasUnsyncedLocalProgress = pendingActionDao.countActionsForBookmarkByType(
+                bookmarkRemoteId, serverId, PendingActionType.UPDATE_READING_PROGRESS
+            ) > 0
+            if (hasUnsyncedLocalProgress) {
+                AppLogger.d("ReadProgressSync", "pull -- local progress not pushed yet, keeping it")
+                return@withContext ReadingProgressPullResult.SKIPPED
+            }
+
             AppLogger.d("ReadProgressSync", "fetching server progress for originalRemoteId=${bookmark.originalRemoteId}")
             val serverPercent = remoteDataSource.getReadingProgress(server, bookmark.originalRemoteId)
             if (serverPercent == null) {
@@ -68,18 +85,17 @@ suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(
 
             AppLogger.d("ReadProgressSync", "server has ${serverPercent}%, local has ${(bookmark.readingProgress * 100).toInt()}%")
             val serverProgress = serverPercent / 100f
-            // Only apply server progress if it's higher than local (avoid overwriting newer local data)
-            if (serverProgress > bookmark.readingProgress) {
-                bookmarkDao.updateReadingProgress(
+            if (serverProgress != bookmark.readingProgress) {
+                bookmarkDao.applyServerReadingProgress(
                     localId = bookmark.localId,
                     progress = serverProgress,
                     scrollIndex = 0,
                     scrollOffset = 0
                 )
-                AppLogger.d("ReadProgressSync", "restored from server: ${serverPercent}%")
+                AppLogger.d("ReadProgressSync", "applied from server: ${serverPercent}%")
                 ReadingProgressPullResult.APPLIED
             } else {
-                AppLogger.d("ReadProgressSync", "server progress not higher, keeping local")
+                AppLogger.d("ReadProgressSync", "server matches local, nothing to apply")
                 ReadingProgressPullResult.SKIPPED
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
