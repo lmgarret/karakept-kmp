@@ -151,6 +151,24 @@ class BookmarkRepository(
         lastAutoSyncCompletedAt[serverId] = System.currentTimeMillis()
     }
 
+    // Reading progress has no batch endpoint: each bookmark costs one tRPC call, so a pass
+    // is capped at 50 bookmarks and rotates through the library. Syncing a list used to skip
+    // the pass entirely, which left progress from other devices invisible to anyone who
+    // browses by list. Now every flavour may run it, rationed here: a Full sync always gets
+    // its pass, and the list/filter passes share one slot per interval no matter how many
+    // lists fan out at once.
+    private val lastProgressPullAt = mutableMapOf<String, Long>()
+    private val progressPullMutex = Mutex()
+
+    internal suspend fun tryAcquireReadingProgressPull(serverId: String, force: Boolean): Boolean =
+        progressPullMutex.withLock {
+            val now = System.currentTimeMillis()
+            val last = lastProgressPullAt[serverId] ?: 0L
+            if (!force && now - last < PROGRESS_PULL_MIN_INTERVAL_MS) return@withLock false
+            lastProgressPullAt[serverId] = now
+            true
+        }
+
     suspend fun syncBookmarks(server: Server): Int =
         executeSyncPipeline(SyncConfiguration.Full(server))
 
@@ -484,6 +502,9 @@ class BookmarkRepository(
     }
 
     companion object {
+        /** Minimum gap between two reading-progress passes triggered by list/filter syncs. */
+        internal const val PROGRESS_PULL_MIN_INTERVAL_MS = 2 * 60_000L
+
         private const val BOOKMARK_SELECT = """localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
@@ -647,6 +668,12 @@ class BookmarkRepository(
                 },
                 shouldRunEnrichment = {
                     tryAcquireEnrichmentKey(key).also { holdsEnrichmentKey = it }
+                },
+                shouldPullReadingProgress = {
+                    tryAcquireReadingProgressPull(
+                        serverId = config.server.id,
+                        force = config is SyncConfiguration.Full
+                    )
                 }
             )
             val result = pipeline.execute()

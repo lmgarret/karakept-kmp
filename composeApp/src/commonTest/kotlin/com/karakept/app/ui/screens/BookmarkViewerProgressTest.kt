@@ -117,7 +117,7 @@ class BookmarkViewerProgressTest {
         // Default stub for pullReadingProgressFromServer extension function
         coEvery {
             bookmarkActionsRepository.pullReadingProgressFromServer(any(), any())
-        } returns false
+        } returns com.karakept.app.data.repository.ReadingProgressPullResult.SKIPPED
 
         // Default stubs for ServerRepository
         every { serverRepository.servers } returns flowOf(emptyList())
@@ -295,7 +295,7 @@ class BookmarkViewerProgressTest {
             bookmarkActionsRepository.pullReadingProgressFromServer(any(), any())
         } coAnswers {
             delay(BookmarkViewerScreenModel.PROGRESS_PULL_GRACE_MILLIS / 2)
-            true
+            com.karakept.app.data.repository.ReadingProgressPullResult.APPLIED
         }
 
         val screenModel = createScreenModel()

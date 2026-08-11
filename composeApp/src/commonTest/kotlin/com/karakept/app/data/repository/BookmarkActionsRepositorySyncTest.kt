@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -116,25 +115,25 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     // ──────────────────────────────────────────────────────────
 
     @Test
-    fun pullReadingProgress_serverNotFound_returnsFalse() = runTest(testDispatcher) {
+    fun pullReadingProgress_serverNotFound_reportsFailure() = runTest(testDispatcher) {
         coEvery { serverRepository.servers } returns flowOf(emptyList())
 
         val result = repository.pullReadingProgressFromServer(42L, "server1")
 
-        assertFalse(result)
+        assertEquals(ReadingProgressPullResult.FAILED, result)
     }
 
     @Test
-    fun pullReadingProgress_bookmarkNotFound_returnsFalse() = runTest(testDispatcher) {
+    fun pullReadingProgress_bookmarkNotFound_reportsFailure() = runTest(testDispatcher) {
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns null
 
         val result = repository.pullReadingProgressFromServer(42L, "server1")
 
-        assertFalse(result)
+        assertEquals(ReadingProgressPullResult.FAILED, result)
     }
 
     @Test
-    fun pullReadingProgress_serverProgressHigher_updatesLocal_returnsTrue() = runTest(testDispatcher) {
+    fun pullReadingProgress_serverProgressHigher_updatesLocal_reportsApplied() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 0.2f)
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
         coEvery {
@@ -143,7 +142,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
         val result = repository.pullReadingProgressFromServer(42L, "server1")
 
-        assertTrue(result)
+        assertEquals(ReadingProgressPullResult.APPLIED, result)
         coVerify {
             bookmarkDao.updateReadingProgress(
                 localId = bookmark.localId,
@@ -155,7 +154,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun pullReadingProgress_serverProgressLower_doesNotUpdate_returnsFalse() = runTest(testDispatcher) {
+    fun pullReadingProgress_serverProgressLower_doesNotUpdate_reportsSkipped() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 0.8f)
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
         coEvery {
@@ -164,12 +163,12 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
         val result = repository.pullReadingProgressFromServer(42L, "server1")
 
-        assertFalse(result)
+        assertEquals(ReadingProgressPullResult.SKIPPED, result)
         coVerify(exactly = 0) { bookmarkDao.updateReadingProgress(any(), any(), any(), any()) }
     }
 
     @Test
-    fun pullReadingProgress_serverReturnsNull_returnsFalse() = runTest(testDispatcher) {
+    fun pullReadingProgress_serverHasNoProgress_reportsSkipped() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
         coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
         coEvery {
@@ -178,7 +177,23 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
         val result = repository.pullReadingProgressFromServer(42L, "server1")
 
-        assertFalse(result)
+        assertEquals(ReadingProgressPullResult.SKIPPED, result)
+    }
+
+    // A failed request must stay distinguishable from "nothing to apply": the sync
+    // pipeline advances its rotating cursor on the pull having reached the server.
+    @Test
+    fun pullReadingProgress_requestFails_reportsFailure() = runTest(testDispatcher) {
+        val bookmark = makeBookmark()
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery {
+            remoteDataSource.getReadingProgress(testServer, bookmark.originalRemoteId)
+        } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
+
+        val result = repository.pullReadingProgressFromServer(42L, "server1")
+
+        assertEquals(ReadingProgressPullResult.FAILED, result)
+        coVerify(exactly = 0) { bookmarkDao.updateReadingProgress(any(), any(), any(), any()) }
     }
 
     // ──────────────────────────────────────────────────────────
@@ -253,6 +268,86 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
             })
         }
         coVerify(exactly = 0) { pendingActionDao.deleteAction(action) }
+    }
+
+    @Test
+    fun executeAction_readingProgressPushed_deletesAction() = runTest(testDispatcher) {
+        val action = makePendingAction(
+            actionType = PendingActionType.UPDATE_READING_PROGRESS,
+            actionData = """{"progressPercent":"73"}"""
+        )
+        val bookmark = makeBookmark()
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery {
+            remoteDataSource.updateReadingProgress(testServer, bookmark.originalRemoteId, 73)
+        } returns true
+
+        repository.executeAction(action, "server1")
+
+        coVerify { pendingActionDao.deleteAction(action) }
+    }
+
+    // A rejected push used to be dropped as if it had synced, leaving the progress local
+    // forever with nothing surfaced to the user.
+    @Test
+    fun executeAction_readingProgressRejected_keepsActionForRetry() = runTest(testDispatcher) {
+        val action = makePendingAction(
+            actionType = PendingActionType.UPDATE_READING_PROGRESS,
+            actionData = """{"progressPercent":"73"}"""
+        )
+        val bookmark = makeBookmark()
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery {
+            remoteDataSource.updateReadingProgress(any(), any(), any())
+        } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
+
+        repository.executeAction(action, "server1")
+
+        coVerify(exactly = 0) { pendingActionDao.deleteAction(action) }
+        coVerify { pendingActionDao.updateAction(match { it.retryCount == 1 }) }
+    }
+
+    // A server that has no reading-progress route at all can never accept this action —
+    // park it as failed so the user sees it instead of retrying forever.
+    @Test
+    fun executeAction_readingProgressRouteMissing_marksActionFailed() = runTest(testDispatcher) {
+        val action = makePendingAction(
+            actionType = PendingActionType.UPDATE_READING_PROGRESS,
+            actionData = """{"progressPercent":"73"}"""
+        )
+        val bookmark = makeBookmark()
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery {
+            remoteDataSource.updateReadingProgress(any(), any(), any())
+        } throws com.karakept.app.data.remote.ApiException("HTTP 404", statusCode = 404)
+
+        repository.executeAction(action, "server1")
+
+        coVerify {
+            pendingActionDao.updateAction(match {
+                it.status == com.karakept.app.data.local.entity.PendingActionEntity.STATUS_FAILED
+            })
+        }
+        coVerify(exactly = 0) { pendingActionDao.deleteAction(action) }
+    }
+
+    // Karakeep only keeps progress for link bookmarks; that rejection is final and there is
+    // nothing to retry, so the queue must not hold the action forever.
+    @Test
+    fun executeAction_readingProgressNotStorableForBookmarkType_dropsAction() = runTest(testDispatcher) {
+        val action = makePendingAction(
+            actionType = PendingActionType.UPDATE_READING_PROGRESS,
+            actionData = """{"progressPercent":"73"}"""
+        )
+        val bookmark = makeBookmark()
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery {
+            remoteDataSource.updateReadingProgress(any(), any(), any())
+        } returns false
+
+        repository.executeAction(action, "server1")
+
+        coVerify { pendingActionDao.deleteAction(action) }
     }
 
     @Test

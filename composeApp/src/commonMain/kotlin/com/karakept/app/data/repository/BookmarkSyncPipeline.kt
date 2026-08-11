@@ -93,7 +93,13 @@ internal class BookmarkSyncPipeline(
      * overlapping syncs for the same key from downloading the same content twice, now
      * that the key itself is released as soon as the foreground stage finishes.
      */
-    private val shouldRunEnrichment: (suspend () -> Boolean)? = null
+    private val shouldRunEnrichment: (suspend () -> Boolean)? = null,
+    /**
+     * Gate for the reading-progress pull (phase 6). Returning false skips it — the pull
+     * costs one tRPC call per bookmark, so the caller rations it across the sync flavours
+     * instead of letting every list pass run its own.
+     */
+    private val shouldPullReadingProgress: (suspend () -> Boolean)? = null
 ) {
     /** Bookmarks inserted during the last execute() call, available after completion. */
     var newlyInsertedBookmarks: List<BookmarkEntity> = emptyList()
@@ -196,9 +202,11 @@ internal class BookmarkSyncPipeline(
         // lists explicitly configured for offline reading.
         syncContent(syncedEntities)
 
-        // Phase 6: Sync reading progress. Scoped to Full sync only — running it for
-        // every ForList pass multiplied the per-bookmark tRPC calls (up to lists×50).
-        if (config is SyncConfiguration.Full) {
+        // Phase 6: Sync reading progress. Every sync flavour is eligible — a user who only
+        // ever opens a list would otherwise never pull progress at all — but the gate keeps
+        // a fan-out of list syncs from multiplying the per-bookmark tRPC calls by the
+        // number of lists.
+        if (shouldPullReadingProgress?.invoke() != false) {
             syncReadingProgress()
         }
 
@@ -513,6 +521,9 @@ internal class BookmarkSyncPipeline(
     // The karakeep server stores reading progress in a separate table, only
     // accessible via per-bookmark tRPC calls (no batch endpoint). To keep
     // sync time reasonable we pull concurrently and cap the total count.
+    // How many calls that costs is the caller's problem: [shouldPullReadingProgress]
+    // decides whether this pass runs at all, which is what keeps a fan-out of list
+    // syncs from multiplying it by the number of lists.
     private suspend fun syncReadingProgress() {
         val trackProgress = kotlinx.coroutines.withTimeoutOrNull(1000) {
             settingsRepository.trackReadingProgress.firstOrNull()
@@ -538,10 +549,15 @@ internal class BookmarkSyncPipeline(
                 launch {
                     semaphore.acquire()
                     try {
-                        bookmarkActionsRepository.pullReadingProgressFromServer(
+                        val result = bookmarkActionsRepository.pullReadingProgressFromServer(
                             bookmark.remoteId, config.server.id
                         )
-                        bookmarkDao.updateProgressSyncedAt(bookmark.localId, now)
+                        // Only a pull the server actually answered advances the cursor.
+                        // Stamping a failed one would rotate the bookmark to the back of
+                        // the queue for a whole cycle without its progress ever arriving.
+                        if (result != ReadingProgressPullResult.FAILED) {
+                            bookmarkDao.updateProgressSyncedAt(bookmark.localId, now)
+                        }
                     } catch (e: kotlinx.coroutines.CancellationException) {
                         throw e
                     } catch (_: Exception) {

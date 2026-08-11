@@ -40,6 +40,20 @@ bodies use the batch envelope `{"0":{"json":{…}}}`, built by
 job — a successful response only means the request was accepted, so callers re-sync the
 bookmark afterwards to pick up the result.
 
+Reading progress lives in its own server-side table with **no batch endpoint** — one call per
+bookmark in each direction:
+
+- **Push** rides the pending-action queue (`UPDATE_READING_PROGRESS`), so a rejected push is
+  retried or parked as a failed action rather than dropped. The single exception is
+  `BAD_REQUEST: reading progress can only be saved for link bookmarks`, which no retry can
+  fix: `updateReadingProgress` returns `false` and the action is discarded.
+- **Pull** happens when a bookmark is opened, and as sync phase 6 for a rotating batch of 50
+  bookmarks (`getReadingProgressPullCandidates`, ordered by `progressSyncedAt`). Every sync
+  flavour is eligible — browsing by list must not starve the pull — but
+  `BookmarkRepository.tryAcquireReadingProgressPull` rations passes so a fan-out of list syncs
+  cannot multiply the per-bookmark calls by the number of lists. Only a pull the server
+  actually answered advances the cursor.
+
 > These are internal APIs with no compatibility guarantee across Karakeep versions. Every
 > call site must degrade to a user-visible error and leave local state untouched. A 404 whose
 > body says "No procedure found" is surfaced as `UnsupportedServerActionException` so the UI

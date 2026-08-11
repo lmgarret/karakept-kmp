@@ -19,13 +19,31 @@ import kotlinx.serialization.encodeToString
  */
 
 /**
+ * Outcome of a reading-progress pull. [FAILED] has to stay distinguishable from [SKIPPED]:
+ * the sync pipeline advances its rotating cursor on the strength of a pull having actually
+ * reached the server, and a failed request that looked like "nothing to apply" would send
+ * the bookmark to the back of the queue without anyone having asked the server.
+ */
+enum class ReadingProgressPullResult {
+    /** Server progress was ahead of local and has been written to the DB. */
+    APPLIED,
+
+    /** The server answered, but there was nothing newer to apply. */
+    SKIPPED,
+
+    /** The server was never asked, or the request failed. */
+    FAILED
+}
+
+/**
  * Fetch reading progress from the server and apply it locally if it is higher than the
  * current local progress. Used when opening a bookmark on a new device to restore
  * cross-device reading position.
- *
- * @return true if local progress was updated from server data, false otherwise.
  */
-suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(bookmarkRemoteId: Long, serverId: String): Boolean {
+suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(
+    bookmarkRemoteId: Long,
+    serverId: String
+): ReadingProgressPullResult {
     return withContext(appDispatchers.io) {
         try {
             AppLogger.d("ReadProgressSync", "pullReadingProgressFromServer remoteId=$bookmarkRemoteId serverId=$serverId")
@@ -33,19 +51,19 @@ suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(bookmarkRemo
             val server = servers.find { it.id == serverId }
             if (server == null) {
                 AppLogger.w("ReadProgressSync", "pull ABORT -- server not found for serverId=$serverId")
-                return@withContext false
+                return@withContext ReadingProgressPullResult.FAILED
             }
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
             if (bookmark == null) {
                 AppLogger.w("ReadProgressSync", "pull ABORT -- bookmark not found in DB for remoteId=$bookmarkRemoteId")
-                return@withContext false
+                return@withContext ReadingProgressPullResult.FAILED
             }
 
             AppLogger.d("ReadProgressSync", "fetching server progress for originalRemoteId=${bookmark.originalRemoteId}")
             val serverPercent = remoteDataSource.getReadingProgress(server, bookmark.originalRemoteId)
             if (serverPercent == null) {
-                AppLogger.w("ReadProgressSync", "pull -- server returned null progress")
-                return@withContext false
+                AppLogger.d("ReadProgressSync", "pull -- server has no progress stored")
+                return@withContext ReadingProgressPullResult.SKIPPED
             }
 
             AppLogger.d("ReadProgressSync", "server has ${serverPercent}%, local has ${(bookmark.readingProgress * 100).toInt()}%")
@@ -59,16 +77,16 @@ suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(bookmarkRemo
                     scrollOffset = 0
                 )
                 AppLogger.d("ReadProgressSync", "restored from server: ${serverPercent}%")
-                true
+                ReadingProgressPullResult.APPLIED
             } else {
                 AppLogger.d("ReadProgressSync", "server progress not higher, keeping local")
-                false
+                ReadingProgressPullResult.SKIPPED
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
             AppLogger.e("BookmarkActionsRepositorySync", "Failed to pull reading progress: ${e.message}")
-            false
+            ReadingProgressPullResult.FAILED
         }
     }
 }
@@ -246,8 +264,11 @@ internal suspend fun BookmarkActionsRepository.executeAction(action: PendingActi
                 val data = jsonSerializer.decodeFromString<Map<String, String>>(action.actionData)
                 val progressPercent = data["progressPercent"]?.toIntOrNull() ?: 0
                 AppLogger.d("ReadProgressSync", "executing pending action -- pushing ${progressPercent}% for bookmark $bookmarkId to server")
-                val success = remoteDataSource.updateReadingProgress(server, bookmarkId, progressPercent)
-                AppLogger.d("ReadProgressSync", "push result=$success")
+                // false means the server will never keep progress for this bookmark (not a
+                // link), so the action is dropped below like a successful one. Every other
+                // rejection throws and lands in recordActionFailure.
+                val stored = remoteDataSource.updateReadingProgress(server, bookmarkId, progressPercent)
+                AppLogger.d("ReadProgressSync", "push stored=$stored")
             }
             PendingActionType.MOVE_TO_LIST -> {
                 val data = jsonSerializer.decodeFromString<Map<String, String>>(action.actionData)

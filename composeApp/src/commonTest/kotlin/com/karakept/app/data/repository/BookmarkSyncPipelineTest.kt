@@ -111,7 +111,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
     private fun createPipeline(
         config: SyncConfiguration,
-        onProgress: ((ListSyncStatus) -> Unit)? = null
+        onProgress: ((ListSyncStatus) -> Unit)? = null,
+        shouldPullReadingProgress: (suspend () -> Boolean)? = null
     ): BookmarkSyncPipeline {
         return BookmarkSyncPipeline(
             config = config,
@@ -126,7 +127,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
             syncProgress = syncProgress,
             fetchRemoteContent = fetchRemoteContent,
             cacheHeroAssetsForBookmark = cacheHeroAssetsForBookmark,
-            onProgress = onProgress
+            onProgress = onProgress,
+            shouldPullReadingProgress = shouldPullReadingProgress
         )
     }
 
@@ -1392,15 +1394,38 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun forListSync_doesNotPullReadingProgress() = runTest(testDispatcher) {
-        // Phase 6 is scoped to Full sync — ForList passes must not multiply tRPC calls.
+    fun forListSync_pullsReadingProgressWhenGateAllows() = runTest(testDispatcher) {
+        // A user who only ever opens a list would never see progress from another device
+        // back when phase 6 was scoped to Full syncs.
         val dto = makeBookmarkDto(id = "bk-1")
         coEvery {
             remoteDataSource.fetchBookmarksForList(testServer, "list-1", false)
         } returns listOf(dto)
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
 
-        val pipeline = createPipeline(SyncConfiguration.ForList(testServer, "list-1"))
+        val pipeline = createPipeline(
+            SyncConfiguration.ForList(testServer, "list-1"),
+            shouldPullReadingProgress = { true }
+        )
+        pipeline.execute()
+
+        coVerify { bookmarkDao.getReadingProgressPullCandidates(any(), any()) }
+    }
+
+    @Test
+    fun forListSync_skipsReadingProgressWhenGateDeclines() = runTest(testDispatcher) {
+        // The gate is what keeps a fan-out of list syncs from multiplying the per-bookmark
+        // tRPC calls by the number of lists.
+        val dto = makeBookmarkDto(id = "bk-1")
+        coEvery {
+            remoteDataSource.fetchBookmarksForList(testServer, "list-1", false)
+        } returns listOf(dto)
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+
+        val pipeline = createPipeline(
+            SyncConfiguration.ForList(testServer, "list-1"),
+            shouldPullReadingProgress = { false }
+        )
         pipeline.execute()
 
         coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any()) }
@@ -1461,6 +1486,24 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // Candidates come from the rotating-cursor query and get stamped after the pull
         coVerify { bookmarkDao.getReadingProgressPullCandidates("server1", 50) }
         coVerify { bookmarkDao.updateProgressSyncedAt(7L, any()) }
+    }
+
+    @Test
+    fun fullSync_failedProgressPullDoesNotAdvanceCursor() = runTest(testDispatcher) {
+        // Stamping a bookmark whose pull never reached the server would rotate it to the
+        // back of the queue for a whole cycle with its progress still missing.
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+        val candidate = makeBookmarkEntity(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur")
+        coEvery { bookmarkDao.getReadingProgressPullCandidates("server1", 50) } returns listOf(candidate)
+        coEvery { bookmarkDao.getBookmarkByRemoteId(99L, "server1") } returns candidate
+        coEvery {
+            remoteDataSource.getReadingProgress(testServer, "bk-cur")
+        } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
+
+        val pipeline = createPipeline(SyncConfiguration.Full(testServer))
+        pipeline.execute()
+
+        coVerify(exactly = 0) { bookmarkDao.updateProgressSyncedAt(7L, any()) }
     }
 
     // ──────────────────────────────────────────────────────────

@@ -40,6 +40,12 @@ class OfflineModeException(message: String = "Offline mode is enabled - network 
 class UnsupportedServerActionException(message: String) : Exception(message)
 
 /**
+ * Karakeep's wording when reading progress is pushed for a bookmark that is not a link.
+ * The only push rejection that is not worth retrying.
+ */
+private const val NON_LINK_PROGRESS_ERROR = "reading progress can only be saved"
+
+/**
  * Extension that checks the HTTP status of a generated API response before deserializing.
  * If the response is non-2xx, throws [ApiException] with the status code and response body,
  * preventing cryptic [io.ktor.client.call.NoTransformationFoundException] errors when the
@@ -486,8 +492,12 @@ class RemoteDataSource(
 
     /**
      * Push reading progress to server via tRPC.
-     * Only works for LINK-type bookmarks; silently ignores BAD_REQUEST for other types.
-     * Returns true on success, false if the endpoint is unsupported or the bookmark type is wrong.
+     *
+     * Returns true when the server stored the value, false only for the one rejection that
+     * can never succeed on retry: Karakeep keeps reading progress for LINK bookmarks alone
+     * and answers BAD_REQUEST for every other type. Any other non-2xx throws, so the pending
+     * action survives for a retry instead of being dropped as if it had synced — a rejected
+     * push used to leave the progress local forever with nothing to show for it.
      *
      * tRPC mutation: bookmarks.updateReadingProgress
      * POST /api/trpc/bookmarks.updateReadingProgress?batch=1
@@ -497,33 +507,43 @@ class RemoteDataSource(
         bookmarkId: String,
         progressPercent: Int
     ): Boolean = guardedCall {
-        try {
+        val response: HttpResponse = try {
             val trpcBase = getTrpcBaseUrl(server)
             val url = "$trpcBase/api/trpc/bookmarks.updateReadingProgress?batch=1"
             val body = TrpcPayloadUtils.updateReadingProgress(bookmarkId, progressPercent)
-            val response: HttpResponse = client.post(url) {
+            client.post(url) {
                 header("Authorization", getAuth(server))
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
-
-            // 200 = success, 400 = non-link bookmark (expected, not an error for us)
-            response.status.value == 200
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
-            val msg = e.message?.lowercase() ?: ""
-            if (msg.contains("400") || msg.contains("bad_request") ||
-                msg.contains("reading progress can only be saved")) {
-                // Non-link bookmark – not an error from our perspective
-                false
-            } else {
-                throw ApiException("Error updating reading progress: ${e.message}", e)
-            }
+            throw ApiException("Error updating reading progress: ${e.message}", e)
         }
+
+        if (response.status.isSuccess()) return@guardedCall true
+
+        val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+        if (response.status.value == 400 && errorBody.contains(NON_LINK_PROGRESS_ERROR, ignoreCase = true)) {
+            AppLogger.d(
+                "RemoteDataSource",
+                "Server does not keep reading progress for bookmark $bookmarkId (not a link)"
+            )
+            return@guardedCall false
+        }
+
+        throw ApiException(
+            "Error updating reading progress: HTTP ${response.status.value}: $errorBody",
+            statusCode = response.status.value
+        )
     }
 
     /**
      * Fetch reading progress from server via tRPC.
-     * Returns the progress percent (0-100) or null if not available.
+     * Returns the progress percent (0-100), or null when the server has no progress stored
+     * for this bookmark. A failed request throws so callers can tell "nothing to restore"
+     * apart from "we never found out".
      *
      * tRPC query: bookmarks.getReadingProgress
      * GET /api/trpc/bookmarks.getReadingProgress?batch=1&input=...
@@ -532,19 +552,29 @@ class RemoteDataSource(
         server: Server,
         bookmarkId: String
     ): Int? = guardedCall {
-        try {
+        val response: HttpResponse = try {
             val trpcBase = getTrpcBaseUrl(server)
             val url = "$trpcBase/api/trpc/bookmarks.getReadingProgress"
-            val response: HttpResponse = client.get(url) {
+            client.get(url) {
                 header("Authorization", getAuth(server))
                 parameter("batch", "1")
                 parameter("input", TrpcPayloadUtils.getReadingProgress(bookmarkId))
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException("Error fetching reading progress: ${e.message}", e)
+        }
 
-            if (!response.status.isSuccess()) {
-                return@guardedCall null
-            }
+        if (!response.status.isSuccess()) {
+            val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+            throw ApiException(
+                "Error fetching reading progress: HTTP ${response.status.value}: $errorBody",
+                statusCode = response.status.value
+            )
+        }
 
+        try {
             val responseText = response.bodyAsText()
             // tRPC batch response: [{"result":{"data":{"json":{...}}}}]
             val element = trpcJson.parseToJsonElement(responseText)
@@ -554,14 +584,11 @@ class RemoteDataSource(
                 ?.jsonObject?.get("data")
                 ?.jsonObject?.get("json")
                 ?.jsonObject
-            val result = data?.get("readingProgressPercent")?.jsonPrimitive?.intOrNull
-            result
+            data?.get("readingProgressPercent")?.jsonPrimitive?.intOrNull
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            AppLogger.e("RemoteDataSource", "Read progress sync failed: ${e.message}", e)
-            // Non-critical – return null if fetch fails
-            null
+            throw ApiException("Error parsing reading progress response: ${e.message}", e)
         }
     }
 

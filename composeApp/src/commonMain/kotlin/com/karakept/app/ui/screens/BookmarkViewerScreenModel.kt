@@ -19,6 +19,7 @@ import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.ReadingProgressPullResult
 import com.karakept.app.data.repository.pullReadingProgressFromServer
 import com.karakept.app.data.repository.setViewerMode
 import com.karakept.app.data.repository.setHtmlTextColor
@@ -438,7 +439,7 @@ class BookmarkViewerScreenModel(
                                     // update loadingState before we signal serverProgressChecked.
                                     // This prevents a race where the UI sees serverProgressChecked=true
                                     // but loadingState still holds the old 0% progress.
-                                    if (updated == true) kotlinx.coroutines.yield()
+                                    if (updated == ReadingProgressPullResult.APPLIED) kotlinx.coroutines.yield()
                                     _serverProgressChecked.value = true
                                 }
                             } else {
