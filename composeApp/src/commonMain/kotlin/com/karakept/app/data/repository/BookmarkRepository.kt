@@ -502,8 +502,13 @@ class BookmarkRepository(
     }
 
     companion object {
-        /** Minimum gap between two reading-progress passes triggered by list/filter syncs. */
-        internal const val PROGRESS_PULL_MIN_INTERVAL_MS = 2 * 60_000L
+        /**
+         * Minimum gap between two reading-progress passes triggered by list/filter syncs.
+         * Short enough that refreshing again pulls the next 50 bookmarks rather than
+         * appearing to do nothing, long enough that one fan-out of list syncs still costs
+         * a single pass.
+         */
+        internal const val PROGRESS_PULL_MIN_INTERVAL_MS = 30_000L
 
         private const val BOOKMARK_SELECT = """localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,

@@ -291,6 +291,33 @@ class BookmarkViewerScreenModel(
          * article regardless. Revealing content must not depend on a network round-trip.
          */
         const val PROGRESS_PULL_GRACE_MILLIS = 2_000L
+
+        /**
+         * How long a restored progress value gets to travel from the DB write back into
+         * [loadingState]. Bounded because the reader is held on a skeleton meanwhile, and a
+         * DB round trip that takes this long is a bug, not a slow network.
+         */
+        const val PROGRESS_APPLY_GRACE_MILLIS = 1_000L
+
+        /** Progress below this is treated as "not worth restoring" by the reader. */
+        const val MEANINGFUL_PROGRESS = 0.02f
+    }
+
+    /**
+     * Suspends until [loadingState] carries the progress a pull just wrote to the DB, so the
+     * reader decides where to open the article on the restored value rather than on the 0%
+     * it was showing a moment earlier.
+     */
+    private suspend fun awaitRestoredProgress() {
+        val applied = withTimeoutOrNull(PROGRESS_APPLY_GRACE_MILLIS) {
+            _loadingState.first {
+                it is BookmarkLoadingState.FullyLoaded &&
+                    it.bookmark.readingProgress > MEANINGFUL_PROGRESS
+            }
+        }
+        if (applied == null) {
+            AppLogger.w("ViewerModel", "Restored reading progress did not reach the reader in time")
+        }
     }
 
     /**
@@ -434,12 +461,18 @@ class BookmarkViewerScreenModel(
                                     val updated = withTimeoutOrNull(PROGRESS_PULL_GRACE_MILLIS) {
                                         pull.await()
                                     }
-                                    // If the server had newer progress, yield once so the DB
-                                    // update can propagate through observeBookmarkById and
-                                    // update loadingState before we signal serverProgressChecked.
-                                    // This prevents a race where the UI sees serverProgressChecked=true
-                                    // but loadingState still holds the old 0% progress.
-                                    if (updated == ReadingProgressPullResult.APPLIED) kotlinx.coroutines.yield()
+                                    // The restored progress reaches the reader through the DB:
+                                    // Room's invalidation, observeBookmarkById and this
+                                    // ScreenModel all sit between the write and loadingState.
+                                    // A single yield() did not span that, so the reader saw
+                                    // serverProgressChecked=true while loadingState still held
+                                    // 0% — it latched "nothing to restore" and opened the
+                                    // article at the top, and only a second open (with the
+                                    // value already in the DB) landed in the right place.
+                                    // Wait for the emission itself instead.
+                                    if (updated == ReadingProgressPullResult.APPLIED) {
+                                        awaitRestoredProgress()
+                                    }
                                     _serverProgressChecked.value = true
                                 }
                             } else {
