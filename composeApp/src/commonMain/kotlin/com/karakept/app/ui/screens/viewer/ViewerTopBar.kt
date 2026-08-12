@@ -61,6 +61,9 @@ import getPlatform
 /**
  * Top bar with back button, sticky title, and dropdown menu
  */
+/** Reading-progress strip under the toolbar. Part of the chrome that covers the article. */
+internal val ReadingProgressBarHeight = 3.dp
+
 @Composable
 internal fun ViewerTopBar(
     title: String,
@@ -385,7 +388,7 @@ internal fun ViewerTopBar(
         LinearProgressIndicator(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(3.dp),
+                .height(ReadingProgressBarHeight),
             color = MaterialTheme.colorScheme.primary,
             trackColor = Color.Transparent,
         )
@@ -394,7 +397,7 @@ internal fun ViewerTopBar(
             progress = { readingProgress },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(3.dp),
+                .height(ReadingProgressBarHeight),
             color = MaterialTheme.colorScheme.primary,
             trackColor = Color.Transparent,
             drawStopIndicator = {}

@@ -58,4 +58,54 @@ class PageScrollUtilsTest {
         assertEquals(1200f, large)
         assertTrue(abs(large / small - 4f) < 0.0001f)
     }
+
+    @Test
+    fun `chrome painted over the list shortens the page by its height`() {
+        val delta = computePageScrollDelta(
+            viewportHeightPx = 1000,
+            overlapPercent = 0,
+            direction = PageTurnDirection.NEXT,
+            obscuredTopPx = 100,
+            obscuredBottomPx = 50
+        )
+        assertEquals(850f, delta)
+    }
+
+    @Test
+    fun `overlap is taken from the visible band, not the whole viewport`() {
+        // 1000 - 100 - 50 = 850 readable, less 10% = 765. Applying the overlap to the raw 1000
+        // first would give 900 and bury the top of the new page behind the bar.
+        val delta = computePageScrollDelta(1000, 10, PageTurnDirection.NEXT, 100, 50)
+        assertEquals(765f, delta)
+    }
+
+    @Test
+    fun `obscured chrome shortens a backward turn by the same amount`() {
+        val next = computePageScrollDelta(1000, 10, PageTurnDirection.NEXT, 100, 50)
+        val previous = computePageScrollDelta(1000, 10, PageTurnDirection.PREVIOUS, 100, 50)
+        assertEquals(next, -previous)
+    }
+
+    @Test
+    fun `a screen with no overlaying chrome is unaffected`() {
+        // The bookmark list consumes its Scaffold padding, so it passes no insets and has to keep
+        // turning exactly as far as it did before.
+        assertEquals(
+            computePageScrollDelta(1000, 10, PageTurnDirection.NEXT),
+            computePageScrollDelta(1000, 10, PageTurnDirection.NEXT, 0, 0)
+        )
+    }
+
+    @Test
+    fun `insets taller than the viewport fall back to the raw viewport`() {
+        // A half-measured frame must not freeze the button by producing a zero-height page.
+        val delta = computePageScrollDelta(1000, 0, PageTurnDirection.NEXT, 900, 200)
+        assertEquals(1000f, delta)
+    }
+
+    @Test
+    fun `negative insets are floored rather than lengthening the page`() {
+        val delta = computePageScrollDelta(1000, 0, PageTurnDirection.NEXT, -300, -100)
+        assertEquals(1000f, delta)
+    }
 }

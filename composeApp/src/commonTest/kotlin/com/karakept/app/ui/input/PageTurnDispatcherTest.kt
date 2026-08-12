@@ -6,11 +6,13 @@ import com.karakept.app.data.repository.FakeDataStore
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setPageTurnKeyCode
 import com.karakept.app.data.repository.setPageTurnKeysEnabled
+import com.karakept.app.data.repository.setPageTurnUseVolumeKeys
 import com.karakept.app.utils.AppDispatchers
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -111,7 +113,12 @@ class PageTurnDispatcherTest {
         advanceUntilIdle()
 
         assertEquals(KEY_VOLUME_UP, dispatcher.bindings.value.previousKeyCode)
+
+        val received = async { dispatcher.events.first() }
+        advanceUntilIdle()
         assertTrue(dispatcher.onKeyDown(KEY_VOLUME_UP))
+        advanceUntilIdle()
+        assertEquals(PageTurnDirection.PREVIOUS, received.await())
     }
 
     @Test
@@ -128,6 +135,18 @@ class PageTurnDispatcherTest {
     }
 
     @Test
+    fun `a bound key is left to the platform when no screen is listening`() = runTest(testDispatcher) {
+        val repo = repository()
+        repo.setPageTurnKeyCode(PageTurnDirection.NEXT, KEY_VOLUME_DOWN)
+        val dispatcher = dispatcherWith(repo)
+        advanceUntilIdle()
+
+        // Settings, login, anywhere without a page-turnable list: swallowing the key here would
+        // cost volume control for the whole app once the volume preset is on.
+        assertFalse(dispatcher.onKeyDown(KEY_VOLUME_DOWN))
+    }
+
+    @Test
     fun `emitDirection is refused while hardware keys are disabled`() = runTest(testDispatcher) {
         val repo = repository()
         repo.setPageTurnKeysEnabled(false)
@@ -135,6 +154,50 @@ class PageTurnDispatcherTest {
         advanceUntilIdle()
 
         assertFalse(dispatcher.emitDirection(PageTurnDirection.NEXT))
+    }
+
+    @Test
+    fun `the volume preset reaches the dispatcher through the repository`() = runTest(testDispatcher) {
+        val repo = repository()
+        repo.setPageTurnUseVolumeKeys(true)
+        val dispatcher = dispatcherWith(repo)
+        advanceUntilIdle()
+
+        val received = async { dispatcher.events.first() }
+        advanceUntilIdle()
+
+        assertTrue(dispatcher.onKeyDown(PlatformKeyCodes.VOLUME_DOWN))
+        advanceUntilIdle()
+        assertEquals(PageTurnDirection.NEXT, received.await())
+    }
+
+    @Test
+    fun `volume keys stay with the system until the preset is on`() = runTest(testDispatcher) {
+        val dispatcher = dispatcherWith(repository())
+        advanceUntilIdle()
+
+        // Not consumed means MainActivity falls through to super, so the volume overlay still works.
+        assertFalse(dispatcher.onKeyDown(PlatformKeyCodes.VOLUME_UP))
+        assertFalse(dispatcher.onKeyDown(PlatformKeyCodes.VOLUME_DOWN))
+    }
+
+    @Test
+    fun `a key pressed the instant capture opens is not dropped`() = runTest(testDispatcher) {
+        val dispatcher = dispatcherWith(repository())
+        advanceUntilIdle()
+
+        // capturedKeys has no replay, so a collector that subscribes after capture mode opens
+        // loses the first press. onSubscription is what closes that window.
+        val captured = async {
+            dispatcher.capturedKeys
+                .onSubscription { dispatcher.setCaptureMode(true) }
+                .first()
+        }
+        advanceUntilIdle()
+
+        assertTrue(dispatcher.onKeyDown(KEY_UNBOUND))
+        advanceUntilIdle()
+        assertEquals(KEY_UNBOUND, captured.await())
     }
 
     @Test

@@ -205,6 +205,7 @@ fun BookmarkViewerContent(
         }
     }
 
+    val einkMode = LocalEinkMode.current
     val scrollState = remember { LazyListState() }
     val density = LocalDensity.current
 
@@ -235,7 +236,11 @@ fun BookmarkViewerContent(
         val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
         val availableHeight = viewportHeight - panelHeightPx
         val offsetPx = maxOf(0, highlightOffsetInItem - availableHeight / 2)
-        scrollState.animateScrollToItem(contentBodyIndex, offsetPx)
+        if (einkMode.instantScroll) {
+            scrollRestoration.safeScrollToItem(contentBodyIndex, offsetPx)
+        } else {
+            scrollState.animateScrollToItem(contentBodyIndex, offsetPx)
+        }
     }
 
     var highlightPositionReceived by remember { mutableStateOf(false) }
@@ -279,8 +284,15 @@ fun BookmarkViewerContent(
     }
     val displayState = if (loadingState is BookmarkLoadingState.Error && lastValidState is BookmarkLoadingState.FullyLoaded) lastValidState else loadingState
 
-    val einkMode = LocalEinkMode.current
-    PageTurnScrollEffect(listState = scrollState)
+    // The top bar is painted over the list rather than reserved by the Scaffold, so a page is the
+    // viewport minus that chrome — otherwise every turn hides a line or two behind it.
+    val chromeInsets = rememberViewerChromeInsets(toolbarHeight = toolbarHeight)
+    PageTurnScrollEffect(
+        listState = scrollState,
+        obscuredTopPx = chromeInsets.topPx,
+        obscuredBottomPx = chromeInsets.bottomPx,
+        onScrolled = { scrollRestoration.approveCurrentPosition() }
+    )
     val (fabVisible, toggleFabVisible) = rememberFabVisibilityState(scrollState = scrollState, fabExpanded = fabExpanded)
     val scrollToTopEnabled by screenModel.scrollToTopEnabled.collectAsState()
     val scrollToTopVisible = rememberScrollToTopVisibility(scrollState = scrollState, fabVisible = fabVisible)
@@ -512,7 +524,11 @@ fun BookmarkViewerContent(
                                                     val matchInItem = (y.toInt() - itemTop).coerceAtLeast(0)
                                                     val vpHeight = li.viewportEndOffset - li.viewportStartOffset
                                                     val scrollOffset = maxOf(0, matchInItem - vpHeight / 4)
-                                                    scrollState.animateScrollToItem(cbi, scrollOffset)
+                                                    if (einkMode.instantScroll) {
+                                                        scrollRestoration.safeScrollToItem(cbi, scrollOffset)
+                                                    } else {
+                                                        scrollState.animateScrollToItem(cbi, scrollOffset)
+                                                    }
                                                 }
                                             }
                                         }
@@ -555,7 +571,7 @@ fun BookmarkViewerContent(
                         SmallFloatingActionButton(
                             onClick = {
                                 scope.launch {
-                                    scrollState.scrollToTop(einkMode.animationsDisabled)
+                                    scrollState.scrollToTop(einkMode.instantScroll)
                                     // Use safeScrollToItem to update the scroll guard's
                                     // approved position — without this, the guard detects
                                     // an "unintended jump" and snaps back to the old position

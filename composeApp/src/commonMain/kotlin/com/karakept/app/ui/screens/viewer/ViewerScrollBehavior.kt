@@ -1,9 +1,11 @@
 package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -13,6 +15,31 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+
+/** Pixels of the reader viewport hidden behind chrome painted over it. */
+@Immutable
+internal data class ViewerChromeInsets(val topPx: Int, val bottomPx: Int)
+
+/**
+ * How much of the reader's scroll viewport the user cannot actually read.
+ *
+ * The reader's Scaffold declares no `topBar`, and the loaded branch never applies its padding:
+ * `ViewerTopBar` is a sibling painted over the LazyColumn, and the list runs edge to edge under
+ * the system bars. So `viewportEndOffset - viewportStartOffset` counts a band at each end that is
+ * covered — anything sizing a page has to subtract this, or every turn buries a line or two.
+ *
+ * Counted unconditionally, including over the hero where the bar is still transparent: a page that
+ * changes size as you cross the hero is worse than one that occasionally overlaps a little more,
+ * and the back and overflow buttons sit up there either way.
+ */
+@Composable
+internal fun rememberViewerChromeInsets(toolbarHeight: Dp = 56.dp): ViewerChromeInsets {
+    val density = LocalDensity.current
+    val topPx = WindowInsets.statusBars.getTop(density) +
+        with(density) { (toolbarHeight + ReadingProgressBarHeight).roundToPx() }
+    val bottomPx = WindowInsets.navigationBars.getBottom(density)
+    return remember(topPx, bottomPx) { ViewerChromeInsets(topPx, bottomPx) }
+}
 
 /**
  * Calculates reading progress (0.0 to 1.0) based on scroll position in the content list.

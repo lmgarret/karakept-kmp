@@ -689,7 +689,7 @@ internal fun BookmarkListContent(
         ) {
             Surface(
                 onClick = {
-                    scope.launch { listState.scrollToTop(einkMode.animationsDisabled) }
+                    scope.launch { listState.scrollToTop(einkMode.instantScroll) }
                     onClearNewBookmarksAbove()
                 },
                 shape = MaterialTheme.shapes.large,
@@ -724,7 +724,7 @@ internal fun BookmarkListContent(
             modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
         ) {
             SmallFloatingActionButton(
-                onClick = { scope.launch { listState.scrollToTop(einkMode.animationsDisabled) } },
+                onClick = { scope.launch { listState.scrollToTop(einkMode.instantScroll) } },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 contentColor = MaterialTheme.colorScheme.onSurface
             ) {

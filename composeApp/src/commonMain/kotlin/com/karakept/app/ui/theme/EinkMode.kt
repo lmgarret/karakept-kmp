@@ -22,7 +22,14 @@ import androidx.compose.foundation.interaction.InteractionSource
 data class EinkMode(
     val animationsDisabled: Boolean = false,
     val highContrast: Boolean = false,
-    /** Page turns and scroll-to-top jump instead of animating. */
+    /**
+     * Scroll-to-top and in-article jumps (highlights, search matches) land in one repaint instead
+     * of animating.
+     *
+     * Hardware page turns deliberately do *not* read this: they are not gated on the master e-ink
+     * switch, so they take the same preference ungated, off
+     * [com.karakept.app.data.model.PageTurnKeyBindings.instantPageTurn].
+     */
     val instantScroll: Boolean = false
 )
 

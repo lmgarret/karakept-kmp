@@ -253,10 +253,35 @@ that ghosts, and MD3's tonal surface steps collapse into indistinguishable greys
 ### Hardware page-turn buttons
 
 `PageTurnDispatcher` (`ui/input/PageTurnDispatcher.kt`, a Koin `single`) maps device key codes to
-page turns. Key codes are *learned from the device* in the E-ink settings screen, not hardcoded.
+page turns. Key codes are *learned from the device* in the E-ink settings screen, not hardcoded —
+except the volume rocker, which nearly every e-ink reader wires its facade buttons to and which
+`PageTurnKeyBindings.useVolumeKeys` offers as a one-switch preset (`invertVolumeKeys` swaps the
+two for the other grip). The codes come from `expect object PlatformKeyCodes`, since Android and
+desktop number keys differently.
+
 A scrollable screen opts in with `PageTurnScrollEffect(listState)`; pass `enabled = false` when
 another pane owns the buttons. Android intercepts in `MainActivity.dispatchKeyEvent` so a bound
 volume key never reaches the system volume overlay.
+
+A page is the *visible* band, not the viewport. `viewportEndOffset - viewportStartOffset` reports
+the list's full height, so a screen that paints its bars **over** the list — as the reader does,
+with no Scaffold `topBar` and content running edge to edge under the system bars — must pass
+`obscuredTopPx`/`obscuredBottomPx` (`rememberViewerChromeInsets`) or every turn hides a line or two
+behind the bar. A screen that consumes its Scaffold padding, like the bookmark list, passes
+nothing.
+
+> **Rule:** never put key capture inside a Compose `Dialog`/`AlertDialog`/`ModalBottomSheet`. Those
+> are separate platform windows on Android, and while one holds focus key events go to *its*
+> `Window.Callback` instead of `MainActivity.dispatchKeyEvent` — the only thing that feeds the
+> dispatcher. A prompt in a dialog can never see the keys it is asking for. Capture inline, as
+> `KeyBindingCard` does.
+
+Page turns read `PageTurnKeyBindings.instantPageTurn`, not `LocalEinkMode.instantScroll`: the
+latter ANDs in the master e-ink switch, and hardware buttons are deliberately usable without it.
+Anything that moves the reader instantly must also call
+`ScrollRestorationState.approveCurrentPosition()` — the reader's scroll guard snaps back movement
+it did not sanction, and an instant scroll is indistinguishable from an unintended jump because it
+finishes inside one `scroll {}` block.
 
 ### Menus and bottom sheets
 

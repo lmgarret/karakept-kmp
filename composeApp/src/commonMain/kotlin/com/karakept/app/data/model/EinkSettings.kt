@@ -1,5 +1,7 @@
 package com.karakept.app.data.model
 
+import com.karakept.app.ui.input.PlatformKeyCodes
+
 /**
  * Which way a hardware page-turn button moves the content.
  */
@@ -27,18 +29,44 @@ data class EinkDisplaySettings(
  * Key codes are platform raw values (Android `KeyEvent.KEYCODE_*`, desktop
  * `Key.keyCode` truncated to Int) captured from the device itself rather than hardcoded, because
  * e-ink readers disagree on which codes their facade buttons emit.
+ *
+ * [useVolumeKeys] is the exception: e-ink readers overwhelmingly wire their facade buttons to the
+ * volume rocker, so that one pair is offered as a preset rather than something to learn.
+ *
+ * [instantPageTurn] mirrors the e-ink "Instant scrolling" preference *ungated* by the master e-ink
+ * switch, because page-turn buttons themselves are ungated — a smoothly animated jump is the wrong
+ * answer on any device with page buttons.
  */
 data class PageTurnKeyBindings(
     val enabled: Boolean = true,
+    val useVolumeKeys: Boolean = false,
+    val invertVolumeKeys: Boolean = false,
     val previousKeyCode: Int? = null,
     val nextKeyCode: Int? = null,
-    val overlapPercent: Int = DEFAULT_OVERLAP_PERCENT
+    val overlapPercent: Int = DEFAULT_OVERLAP_PERCENT,
+    val instantPageTurn: Boolean = true
 ) {
-    fun directionFor(keyCode: Int): PageTurnDirection? = when {
-        !enabled -> null
-        previousKeyCode != null && keyCode == previousKeyCode -> PageTurnDirection.PREVIOUS
-        nextKeyCode != null && keyCode == nextKeyCode -> PageTurnDirection.NEXT
-        else -> null
+    fun directionFor(keyCode: Int): PageTurnDirection? {
+        if (!enabled) return null
+        volumeDirectionFor(keyCode)?.let { return it }
+        return when {
+            previousKeyCode != null && keyCode == previousKeyCode -> PageTurnDirection.PREVIOUS
+            nextKeyCode != null && keyCode == nextKeyCode -> PageTurnDirection.NEXT
+            else -> null
+        }
+    }
+
+    // Checked before the learned codes so the preset still wins if a device also reports the
+    // volume rocker under a code the user happened to bind earlier.
+    private fun volumeDirectionFor(keyCode: Int): PageTurnDirection? {
+        if (!useVolumeKeys) return null
+        return when (keyCode) {
+            PlatformKeyCodes.VOLUME_UP ->
+                if (invertVolumeKeys) PageTurnDirection.NEXT else PageTurnDirection.PREVIOUS
+            PlatformKeyCodes.VOLUME_DOWN ->
+                if (invertVolumeKeys) PageTurnDirection.PREVIOUS else PageTurnDirection.NEXT
+            else -> null
+        }
     }
 
     companion object {

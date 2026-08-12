@@ -17,6 +17,15 @@ import kotlinx.coroutines.delay
  */
 class ScrollRestorationState(
     val safeScrollToItem: suspend (Int, Int) -> Unit,
+    /**
+     * Accepts wherever the list currently sits as intentional.
+     *
+     * An instant scroll finishes inside a single `scroll {}` block, so by the time the guard's
+     * effect runs `isScrollInProgress` is already false and the move looks like an unintended
+     * jump — the guard would snap it straight back. Animated scrolls survive only because they
+     * span frames. Anything that moves the reader instantly has to call this.
+     */
+    val approveCurrentPosition: () -> Unit,
     val hasRestoredScroll: Boolean,
     val contentRendered: Boolean,
     val onContentRendered: () -> Unit
@@ -49,6 +58,11 @@ fun rememberScrollRestoration(
         approvedOffset = offset
         scrollState.scrollToItem(index, offset)
         kotlinx.coroutines.yield()
+        approvedIndex = scrollState.firstVisibleItemIndex
+        approvedOffset = scrollState.firstVisibleItemScrollOffset
+    }
+
+    val approveCurrentPosition: () -> Unit = {
         approvedIndex = scrollState.firstVisibleItemIndex
         approvedOffset = scrollState.firstVisibleItemScrollOffset
     }
@@ -136,6 +150,7 @@ fun rememberScrollRestoration(
 
     return ScrollRestorationState(
         safeScrollToItem = safeScrollToItem,
+        approveCurrentPosition = approveCurrentPosition,
         hasRestoredScroll = hasRestoredScroll,
         contentRendered = contentRendered,
         onContentRendered = { contentRendered = true }

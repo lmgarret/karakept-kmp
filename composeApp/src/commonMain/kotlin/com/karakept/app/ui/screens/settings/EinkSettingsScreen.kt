@@ -13,14 +13,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.Contrast
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.SwipeVertical
 import androidx.compose.material.icons.filled.Tonality
 import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.data.model.PageTurnKeyBindings
+import com.karakept.app.ui.input.PlatformKeyCodes
 import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
@@ -79,6 +81,7 @@ fun EinkSettingsContent(
     val rowActionMode by screenModel.rowActionMode.collectAsState()
 
     var capturingFor by remember { mutableStateOf<PageTurnDirection?>(null) }
+    var captureTimedOut by remember { mutableStateOf<PageTurnDirection?>(null) }
 
     Scaffold(
         topBar = {
@@ -135,7 +138,9 @@ fun EinkSettingsContent(
 
                 SettingSwitchCard(
                     title = "Instant scrolling",
-                    description = "Jump straight to the new position instead of scrolling smoothly",
+                    description = "Page turns, scroll-to-top and in-article jumps land in one " +
+                        "repaint instead of gliding. Page turns follow this even with E-ink " +
+                        "mode off.",
                     icon = Icons.Default.SwipeVertical,
                     checked = instantPageScroll,
                     onCheckedChange = { screenModel.setInstantPageScroll(it) }
@@ -185,17 +190,57 @@ fun EinkSettingsContent(
             )
 
             if (keyBindings.enabled) {
+                SettingSwitchCard(
+                    title = "Use volume buttons",
+                    description = "Most e-ink readers wire their page buttons to the volume " +
+                        "rocker. Volume up turns back, volume down turns forward, and neither " +
+                        "changes the volume while the app is open.",
+                    icon = Icons.AutoMirrored.Filled.VolumeUp,
+                    checked = keyBindings.useVolumeKeys,
+                    onCheckedChange = { screenModel.setUseVolumeKeys(it) }
+                )
+
+                if (keyBindings.useVolumeKeys) {
+                    SettingSwitchCard(
+                        title = "Invert volume buttons",
+                        description = "Swap the two, for holding the device the other way up",
+                        icon = Icons.Default.SwapVert,
+                        checked = keyBindings.invertVolumeKeys,
+                        onCheckedChange = { screenModel.setInvertVolumeKeys(it) }
+                    )
+                }
+
+                val startCapture: (PageTurnDirection) -> Unit = { direction ->
+                    captureTimedOut = null
+                    capturingFor = direction
+                    screenModel.captureKeyBinding(direction) { keyCode ->
+                        if (keyCode == null) captureTimedOut = direction
+                        capturingFor = null
+                    }
+                }
+                val cancelCapture: () -> Unit = {
+                    screenModel.cancelCapture()
+                    capturingFor = null
+                    captureTimedOut = null
+                }
+
                 KeyBindingCard(
                     title = "Previous page",
                     keyCode = keyBindings.previousKeyCode,
-                    onBind = { capturingFor = PageTurnDirection.PREVIOUS },
+                    capturing = capturingFor == PageTurnDirection.PREVIOUS,
+                    timedOut = captureTimedOut == PageTurnDirection.PREVIOUS,
+                    onBind = { startCapture(PageTurnDirection.PREVIOUS) },
+                    onCancel = cancelCapture,
                     onClear = { screenModel.clearBinding(PageTurnDirection.PREVIOUS) }
                 )
 
                 KeyBindingCard(
                     title = "Next page",
                     keyCode = keyBindings.nextKeyCode,
-                    onBind = { capturingFor = PageTurnDirection.NEXT },
+                    capturing = capturingFor == PageTurnDirection.NEXT,
+                    timedOut = captureTimedOut == PageTurnDirection.NEXT,
+                    onBind = { startCapture(PageTurnDirection.NEXT) },
+                    onCancel = cancelCapture,
                     onClear = { screenModel.clearBinding(PageTurnDirection.NEXT) }
                 )
 
@@ -222,73 +267,32 @@ fun EinkSettingsContent(
             }
         }
     }
-
-    capturingFor?.let { direction ->
-        KeyCaptureDialog(
-            direction = direction,
-            onDismiss = {
-                screenModel.cancelCapture()
-                capturingFor = null
-            },
-            onStart = { onFinished ->
-                screenModel.captureKeyBinding(direction) { onFinished(it) }
-            },
-            onFinished = { capturingFor = null }
-        )
-    }
 }
 
-@Composable
-private fun KeyCaptureDialog(
-    direction: PageTurnDirection,
-    onDismiss: () -> Unit,
-    onStart: ((Int?) -> Unit) -> Unit,
-    onFinished: () -> Unit
-) {
-    var timedOut by remember { mutableStateOf(false) }
-
-    androidx.compose.runtime.LaunchedEffect(direction) {
-        onStart { keyCode ->
-            if (keyCode == null) timedOut = true else onFinished()
-        }
-    }
-
-    val label = when (direction) {
-        PageTurnDirection.PREVIOUS -> "previous page"
-        PageTurnDirection.NEXT -> "next page"
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (timedOut) "No button detected" else "Press a button") },
-        text = {
-            Text(
-                if (timedOut) {
-                    "Nothing arrived within 10 seconds. Some devices handle their page buttons in " +
-                        "firmware and never pass them to apps."
-                } else {
-                    "Press the hardware button you want to use for the $label."
-                }
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(if (timedOut) "Close" else "Cancel") }
-        }
-    )
-}
-
+/**
+ * A single direction's binding, which doubles as the capture prompt.
+ *
+ * Capture is rendered inline rather than in an `AlertDialog` on purpose. A Compose dialog is a
+ * separate platform window on Android, and while it holds focus key events go to *its*
+ * `Window.Callback` instead of `MainActivity.dispatchKeyEvent` — the only thing that feeds
+ * `PageTurnDispatcher`. In a dialog the prompt could never see the very keys it asks for, and a
+ * volume press would fall through to the system volume overlay.
+ */
 @Composable
 private fun KeyBindingCard(
     title: String,
     keyCode: Int?,
+    capturing: Boolean,
+    timedOut: Boolean,
     onBind: () -> Unit,
+    onCancel: () -> Unit,
     onClear: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 12.dp)
-            .clickable(onClick = onBind)
+            .clickable(enabled = !capturing, onClick = onBind)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -297,16 +301,30 @@ private fun KeyBindingCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = title, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = keyCode?.let { "Key code $it" } ?: "Not set — tap to bind",
+                    text = when {
+                        capturing -> "Press the button you want to use…"
+                        timedOut -> "No button detected. Some devices handle their page buttons " +
+                            "in firmware and never pass them to apps."
+                        keyCode != null -> keyLabel(keyCode)
+                        else -> "Not set — tap to bind"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (keyCode != null) {
-                TextButton(onClick = onClear) { Text("Clear") }
+            when {
+                capturing -> TextButton(onClick = onCancel) { Text("Cancel") }
+                keyCode != null -> TextButton(onClick = onClear) { Text("Clear") }
             }
         }
     }
+}
+
+/** Raw key codes mean nothing to a reader, so name the ones we can recognise. */
+private fun keyLabel(keyCode: Int): String = when (keyCode) {
+    PlatformKeyCodes.VOLUME_UP -> "Volume up (key code $keyCode)"
+    PlatformKeyCodes.VOLUME_DOWN -> "Volume down (key code $keyCode)"
+    else -> "Key code $keyCode"
 }
 
 @Composable

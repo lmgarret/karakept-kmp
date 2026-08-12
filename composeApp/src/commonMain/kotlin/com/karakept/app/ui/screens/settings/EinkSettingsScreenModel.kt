@@ -12,13 +12,17 @@ import com.karakept.app.data.repository.setEinkInstantPageScroll
 import com.karakept.app.data.repository.setEinkModeEnabled
 import com.karakept.app.data.repository.setHideArticleThumbnails
 import com.karakept.app.data.repository.setPageTurnKeyCode
+import com.karakept.app.data.repository.setPageTurnInvertVolumeKeys
 import com.karakept.app.data.repository.setPageTurnKeysEnabled
 import com.karakept.app.data.repository.setPageTurnOverlapPercent
+import com.karakept.app.data.repository.setPageTurnUseVolumeKeys
 import com.karakept.app.data.repository.setRowActionMode
 import com.karakept.app.ui.input.PageTurnDispatcher
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -80,6 +84,14 @@ class EinkSettingsScreenModel(
         settingsRepository.setPageTurnKeysEnabled(enabled)
     }
 
+    fun setUseVolumeKeys(enabled: Boolean) = launchSetting {
+        settingsRepository.setPageTurnUseVolumeKeys(enabled)
+    }
+
+    fun setInvertVolumeKeys(inverted: Boolean) = launchSetting {
+        settingsRepository.setPageTurnInvertVolumeKeys(inverted)
+    }
+
     fun setOverlapPercent(percent: Int) = launchSetting {
         settingsRepository.setPageTurnOverlapPercent(percent)
     }
@@ -100,11 +112,16 @@ class EinkSettingsScreenModel(
         timeoutMillis: Long = CAPTURE_TIMEOUT_MILLIS,
         onFinished: (Int?) -> Unit
     ) {
-        viewModelScope.launch {
-            pageTurnDispatcher.setCaptureMode(true)
+        captureJob?.cancel()
+        captureJob = viewModelScope.launch {
             try {
                 val keyCode = withTimeoutOrNull(timeoutMillis) {
-                    pageTurnDispatcher.capturedKeys.first()
+                    // capturedKeys has no replay, so capture mode must not open until this
+                    // collector is registered — otherwise onKeyDown swallows the very first press
+                    // and tryEmit drops it for want of a subscriber.
+                    pageTurnDispatcher.capturedKeys
+                        .onSubscription { pageTurnDispatcher.setCaptureMode(true) }
+                        .first()
                 }
                 if (keyCode != null) {
                     settingsRepository.setPageTurnKeyCode(direction, keyCode)
@@ -117,12 +134,18 @@ class EinkSettingsScreenModel(
     }
 
     fun cancelCapture() {
+        // Cancelling the job matters as much as clearing the flag: otherwise the timeout keeps
+        // running and reports back to a prompt the user already dismissed.
+        captureJob?.cancel()
+        captureJob = null
         pageTurnDispatcher.setCaptureMode(false)
     }
 
     fun setHideArticleThumbnails(hide: Boolean) = launchSetting {
         settingsRepository.setHideArticleThumbnails(hide)
     }
+
+    private var captureJob: Job? = null
 
     private fun launchSetting(block: suspend () -> Unit) {
         viewModelScope.launch { block() }

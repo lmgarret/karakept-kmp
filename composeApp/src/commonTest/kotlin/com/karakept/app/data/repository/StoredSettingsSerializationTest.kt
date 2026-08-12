@@ -340,6 +340,8 @@ class StoredSettingsSerializationTest {
             highContrast = false,
             instantPageScroll = false,
             hardwareKeysEnabled = false,
+            useVolumeKeys = true,
+            invertVolumeKeys = true,
             previousPageKeyCode = 24,
             nextPageKeyCode = 25,
             pageTurnOverlapPercent = 20
@@ -353,6 +355,16 @@ class StoredSettingsSerializationTest {
         assertEquals(false, settings.einkModeEnabled)
         assertNull(settings.previousPageKeyCode)
         assertNull(settings.nextPageKeyCode)
+    }
+
+    @Test
+    fun `StoredEinkSettings volume preset is opt-in for installs that predate it`() {
+        // Existing users keep working volume buttons; taking them over has to be a choice.
+        val settings = json.decodeFromString<StoredEinkSettings>(
+            """{"einkModeEnabled":true,"hardwareKeysEnabled":true}"""
+        )
+        assertEquals(false, settings.useVolumeKeys)
+        assertEquals(false, settings.invertVolumeKeys)
     }
 
     @Test
