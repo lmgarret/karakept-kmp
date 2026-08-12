@@ -284,8 +284,13 @@ fun BookmarkViewerContent(
     }
     val displayState = if (loadingState is BookmarkLoadingState.Error && lastValidState is BookmarkLoadingState.FullyLoaded) lastValidState else loadingState
 
+    // The top bar is painted over the list rather than reserved by the Scaffold, so a page is the
+    // viewport minus that chrome — otherwise every turn hides a line or two behind it.
+    val chromeInsets = rememberViewerChromeInsets(toolbarHeight = toolbarHeight)
     PageTurnScrollEffect(
         listState = scrollState,
+        obscuredTopPx = chromeInsets.topPx,
+        obscuredBottomPx = chromeInsets.bottomPx,
         onScrolled = { scrollRestoration.approveCurrentPosition() }
     )
     val (fabVisible, toggleFabVisible) = rememberFabVisibilityState(scrollState = scrollState, fabExpanded = fabExpanded)

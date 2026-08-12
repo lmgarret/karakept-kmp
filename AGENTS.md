@@ -263,6 +263,13 @@ A scrollable screen opts in with `PageTurnScrollEffect(listState)`; pass `enable
 another pane owns the buttons. Android intercepts in `MainActivity.dispatchKeyEvent` so a bound
 volume key never reaches the system volume overlay.
 
+A page is the *visible* band, not the viewport. `viewportEndOffset - viewportStartOffset` reports
+the list's full height, so a screen that paints its bars **over** the list — as the reader does,
+with no Scaffold `topBar` and content running edge to edge under the system bars — must pass
+`obscuredTopPx`/`obscuredBottomPx` (`rememberViewerChromeInsets`) or every turn hides a line or two
+behind the bar. A screen that consumes its Scaffold padding, like the bookmark list, passes
+nothing.
+
 > **Rule:** never put key capture inside a Compose `Dialog`/`AlertDialog`/`ModalBottomSheet`. Those
 > are separate platform windows on Android, and while one holds focus key events go to *its*
 > `Window.Callback` instead of `MainActivity.dispatchKeyEvent` — the only thing that feeds the

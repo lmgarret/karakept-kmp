@@ -23,6 +23,10 @@ import org.koin.compose.koinInject
  * layout the bookmark list and the reader are composed side by side, and only one of them should
  * respond. The reader wins when it has a bookmark open.
  *
+ * [obscuredTopPx]/[obscuredBottomPx] are the slices of [listState]'s viewport hidden behind chrome
+ * drawn over it, which still count toward the reported viewport height. A screen that overlays its
+ * own bars has to pass them, or every turn scrolls further than the user can read.
+ *
  * [onScrolled] runs after each turn. The reader installs a scroll guard that snaps back any
  * movement it did not sanction, and an instant turn looks exactly like one of those — so the
  * reader passes a callback that re-approves the new position.
@@ -31,10 +35,16 @@ import org.koin.compose.koinInject
 fun PageTurnScrollEffect(
     listState: LazyListState,
     enabled: Boolean = true,
+    obscuredTopPx: Int = 0,
+    obscuredBottomPx: Int = 0,
     onScrolled: (() -> Unit)? = null
 ) {
     val dispatcher = koinInject<PageTurnDispatcher>()
     val currentOnScrolled by rememberUpdatedState(onScrolled)
+    // Kept out of the LaunchedEffect keys so a rotation resizes the page without tearing down and
+    // rebuilding the collector.
+    val currentObscuredTop by rememberUpdatedState(obscuredTopPx)
+    val currentObscuredBottom by rememberUpdatedState(obscuredBottomPx)
 
     LaunchedEffect(listState, enabled) {
         if (!enabled) return@LaunchedEffect
@@ -45,7 +55,9 @@ fun PageTurnScrollEffect(
             val delta = computePageScrollDelta(
                 viewportHeightPx = viewportHeight,
                 overlapPercent = bindings.overlapPercent,
-                direction = direction
+                direction = direction,
+                obscuredTopPx = currentObscuredTop,
+                obscuredBottomPx = currentObscuredBottom
             )
             if (delta == 0f) return@collect
             // scrollBy clamps at the content edges on its own, so no bounds check is needed.
