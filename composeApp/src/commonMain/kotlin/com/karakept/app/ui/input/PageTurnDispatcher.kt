@@ -80,9 +80,15 @@ class PageTurnDispatcher(
     /**
      * Requests a page turn directly, bypassing the key-code lookup. Used by the desktop keyboard
      * mapping, where PageUp/PageDown are fixed rather than user-bound.
+     *
+     * @return true when a screen was listening and the key should be treated as consumed.
      */
     fun emitDirection(direction: PageTurnDirection): Boolean {
         if (!_bindings.value.enabled) return false
+        // Nothing page-turnable is on screen (settings, login, an empty back stack), so leave the
+        // key to the platform. Without this, binding the volume rocker would cost volume control
+        // everywhere in the app rather than only where a page turn means something.
+        if (_events.subscriptionCount.value == 0) return false
         _events.tryEmit(direction)
         return true
     }

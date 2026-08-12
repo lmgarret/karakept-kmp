@@ -81,6 +81,8 @@ data class BackupSettings(
     val einkHighContrast: Boolean = true,
     val einkInstantPageScroll: Boolean = true,
     val pageTurnKeysEnabled: Boolean = true,
+    val pageTurnUseVolumeKeys: Boolean = false,
+    val pageTurnInvertVolumeKeys: Boolean = false,
     val pageTurnPreviousKeyCode: Int? = null,
     val pageTurnNextKeyCode: Int? = null,
     val pageTurnOverlapPercent: Int = PageTurnKeyBindings.DEFAULT_OVERLAP_PERCENT,

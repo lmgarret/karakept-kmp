@@ -270,6 +270,16 @@ screen. Consequences worth knowing before touching this code:
   beat the system volume overlay to a bound volume key — a Compose key modifier runs too late.
 - It mirrors bindings into a `StateFlow` on its own scope (built from `appDispatchers.default`),
   because the platform key callback cannot suspend to read them.
+- Codes are learned from the device, except the volume rocker — `PageTurnKeyBindings.useVolumeKeys`
+  binds it directly, since e-ink readers overwhelmingly wire their facade buttons to it. The two
+  codes come from `expect object PlatformKeyCodes`.
+- The same window rule constrains the *learning* UI: key capture is rendered inline in the E-ink
+  settings screen, never in a Compose `Dialog`, because a dialog is its own platform window and
+  `MainActivity.dispatchKeyEvent` never sees the keys pressed while it has focus.
+- Page turns scroll instantly off `PageTurnKeyBindings.instantPageTurn` rather than
+  `LocalEinkMode.instantScroll`, which folds in the master e-ink switch the buttons are not gated
+  on. In the reader an instant move must be re-approved via
+  `ScrollRestorationState.approveCurrentPosition()`, or the scroll guard snaps it back.
 
 **Dependency Injection:**
 - Koin module configured in AppModule.kt (single instances for repositories, factories for ScreenModels)

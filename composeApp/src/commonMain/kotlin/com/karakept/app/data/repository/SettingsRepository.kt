@@ -402,9 +402,14 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     val pageTurnKeyBindings: Flow<PageTurnKeyBindings> = einkSettingsFlow.map {
         PageTurnKeyBindings(
             enabled = it.hardwareKeysEnabled,
+            useVolumeKeys = it.useVolumeKeys,
+            invertVolumeKeys = it.invertVolumeKeys,
             previousKeyCode = it.previousPageKeyCode,
             nextKeyCode = it.nextPageKeyCode,
-            overlapPercent = it.pageTurnOverlapPercent
+            overlapPercent = it.pageTurnOverlapPercent,
+            // Raw, not folded into the master switch: the buttons work without e-ink mode, so the
+            // scroll style they use has to as well.
+            instantPageTurn = it.instantPageScroll
         )
     }.distinctUntilChanged()
 

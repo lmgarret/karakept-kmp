@@ -84,6 +84,8 @@ internal data class StoredEinkSettings(
     val highContrast: Boolean = true,
     val instantPageScroll: Boolean = true,
     val hardwareKeysEnabled: Boolean = true,
+    val useVolumeKeys: Boolean = false,
+    val invertVolumeKeys: Boolean = false,
     val previousPageKeyCode: Int? = null,
     val nextPageKeyCode: Int? = null,
     val pageTurnOverlapPercent: Int = PageTurnKeyBindings.DEFAULT_OVERLAP_PERCENT

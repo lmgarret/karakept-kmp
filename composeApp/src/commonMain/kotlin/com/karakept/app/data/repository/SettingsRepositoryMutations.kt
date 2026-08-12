@@ -119,6 +119,8 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         einkHighContrast = eink.highContrast,
         einkInstantPageScroll = eink.instantPageScroll,
         pageTurnKeysEnabled = eink.hardwareKeysEnabled,
+        pageTurnUseVolumeKeys = eink.useVolumeKeys,
+        pageTurnInvertVolumeKeys = eink.invertVolumeKeys,
         pageTurnPreviousKeyCode = eink.previousPageKeyCode,
         pageTurnNextKeyCode = eink.nextPageKeyCode,
         pageTurnOverlapPercent = eink.pageTurnOverlapPercent,
@@ -190,9 +192,14 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                 highContrast = s.einkHighContrast,
                 instantPageScroll = s.einkInstantPageScroll,
                 hardwareKeysEnabled = s.pageTurnKeysEnabled,
+                useVolumeKeys = s.pageTurnUseVolumeKeys,
+                invertVolumeKeys = s.pageTurnInvertVolumeKeys,
                 previousPageKeyCode = s.pageTurnPreviousKeyCode,
                 nextPageKeyCode = s.pageTurnNextKeyCode,
-                pageTurnOverlapPercent = s.pageTurnOverlapPercent
+                pageTurnOverlapPercent = s.pageTurnOverlapPercent.coerceIn(
+                    PageTurnKeyBindings.MIN_OVERLAP_PERCENT,
+                    PageTurnKeyBindings.MAX_OVERLAP_PERCENT
+                )
             )
         )
         prefs[SWIPE_SETTINGS_KEY] = settingsJson.encodeToString(
@@ -357,6 +364,12 @@ suspend fun SettingsRepository.setEinkInstantPageScroll(enabled: Boolean) =
 
 suspend fun SettingsRepository.setPageTurnKeysEnabled(enabled: Boolean) =
     updateEinkSettings { copy(hardwareKeysEnabled = enabled) }
+
+suspend fun SettingsRepository.setPageTurnUseVolumeKeys(enabled: Boolean) =
+    updateEinkSettings { copy(useVolumeKeys = enabled) }
+
+suspend fun SettingsRepository.setPageTurnInvertVolumeKeys(inverted: Boolean) =
+    updateEinkSettings { copy(invertVolumeKeys = inverted) }
 
 /**
  * Binds a hardware key to a page-turn direction. Passing null clears the binding. A key code

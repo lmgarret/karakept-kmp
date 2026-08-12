@@ -3,6 +3,7 @@ package com.karakept.app.data.repository
 import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.RowActionMode
+import com.karakept.app.ui.input.PlatformKeyCodes
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
@@ -49,6 +50,31 @@ class EinkSettingsBackupTest {
         assertEquals(24, bindings.previousKeyCode)
         assertEquals(25, bindings.nextKeyCode)
         assertEquals(20, bindings.overlapPercent)
+    }
+
+    @Test
+    fun `the volume-button preset survives an export and import`() = runTest {
+        repo.setPageTurnUseVolumeKeys(true)
+        repo.setPageTurnInvertVolumeKeys(true)
+
+        val restoredInto = SettingsRepository(FakeDataStore())
+        restoredInto.restoreSettings(repo.currentSettings())
+
+        val bindings = restoredInto.pageTurnKeyBindings.first()
+        assertTrue(bindings.useVolumeKeys)
+        assertTrue(bindings.invertVolumeKeys)
+        assertEquals(PageTurnDirection.PREVIOUS, bindings.directionFor(PlatformKeyCodes.VOLUME_DOWN))
+    }
+
+    @Test
+    fun `page turns stay instant even with the master e-ink switch off`() = runTest {
+        // Hardware buttons are not gated on e-ink mode, so the scroll style they use must not be
+        // either — otherwise every turn animates for anyone who never flipped the master switch.
+        assertFalse(repo.einkModeEnabled.first())
+        assertTrue(repo.pageTurnKeyBindings.first().instantPageTurn)
+
+        repo.setEinkInstantPageScroll(false)
+        assertFalse(repo.pageTurnKeyBindings.first().instantPageTurn)
     }
 
     @Test

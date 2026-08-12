@@ -5,13 +5,14 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import com.karakept.app.data.model.PageTurnDirection
-import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.utils.computePageScrollDelta
 import org.koin.compose.koinInject
 
@@ -21,28 +22,37 @@ import org.koin.compose.koinInject
  * [enabled] exists because the events are broadcast to every collector: on the wide desktop
  * layout the bookmark list and the reader are composed side by side, and only one of them should
  * respond. The reader wins when it has a bookmark open.
+ *
+ * [onScrolled] runs after each turn. The reader installs a scroll guard that snaps back any
+ * movement it did not sanction, and an instant turn looks exactly like one of those — so the
+ * reader passes a callback that re-approves the new position.
  */
 @Composable
 fun PageTurnScrollEffect(
     listState: LazyListState,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    onScrolled: (() -> Unit)? = null
 ) {
     val dispatcher = koinInject<PageTurnDispatcher>()
-    val instantScroll = LocalEinkMode.current.instantScroll
+    val currentOnScrolled by rememberUpdatedState(onScrolled)
 
-    LaunchedEffect(listState, enabled, instantScroll) {
+    LaunchedEffect(listState, enabled) {
         if (!enabled) return@LaunchedEffect
         dispatcher.events.collect { direction ->
+            val bindings = dispatcher.bindings.value
             val layoutInfo = listState.layoutInfo
             val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
             val delta = computePageScrollDelta(
                 viewportHeightPx = viewportHeight,
-                overlapPercent = dispatcher.bindings.value.overlapPercent,
+                overlapPercent = bindings.overlapPercent,
                 direction = direction
             )
             if (delta == 0f) return@collect
             // scrollBy clamps at the content edges on its own, so no bounds check is needed.
-            if (instantScroll) listState.scrollBy(delta) else listState.animateScrollBy(delta)
+            // instantPageTurn is read off the bindings rather than LocalEinkMode because the
+            // latter ANDs in the master e-ink switch, which page-turn buttons are not gated on.
+            if (bindings.instantPageTurn) listState.scrollBy(delta) else listState.animateScrollBy(delta)
+            currentOnScrolled?.invoke()
         }
     }
 }
