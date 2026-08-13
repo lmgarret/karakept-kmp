@@ -234,14 +234,35 @@ class MainScreenModel(
     internal val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
-    // Count of bookmarks a background sync prepended above the current viewport, surfaced as a
-    // "N new" pill so the user notices new items instead of silently staying pinned in place.
-    // Reset on a full reload or when the user reaches the top of the list.
-    internal val _newBookmarksAbove = MutableStateFlow(0)
-    val newBookmarksAbove: StateFlow<Int> = _newBookmarksAbove
+    // The topmost bookmark the user has actually seen. Everything above it arrived since.
+    internal val _seenTopRemoteId = MutableStateFlow<Long?>(null)
 
+    /**
+     * How many bookmarks sit above the topmost one the user has seen — the "N new" pill.
+     *
+     * Derived from the loaded window every time rather than accumulated from per-refresh diffs.
+     * A diff counts anything new to the *window*, which over-reports in three ways: it ignores
+     * where the row landed (so a non-NEWEST sort, or an insert below the viewport, still counts
+     * as "above"), it never decrements when rows leave, and because a refresh re-reads a fixed
+     * page range, a row evicted off the tail by a prepend is counted a second time if a later
+     * removal pulls it back into the window. Counting positions asks the list where things
+     * actually are, so it is correct under any sort and self-corrects on every change.
+     *
+     * Counted against [_accumulatedBookmarks] rather than [bookmarks] so a bookmark the user
+     * just created — prepended as a placeholder, and already scrolled to — is not reported back
+     * to them as new. Eager sharing keeps the value readable without a collector.
+     */
+    val newBookmarksAbove: StateFlow<Int> =
+        combine(_accumulatedBookmarks, _seenTopRemoteId) { window, seenTop ->
+            countBookmarksAbove(window, seenTop)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    /**
+     * Marks the row currently at the top as seen, which is what empties the pill. Called when
+     * the user reaches the top of the list, and when they tap the pill to jump there.
+     */
     fun clearNewBookmarksAbove() {
-        _newBookmarksAbove.value = 0
+        _seenTopRemoteId.value = _accumulatedBookmarks.value.firstOrNull()?.remoteId
     }
 
     // RemoteIds of bookmarks on which the user has explicitly performed a list-membership
@@ -948,4 +969,19 @@ class MainScreenModel(
     // Tracked even outside selection mode so Shift+Click can use it as a range anchor.
     // Kept in the class because extension functions cannot hold mutable state.
     internal var _lastSelectedIndex: Int = -1
+}
+
+/**
+ * Number of bookmarks sitting above [seenTopRemoteId] in [bookmarks] — the "N new" pill count.
+ *
+ * Zero when nothing has been marked seen yet, or when the seen bookmark is no longer in the
+ * list: it left the loaded window, so the rows above it are no longer meaningfully "new" and
+ * guessing a count from a missing anchor is what a diff-based counter got wrong.
+ */
+internal fun countBookmarksAbove(
+    bookmarks: List<BookmarkEntity>,
+    seenTopRemoteId: Long?
+): Int {
+    if (seenTopRemoteId == null) return 0
+    return bookmarks.indexOfFirst { it.remoteId == seenTopRemoteId }.coerceAtLeast(0)
 }

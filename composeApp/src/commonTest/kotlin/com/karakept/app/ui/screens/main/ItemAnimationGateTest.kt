@@ -71,11 +71,45 @@ class ItemAnimationGateTest {
     }
 
     @Test
-    fun syncPrependingNewBookmarks_keepsAnimations() {
+    fun syncPrependingNewBookmarks_disablesAnimations() {
+        // Prepended rows displace everything below them, and the viewport is held at the top
+        // for a user who has not scrolled — animating that springs the whole visible list down
+        // from the top edge, which reads as the order shuffling and settling back.
         val loaded = listOfIds(1L..20L)
         val gate = ItemAnimationGate(loaded)
 
-        assertTrue(gate.update(listOfIds(90L..94L) + loaded))
+        assertFalse(gate.update(listOfIds(90L..94L) + loaded))
+    }
+
+    @Test
+    fun repeatedSyncPrepends_stayDisabled() {
+        // A sync commits page by page, so prepends keep landing while the user watches.
+        var current = listOfIds(1L..20L)
+        val gate = ItemAnimationGate(current)
+
+        repeat(3) { round ->
+            current = listOfIds(listOf(90L + round)) + current
+            assertFalse(gate.update(current))
+        }
+    }
+
+    @Test
+    fun gateRecoversAfterAPrepend() {
+        val loaded = listOfIds(1L..20L)
+        val gate = ItemAnimationGate(loaded)
+        assertFalse(gate.update(listOfIds(90L..94L) + loaded))
+
+        // A later removal within the same list animates again.
+        assertTrue(gate.update(listOfIds(90L..94L) + listOfIds((1L..20L).filter { it != 7L })))
+    }
+
+    @Test
+    fun removalAtTheHead_keepsAnimations() {
+        // The previously-first row is gone rather than displaced — nothing shifts down.
+        val loaded = listOfIds(1L..20L)
+        val gate = ItemAnimationGate(loaded)
+
+        assertTrue(gate.update(listOfIds(2L..20L)))
     }
 
     @Test

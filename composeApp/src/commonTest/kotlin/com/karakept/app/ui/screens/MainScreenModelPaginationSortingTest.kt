@@ -304,7 +304,40 @@ class MainScreenModelPaginationSortingTest {
 
             assertEquals(2, model.newBookmarksAbove.value)
 
+            // Marking the new top row as seen empties the pill. The count is derived from the
+            // window rather than held as a counter, so it settles on the next dispatch.
             model.clearNewBookmarksAbove()
+            advanceUntilIdle()
+            assertEquals(0, model.newBookmarksAbove.value)
+        }
+
+    @Test
+    fun `N-new pill does not double-count a bookmark that re-enters the loaded window`() =
+        runTest(testDispatcher) {
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            model._accumulatedBookmarks.value =
+                listOf(makeBookmark(1, "b1"), makeBookmark(2, "b2"), makeBookmark(3, "b3"))
+            model._currentPage.value = 0
+            model.clearNewBookmarksAbove()
+            advanceUntilIdle()
+
+            // A sync prepends one row; the window is a fixed page range, so b3 falls off the end.
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+            } returns listOf(makeBookmark(10, "new1"), makeBookmark(1, "b1"), makeBookmark(2, "b2"))
+            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
+            advanceUntilIdle()
+            assertEquals(1, model.newBookmarksAbove.value)
+
+            // The prepended row then leaves, pulling b3 back into the window. b3 is not new —
+            // the user saw it before — and only rows above the seen row may be counted.
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+            } returns listOf(makeBookmark(1, "b1"), makeBookmark(2, "b2"), makeBookmark(3, "b3"))
+            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
+            advanceUntilIdle()
+
             assertEquals(0, model.newBookmarksAbove.value)
         }
 }

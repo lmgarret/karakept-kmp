@@ -247,7 +247,7 @@ object MainScreen : NavKey {
 
         // Scroll-triggered action
         MainScreenScrollAction(
-            listState = listState, bookmarks = bookmarks, bookmarkListVersion = bookmarkListVersion,
+            listState = listState, bookmarks = bookmarks,
             currentListId = currentListId,
             currentListScrollAction = currentListScrollAction, currentListScrollActionConfig = currentListScrollActionConfig,
             screenModel = screenModel

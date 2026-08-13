@@ -123,8 +123,9 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     _currentPage.value = 0
     _hasMoreItems.value = true
     _actedOnBookmarkIds.value = emptySet()
-    // Fresh view — any pending "N new" indicator no longer applies.
-    _newBookmarksAbove.value = 0
+    // Fresh view — nothing in it has been seen yet, so the "N new" indicator starts empty and
+    // re-anchors once the list renders at the top.
+    _seenTopRemoteId.value = null
     // Block loadNextPage from launching while we are iterating through pages.
     _isLoadingMore.value = true
     _isResettingPagination.value = true
@@ -146,6 +147,11 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
         _bookmarkListVersion.value++
         if (scrollToTop) scrollToTop()
         updateAccumulatedBookmarks { newItems }
+        // A freshly loaded view counts as seen, so the pill stays empty until a later sync puts
+        // something above it. Anchoring here rather than waiting for the list to report itself
+        // at the top keeps the count right when the view opens somewhere else — a restored
+        // scroll position, or a reload that deliberately holds its place.
+        _seenTopRemoteId.value = newItems.firstOrNull()?.remoteId
         // The window spans pages 0..currentPage and is re-read page by page on every refresh, so
         // it must end at the page that *contributed* the items. Finding nothing means the search
         // walked the table without loading a window — recording the page it gave up on would
@@ -204,12 +210,9 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
             currentView() != view
         ) return
 
-        // Count bookmarks the sync introduced (they land at the top for the default NEWEST sort),
-        // so the UI can surface a "N new" pill when the user is scrolled away from the top.
-        val previousIds = _accumulatedBookmarks.value.map { it.remoteId }.toSet()
-        val added = all.count { it.remoteId !in previousIds }
-        if (added > 0) _newBookmarksAbove.value += added
-
+        // The "N new" pill counts rows sitting above the last one the user saw, derived from the
+        // list itself (see MainScreenModel.newBookmarksAbove) — a refresh publishes the new
+        // window and the count follows, with nothing to tally here.
         _loadedView.value = view
         updateAccumulatedBookmarks { all }
         _currentPage.value = if (reachedEnd) page else lastLoadedPage
