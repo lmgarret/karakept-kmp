@@ -32,6 +32,22 @@ class ScrollRestorationState(
 )
 
 /**
+ * Whether the reader may still act on a saved reading position.
+ *
+ * [hasRestoredScroll] latches for two different reasons — a position was restored, or there
+ * was nothing to restore — and only the first is final. A cross-device pull that lands after
+ * the reader gave up waiting for it must still be honoured, which is safe exactly while the
+ * article has not moved: the reader is looking at the top either way, so nothing is
+ * interrupted. Once the reader has scrolled off the top, or a position has actually been
+ * restored, the door is closed for good.
+ */
+internal fun mayRestoreReadingPosition(
+    hasRestoredScroll: Boolean,
+    hasScrolledToSavedPosition: Boolean,
+    stillAtTopOfArticle: Boolean
+): Boolean = !hasRestoredScroll || (!hasScrolledToSavedPosition && stillAtTopOfArticle)
+
+/**
  * Composable that installs a scroll guard to prevent unintended jumps
  * (e.g. from SelectionContainer/Focus), and handles reading progress
  * restoration once content is rendered.
@@ -96,6 +112,9 @@ fun rememberScrollRestoration(
 
     // --- READING PROGRESS RESTORATION ---
     var hasRestoredScroll by remember { mutableStateOf(false) }
+    // Separate from [hasRestoredScroll], which also latches for "there was nothing to
+    // restore". Only an actual scroll to a saved position closes the door for good.
+    var hasScrolledToSavedPosition by remember { mutableStateOf(false) }
     val isNativeRenderer = viewerMode == ViewerMode.READER
 
     LaunchedEffect(loadingState, trackReadingProgress, contentRendered, serverProgressChecked, contentFetchAttempted) {
@@ -103,7 +122,14 @@ fun rememberScrollRestoration(
             hasRestoredScroll = true
             return@LaunchedEffect
         }
-        if (!hasRestoredScroll && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
+        val mayRestore = mayRestoreReadingPosition(
+            hasRestoredScroll = hasRestoredScroll,
+            hasScrolledToSavedPosition = hasScrolledToSavedPosition,
+            stillAtTopOfArticle = scrollState.firstVisibleItemIndex == 0 &&
+                scrollState.firstVisibleItemScrollOffset == 0
+        )
+
+        if (mayRestore && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
             val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
             val hasMeaningfulProgress = bookmark.readingProgress > 0.02f
             if (hasMeaningfulProgress && !bookmark.content.isNullOrBlank()) {
@@ -136,6 +162,7 @@ fun rememberScrollRestoration(
                             safeScrollToItem(targetIndex, targetOffset)
                         }
                     }
+                    hasScrolledToSavedPosition = true
                     hasRestoredScroll = true
                 }
             } else if (!hasMeaningfulProgress) {

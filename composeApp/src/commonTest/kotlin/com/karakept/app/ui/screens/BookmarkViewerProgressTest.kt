@@ -21,6 +21,7 @@ import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -113,11 +114,14 @@ class BookmarkViewerProgressTest {
         every { settingsRepository.offlineMode } returns flowOf(false)
         every { settingsRepository.trackReadingProgress } returns flowOf(true)
         every { settingsRepository.contentSyncStrategy } returns flowOf(com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK)
+        // Consumed by reloadAssets at the tail of every load — a relaxed Flow mock makes
+        // first() throw, which left the screen model in Error instead of FullyLoaded.
+        every { settingsRepository.preferFullPageHtml } returns flowOf(false)
 
         // Default stub for pullReadingProgressFromServer extension function
         coEvery {
             bookmarkActionsRepository.pullReadingProgressFromServer(any(), any())
-        } returns false
+        } returns com.karakept.app.data.repository.ReadingProgressPullResult.SKIPPED
 
         // Default stubs for ServerRepository
         every { serverRepository.servers } returns flowOf(emptyList())
@@ -289,13 +293,73 @@ class BookmarkViewerProgressTest {
         )
     }
 
+    // -----------------------------------------------------------------------
+    // Regression: restored progress must reach the reader before it decides
+    // where to open the article
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `serverProgressChecked waits for restored progress to reach loadingState`() = runTest(testDispatcher) {
+        // The pull writes to the DB; Room's invalidation, observeBookmarkById and this
+        // ScreenModel all sit between that write and loadingState. Flipping the flag before
+        // the emission arrives made the reader latch "nothing to restore" on the stale 0%,
+        // so the article opened at the top and only a second open landed in the right place.
+        val emissions = MutableStateFlow(testBookmark)
+        every { bookmarkDao.observeBookmarkById(any()) } returns emissions
+        coEvery {
+            bookmarkActionsRepository.pullReadingProgressFromServer(any(), any())
+        } coAnswers {
+            backgroundScope.launch {
+                delay(300)
+                emissions.value = testBookmark.copy(readingProgress = 0.75f)
+            }
+            com.karakept.app.data.repository.ReadingProgressPullResult.APPLIED
+        }
+
+        val screenModel = createScreenModel()
+        screenModel.loadBookmark(1L)
+
+        advanceTimeBy(100)
+        runCurrent()
+        assertFalse(
+            screenModel.serverProgressChecked.value,
+            "should still be waiting for the restored progress to reach the reader"
+        )
+
+        advanceUntilIdle()
+        assertTrue(screenModel.serverProgressChecked.value)
+        val state = screenModel.loadingState.value
+        assertTrue(state is BookmarkLoadingState.FullyLoaded)
+        assertEquals(
+            0.75f, state.bookmark.readingProgress,
+            "the reader must see the restored progress by the time it is told to decide"
+        )
+    }
+
+    @Test
+    fun `serverProgressChecked flips even when the restored progress never arrives`() = runTest(testDispatcher) {
+        // The wait is bounded: a DB round trip that never completes must not hold the
+        // reader on a skeleton forever.
+        coEvery {
+            bookmarkActionsRepository.pullReadingProgressFromServer(any(), any())
+        } returns com.karakept.app.data.repository.ReadingProgressPullResult.APPLIED
+
+        val screenModel = createScreenModel()
+        screenModel.loadBookmark(1L)
+
+        advanceTimeBy(BookmarkViewerScreenModel.PROGRESS_APPLY_GRACE_MILLIS + 100)
+        runCurrent()
+
+        assertTrue(screenModel.serverProgressChecked.value)
+    }
+
     @Test
     fun `a slow but successful pull inside the grace period is still awaited`() = runTest(testDispatcher) {
         coEvery {
             bookmarkActionsRepository.pullReadingProgressFromServer(any(), any())
         } coAnswers {
             delay(BookmarkViewerScreenModel.PROGRESS_PULL_GRACE_MILLIS / 2)
-            true
+            com.karakept.app.data.repository.ReadingProgressPullResult.APPLIED
         }
 
         val screenModel = createScreenModel()

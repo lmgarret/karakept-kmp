@@ -314,6 +314,7 @@ fun MainScreenScaffoldContent(
                 onSwipeAction = onSwipeAction,
                 onRefresh = { if (!offlineMode) screenModel.syncBookmarks() },
                 onLoadMore = { screenModel.loadNextPage() },
+                onBookmarksVisible = { ids -> screenModel.onBookmarksVisible(ids) },
                 onCtrlClick = if (isDesktop) { bookmark ->
                     if (!isSelectionMode) {
                         screenModel.enterSelectionMode(bookmark)

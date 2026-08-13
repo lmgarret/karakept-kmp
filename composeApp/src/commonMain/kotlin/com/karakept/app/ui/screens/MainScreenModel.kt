@@ -747,6 +747,29 @@ class MainScreenModel(
         else -> null
     }
 
+    /**
+     * Fills in reading progress for the rows currently on screen.
+     *
+     * The sync pass converges the library 50 bookmarks at a time because the server has no
+     * batch endpoint for progress, which leaves rows further down the list showing nothing
+     * for a while. Scrolling to them asks for exactly those, so what the user is looking at
+     * is right even when the rotation has not reached it. Only rows that have never been
+     * pulled cost a request, so scrolling back and forth is free.
+     */
+    fun onBookmarksVisible(remoteIds: List<Long>) {
+        val server = _selectedServer.value ?: return
+        if (remoteIds.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                bookmarkRepository.pullReadingProgressForVisible(server.id, remoteIds)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLogger.d("MainScreenModel", "Visible-row progress pull failed: ${e.message}")
+            }
+        }
+    }
+
     fun syncBookmarks() {
         viewModelScope.launch {
             // Capture state BEFORE any suspension so the sync strategy and the

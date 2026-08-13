@@ -170,8 +170,14 @@ class BookmarkActionsRepository(
     }
 
     /**
-     * Mark bookmark as unread locally and optionally reset server-side progress to 0%.
-     * @param resetProgress If true, also resets reading progress and scroll position to zero.
+     * Mark bookmark as unread locally, and with [resetProgress] also clear the reading
+     * position and tell the server about it.
+     *
+     * Read state has no field of its own on the server: the reading percentage is the only
+     * thing that carries it between devices, so an unread that keeps its position cannot
+     * travel — there is nothing to send that means "unread but 80% in". [resetProgress]
+     * (the `resetProgressOnMarkUnread` setting, on by default) is therefore also the choice
+     * between an unread that reaches other devices and one that stays on this one.
      */
     suspend fun markAsUnread(bookmarkRemoteId: Long, serverId: String, resetProgress: Boolean = false) {
         performAction {

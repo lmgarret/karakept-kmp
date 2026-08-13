@@ -40,6 +40,38 @@ bodies use the batch envelope `{"0":{"json":{…}}}`, built by
 job — a successful response only means the request was accepted, so callers re-sync the
 bookmark afterwards to pick up the result.
 
+Reading progress lives in its own server-side table with **no batch endpoint** — one call per
+bookmark in each direction:
+
+- **Push** rides the pending-action queue (`UPDATE_READING_PROGRESS`), so a rejected push is
+  retried or parked as a failed action rather than dropped. The single exception is
+  `BAD_REQUEST: reading progress can only be saved for link bookmarks`, which no retry can
+  fix: `updateReadingProgress` returns `false` and the action is discarded.
+- **Pull** happens on three paths, because one call per bookmark cannot cover a library in one
+  sync:
+  1. *Backfill* — a server whose rows have never been pulled (`progressSyncedAt = 0`) is
+     drained in full on the first sync. Without it the library converged 50 rows per sync,
+     and the unread count crept down over hundreds of syncs without arriving.
+  2. *Rotation* — steady state, 50 rows per pass ordered by `progressSyncedAt`. Every sync
+     flavour is eligible (browsing by list must not starve it), rationed by
+     `BookmarkRepository.tryAcquireReadingProgressPull` so a fan-out of list syncs cannot
+     multiply the calls by the number of lists.
+  3. *Visible rows* — `pullReadingProgressForVisible`, driven by the list's scroll position,
+     refreshes what is on screen when its progress is missing or older than
+     `VISIBLE_PROGRESS_STALE_AFTER_MS`. This is what makes a change from another device show
+     up on the list being looked at rather than one rotation later.
+
+  Only a pull the server actually answered advances the cursor.
+
+**Read state is local-only.** Karakeep has no read flag, so `readingProgress` is the sole
+carrier between devices, and `applyServerReadingProgress` derives `isRead` from it. Two
+consequences: the pull takes the server's value even when it is *lower* (otherwise "mark as
+unread" — a reset to 0% — could never travel), guarded only by "this device has no progress
+push of its own still queued"; and marking unread while *keeping* the reading position stays
+local, because no percentage means "unread but 80% in". `getReadingProgress` returns no
+timestamp, so real last-writer-wins is not available: two devices reading the same article
+settle on the last one to push.
+
 > These are internal APIs with no compatibility guarantee across Karakeep versions. Every
 > call site must degrade to a user-visible error and leave local state untouched. A 404 whose
 > body says "No procedure found" is surfaced as `UnsupportedServerActionException` so the UI

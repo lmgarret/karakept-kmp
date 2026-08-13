@@ -31,7 +31,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Instant
 
@@ -150,6 +152,70 @@ class BookmarkRepository(
     suspend fun markAutoSyncCompleted(serverId: String) = autoSyncMutex.withLock {
         lastAutoSyncCompletedAt[serverId] = System.currentTimeMillis()
     }
+
+    // Reading progress has no batch endpoint: each bookmark costs one tRPC call, so a pass
+    // is capped at 50 bookmarks and rotates through the library. Syncing a list used to skip
+    // the pass entirely, which left progress from other devices invisible to anyone who
+    // browses by list. Now every flavour may run it, rationed here: a Full sync always gets
+    // its pass, and the list/filter passes share one slot per interval no matter how many
+    // lists fan out at once.
+    private val lastProgressPullAt = mutableMapOf<String, Long>()
+    private val progressPullMutex = Mutex()
+
+    /**
+     * Pulls reading progress for bookmarks the user is currently looking at, ahead of the
+     * rotating cursor reaching them. Only rows whose progress is missing or older than
+     * [VISIBLE_PROGRESS_STALE_AFTER_MS] are fetched, so scrolling a list back and forth
+     * costs nothing while still picking up what another device changed.
+     *
+     * Best-effort and silent: this runs off scrolling, and a failed pull here is picked up
+     * by the next sync.
+     */
+    suspend fun pullReadingProgressForVisible(serverId: String, remoteIds: List<Long>) {
+        if (remoteIds.isEmpty()) return
+        if (settingsRepository.offlineMode.first()) return
+        if (!settingsRepository.trackReadingProgress.first()) return
+
+        val targets = bookmarkDao.getStaleProgressTargetsIn(
+            serverId = serverId,
+            remoteIds = remoteIds,
+            staleBefore = System.currentTimeMillis() - VISIBLE_PROGRESS_STALE_AFTER_MS
+        )
+        if (targets.isEmpty()) return
+
+        val now = System.currentTimeMillis()
+        val semaphore = Semaphore(PROGRESS_PULL_CONCURRENCY)
+        coroutineScope {
+            targets.forEach { target ->
+                launch {
+                    semaphore.acquire()
+                    try {
+                        val result = bookmarkActionsRepository.pullReadingProgressFromServer(
+                            target.remoteId, serverId
+                        )
+                        if (result != ReadingProgressPullResult.FAILED) {
+                            bookmarkDao.updateProgressSyncedAt(target.localId, now)
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        AppLogger.d("BookmarkRepo", "Visible-row progress pull failed: ${e.message}")
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }
+        }
+    }
+
+    internal suspend fun tryAcquireReadingProgressPull(serverId: String, force: Boolean): Boolean =
+        progressPullMutex.withLock {
+            val now = System.currentTimeMillis()
+            val last = lastProgressPullAt[serverId] ?: 0L
+            if (!force && now - last < PROGRESS_PULL_MIN_INTERVAL_MS) return@withLock false
+            lastProgressPullAt[serverId] = now
+            true
+        }
 
     suspend fun syncBookmarks(server: Server): Int =
         executeSyncPipeline(SyncConfiguration.Full(server))
@@ -484,6 +550,21 @@ class BookmarkRepository(
     }
 
     companion object {
+        /**
+         * Minimum gap between two reading-progress passes triggered by list/filter syncs.
+         * Short enough that refreshing again pulls the next 50 bookmarks rather than
+         * appearing to do nothing, long enough that one fan-out of list syncs still costs
+         * a single pass.
+         */
+        internal const val PROGRESS_PULL_MIN_INTERVAL_MS = 30_000L
+
+        /**
+         * How old a row's reading progress may be before looking at it in the list refetches
+         * it. Bounds the cost of scrolling — roughly one request per visible row per window —
+         * while keeping the rows on screen current with the other devices.
+         */
+        internal const val VISIBLE_PROGRESS_STALE_AFTER_MS = 5 * 60_000L
+
         private const val BOOKMARK_SELECT = """localId, remoteId, originalRemoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
@@ -647,6 +728,12 @@ class BookmarkRepository(
                 },
                 shouldRunEnrichment = {
                     tryAcquireEnrichmentKey(key).also { holdsEnrichmentKey = it }
+                },
+                shouldPullReadingProgress = {
+                    tryAcquireReadingProgressPull(
+                        serverId = config.server.id,
+                        force = config is SyncConfiguration.Full
+                    )
                 }
             )
             val result = pipeline.execute()

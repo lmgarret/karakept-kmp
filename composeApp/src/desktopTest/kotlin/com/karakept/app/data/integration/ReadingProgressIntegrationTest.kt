@@ -1,13 +1,13 @@
 package com.karakept.app.data.integration
 
 import com.karakept.app.data.repository.processPendingActions
+import com.karakept.app.data.repository.ReadingProgressPullResult
 import com.karakept.app.data.repository.pullReadingProgressFromServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -154,7 +154,10 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
             bookmark.remoteId, testServer.id
         )
 
-        assertTrue(updated, "pullReadingProgressFromServer should return true when server has progress")
+        assertEquals(
+            ReadingProgressPullResult.APPLIED, updated,
+            "pullReadingProgressFromServer should apply progress when the server has some"
+        )
 
         val afterPull = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertNotNull(afterPull)
@@ -179,7 +182,10 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
             bookmark.remoteId, testServer.id
         )
 
-        assertFalse(updated, "pullReadingProgressFromServer should not overwrite higher local progress")
+        assertEquals(
+            ReadingProgressPullResult.SKIPPED, updated,
+            "pullReadingProgressFromServer should not overwrite higher local progress"
+        )
 
         val afterPull = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertNotNull(afterPull)
@@ -204,7 +210,10 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
         val updated = bookmarkActionsRepository.pullReadingProgressFromServer(
             bookmark.remoteId, testServer.id
         )
-        assertFalse(updated, "Should not update local progress when server has none")
+        assertEquals(
+            ReadingProgressPullResult.SKIPPED, updated,
+            "Should not update local progress when server has none"
+        )
     }
 
     // -----------------------------------------------------------------------
@@ -240,7 +249,10 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
         val restored = bookmarkActionsRepository.pullReadingProgressFromServer(
             bookmarkB.remoteId, testServer.id
         )
-        assertTrue(restored, "Device B should restore progress from server")
+        assertEquals(
+            ReadingProgressPullResult.APPLIED, restored,
+            "Device B should restore progress from server"
+        )
 
         val afterRestore = db.bookmarkDao().getBookmarkByRemoteId(bookmarkB.remoteId, testServer.id)
         assertEquals(0.75f, afterRestore!!.readingProgress, 0.01f,
@@ -269,7 +281,10 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
             bookmark.remoteId, testServer.id
         )
 
-        assertTrue(updated, "pullReadingProgressFromServer should update when server progress is higher")
+        assertEquals(
+            ReadingProgressPullResult.APPLIED, updated,
+            "pullReadingProgressFromServer should update when server progress is higher"
+        )
 
         val afterPull = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertNotNull(afterPull)
