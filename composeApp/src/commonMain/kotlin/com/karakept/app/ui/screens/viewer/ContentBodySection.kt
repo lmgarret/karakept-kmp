@@ -37,7 +37,7 @@ import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.ViewerMode
-import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.components.HtmlContent
 import com.karakept.app.ui.components.WebModeBadge
 import com.fleeksoft.ksoup.nodes.Document
@@ -233,21 +233,19 @@ internal fun ContentBodySection(
                 )
             }
 
-            // Show skeleton on top until the body is ready AND revealed (top layer).
-            // Always use Initial state so the shimmer skeleton is visible.
-            // Using the actual loadingState would render nothing for FullyLoaded,
-            // letting the CloudOff placeholder in HtmlContent flash briefly
-            // before the HTML is processed. No banner skeleton here: the real hero
-            // is already shown above this section.
+            // Show a loading indicator on top until the body is ready AND revealed (top layer).
+            // Using the actual loadingState would render nothing for FullyLoaded, letting the
+            // CloudOff placeholder in HtmlContent flash briefly before the HTML is processed.
             if (shouldShowBodySkeleton(htmlContentReady, hasRenderableBody, contentRevealed)) {
-                BookmarkContentLoader(
-                    loadingState = BookmarkLoadingState.Initial,
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 320.dp)
                         .background(MaterialTheme.colorScheme.background),
-                    showBanner = false
-                )
+                    contentAlignment = Alignment.Center
+                ) {
+                    LoadingDotsIndicator()
+                }
             }
         }
     }

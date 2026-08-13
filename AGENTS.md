@@ -205,6 +205,21 @@ full-bleed and its divider reaches both edges.
 
 > **Rule:** Never implement custom tag-selection dialogs or text fields.
 
+### Loading indicators
+
+**`LoadingDotsIndicator`** (`ui/components/EinkAware.kt`)
+- Three dots that fill in sequence — off e-ink a smooth continuous wave, on e-ink a plain
+  `delay`-driven step from one dot to the next (one discrete repaint at a time, no interpolation
+  to ghost). Takes an optional `label` (shown as `Text` below the dots) and `dotSize`.
+- **Use for any loading slot that used to be a shimmering skeleton**: a full-screen "content not
+  loaded yet" state, an article body waiting to render, an image still loading, a list row for a
+  bookmark that's saved but not yet fetched. It replaces skeletons project-wide — a skeleton fakes
+  the shape of content that isn't there yet and is unavoidably an animated, e-ink-hostile visual;
+  this says "loading" without pretending to know the shape.
+
+> **Rule:** Never add a new shimmering/skeleton placeholder. Use `LoadingDotsIndicator` instead —
+> it is already e-ink-aware, so the call site doesn't need its own `LocalEinkMode` branch.
+
 ### Empty states
 
 - A list with nothing in it needs an **explicit empty state**, never a blank area — the two
