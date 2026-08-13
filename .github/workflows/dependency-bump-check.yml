@@ -4,8 +4,9 @@ name: Dependency Bump Check
 # desktop but incompatible with the Android build (AAR metadata requirements,
 # AGP/compileSdk mismatches, etc.) can merge unnoticed — the Android target is
 # otherwise only compiled at release time. This workflow closes that gap by
-# compiling the Android debug variant whenever a dependency version actually
-# changes, without paying for a full Android test run or signed build on every PR.
+# checking the bumped dependencies' AAR metadata against this project's
+# compileSdk/AGP version whenever a dependency version actually changes, without
+# paying for a full Android compile, test run, or signed build on every PR.
 on:
   pull_request:
     branches: [ main ]
@@ -38,10 +39,10 @@ jobs:
             notifications
             wrapper
 
-      # assembleDebug compiles the Android target end-to-end and, as a prerequisite,
-      # runs checkDebugAarMetadata — the exact check that catches a bumped AAR
-      # requiring a higher compileSdk/AGP than this project currently targets. It
-      # needs no signing secrets: the debug build type uses the auto-generated debug
-      # keystore, so this stays safe to run on PRs from forks.
-      - name: Compile Android debug variant
-        run: ./gradlew :composeApp:assembleDebug
+      # checkDebugAarMetadata is the exact task that catches a bumped AAR requiring
+      # a higher compileSdk/AGP than this project currently targets — it only
+      # resolves the runtime classpath and compares metadata, with no Kotlin/KSP
+      # compilation, resource merging, or packaging behind it. That keeps this
+      # check fast and secret-free (no signing config is ever touched).
+      - name: Check bumped dependencies' AAR metadata
+        run: ./gradlew :composeApp:checkDebugAarMetadata
