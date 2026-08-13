@@ -1,0 +1,47 @@
+name: Dependency Bump Check
+
+# ci.yml only runs the desktop (JVM) test suite, so a library bump that is fine on
+# desktop but incompatible with the Android build (AAR metadata requirements,
+# AGP/compileSdk mismatches, etc.) can merge unnoticed — the Android target is
+# otherwise only compiled at release time. This workflow closes that gap by
+# compiling the Android debug variant whenever a dependency version actually
+# changes, without paying for a full Android test run or signed build on every PR.
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'gradle/libs.versions.toml'
+      - 'gradle/wrapper/gradle-wrapper.properties'
+
+jobs:
+  android-build-check:
+    name: Verify Android build against bumped dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v6.2.0
+        with:
+          # basic = open-source (MIT) cache provider; v6's default 'enhanced'
+          # provider is proprietary under Gradle's commercial Terms of Use.
+          cache-provider: basic
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            wrapper
+
+      # assembleDebug compiles the Android target end-to-end and, as a prerequisite,
+      # runs checkDebugAarMetadata — the exact check that catches a bumped AAR
+      # requiring a higher compileSdk/AGP than this project currently targets. It
+      # needs no signing secrets: the debug build type uses the auto-generated debug
+      # keystore, so this stays safe to run on PRs from forks.
+      - name: Compile Android debug variant
+        run: ./gradlew :composeApp:assembleDebug
