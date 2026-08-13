@@ -35,6 +35,7 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -76,6 +77,9 @@ import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.input.PageTurnScrollEffect
 import com.karakept.app.ui.input.handleDesktopPageKey
 import com.karakept.app.ui.theme.LocalEinkMode
+import com.karakept.app.ui.components.reader.GalleryViewerState
+import com.karakept.app.ui.components.reader.ImageGalleryOverlay
+import com.karakept.app.ui.components.reader.LocalGalleryViewerState
 import com.karakept.app.ui.components.reader.SearchMatch
 import com.karakept.app.ui.components.rememberCustomTabOpener
 import com.karakept.app.ui.screens.viewer.*
@@ -208,6 +212,7 @@ fun BookmarkViewerContent(
     val einkMode = LocalEinkMode.current
     val scrollState = remember { LazyListState() }
     val density = LocalDensity.current
+    val galleryViewerState = remember { GalleryViewerState() }
 
     // Scroll guard + reading progress restoration
     val scrollRestoration = rememberScrollRestoration(
@@ -289,6 +294,9 @@ fun BookmarkViewerContent(
     val chromeInsets = rememberViewerChromeInsets(toolbarHeight = toolbarHeight)
     PageTurnScrollEffect(
         listState = scrollState,
+        // While the image gallery is open it owns the page-turn buttons (flips between
+        // images instead), so the article underneath must not also scroll.
+        enabled = galleryViewerState.request == null,
         obscuredTopPx = chromeInsets.topPx,
         obscuredBottomPx = chromeInsets.bottomPx,
         onScrolled = { scrollRestoration.approveCurrentPosition() }
@@ -340,6 +348,12 @@ fun BookmarkViewerContent(
                         scope.launch { kotlinx.coroutines.delay(100); contentFocusRequester.requestFocus() }
                         true
                     }
+                    // Desktop has no hardware back button, so Escape is the gallery's own
+                    // dismiss key here (BackHandler is a no-op on desktop).
+                    keyEvent.keyboardKey == Key.Escape && galleryViewerState.request != null -> {
+                        galleryViewerState.close()
+                        true
+                    }
                     // Keyboard equivalents of the e-ink facade buttons, so page turning can be
                     // exercised on desktop without the device.
                     !showSearch && pageTurnDispatcher.handleDesktopPageKey(keyEvent) -> true
@@ -351,7 +365,8 @@ fun BookmarkViewerContent(
         floatingActionButton = {
             AnimatedVisibilityOrPlain(
                 visible = fabVisible && !getPlatform().isDesktop &&
-                    !showDetailsPanel && !showAppearancePanel && !showSearch,
+                    !showDetailsPanel && !showAppearancePanel && !showSearch &&
+                    galleryViewerState.request == null,
                 animated = !einkMode.animationsDisabled
             ) {
                 if (loadingState is BookmarkLoadingState.FullyLoaded) {
@@ -411,6 +426,9 @@ fun BookmarkViewerContent(
                             Modifier.focusRequester(contentFocusRequester).focusable()
                         else Modifier)
                     ) {
+                    // Provided here so RenderResolvedImage (deep inside the LazyColumn's HTML
+                    // content) can request the full-screen gallery below without a Dialog.
+                    CompositionLocalProvider(LocalGalleryViewerState provides galleryViewerState) {
                     val needsScrollRestore = trackReadingProgress && !scrollRestoration.hasRestoredScroll &&
                         loadingState is BookmarkLoadingState.FullyLoaded &&
                         ((loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f || !serverProgressChecked)
@@ -682,6 +700,19 @@ fun BookmarkViewerContent(
                                 .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                                 .padding(end = 80.dp, bottom = 14.dp, start = 16.dp)
                     )
+
+                    // Full-screen image viewer. Rendered inline (not a Dialog) so it stays in
+                    // the reader's own window — see GalleryViewerState's doc for why that
+                    // matters for hardware page-turn keys — and drawn last so it paints above
+                    // the top bar and search bar.
+                    galleryViewerState.request?.let { request ->
+                        ImageGalleryOverlay(
+                            images = request.images,
+                            initialIndex = request.initialIndex,
+                            onDismiss = { galleryViewerState.close() }
+                        )
+                    }
+                    } // end CompositionLocalProvider
                     } // end inner Box
                 }
 

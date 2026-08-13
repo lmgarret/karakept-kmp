@@ -31,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -53,11 +54,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import com.karakept.app.data.model.PageTurnDirection
+import com.karakept.app.ui.components.BackHandler
+import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.theme.LocalEinkMode
 import kotlin.math.abs
+import org.koin.compose.koinInject
 
 internal const val MIN_IMAGE_ZOOM = 1f
 internal const val MAX_IMAGE_ZOOM = 5f
@@ -99,77 +102,98 @@ internal fun shouldDismissFromDrag(dragOffsetY: Float, thresholdPx: Float): Bool
     thresholdPx > 0f && dragOffsetY < -thresholdPx
 
 /**
- * Full-screen dialog showing [images] in a swipeable [HorizontalPager], starting on
+ * Full-screen overlay showing [images] in a swipeable [HorizontalPager], starting on
  * [initialIndex]. Each page owns its own independent zoom/pan/drag state (see
  * [ZoomableImagePage]); the scrim dimming and close button are shared chrome, driven by
  * whichever page is currently active. The pager's own swipe-between-images gesture is
  * disabled while the active page is zoomed in above [MIN_IMAGE_ZOOM], so a pinched-in image
  * can be panned without accidentally flipping to the next one.
+ *
+ * Deliberately a plain composable rather than a platform [androidx.compose.ui.window.Dialog]:
+ * a Dialog opens a separate platform window, and while one holds focus hardware page-turn key
+ * events never reach [PageTurnDispatcher] (see [GalleryViewerState]'s doc). Staying inline keeps
+ * the reader's window focused, so [PageTurnDispatcher.events] below can repurpose those same
+ * buttons to flip between images instead — the caller is expected to disable its own
+ * `PageTurnScrollEffect` for the duration so a turn doesn't also scroll the article underneath.
  */
 @Composable
-internal fun ImageGalleryDialog(
+internal fun ImageGalleryOverlay(
     images: List<GalleryImage>,
     initialIndex: Int,
     onDismiss: () -> Unit
 ) {
     if (images.isEmpty()) return
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    val pageTurnDispatcher = koinInject<PageTurnDispatcher>()
+
+    BackHandler(onBack = onDismiss)
+
+    val pagerState = rememberPagerState(
+        initialPage = initialIndex.coerceIn(0, images.lastIndex)
+    ) { images.size }
+    var currentPageZoomed by remember { mutableStateOf(false) }
+    var scrimAlpha by remember { mutableStateOf(SCRIM_ALPHA) }
+    var chromeAlpha by remember { mutableStateOf(1f) }
+
+    LaunchedEffect(pagerState, images.size) {
+        pageTurnDispatcher.events.collect { direction ->
+            val target = when (direction) {
+                PageTurnDirection.NEXT -> pagerState.currentPage + 1
+                PageTurnDirection.PREVIOUS -> pagerState.currentPage - 1
+            }
+            if (target !in images.indices) return@collect
+            if (pageTurnDispatcher.bindings.value.instantPageTurn) {
+                pagerState.scrollToPage(target)
+            } else {
+                pagerState.animateScrollToPage(target)
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = scrimAlpha))
     ) {
-        val pagerState = rememberPagerState(
-            initialPage = initialIndex.coerceIn(0, images.lastIndex)
-        ) { images.size }
-        var currentPageZoomed by remember { mutableStateOf(false) }
-        var scrimAlpha by remember { mutableStateOf(SCRIM_ALPHA) }
-        var chromeAlpha by remember { mutableStateOf(1f) }
+        HorizontalPager(
+            state = pagerState,
+            userScrollEnabled = !currentPageZoomed,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            ZoomableImagePage(
+                galleryImage = images[page],
+                page = page,
+                onZoomChanged = { zoomed ->
+                    if (page == pagerState.currentPage) currentPageZoomed = zoomed
+                },
+                onDismissProgress = { progress ->
+                    if (page == pagerState.currentPage) {
+                        scrimAlpha = SCRIM_ALPHA * (1f - progress)
+                        chromeAlpha = 1f - progress
+                    }
+                },
+                onDismiss = onDismiss
+            )
+        }
 
-        Box(
+        IconButton(
+            onClick = onDismiss,
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = scrimAlpha))
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(8.dp)
+                .alpha(chromeAlpha)
         ) {
-            HorizontalPager(
-                state = pagerState,
-                userScrollEnabled = !currentPageZoomed,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                ZoomableImagePage(
-                    galleryImage = images[page],
-                    page = page,
-                    onZoomChanged = { zoomed ->
-                        if (page == pagerState.currentPage) currentPageZoomed = zoomed
-                    },
-                    onDismissProgress = { progress ->
-                        if (page == pagerState.currentPage) {
-                            scrimAlpha = SCRIM_ALPHA * (1f - progress)
-                            chromeAlpha = 1f - progress
-                        }
-                    },
-                    onDismiss = onDismiss
-                )
-            }
-
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(8.dp)
-                    .alpha(chromeAlpha)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
-                    tint = Color.White
-                )
-            }
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Close",
+                tint = Color.White
+            )
         }
     }
 }
 
 /**
- * A single page of [ImageGalleryDialog]: pinch-to-zoom, double-tap zoom, mouse
+ * A single page of [ImageGalleryOverlay]: pinch-to-zoom, double-tap zoom, mouse
  * scroll-wheel zoom (desktop), drag-to-pan once zoomed in, and swipe-up/tap-to-dismiss,
  * all recognized anywhere on the page — not just over the image's own (unzoomed) layout
  * bounds — since a zoomed-in image's visual size outgrows those bounds but its hit-test
@@ -287,8 +311,12 @@ private fun ZoomableImagePage(
                     while (true) {
                         val event = awaitPointerEvent()
                         if (event.type == PointerEventType.Scroll) {
-                            val scrollDelta = event.changes.first().scrollDelta.y
-                            applyZoom(scale - scrollDelta * SCROLL_ZOOM_SENSITIVITY)
+                            val change = event.changes.first()
+                            applyZoom(scale - change.scrollDelta.y * SCROLL_ZOOM_SENSITIVITY)
+                            // The overlay is no longer a separate platform window (see class
+                            // doc), so an unconsumed mouse-wheel scroll would otherwise also
+                            // reach the reader's LazyColumn sitting underneath it.
+                            change.consume()
                         }
                     }
                 }
