@@ -1,0 +1,48 @@
+name: Dependency Bump Check
+
+# ci.yml only runs the desktop (JVM) test suite, so a library bump that is fine on
+# desktop but incompatible with the Android build (AAR metadata requirements,
+# AGP/compileSdk mismatches, etc.) can merge unnoticed — the Android target is
+# otherwise only compiled at release time. This workflow closes that gap by
+# checking the bumped dependencies' AAR metadata against this project's
+# compileSdk/AGP version whenever a dependency version actually changes, without
+# paying for a full Android compile, test run, or signed build on every PR.
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'gradle/libs.versions.toml'
+      - 'gradle/wrapper/gradle-wrapper.properties'
+
+jobs:
+  android-build-check:
+    name: Android AAR metadata check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v6.2.0
+        with:
+          # basic = open-source (MIT) cache provider; v6's default 'enhanced'
+          # provider is proprietary under Gradle's commercial Terms of Use.
+          cache-provider: basic
+          gradle-home-cache-includes: |
+            caches
+            notifications
+            wrapper
+
+      # checkDebugAarMetadata is the exact task that catches a bumped AAR requiring
+      # a higher compileSdk/AGP than this project currently targets — it only
+      # resolves the runtime classpath and compares metadata, with no Kotlin/KSP
+      # compilation, resource merging, or packaging behind it. That keeps this
+      # check fast and secret-free (no signing config is ever touched).
+      - name: Check bumped dependencies' AAR metadata
+        run: ./gradlew :composeApp:checkDebugAarMetadata
