@@ -30,7 +30,15 @@ data class EinkMode(
      * switch, so they take the same preference ungated, off
      * [com.karakept.app.data.model.PageTurnKeyBindings.instantPageTurn].
      */
-    val instantScroll: Boolean = false
+    val instantScroll: Boolean = false,
+    /**
+     * The raw master e-ink switch, unfolded into any sub-toggle.
+     *
+     * Use this (rather than [animationsDisabled] or [highContrast]) when a behavior needs to key
+     * off e-ink mode itself regardless of which display sub-toggles the user left on — e.g. the
+     * reader's FAB and scroll-to-top button only appearing on tap.
+     */
+    val enabled: Boolean = false
 )
 
 val LocalEinkMode = staticCompositionLocalOf { EinkMode() }

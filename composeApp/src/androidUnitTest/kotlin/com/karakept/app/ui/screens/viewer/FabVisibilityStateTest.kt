@@ -122,4 +122,72 @@ class FabVisibilityStateTest {
         composeTestRule.waitForIdle()
         assertTrue(composeTestRule.onAllNodesWithTag("fab").fetchSemanticsNodes().isEmpty())
     }
+
+    @Test
+    fun `einkTapOnly starts the fab hidden instead of visible at the top`() {
+        composeTestRule.setContent {
+            val state = rememberLazyListState()
+            val (fabVisible, _) = rememberFabVisibilityState(
+                scrollState = state, fabExpanded = false, einkTapOnly = true
+            )
+
+            LazyColumn(state = state) {
+                items(50) { index -> Text("Item $index") }
+            }
+
+            if (fabVisible) {
+                Text("Fab", modifier = Modifier.testTag("fab"))
+            }
+        }
+
+        assertTrue(composeTestRule.onAllNodesWithTag("fab").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun `einkTapOnly ignores scroll direction and only responds to the manual toggle`() {
+        var toggle: (() -> Unit)? = null
+        var scrollState: LazyListState? = null
+
+        composeTestRule.setContent {
+            val state = rememberLazyListState()
+            scrollState = state
+            val (fabVisible, toggleFabVisible) = rememberFabVisibilityState(
+                scrollState = state, fabExpanded = false, einkTapOnly = true
+            )
+            toggle = toggleFabVisible
+
+            LazyColumn(state = state) {
+                items(50) { index -> Text("Item $index") }
+            }
+
+            if (fabVisible) {
+                Text("Fab", modifier = Modifier.testTag("fab"))
+            }
+        }
+
+        // A tap shows it even though we're still at the top (would already be visible without
+        // einkTapOnly, so this alone wouldn't prove much — the next scroll assertion does).
+        composeTestRule.runOnIdle { toggle!!.invoke() }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("fab").assertIsDisplayed()
+
+        // Scrolling down — as a hardware page-turn button would — must NOT hide it: only the
+        // tap toggle controls visibility in e-ink tap-only mode.
+        composeTestRule.runOnIdle {
+            runBlocking { scrollState!!.scrollToItem(10) }
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("fab").assertIsDisplayed()
+
+        // Tapping again hides it, and scrolling back up must NOT bring it back on its own.
+        composeTestRule.runOnIdle { toggle!!.invoke() }
+        composeTestRule.waitForIdle()
+        assertTrue(composeTestRule.onAllNodesWithTag("fab").fetchSemanticsNodes().isEmpty())
+
+        composeTestRule.runOnIdle {
+            runBlocking { scrollState!!.scrollToItem(0) }
+        }
+        composeTestRule.waitForIdle()
+        assertTrue(composeTestRule.onAllNodesWithTag("fab").fetchSemanticsNodes().isEmpty())
+    }
 }

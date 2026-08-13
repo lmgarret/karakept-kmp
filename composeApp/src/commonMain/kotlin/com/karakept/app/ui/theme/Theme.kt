@@ -21,7 +21,8 @@ fun AppTheme(
     val einkMode = EinkMode(
         animationsDisabled = einkSettings.animationsDisabled,
         highContrast = einkSettings.highContrast,
-        instantScroll = einkSettings.instantPageScroll
+        instantScroll = einkSettings.instantPageScroll,
+        enabled = einkSettings.enabled
     )
 
     MaterialTheme(colorScheme = colorScheme) {

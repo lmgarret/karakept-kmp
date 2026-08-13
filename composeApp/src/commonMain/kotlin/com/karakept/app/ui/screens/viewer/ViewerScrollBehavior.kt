@@ -141,18 +141,25 @@ internal fun rememberReadingProgress(
  * scrolling down and shows it when scrolling up; any scroll movement re-asserts that
  * scroll-driven visibility, so a manual toggle only persists until the next scroll.
  *
+ * @param einkTapOnly when true, scroll movement (including hardware page turns) never affects
+ * visibility — the FAB starts hidden and is shown/hidden only by [toggleFabVisible]. Page turns on
+ * e-ink devices are just scroll events like any other, so without this the FAB would flash on
+ * every button press and sit over content on a panel that can't afford to redraw it away.
  * @return the current visibility paired with a function that toggles it.
  */
 @Composable
 internal fun rememberFabVisibilityState(
     scrollState: LazyListState,
-    fabExpanded: Boolean
+    fabExpanded: Boolean,
+    einkTapOnly: Boolean = false
 ): Pair<Boolean, () -> Unit> {
     var previousScrollOffset by remember { mutableStateOf(0) }
-    var fabVisible by remember { mutableStateOf(true) }
+    var fabVisible by remember { mutableStateOf(!einkTapOnly) }
     val toggleFabVisible = remember { { fabVisible = !fabVisible } }
 
-    LaunchedEffect(scrollState.firstVisibleItemScrollOffset, scrollState.firstVisibleItemIndex) {
+    LaunchedEffect(scrollState.firstVisibleItemScrollOffset, scrollState.firstVisibleItemIndex, einkTapOnly) {
+        if (einkTapOnly) return@LaunchedEffect
+
         val currentOffset = scrollState.firstVisibleItemIndex * 1000 + scrollState.firstVisibleItemScrollOffset
         val scrollingDown = currentOffset > previousScrollOffset
 
@@ -199,11 +206,15 @@ internal fun rememberStickyTitleVisibility(
  *
  * The button is shown when:
  * - Hero is NOT visible AND (FAB is visible OR user is at the end of the article)
+ *
+ * @param einkTapOnly when true, the end-of-article auto-show is dropped — on e-ink the button
+ * must only ever appear because [fabVisible] says so (i.e. the user tapped), matching the FAB.
  */
 @Composable
 internal fun rememberScrollToTopVisibility(
     scrollState: LazyListState,
-    fabVisible: Boolean
+    fabVisible: Boolean,
+    einkTapOnly: Boolean = false
 ): Boolean {
     val isHeroVisible by remember {
         derivedStateOf { scrollState.firstVisibleItemIndex == 0 }
@@ -215,5 +226,5 @@ internal fun rememberScrollToTopVisibility(
             lastVisible != null && lastVisible.index == layoutInfo.totalItemsCount - 1
         }
     }
-    return !isHeroVisible && (fabVisible || isAtEnd)
+    return !isHeroVisible && (fabVisible || (isAtEnd && !einkTapOnly))
 }
