@@ -293,9 +293,13 @@ fun BookmarkViewerContent(
         obscuredBottomPx = chromeInsets.bottomPx,
         onScrolled = { scrollRestoration.approveCurrentPosition() }
     )
-    val (fabVisible, toggleFabVisible) = rememberFabVisibilityState(scrollState = scrollState, fabExpanded = fabExpanded)
+    val (fabVisible, toggleFabVisible) = rememberFabVisibilityState(
+        scrollState = scrollState, fabExpanded = fabExpanded, einkTapOnly = einkMode.enabled
+    )
     val scrollToTopEnabled by screenModel.scrollToTopEnabled.collectAsState()
-    val scrollToTopVisible = rememberScrollToTopVisibility(scrollState = scrollState, fabVisible = fabVisible)
+    val scrollToTopVisible = rememberScrollToTopVisibility(
+        scrollState = scrollState, fabVisible = fabVisible, einkTapOnly = einkMode.enabled
+    )
     val showStickyTitle = rememberStickyTitleVisibility(scrollState = scrollState, bannerHeight = bannerHeight, toolbarHeight = toolbarHeight)
     val readingProgress = rememberReadingProgress(scrollState, bannerHeight, toolbarHeight)
 

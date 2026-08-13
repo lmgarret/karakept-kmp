@@ -168,4 +168,70 @@ class ScrollToTopVisibilityTest {
         // But scrollToTopEnabled is false, so button should NOT be composed
         assertTrue(composeTestRule.onAllNodesWithTag("scrollToTop").fetchSemanticsNodes().isEmpty())
     }
+
+    @Test
+    fun `einkTapOnly hides the button at end of article when fab is not visible`() {
+        var scrollState: LazyListState? = null
+
+        composeTestRule.setContent {
+            val state = rememberLazyListState()
+            scrollState = state
+            val visible = rememberScrollToTopVisibility(
+                scrollState = state,
+                fabVisible = false,
+                einkTapOnly = true
+            )
+
+            LazyColumn(state = state) {
+                items(50) { index ->
+                    Text("Item $index")
+                }
+            }
+
+            if (visible) {
+                Text("ScrollToTop", modifier = Modifier.testTag("scrollToTop"))
+            }
+        }
+
+        // Scroll to the last item (end of article) — without einkTapOnly this alone shows the
+        // button; with it, only fabVisible (i.e. a tap) may.
+        composeTestRule.runOnIdle {
+            runBlocking { scrollState!!.scrollToItem(49) }
+        }
+        composeTestRule.waitForIdle()
+
+        assertTrue(composeTestRule.onAllNodesWithTag("scrollToTop").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun `einkTapOnly still shows the button at end of article once fab is tapped visible`() {
+        var scrollState: LazyListState? = null
+
+        composeTestRule.setContent {
+            val state = rememberLazyListState()
+            scrollState = state
+            val visible = rememberScrollToTopVisibility(
+                scrollState = state,
+                fabVisible = true,
+                einkTapOnly = true
+            )
+
+            LazyColumn(state = state) {
+                items(50) { index ->
+                    Text("Item $index")
+                }
+            }
+
+            if (visible) {
+                Text("ScrollToTop", modifier = Modifier.testTag("scrollToTop"))
+            }
+        }
+
+        composeTestRule.runOnIdle {
+            runBlocking { scrollState!!.scrollToItem(49) }
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("scrollToTop").assertIsDisplayed()
+    }
 }
