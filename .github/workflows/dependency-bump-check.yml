@@ -16,7 +16,7 @@ on:
 
 jobs:
   android-build-check:
-    name: Verify Android build against bumped dependencies
+    name: Android AAR metadata check
     runs-on: ubuntu-latest
 
     steps:
