@@ -1,5 +1,11 @@
 package com.karakept.app.ui.components.reader
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,6 +50,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import coil3.compose.AsyncImage
 import com.karakept.app.ui.components.HighlightPosition
 import com.karakept.app.ui.components.LoadingDotsIndicator
+import com.karakept.app.ui.theme.LocalEinkMode
 import com.fleeksoft.ksoup.nodes.Element
 import com.fleeksoft.ksoup.nodes.Node
 import com.fleeksoft.ksoup.nodes.TextNode
@@ -1002,12 +1009,26 @@ private fun RenderResolvedImage(
 
 @Composable
 private fun ImageLoadingSkeleton(modifier: Modifier) {
-    Box(
-        modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-        contentAlignment = Alignment.Center
-    ) {
-        LoadingDotsIndicator(dotSize = 6.dp)
+    if (LocalEinkMode.current.animationsDisabled) {
+        Box(
+            modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+            contentAlignment = Alignment.Center
+        ) {
+            LoadingDotsIndicator(dotSize = 6.dp)
+        }
+        return
     }
+    val transition = rememberInfiniteTransition(label = "imgSkeleton")
+    val alpha by transition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.55f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "imgSkeletonAlpha"
+    )
+    Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha)))
 }
 
 @Composable

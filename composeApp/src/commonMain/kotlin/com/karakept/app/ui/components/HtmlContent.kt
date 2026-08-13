@@ -230,17 +230,15 @@ fun HtmlContent(
                     }
                 }
 
-                // Show a loading indicator until content is fully loaded
+                // Show SkeletonLoader until content is fully loaded
+                // Use a crossfade for smoother transition
                 AnimatedVisibilityOrPlain(
                     visible = !isContentLoaded || (processedHtml == null && localFilePath == null),
                     animated = !LocalEinkMode.current.animationsDisabled
                 ) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        LoadingDotsIndicator()
-                    }
+                    SkeletonLoader(
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }

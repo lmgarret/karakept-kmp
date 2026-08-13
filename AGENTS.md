@@ -211,14 +211,17 @@ full-bleed and its divider reaches both edges.
 - Three dots that fill in sequence — off e-ink a smooth continuous wave, on e-ink a plain
   `delay`-driven step from one dot to the next (one discrete repaint at a time, no interpolation
   to ghost). Takes an optional `label` (shown as `Text` below the dots) and `dotSize`.
-- **Use for any loading slot that used to be a shimmering skeleton**: a full-screen "content not
-  loaded yet" state, an article body waiting to render, an image still loading, a list row for a
-  bookmark that's saved but not yet fetched. It replaces skeletons project-wide — a skeleton fakes
-  the shape of content that isn't there yet and is unavoidably an animated, e-ink-hostile visual;
-  this says "loading" without pretending to know the shape.
+- **E-ink-only replacement for skeletons**, not a redesign of the non-e-ink loading state. Every
+  skeleton in the app (`BookmarkContentLoader`, `SkeletonLoader`, `ImageLoadingSkeleton`,
+  `BookmarkPlaceholderItem`) keeps its original shimmer for normal displays — that visual is
+  unchanged — and branches to `LoadingDotsIndicator` only when `LocalEinkMode.current.animationsDisabled`
+  is true. A shimmer is a continuous animation, which on e-ink means either permanent ghosting or
+  nothing visible at all (its tonal fill collapses into the page color under high contrast); dots
+  fixes that without touching how loading looks anywhere else.
 
-> **Rule:** Never add a new shimmering/skeleton placeholder. Use `LoadingDotsIndicator` instead —
-> it is already e-ink-aware, so the call site doesn't need its own `LocalEinkMode` branch.
+> **Rule:** A new skeleton must branch the same way — keep its shimmer for normal displays, swap to
+> `LoadingDotsIndicator` under `LocalEinkMode.current.animationsDisabled`. Never let e-ink adjustments
+> change what non-e-ink users see.
 
 ### Empty states
 

@@ -69,7 +69,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.ui.components.LoadingDotsIndicator
+import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.scrollToTop
 import com.karakept.app.ui.input.PageTurnDispatcher
@@ -388,12 +388,7 @@ fun BookmarkViewerContent(
     ) { padding ->
         when (val state = displayState) {
             is BookmarkLoadingState.Initial -> {
-                Box(
-                    modifier = Modifier.padding(padding).fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    LoadingDotsIndicator(label = "Loading…")
-                }
+                BookmarkContentLoader(loadingState = state, modifier = Modifier.padding(padding))
             }
             is BookmarkLoadingState.FullyLoaded -> {
                 val title = state.bookmark.title
@@ -547,20 +542,18 @@ fun BookmarkViewerContent(
                         }
                     }
 
-                    // Full-page loading indicator while restoring to a saved reading position. It
-                    // sits above the LazyColumn (which scrolls to the saved offset underneath) but
+                    // Full-page shimmer while restoring to a saved reading position. It sits
+                    // above the LazyColumn (which scrolls to the saved offset underneath) but
                     // below the top bar, and fades out once restoration completes.
                     AnimatedVisibilityOrPlain(
                         visible = restoringToSavedPosition,
                         animated = !einkMode.animationsDisabled
                     ) {
-                        Box(
+                        BookmarkContentLoader(
+                            loadingState = BookmarkLoadingState.Initial,
                             modifier = Modifier.fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LoadingDotsIndicator(label = "Loading…")
-                        }
+                                .background(MaterialTheme.colorScheme.background)
+                        )
                     }
 
                     // Scroll-to-top button (READER-03)
