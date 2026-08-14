@@ -234,6 +234,42 @@ class MainScreenModel(
     internal val _scrollToTopTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val scrollToTopTrigger: SharedFlow<Unit> = _scrollToTopTrigger
 
+    /**
+     * The active [BookmarkLayout] for the current view.
+     * Resolution order: per-list layout → default layout → null (fall back to global settings).
+     */
+    val activeLayout: StateFlow<BookmarkLayout?> =
+        combine(
+            _currentListContext,
+            settingsRepository.allListSettings,
+            settingsRepository.defaultLayoutId,
+            settingsRepository.customLayouts
+        ) { listId, allSettings, defaultLayoutId, customLayouts ->
+            val perListLayoutId = if (listId != null) allSettings[listId]?.layoutId else null
+            val resolvedId = perListLayoutId ?: defaultLayoutId ?: return@combine null
+            if (BookmarkLayout.isBuiltInId(resolvedId)) {
+                BookmarkLayout.getBuiltIn(resolvedId)
+            } else {
+                customLayouts.find { it.id == resolvedId }
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    /** The global setting. Read through [effectiveDimReadBookmarks], which applies the layout. */
+    private val dimReadBookmarks: StateFlow<Boolean> =
+        settingsRepository.dimReadBookmarks.stateIn(
+            viewModelScope, SharingStarted.WhileSubscribed(5000), initialValue = true
+        )
+
+    /**
+     * Whether read bookmarks are faded in the list right now — the active layout's choice when
+     * it has one, the global setting otherwise. Resolved here rather than at each use so the
+     * rendering and the "N new" pill cannot disagree about it.
+     */
+    val effectiveDimReadBookmarks: StateFlow<Boolean> =
+        combine(activeLayout, dimReadBookmarks) { layout, global ->
+            layout?.dimReadBookmarks ?: global
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     // The topmost bookmark the user has actually seen. Everything above it arrived since.
     internal val _seenTopRemoteId = MutableStateFlow<Long?>(null)
 
@@ -251,10 +287,19 @@ class MainScreenModel(
      * Counted against [_accumulatedBookmarks] rather than [bookmarks] so a bookmark the user
      * just created — prepended as a placeholder, and already scrolled to — is not reported back
      * to them as new. Eager sharing keeps the value readable without a collector.
+     *
+     * Read bookmarks are left out while they are being faded: the pill offers to take the user
+     * to what arrived, and a row already read — marked on another device, or carried in by the
+     * reading progress the sync pulls — is not something they are being sent back for. With
+     * fading off, read and unread rows look alike and the count covers both.
      */
     val newBookmarksAbove: StateFlow<Int> =
-        combine(_accumulatedBookmarks, _seenTopRemoteId) { window, seenTop ->
-            countBookmarksAbove(window, seenTop)
+        combine(
+            _accumulatedBookmarks,
+            _seenTopRemoteId,
+            effectiveDimReadBookmarks
+        ) { window, seenTop, dimRead ->
+            countBookmarksAbove(window, seenTop, excludeRead = dimRead)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
     /**
@@ -435,11 +480,6 @@ class MainScreenModel(
             viewModelScope, SharingStarted.WhileSubscribed(5000), RowActionMode.SWIPE
         )
 
-    val dimReadBookmarks: StateFlow<Boolean> =
-        settingsRepository.dimReadBookmarks.stateIn(
-            viewModelScope, SharingStarted.WhileSubscribed(5000), initialValue = true
-        )
-
     val currentListScrollAction: StateFlow<com.karakept.app.data.model.SwipeAction> =
         _currentListContext
             .flatMapLatest { listId ->
@@ -461,26 +501,6 @@ class MainScreenModel(
             val settings = allSettings[listId] ?: return@combine null
             val configId = settings.scrollActionConfigId ?: return@combine null
             configs.find { it.id == configId }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    /**
-     * The active [BookmarkLayout] for the current view.
-     * Resolution order: per-list layout → default layout → null (fall back to global settings).
-     */
-    val activeLayout: StateFlow<BookmarkLayout?> =
-        combine(
-            _currentListContext,
-            settingsRepository.allListSettings,
-            settingsRepository.defaultLayoutId,
-            settingsRepository.customLayouts
-        ) { listId, allSettings, defaultLayoutId, customLayouts ->
-            val perListLayoutId = if (listId != null) allSettings[listId]?.layoutId else null
-            val resolvedId = perListLayoutId ?: defaultLayoutId ?: return@combine null
-            if (BookmarkLayout.isBuiltInId(resolvedId)) {
-                BookmarkLayout.getBuiltIn(resolvedId)
-            } else {
-                customLayouts.find { it.id == resolvedId }
-            }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // Two independent bookmark pipelines selected by _searchQuery:
@@ -1000,11 +1020,19 @@ class MainScreenModel(
  * Zero when nothing has been marked seen yet, or when the seen bookmark is no longer in the
  * list: it left the loaded window, so the rows above it are no longer meaningfully "new" and
  * guessing a count from a missing anchor is what a diff-based counter got wrong.
+ *
+ * @param excludeRead leaves already-read rows out of the count, for when the list fades them.
+ *   The rows above the anchor still *are* new to the window — they are simply not worth
+ *   offering a trip to the top for.
  */
 internal fun countBookmarksAbove(
     bookmarks: List<BookmarkEntity>,
-    seenTopRemoteId: Long?
+    seenTopRemoteId: Long?,
+    excludeRead: Boolean = false
 ): Int {
     if (seenTopRemoteId == null) return 0
-    return bookmarks.indexOfFirst { it.remoteId == seenTopRemoteId }.coerceAtLeast(0)
+    val above = bookmarks.indexOfFirst { it.remoteId == seenTopRemoteId }
+    if (above <= 0) return 0
+    if (!excludeRead) return above
+    return bookmarks.take(above).count { !it.isRead }
 }

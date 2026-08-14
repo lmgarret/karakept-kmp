@@ -99,12 +99,13 @@ object MainScreen : NavKey {
         val showTags by settingsScreenModel.showTags.collectAsState()
         val showDateInList by settingsScreenModel.showDateInList.collectAsState()
         val dateDisplayMode by settingsScreenModel.dateDisplayMode.collectAsState()
-        val dimReadBookmarks by screenModel.dimReadBookmarks.collectAsState()
+        // Resolved in the screen model, which needs the same answer for the "N new" pill.
+        val dimReadBookmarks by screenModel.effectiveDimReadBookmarks.collectAsState()
         val showScrollCursor by settingsScreenModel.showScrollCursor.collectAsState()
         val displayConfig = remember(activeLayout, layoutType, dimReadBookmarks, showReadingTimeBadge, showTags, showDateInList, dateDisplayMode) {
             MainScreenDisplayConfig(
                 layoutType = activeLayout?.layoutType?.let { LayoutType.fromString(it) } ?: layoutType,
-                dimReadBookmarks = activeLayout?.dimReadBookmarks ?: dimReadBookmarks,
+                dimReadBookmarks = dimReadBookmarks,
                 showReadingTimeBadge = activeLayout?.showReadingTime ?: showReadingTimeBadge,
                 showTags = activeLayout?.showTags ?: showTags,
                 showDate = activeLayout?.showDate ?: showDateInList,

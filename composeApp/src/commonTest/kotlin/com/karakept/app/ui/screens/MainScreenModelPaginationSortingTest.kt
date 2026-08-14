@@ -306,6 +306,91 @@ class MainScreenModelPaginationSortingTest {
         }
 
     @Test
+    fun `N-new pill leaves out bookmarks that are already read while they are faded`() =
+        runTest(testDispatcher) {
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            model._accumulatedBookmarks.value = listOf(makeBookmark(1, "b1"))
+            model._currentPage.value = 0
+            model.clearNewBookmarksAbove()
+
+            // Two bookmarks arrive above the one the user saw; one of them is already read —
+            // marked on another device, or carried in by the reading progress the sync pulls.
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+            } returns listOf(
+                makeBookmark(10, "new1"),
+                makeBookmark(11, "new2").copy(isRead = true),
+                makeBookmark(1, "b1")
+            )
+
+            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
+            advanceUntilIdle()
+
+            assertEquals(1, model.newBookmarksAbove.value)
+        }
+
+    @Test
+    fun `N-new pill counts read bookmarks when fading is turned off`() =
+        runTest(testDispatcher) {
+            // Nothing distinguishes a read row from an unread one in the list, so the pill
+            // reports what actually arrived.
+            every { settingsRepository.dimReadBookmarks } returns flowOf(false)
+
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            model._accumulatedBookmarks.value = listOf(makeBookmark(1, "b1"))
+            model._currentPage.value = 0
+            model.clearNewBookmarksAbove()
+
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+            } returns listOf(
+                makeBookmark(10, "new1"),
+                makeBookmark(11, "new2").copy(isRead = true),
+                makeBookmark(1, "b1")
+            )
+
+            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
+            advanceUntilIdle()
+
+            assertEquals(2, model.newBookmarksAbove.value)
+        }
+
+    @Test
+    fun `the active layout decides whether the pill counts read bookmarks`() =
+        runTest(testDispatcher) {
+            // The layout overrides the global setting for the rendering, so it must override it
+            // for the count too — otherwise the pill offers a trip to rows it can see are faded.
+            val layout = com.karakept.app.data.model.BookmarkLayout(
+                id = "custom-1", name = "No fade", dimReadBookmarks = false
+            )
+            every { settingsRepository.dimReadBookmarks } returns flowOf(true)
+            every { settingsRepository.defaultLayoutId } returns flowOf("custom-1")
+            every { settingsRepository.customLayouts } returns flowOf(listOf(layout))
+
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            model._accumulatedBookmarks.value = listOf(makeBookmark(1, "b1"))
+            model._currentPage.value = 0
+            model.clearNewBookmarksAbove()
+
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+            } returns listOf(
+                makeBookmark(10, "new1"),
+                makeBookmark(11, "new2").copy(isRead = true),
+                makeBookmark(1, "b1")
+            )
+
+            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
+            advanceUntilIdle()
+
+            assertEquals(false, model.effectiveDimReadBookmarks.value, "layout wins over the setting")
+            assertEquals(2, model.newBookmarksAbove.value)
+        }
+
+    @Test
     fun `N-new pill does not double-count a bookmark that re-enters the loaded window`() =
         runTest(testDispatcher) {
             val model = createMainScreenModel()
