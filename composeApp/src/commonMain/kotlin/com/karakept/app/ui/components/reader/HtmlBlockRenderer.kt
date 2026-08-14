@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -861,9 +862,10 @@ internal const val MIN_RENDERABLE_IMAGE_PX = 8
  * never declared. One image pixel maps to one dp, the same way a browser maps it to one CSS px —
  * matching what [extractImageDimensions] already feeds the renderer.
  *
- * Coil scales a decode down to the composable's constraints but never up (Compose's default
- * [coil3.size.Precision.INEXACT]), so this is either the true intrinsic size or roughly the
- * container width in *device* pixels. Device pixels outnumber dp at any density ≥ 1, so a
+ * Only the width is ever acted on (as a cap), never the height: see [RenderResolvedImage]. Coil
+ * scales a decode down to the composable's constraints but never up (Compose's default
+ * [coil3.size.Precision.INEXACT]), so this width is either the image's true intrinsic width or
+ * roughly the container's in *device* pixels. Device pixels outnumber dp at any density ≥ 1, so a
  * downscaled image can never come out looking narrower than its column: only genuinely small
  * images take the shrink path.
  */
@@ -938,8 +940,8 @@ internal fun resolveImageUrls(element: Element): List<String> {
  *
  * Sizing follows the browser's `max-width: 100%; height: auto`: an image occupies its own
  * width and only shrinks once it is wider than the column. [dimensions] supplies that width
- * when the HTML declares it; otherwise the decoded image's own size does, which is why a small
- * icon is no longer blown up to the full column width.
+ * when the HTML declares it; otherwise the decoded image's own width caps it, which is why a
+ * small icon is no longer blown up to the full column width.
  *
  * [element] identifies this image within [LocalGalleryImages] so tapping it opens the
  * full-screen gallery viewer positioned on this exact image, swipeable to its siblings.
@@ -960,17 +962,29 @@ private fun RenderResolvedImage(
     val galleryViewerState = LocalGalleryViewerState.current
     val galleryImages = LocalGalleryImages.current
 
-    val effectiveDimensions = dimensions ?: loadedDimensions
-    val sizeModifier = if (effectiveDimensions != null) {
-        Modifier
-            .widthIn(max = effectiveDimensions.width.dp)
+    val loaded = loadedDimensions
+    val effectiveDimensions = dimensions ?: loaded
+    val sizeModifier = when {
+        // Declared dimensions describe the box before anything loads, so the container can
+        // safely claim that height up front and hold the layout still.
+        dimensions != null -> Modifier
+            .widthIn(max = dimensions.width.dp)
             .fillMaxWidth()
-            .aspectRatio(effectiveDimensions.aspectRatio)
-    } else {
-        Modifier.fillMaxWidth()
+            .aspectRatio(dimensions.aspectRatio)
+        // A decoded size only caps the width — the painter still drives the height. Pinning an
+        // aspect ratio here asserts a height the painter need not agree with: with crossfade on
+        // (App.kt's loader) the drawing painter is a CrossfadePainter sized max(previous, loaded),
+        // and one given a box shorter than its content insets outward and paints over whatever
+        // block comes next instead of shrinking into it.
+        loaded != null -> Modifier
+            .widthIn(max = loaded.width.dp)
+            .fillMaxWidth()
+        else -> Modifier.fillMaxWidth()
     }
     val shape = RoundedCornerShape(4.dp)
-    val baseModifier = sizeModifier.padding(vertical = 8.dp)
+    // Belt and braces for the same failure: whatever the painter decides to draw stays inside
+    // this block's own bounds and never lands on the surrounding text.
+    val baseModifier = sizeModifier.padding(vertical = 8.dp).clipToBounds()
 
     // A spacer or tracking pixel: drop it entirely rather than leave a padded sliver in the text.
     if (effectiveDimensions != null && isTrackingPixel(effectiveDimensions)) return
@@ -979,7 +993,7 @@ private fun RenderResolvedImage(
         // All candidate URLs failed — show broken-image placeholder.
         Box(
             modifier = baseModifier
-                .then(if (effectiveDimensions == null) Modifier.height(100.dp) else Modifier)
+                .then(if (dimensions == null) Modifier.height(100.dp) else Modifier)
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
             contentAlignment = Alignment.Center
@@ -1002,7 +1016,7 @@ private fun RenderResolvedImage(
             val initialIndex = galleryImages.indexOfFirst { it.element === element }.coerceAtLeast(0)
             galleryViewerState?.open(
                 images = galleryImages.ifEmpty {
-                    listOf(GalleryImage(element, urls, alt, caption, effectiveDimensions))
+                    listOf(GalleryImage(element, urls, alt, caption, dimensions))
                 },
                 initialIndex = initialIndex
             )
@@ -1011,7 +1025,7 @@ private fun RenderResolvedImage(
         // Skeleton shown while the current URL is loading.
         if (isLoading) {
             ImageLoadingSkeleton(
-                modifier = if (effectiveDimensions != null) {
+                modifier = if (dimensions != null) {
                     Modifier.matchParentSize()
                 } else {
                     Modifier.fillMaxWidth().height(200.dp)
@@ -1021,7 +1035,7 @@ private fun RenderResolvedImage(
         AsyncImage(
             model = urls[idx],
             contentDescription = alt.ifBlank { null },
-            contentScale = if (effectiveDimensions != null) ContentScale.Fit else ContentScale.FillWidth,
+            contentScale = if (dimensions != null) ContentScale.Fit else ContentScale.FillWidth,
             onLoading = { isLoading = true },
             onSuccess = { state ->
                 isLoading = false
