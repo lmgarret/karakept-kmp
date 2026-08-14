@@ -80,17 +80,28 @@ object BookmarkFilterUtils {
 
     /**
      * Sorts [bookmarks] according to [sort].
+     *
+     * Ties break on `localId`, matching the ORDER BY the paged query uses (see
+     * BookmarkRepository.toOrderBySql). Both ends must agree: a page appended to the loaded
+     * window is re-sorted here, and a comparator that ordered ties differently from the query
+     * would interleave the new page into the old rows in an order no page boundary matches.
      */
     fun applySorting(
         bookmarks: List<BookmarkEntity>,
         sort: SortOption
     ): List<BookmarkEntity> = when (sort) {
-        SortOption.NEWEST             -> bookmarks.sortedByDescending { it.createdAt }
-        SortOption.OLDEST             -> bookmarks.sortedBy { it.createdAt }
-        SortOption.TITLE_AZ           -> bookmarks.sortedBy { it.title.lowercase() }
-        SortOption.TITLE_ZA           -> bookmarks.sortedByDescending { it.title.lowercase() }
-        SortOption.READING_TIME_SHORT -> bookmarks.sortedBy { it.readingTimeMinutes }
-        SortOption.READING_TIME_LONG  -> bookmarks.sortedByDescending { it.readingTimeMinutes }
+        SortOption.NEWEST ->
+            bookmarks.sortedWith(compareByDescending<BookmarkEntity> { it.createdAt }.thenByDescending { it.localId })
+        SortOption.OLDEST ->
+            bookmarks.sortedWith(compareBy<BookmarkEntity> { it.createdAt }.thenBy { it.localId })
+        SortOption.TITLE_AZ ->
+            bookmarks.sortedWith(compareBy<BookmarkEntity> { it.title.lowercase() }.thenBy { it.localId })
+        SortOption.TITLE_ZA ->
+            bookmarks.sortedWith(compareByDescending<BookmarkEntity> { it.title.lowercase() }.thenByDescending { it.localId })
+        SortOption.READING_TIME_SHORT ->
+            bookmarks.sortedWith(compareBy<BookmarkEntity> { it.readingTimeMinutes }.thenBy { it.localId })
+        SortOption.READING_TIME_LONG ->
+            bookmarks.sortedWith(compareByDescending<BookmarkEntity> { it.readingTimeMinutes }.thenByDescending { it.localId })
     }
 
     /**

@@ -248,19 +248,13 @@ class MainScreenModelPaginationSortingTest {
     @Test
     fun `refreshLoadedPagesInPlace keeps the loaded window and does not bump the list version`() =
         runTest(testDispatcher) {
-            val pageSize = 20
-            val page0 = (1..pageSize).map { makeBookmark(id = it.toLong(), title = "b$it") }
-            val page1 = (pageSize + 1..pageSize * 2).map { makeBookmark(id = it.toLong(), title = "b$it") }
-            val page2 = (pageSize * 2 + 1..pageSize * 2 + 10).map { makeBookmark(id = it.toLong(), title = "b$it") }
+            // A table of 50 rows, served the way the DAO serves it: sliced by offset/limit.
+            val table = (1..50).map { makeBookmark(id = it.toLong(), title = "b$it") }
             coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
-            } returns page0
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = pageSize, limit = any(), sort = any(), listId = any())
-            } returns page1
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = pageSize * 2, limit = any(), sort = any(), listId = any())
-            } returns page2  // partial page (10 < 20) → DB end
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = any(), limit = any(), sort = any(), listId = any())
+            } answers {
+                table.drop(arg<Int>(2)).take(arg<Int>(3))
+            }
 
             val model = createMainScreenModel()
             advanceUntilIdle()

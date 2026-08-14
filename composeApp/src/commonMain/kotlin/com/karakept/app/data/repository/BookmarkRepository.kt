@@ -503,52 +503,6 @@ class BookmarkRepository(
         return result
     }
 
-    private fun buildPagedQuery(
-        serverId: String,
-        status: FilterStatus,
-        sort: SortOption,
-        listId: String?,
-        limit: Int,
-        offset: Int
-    ): RoomRawQuery {
-        val orderBy = sort.toOrderBySql()
-        return if (listId != null) {
-            RoomRawQuery(
-                """SELECT $BOOKMARK_SELECT FROM bookmarks
-                   WHERE serverId = ?
-                   AND (listIds = ?
-                        OR listIds LIKE ? || ',%'
-                        OR listIds LIKE '%,' || ?
-                        OR listIds LIKE '%,' || ? || ',%')
-                   ORDER BY $orderBy
-                   LIMIT ? OFFSET ?"""
-            ) { stmt ->
-                stmt.bindText(1, serverId)
-                stmt.bindText(2, listId)
-                stmt.bindText(3, listId)
-                stmt.bindText(4, listId)
-                stmt.bindText(5, listId)
-                stmt.bindLong(6, limit.toLong())
-                stmt.bindLong(7, offset.toLong())
-            }
-        } else {
-            val whereClause = when (status) {
-                FilterStatus.ALL -> "serverId = ? AND isArchived = 0"
-                FilterStatus.ALL_INCLUDING_ARCHIVED -> "serverId = ?"
-                FilterStatus.FAVORITES -> "serverId = ? AND isStarred = 1"
-                FilterStatus.ARCHIVED -> "serverId = ? AND isArchived = 1"
-                FilterStatus.OFFLINE -> "serverId = ? AND content IS NOT NULL AND length(content) > 0"
-            }
-            RoomRawQuery(
-                "SELECT $BOOKMARK_SELECT FROM bookmarks WHERE $whereClause ORDER BY $orderBy LIMIT ? OFFSET ?"
-            ) { stmt ->
-                stmt.bindText(1, serverId)
-                stmt.bindLong(2, limit.toLong())
-                stmt.bindLong(3, offset.toLong())
-            }
-        }
-    }
-
     companion object {
         /**
          * Minimum gap between two reading-progress passes triggered by list/filter syncs.
@@ -571,13 +525,73 @@ class BookmarkRepository(
                modifiedAt, progressSyncedAt,
                '' as content"""
 
+        /**
+         * Builds the paged query. Lives in the companion so a test can page a real SQLite
+         * table with it rather than restating its SQL — the ORDER BY is what makes paging
+         * well-defined, and a copy of it in a test proves nothing about the query the app runs.
+         */
+        internal fun buildPagedQuery(
+            serverId: String,
+            status: FilterStatus,
+            sort: SortOption,
+            listId: String?,
+            limit: Int,
+            offset: Int
+        ): RoomRawQuery {
+            val orderBy = sort.toOrderBySql()
+            return if (listId != null) {
+                RoomRawQuery(
+                    """SELECT $BOOKMARK_SELECT FROM bookmarks
+                       WHERE serverId = ?
+                       AND (listIds = ?
+                            OR listIds LIKE ? || ',%'
+                            OR listIds LIKE '%,' || ?
+                            OR listIds LIKE '%,' || ? || ',%')
+                       ORDER BY $orderBy
+                       LIMIT ? OFFSET ?"""
+                ) { stmt ->
+                    stmt.bindText(1, serverId)
+                    stmt.bindText(2, listId)
+                    stmt.bindText(3, listId)
+                    stmt.bindText(4, listId)
+                    stmt.bindText(5, listId)
+                    stmt.bindLong(6, limit.toLong())
+                    stmt.bindLong(7, offset.toLong())
+                }
+            } else {
+                val whereClause = when (status) {
+                    FilterStatus.ALL -> "serverId = ? AND isArchived = 0"
+                    FilterStatus.ALL_INCLUDING_ARCHIVED -> "serverId = ?"
+                    FilterStatus.FAVORITES -> "serverId = ? AND isStarred = 1"
+                    FilterStatus.ARCHIVED -> "serverId = ? AND isArchived = 1"
+                    FilterStatus.OFFLINE -> "serverId = ? AND content IS NOT NULL AND length(content) > 0"
+                }
+                RoomRawQuery(
+                    "SELECT $BOOKMARK_SELECT FROM bookmarks WHERE $whereClause ORDER BY $orderBy LIMIT ? OFFSET ?"
+                ) { stmt ->
+                    stmt.bindText(1, serverId)
+                    stmt.bindLong(2, limit.toLong())
+                    stmt.bindLong(3, offset.toLong())
+                }
+            }
+        }
+
+        /**
+         * Every sort ends on `localId`, which is unique, so the row order is total.
+         *
+         * Without it rows sharing a sort key are placed relative to one another by nothing:
+         * two LIMIT/OFFSET reads of the same table are free to disagree about where a tied
+         * row sits, and a row the two reads disagree about lands on both sides of a page
+         * boundary or on neither. Ties are the norm — a feed imports a batch of bookmarks
+         * carrying one timestamp, and `readingTimeMinutes` is 0 across most of a library.
+         */
         private fun SortOption.toOrderBySql(): String = when (this) {
-            SortOption.NEWEST             -> "createdAt DESC"
-            SortOption.OLDEST             -> "createdAt ASC"
-            SortOption.TITLE_AZ           -> "title COLLATE NOCASE ASC"
-            SortOption.TITLE_ZA           -> "title COLLATE NOCASE DESC"
-            SortOption.READING_TIME_SHORT -> "readingTimeMinutes ASC"
-            SortOption.READING_TIME_LONG  -> "readingTimeMinutes DESC"
+            SortOption.NEWEST             -> "createdAt DESC, localId DESC"
+            SortOption.OLDEST             -> "createdAt ASC, localId ASC"
+            SortOption.TITLE_AZ           -> "title COLLATE NOCASE ASC, localId ASC"
+            SortOption.TITLE_ZA           -> "title COLLATE NOCASE DESC, localId DESC"
+            SortOption.READING_TIME_SHORT -> "readingTimeMinutes ASC, localId ASC"
+            SortOption.READING_TIME_LONG  -> "readingTimeMinutes DESC, localId DESC"
         }
     }
 
