@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.ui.components.FloatingBusyCard
 import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.components.RefreshableBox
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
@@ -769,6 +770,13 @@ fun BookmarkViewerContent(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     viewerContent()
+                    // Without the pull gesture's spinner, and with the top bar's indeterminate
+                    // strip skipped on e-ink, this card is the only sign a refresh is running.
+                    if (isRefreshing && einkMode.animationsDisabled) {
+                        FloatingBusyCard(modifier = Modifier.align(Alignment.Center)) {
+                            LoadingDotsIndicator(label = "Refreshing…", dotSize = 8.dp)
+                        }
+                    }
                 }
             }
             is BookmarkLoadingState.Error -> {

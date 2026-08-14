@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -70,7 +71,8 @@ import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.BusyIndicator
-import com.karakept.app.ui.components.InlineLoadingDots
+import com.karakept.app.ui.components.FloatingBusyCard
+import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.components.RefreshableBox
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.BookmarkCardLayout
@@ -701,7 +703,11 @@ internal fun BookmarkListContent(
         if (isSyncing) {
             SyncProgressBar(
                 progress = syncProgress,
-                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                modifier = if (einkMode.animationsDisabled) {
+                    Modifier.align(Alignment.Center)
+                } else {
+                    Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                }
             )
         }
 
@@ -837,42 +843,56 @@ private fun SyncProgressBar(
     // Only the *indeterminate* bar is a problem on e-ink: it animates continuously. The
     // determinate one redraws once per progress change, which the panel handles fine.
     val einkMode = LocalEinkMode.current
-    Column(modifier = modifier) {
-        when (progress) {
-            is com.karakept.app.data.model.SyncProgress.FetchingContent -> {
-                if (progress.total > 0) {
-                    LinearProgressIndicator(
-                        progress = { progress.current.toFloat() / progress.total.toFloat() },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Text(
-                        text = "${progress.current} / ${progress.total}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-                    )
-                } else {
-                    IndeterminateSyncIndicator(einkMode.animationsDisabled)
-                }
+    val fetched = (progress as? com.karakept.app.data.model.SyncProgress.FetchingContent)
+        ?.takeIf { it.total > 0 }
+
+    if (einkMode.animationsDisabled) {
+        // A strip at the top edge of the list is easy to overlook on a monochrome panel, so the
+        // whole sync state moves into one card in the middle of the page — determinate or not,
+        // rather than splitting it across two places.
+        FloatingBusyCard(modifier = modifier) {
+            if (fetched != null) {
+                Text(
+                    text = "Syncing…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                LinearProgressIndicator(
+                    progress = { fetched.current.toFloat() / fetched.total.toFloat() },
+                    modifier = Modifier.width(SyncCardProgressWidth)
+                )
+                Text(
+                    text = "${fetched.current} / ${fetched.total}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                LoadingDotsIndicator(label = "Syncing…", dotSize = 8.dp)
             }
-            else -> IndeterminateSyncIndicator(einkMode.animationsDisabled)
+        }
+        return
+    }
+
+    Column(modifier = modifier) {
+        if (fetched != null) {
+            LinearProgressIndicator(
+                progress = { fetched.current.toFloat() / fetched.total.toFloat() },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "${fetched.current} / ${fetched.total}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+            )
+        } else {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
     }
 }
 
-@Composable
-private fun IndeterminateSyncIndicator(animationsDisabled: Boolean) {
-    if (animationsDisabled) {
-        // A bare "Syncing…" label was easy to miss against the list it overlays; the dots make
-        // the strip read as active without animating a single continuous frame.
-        InlineLoadingDots(
-            label = "Syncing…",
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-        )
-    } else {
-        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-    }
-}
+/** Wide enough to read as a progress bar, narrow enough to keep the card off the page edges. */
+private val SyncCardProgressWidth = 160.dp
 
 @Composable
 private fun EmptyBookmarkList() {

@@ -164,7 +164,7 @@ currentSyncStatus = perKeyProgress[resolveCurrentKey(currentList, currentFilter)
 
 Switching lists while a sync is in progress immediately updates `currentSyncStatus` to reflect the new list's status (or Idle if that list is not syncing). Background syncs for other lists continue uninterrupted.
 
-`isSyncing` (used for the pull-to-refresh spinner) is `true` only when the **current list's** key is present in `perKeyProgress` — background other-list syncs do not trigger the pull-to-refresh indicator. In e-ink mode there is no pull gesture: `isSyncing` disables the top bar's `Refresh` button instead, and the sync strip over the list shows `InlineLoadingDots` rather than an indeterminate bar.
+`isSyncing` (used for the pull-to-refresh spinner) is `true` only when the **current list's** key is present in `perKeyProgress` — background other-list syncs do not trigger the pull-to-refresh indicator. In e-ink mode there is no pull gesture: `isSyncing` disables the top bar's `Refresh` button instead, and the whole sync state — determinate bar and count included — moves from the top strip into a centred `FloatingBusyCard` over the list.
 
 ## Content Fetching Logic (Precedence)
 

@@ -221,12 +221,27 @@ full-bleed and its divider reaches both edges.
 
 **`InlineLoadingDots`** (`ui/components/EinkAware.kt`)
 - The same dots on one line, label beside them instead of below. For slots too short for the
-  stacked form: the bookmark list's sync strip, the reader top bar's refresh bar, a drawer row's
-  trailing status, an asset download with no `Content-Length`.
-- Every one of those slots used to hold an **indeterminate** `LinearProgressIndicator` or
-  `CircularProgressIndicator` — a bar that sweeps forever, which on e-ink shows as a smear or,
-  on panels that throttle refreshes, as nothing at all. Determinate bars are fine there and stay
-  as they are: they only repaint when progress moves.
+  stacked form: a drawer row's trailing status, an asset download with no `Content-Length`.
+- Both used to hold an **indeterminate** `LinearProgressIndicator` or `CircularProgressIndicator`
+  — a bar that sweeps forever, which on e-ink shows as a smear or, on panels that throttle
+  refreshes, as nothing at all. Determinate bars are fine there and stay as they are: they only
+  repaint when progress moves.
+
+**`FloatingBusyCard`** (`ui/components/EinkAware.kt`)
+- A centred card holding a **screen-level** busy state on e-ink — the bookmark list's sync, the
+  reader's refresh. Bordered under `highContrast` (elevation separates nothing when every
+  surface role is the page colour) and takes no pointer input, so the content underneath stays
+  scrollable while it is up.
+- Screen-level progress used to live in a thin strip pinned to the top edge of the content. That
+  is easy to overlook on a monochrome panel: no colour to catch the eye, no motion the display
+  renders smoothly. One deliberate block in the middle of the page is the placement that reads.
+- On e-ink the **determinate** sync bar moves into the card too. Not because a determinate bar
+  is a problem — it isn't — but so sync state lives in one place rather than jumping between the
+  card and the top strip as `SyncProgress` resolves.
+
+> **Rule:** a screen-level busy state on e-ink goes in a `FloatingBusyCard`; a row- or
+> control-level one stays inline with `InlineLoadingDots`. Off e-ink both keep the strip or
+> spinner they already had.
 
 **`BusyIndicator`** (`ui/components/EinkAware.kt`)
 - A "working on it" signal: `CircularProgressIndicator` normally, `LoadingDotsIndicator` on e-ink.
