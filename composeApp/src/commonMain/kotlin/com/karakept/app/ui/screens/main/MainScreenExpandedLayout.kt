@@ -357,6 +357,12 @@ fun MainScreenExpandedLayout(
                 val currentBookmarkId = selectedBookmarkId
                 val currentScrollToHighlightId = scrollToHighlightId
                 if (currentBookmarkId != null) {
+                    // Already in memory from the list pane — lets the reader's top bar show a
+                    // title immediately instead of waiting on its own DB query to resolve.
+                    val bookmarks by screenModel.bookmarks.collectAsState()
+                    val selectedBookmark = remember(bookmarks, currentBookmarkId) {
+                        bookmarks.find { it.localId == currentBookmarkId }
+                    }
                     // Use key() to force fresh composition when bookmark or highlight changes
                     androidx.compose.runtime.key(currentBookmarkId, currentScrollToHighlightId) {
                         // koinViewModel, not koinInject: an injected ViewModel is never put in
@@ -374,6 +380,8 @@ fun MainScreenExpandedLayout(
                             bookmarkId = currentBookmarkId,
                             scrollToHighlightId = currentScrollToHighlightId,
                             searchTrigger = readerSearchTrigger,
+                            initialTitle = selectedBookmark?.title,
+                            initialUrl = selectedBookmark?.url,
                             screenModel = viewerScreenModel,
                             onBack = {
                                 if (isReaderFullscreen) {

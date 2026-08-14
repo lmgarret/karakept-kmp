@@ -477,7 +477,13 @@ object MainScreen : NavKey {
                         scaffoldContent(false, null, { bookmark ->
                             val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
                             if (idx >= 0) screenModel.trackLastClickedIndex(idx)
-                            navigator.push(BookmarkViewerScreen(bookmark.localId))
+                            navigator.push(
+                                BookmarkViewerScreen(
+                                    bookmark.localId,
+                                    initialTitle = bookmark.title,
+                                    initialUrl = bookmark.url
+                                )
+                            )
                         }, { scope.launch { drawerState.openDrawer(einkMode.animationsDisabled) } })
                     }
                 }
