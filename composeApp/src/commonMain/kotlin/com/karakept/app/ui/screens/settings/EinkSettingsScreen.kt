@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.Contrast
 import androidx.compose.material.icons.filled.ImageNotSupported
+import androidx.compose.material.icons.filled.InvertColors
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.SwipeVertical
@@ -50,6 +51,7 @@ import com.karakept.app.ui.input.PlatformKeyCodes
 import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
+import com.karakept.app.utils.AppIconManager
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -76,6 +78,7 @@ fun EinkSettingsContent(
     val disableAnimations by screenModel.disableAnimations.collectAsState()
     val highContrast by screenModel.highContrast.collectAsState()
     val instantPageScroll by screenModel.instantPageScroll.collectAsState()
+    val monochromeIcon by screenModel.monochromeIcon.collectAsState()
     val keyBindings by screenModel.keyBindings.collectAsState()
     val hideArticleThumbnails by screenModel.hideArticleThumbnails.collectAsState()
     val rowActionMode by screenModel.rowActionMode.collectAsState()
@@ -118,6 +121,19 @@ fun EinkSettingsContent(
                 checked = einkModeEnabled,
                 onCheckedChange = { screenModel.setEinkModeEnabled(it) }
             )
+
+            // Ungated on purpose: the home screen goes on showing the icon after E-ink mode is
+            // switched off, so the colour artwork must not come back on its own.
+            if (AppIconManager.isSupported) {
+                SettingSwitchCard(
+                    title = "Monochrome icon",
+                    description = "Black-on-white launcher icon and splash screen. Stays put " +
+                        "when E-ink mode is off; the splash follows from the next cold start.",
+                    icon = Icons.Default.InvertColors,
+                    checked = monochromeIcon,
+                    onCheckedChange = { screenModel.setMonochromeIcon(it) }
+                )
+            }
 
             if (einkModeEnabled) {
                 SettingSwitchCard(

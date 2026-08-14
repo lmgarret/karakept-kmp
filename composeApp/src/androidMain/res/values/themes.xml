@@ -6,6 +6,18 @@
         <item name="postSplashScreenTheme">@style/Theme.App</item>
     </style>
 
+    <!--
+      Monochrome counterpart of Theme.App.Starting, applied by MainActivity when the e-ink
+      "Monochrome icon" setting is on. Deliberately not duplicated in values-night: the point
+      is a splash that is black on white whatever the system theme says, matching the paper
+      the panel is imitating. @style/Theme.App still resolves per configuration.
+    -->
+    <style name="Theme.App.Starting.Mono" parent="Theme.App.Starting">
+        <item name="windowSplashScreenBackground">@color/ic_launcher_mono_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon_mono</item>
+        <item name="postSplashScreenTheme">@style/Theme.App</item>
+    </style>
+
     <style name="Theme.App" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

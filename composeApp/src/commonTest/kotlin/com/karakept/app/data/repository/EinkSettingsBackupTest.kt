@@ -53,6 +53,35 @@ class EinkSettingsBackupTest {
     }
 
     @Test
+    fun `the monochrome icon setting survives an export and import`() = runTest {
+        repo.setEinkMonochromeIcon(true)
+
+        val restoredInto = SettingsRepository(FakeDataStore())
+        restoredInto.restoreSettings(repo.currentSettings())
+
+        assertTrue(restoredInto.einkMonochromeIcon.first())
+    }
+
+    @Test
+    fun `the monochrome icon is not gated on the master switch`() = runTest {
+        // The launcher keeps showing the icon long after e-ink mode is switched off, so the
+        // colour artwork must not come back on its own — nor appear just because the master
+        // switch went on.
+        repo.setEinkMonochromeIcon(true)
+        repo.setEinkModeEnabled(true)
+        assertTrue(repo.einkMonochromeIcon.first())
+
+        repo.setEinkModeEnabled(false)
+        assertTrue(repo.einkMonochromeIcon.first())
+    }
+
+    @Test
+    fun `enabling e-ink mode alone leaves the icon in colour`() = runTest {
+        repo.setEinkModeEnabled(true)
+        assertFalse(repo.einkMonochromeIcon.first())
+    }
+
+    @Test
     fun `the volume-button preset survives an export and import`() = runTest {
         repo.setPageTurnUseVolumeKeys(true)
         repo.setPageTurnInvertVolumeKeys(true)

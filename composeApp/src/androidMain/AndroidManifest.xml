@@ -37,13 +37,43 @@
         android:theme="@style/Theme.App.Starting">
         <activity
             android:name=".MainActivity"
+            android:exported="false"
+            android:launchMode="singleTop" />
+
+        <!--
+          The launcher entry lives on aliases rather than on MainActivity itself, because an
+          icon can only be swapped at runtime by enabling one component and disabling another
+          and MainActivity has to stay enabled for notification intents to resolve. Exactly one
+          alias is ever enabled; AppIconManager flips the pair. Keep DEFAULT enabled here so a
+          fresh install has a launcher entry before any code runs.
+        -->
+        <activity-alias
+            android:name=".LauncherDefault"
+            android:targetActivity=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher"
+            android:label="${appName}">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherMonochrome"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:icon="@mipmap/ic_launcher_mono"
+            android:roundIcon="@mipmap/ic_launcher_mono"
+            android:label="${appName}">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <activity
             android:name=".BookmarkSavingActivity"

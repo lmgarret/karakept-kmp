@@ -86,6 +86,7 @@ data class BackupSettings(
     val pageTurnPreviousKeyCode: Int? = null,
     val pageTurnNextKeyCode: Int? = null,
     val pageTurnOverlapPercent: Int = PageTurnKeyBindings.DEFAULT_OVERLAP_PERCENT,
+    val einkMonochromeIcon: Boolean = false,
 
     // Theme
     val themeMode: String = ThemeMode.SYSTEM.name,

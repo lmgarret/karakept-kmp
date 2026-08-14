@@ -88,7 +88,13 @@ internal data class StoredEinkSettings(
     val invertVolumeKeys: Boolean = false,
     val previousPageKeyCode: Int? = null,
     val nextPageKeyCode: Int? = null,
-    val pageTurnOverlapPercent: Int = PageTurnKeyBindings.DEFAULT_OVERLAP_PERCENT
+    val pageTurnOverlapPercent: Int = PageTurnKeyBindings.DEFAULT_OVERLAP_PERCENT,
+    /**
+     * Launcher icon and splash screen in black on white. Not gated on [einkModeEnabled]: the
+     * home screen keeps showing the icon long after e-ink mode is switched off, so silently
+     * putting the colour artwork back would be a change the user never asked for.
+     */
+    val monochromeIcon: Boolean = false
 )
 
 /** Swipe-action settings: left/right actions and custom swipe configurations. */

@@ -124,6 +124,7 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         pageTurnPreviousKeyCode = eink.previousPageKeyCode,
         pageTurnNextKeyCode = eink.nextPageKeyCode,
         pageTurnOverlapPercent = eink.pageTurnOverlapPercent,
+        einkMonochromeIcon = eink.monochromeIcon,
         swipeLeftAction = swipe.swipeLeftAction,
         swipeRightAction = swipe.swipeRightAction,
         customSwipeConfigsJson = swipe.customSwipeConfigsJson,
@@ -199,7 +200,8 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                 pageTurnOverlapPercent = s.pageTurnOverlapPercent.coerceIn(
                     PageTurnKeyBindings.MIN_OVERLAP_PERCENT,
                     PageTurnKeyBindings.MAX_OVERLAP_PERCENT
-                )
+                ),
+                monochromeIcon = s.einkMonochromeIcon
             )
         )
         prefs[SWIPE_SETTINGS_KEY] = settingsJson.encodeToString(
@@ -361,6 +363,9 @@ suspend fun SettingsRepository.setEinkHighContrast(enabled: Boolean) =
 
 suspend fun SettingsRepository.setEinkInstantPageScroll(enabled: Boolean) =
     updateEinkSettings { copy(instantPageScroll = enabled) }
+
+suspend fun SettingsRepository.setEinkMonochromeIcon(enabled: Boolean) =
+    updateEinkSettings { copy(monochromeIcon = enabled) }
 
 suspend fun SettingsRepository.setPageTurnKeysEnabled(enabled: Boolean) =
     updateEinkSettings { copy(hardwareKeysEnabled = enabled) }
