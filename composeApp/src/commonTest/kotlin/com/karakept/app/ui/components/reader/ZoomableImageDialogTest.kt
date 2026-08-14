@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 
 /**
  * Tests for [clampImageZoom] and [clampImagePan], the pure gesture-math helpers behind
- * [ImageGalleryDialog]'s pinch/scroll zoom and drag-to-pan behavior.
+ * [ImageGalleryOverlay]'s pinch/scroll zoom and drag-to-pan behavior.
  */
 class ZoomableImageDialogTest {
 

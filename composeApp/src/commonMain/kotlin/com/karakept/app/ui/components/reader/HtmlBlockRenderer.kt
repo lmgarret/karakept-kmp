@@ -928,7 +928,8 @@ private fun RenderResolvedImage(
     var idx by remember(urls) { mutableIntStateOf(0) }
     // Resets to true on every new URL attempt (idx change) and on new image (urls change).
     var isLoading by remember(urls, idx) { mutableStateOf(true) }
-    var showFullscreen by remember(urls) { mutableStateOf(false) }
+    val galleryViewerState = LocalGalleryViewerState.current
+    val galleryImages = LocalGalleryImages.current
 
     val sizeModifier = if (dimensions != null) {
         Modifier
@@ -964,7 +965,15 @@ private fun RenderResolvedImage(
         modifier = baseModifier.clickable(
             enabled = !isLoading,
             onClickLabel = "View image full-screen"
-        ) { showFullscreen = true }
+        ) {
+            val initialIndex = galleryImages.indexOfFirst { it.element === element }.coerceAtLeast(0)
+            galleryViewerState?.open(
+                images = galleryImages.ifEmpty {
+                    listOf(GalleryImage(element, urls, alt, caption, dimensions))
+                },
+                initialIndex = initialIndex
+            )
+        }
     ) {
         // Skeleton shown while the current URL is loading.
         if (isLoading) {
@@ -987,20 +996,6 @@ private fun RenderResolvedImage(
                 .fillMaxWidth()
                 .clip(shape)
                 .alpha(if (isLoading) 0f else 1f)
-        )
-    }
-
-    if (showFullscreen) {
-        val galleryImages = LocalGalleryImages.current
-        val initialIndex = remember(galleryImages, element) {
-            galleryImages.indexOfFirst { it.element === element }.coerceAtLeast(0)
-        }
-        ImageGalleryDialog(
-            images = galleryImages.ifEmpty {
-                listOf(GalleryImage(element, urls, alt, caption, dimensions))
-            },
-            initialIndex = initialIndex,
-            onDismiss = { showFullscreen = false }
         )
     }
 }

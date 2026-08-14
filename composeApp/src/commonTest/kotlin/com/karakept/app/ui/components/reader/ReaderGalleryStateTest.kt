@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 /**
  * Tests for [collectGalleryImages] and its per-element resolvers, which pre-scan a page's
  * `<img>`/`<picture>` elements in document order so the full-screen viewer can swipe
- * between all of them (see [ImageGalleryDialog]).
+ * between all of them (see [ImageGalleryOverlay]).
  */
 class ReaderGalleryStateTest {
 

@@ -1,5 +1,8 @@
 package com.karakept.app.ui.components.reader
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.fleeksoft.ksoup.nodes.Document
 import com.fleeksoft.ksoup.nodes.Element
@@ -24,6 +27,33 @@ internal data class GalleryImage(
  * them without the block-by-block renderer needing to know about its siblings.
  */
 internal val LocalGalleryImages = staticCompositionLocalOf<List<GalleryImage>> { emptyList() }
+
+/** One full-screen image viewer request: the page-wide image list plus which one was tapped. */
+internal data class GalleryViewerRequest(val images: List<GalleryImage>, val initialIndex: Int)
+
+/**
+ * Holds the currently-open full-screen image viewer, if any. [ImageGalleryOverlay] is rendered
+ * from this rather than a platform [androidx.compose.ui.window.Dialog]: a Dialog is a separate
+ * platform window, and hardware page-turn keys stop reaching
+ * [com.karakept.app.ui.input.PageTurnDispatcher] while one has focus (see that class's rule
+ * against capturing keys inside dialogs). Staying inline keeps the reader's own window focused,
+ * so the buttons can instead be repurposed to flip between images while the viewer is open.
+ */
+internal class GalleryViewerState {
+    var request by mutableStateOf<GalleryViewerRequest?>(null)
+        private set
+
+    fun open(images: List<GalleryImage>, initialIndex: Int) {
+        request = GalleryViewerRequest(images, initialIndex)
+    }
+
+    fun close() {
+        request = null
+    }
+}
+
+/** Provided by [com.karakept.app.ui.screens.BookmarkViewerContent], consumed by [com.karakept.app.ui.components.reader]'s image renderer to open the viewer. */
+internal val LocalGalleryViewerState = staticCompositionLocalOf<GalleryViewerState?> { null }
 
 /**
  * Resolves a bare `<img>` element into a [GalleryImage], or null if it has no
