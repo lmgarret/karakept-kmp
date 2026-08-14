@@ -262,6 +262,22 @@ screen. Consequences worth knowing before touching this code:
 - `getColorScheme(…, highContrast = true)` swaps the accent palette for `einkColorScheme()`,
   which flattens every surface role to the page colour and moves all separation onto `outline`.
   It stays orthogonal to `ThemeMode` so it composes with LIGHT/DARK/SYSTEM.
+- The launcher icon and splash have a black-on-white variant behind `einkMonochromeIcon`,
+  applied by `AppIconManager` (`utils/`, `expect`/`actual`; a no-op on desktop, where the shell
+  reads the icon before the JVM starts). Android cannot re-point an icon at runtime, so the
+  manifest declares two `activity-alias` launcher entries — `.LauncherDefault` and
+  `.LauncherMonochrome` — and the manager enables one and disables the other, always in that
+  order so the package is never momentarily without a launcher entry. `KarakeptApp` drives it
+  from the settings flow rather than from the switch, so a restored backup lands too.
+- Alone among the e-ink settings it is *not* ANDed with the master switch: the home screen goes
+  on showing the icon after e-ink mode is turned off, and putting the colour artwork back
+  unasked would be a change the user never made.
+- The splash follows the icon through `MainActivity.applySplashScreenTheme()`, which needs
+  opposite treatment per API level — `SplashScreen.setSplashScreenTheme` from API 31 (the system
+  paints the splash before the process exists, so the override applies from the next cold start),
+  plain `setTheme` before it (androidx draws the splash as the window background and reads the
+  theme in `installSplashScreen()`). The flag is mirrored into SharedPreferences because that
+  code runs before a suspending DataStore read has anywhere to go.
 
 **Hardware key input:**
 - `PageTurnDispatcher` (`ui/input/`, a Koin `single`) owns the key-code → page-turn mapping and

@@ -1,6 +1,7 @@
 package com.karakept.app
 
 import App
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import com.karakept.app.services.SaveBookmarkWorker
 import com.karakept.app.ui.input.PageTurnDispatcher
+import com.karakept.app.utils.AppIconManager
 import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
@@ -50,6 +52,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        applySplashScreenTheme()
         super.onCreate(savedInstanceState)
         installSplashScreen()
 
@@ -80,6 +83,32 @@ class MainActivity : ComponentActivity() {
                 saveErrorUrl = saveErrorUrl,
                 saveErrorMessage = saveErrorMessage
             )
+        }
+    }
+
+    /**
+     * Picks the colour or the monochrome splash to match the launcher icon.
+     *
+     * The two Android versions need opposite treatment. From API 31 the system paints the splash
+     * from the manifest theme before the process exists, so the only lever is
+     * `SplashScreen.setSplashScreenTheme`, which the platform stores and honours from the *next*
+     * cold start. Below that, androidx draws the splash itself as the window background and reads
+     * whatever theme is set when `installSplashScreen()` runs, so plain `setTheme` before
+     * `super.onCreate()` is both sufficient and immediate.
+     *
+     * The flag comes from SharedPreferences rather than the settings DataStore because this runs
+     * before the window is built and a suspending read has nowhere to go.
+     */
+    private fun applySplashScreenTheme() {
+        val themeId = if (AppIconManager.isMonochromeSplash(this)) {
+            R.style.Theme_App_Starting_Mono
+        } else {
+            R.style.Theme_App_Starting
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            splashScreen.setSplashScreenTheme(themeId)
+        } else {
+            setTheme(themeId)
         }
     }
 

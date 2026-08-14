@@ -10,6 +10,7 @@ import com.karakept.app.data.repository.setEinkDisableAnimations
 import com.karakept.app.data.repository.setEinkHighContrast
 import com.karakept.app.data.repository.setEinkInstantPageScroll
 import com.karakept.app.data.repository.setEinkModeEnabled
+import com.karakept.app.data.repository.setEinkMonochromeIcon
 import com.karakept.app.data.repository.setHideArticleThumbnails
 import com.karakept.app.data.repository.setPageTurnKeyCode
 import com.karakept.app.data.repository.setPageTurnInvertVolumeKeys
@@ -48,6 +49,10 @@ class EinkSettingsScreenModel(
         viewModelScope, SharingStarted.WhileSubscribed(5000), true
     )
 
+    val monochromeIcon: StateFlow<Boolean> = settingsRepository.einkMonochromeIcon.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5000), false
+    )
+
     val keyBindings: StateFlow<PageTurnKeyBindings> = settingsRepository.pageTurnKeyBindings.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), PageTurnKeyBindings()
     )
@@ -74,6 +79,10 @@ class EinkSettingsScreenModel(
 
     fun setHighContrast(enabled: Boolean) = launchSetting {
         settingsRepository.setEinkHighContrast(enabled)
+    }
+
+    fun setMonochromeIcon(enabled: Boolean) = launchSetting {
+        settingsRepository.setEinkMonochromeIcon(enabled)
     }
 
     fun setInstantPageScroll(enabled: Boolean) = launchSetting {

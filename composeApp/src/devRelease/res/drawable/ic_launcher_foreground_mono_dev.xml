@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Dev-flavour monochrome foreground. The banner keeps its red so a dev build stays
+  distinguishable at a glance even once the rest of the icon has gone black-and-white.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_foreground_mono" />
+    <item android:drawable="@drawable/dev_banner" />
+</layer-list>

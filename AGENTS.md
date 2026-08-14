@@ -250,6 +250,27 @@ that ghosts, and MD3's tonal surface steps collapse into indistinguishable greys
 - Gestures that track a finger across many frames (swipe-to-act) smear on e-ink. `RowActionMode`
   lets the bookmark list swap them for the always-visible button cluster desktop uses.
 
+### Monochrome launcher icon
+
+`AppIconManager` (`utils/AppIconManager.kt`, `expect`/`actual`) swaps the launcher icon and splash
+for a black-on-white pair. Check `isSupported` before offering it — desktop shells read the icon
+before the JVM starts and it is a no-op there.
+
+Android cannot re-point an icon at runtime, so the manifest carries two `activity-alias` launcher
+entries (`.LauncherDefault`, `.LauncherMonochrome`) and the manager enables one before disabling
+the other. Consequences worth knowing before touching any of it:
+
+- `MainActivity` must stay enabled and keep no launcher `intent-filter` of its own — notification
+  intents resolve against it directly.
+- Alias `android:name`s expand against the *namespace*, which `applicationIdSuffix` does not
+  touch, so a component name built from `packageName` misses on the dev build type.
+- `einkMonochromeIcon` is the one e-ink setting **not** ANDed with the master switch: the icon
+  outlives the mode on the home screen.
+- The splash follows via `MainActivity.applySplashScreenTheme()`, from SharedPreferences rather
+  than DataStore — it runs before a suspending read has anywhere to go — and takes effect only
+  on the next cold start from API 31, where the system paints the splash before the process
+  exists.
+
 ### Hardware page-turn buttons
 
 `PageTurnDispatcher` (`ui/input/PageTurnDispatcher.kt`, a Koin `single`) maps device key codes to

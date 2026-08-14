@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="splash_icon_background">#6750A4</color>
+
+    <!--
+      The monochrome launcher/splash variant. Deliberately pure black on pure white rather
+      than a grey pair: an e-ink panel renders anything in between as a dither pattern.
+    -->
+    <color name="ic_launcher_mono_background">#FFFFFFFF</color>
+    <color name="ic_launcher_mono_foreground">#FF000000</color>
 </resources>

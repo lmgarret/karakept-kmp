@@ -6,6 +6,7 @@ import com.karakept.app.di.appModule
 import com.karakept.app.services.AndroidNotificationProvider
 import com.karakept.app.services.BackgroundSyncScheduler
 import com.karakept.app.services.NotificationProvider
+import com.karakept.app.utils.AppIconManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,7 +39,22 @@ class KarakeptApp : Application(), KoinComponent {
         com.karakept.app.data.local.AndroidContext.context = applicationContext
         com.karakept.app.data.local.initializeDataStore(applicationContext)
 
+        AppIconManager.init(applicationContext)
+
         initializeBackgroundSync()
+        initializeAppIcon()
+    }
+
+    /**
+     * Keeps the launcher aliases in step with the stored preference. Driven from the flow rather
+     * than from the settings screen so a restored backup also lands, and so a component the
+     * system reset (a "clear data", a restore-from-cloud) is put back on the next start.
+     */
+    private fun initializeAppIcon() {
+        val settingsRepository: SettingsRepository by inject()
+        appScope.launch {
+            settingsRepository.einkMonochromeIcon.collect { AppIconManager.setMonochrome(it) }
+        }
     }
 
     private fun initializeBackgroundSync() {

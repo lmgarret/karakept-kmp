@@ -399,6 +399,9 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     val einkHighContrast: Flow<Boolean> = einkSettingsFlow.map { it.highContrast }.distinctUntilChanged()
     val einkInstantPageScroll: Flow<Boolean> = einkSettingsFlow.map { it.instantPageScroll }.distinctUntilChanged()
 
+    /** Ungated by the master switch — see [StoredEinkSettings.monochromeIcon]. */
+    val einkMonochromeIcon: Flow<Boolean> = einkSettingsFlow.map { it.monochromeIcon }.distinctUntilChanged()
+
     val pageTurnKeyBindings: Flow<PageTurnKeyBindings> = einkSettingsFlow.map {
         PageTurnKeyBindings(
             enabled = it.hardwareKeysEnabled,
