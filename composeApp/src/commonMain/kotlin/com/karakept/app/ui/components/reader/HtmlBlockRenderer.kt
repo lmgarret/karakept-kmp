@@ -853,6 +853,28 @@ internal fun extractImageDimensions(element: Element): ImageDimensions? {
     return ImageDimensions(width, height)
 }
 
+/** Below this in either axis an image is a tracking pixel or a spacer, never content. */
+internal const val MIN_RENDERABLE_IMAGE_PX = 8
+
+/**
+ * The decoded image's own pixel size, standing in for the `width`/`height` attributes the HTML
+ * never declared. One image pixel maps to one dp, the same way a browser maps it to one CSS px —
+ * matching what [extractImageDimensions] already feeds the renderer.
+ *
+ * Coil scales a decode down to the composable's constraints but never up (Compose's default
+ * [coil3.size.Precision.INEXACT]), so this is either the true intrinsic size or roughly the
+ * container width in *device* pixels. Device pixels outnumber dp at any density ≥ 1, so a
+ * downscaled image can never come out looking narrower than its column: only genuinely small
+ * images take the shrink path.
+ */
+internal fun loadedImageDimensions(widthPx: Int, heightPx: Int): ImageDimensions? {
+    if (widthPx <= 0 || heightPx <= 0) return null
+    return ImageDimensions(widthPx, heightPx)
+}
+
+internal fun isTrackingPixel(dimensions: ImageDimensions): Boolean =
+    dimensions.width < MIN_RENDERABLE_IMAGE_PX || dimensions.height < MIN_RENDERABLE_IMAGE_PX
+
 /**
  * Finds the caption for an image, if it sits inside a `<figure>` with a `<figcaption>`.
  * Walks up from [element] to the nearest `<figure>` ancestor rather than only checking the
@@ -912,7 +934,12 @@ internal fun resolveImageUrls(element: Element): List<String> {
 /**
  * Renders an image trying each URL in [urls] in order, falling back to the next on
  * Coil error. Shows a pulsing skeleton while loading and a broken-image placeholder
- * when all URLs fail. Capping width to declared dimensions prevents upscaling small icons.
+ * when all URLs fail.
+ *
+ * Sizing follows the browser's `max-width: 100%; height: auto`: an image occupies its own
+ * width and only shrinks once it is wider than the column. [dimensions] supplies that width
+ * when the HTML declares it; otherwise the decoded image's own size does, which is why a small
+ * icon is no longer blown up to the full column width.
  *
  * [element] identifies this image within [LocalGalleryImages] so tapping it opens the
  * full-screen gallery viewer positioned on this exact image, swipeable to its siblings.
@@ -928,25 +955,31 @@ private fun RenderResolvedImage(
     var idx by remember(urls) { mutableIntStateOf(0) }
     // Resets to true on every new URL attempt (idx change) and on new image (urls change).
     var isLoading by remember(urls, idx) { mutableStateOf(true) }
+    // The decoded image's own size, resolved once Coil hands it over — the HTML declared none.
+    var loadedDimensions by remember(urls) { mutableStateOf<ImageDimensions?>(null) }
     val galleryViewerState = LocalGalleryViewerState.current
     val galleryImages = LocalGalleryImages.current
 
-    val sizeModifier = if (dimensions != null) {
+    val effectiveDimensions = dimensions ?: loadedDimensions
+    val sizeModifier = if (effectiveDimensions != null) {
         Modifier
-            .widthIn(max = dimensions.width.dp)
+            .widthIn(max = effectiveDimensions.width.dp)
             .fillMaxWidth()
-            .aspectRatio(dimensions.aspectRatio)
+            .aspectRatio(effectiveDimensions.aspectRatio)
     } else {
         Modifier.fillMaxWidth()
     }
     val shape = RoundedCornerShape(4.dp)
     val baseModifier = sizeModifier.padding(vertical = 8.dp)
 
+    // A spacer or tracking pixel: drop it entirely rather than leave a padded sliver in the text.
+    if (effectiveDimensions != null && isTrackingPixel(effectiveDimensions)) return
+
     if (idx >= urls.size) {
         // All candidate URLs failed — show broken-image placeholder.
         Box(
             modifier = baseModifier
-                .then(if (dimensions == null) Modifier.height(100.dp) else Modifier)
+                .then(if (effectiveDimensions == null) Modifier.height(100.dp) else Modifier)
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
             contentAlignment = Alignment.Center
@@ -969,7 +1002,7 @@ private fun RenderResolvedImage(
             val initialIndex = galleryImages.indexOfFirst { it.element === element }.coerceAtLeast(0)
             galleryViewerState?.open(
                 images = galleryImages.ifEmpty {
-                    listOf(GalleryImage(element, urls, alt, caption, dimensions))
+                    listOf(GalleryImage(element, urls, alt, caption, effectiveDimensions))
                 },
                 initialIndex = initialIndex
             )
@@ -978,7 +1011,7 @@ private fun RenderResolvedImage(
         // Skeleton shown while the current URL is loading.
         if (isLoading) {
             ImageLoadingSkeleton(
-                modifier = if (dimensions != null) {
+                modifier = if (effectiveDimensions != null) {
                     Modifier.matchParentSize()
                 } else {
                     Modifier.fillMaxWidth().height(200.dp)
@@ -988,9 +1021,15 @@ private fun RenderResolvedImage(
         AsyncImage(
             model = urls[idx],
             contentDescription = alt.ifBlank { null },
-            contentScale = if (dimensions != null) ContentScale.Fit else ContentScale.FillWidth,
+            contentScale = if (effectiveDimensions != null) ContentScale.Fit else ContentScale.FillWidth,
             onLoading = { isLoading = true },
-            onSuccess = { isLoading = false },
+            onSuccess = { state ->
+                isLoading = false
+                if (dimensions == null) {
+                    val image = state.result.image
+                    loadedDimensions = loadedImageDimensions(image.width, image.height)
+                }
+            },
             onError = { idx++ },
             modifier = Modifier
                 .fillMaxWidth()

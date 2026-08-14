@@ -133,4 +133,33 @@ class ReaderGalleryStateTest {
         val picture = doc.selectFirst("picture")!!
         assertNull(resolvePictureGalleryImage(picture))
     }
+
+    @Test
+    fun resolveImgGalleryImage_declaredTrackingPixel_returnsNull() {
+        val doc = parse("<body><img src=\"https://x/pixel.gif\" width=\"1\" height=\"1\"></body>")
+        assertNull(resolveImgGalleryImage(doc.selectFirst("img")!!))
+    }
+
+    @Test
+    fun resolvePictureGalleryImage_declaredTrackingPixel_returnsNull() {
+        val doc = parse("<body><picture><img src=\"https://x/pixel.gif\" width=\"1\" height=\"1\"></picture></body>")
+        assertNull(resolvePictureGalleryImage(doc.selectFirst("picture")!!))
+    }
+
+    @Test
+    fun collectGalleryImages_trackingPixelBetweenPhotos_isSkipped() {
+        val doc = parse(
+            """
+            <body>
+                <img src="https://x/1.jpg">
+                <img src="https://x/pixel.gif" width="1" height="1">
+                <img src="https://x/2.jpg">
+            </body>
+            """.trimIndent()
+        )
+
+        val images = collectGalleryImages(doc)
+
+        assertEquals(listOf("https://x/1.jpg", "https://x/2.jpg"), images.map { it.urls.first() })
+    }
 }
