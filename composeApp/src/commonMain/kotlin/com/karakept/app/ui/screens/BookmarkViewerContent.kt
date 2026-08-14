@@ -424,7 +424,13 @@ fun BookmarkViewerContent(
                         }
                     }
                 } else {
-                    BookmarkContentLoader(loadingState = state, modifier = Modifier.padding(padding))
+                    // fillMaxSize so the e-ink dots land centered like every other loading slot —
+                    // without a height the Box wraps them and they sit pinned to the top, then
+                    // jump to the middle as soon as the next loading state takes over.
+                    BookmarkContentLoader(
+                        loadingState = state,
+                        modifier = Modifier.padding(padding).fillMaxSize()
+                    )
                 }
             }
             is BookmarkLoadingState.FullyLoaded -> {
@@ -652,7 +658,9 @@ fun BookmarkViewerContent(
 
                     // Top Bar
                     ViewerTopBar(
-                        title = title, url = url, showStickyTitle = showStickyTitle, showMenu = showMenu,
+                        title = title, url = url,
+                        showStickyTitle = shouldShowStickyTitle(showStickyTitle, restoringToSavedPosition),
+                        showMenu = showMenu,
                         toolbarHeight = toolbarHeight,
                         readingProgress = if (trackReadingProgress) readingProgress else 0f,
                         isRefreshing = isRefreshing,

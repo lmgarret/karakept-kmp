@@ -104,4 +104,30 @@ class ContentBodyRevealLogicTest {
     fun restoreOverlay_hidden_whenRestoreAlreadyDone() {
         assertFalse(shouldShowRestoreOverlay(needsScrollRestore = false, readingProgress = 0.5f))
     }
+
+    // shouldShowStickyTitle ------------------------------------------------------
+
+    @Test
+    fun stickyTitle_shown_whileRestoreOverlayCoversTheHero() {
+        // The overlay hides the hero while the scroll is still at the top, so the top bar is the
+        // only thing left that can name the article — otherwise the restore reads as a blank page.
+        assertTrue(
+            shouldShowStickyTitle(scrolledPastBanner = false, restoringToSavedPosition = true)
+        )
+    }
+
+    @Test
+    fun stickyTitle_hidden_atTopOfAFreshOpen() {
+        // No overlay: the hero is visible and carries the title itself.
+        assertFalse(
+            shouldShowStickyTitle(scrolledPastBanner = false, restoringToSavedPosition = false)
+        )
+    }
+
+    @Test
+    fun stickyTitle_shown_onceScrolledPastTheBanner() {
+        assertTrue(
+            shouldShowStickyTitle(scrolledPastBanner = true, restoringToSavedPosition = false)
+        )
+    }
 }

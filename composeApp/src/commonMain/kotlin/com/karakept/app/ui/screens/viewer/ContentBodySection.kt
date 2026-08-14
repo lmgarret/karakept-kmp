@@ -279,3 +279,16 @@ internal fun shouldShowBodySkeleton(
  */
 internal fun shouldShowRestoreOverlay(needsScrollRestore: Boolean, readingProgress: Float): Boolean =
     needsScrollRestore && readingProgress > 0.02f
+
+/**
+ * Whether the top bar shows its opaque background and title.
+ *
+ * Normally that is purely a scroll question — the hero carries the title until it scrolls away.
+ * But [shouldShowRestoreOverlay] covers the hero while restoring a saved reading position, and
+ * the scroll is still at the top then, so without this the overlay reads as a blank page with a
+ * loading indicator and nothing identifying the article that is opening.
+ */
+internal fun shouldShowStickyTitle(
+    scrolledPastBanner: Boolean,
+    restoringToSavedPosition: Boolean
+): Boolean = scrolledPastBanner || restoringToSavedPosition
