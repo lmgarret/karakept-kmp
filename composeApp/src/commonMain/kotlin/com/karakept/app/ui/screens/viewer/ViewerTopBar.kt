@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.utils.FaviconUtils
 import getPlatform
 
@@ -383,8 +384,12 @@ internal fun ViewerTopBar(
         } // end Row wrapping action buttons
     }
 
-    // Reading progress bar — shows indeterminate while refreshing
-    if (isRefreshing) {
+    // Reading progress bar — shows indeterminate while refreshing.
+    //
+    // On e-ink the indeterminate bar is skipped entirely: it sweeps forever, and a 3 dp line at
+    // the top edge is too easy to miss there anyway. The reader shows a FloatingBusyCard over
+    // the article instead, so this slot keeps showing real reading progress throughout.
+    if (isRefreshing && !LocalEinkMode.current.animationsDisabled) {
         LinearProgressIndicator(
             modifier = Modifier
                 .fillMaxWidth()

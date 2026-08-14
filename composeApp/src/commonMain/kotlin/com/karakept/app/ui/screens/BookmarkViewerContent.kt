@@ -30,7 +30,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
@@ -72,7 +71,9 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.ui.components.FloatingBusyCard
 import com.karakept.app.ui.components.LoadingDotsIndicator
+import com.karakept.app.ui.components.RefreshableBox
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.scrollToTop
 import com.karakept.app.ui.input.PageTurnDispatcher
@@ -761,17 +762,20 @@ fun BookmarkViewerContent(
                     } // end inner Box
                 }
 
-                if (!getPlatform().isDesktop) {
-                    PullToRefreshBox(
-                        isRefreshing = isRefreshing,
-                        onRefresh = { screenModel.refreshBookmark(bookmarkId) },
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        viewerContent()
-                    }
-                } else {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        viewerContent()
+                // E-ink readers refresh from the overflow menu instead — see RefreshableBox.
+                RefreshableBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = { screenModel.refreshBookmark(bookmarkId) },
+                    enabled = !getPlatform().isDesktop,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    viewerContent()
+                    // Without the pull gesture's spinner, and with the top bar's indeterminate
+                    // strip skipped on e-ink, this card is the only sign a refresh is running.
+                    if (isRefreshing && einkMode.animationsDisabled) {
+                        FloatingBusyCard(modifier = Modifier.align(Alignment.Center)) {
+                            LoadingDotsIndicator(label = "Refreshing…", dotSize = 8.dp)
+                        }
                     }
                 }
             }

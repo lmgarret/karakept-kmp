@@ -195,6 +195,7 @@ fun MainScreenScaffoldContent(
                     navigateTo(com.karakept.app.ui.screens.settings.SyncDataSettingsScreen(highlightOfflineMode = true))
                 },
                 isDesktop = isDesktop,
+                isSyncing = isSyncing,
                 isExpandedLayout = isExpandedLayout,
                 isDrawerVisible = isDrawerVisible,
                 hasActiveFilter = hasActiveFilter,

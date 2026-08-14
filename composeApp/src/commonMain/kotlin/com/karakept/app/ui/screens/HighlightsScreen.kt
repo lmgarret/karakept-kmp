@@ -11,8 +11,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -28,7 +28,10 @@ import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
+import com.karakept.app.ui.components.BusyIndicator
 import com.karakept.app.ui.components.HighlightCard
+import com.karakept.app.ui.components.RefreshableBox
+import com.karakept.app.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
 
 @Serializable
@@ -43,6 +46,7 @@ class HighlightsScreen : NavKey {
         val isLoadingMore by screenModel.isLoadingMore.collectAsState()
         val hasMoreItems by screenModel.hasMoreItems.collectAsState()
         val scope = rememberCoroutineScope()
+        val einkMode = LocalEinkMode.current
 
         val listState = remember { LazyListState() }
 
@@ -74,11 +78,22 @@ class HighlightsScreen : NavKey {
                         IconButton(onClick = { navigator.pop() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
+                    },
+                    actions = {
+                        // The pull gesture is off in e-ink mode; this replaces it.
+                        if (einkMode.enabled) {
+                            IconButton(
+                                onClick = { screenModel.syncHighlights() },
+                                enabled = !isSyncing
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            }
+                        }
                     }
                 )
             }
         ) { paddingValues ->
-            PullToRefreshBox(
+            RefreshableBox(
                 isRefreshing = isSyncing,
                 onRefresh = { screenModel.syncHighlights() },
                 modifier = Modifier.fillMaxSize().padding(paddingValues)
@@ -95,7 +110,7 @@ class HighlightsScreen : NavKey {
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        BusyIndicator()
                     }
                 } else {
                     LazyColumn(
@@ -126,7 +141,7 @@ class HighlightsScreen : NavKey {
                                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    CircularProgressIndicator()
+                                    BusyIndicator()
                                 }
                             }
                         }

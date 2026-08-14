@@ -23,7 +23,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -34,6 +33,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.ui.components.HighlightCard
+import com.karakept.app.ui.components.RefreshableBox
+import com.karakept.app.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +53,7 @@ fun HighlightsListContent(
     onOpenDrawer: (() -> Unit)? = null
 ) {
     val listState = remember { LazyListState() }
+    val einkMode = LocalEinkMode.current
 
     // Detect when scrolled near end
     LaunchedEffect(listState) {
@@ -84,7 +86,8 @@ fun HighlightsListContent(
                     }
                 },
                 actions = {
-                    if (showRefreshButton && onRefresh != null) {
+                    // E-ink mode drops the pull gesture, so the button becomes the only way in.
+                    if ((showRefreshButton || einkMode.enabled) && onRefresh != null) {
                         IconButton(onClick = onRefresh, enabled = !isSyncing) {
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                         }
@@ -93,7 +96,7 @@ fun HighlightsListContent(
             )
         }
     ) { paddingValues ->
-        PullToRefreshBox(
+        RefreshableBox(
             isRefreshing = isSyncing,
             onRefresh = { onRefresh?.invoke() },
             modifier = Modifier.fillMaxSize().padding(paddingValues)

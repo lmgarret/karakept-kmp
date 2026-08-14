@@ -219,9 +219,54 @@ full-bleed and its divider reaches both edges.
   nothing visible at all (its tonal fill collapses into the page color under high contrast); dots
   fixes that without touching how loading looks anywhere else.
 
+**`InlineLoadingDots`** (`ui/components/EinkAware.kt`)
+- The same dots on one line, label beside them instead of below. For slots too short for the
+  stacked form: a drawer row's trailing status, an asset download with no `Content-Length`.
+- Both used to hold an **indeterminate** `LinearProgressIndicator` or `CircularProgressIndicator`
+  — a bar that sweeps forever, which on e-ink shows as a smear or, on panels that throttle
+  refreshes, as nothing at all. Determinate bars are fine there and stay as they are: they only
+  repaint when progress moves.
+
+**`FloatingBusyCard`** (`ui/components/EinkAware.kt`)
+- A centred card holding a **screen-level** busy state on e-ink — the bookmark list's sync, the
+  reader's refresh. Bordered under `highContrast` (elevation separates nothing when every
+  surface role is the page colour) and takes no pointer input, so the content underneath stays
+  scrollable while it is up.
+- Screen-level progress used to live in a thin strip pinned to the top edge of the content. That
+  is easy to overlook on a monochrome panel: no colour to catch the eye, no motion the display
+  renders smoothly. One deliberate block in the middle of the page is the placement that reads.
+- On e-ink the **determinate** sync bar moves into the card too. Not because a determinate bar
+  is a problem — it isn't — but so sync state lives in one place rather than jumping between the
+  card and the top strip as `SyncProgress` resolves.
+
+> **Rule:** a screen-level busy state on e-ink goes in a `FloatingBusyCard`; a row- or
+> control-level one stays inline with `InlineLoadingDots`. Off e-ink both keep the strip or
+> spinner they already had.
+
+**`BusyIndicator`** (`ui/components/EinkAware.kt`)
+- A "working on it" signal: `CircularProgressIndicator` normally, `LoadingDotsIndicator` on e-ink.
+  Use it for bottom-of-list "loading more" footers and centred busy states.
+
 > **Rule:** A new skeleton must branch the same way — keep its shimmer for normal displays, swap to
 > `LoadingDotsIndicator` under `LocalEinkMode.current.animationsDisabled`. Never let e-ink adjustments
-> change what non-e-ink users see.
+> change what non-e-ink users see. The same goes for an indeterminate bar or spinner: keep it off
+> e-ink, swap to `InlineLoadingDots` on it.
+
+### Pull to refresh
+
+**`RefreshableBox`** (`ui/components/EinkAware.kt`) — use instead of `PullToRefreshBox` anywhere a
+screen offers refresh.
+
+- Wraps content in `PullToRefreshBox`, or in a plain `Box` when e-ink mode is on or the caller
+  passes `enabled = false` (desktop, where there is no finger to pull with).
+- The gesture tracks a finger across many frames and drives a spinner that animates until the
+  refresh returns — both smear on e-ink — and overscroll is foreign to a reader's page-turn-first
+  interaction model.
+
+> **Rule:** refresh must never become unreachable. A screen that drops the gesture has to put a
+> `Refresh` `IconButton` in its top bar, gated on `shouldShowRefreshButton(isDesktop, einkMode)`
+> — the exact inverse of the `shouldUsePullToRefresh` check `RefreshableBox` makes, so exactly one
+> of the two is live at any time.
 
 ### Empty states
 
@@ -261,12 +306,13 @@ that ghosts, and MD3's tonal surface steps collapse into indistinguishable greys
   under `highContrast` every surface role is the same colour. Add
   `border(1.dp, colorScheme.outline)` in that case, as `TagChip`, `BookmarkLayouts` and
   `BaseBottomPanel` do.
-- No shimmer or indeterminate spinner as the only "busy" signal; fall back to static text
-  (`BusyIndicator` in `ui/components/EinkAware.kt` does this).
+- No shimmer or indeterminate spinner as the only "busy" signal; fall back to the stepped dots
+  (`BusyIndicator` / `InlineLoadingDots` in `ui/components/EinkAware.kt` do this).
 - `secondaryContainer` is the scheme's one deliberate grey, for small repeated elements like tag
   chips. Every other surface role is the page colour — do not reintroduce tonal steps.
 - Gestures that track a finger across many frames (swipe-to-act) smear on e-ink. `RowActionMode`
-  lets the bookmark list swap them for the always-visible button cluster desktop uses.
+  lets the bookmark list swap them for the always-visible button cluster desktop uses, and
+  `RefreshableBox` swaps pull-to-refresh for a top-bar button.
 
 ### Hardware page-turn buttons
 

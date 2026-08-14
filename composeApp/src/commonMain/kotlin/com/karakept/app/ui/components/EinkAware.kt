@@ -9,20 +9,27 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,11 +74,11 @@ fun AnimatedVisibilityOrPlain(
 }
 
 /**
- * A "working on it" signal: a spinner normally, static text on e-ink.
+ * A "working on it" signal: a spinner normally, stepped dots on e-ink.
  *
  * An indeterminate spinner animates forever, which on an e-ink panel means either continuous
- * ghosting or — on devices that throttle refreshes — nothing visible at all. Text says the same
- * thing in one frame.
+ * ghosting or — on devices that throttle refreshes — nothing visible at all. [LoadingDotsIndicator]
+ * says the same thing in one discrete repaint at a time.
  */
 @Composable
 fun BusyIndicator(
@@ -79,16 +86,61 @@ fun BusyIndicator(
     label: String = "Loading…"
 ) {
     if (LocalEinkMode.current.animationsDisabled) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = modifier
-        )
+        LoadingDotsIndicator(modifier = modifier, label = label, dotSize = 8.dp)
     } else {
         CircularProgressIndicator(modifier = modifier)
     }
 }
+
+/**
+ * Wraps [content] in a pull-to-refresh container, or in a plain `Box` when [enabled] is false or
+ * e-ink mode is on.
+ *
+ * Pull-to-refresh is a gesture that tracks a finger across many frames and drives a spinner that
+ * keeps animating until the refresh returns — the two things an e-ink panel handles worst. The
+ * gesture is also unfamiliar on readers, whose page-turn-first interaction model has no
+ * overscroll. Screens that turn it off must expose an explicit refresh button instead; see
+ * [com.karakept.app.ui.screens.main.MainScreenTopBar] and
+ * [com.karakept.app.ui.screens.main.HighlightsListContent].
+ *
+ * Pass `enabled = !isDesktop` where a pointer has nothing to pull with either.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RefreshableBox(
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable BoxScope.() -> Unit
+) {
+    if (shouldUsePullToRefresh(gestureCapable = enabled, einkMode = LocalEinkMode.current.enabled)) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = modifier,
+            content = content
+        )
+    } else {
+        Box(modifier = modifier, content = content)
+    }
+}
+
+/**
+ * Whether the pull-to-refresh gesture is live, given a surface that can host it at all
+ * ([gestureCapable] — false on desktop, where there is no finger to pull with).
+ */
+fun shouldUsePullToRefresh(gestureCapable: Boolean, einkMode: Boolean): Boolean =
+    gestureCapable && !einkMode
+
+/**
+ * Whether a screen must carry an explicit refresh button in its top bar.
+ *
+ * The inverse of [shouldUsePullToRefresh] for a touch surface: refresh is never unreachable —
+ * exactly one of the gesture and the button is available at any time.
+ */
+fun shouldShowRefreshButton(isDesktop: Boolean, einkMode: Boolean): Boolean =
+    !shouldUsePullToRefresh(gestureCapable = !isDesktop, einkMode = einkMode)
 
 /**
  * A "content is coming" signal for a full loading slot (an empty screen, a body area, an image
@@ -112,11 +164,7 @@ fun LoadingDotsIndicator(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (LocalEinkMode.current.animationsDisabled) {
-            SteppedDots(dotSize)
-        } else {
-            WaveDots(dotSize)
-        }
+        LoadingDots(dotSize)
         if (label != null) {
             Text(
                 text = label,
@@ -124,6 +172,82 @@ fun LoadingDotsIndicator(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+/**
+ * [LoadingDotsIndicator] laid out on one line, for slots too short for the stacked form — a
+ * progress-bar strip, a drawer row's trailing status, a button's leading icon.
+ *
+ * Same dots and the same e-ink branch; only the label moves beside them instead of below.
+ */
+@Composable
+fun InlineLoadingDots(
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    dotSize: Dp = 6.dp
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LoadingDots(dotSize)
+        if (label != null) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * A centred card carrying a screen-level "busy" state — a sync, a refresh — on e-ink.
+ *
+ * The thin progress strip these replace sits at the very top edge of the content, which on a
+ * high-contrast monochrome panel is easy to overlook entirely: there is no colour to catch the
+ * eye and no motion the display can render smoothly. One deliberate block in the middle of the
+ * page is the only placement that reliably reads as "something is happening".
+ *
+ * Draws nothing itself when not busy — callers gate on their own state — and takes no pointer
+ * input, so the list underneath stays scrollable while it is up.
+ *
+ * E-ink only. Off e-ink the strip is fine and stays where it is; see `SyncProgressBar`.
+ */
+@Composable
+fun FloatingBusyCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val einkMode = LocalEinkMode.current
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        // Under highContrast every surface role is the page colour, so elevation separates
+        // nothing — the outline is what makes this read as a card floating over the content.
+        shadowElevation = if (einkMode.highContrast) 0.dp else 6.dp,
+        border = if (einkMode.highContrast) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        } else null
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun LoadingDots(dotSize: Dp) {
+    if (LocalEinkMode.current.animationsDisabled) {
+        SteppedDots(dotSize)
+    } else {
+        WaveDots(dotSize)
     }
 }
 
