@@ -159,7 +159,11 @@ fun RenderBlock(
         selectedHighlight.startOffset < blockEnd && 
         selectedHighlight.endOffset > blockStart
 
-    Box {
+    // A Column, not a Box: "hr" and the `else` fallback each emit several siblings, and the
+    // fallback runs for every block without a branch of its own — including an <a> wrapping
+    // block content, which isBlockElement treats as a block. A Box would stack them all at the
+    // same corner.
+    Column {
         when (tag) {
             "p" -> RenderParagraph(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId)
             "div", "section", "article", "header", "footer", "nav", "aside", "main", "address" ->
@@ -971,19 +975,17 @@ private fun RenderResolvedImage(
             .widthIn(max = dimensions.width.dp)
             .fillMaxWidth()
             .aspectRatio(dimensions.aspectRatio)
-        // A decoded size only caps the width — the painter still drives the height. Pinning an
-        // aspect ratio here asserts a height the painter need not agree with: with crossfade on
-        // (App.kt's loader) the drawing painter is a CrossfadePainter sized max(previous, loaded),
-        // and one given a box shorter than its content insets outward and paints over whatever
-        // block comes next instead of shrinking into it.
+        // A decoded size only caps the width; the painter keeps driving the height, so the box
+        // can never claim a height that disagrees with what is actually drawn into it.
         loaded != null -> Modifier
             .widthIn(max = loaded.width.dp)
             .fillMaxWidth()
         else -> Modifier.fillMaxWidth()
     }
     val shape = RoundedCornerShape(4.dp)
-    // Belt and braces for the same failure: whatever the painter decides to draw stays inside
-    // this block's own bounds and never lands on the surrounding text.
+    // An image block has nothing to paint outside its own box, so clip it: a painter handed a
+    // box shorter than its content draws past the edge rather than shrinking into it, and that
+    // lands on the surrounding text.
     val baseModifier = sizeModifier.padding(vertical = 8.dp).clipToBounds()
 
     // A spacer or tracking pixel: drop it entirely rather than leave a padded sliver in the text.

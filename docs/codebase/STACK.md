@@ -151,6 +151,8 @@
 - JUnit 4.13.2 - Unit test framework
 - mockk 1.14.11 - Kotlin mocking library
 - kotlinx-coroutines-test - Coroutine testing utilities
+- compose.desktop.uiTestJUnit4 - Headless Compose layout/semantics assertions (desktopTest;
+  Android UI tests use androidx.compose.ui:ui-test-junit4 with Robolectric)
 
 **Kotlin Test Framework:**
 - kotlin-test - Standard library test assertions
