@@ -16,16 +16,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.karakept.app.ui.screens.BookmarkLoadingState
+import com.karakept.app.ui.theme.LocalEinkMode
 
 /**
  * Skeleton screens for each loading stage with shimmer animations.
+ *
+ * The shimmer is a continuous animation, which on e-ink means either permanent ghosting or
+ * nothing visible at all (its tonal fill collapses into the page color under high contrast), so
+ * e-ink swaps the whole skeleton for [LoadingDotsIndicator] instead of just changing the shimmer's
+ * brush.
  */
 @Composable
 fun BookmarkContentLoader(
@@ -35,36 +39,42 @@ fun BookmarkContentLoader(
 ) {
     when (loadingState) {
         is BookmarkLoadingState.Initial -> {
-            // Full skeleton for everything
-            Column(modifier = modifier.fillMaxWidth()) {
-                // Banner skeleton (omitted when the real hero is already shown above)
-                if (showBanner) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(280.dp)
-                    )
+            if (LocalEinkMode.current.animationsDisabled) {
+                Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    LoadingDotsIndicator(label = "Loading…")
                 }
-
-                // Content area skeleton
-                Column(modifier = Modifier.padding(16.dp)) {
-                    // URL skeleton
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .height(16.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Content lines skeleton
-                    repeat(5) {
+            } else {
+                // Full skeleton for everything
+                Column(modifier = modifier.fillMaxWidth()) {
+                    // Banner skeleton (omitted when the real hero is already shown above)
+                    if (showBanner) {
                         ShimmerBox(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(20.dp)
+                                .height(280.dp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    // Content area skeleton
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // URL skeleton
+                        ShimmerBox(
+                            modifier = Modifier
+                                .fillMaxWidth(0.6f)
+                                .height(16.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Content lines skeleton
+                        repeat(5) {
+                            ShimmerBox(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(20.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                 }
             }

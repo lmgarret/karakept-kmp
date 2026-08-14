@@ -19,12 +19,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import com.karakept.app.ui.theme.LocalEinkMode
 
@@ -32,44 +31,45 @@ import com.karakept.app.ui.theme.LocalEinkMode
 fun SkeletonLoader(
     modifier: Modifier = Modifier
 ) {
+    // A shimmer is an infinite animation — the worst possible case on e-ink, where it never stops
+    // requesting full-panel refreshes and its tonal fill collapses into the page color under high
+    // contrast anyway. Swap the whole skeleton for the dots indicator there instead.
+    if (LocalEinkMode.current.animationsDisabled) {
+        Box(modifier = modifier, contentAlignment = Alignment.Center) {
+            LoadingDotsIndicator()
+        }
+        return
+    }
+
     val shimmerColors = listOf(
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
     )
 
-    // A shimmer is an infinite animation — the worst possible case on e-ink, where it never stops
-    // requesting full-panel refreshes. Fall back to flat outlined blocks, which still communicate
-    // "content is coming" without a single frame of motion.
-    val einkMode = LocalEinkMode.current
-
     BoxWithConstraints(modifier = modifier) {
         val widthPx = constraints.maxWidth.toFloat()
         // Ensure we have a valid width, otherwise default to a reasonable value
         val targetValue = if (widthPx > 0) widthPx * 2 else 1000f
 
-        val brush = if (einkMode.animationsDisabled) {
-            SolidColor(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-        } else {
-            val transition = rememberInfiniteTransition()
-            val translateAnim by transition.animateFloat(
-                initialValue = 0f,
-                targetValue = targetValue,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(
-                        durationMillis = 1200,
-                        easing = LinearEasing
-                    ),
-                    repeatMode = RepeatMode.Restart
-                )
+        val transition = rememberInfiniteTransition()
+        val translateAnim by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = targetValue,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = 1200,
+                    easing = LinearEasing
+                ),
+                repeatMode = RepeatMode.Restart
             )
-            Brush.linearGradient(
-                colors = shimmerColors,
-                start = Offset(translateAnim - 200f, translateAnim - 200f),
-                end = Offset(translateAnim, translateAnim)
-            )
-        }
-        val blockModifier: Modifier = if (einkMode.highContrast) {
+        )
+        val brush = Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset(translateAnim - 200f, translateAnim - 200f),
+            end = Offset(translateAnim, translateAnim)
+        )
+        val blockModifier: Modifier = if (LocalEinkMode.current.highContrast) {
             Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
         } else {
             Modifier

@@ -205,6 +205,24 @@ full-bleed and its divider reaches both edges.
 
 > **Rule:** Never implement custom tag-selection dialogs or text fields.
 
+### Loading indicators
+
+**`LoadingDotsIndicator`** (`ui/components/EinkAware.kt`)
+- Three dots that fill in sequence — off e-ink a smooth continuous wave, on e-ink a plain
+  `delay`-driven step from one dot to the next (one discrete repaint at a time, no interpolation
+  to ghost). Takes an optional `label` (shown as `Text` below the dots) and `dotSize`.
+- **E-ink-only replacement for skeletons**, not a redesign of the non-e-ink loading state. Every
+  skeleton in the app (`BookmarkContentLoader`, `SkeletonLoader`, `ImageLoadingSkeleton`,
+  `BookmarkPlaceholderItem`) keeps its original shimmer for normal displays — that visual is
+  unchanged — and branches to `LoadingDotsIndicator` only when `LocalEinkMode.current.animationsDisabled`
+  is true. A shimmer is a continuous animation, which on e-ink means either permanent ghosting or
+  nothing visible at all (its tonal fill collapses into the page color under high contrast); dots
+  fixes that without touching how loading looks anywhere else.
+
+> **Rule:** A new skeleton must branch the same way — keep its shimmer for normal displays, swap to
+> `LoadingDotsIndicator` under `LocalEinkMode.current.animationsDisabled`. Never let e-ink adjustments
+> change what non-e-ink users see.
+
 ### Empty states
 
 - A list with nothing in it needs an **explicit empty state**, never a blank area — the two

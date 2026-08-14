@@ -12,7 +12,11 @@ import org.koin.compose.koinInject
 @Serializable
 data class BookmarkViewerScreen(
     val bookmarkId: Long,
-    val scrollToHighlightId: String? = null
+    val scrollToHighlightId: String? = null,
+    // Known from the caller (e.g. the bookmark list already has this in memory) so the top bar
+    // can show a title immediately instead of waiting on this screen's own DB query to resolve.
+    val initialTitle: String? = null,
+    val initialUrl: String? = null
 ) : NavKey {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
@@ -24,6 +28,8 @@ data class BookmarkViewerScreen(
         BookmarkViewerContent(
             bookmarkId = bookmarkId,
             scrollToHighlightId = scrollToHighlightId,
+            initialTitle = initialTitle,
+            initialUrl = initialUrl,
             screenModel = screenModel,
             onBack = { navigator.pop() },
             onTagFilterApply = { tag ->

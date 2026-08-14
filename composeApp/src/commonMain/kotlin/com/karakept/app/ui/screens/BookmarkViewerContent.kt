@@ -12,6 +12,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -71,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.scrollToTop
 import com.karakept.app.ui.input.PageTurnDispatcher
@@ -97,6 +99,8 @@ fun BookmarkViewerContent(
     bookmarkId: Long,
     scrollToHighlightId: String? = null,
     searchTrigger: Int = 0,
+    initialTitle: String? = null,
+    initialUrl: String? = null,
     screenModel: BookmarkViewerScreenModel,
     onBack: () -> Unit,
     onTagFilterApply: (tag: String) -> Unit,
@@ -403,7 +407,46 @@ fun BookmarkViewerContent(
     ) { padding ->
         when (val state = displayState) {
             is BookmarkLoadingState.Initial -> {
-                BookmarkContentLoader(loadingState = state, modifier = Modifier.padding(padding))
+                // The caller (bookmark list, highlights list, ...) often already has the title
+                // and url in memory — passed through as initialTitle/initialUrl — so the top bar
+                // can render immediately instead of waiting on this screen's own DB query to
+                // resolve. Without it there is nothing to show up top, so fall back to the
+                // full-screen skeleton/dots as before.
+                if (initialTitle != null) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        ViewerTopBar(
+                            title = initialTitle,
+                            url = initialUrl ?: "",
+                            showStickyTitle = true,
+                            showMenu = false,
+                            toolbarHeight = toolbarHeight,
+                            readingProgress = 0f,
+                            onBackClick = onBack,
+                            onMenuToggle = {},
+                            onAppearanceClick = {},
+                            onMoveToListClick = {},
+                            onEditTagsClick = {},
+                            onRefreshClick = {},
+                            onDeleteClick = {},
+                            isDesktop = getPlatform().isDesktop,
+                            bookmark = null
+                        )
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LoadingDotsIndicator(label = "Loading…")
+                        }
+                    }
+                } else {
+                    // fillMaxSize so the e-ink dots land centered like every other loading slot —
+                    // without a height the Box wraps them and they sit pinned to the top, then
+                    // jump to the middle as soon as the next loading state takes over.
+                    BookmarkContentLoader(
+                        loadingState = state,
+                        modifier = Modifier.padding(padding).fillMaxSize()
+                    )
+                }
             }
             is BookmarkLoadingState.FullyLoaded -> {
                 val title = state.bookmark.title
@@ -633,7 +676,9 @@ fun BookmarkViewerContent(
 
                     // Top Bar
                     ViewerTopBar(
-                        title = title, url = url, showStickyTitle = showStickyTitle, showMenu = showMenu,
+                        title = title, url = url,
+                        showStickyTitle = shouldShowStickyTitle(showStickyTitle, restoringToSavedPosition),
+                        showMenu = showMenu,
                         toolbarHeight = toolbarHeight,
                         readingProgress = if (trackReadingProgress) readingProgress else 0f,
                         isRefreshing = isRefreshing,

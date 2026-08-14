@@ -22,15 +22,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.LayoutType
+import com.karakept.app.ui.theme.LocalEinkMode
 
 @Composable
 fun BookmarkPlaceholderItem(url: String, layoutType: LayoutType = LayoutType.LIST) {
+    // The shimmer is a continuous animation — the worst case on e-ink. Collapse the two
+    // shimmering thumbnail/title blocks into a single LoadingDotsIndicator there instead of
+    // just changing their brush.
+    if (LocalEinkMode.current.animationsDisabled) {
+        EinkPlaceholder(url)
+        return
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "placeholder_shimmer")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.2f,
@@ -48,6 +58,27 @@ fun BookmarkPlaceholderItem(url: String, layoutType: LayoutType = LayoutType.LIS
         LayoutType.CARD -> CardPlaceholder(url, shimmerColor)
         @Suppress("DEPRECATION")
         LayoutType.COMPACT_LIST -> ListPlaceholder(url, shimmerColor)
+    }
+}
+
+@Composable
+private fun EinkPlaceholder(url: String) {
+    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LoadingDotsIndicator(dotSize = 8.dp)
+            Text(
+                text = url,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
