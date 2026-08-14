@@ -29,7 +29,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -71,6 +70,8 @@ import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.BusyIndicator
+import com.karakept.app.ui.components.InlineLoadingDots
+import com.karakept.app.ui.components.RefreshableBox
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkContextMenu
@@ -763,39 +764,25 @@ internal fun BookmarkListContent(
     }
 
     // ScrollCursorIndicator is intentionally placed OUTSIDE listContent so it renders
-    // as the last child of PullToRefreshBox / desktop Box. This guarantees it is drawn
-    // on top of everything inside listContent (including the scroll-to-top FAB whose
-    // Material3 Surface creates a hardware-accelerated layer that ignores zIndex).
-    if (!isDesktop) {
-        PullToRefreshBox(
-            isRefreshing = isSyncing,
-            onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            listContent()
-            if (showScrollCursor) {
-                ScrollCursorIndicator(
-                    listState = listState,
-                    bookmarks = bookmarks,
-                    sortOption = sortOption,
-                    totalBookmarkCount = totalBookmarkCount,
-                    // padding(top) keeps the scrollbar clear of the sync progress bar
-                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
-                )
-            }
-        }
-    } else {
-        Box(modifier = Modifier.fillMaxSize()) {
-            listContent()
-            if (showScrollCursor) {
-                ScrollCursorIndicator(
-                    listState = listState,
-                    bookmarks = bookmarks,
-                    sortOption = sortOption,
-                    totalBookmarkCount = totalBookmarkCount,
-                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
-                )
-            }
+    // as the last child of the RefreshableBox. This guarantees it is drawn on top of
+    // everything inside listContent (including the scroll-to-top FAB whose Material3
+    // Surface creates a hardware-accelerated layer that ignores zIndex).
+    RefreshableBox(
+        isRefreshing = isSyncing,
+        onRefresh = onRefresh,
+        enabled = !isDesktop,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        listContent()
+        if (showScrollCursor) {
+            ScrollCursorIndicator(
+                listState = listState,
+                bookmarks = bookmarks,
+                sortOption = sortOption,
+                totalBookmarkCount = totalBookmarkCount,
+                // padding(top) keeps the scrollbar clear of the sync progress bar
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
+            )
         }
     }
 }
@@ -876,10 +863,10 @@ private fun SyncProgressBar(
 @Composable
 private fun IndeterminateSyncIndicator(animationsDisabled: Boolean) {
     if (animationsDisabled) {
-        Text(
-            text = "Syncing…",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // A bare "Syncing…" label was easy to miss against the list it overlays; the dots make
+        // the strip read as active without animating a single continuous frame.
+        InlineLoadingDots(
+            label = "Syncing…",
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
         )
     } else {

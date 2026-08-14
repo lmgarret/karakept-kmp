@@ -150,7 +150,7 @@ ListSyncStatus:
 Each list item in the navigation drawer shows a `ListCountOrSyncIndicator`:
 
 - **Idle**: displays the bookmark count as a number.
-- **FetchingMetadata**: shows a 16 dp indeterminate `CircularProgressIndicator`.
+- **FetchingMetadata**: shows a 16 dp indeterminate `CircularProgressIndicator`, or `InlineLoadingDots` in e-ink mode (an indeterminate spinner never stops requesting panel refreshes).
 - **FetchingContent**: shows a 16 dp determinate `CircularProgressIndicator` with `progress = current/total`.
 
 ### Top bar
@@ -164,7 +164,7 @@ currentSyncStatus = perKeyProgress[resolveCurrentKey(currentList, currentFilter)
 
 Switching lists while a sync is in progress immediately updates `currentSyncStatus` to reflect the new list's status (or Idle if that list is not syncing). Background syncs for other lists continue uninterrupted.
 
-`isSyncing` (used for pull-to-refresh spinner) is `true` only when the **current list's** key is present in `perKeyProgress` — background other-list syncs do not trigger the pull-to-refresh indicator.
+`isSyncing` (used for the pull-to-refresh spinner) is `true` only when the **current list's** key is present in `perKeyProgress` — background other-list syncs do not trigger the pull-to-refresh indicator. In e-ink mode there is no pull gesture: `isSyncing` disables the top bar's `Refresh` button instead, and the sync strip over the list shows `InlineLoadingDots` rather than an indeterminate bar.
 
 ## Content Fetching Logic (Precedence)
 

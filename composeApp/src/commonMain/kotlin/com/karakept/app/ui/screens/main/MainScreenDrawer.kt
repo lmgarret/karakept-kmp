@@ -60,6 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpOffset
+import com.karakept.app.ui.components.InlineLoadingDots
 import com.karakept.app.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
@@ -421,11 +422,7 @@ private fun ListCountOrSyncIndicator(
             // Indeterminate spinners never stop animating; the determinate one below is fine on
             // e-ink because it only redraws when progress moves.
             if (LocalEinkMode.current.animationsDisabled) {
-                Text(
-                    text = "…",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                InlineLoadingDots(dotSize = 4.dp)
             } else {
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),

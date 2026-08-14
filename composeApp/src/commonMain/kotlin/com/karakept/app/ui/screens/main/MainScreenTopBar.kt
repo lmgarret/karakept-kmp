@@ -54,6 +54,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.karakept.app.ui.components.OfflineModeBadge
+import com.karakept.app.ui.components.shouldShowRefreshButton
+import com.karakept.app.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +66,7 @@ internal fun MainScreenTopBar(
     onRefreshClick: () -> Unit,
     onOfflineBadgeClick: () -> Unit = {},
     isDesktop: Boolean,
+    isSyncing: Boolean = false,
     isExpandedLayout: Boolean = false,
     isDrawerVisible: Boolean = true,
     hasActiveFilter: Boolean = false,
@@ -248,10 +251,12 @@ internal fun MainScreenTopBar(
                         Icon(Icons.Default.FilterList, contentDescription = "Filter")
                     }
                 }
-                if (isDesktop) {
+                // Desktop has no pull-to-refresh gesture, and e-ink mode turns it off — both
+                // need the button as their only way to trigger a sync.
+                if (shouldShowRefreshButton(isDesktop, LocalEinkMode.current.enabled)) {
                     IconButton(
                         onClick = onRefreshClick,
-                        enabled = !offlineMode
+                        enabled = !offlineMode && !isSyncing
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Sync")
                     }

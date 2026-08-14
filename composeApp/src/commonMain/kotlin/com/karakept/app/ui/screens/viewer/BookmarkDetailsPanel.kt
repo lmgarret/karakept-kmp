@@ -5,6 +5,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.BorderStroke
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
+import com.karakept.app.ui.components.InlineLoadingDots
 import com.karakept.app.ui.theme.LocalEinkMode
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -772,6 +773,10 @@ private fun DownloadProgressBar(
             progress = { fraction },
             modifier = modifier.height(4.dp)
         )
+    } else if (LocalEinkMode.current.animationsDisabled) {
+        // No Content-Length, so the bar would have to be indeterminate — which never stops
+        // sweeping. Dots step one repaint at a time instead.
+        InlineLoadingDots(dotSize = 4.dp, modifier = modifier)
     } else {
         // No Content-Length on the response, so the fraction is unknowable.
         LinearProgressIndicator(modifier = modifier.height(4.dp))

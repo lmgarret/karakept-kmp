@@ -30,7 +30,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
@@ -73,6 +72,7 @@ import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.LoadingDotsIndicator
+import com.karakept.app.ui.components.RefreshableBox
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.scrollToTop
 import com.karakept.app.ui.input.PageTurnDispatcher
@@ -761,18 +761,14 @@ fun BookmarkViewerContent(
                     } // end inner Box
                 }
 
-                if (!getPlatform().isDesktop) {
-                    PullToRefreshBox(
-                        isRefreshing = isRefreshing,
-                        onRefresh = { screenModel.refreshBookmark(bookmarkId) },
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        viewerContent()
-                    }
-                } else {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        viewerContent()
-                    }
+                // E-ink readers refresh from the overflow menu instead — see RefreshableBox.
+                RefreshableBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = { screenModel.refreshBookmark(bookmarkId) },
+                    enabled = !getPlatform().isDesktop,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    viewerContent()
                 }
             }
             is BookmarkLoadingState.Error -> {
