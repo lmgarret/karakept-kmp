@@ -702,6 +702,10 @@ class MainScreenModel(
         viewModelScope.launch {
             bookmarkActionsRepository.bookmarkChangedEvents.collect { remoteId ->
                 val serverId = _selectedServer.value?.id ?: return@collect
+                // The reading-progress sync notifies for rows anywhere in the library — a
+                // backfill covers all of it — and only the loaded window has anything to
+                // re-read. Nothing to remove either: a row outside it is already not shown.
+                if (_accumulatedBookmarks.value.none { it.remoteId == remoteId }) return@collect
                 val updated = bookmarkRepository.getBookmarkByRemoteId(remoteId, serverId)
                 updateAccumulatedBookmarks { current ->
                     if (updated != null) {

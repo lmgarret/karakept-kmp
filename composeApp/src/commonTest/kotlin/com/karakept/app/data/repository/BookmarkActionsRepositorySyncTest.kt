@@ -11,6 +11,8 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -193,6 +195,54 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         assertEquals(ReadingProgressPullResult.SKIPPED, result)
         coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(any(), any(), any(), any()) }
         coVerify(exactly = 0) { remoteDataSource.getReadingProgress(any(), any()) }
+    }
+
+    // The write moves the read flag, and the list holds a snapshot of its rows while the
+    // drawer's unread count reads the table live. Without an event the two disagree: the
+    // count reports a bookmark the pull turned back to unread and the list keeps drawing it
+    // as read, so there is nothing on screen to scroll to (#333).
+    @Test
+    fun pullReadingProgress_applied_notifiesTheBookmarkChanged() = runTest(testDispatcher) {
+        val bookmark = makeBookmark(readingProgress = 1f)
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery {
+            remoteDataSource.getReadingProgress(testServer, bookmark.originalRemoteId)
+        } returns 0
+
+        val events = mutableListOf<Long>()
+        val collector = backgroundScope.launch {
+            repository.bookmarkChangedEvents.collect { events += it }
+        }
+        runCurrent()
+
+        val result = repository.pullReadingProgressFromServer(42L, "server1")
+        runCurrent()
+        collector.cancel()
+
+        assertEquals(ReadingProgressPullResult.APPLIED, result)
+        assertEquals(listOf(42L), events, "the row the list is holding is now out of date")
+    }
+
+    @Test
+    fun pullReadingProgress_skipped_notifiesNothing() = runTest(testDispatcher) {
+        val bookmark = makeBookmark(readingProgress = 0.3f)
+        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery {
+            remoteDataSource.getReadingProgress(testServer, bookmark.originalRemoteId)
+        } returns 30
+
+        val events = mutableListOf<Long>()
+        val collector = backgroundScope.launch {
+            repository.bookmarkChangedEvents.collect { events += it }
+        }
+        runCurrent()
+
+        repository.pullReadingProgressFromServer(42L, "server1")
+        runCurrent()
+        collector.cancel()
+
+        // A backfill walks the whole library; only the rows it actually changes may notify.
+        assertTrue(events.isEmpty(), "nothing changed, so nothing to re-read")
     }
 
     @Test

@@ -92,6 +92,14 @@ suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(
                     scrollIndex = 0,
                     scrollOffset = 0
                 )
+                // This write moves the read flag — below 100% it clears it — so the row the
+                // list is holding is now wrong. The list keeps a snapshot of its rows while
+                // the drawer's unread count reads the table live, so without this the two
+                // disagree: the count reports a bookmark this pull turned back to unread and
+                // the list goes on drawing it as read, with nothing on screen to scroll to.
+                // Re-reading the view is what reconciled them, which is why the bookmarks
+                // "appeared" only after a filter was applied and taken off again (#333).
+                notifyBookmarkChanged(bookmarkRemoteId)
                 AppLogger.d("ReadProgressSync", "applied from server: ${serverPercent}%")
                 ReadingProgressPullResult.APPLIED
             } else {
