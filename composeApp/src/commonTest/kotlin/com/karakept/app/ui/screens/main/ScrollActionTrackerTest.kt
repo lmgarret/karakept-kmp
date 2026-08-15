@@ -44,7 +44,8 @@ class ScrollActionTrackerTest {
         firstOffset: Int = 0,
         visibleCount: Int = 5,
         isScrolling: Boolean = false,
-        actedOnIds: Set<Long> = emptySet()
+        actedOnIds: Set<Long> = emptySet(),
+        pageTurns: Int = 0
     ) = ScrollActionSnapshot(
         firstIndex = firstIndex,
         firstKey = bookmarks.getOrNull(firstIndex)?.remoteId,
@@ -52,7 +53,8 @@ class ScrollActionTrackerTest {
         lastVisibleIndex = minOf(firstIndex + visibleCount - 1, bookmarks.lastIndex),
         bookmarks = bookmarks,
         isScrolling = isScrolling,
-        actedOnIds = actedOnIds
+        actedOnIds = actedOnIds,
+        pageTurns = pageTurns
     )
 
     private fun ids(bookmarks: List<BookmarkEntity>) = bookmarks.map { it.remoteId }
@@ -252,5 +254,62 @@ class ScrollActionTrackerTest {
         assertTrue(tracker.onSnapshot(snapshot(emptyList(), visibleCount = 0)).isEmpty())
         assertTrue(tracker.onSnapshot(snapshot(longList, firstIndex = 0)).isEmpty())
         assertTrue(tracker.onSnapshot(snapshot(longList, firstIndex = 0)).isEmpty())
+    }
+
+    @Test
+    fun filterBringingBookmarksIntoView_doesNotMarkThemOnArrival() {
+        // Applying a filter replaces the dataset with rows that fit in one screenful. The
+        // gesture that got the user here belongs to the list they just left: inheriting it let
+        // the bottom rule fire on arrival, marking the bookmark they had gone looking for read
+        // before they could read it.
+        val tracker = ScrollActionTracker()
+        tracker.onSnapshot(snapshot(longList, firstIndex = 0))
+        tracker.onSnapshot(snapshot(longList, firstIndex = 4, isScrolling = true))
+
+        val filtered = listOfIds(77)
+        assertTrue(tracker.onSnapshot(snapshot(filtered, visibleCount = 1)).isEmpty())
+        assertTrue(tracker.onSnapshot(snapshot(filtered, visibleCount = 1)).isEmpty())
+        assertTrue(tracker.onSnapshot(snapshot(filtered, visibleCount = 1)).isEmpty())
+    }
+
+    // --- hardware page turns ------------------------------------------------------------
+
+    @Test
+    fun instantPageTurn_armsTheBottomSweep() {
+        // An instant turn (the e-ink setting) finishes inside one frame, so isScrolling is
+        // never sampled as true. Without the turn itself counting as the gesture, the last
+        // screenful — the page the user started on — was never marked read.
+        val tracker = ScrollActionTracker()
+        val short = listOfIds(1, 2, 3)
+        tracker.onSnapshot(snapshot(short, visibleCount = 3))
+
+        val fired = tracker.onSnapshot(
+            snapshot(short, visibleCount = 3, firstOffset = 40, pageTurns = 1)
+        )
+
+        assertEquals(listOf(1L, 2L, 3L), ids(fired))
+    }
+
+    @Test
+    fun instantPageTurn_firesOnTheRowsThatLeftTheTop() {
+        val tracker = ScrollActionTracker()
+        tracker.onSnapshot(snapshot(longList, firstIndex = 0))
+
+        val fired = tracker.onSnapshot(snapshot(longList, firstIndex = 4, pageTurns = 1))
+
+        assertEquals(listOf(1L, 2L, 3L, 4L), ids(fired))
+    }
+
+    @Test
+    fun noPageTurn_leavesTheSweepDisarmed() {
+        // The counter standing still must not arm anything — a sync can still end the list at
+        // the viewport by prepending rows or dropping them off the tail.
+        val tracker = ScrollActionTracker()
+        val short = listOfIds(1, 2, 3)
+        tracker.onSnapshot(snapshot(short, visibleCount = 3))
+
+        val fired = tracker.onSnapshot(snapshot(short, visibleCount = 3, pageTurns = 0))
+
+        assertTrue(fired.isEmpty())
     }
 }

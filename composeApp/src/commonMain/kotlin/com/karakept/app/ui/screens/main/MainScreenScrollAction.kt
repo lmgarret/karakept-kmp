@@ -3,13 +3,19 @@ package com.karakept.app.ui.screens.main
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.SwipeAction
+import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.executeScrollAction
+import org.koin.compose.koinInject
 
 /**
  * Scroll-triggered action: apply the active list's scroll action silently (no snackbar)
@@ -44,6 +50,16 @@ fun MainScreenScrollAction(
     // leaving `bookmarks` frozen at its first-composition value.
     val currentBookmarksState = rememberUpdatedState(bookmarks)
 
+    // A hardware page turn is a deliberate gesture, but an *instant* one (the e-ink setting)
+    // completes inside a single frame, so `isScrollInProgress` is never sampled as true and
+    // the list appears to have moved on its own. Counting turns gives the tracker the one
+    // thing it cannot read off the scroll state.
+    val dispatcher = koinInject<PageTurnDispatcher>()
+    var pageTurns by remember { mutableStateOf(0) }
+    LaunchedEffect(dispatcher) {
+        dispatcher.events.collect { pageTurns++ }
+    }
+
     LaunchedEffect(currentListId, currentListScrollAction, currentListScrollActionConfig) {
         if (currentListScrollAction == SwipeAction.NONE) return@LaunchedEffect
         val tracker = ScrollActionTracker()
@@ -59,7 +75,8 @@ fun MainScreenScrollAction(
                 lastVisibleIndex = visibleItems.lastOrNull()?.index ?: -1,
                 bookmarks = currentBookmarksState.value,
                 isScrolling = listState.isScrollInProgress,
-                actedOnIds = screenModel.actedOnBookmarkIds.value
+                actedOnIds = screenModel.actedOnBookmarkIds.value,
+                pageTurns = pageTurns
             )
         }.collect { snapshot ->
             tracker.onSnapshot(snapshot).forEach { bookmark ->
@@ -78,7 +95,9 @@ internal data class ScrollActionSnapshot(
     val lastVisibleIndex: Int,
     val bookmarks: List<BookmarkEntity>,
     val isScrolling: Boolean,
-    val actedOnIds: Set<Long> = emptySet()
+    val actedOnIds: Set<Long> = emptySet(),
+    /** Hardware page turns so far. A change means the user turned a page. */
+    val pageTurns: Int = 0
 )
 
 /**
@@ -99,6 +118,7 @@ internal class ScrollActionTracker {
     private var lastBookmarks: List<BookmarkEntity>? = null
     private var lastIndex = 0
     private var lastOffset = 0
+    private var lastPageTurns = 0
 
     // Guard against double-firing. Entries are dropped for items that become visible again
     // when the user scrolls back up, so a manually-unread bookmark can be re-triggered on the
@@ -108,9 +128,11 @@ internal class ScrollActionTracker {
     fun onSnapshot(snapshot: ScrollActionSnapshot): List<BookmarkEntity> {
         val previousBookmarks = lastBookmarks
         val moved = snapshot.firstIndex != lastIndex || snapshot.firstOffset != lastOffset
+        val turned = snapshot.pageTurns != lastPageTurns
         lastBookmarks = snapshot.bookmarks
         lastIndex = snapshot.firstIndex
         lastOffset = snapshot.firstOffset
+        lastPageTurns = snapshot.pageTurns
 
         if (previousBookmarks != null && snapshot.bookmarks !== previousBookmarks) {
             // The dataset and layoutInfo update in separate snapshots, so this snapshot's
@@ -120,8 +142,10 @@ internal class ScrollActionTracker {
         }
 
         // Requiring actual movement keeps an overscroll gesture — a pull-to-refresh at the top
-        // of a list that already fits on screen — from counting as a scroll.
-        if (snapshot.isScrolling && moved) userHasScrolled = true
+        // of a list that already fits on screen — from counting as a scroll. A page turn is
+        // counted on its own: pressing the button is the gesture, and an instant turn finishes
+        // inside one frame, so the scroll it performs is never observed in progress.
+        if ((snapshot.isScrolling && moved) || turned) userHasScrolled = true
 
         if (anchorKey == null) {
             // Nothing to compare against yet — adopt the current position silently.
@@ -180,6 +204,13 @@ internal class ScrollActionTracker {
             // from layout info that still describes the old list.
             anchorKey = null
             anchorIndex = 0
+            // The rows on screen are not the ones the user was scrolling a moment ago, so the
+            // gesture that got them here does not carry over. Applying a filter is the case
+            // that showed it: the bookmarks it brings into view sit inside one screenful, and
+            // an inherited "has scrolled" let the bottom rule mark them read on arrival —
+            // before the user could read the one they had gone looking for.
+            userHasScrolled = false
+            bottomReached = false
         }
     }
 
