@@ -28,7 +28,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,6 +50,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.components.EinkAwareFab
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.BookmarkLayout
@@ -166,7 +166,7 @@ fun LayoutsContent(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = {
+            EinkAwareFab(onClick = {
                 if (isDesktop) {
                     editingLayoutId = null
                     showEditorDialog = true

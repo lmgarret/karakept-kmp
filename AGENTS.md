@@ -268,6 +268,36 @@ screen offers refresh.
 > — the exact inverse of the `shouldUsePullToRefresh` check `RefreshableBox` makes, so exactly one
 > of the two is live at any time.
 
+### Elements that float above the page
+
+FABs, the "N new bookmarks" pill, snackbars and `FloatingBusyCard` all sit above the content, and
+Material gives every one of them the same edge: a drop shadow. Under `highContrast` that edge
+disappears twice over — the shadow is a grey gradient the panel cannot render, and the container
+colour has already collapsed to the page colour — so a FAB becomes an icon with no button around
+it. `floatingSurfaceStyle(elevation)` (`ui/components/EinkAware.kt`) resolves the pair for the
+current display: the shadow off e-ink, a 1dp `outline` border on it, never both and never neither.
+Feed it into a `Surface` as `shadowElevation = style.shadowElevation` and
+`border = style.borderStroke()`.
+
+**`EinkAwareFab`** / **`EinkAwareSmallFab`** (`ui/components/EinkAware.kt`)
+- The same treatment already wired into a FAB, plus zeroed pressed/hovered elevation.
+- **Use instead of `FloatingActionButton` / `SmallFloatingActionButton` everywhere.**
+
+**`EinkAwareSnackbarHost`** (`ui/components/EinkAware.kt`)
+- **Use instead of `SnackbarHost` everywhere.** Material's host fades *and* scales its snackbar in
+  and out with a spec it does not expose, so under `animationsDisabled` the whole host is replaced
+  — which is why `snackbarDurationMillis` exists: dismissing a snackbar once its duration is up is
+  the one job that host was still doing.
+- Under `highContrast` the visual is replaced too. `Snackbar` hardcodes a 6dp shadow, and its
+  `inverseSurface` container is a solid block of ink on the e-ink scheme — a lot of ink to lay
+  down, and then ghost, for a message that leaves after four seconds.
+
+> **Rule:** state is carried by the icon and the label, not by the container colour.
+> `primaryContainer`, `tertiaryContainer` and `surfaceContainerHigh` are all the page colour under
+> `highContrast`, so a FAB menu item that shows "on" by swapping its container shows nothing —
+> swap the icon (`Star`/`StarBorder`) and the label ("Favorite"/"Unfavorite") as
+> `BookmarkFabMenu` does.
+
 ### Empty states
 
 - A list with nothing in it needs an **explicit empty state**, never a blank area — the two
@@ -305,7 +335,8 @@ that ghosts, and MD3's tonal surface steps collapse into indistinguishable greys
 - Never rely on a tonal fill or `shadowElevation` alone to separate an element from the page —
   under `highContrast` every surface role is the same colour. Add
   `border(1.dp, colorScheme.outline)` in that case, as `TagChip`, `BookmarkLayouts` and
-  `BaseBottomPanel` do.
+  `BaseBottomPanel` do — or, for anything floating above the content, take the border and the
+  elevation together from `floatingSurfaceStyle()` (see "Elements that float above the page").
 - No shimmer or indeterminate spinner as the only "busy" signal; fall back to the stepped dots
   (`BusyIndicator` / `InlineLoadingDots` in `ui/components/EinkAware.kt` do this).
 - `secondaryContainer` is the scheme's one deliberate grey, for small repeated elements like tag

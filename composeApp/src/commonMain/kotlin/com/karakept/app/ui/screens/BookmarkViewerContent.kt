@@ -31,8 +31,6 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -71,6 +69,8 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.ui.components.EinkAwareSmallFab
+import com.karakept.app.ui.components.EinkAwareSnackbarHost
 import com.karakept.app.ui.components.FloatingBusyCard
 import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.components.RefreshableBox
@@ -366,7 +366,7 @@ fun BookmarkViewerContent(
                 }
             } else false
         },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = { EinkAwareSnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             AnimatedVisibilityOrPlain(
                 visible = fabVisible && !getPlatform().isDesktop &&
@@ -634,7 +634,7 @@ fun BookmarkViewerContent(
                             .navigationBarsPadding()
                             .padding(start = 16.dp, bottom = scrollToTopBottomPadding)
                     ) {
-                        SmallFloatingActionButton(
+                        EinkAwareSmallFab(
                             onClick = {
                                 scope.launch {
                                     scrollState.scrollToTop(einkMode.instantScroll)
@@ -643,9 +643,7 @@ fun BookmarkViewerContent(
                                     // an "unintended jump" and snaps back to the old position
                                     scrollRestoration.safeScrollToItem(0, 0)
                                 }
-                            },
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                            contentColor = MaterialTheme.colorScheme.onSurface
+                            }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ArrowUpward,
