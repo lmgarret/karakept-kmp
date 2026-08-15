@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
@@ -59,6 +60,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.karakept.app.ui.theme.LocalEinkMode
@@ -131,18 +135,6 @@ fun floatingSurfaceStyle(shadowElevation: Dp): FloatingSurfaceStyle =
 fun FloatingSurfaceStyle.borderStroke(): BorderStroke? =
     if (outlined) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null
 
-@Composable
-private fun Modifier.floatingOutline(style: FloatingSurfaceStyle, shape: Shape): Modifier =
-    if (style.outlined) border(1.dp, MaterialTheme.colorScheme.outline, shape) else this
-
-@Composable
-private fun fabElevation(style: FloatingSurfaceStyle) =
-    if (style.outlined) {
-        FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp)
-    } else {
-        FloatingActionButtonDefaults.elevation()
-    }
-
 /**
  * A [FloatingActionButton] that stays visible on an e-ink page.
  *
@@ -161,17 +153,25 @@ fun EinkAwareFab(
     contentColor: Color = contentColorFor(containerColor),
     content: @Composable () -> Unit
 ) {
-    val style = floatingSurfaceStyle(FAB_ELEVATION)
-    val shape = FloatingActionButtonDefaults.shape
-    FloatingActionButton(
-        onClick = onClick,
-        modifier = modifier.floatingOutline(style, shape),
-        shape = shape,
-        containerColor = containerColor,
-        contentColor = contentColor,
-        elevation = fabElevation(style),
-        content = content
-    )
+    if (floatingSurfaceStyle(FAB_ELEVATION).outlined) {
+        OutlinedFab(
+            onClick = onClick,
+            modifier = modifier,
+            shape = FloatingActionButtonDefaults.shape,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            size = FAB_SIZE,
+            content = content
+        )
+    } else {
+        FloatingActionButton(
+            onClick = onClick,
+            modifier = modifier,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            content = content
+        )
+    }
 }
 
 /**
@@ -187,20 +187,68 @@ fun EinkAwareSmallFab(
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     content: @Composable () -> Unit
 ) {
-    val style = floatingSurfaceStyle(FAB_ELEVATION)
-    val shape = FloatingActionButtonDefaults.smallShape
-    SmallFloatingActionButton(
+    if (floatingSurfaceStyle(FAB_ELEVATION).outlined) {
+        OutlinedFab(
+            onClick = onClick,
+            modifier = modifier,
+            shape = FloatingActionButtonDefaults.smallShape,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            size = SMALL_FAB_SIZE,
+            content = content
+        )
+    } else {
+        SmallFloatingActionButton(
+            onClick = onClick,
+            modifier = modifier,
+            containerColor = containerColor,
+            contentColor = contentColor,
+            content = content
+        )
+    }
+}
+
+/**
+ * The e-ink half of [EinkAwareFab] / [EinkAwareSmallFab]: the same button drawn as the outlined,
+ * unshaded, untinted surface it reduces to under high contrast.
+ *
+ * A FAB cannot take the outline from an outer `Modifier.border` instead. `Surface(onClick)` centres
+ * its visual bounds inside a 48dp minimum touch target, so on the 40dp small FAB an outer border
+ * lands 4dp clear of the fill and rings it with a transparent gap. Handing the border to the same
+ * `Surface` that paints the background is the only place the two are guaranteed to agree.
+ */
+@Composable
+private fun OutlinedFab(
+    onClick: () -> Unit,
+    modifier: Modifier,
+    shape: Shape,
+    containerColor: Color,
+    contentColor: Color,
+    size: Dp,
+    content: @Composable () -> Unit
+) {
+    Surface(
         onClick = onClick,
-        modifier = modifier.floatingOutline(style, shape),
+        modifier = modifier.semantics { role = Role.Button },
         shape = shape,
-        containerColor = containerColor,
+        color = containerColor,
         contentColor = contentColor,
-        elevation = fabElevation(style),
-        content = content
-    )
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp
+    ) {
+        Box(
+            modifier = Modifier.defaultMinSize(minWidth = size, minHeight = size),
+            contentAlignment = Alignment.Center
+        ) {
+            content()
+        }
+    }
 }
 
 private val FAB_ELEVATION = 6.dp
+private val FAB_SIZE = 56.dp
+private val SMALL_FAB_SIZE = 40.dp
 private val SNACKBAR_ELEVATION = 6.dp
 
 /**
