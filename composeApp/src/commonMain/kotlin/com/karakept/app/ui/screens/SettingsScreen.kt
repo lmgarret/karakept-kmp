@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Tonality
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,6 +63,8 @@ import com.karakept.app.ui.screens.settings.BookmarkViewSettingsContent
 import com.karakept.app.ui.screens.settings.BookmarkViewSettingsScreen
 import com.karakept.app.ui.screens.settings.CustomSwipeActionsContent
 import com.karakept.app.ui.screens.settings.CustomSwipeActionsScreen
+import com.karakept.app.ui.screens.settings.EinkSettingsContent
+import com.karakept.app.ui.screens.settings.EinkSettingsScreen
 import com.karakept.app.ui.screens.settings.LayoutsContent
 import com.karakept.app.ui.screens.settings.LayoutsScreen
 import com.karakept.app.ui.screens.settings.ServerSettingsContent
@@ -79,6 +82,7 @@ private enum class SettingsSection(
     APPEARANCE("Appearance", "Theme, accent color, layouts", Icons.Default.Palette),
     BEHAVIOR("Behavior", "Layout, gestures, reading speed, notifications", Icons.AutoMirrored.Filled.ViewList),
     READER("Reader", "Viewer mode, progress, tags, link handling", Icons.Default.Visibility),
+    EINK("E-ink", "Contrast, motion, page-turn buttons", Icons.Default.Tonality),
     SYNC_DATA("Sync & Data", "Offline mode, content sync, server, backup", Icons.Default.Sync),
     ABOUT("About", "App version and open source licenses", Icons.Default.Info)
 }
@@ -183,6 +187,11 @@ class SettingsScreen : NavKey {
                                 screenModel = screenModel,
                                 onBack = { navigator.pop() },
                                 onNavigate = { selectedSubScreen = it },
+                                showBackButton = false
+                            )
+                            SettingsSection.EINK -> EinkSettingsContent(
+                                screenModel = koinViewModel(),
+                                onBack = { navigator.pop() },
                                 showBackButton = false
                             )
                             SettingsSection.SYNC_DATA -> SyncDataSettingsContent(
@@ -291,6 +300,15 @@ class SettingsScreen : NavKey {
                                 description = "Viewer mode, progress, tags, link handling",
                                 icon = Icons.Default.Visibility,
                                 onClick = { navigator.push(BookmarkViewSettingsScreen()) }
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            SettingsNavigationItem(
+                                title = "E-ink",
+                                description = "Contrast, motion, page-turn buttons",
+                                icon = Icons.Default.Tonality,
+                                onClick = { navigator.push(EinkSettingsScreen()) }
                             )
 
                             Spacer(modifier = Modifier.height(16.dp))

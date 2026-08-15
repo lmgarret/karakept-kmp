@@ -251,6 +251,17 @@ screen. Consequences worth knowing before touching this code:
   `ui/components/HtmlContent.kt`
 
 **E-ink display mode:**
+- E-ink is its own top-level settings section (`SettingsSection.EINK`), not a link under
+  Appearance. Only a couple of its switches are about how the app looks — instant scrolling, row
+  action buttons and the hardware page-turn bindings change how it *behaves* — so hanging the
+  whole screen off "Appearance" described the minority of it.
+- Inside the screen the master "E-ink mode" switch sits above four groups — Display, Motion,
+  Interaction, Page-turn buttons — declared in `EinkSettingsSections.kt` rather than in the
+  composable. `visibleEinkSettings` holds the gating rules (which switches the master turns off,
+  and the two that outlive it: the monochrome icon and the page-turn buttons) and
+  `visibleEinkGroups` buckets them, dropping a group whose settings are all gated away so no
+  heading is left stranded over nothing. `EinkSettingsContent` renders that list in order,
+  which keeps the visibility rules testable without a Compose test rule.
 - `LocalEinkMode` (`ui/theme/EinkMode.kt`) is a `staticCompositionLocalOf` resolved once in
   `App.kt` from `SettingsRepository.einkDisplaySettings` and provided by `AppTheme`. It carries
   `animationsDisabled`, `highContrast` and `instantScroll`, each already ANDed with the master
