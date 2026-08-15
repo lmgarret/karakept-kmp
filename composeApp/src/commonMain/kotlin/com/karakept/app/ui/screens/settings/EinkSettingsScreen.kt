@@ -86,6 +86,29 @@ fun EinkSettingsContent(
     var capturingFor by remember { mutableStateOf<PageTurnDirection?>(null) }
     var captureTimedOut by remember { mutableStateOf<PageTurnDirection?>(null) }
 
+    val startCapture: (PageTurnDirection) -> Unit = { direction ->
+        captureTimedOut = null
+        capturingFor = direction
+        screenModel.captureKeyBinding(direction) { keyCode ->
+            if (keyCode == null) captureTimedOut = direction
+            capturingFor = null
+        }
+    }
+    val cancelCapture: () -> Unit = {
+        screenModel.cancelCapture()
+        capturingFor = null
+        captureTimedOut = null
+    }
+
+    val groups = visibleEinkGroups(
+        EinkSettingsState(
+            einkModeEnabled = einkModeEnabled,
+            monochromeIconSupported = AppIconManager.isSupported,
+            hardwareKeysEnabled = keyBindings.enabled,
+            useVolumeKeys = keyBindings.useVolumeKeys
+        )
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -108,176 +131,160 @@ fun EinkSettingsContent(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Top
         ) {
-            Text(
-                text = "Display",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
             SettingSwitchCard(
                 title = "E-ink mode",
-                description = "Tune the app for an electronic-paper display",
+                description = "Tune the app for an electronic-paper display. Leaves the page-turn " +
+                    "buttons and the monochrome icon below alone — those work on any device.",
                 icon = Icons.Default.Tonality,
                 checked = einkModeEnabled,
                 onCheckedChange = { screenModel.setEinkModeEnabled(it) }
             )
 
-            // Ungated on purpose: the home screen goes on showing the icon after E-ink mode is
-            // switched off, so the colour artwork must not come back on its own.
-            if (AppIconManager.isSupported) {
-                SettingSwitchCard(
-                    title = "Monochrome icon",
-                    description = "Black-on-white launcher icon and splash screen. Stays put " +
-                        "when E-ink mode is off; the splash follows from the next cold start.",
-                    icon = Icons.Default.InvertColors,
-                    checked = monochromeIcon,
-                    onCheckedChange = { screenModel.setMonochromeIcon(it) }
+            groups.forEach { (group, settings) ->
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = group.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
-            }
-
-            if (einkModeEnabled) {
-                SettingSwitchCard(
-                    title = "Disable animations",
-                    description = "Screen transitions, fades and spinners refresh the whole panel and leave ghosting",
-                    icon = Icons.Default.Animation,
-                    checked = disableAnimations,
-                    onCheckedChange = { screenModel.setDisableAnimations(it) }
-                )
-
-                SettingSwitchCard(
-                    title = "High contrast",
-                    description = "Pure black on white, with outlines instead of shaded surfaces",
-                    icon = Icons.Default.Contrast,
-                    checked = highContrast,
-                    onCheckedChange = { screenModel.setHighContrast(it) }
-                )
-
-                SettingSwitchCard(
-                    title = "Instant scrolling",
-                    description = "Page turns, scroll-to-top and in-article jumps land in one " +
-                        "repaint instead of gliding. Page turns follow this even with E-ink " +
-                        "mode off.",
-                    icon = Icons.Default.SwipeVertical,
-                    checked = instantPageScroll,
-                    onCheckedChange = { screenModel.setInstantPageScroll(it) }
-                )
-
-                SettingSwitchCard(
-                    title = "Action buttons instead of swipe",
-                    description = "A swipe must be tracked across many frames; e-ink panels smear or drop it",
-                    icon = Icons.Default.TouchApp,
-                    checked = rowActionMode == RowActionMode.BUTTONS,
-                    onCheckedChange = {
-                        screenModel.setRowActionMode(if (it) RowActionMode.BUTTONS else RowActionMode.SWIPE)
-                    }
-                )
-
-                SettingSwitchCard(
-                    title = "Hide article thumbnails",
-                    description = "Photos dither poorly on e-ink. Also available under Reader settings",
-                    icon = Icons.Default.ImageNotSupported,
-                    checked = hideArticleThumbnails,
-                    onCheckedChange = { screenModel.setHideArticleThumbnails(it) }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Page-turn buttons",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Text(
-                text = "Bind the device's hardware buttons to turn pages in the reader and the " +
-                    "bookmark list. Bound buttons stop doing whatever they normally do while the " +
-                    "app is open.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            SettingSwitchCard(
-                title = "Enable hardware buttons",
-                description = "Turn pages with the device's physical buttons",
-                icon = Icons.Default.Keyboard,
-                checked = keyBindings.enabled,
-                onCheckedChange = { screenModel.setHardwareKeysEnabled(it) }
-            )
-
-            if (keyBindings.enabled) {
-                SettingSwitchCard(
-                    title = "Use volume buttons",
-                    description = "Most e-ink readers wire their page buttons to the volume " +
-                        "rocker. Volume up turns back, volume down turns forward, and neither " +
-                        "changes the volume while the app is open.",
-                    icon = Icons.AutoMirrored.Filled.VolumeUp,
-                    checked = keyBindings.useVolumeKeys,
-                    onCheckedChange = { screenModel.setUseVolumeKeys(it) }
-                )
-
-                if (keyBindings.useVolumeKeys) {
-                    SettingSwitchCard(
-                        title = "Invert volume buttons",
-                        description = "Swap the two, for holding the device the other way up",
-                        icon = Icons.Default.SwapVert,
-                        checked = keyBindings.invertVolumeKeys,
-                        onCheckedChange = { screenModel.setInvertVolumeKeys(it) }
+                group.description?.let { description ->
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
                     )
                 }
 
-                val startCapture: (PageTurnDirection) -> Unit = { direction ->
-                    captureTimedOut = null
-                    capturingFor = direction
-                    screenModel.captureKeyBinding(direction) { keyCode ->
-                        if (keyCode == null) captureTimedOut = direction
-                        capturingFor = null
-                    }
-                }
-                val cancelCapture: () -> Unit = {
-                    screenModel.cancelCapture()
-                    capturingFor = null
-                    captureTimedOut = null
-                }
-
-                KeyBindingCard(
-                    title = "Previous page",
-                    keyCode = keyBindings.previousKeyCode,
-                    capturing = capturingFor == PageTurnDirection.PREVIOUS,
-                    timedOut = captureTimedOut == PageTurnDirection.PREVIOUS,
-                    onBind = { startCapture(PageTurnDirection.PREVIOUS) },
-                    onCancel = cancelCapture,
-                    onClear = { screenModel.clearBinding(PageTurnDirection.PREVIOUS) }
-                )
-
-                KeyBindingCard(
-                    title = "Next page",
-                    keyCode = keyBindings.nextKeyCode,
-                    capturing = capturingFor == PageTurnDirection.NEXT,
-                    timedOut = captureTimedOut == PageTurnDirection.NEXT,
-                    onBind = { startCapture(PageTurnDirection.NEXT) },
-                    onCancel = cancelCapture,
-                    onClear = { screenModel.clearBinding(PageTurnDirection.NEXT) }
-                )
-
-                Card(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Page overlap: ${keyBindings.overlapPercent}%",
-                            style = MaterialTheme.typography.titleMedium
+                settings.forEach { setting ->
+                    when (setting) {
+                        EinkSetting.HIGH_CONTRAST -> SettingSwitchCard(
+                            title = "High contrast",
+                            description = "Pure black on white, with outlines instead of shaded surfaces",
+                            icon = Icons.Default.Contrast,
+                            checked = highContrast,
+                            onCheckedChange = { screenModel.setHighContrast(it) }
                         )
-                        Text(
-                            text = "How much of the current page stays on screen after a turn",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                        EinkSetting.HIDE_ARTICLE_THUMBNAILS -> SettingSwitchCard(
+                            title = "Hide article thumbnails",
+                            description = "Photos dither poorly on e-ink. Also available under Reader settings",
+                            icon = Icons.Default.ImageNotSupported,
+                            checked = hideArticleThumbnails,
+                            onCheckedChange = { screenModel.setHideArticleThumbnails(it) }
                         )
-                        Slider(
-                            value = keyBindings.overlapPercent.toFloat(),
-                            onValueChange = { screenModel.setOverlapPercent(it.toInt()) },
-                            valueRange = PageTurnKeyBindings.MIN_OVERLAP_PERCENT.toFloat()..
-                                PageTurnKeyBindings.MAX_OVERLAP_PERCENT.toFloat(),
-                            steps = PageTurnKeyBindings.MAX_OVERLAP_PERCENT - 1
+
+                        // Ungated on purpose: the home screen goes on showing the icon after E-ink
+                        // mode is switched off, so the colour artwork must not come back on its own.
+                        EinkSetting.MONOCHROME_ICON -> SettingSwitchCard(
+                            title = "Monochrome icon",
+                            description = "Black-on-white launcher icon and splash screen. Stays " +
+                                "put when E-ink mode is off; the splash follows from the next " +
+                                "cold start.",
+                            icon = Icons.Default.InvertColors,
+                            checked = monochromeIcon,
+                            onCheckedChange = { screenModel.setMonochromeIcon(it) }
                         )
+
+                        EinkSetting.DISABLE_ANIMATIONS -> SettingSwitchCard(
+                            title = "Disable animations",
+                            description = "Screen transitions, fades and spinners refresh the whole panel and leave ghosting",
+                            icon = Icons.Default.Animation,
+                            checked = disableAnimations,
+                            onCheckedChange = { screenModel.setDisableAnimations(it) }
+                        )
+
+                        EinkSetting.INSTANT_SCROLLING -> SettingSwitchCard(
+                            title = "Instant scrolling",
+                            description = "Page turns, scroll-to-top and in-article jumps land in " +
+                                "one repaint instead of gliding. Page turns follow this even with " +
+                                "E-ink mode off.",
+                            icon = Icons.Default.SwipeVertical,
+                            checked = instantPageScroll,
+                            onCheckedChange = { screenModel.setInstantPageScroll(it) }
+                        )
+
+                        EinkSetting.ROW_ACTION_BUTTONS -> SettingSwitchCard(
+                            title = "Action buttons instead of swipe",
+                            description = "A swipe must be tracked across many frames; e-ink panels smear or drop it",
+                            icon = Icons.Default.TouchApp,
+                            checked = rowActionMode == RowActionMode.BUTTONS,
+                            onCheckedChange = {
+                                screenModel.setRowActionMode(
+                                    if (it) RowActionMode.BUTTONS else RowActionMode.SWIPE
+                                )
+                            }
+                        )
+
+                        EinkSetting.HARDWARE_KEYS_ENABLED -> SettingSwitchCard(
+                            title = "Enable hardware buttons",
+                            description = "Turn pages with the device's physical buttons",
+                            icon = Icons.Default.Keyboard,
+                            checked = keyBindings.enabled,
+                            onCheckedChange = { screenModel.setHardwareKeysEnabled(it) }
+                        )
+
+                        EinkSetting.USE_VOLUME_KEYS -> SettingSwitchCard(
+                            title = "Use volume buttons",
+                            description = "Most e-ink readers wire their page buttons to the " +
+                                "volume rocker. Volume up turns back, volume down turns forward, " +
+                                "and neither changes the volume while the app is open.",
+                            icon = Icons.AutoMirrored.Filled.VolumeUp,
+                            checked = keyBindings.useVolumeKeys,
+                            onCheckedChange = { screenModel.setUseVolumeKeys(it) }
+                        )
+
+                        EinkSetting.INVERT_VOLUME_KEYS -> SettingSwitchCard(
+                            title = "Invert volume buttons",
+                            description = "Swap the two, for holding the device the other way up",
+                            icon = Icons.Default.SwapVert,
+                            checked = keyBindings.invertVolumeKeys,
+                            onCheckedChange = { screenModel.setInvertVolumeKeys(it) }
+                        )
+
+                        EinkSetting.BIND_PREVIOUS -> KeyBindingCard(
+                            title = "Previous page",
+                            keyCode = keyBindings.previousKeyCode,
+                            capturing = capturingFor == PageTurnDirection.PREVIOUS,
+                            timedOut = captureTimedOut == PageTurnDirection.PREVIOUS,
+                            onBind = { startCapture(PageTurnDirection.PREVIOUS) },
+                            onCancel = cancelCapture,
+                            onClear = { screenModel.clearBinding(PageTurnDirection.PREVIOUS) }
+                        )
+
+                        EinkSetting.BIND_NEXT -> KeyBindingCard(
+                            title = "Next page",
+                            keyCode = keyBindings.nextKeyCode,
+                            capturing = capturingFor == PageTurnDirection.NEXT,
+                            timedOut = captureTimedOut == PageTurnDirection.NEXT,
+                            onBind = { startCapture(PageTurnDirection.NEXT) },
+                            onCancel = cancelCapture,
+                            onClear = { screenModel.clearBinding(PageTurnDirection.NEXT) }
+                        )
+
+                        EinkSetting.PAGE_OVERLAP -> Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "Page overlap: ${keyBindings.overlapPercent}%",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = "How much of the current page stays on screen after a turn",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Slider(
+                                    value = keyBindings.overlapPercent.toFloat(),
+                                    onValueChange = { screenModel.setOverlapPercent(it.toInt()) },
+                                    valueRange = PageTurnKeyBindings.MIN_OVERLAP_PERCENT.toFloat()..
+                                        PageTurnKeyBindings.MAX_OVERLAP_PERCENT.toFloat(),
+                                    steps = PageTurnKeyBindings.MAX_OVERLAP_PERCENT - 1
+                                )
+                            }
+                        }
                     }
                 }
             }
