@@ -1,6 +1,8 @@
 package com.karakept.app.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
@@ -22,15 +24,30 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarData
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -39,6 +56,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -50,6 +69,9 @@ import kotlinx.coroutines.delay
  *
  * E-ink panels cannot render a fade: the intermediate frames either ghost or are dropped
  * entirely, so a fading element reads as a flicker. Snapping is both faster and cleaner there.
+ *
+ * [enter] / [exit] override the fade for callers that animate something richer off e-ink — the
+ * e-ink branch shows or hides the content either way.
  */
 @Composable
 fun AnimatedVisibilityOrPlain(
@@ -57,19 +79,213 @@ fun AnimatedVisibilityOrPlain(
     animated: Boolean,
     modifier: Modifier = Modifier,
     durationMillis: Int = 300,
+    enter: EnterTransition = fadeIn(animationSpec = tween(durationMillis)),
+    exit: ExitTransition = fadeOut(animationSpec = tween(durationMillis)),
     content: @Composable () -> Unit
 ) {
     if (animated) {
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(animationSpec = tween(durationMillis)),
-            exit = fadeOut(animationSpec = tween(durationMillis)),
+            enter = enter,
+            exit = exit,
             modifier = modifier
         ) {
             content()
         }
     } else if (visible) {
         Box(modifier = modifier) { content() }
+    }
+}
+
+/**
+ * How an element that floats above the page separates itself from it.
+ *
+ * Exactly one of the two carries that job: a drop shadow normally, a 1dp outline under e-ink
+ * high contrast — where a shadow is a grey gradient the panel cannot render and every surface
+ * role has already collapsed to the page colour, so a shadow-only element has no edge at all.
+ */
+@Immutable
+data class FloatingSurfaceStyle(
+    val shadowElevation: Dp,
+    val outlined: Boolean
+)
+
+/**
+ * Resolves [FloatingSurfaceStyle] for the current display, given the [shadowElevation] the
+ * element uses off e-ink.
+ */
+fun floatingSurfaceStyle(highContrast: Boolean, shadowElevation: Dp): FloatingSurfaceStyle =
+    if (highContrast) {
+        FloatingSurfaceStyle(shadowElevation = 0.dp, outlined = true)
+    } else {
+        FloatingSurfaceStyle(shadowElevation = shadowElevation, outlined = false)
+    }
+
+/** [floatingSurfaceStyle] read off the ambient e-ink mode. */
+@Composable
+fun floatingSurfaceStyle(shadowElevation: Dp): FloatingSurfaceStyle =
+    floatingSurfaceStyle(LocalEinkMode.current.highContrast, shadowElevation)
+
+/** The outline that stands in for the shadow, or null when the shadow is doing the work. */
+@Composable
+fun FloatingSurfaceStyle.borderStroke(): BorderStroke? =
+    if (outlined) BorderStroke(1.dp, MaterialTheme.colorScheme.outline) else null
+
+@Composable
+private fun Modifier.floatingOutline(style: FloatingSurfaceStyle, shape: Shape): Modifier =
+    if (style.outlined) border(1.dp, MaterialTheme.colorScheme.outline, shape) else this
+
+@Composable
+private fun fabElevation(style: FloatingSurfaceStyle) =
+    if (style.outlined) {
+        FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp)
+    } else {
+        FloatingActionButtonDefaults.elevation()
+    }
+
+/**
+ * A [FloatingActionButton] that stays visible on an e-ink page.
+ *
+ * The Material FAB leans entirely on elevation to lift itself off the content: a tonal container
+ * plus a 6dp shadow. Under [com.karakept.app.ui.theme.EinkMode.highContrast] both are gone — the
+ * container is the page colour and the shadow does not render — leaving an icon floating with no
+ * button around it. Swapping the shadow for an outline puts the edge back.
+ *
+ * **Use instead of [FloatingActionButton] everywhere.**
+ */
+@Composable
+fun EinkAwareFab(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    containerColor: Color = FloatingActionButtonDefaults.containerColor,
+    contentColor: Color = contentColorFor(containerColor),
+    content: @Composable () -> Unit
+) {
+    val style = floatingSurfaceStyle(FAB_ELEVATION)
+    val shape = FloatingActionButtonDefaults.shape
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = modifier.floatingOutline(style, shape),
+        shape = shape,
+        containerColor = containerColor,
+        contentColor = contentColor,
+        elevation = fabElevation(style),
+        content = content
+    )
+}
+
+/**
+ * [EinkAwareFab] in the small size, for secondary affordances — scroll-to-top above all.
+ *
+ * **Use instead of [SmallFloatingActionButton] everywhere.**
+ */
+@Composable
+fun EinkAwareSmallFab(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    content: @Composable () -> Unit
+) {
+    val style = floatingSurfaceStyle(FAB_ELEVATION)
+    val shape = FloatingActionButtonDefaults.smallShape
+    SmallFloatingActionButton(
+        onClick = onClick,
+        modifier = modifier.floatingOutline(style, shape),
+        shape = shape,
+        containerColor = containerColor,
+        contentColor = contentColor,
+        elevation = fabElevation(style),
+        content = content
+    )
+}
+
+private val FAB_ELEVATION = 6.dp
+private val SNACKBAR_ELEVATION = 6.dp
+
+/**
+ * How long a snackbar of this [duration] stays up.
+ *
+ * Material keeps the same mapping internal to `SnackbarHost`, so the e-ink host — which cannot
+ * reuse that host at all (see [EinkAwareSnackbarHost]) — has to carry its own copy of the timing
+ * or snackbars would never dismiss themselves.
+ */
+fun snackbarDurationMillis(duration: SnackbarDuration): Long = when (duration) {
+    SnackbarDuration.Indefinite -> Long.MAX_VALUE
+    SnackbarDuration.Long -> 10_000L
+    SnackbarDuration.Short -> 4_000L
+}
+
+/**
+ * A snackbar host that neither fades nor floats on an e-ink page.
+ *
+ * Two separate problems, one per e-ink toggle. Material's `SnackbarHost` fades *and* scales its
+ * snackbar in and out with a spec it does not expose, so under `animationsDisabled` the host
+ * itself is replaced — hence the dismiss timer here, which is the one thing that host was still
+ * doing for us. Under `highContrast` the visual is replaced too: `Snackbar` hardcodes a 6dp
+ * shadow, and its `inverseSurface` container is a solid block of ink on the e-ink scheme — a lot
+ * of ink to lay down and then ghost for a message that disappears after four seconds.
+ *
+ * **Use instead of `SnackbarHost` everywhere.**
+ */
+@Composable
+fun EinkAwareSnackbarHost(
+    hostState: SnackbarHostState,
+    modifier: Modifier = Modifier
+) {
+    if (!LocalEinkMode.current.animationsDisabled) {
+        SnackbarHost(hostState, modifier) { EinkAwareSnackbar(it) }
+        return
+    }
+
+    val data = hostState.currentSnackbarData
+    LaunchedEffect(data) {
+        if (data != null) {
+            delay(snackbarDurationMillis(data.visuals.duration))
+            data.dismiss()
+        }
+    }
+    if (data != null) {
+        Box(modifier) { EinkAwareSnackbar(data) }
+    }
+}
+
+@Composable
+private fun EinkAwareSnackbar(data: SnackbarData) {
+    val style = floatingSurfaceStyle(SNACKBAR_ELEVATION)
+    if (!style.outlined) {
+        Snackbar(data)
+        return
+    }
+    Surface(
+        // Material's own Snackbar insets itself by the same amount; the host adds none.
+        modifier = Modifier.padding(12.dp),
+        shape = MaterialTheme.shapes.extraSmall,
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = style.borderStroke(),
+        shadowElevation = style.shadowElevation
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = data.visuals.message,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f).padding(vertical = 14.dp)
+            )
+            data.visuals.actionLabel?.let { label ->
+                TextButton(onClick = { data.performAction() }) {
+                    Text(text = label, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+            if (data.visuals.withDismissAction) {
+                IconButton(onClick = { data.dismiss() }) {
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Dismiss")
+                }
+            }
+        }
     }
 }
 
@@ -221,17 +437,15 @@ fun FloatingBusyCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val einkMode = LocalEinkMode.current
+    // Under highContrast every surface role is the page colour, so elevation separates
+    // nothing — the outline is what makes this read as a card floating over the content.
+    val style = floatingSurfaceStyle(6.dp)
     Surface(
         modifier = modifier,
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface,
-        // Under highContrast every surface role is the page colour, so elevation separates
-        // nothing — the outline is what makes this read as a card floating over the content.
-        shadowElevation = if (einkMode.highContrast) 0.dp else 6.dp,
-        border = if (einkMode.highContrast) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-        } else null
+        shadowElevation = style.shadowElevation,
+        border = style.borderStroke()
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 22.dp),

@@ -28,7 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,7 +70,10 @@ import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.BusyIndicator
+import com.karakept.app.ui.components.EinkAwareSmallFab
 import com.karakept.app.ui.components.FloatingBusyCard
+import com.karakept.app.ui.components.borderStroke
+import com.karakept.app.ui.components.floatingSurfaceStyle
 import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.components.RefreshableBox
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
@@ -712,6 +714,7 @@ internal fun BookmarkListContent(
         }
 
         // "N new bookmarks" pill — tap to jump to the newly synced items at the top.
+        val pillStyle = floatingSurfaceStyle(4.dp)
         AnimatedVisibilityOrPlain(
             visible = showNewBookmarksPill,
             animated = !einkMode.animationsDisabled,
@@ -724,9 +727,21 @@ internal fun BookmarkListContent(
                     onClearNewBookmarksAbove()
                 },
                 shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shadowElevation = if (einkMode.highContrast) 0.dp else 4.dp
+                // `primary` is solid ink on the e-ink scheme. A filled pill would read, but it
+                // lays down — and then ghosts — a block of ink for a transient prompt; an
+                // outlined one on the page colour says the same thing for a fraction of it.
+                color = if (pillStyle.outlined) {
+                    MaterialTheme.colorScheme.surface
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                contentColor = if (pillStyle.outlined) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onPrimary
+                },
+                border = pillStyle.borderStroke(),
+                shadowElevation = pillStyle.shadowElevation
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -754,10 +769,8 @@ internal fun BookmarkListContent(
             durationMillis = 300,
             modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
         ) {
-            SmallFloatingActionButton(
-                onClick = { scope.launch { listState.scrollToTop(einkMode.instantScroll) } },
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                contentColor = MaterialTheme.colorScheme.onSurface
+            EinkAwareSmallFab(
+                onClick = { scope.launch { listState.scrollToTop(einkMode.instantScroll) } }
             ) {
                 Icon(
                     imageVector = Icons.Default.ArrowUpward,

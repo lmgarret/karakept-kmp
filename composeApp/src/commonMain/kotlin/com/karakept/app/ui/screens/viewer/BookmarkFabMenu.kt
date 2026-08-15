@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -44,6 +43,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
+import com.karakept.app.ui.components.EinkAwareFab
+import com.karakept.app.ui.components.borderStroke
+import com.karakept.app.ui.components.floatingSurfaceStyle
+import com.karakept.app.ui.theme.LocalEinkMode
 
 @Composable
 internal fun BookmarkFabMenu(
@@ -56,13 +60,15 @@ internal fun BookmarkFabMenu(
     onShareClick: () -> Unit,
     onOpenInBrowserClick: () -> Unit
 ) {
+    val einkMode = LocalEinkMode.current
     Column(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Action FABs
-        androidx.compose.animation.AnimatedVisibility(
+        AnimatedVisibilityOrPlain(
             visible = expanded,
+            animated = !einkMode.animationsDisabled,
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
@@ -128,10 +134,18 @@ internal fun BookmarkFabMenu(
             }
         }
 
-        // Main FAB with rotation animation
-        FloatingActionButton(
+        // Main FAB
+        EinkAwareFab(
             onClick = { onExpandedChange(!expanded) }
         ) {
+            // The spring and the crossfade both spend a couple of hundred milliseconds part-way
+            // between two icons, which an e-ink panel renders as a smear of the two overlaid.
+            // The icon still swaps — it just swaps in one repaint.
+            if (einkMode.animationsDisabled) {
+                FabIcon(expanded)
+                return@EinkAwareFab
+            }
+
             val rotation by animateFloatAsState(
                 targetValue = if (expanded) 180f else 0f,
                 animationSpec = spring(
@@ -149,14 +163,19 @@ internal fun BookmarkFabMenu(
                     targetState = expanded,
                     animationSpec = tween(200)
                 ) { isExpanded ->
-                    Icon(
-                        imageVector = if (isExpanded) Icons.Default.Close else Icons.Default.Bookmark,
-                        contentDescription = if (isExpanded) "Close menu" else "Bookmark actions"
-                    )
+                    FabIcon(isExpanded)
                 }
             }
         }
     }
+}
+
+@Composable
+private fun FabIcon(expanded: Boolean) {
+    Icon(
+        imageVector = if (expanded) Icons.Default.Close else Icons.Default.Bookmark,
+        contentDescription = if (expanded) "Close menu" else "Bookmark actions"
+    )
 }
 
 @Composable
@@ -167,13 +186,17 @@ private fun FabMenuItem(
     contentColor: androidx.compose.ui.graphics.Color,
     onClick: () -> Unit
 ) {
+    // The container colours above are all page-coloured under high contrast — the label and the
+    // icon carry the state instead, and the outline is what makes each row a button at all.
+    val style = floatingSurfaceStyle(3.dp)
     Surface(
         onClick = onClick,
         shape = MaterialTheme.shapes.large,
         color = containerColor,
         contentColor = contentColor,
-        shadowElevation = 3.dp,
-        tonalElevation = 3.dp
+        border = style.borderStroke(),
+        shadowElevation = style.shadowElevation,
+        tonalElevation = style.shadowElevation
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
