@@ -364,9 +364,8 @@ private fun ZoomableImagePage(
                         onSuccess = { state ->
                             if (galleryImage.dimensions == null) {
                                 val image = state.result.image
-                                if (image.width > 0 && image.height > 0) {
-                                    loadedAspectRatio = image.width.toFloat() / image.height.toFloat()
-                                }
+                                loadedAspectRatio = loadedImageDimensions(image.width, image.height)
+                                    ?.aspectRatio ?: loadedAspectRatio
                             }
                         },
                         onError = { idx++ },

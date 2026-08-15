@@ -63,12 +63,16 @@ internal val LocalGalleryViewerState = staticCompositionLocalOf<GalleryViewerSta
 internal fun resolveImgGalleryImage(element: Element): GalleryImage? {
     val urls = resolveImageUrls(element)
     if (urls.isEmpty()) return null
+    val dimensions = extractImageDimensions(element)
+    // A declared 1x1 is a tracking pixel — neither worth rendering nor worth a gallery page.
+    // Undeclared ones are caught later, once the decode reveals their size.
+    if (dimensions != null && isTrackingPixel(dimensions)) return null
     return GalleryImage(
         element = element,
         urls = urls,
         alt = element.attr("alt"),
         caption = findFigureCaption(element),
-        dimensions = extractImageDimensions(element)
+        dimensions = dimensions
     )
 }
 
@@ -88,12 +92,14 @@ internal fun resolvePictureGalleryImage(element: Element): GalleryImage? {
     if (img != null) candidates += resolveImageUrls(img)
     val urls = candidates.distinct()
     if (urls.isEmpty()) return null
+    val dimensions = img?.let { extractImageDimensions(it) }
+    if (dimensions != null && isTrackingPixel(dimensions)) return null
     return GalleryImage(
         element = element,
         urls = urls,
         alt = img?.attr("alt").orEmpty(),
         caption = findFigureCaption(element),
-        dimensions = img?.let { extractImageDimensions(it) }
+        dimensions = dimensions
     )
 }
 

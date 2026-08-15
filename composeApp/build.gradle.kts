@@ -129,6 +129,9 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.junit)
                 implementation(libs.mockk)
+                // Headless Compose layout assertions — a reader block's geometry is not
+                // observable from a pure unit test, and desktopTest is the PR CI entry point.
+                implementation(compose.desktop.uiTestJUnit4)
             }
         }
         val androidUnitTest by getting {

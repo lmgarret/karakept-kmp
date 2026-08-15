@@ -3,6 +3,7 @@ package com.karakept.app.ui.components.reader
 import com.fleeksoft.ksoup.Ksoup
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -322,6 +323,44 @@ class HtmlImageUrlTest {
         assertNotNull(dims, "width/height should survive sanitization")
         assertEquals(48, dims.width)
         assertEquals(48, dims.height)
+    }
+
+    // --- loadedImageDimensions / isTrackingPixel ---
+
+    @Test
+    fun loadedImageDimensions_decodedSize_returnsDims() {
+        val dims = loadedImageDimensions(320, 240)
+        assertNotNull(dims)
+        assertEquals(320, dims.width)
+        assertEquals(240, dims.height)
+        assertEquals(320f / 240f, dims.aspectRatio)
+    }
+
+    @Test
+    fun loadedImageDimensions_zeroOrNegative_returnsNull() {
+        assertTrue(loadedImageDimensions(0, 100) == null)
+        assertTrue(loadedImageDimensions(100, 0) == null)
+        assertTrue(loadedImageDimensions(-1, -1) == null)
+    }
+
+    @Test
+    fun isTrackingPixel_onePixelGif_returnsTrue() {
+        assertTrue(isTrackingPixel(ImageDimensions(1, 1)))
+        assertTrue(isTrackingPixel(ImageDimensions(2, 2)))
+    }
+
+    @Test
+    fun isTrackingPixel_thinSpacer_returnsTrue() {
+        // A 1x600 spacer is only degenerate on one axis.
+        assertTrue(isTrackingPixel(ImageDimensions(1, 600)))
+        assertTrue(isTrackingPixel(ImageDimensions(600, 1)))
+    }
+
+    @Test
+    fun isTrackingPixel_realImages_returnsFalse() {
+        assertFalse(isTrackingPixel(ImageDimensions(MIN_RENDERABLE_IMAGE_PX, MIN_RENDERABLE_IMAGE_PX)))
+        assertFalse(isTrackingPixel(ImageDimensions(200, 60)))
+        assertFalse(isTrackingPixel(ImageDimensions(1920, 1080)))
     }
 
     // --- findFigureCaption ---

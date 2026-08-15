@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -160,7 +161,11 @@ fun RenderBlock(
         selectedHighlight.startOffset < blockEnd && 
         selectedHighlight.endOffset > blockStart
 
-    Box {
+    // A Column, not a Box: "hr" and the `else` fallback each emit several siblings, and the
+    // fallback runs for every block without a branch of its own — including an <a> wrapping
+    // block content, which isBlockElement treats as a block. A Box would stack them all at the
+    // same corner.
+    Column {
         when (tag) {
             "p" -> RenderParagraph(element, theme, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId)
             "div", "section", "article", "header", "footer", "nav", "aside", "main", "address" ->
@@ -855,6 +860,29 @@ internal fun extractImageDimensions(element: Element): ImageDimensions? {
     return ImageDimensions(width, height)
 }
 
+/** Below this in either axis an image is a tracking pixel or a spacer, never content. */
+internal const val MIN_RENDERABLE_IMAGE_PX = 8
+
+/**
+ * The decoded image's own pixel size, standing in for the `width`/`height` attributes the HTML
+ * never declared. One image pixel maps to one dp, the same way a browser maps it to one CSS px —
+ * matching what [extractImageDimensions] already feeds the renderer.
+ *
+ * Only the width is ever acted on (as a cap), never the height: see [RenderResolvedImage]. Coil
+ * scales a decode down to the composable's constraints but never up (Compose's default
+ * [coil3.size.Precision.INEXACT]), so this width is either the image's true intrinsic width or
+ * roughly the container's in *device* pixels. Device pixels outnumber dp at any density ≥ 1, so a
+ * downscaled image can never come out looking narrower than its column: only genuinely small
+ * images take the shrink path.
+ */
+internal fun loadedImageDimensions(widthPx: Int, heightPx: Int): ImageDimensions? {
+    if (widthPx <= 0 || heightPx <= 0) return null
+    return ImageDimensions(widthPx, heightPx)
+}
+
+internal fun isTrackingPixel(dimensions: ImageDimensions): Boolean =
+    dimensions.width < MIN_RENDERABLE_IMAGE_PX || dimensions.height < MIN_RENDERABLE_IMAGE_PX
+
 /**
  * Finds the caption for an image, if it sits inside a `<figure>` with a `<figcaption>`.
  * Walks up from [element] to the nearest `<figure>` ancestor rather than only checking the
@@ -914,7 +942,12 @@ internal fun resolveImageUrls(element: Element): List<String> {
 /**
  * Renders an image trying each URL in [urls] in order, falling back to the next on
  * Coil error. Shows a pulsing skeleton while loading and a broken-image placeholder
- * when all URLs fail. Capping width to declared dimensions prevents upscaling small icons.
+ * when all URLs fail.
+ *
+ * Sizing follows the browser's `max-width: 100%; height: auto`: an image occupies its own
+ * width and only shrinks once it is wider than the column. [dimensions] supplies that width
+ * when the HTML declares it; otherwise the decoded image's own width caps it, which is why a
+ * small icon is no longer blown up to the full column width.
  *
  * [element] identifies this image within [LocalGalleryImages] so tapping it opens the
  * full-screen gallery viewer positioned on this exact image, swipeable to its siblings.
@@ -930,19 +963,35 @@ private fun RenderResolvedImage(
     var idx by remember(urls) { mutableIntStateOf(0) }
     // Resets to true on every new URL attempt (idx change) and on new image (urls change).
     var isLoading by remember(urls, idx) { mutableStateOf(true) }
+    // The decoded image's own size, resolved once Coil hands it over — the HTML declared none.
+    var loadedDimensions by remember(urls) { mutableStateOf<ImageDimensions?>(null) }
     val galleryViewerState = LocalGalleryViewerState.current
     val galleryImages = LocalGalleryImages.current
 
-    val sizeModifier = if (dimensions != null) {
-        Modifier
+    val loaded = loadedDimensions
+    val effectiveDimensions = dimensions ?: loaded
+    val sizeModifier = when {
+        // Declared dimensions describe the box before anything loads, so the container can
+        // safely claim that height up front and hold the layout still.
+        dimensions != null -> Modifier
             .widthIn(max = dimensions.width.dp)
             .fillMaxWidth()
             .aspectRatio(dimensions.aspectRatio)
-    } else {
-        Modifier.fillMaxWidth()
+        // A decoded size only caps the width; the painter keeps driving the height, so the box
+        // can never claim a height that disagrees with what is actually drawn into it.
+        loaded != null -> Modifier
+            .widthIn(max = loaded.width.dp)
+            .fillMaxWidth()
+        else -> Modifier.fillMaxWidth()
     }
     val shape = RoundedCornerShape(4.dp)
-    val baseModifier = sizeModifier.padding(vertical = 8.dp)
+    // An image block has nothing to paint outside its own box, so clip it: a painter handed a
+    // box shorter than its content draws past the edge rather than shrinking into it, and that
+    // lands on the surrounding text.
+    val baseModifier = sizeModifier.padding(vertical = 8.dp).clipToBounds()
+
+    // A spacer or tracking pixel: drop it entirely rather than leave a padded sliver in the text.
+    if (effectiveDimensions != null && isTrackingPixel(effectiveDimensions)) return
 
     if (idx >= urls.size) {
         // All candidate URLs failed — show broken-image placeholder.
@@ -992,7 +1041,13 @@ private fun RenderResolvedImage(
             contentDescription = alt.ifBlank { null },
             contentScale = if (dimensions != null) ContentScale.Fit else ContentScale.FillWidth,
             onLoading = { isLoading = true },
-            onSuccess = { isLoading = false },
+            onSuccess = { state ->
+                isLoading = false
+                if (dimensions == null) {
+                    val image = state.result.image
+                    loadedDimensions = loadedImageDimensions(image.width, image.height)
+                }
+            },
             onError = { idx++ },
             modifier = Modifier
                 .fillMaxWidth()
