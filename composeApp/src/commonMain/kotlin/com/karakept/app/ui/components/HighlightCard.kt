@@ -1,9 +1,8 @@
 package com.karakept.app.ui.components
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -31,10 +30,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.Highlight
-import com.karakept.app.ui.theme.HighlightBlue
-import com.karakept.app.ui.theme.HighlightGreen
-import com.karakept.app.ui.theme.HighlightRed
-import com.karakept.app.ui.theme.HighlightYellow
+import com.karakept.app.ui.theme.HighlightPalette
+import com.karakept.app.ui.theme.LocalEinkMode
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -46,23 +43,30 @@ fun HighlightCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val highlightColor = getColorForHighlight(highlight.color ?: "yellow")
+    val style = HighlightPalette.styleFor(highlight.color)
+    val highContrast = LocalEinkMode.current.highContrast
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (highContrast) 0.dp else 2.dp),
+        // A 2dp shadow separates nothing when every surface role is the page colour.
+        border = if (highContrast) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        } else {
+            null
+        },
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            // Color indicator bar
-            Box(
+            // Color indicator bar — carries the pattern instead of the hue on e-ink.
+            HighlightPatternBar(
+                style = style,
                 modifier = Modifier
-                    .width(4.dp)
+                    .width(if (highContrast) 6.dp else 4.dp)
                     .fillMaxHeight()
-                    .background(highlightColor)
             )
 
             Column(
@@ -102,22 +106,24 @@ fun HighlightCard(
                 val date = Instant.fromEpochMilliseconds(highlight.createdAt)
                     .toLocalDateTime(TimeZone.currentSystemDefault())
 
-                Text(
-                    text = "${date.dayOfMonth}/${date.monthNumber}/${date.year}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${date.dayOfMonth}/${date.monthNumber}/${date.year}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    // The bar's pattern is only learnable if it is named somewhere.
+                    if (highContrast) {
+                        TagChip(tag = style.label)
+                    }
+                }
             }
         }
     }
 }
 
-fun getColorForHighlight(colorName: String): Color {
-    return when (colorName.lowercase()) {
-        "yellow" -> HighlightYellow
-        "blue" -> HighlightBlue
-        "green" -> HighlightGreen
-        "red" -> HighlightRed
-        else -> HighlightYellow
-    }
-}
+fun getColorForHighlight(colorName: String): Color = HighlightPalette.styleFor(colorName).color

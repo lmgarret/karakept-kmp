@@ -14,6 +14,7 @@ import com.fleeksoft.ksoup.nodes.Element
 import com.fleeksoft.ksoup.nodes.Node
 import com.fleeksoft.ksoup.nodes.TextNode
 import com.karakept.app.data.model.Highlight
+import com.karakept.app.ui.theme.HighlightPalette
 
 /**
  * Annotation tag used for highlight click targets.
@@ -24,6 +25,51 @@ const val HIGHLIGHT_ANNOTATION_TAG = "karakept_highlight"
  * Annotation tag used for link click targets.
  */
 const val LINK_ANNOTATION_TAG = "karakept_link"
+
+/**
+ * Applies one highlight's fill and its click annotation over [start]..[end].
+ *
+ * On e-ink every highlight gets the same fill ([ReaderThemeData.monochromeHighlight]) because four
+ * saturated colours collapse into the same grey; [AnnotatedClickableText] reads the annotations back
+ * and draws the per-colour pattern rule that actually distinguishes them.
+ */
+internal fun AnnotatedString.Builder.addHighlightSpan(
+    highlight: Highlight,
+    start: Int,
+    end: Int,
+    theme: ReaderThemeData
+) {
+    val mono = theme.monochromeHighlight
+    addStyle(
+        SpanStyle(
+            background = mono?.fill ?: HighlightPalette.styleFor(highlight.color).color,
+            color = mono?.content ?: ReaderThemeData.highlightTextColor
+        ),
+        start,
+        end
+    )
+    addStringAnnotation(
+        tag = HIGHLIGHT_ANNOTATION_TAG,
+        annotation = highlight.id,
+        start = start,
+        end = end
+    )
+}
+
+/**
+ * Styling for a `<mark>` that came from the article's own HTML rather than from a user highlight.
+ *
+ * The two call sites (block and inline paths) used to hardcode the same yellow at different
+ * opacities.
+ */
+internal fun sourceMarkSpanStyle(theme: ReaderThemeData): SpanStyle {
+    val mono = theme.monochromeHighlight
+    return if (mono != null) {
+        SpanStyle(background = mono.fill, color = mono.content)
+    } else {
+        SpanStyle(background = HighlightPalette.default.color)
+    }
+}
 
 /**
  * Builds an [AnnotatedString] from the inline children of a block-level HTML element.
@@ -81,22 +127,7 @@ fun buildInlineAnnotatedString(
             val localEnd = (highlight.endOffset - blockStartOffset).coerceIn(0, result.length)
             if (localStart >= localEnd) continue
 
-            val bgColor = theme.highlightColors[highlight.color ?: "yellow"] ?: theme.highlightColors["yellow"] ?: Color.Yellow
-
-            addStyle(
-                SpanStyle(
-                    background = bgColor,
-                    color = ReaderThemeData.highlightTextColor
-                ),
-                localStart,
-                localEnd
-            )
-            addStringAnnotation(
-                tag = HIGHLIGHT_ANNOTATION_TAG,
-                annotation = highlight.id,
-                start = localStart,
-                end = localEnd
-            )
+            addHighlightSpan(highlight, localStart, localEnd, theme)
         }
 
         // Apply search match spans (drawn on top of highlights for visibility)
@@ -206,11 +237,7 @@ private fun appendNodeChildren(
                             // Our highlight marks — handled in the overlay pass
                         } else {
                             // Generic <mark> from HTML content
-                            builder.addStyle(
-                                SpanStyle(background = Color(0xFFFFEB3B)), // Full opacity generic mark
-                                start,
-                                builder.length
-                            )
+                            builder.addStyle(sourceMarkSpanStyle(theme), start, builder.length)
                         }
                     }
 

@@ -298,6 +298,36 @@ Feed it into a `Surface` as `shadowElevation = style.shadowElevation` and
 > swap the icon (`Star`/`StarBorder`) and the label ("Favorite"/"Unfavorite") as
 > `BookmarkFabMenu` does.
 
+### Highlight colours
+
+Karakeep gives a highlight one of four colours — `yellow`, `blue`, `green`, `red` — stored as a
+plain string. **`HighlightPalette`** (`ui/theme/HighlightPalette.kt`) is the only place that turns
+that string into anything visible: `HighlightPalette.styleFor(name)` returns a `HighlightStyle`
+with the Compose `color`, a display `label`, the `cssHex` the WebView stylesheet is generated
+from, and a `HighlightPattern`. Unknown and null names fall back to yellow, matching both the API
+default and `HighlightRepository`'s own.
+
+> **Rule:** never write a `when (color) { "yellow" -> … }` again. There were four such tables and
+> they had already drifted — two `<mark>` renderers disagreed on opacity, and the WebView's hex
+> literals were maintained by hand.
+
+On a monochrome panel the four fills all land within a couple of greys of each other, so under
+`highContrast` the fill stops carrying the colour and the **pattern** does:
+solid (yellow) / double (blue) / dashed (green) / dotted (red).
+
+- **`drawHighlightRule(...)`** (`ui/components/HighlightPatterns.kt`) — a `DrawScope` extension
+  drawing the pattern as a horizontal rule, growing *upward* from a `bottom` edge so it stays
+  inside the band whatever the line height. `AnnotatedClickableText` calls it once per line box of
+  every highlighted run, via `drawWithContent` **after** `drawContent()` — a highlight's fill is a
+  `SpanStyle.background` painted by the text itself, so a rule put behind the text is covered up.
+- **`HighlightPatternBar`** (same file) — the colour accent on a highlight row: a plain fill
+  normally, the pattern on e-ink. **Use instead of `Box().background(highlightColor)`.**
+- `ReaderThemeData.monochromeHighlight` is non-null only on e-ink and holds the one fill every
+  highlight shares. `addHighlightSpan` / `sourceMarkSpanStyle` (`HtmlInlineRenderer.kt`) read it —
+  both reader paths (`buildInlineAnnotatedString` and `RenderInlineGroup`) go through them.
+- A pattern is only learnable if it is named, so `HighlightCard` and the colour picker spell the
+  colour out (`TagChip`, and a label under each swatch) under `highContrast`.
+
 ### Empty states
 
 - A list with nothing in it needs an **explicit empty state**, never a blank area — the two

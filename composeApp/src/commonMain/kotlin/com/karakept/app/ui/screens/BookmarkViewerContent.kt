@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
@@ -655,18 +656,32 @@ fun BookmarkViewerContent(
                     // Global Dimming Overlay
                     if (selectedHighlightId != null) {
                         var overlayRootOffset by remember { mutableStateOf(Offset.Zero) }
+                        // A 60% black scrim is a page-sized ink dump that ghosts for several turns,
+                        // and it leaves the rest of the article barely legible on a monochrome
+                        // panel. Outlining the selection says the same thing for a hundredth of
+                        // the ink.
+                        val outlineOnly = einkMode.highContrast
+                        val outlineColor = MaterialTheme.colorScheme.outline
                         Box(
                             modifier = Modifier.fillMaxSize()
                                 .onGloballyPositioned { coords -> overlayRootOffset = coords.positionInRoot() }
                                 .pointerInput(Unit) { detectTapGestures { selectedHighlightId = null } }
                         ) {
                             Canvas(modifier = Modifier.fillMaxSize().graphicsLayer(alpha = 0.99f)) {
-                                drawRect(Color.Black.copy(alpha = 0.6f))
+                                if (!outlineOnly) drawRect(Color.Black.copy(alpha = 0.6f))
                                 val pos = highlightPosition
                                 val posPath = pos?.path
                                 if (posPath != null) {
                                     withTransform({ translate(pos.rootOffset.x - overlayRootOffset.x, pos.rootOffset.y - overlayRootOffset.y) }) {
-                                        drawPath(path = posPath, color = Color.Transparent, blendMode = BlendMode.Clear)
+                                        if (outlineOnly) {
+                                            drawPath(
+                                                path = posPath,
+                                                color = outlineColor,
+                                                style = Stroke(width = 2.dp.toPx())
+                                            )
+                                        } else {
+                                            drawPath(path = posPath, color = Color.Transparent, blendMode = BlendMode.Clear)
+                                        }
                                     }
                                 }
                             }

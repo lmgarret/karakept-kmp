@@ -4,6 +4,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -12,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -28,6 +30,10 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.withTimeoutOrNull
 import com.karakept.app.ui.components.HighlightPosition
+import com.karakept.app.ui.components.drawHighlightRule
+import com.karakept.app.ui.theme.HighlightPalette
+import com.karakept.app.ui.theme.HighlightPattern
+import com.karakept.app.ui.theme.LocalEinkMode
 
 
 /**
@@ -79,6 +85,28 @@ fun AnnotatedClickableText(
         }
     }
 
+    // On a monochrome panel every highlight is filled with the same grey, so the colour has to be
+    // carried by a pattern drawn under the run. Empty off e-ink — nothing is drawn and nothing is
+    // allocated.
+    val patternRules = LocalEinkMode.current.highContrast
+    val patternRuns = remember(text, highlights, patternRules) {
+        if (!patternRules) {
+            emptyList()
+        } else {
+            text.getStringAnnotations(HIGHLIGHT_ANNOTATION_TAG, 0, text.length)
+                .mapNotNull { annotation ->
+                    val highlight = highlights.firstOrNull { it.id == annotation.item }
+                        ?: return@mapNotNull null
+                    PatternRun(
+                        pattern = HighlightPalette.styleFor(highlight.color).pattern,
+                        start = annotation.start,
+                        end = annotation.end
+                    )
+                }
+        }
+    }
+    val ruleColor = MaterialTheme.colorScheme.onSecondaryContainer
+
     var rootOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
     // Identifies this block's contribution to a highlight's mask across the
@@ -90,29 +118,18 @@ fun AnnotatedClickableText(
         val layout = layoutResult.value ?: return@LaunchedEffect
         val range = selectionRange ?: return@LaunchedEffect
 
-        // Build a tight path using per-line bounding boxes instead of
-        // getPathForRange(), which extends rectangles to full line width
-        // on wrapped lines and includes non-highlighted whitespace.
-        val startLine = layout.getLineForOffset(range.start)
-        val endLine = layout.getLineForOffset(range.end - 1)
         val padding = 2f
         val cornerRadius = 6f
 
         // Build path in root coordinates so multiple text blocks
         // (multi-paragraph highlights) can be merged into one path.
         val path = Path().apply {
-            for (line in startLine..endLine) {
-                val lineStart = maxOf(range.start, layout.getLineStart(line))
-                val lineEnd = minOf(range.end, layout.getLineEnd(line))
-                if (lineStart >= lineEnd) continue
-
-                val firstBox = layout.getBoundingBox(lineStart)
-                val lastBox = layout.getBoundingBox(lineEnd - 1)
+            for (box in highlightLineRects(layout, range.start, range.end)) {
                 val rect = Rect(
-                    left = minOf(firstBox.left, lastBox.left) - padding + rootOffset.x,
-                    top = firstBox.top - padding + rootOffset.y,
-                    right = maxOf(firstBox.right, lastBox.right) + padding + rootOffset.x,
-                    bottom = firstBox.bottom + padding + rootOffset.y
+                    left = box.left - padding + rootOffset.x,
+                    top = box.top - padding + rootOffset.y,
+                    right = box.right + padding + rootOffset.x,
+                    bottom = box.bottom + padding + rootOffset.y
                 )
                 addRoundRect(
                     androidx.compose.ui.geometry.RoundRect(
@@ -191,7 +208,77 @@ fun AnnotatedClickableText(
             fontStyle = fontStyle,
             lineHeight = lineHeight,
             overflow = overflow,
-            onTextLayout = { layoutResult.value = it }
+            onTextLayout = { layoutResult.value = it },
+            modifier = Modifier.drawHighlightRules(patternRuns, ruleColor) { layoutResult.value }
         )
     }
+}
+
+/** One highlight's pattern and the character range it covers within a single text block. */
+private data class PatternRun(val pattern: HighlightPattern, val start: Int, val end: Int)
+
+/**
+ * Draws the per-colour rule under each highlighted run.
+ *
+ * Over the text rather than behind it: a highlight's fill is a `SpanStyle.background`, which the
+ * text painter draws as part of its own content, so anything put behind it is covered up.
+ *
+ * Off e-ink [runs] is always empty and this adds nothing to the modifier chain. The layout is read
+ * through a lambda because `onTextLayout` only fires after the modifier has been built.
+ */
+private fun Modifier.drawHighlightRules(
+    runs: List<PatternRun>,
+    color: Color,
+    layout: () -> TextLayoutResult?
+): Modifier {
+    if (runs.isEmpty()) return this
+    return drawWithContent {
+        drawContent()
+        val result = layout() ?: return@drawWithContent
+        val strokeWidth = 1.dp.toPx()
+        for (run in runs) {
+            for (box in highlightLineRects(result, run.start, run.end)) {
+                drawHighlightRule(
+                    pattern = run.pattern,
+                    color = color,
+                    left = box.left,
+                    right = box.right,
+                    bottom = box.bottom,
+                    strokeWidth = strokeWidth
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The tight per-line boxes covering [start] until [end].
+ *
+ * Deliberately not `TextLayoutResult.getPathForRange()`, which extends every wrapped line to the
+ * full column width and swallows the whitespace either side of the range.
+ */
+internal fun highlightLineRects(
+    layout: TextLayoutResult,
+    start: Int,
+    end: Int
+): List<Rect> {
+    if (start >= end) return emptyList()
+    val rects = mutableListOf<Rect>()
+    val startLine = layout.getLineForOffset(start)
+    val endLine = layout.getLineForOffset(end - 1)
+    for (line in startLine..endLine) {
+        val lineStart = maxOf(start, layout.getLineStart(line))
+        val lineEnd = minOf(end, layout.getLineEnd(line))
+        if (lineStart >= lineEnd) continue
+
+        val firstBox = layout.getBoundingBox(lineStart)
+        val lastBox = layout.getBoundingBox(lineEnd - 1)
+        rects += Rect(
+            left = minOf(firstBox.left, lastBox.left),
+            top = firstBox.top,
+            right = maxOf(firstBox.right, lastBox.right),
+            bottom = firstBox.bottom
+        )
+    }
+    return rects
 }

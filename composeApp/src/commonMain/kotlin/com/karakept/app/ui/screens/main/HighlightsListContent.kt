@@ -129,7 +129,10 @@ fun HighlightsListContent(
                                 Modifier
                                     .clip(RoundedCornerShape(12.dp))
                                     .border(
-                                        2.dp,
+                                        // Every card already carries a 1dp outline on e-ink, and
+                                        // tertiary is the same ink there — only width sets the
+                                        // active card apart.
+                                        if (einkMode.highContrast) 3.dp else 2.dp,
                                         MaterialTheme.colorScheme.tertiary,
                                         RoundedCornerShape(12.dp)
                                     )
