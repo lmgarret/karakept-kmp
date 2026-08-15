@@ -339,16 +339,7 @@ private fun RenderInlineGroup(
                 val localStart = (highlight.startOffset - blockStartOffset).coerceIn(0, result.length)
                 val localEnd = (highlight.endOffset - blockStartOffset).coerceIn(0, result.length)
                 if (localStart >= localEnd) continue
-                val bgColor = theme.highlightColors[highlight.color ?: "yellow"] ?: theme.highlightColors["yellow"] ?: Color.Yellow
-                addStyle(
-                    SpanStyle(
-                        background = bgColor,
-                        color = ReaderThemeData.highlightTextColor
-                    ),
-                    localStart,
-                    localEnd
-                )
-                addStringAnnotation(HIGHLIGHT_ANNOTATION_TAG, highlight.id, localStart, localEnd)
+                addHighlightSpan(highlight, localStart, localEnd, theme)
             }
             if (inlineSearchState != null) {
                 val (searchMatches, activeIndex) = inlineSearchState
@@ -428,7 +419,7 @@ private fun appendInlineElement(
         }
         "mark" -> {
             if (element.attr("data-id").isBlank()) {
-                builder.addStyle(SpanStyle(background = androidx.compose.ui.graphics.Color(0xFFFFEB3B).copy(alpha = 0.4f)), start, end)
+                builder.addStyle(sourceMarkSpanStyle(theme), start, end)
             }
         }
         "sup" -> builder.addStyle(SpanStyle(baselineShift = androidx.compose.ui.text.style.BaselineShift.Superscript, fontSize = (theme.fontSize.value * 0.75f).sp), start, end)

@@ -8,10 +8,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
-import com.karakept.app.ui.theme.HighlightYellow
-import com.karakept.app.ui.theme.HighlightBlue
-import com.karakept.app.ui.theme.HighlightGreen
-import com.karakept.app.ui.theme.HighlightRed
+
+/**
+ * The single fill every highlight shares on a monochrome panel.
+ *
+ * Four saturated fills all land within a couple of greys of one another on e-ink, so the fill only
+ * says *that* a run is highlighted; which colour it is comes from the pattern rule
+ * [com.karakept.app.ui.components.drawHighlightRule] draws underneath.
+ */
+@Immutable
+data class MonochromeHighlight(val fill: Color, val content: Color)
 
 @Immutable
 data class ReaderThemeData(
@@ -21,7 +27,8 @@ data class ReaderThemeData(
     val fontFamily: FontFamily,
     val linkColor: Color,
     val codeBackgroundColor: Color,
-    val highlightColors: Map<String, Color> = defaultHighlightColors,
+    /** Non-null only on e-ink; off it, highlights keep their own colours. */
+    val monochromeHighlight: MonochromeHighlight? = null,
     /**
      * Multiplies the per-block line-height ratios below. A scale rather than an absolute line
      * height, so body / heading / code stay proportional to one another.
@@ -42,14 +49,12 @@ data class ReaderThemeData(
         /** Headings, code blocks, blockquotes and tables: tighter than body copy. */
         const val TIGHT_LINE_RATIO = 1.4f
 
-        val defaultHighlightColors = mapOf(
-            "yellow" to HighlightYellow,
-            "blue" to HighlightBlue,
-            "green" to HighlightGreen,
-            "red" to HighlightRed
-        )
-
-        /** Highlight text color — always black for readability on colored backgrounds. */
+        /**
+         * Highlight text color — black for readability on the saturated colored backgrounds.
+         *
+         * E-ink does not use this: its highlights are filled with `secondaryContainer`, whose own
+         * `onSecondaryContainer` follows the panel's light/dark inversion.
+         */
         val highlightTextColor = Color.Black
     }
 }

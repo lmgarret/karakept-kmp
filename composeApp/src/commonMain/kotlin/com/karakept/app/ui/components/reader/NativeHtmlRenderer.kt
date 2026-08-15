@@ -36,6 +36,7 @@ import com.fleeksoft.ksoup.nodes.TextNode
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
+import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.theme.rememberFontFamily
 import com.karakept.app.ui.components.HighlightPosition
 
@@ -82,9 +83,18 @@ fun NativeHtmlRenderer(
 
     val resolvedFont = fontFamily.rememberFontFamily()
 
+    val monochromeHighlight = if (LocalEinkMode.current.highContrast) {
+        MonochromeHighlight(
+            fill = MaterialTheme.colorScheme.secondaryContainer,
+            content = MaterialTheme.colorScheme.onSecondaryContainer
+        )
+    } else {
+        null
+    }
+
     val theme = remember(
         resolvedTextColor, resolvedBackgroundColor, fontSize, resolvedFont, primaryColor,
-        typography.lineHeightScale
+        typography.lineHeightScale, monochromeHighlight
     ) {
         ReaderThemeData(
             textColor = resolvedTextColor,
@@ -93,6 +103,7 @@ fun NativeHtmlRenderer(
             fontFamily = resolvedFont,
             linkColor = primaryColor,
             lineHeightScale = typography.lineHeightScale,
+            monochromeHighlight = monochromeHighlight,
             codeBackgroundColor = if (resolvedBackgroundColor.luminance() > 0.5f) {
                 Color(0x1A7F7F7F) // rgba(127,127,127,0.1) on light
             } else {

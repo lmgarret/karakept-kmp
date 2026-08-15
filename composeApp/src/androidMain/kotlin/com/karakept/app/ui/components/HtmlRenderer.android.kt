@@ -29,6 +29,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
+import com.karakept.app.ui.theme.EinkMode
+import com.karakept.app.ui.theme.HighlightPalette
+import com.karakept.app.ui.theme.HighlightPattern
+import com.karakept.app.ui.theme.LocalEinkMode
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.webkit.WebSettingsCompat
@@ -49,6 +53,65 @@ import java.io.File
 private const val ARCHIVE_VIRTUAL_URL = "https://appassets.androidplatform.net/archive/index.html"
 private const val ARCHIVE_PATH_PREFIX = "/archive/"
 private const val ARCHIVE_VIRTUAL_HOST = "appassets.androidplatform.net"
+
+private fun ComposeColor.toCssHex(): String = String.format("#%06X", 0xFFFFFF and toArgb())
+
+private val HighlightPattern.cssBorder: String
+    get() = when (this) {
+        HighlightPattern.SOLID -> "1px solid"
+        // `double` needs 3px of room to resolve into two rules.
+        HighlightPattern.DOUBLE -> "3px double"
+        HighlightPattern.DASHED -> "1px dashed"
+        HighlightPattern.DOTTED -> "2px dotted"
+    }
+
+/**
+ * The `<mark>` stylesheet injected into the WebView.
+ *
+ * On e-ink the four fills all resolve to the same grey, so they are dropped for one shared fill
+ * plus a per-colour `border-bottom` — the same solid / double / dashed / dotted vocabulary the
+ * native reader draws by hand. The blink keyframes are omitted under [EinkMode.animationsDisabled],
+ * which makes `blinkHighlight`'s class toggle a no-op without touching the script.
+ */
+private fun buildHighlightStyles(
+    einkMode: EinkMode,
+    monochromeFill: String,
+    monochromeInk: String
+): String = buildString {
+    val highContrast = einkMode.highContrast
+    val baseFill = if (highContrast) monochromeFill else HighlightPalette.default.cssHex
+    val baseInk = if (highContrast) monochromeInk else "black"
+
+    appendLine("mark.karakept-highlight {")
+    appendLine("    background-color: $baseFill !important;")
+    appendLine("    color: $baseInk !important;")
+    appendLine("    cursor: pointer;")
+    appendLine("}")
+
+    for (style in HighlightPalette.all) {
+        if (highContrast) {
+            appendLine(
+                "mark.karakept-highlight.${style.name} " +
+                    "{ border-bottom: ${style.pattern.cssBorder} $monochromeInk; }"
+            )
+        } else {
+            appendLine(
+                "mark.karakept-highlight.${style.name} " +
+                    "{ background-color: ${style.cssHex} !important; }"
+            )
+        }
+    }
+
+    if (!einkMode.animationsDisabled) {
+        appendLine("@keyframes karakept-blink {")
+        appendLine("    0%, 100% { opacity: 1; }")
+        appendLine("    50% { opacity: 0.15; }")
+        appendLine("}")
+        appendLine("mark.karakept-highlight.karakept-highlight-blink {")
+        appendLine("    animation: karakept-blink 0.25s ease-in-out 2;")
+        appendLine("}")
+    }
+}
 
 /**
  * Whether [uri] is an in-page anchor link (has a fragment) within a document we ourselves
@@ -175,24 +238,12 @@ actual fun HtmlRenderer(
         String.format("#%06X", 0xFFFFFF and color)
     }
 
-    val highlightStyles = remember {
-        """
-        mark.karakept-highlight {
-            background-color: #ffeb3b !important; /* Brighter Yellow */
-            color: black !important;
-            cursor: pointer;
-        }
-        mark.karakept-highlight.blue { background-color: #2196f3 !important; }
-        mark.karakept-highlight.green { background-color: #4caf50 !important; }
-        mark.karakept-highlight.red { background-color: #f44336 !important; }
-        @keyframes karakept-blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.15; }
-        }
-        mark.karakept-highlight.karakept-highlight-blink {
-            animation: karakept-blink 0.25s ease-in-out 2;
-        }
-        """.trimIndent()
+    val einkMode = LocalEinkMode.current
+    val monochromeFill = MaterialTheme.colorScheme.secondaryContainer.toCssHex()
+    val monochromeInk = MaterialTheme.colorScheme.onSecondaryContainer.toCssHex()
+
+    val highlightStyles = remember(einkMode, monochromeFill, monochromeInk) {
+        buildHighlightStyles(einkMode, monochromeFill, monochromeInk)
     }
 
     val highlightScripts = remember {

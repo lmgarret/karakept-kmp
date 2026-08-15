@@ -1,5 +1,6 @@
 package com.karakept.app.ui.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,10 +31,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.Highlight
-import com.karakept.app.ui.theme.HighlightYellow
-import com.karakept.app.ui.theme.HighlightBlue
-import com.karakept.app.ui.theme.HighlightGreen
-import com.karakept.app.ui.theme.HighlightRed
+import com.karakept.app.ui.theme.HighlightPalette
+import com.karakept.app.ui.theme.HighlightStyle
+import com.karakept.app.ui.theme.LocalEinkMode
 
 @Composable
 fun HighlightDetailsBottomPanel(
@@ -108,51 +108,82 @@ private fun HighlightColorPicker(
     selectedColor: String,
     onColorSelected: (String) -> Unit
 ) {
-    val colors = listOf(
-        "yellow" to HighlightYellow,
-        "blue" to HighlightBlue,
-        "green" to HighlightGreen,
-        "red" to HighlightRed
-    )
+    val highContrast = LocalEinkMode.current.highContrast
 
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(colors) { (name, color) ->
+        items(HighlightPalette.all) { style ->
             ColorSwatch(
-                color = color,
-                isSelected = selectedColor == name,
-                onClick = { onColorSelected(name) }
+                style = style,
+                isSelected = selectedColor == style.name,
+                highContrast = highContrast,
+                onClick = { onColorSelected(style.name) }
             )
         }
     }
 }
 
+/**
+ * Four swatches that all render as the same grey on a monochrome panel are not a choice. On e-ink
+ * the fill is dropped for the colour's pattern and the name is spelled out underneath.
+ */
 @Composable
 private fun ColorSwatch(
-    color: Color,
+    style: HighlightStyle,
     isSelected: Boolean,
+    highContrast: Boolean,
     onClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(color)
-            .border(
-                width = if (isSelected) 3.dp else 1.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.LightGray.copy(alpha = 0.5f),
-                shape = CircleShape
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+    val ink = MaterialTheme.colorScheme.onSurface
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.clickable(onClick = onClick)
     ) {
-        if (isSelected) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = null,
-                tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
-                modifier = Modifier.size(20.dp)
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .then(if (highContrast) Modifier else Modifier.background(style.color))
+                .border(
+                    width = if (isSelected) 3.dp else 1.dp,
+                    color = when {
+                        isSelected -> MaterialTheme.colorScheme.primary
+                        highContrast -> MaterialTheme.colorScheme.outline
+                        else -> Color.LightGray.copy(alpha = 0.5f)
+                    },
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (highContrast) {
+                Canvas(modifier = Modifier.size(width = 22.dp, height = 14.dp)) {
+                    drawHighlightRule(
+                        pattern = style.pattern,
+                        color = ink,
+                        left = 0f,
+                        right = size.width,
+                        bottom = size.height,
+                        strokeWidth = 1.5.dp.toPx()
+                    )
+                }
+            } else if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = if (style.color.luminance() > 0.5f) Color.Black else Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        if (highContrast) {
+            Text(
+                text = style.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
