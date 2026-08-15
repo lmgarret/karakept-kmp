@@ -384,7 +384,8 @@ object MainScreen : NavKey {
                     onShowBatchDeleteConfirm = { showBatchDeleteConfirm = true },
                     navigateTo = { screen -> navigator.push(screen) },
                     newBookmarksAbove = newBookmarksAbove,
-                    onClearNewBookmarksAbove = { screenModel.clearNewBookmarksAbove() }
+                    onClearNewBookmarksAbove = { screenModel.clearNewBookmarksAbove() },
+                    onTopBookmarkVisible = { screenModel.markTopVisibleSeen(it) }
                 )
             }
 

@@ -158,6 +158,8 @@ internal fun BookmarkListContent(
     onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null,
     newBookmarksAbove: Int = 0,
     onClearNewBookmarksAbove: () -> Unit = {},
+    /** The topmost bookmark on screen, which retires the "N new" count up to that row. */
+    onTopBookmarkVisible: (Long) -> Unit = {},
     /**
      * False when a reader pane is open beside the list (wide layout) — the reader owns the
      * hardware page buttons in that case, and both panes would otherwise scroll at once.
@@ -224,21 +226,24 @@ internal fun BookmarkListContent(
         derivedStateOf { listState.firstVisibleItemIndex > 3 }
     }
 
-    // "N new" pill: shown only while the user is scrolled away from the top. Clear the counter
-    // once they reach the top (by scrolling or tapping the pill), or if new items arrive while
-    // they are already at the top (they can see them, so no pill is warranted).
+    // "N new" pill: shown only while the user is scrolled away from the top. The counter is
+    // retired by reporting the topmost row on screen — the model advances its "seen" anchor up
+    // to it — so scrolling up through what arrived empties the pill as the rows go by, and
+    // arrivals that land while the user is already at the top never raise it at all.
     // Only the scroll position goes through derivedStateOf (it reads snapshot state); the
     // newBookmarksAbove parameter must be read directly so recomposition picks up its changes.
     val scrolledAwayFromTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
     val showNewBookmarksPill = newBookmarksAbove > 0 && scrolledAwayFromTop
-    LaunchedEffect(Unit) {
-        snapshotFlow { listState.firstVisibleItemIndex == 0 }
-            .collect { atTop -> if (atTop) onClearNewBookmarksAbove() }
-    }
-    LaunchedEffect(newBookmarksAbove) {
-        if (newBookmarksAbove > 0 && listState.firstVisibleItemIndex == 0) onClearNewBookmarksAbove()
+    val currentOnTopBookmarkVisible = rememberUpdatedState(onTopBookmarkVisible)
+    LaunchedEffect(listState) {
+        // Reported by key rather than index: a sync prepending rows re-indexes everything
+        // below them, and the row at the top of the viewport is the same row either way.
+        // The trailing loading/end rows are unkeyed, so anything that is not a remoteId is
+        // not a bookmark.
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key as? Long }
+            .collect { topRemoteId -> topRemoteId?.let { currentOnTopBookmarkVisible.value(it) } }
     }
 
     val hapticFeedback = LocalHapticFeedback.current

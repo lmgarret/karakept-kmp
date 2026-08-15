@@ -304,10 +304,33 @@ class MainScreenModel(
 
     /**
      * Marks the row currently at the top as seen, which is what empties the pill. Called when
-     * the user reaches the top of the list, and when they tap the pill to jump there.
+     * the user taps the pill to jump there.
      */
     fun clearNewBookmarksAbove() {
         _seenTopRemoteId.value = _accumulatedBookmarks.value.firstOrNull()?.remoteId
+    }
+
+    /**
+     * Reports the topmost bookmark on screen. The anchor follows the viewport *up* the list and
+     * never back down, so scrolling up through what arrived retires it row by row while
+     * scrolling away downwards leaves the count alone.
+     *
+     * Reaching the exact first row used to be the only thing that moved the anchor. Reading the
+     * new arrivals and stopping a row short of the top therefore left it where it was, and the
+     * pill went on offering a trip to bookmarks the user had just read — every time they
+     * scrolled away from the top again, with no sync in between.
+     */
+    fun markTopVisibleSeen(remoteId: Long) {
+        if (_seenTopRemoteId.value == remoteId) return
+        val window = _accumulatedBookmarks.value
+        val seenIndex = window.indexOfFirst { it.remoteId == remoteId }
+        if (seenIndex < 0) return
+        val anchorIndex = _seenTopRemoteId.value
+            ?.let { anchor -> window.indexOfFirst { it.remoteId == anchor } }
+            ?: -1
+        // An anchor that has left the window can no longer be compared against, and holding on
+        // to it pins the count to zero until the user reaches the top.
+        if (anchorIndex < 0 || seenIndex < anchorIndex) _seenTopRemoteId.value = remoteId
     }
 
     // RemoteIds of bookmarks on which the user has explicitly performed a list-membership

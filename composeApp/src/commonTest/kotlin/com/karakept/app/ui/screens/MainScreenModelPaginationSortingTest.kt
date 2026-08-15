@@ -305,6 +305,93 @@ class MainScreenModelPaginationSortingTest {
             assertEquals(0, model.newBookmarksAbove.value)
         }
 
+    // The anchor is "the topmost bookmark the user has actually seen", and it used to move only
+    // when the list reached its very first row. Reading the new arrivals and stopping a row
+    // short left it behind, so the pill went on announcing bookmarks the user had just read
+    // every time they scrolled away from the top, with no sync in between (#333).
+
+    @Test
+    fun `scrolling up through new bookmarks retires them row by row`() =
+        runTest(testDispatcher) {
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            // Three arrived above the row the user had seen.
+            model._accumulatedBookmarks.value =
+                listOf(makeBookmark(10, "n1"), makeBookmark(11, "n2"), makeBookmark(12, "n3"), makeBookmark(1, "b1"))
+            model._seenTopRemoteId.value = 1L
+            advanceUntilIdle()
+            assertEquals(3, model.newBookmarksAbove.value)
+
+            // The user scrolls up through them. Each row reaching the top of the viewport is
+            // one they have now seen.
+            model.markTopVisibleSeen(12L)
+            advanceUntilIdle()
+            assertEquals(2, model.newBookmarksAbove.value)
+
+            model.markTopVisibleSeen(11L)
+            advanceUntilIdle()
+            assertEquals(1, model.newBookmarksAbove.value)
+
+            // Stopping one row short of the very top must still leave only that one uncounted.
+            assertEquals(11L, model._seenTopRemoteId.value)
+        }
+
+    @Test
+    fun `scrolling back down does not re-count what was already seen`() =
+        runTest(testDispatcher) {
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            model._accumulatedBookmarks.value =
+                listOf(makeBookmark(10, "n1"), makeBookmark(11, "n2"), makeBookmark(1, "b1"))
+            model._seenTopRemoteId.value = 10L
+            advanceUntilIdle()
+            assertEquals(0, model.newBookmarksAbove.value)
+
+            // Scrolling down puts lower rows at the top of the viewport; the anchor must not
+            // follow, or everything above it would be reported as new all over again.
+            model.markTopVisibleSeen(11L)
+            model.markTopVisibleSeen(1L)
+            advanceUntilIdle()
+
+            assertEquals(10L, model._seenTopRemoteId.value, "the anchor only moves up the list")
+            assertEquals(0, model.newBookmarksAbove.value)
+        }
+
+    @Test
+    fun `an anchor that has left the window is replaced by the row on screen`() =
+        runTest(testDispatcher) {
+            // Holding a row the window no longer has pinned the count to zero until the user
+            // reached the very top.
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            model._accumulatedBookmarks.value = listOf(makeBookmark(10, "n1"), makeBookmark(11, "n2"))
+            model._seenTopRemoteId.value = 999L
+            advanceUntilIdle()
+
+            model.markTopVisibleSeen(11L)
+            advanceUntilIdle()
+
+            assertEquals(11L, model._seenTopRemoteId.value)
+            assertEquals(1, model.newBookmarksAbove.value)
+        }
+
+    @Test
+    fun `a row that is not in the window leaves the anchor alone`() =
+        runTest(testDispatcher) {
+            // A just-created bookmark renders above the window as a placeholder.
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            model._accumulatedBookmarks.value = listOf(makeBookmark(10, "n1"), makeBookmark(1, "b1"))
+            model._seenTopRemoteId.value = 1L
+            advanceUntilIdle()
+
+            model.markTopVisibleSeen(777L)
+            advanceUntilIdle()
+
+            assertEquals(1L, model._seenTopRemoteId.value)
+            assertEquals(1, model.newBookmarksAbove.value)
+        }
+
     @Test
     fun `N-new pill leaves out bookmarks that are already read while they are faded`() =
         runTest(testDispatcher) {
