@@ -456,7 +456,16 @@ internal fun BookmarkListContent(
                     }
 
                     if (bookmark.remoteId in pendingBookmarkRemoteIds) {
-                        BookmarkPlaceholderItem(url = bookmark.url, layoutType = layoutType)
+                        BookmarkPlaceholderItem(
+                            url = bookmark.url,
+                            layoutType = layoutType,
+                            itemContainerStyle = itemContainerStyle,
+                            showThumbnail = showThumbnail,
+                            thumbnailSize = thumbnailSize,
+                            thumbnailSide = thumbnailSide,
+                            titlePosition = titlePosition,
+                            showRowDivider = showRowDivider
+                        )
                         return@Box
                     }
 
