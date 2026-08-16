@@ -639,7 +639,7 @@ fun BookmarkListLayout(
  * Selected and active rows keep a tonal wash so they remain distinguishable without a container.
  */
 @Composable
-private fun BookmarkRowContainer(
+internal fun BookmarkRowContainer(
     isFlat: Boolean,
     showDivider: Boolean,
     isSelected: Boolean,
