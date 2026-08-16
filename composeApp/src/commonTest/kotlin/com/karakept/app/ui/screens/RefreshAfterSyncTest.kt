@@ -17,6 +17,7 @@ import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.UndoCompletedEvent
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -292,13 +293,13 @@ class RefreshAfterSyncTest {
     @Test
     fun `bookmarks the sync adds to the current list appear without leaving it`() = runTest(testDispatcher) {
         // The home list's own pass brings in bookmark 4...
-        coEvery { bookmarkRepository.syncBookmarksForList(any(), "list-a") } answers {
+        coEvery { bookmarkRepository.syncBookmarksForList(any(), "list-a", any()) } answers {
             allBookmarks = allBookmarks + makeBookmark(4L, listIds = "list-a")
             1
         }
         // ...and a later pass over the other lists brings in bookmark 5, which the smart list
         // also matches. Both must land in the view while the user is still looking at it.
-        coEvery { bookmarkRepository.syncBookmarksForList(any(), "list-a-1") } answers {
+        coEvery { bookmarkRepository.syncBookmarksForList(any(), "list-a-1", any()) } answers {
             allBookmarks = allBookmarks + makeBookmark(5L, listIds = "list-a")
             1
         }
@@ -401,6 +402,26 @@ class RefreshAfterSyncTest {
             "every bookmark in the list must be reachable by scrolling to the end"
         )
     }
+
+    @Test
+    fun `the list on screen syncs its reading progress without waiting for a slot`() =
+        runTest(testDispatcher) {
+            // The ration is per server, so the list the user just opened would skip its own
+            // pull whenever another list's pass took the slot moments earlier — leaving the
+            // one view being looked at as the place the counts stay stale.
+            val model = createMainScreenModel()
+            advanceUntilIdle()
+            model.syncBookmarks()
+            advanceUntilIdle()
+
+            coVerify {
+                bookmarkRepository.syncBookmarksForList(any(), "list-a", isCurrentView = true)
+            }
+            // The other lists take their turn as before.
+            coVerify {
+                bookmarkRepository.syncBookmarksForList(any(), "list-a-1", isCurrentView = false)
+            }
+        }
 
     /** The loaded window, read straight off the model — no collector needed. */
     private fun window(model: MainScreenModel): List<Long> =

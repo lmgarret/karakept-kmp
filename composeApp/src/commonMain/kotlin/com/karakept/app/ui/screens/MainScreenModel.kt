@@ -773,7 +773,8 @@ class MainScreenModel(
         if (listId !in _smartListsNeedingRefresh.value) return
         _smartListsNeedingRefresh.value -= listId
         try {
-            bookmarkRepository.syncBookmarksForList(server, listId)
+            // The list just navigated to, so it takes the same exemption as syncCurrentView.
+            bookmarkRepository.syncBookmarksForList(server, listId, isCurrentView = true)
             if (currentView() == LoadedView(server.id, filter)) {
                 refreshLoadedPagesInPlace(server, filter)
             }
@@ -883,16 +884,26 @@ class MainScreenModel(
         }
     }
 
-    /** Dispatches the correct repository call for the currently-viewed list or filter. */
+    /**
+     * Dispatches the correct repository call for the currently-viewed list or filter.
+     *
+     * `isCurrentView` exempts this pass from the reading-progress ration, which is per server:
+     * a list opened moments after another list's pass took the slot would otherwise skip its
+     * own, leaving the one view the user is actually looking at as the place the counts stay
+     * stale until scrolling fetched them row by row.
+     */
     private suspend fun syncCurrentView(
         server: com.karakept.app.data.model.Server,
         listContext: String?,
         filter: FilterConfig
     ) {
         when {
-            listContext != null -> bookmarkRepository.syncBookmarksForList(server, listContext)
-            filter.status == FilterStatus.FAVORITES -> bookmarkRepository.syncFavorites(server)
-            filter.status == FilterStatus.ARCHIVED  -> bookmarkRepository.syncArchived(server)
+            listContext != null ->
+                bookmarkRepository.syncBookmarksForList(server, listContext, isCurrentView = true)
+            filter.status == FilterStatus.FAVORITES ->
+                bookmarkRepository.syncFavorites(server, isCurrentView = true)
+            filter.status == FilterStatus.ARCHIVED ->
+                bookmarkRepository.syncArchived(server, isCurrentView = true)
             else -> bookmarkRepository.syncBookmarks(server)
         }
     }

@@ -243,22 +243,44 @@ class BookmarkRepository(
 
     /**
      * Syncs only favorited bookmarks.
+     *
+     * @param isCurrentView true when this is the view on screen — see [syncBookmarksForList].
      */
-    suspend fun syncFavorites(server: Server): Int =
-        executeSyncPipeline(SyncConfiguration.Filtered(server, favourited = true))
+    suspend fun syncFavorites(server: Server, isCurrentView: Boolean = false): Int =
+        executeSyncPipeline(
+            SyncConfiguration.Filtered(server, favourited = true),
+            forceProgressPull = isCurrentView
+        )
 
     /**
      * Syncs only archived bookmarks.
+     *
+     * @param isCurrentView true when this is the view on screen — see [syncBookmarksForList].
      */
-    suspend fun syncArchived(server: Server): Int =
-        executeSyncPipeline(SyncConfiguration.Filtered(server, archived = true))
+    suspend fun syncArchived(server: Server, isCurrentView: Boolean = false): Int =
+        executeSyncPipeline(
+            SyncConfiguration.Filtered(server, archived = true),
+            forceProgressPull = isCurrentView
+        )
 
     /**
      * Syncs only bookmarks from a specific list.
      * Respects content sync mode (NEVER/PER_BOOKMARK/PER_LIST/ALL).
+     *
+     * @param isCurrentView true when this list is the one on screen. The reading-progress
+     *   ration is per server, so a list opened moments after another list's pass took the
+     *   slot would silently skip its own — leaving the view the user is actually looking at
+     *   as the one place the counts stay stale until scrolling fetched them row by row.
+     *   The view on screen is the one that must not be rationed.
      */
-    suspend fun syncBookmarksForList(server: Server, listId: String): Int =
-        executeSyncPipeline(SyncConfiguration.ForList(server, listId))
+    suspend fun syncBookmarksForList(
+        server: Server,
+        listId: String,
+        isCurrentView: Boolean = false
+    ): Int = executeSyncPipeline(
+        SyncConfiguration.ForList(server, listId),
+        forceProgressPull = isCurrentView
+    )
 
     suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<BookmarkEntity> {
         onStatusChange?.invoke("Waiting for server response...")
@@ -494,11 +516,16 @@ class BookmarkRepository(
     companion object {
         /**
          * Minimum gap between two reading-progress passes triggered by list/filter syncs.
-         * Short enough that refreshing again pulls the next 50 bookmarks rather than
-         * appearing to do nothing, long enough that one fan-out of list syncs still costs
-         * a single pass.
+         *
+         * Was 30s, when a pass cost one request per bookmark and a fan-out of list syncs
+         * could put thousands on the wire. Batched, a pass is a few dozen requests, and the
+         * gap is what decides how long a stale count stays on screen — so it is now short
+         * enough that a burst of list syncs runs a handful of passes (each covering the next
+         * rows in the rotation, so the work compounds rather than repeating) instead of
+         * exactly one, and the list the user opens is not left waiting on a slot another
+         * list took a moment earlier.
          */
-        internal const val PROGRESS_PULL_MIN_INTERVAL_MS = 30_000L
+        internal const val PROGRESS_PULL_MIN_INTERVAL_MS = 5_000L
 
         /**
          * How old a row's reading progress may be before looking at it in the list refetches
@@ -685,7 +712,10 @@ class BookmarkRepository(
      * this call returns 0 immediately without starting a new pipeline.
      * Returns the number of new bookmarks inserted.
      */
-    private suspend fun executeSyncPipeline(config: SyncConfiguration): Int = withContext(appDispatchers.io) {
+    private suspend fun executeSyncPipeline(
+        config: SyncConfiguration,
+        forceProgressPull: Boolean = false
+    ): Int = withContext(appDispatchers.io) {
         val key: SyncKey = when (config) {
             is SyncConfiguration.Full -> null
             is SyncConfiguration.Filtered -> if (config.favourited == true) SYNC_KEY_FAVORITES else SYNC_KEY_ARCHIVED
@@ -734,7 +764,9 @@ class BookmarkRepository(
                 shouldPullReadingProgress = {
                     tryAcquireReadingProgressPull(
                         serverId = config.server.id,
-                        force = config is SyncConfiguration.Full
+                        // A full sync covers the library, and the view on screen is the one
+                        // whose staleness the user can see. Everything else takes its turn.
+                        force = config is SyncConfiguration.Full || forceProgressPull
                     )
                 }
             )

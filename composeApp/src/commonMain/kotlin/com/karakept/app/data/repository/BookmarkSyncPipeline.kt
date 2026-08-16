@@ -217,18 +217,22 @@ internal class BookmarkSyncPipeline(
             }
         }
 
-        // Phase 5: Content sync. ForList syncs also run this phase — syncContent() is gated
-        // internally by each list's syncOffline setting, so content is only downloaded for
-        // lists explicitly configured for offline reading.
-        syncContent(syncedEntities)
-
-        // Phase 6: Sync reading progress. Every sync flavour is eligible — a user who only
-        // ever opens a list would otherwise never pull progress at all — but the gate keeps
-        // a fan-out of list syncs from multiplying the per-bookmark tRPC calls by the
-        // number of lists.
+        // Reading progress before content, though content was written first: progress decides
+        // what the user sees — the unread count, which rows are faded — while a content
+        // download changes nothing on the list and can run for minutes on a list configured
+        // for offline reading. Behind it, the state the screen is judged by arrived last.
+        //
+        // Every sync flavour is eligible: a user who only ever opens a list would otherwise
+        // never pull progress at all. The gate keeps a fan-out of list syncs from running a
+        // pass apiece.
         if (shouldPullReadingProgress?.invoke() != false) {
             syncReadingProgress()
         }
+
+        // Content sync. ForList syncs also run this phase — syncContent() is gated internally
+        // by each list's syncOffline setting, so content is only downloaded for lists
+        // explicitly configured for offline reading.
+        syncContent(syncedEntities)
 
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
 

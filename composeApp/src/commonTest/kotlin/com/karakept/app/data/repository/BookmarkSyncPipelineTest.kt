@@ -1510,6 +1510,32 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     }
 
     @Test
+    fun readingProgressRunsBeforeContentDownload() = runTest(testDispatcher) {
+        // Progress decides what the user sees — the unread count, which rows are faded.
+        // A content download changes nothing on the list and runs for minutes on a list
+        // configured for offline reading; behind it, the state the screen is judged by
+        // arrived last.
+        val events = mutableListOf<String>()
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+        coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
+        coEvery { bookmarkDao.getReadingProgressPullCandidates(any(), any(), any()) } coAnswers {
+            events += "reading-progress"
+            emptyList()
+        }
+        coEvery { fetchRemoteContent(any(), any()) } coAnswers {
+            events += "content"
+            "<p>body</p>"
+        }
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1")), nextCursor = null)
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        assertEquals(listOf("reading-progress", "content"), events)
+    }
+
+    @Test
     fun listSync_asksAboutTheListBeingSyncedFirst() = runTest(testDispatcher) {
         // A pass covers a bounded slice of the library, so which slice decides whether the
         // list the user is looking at agrees with the server.

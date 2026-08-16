@@ -58,13 +58,19 @@ query per bookmark does not have to mean one request per bookmark.
   2. *Rotation* — steady state, `PROGRESS_PULL_ROTATION` rows per pass, ordered by what the
      user is most likely to be looking at: the list being synced first, then unread rows, then
      least-recently-pulled. Every sync flavour is eligible (browsing by list must not starve
-     it), rationed by `BookmarkRepository.tryAcquireReadingProgressPull` so a fan-out of list
-     syncs cannot multiply the passes by the number of lists.
+     it), rationed per server by `BookmarkRepository.tryAcquireReadingProgressPull` so a
+     fan-out of list syncs cannot multiply the passes by the number of lists. A full sync and
+     the view currently on screen (`isCurrentView`) are exempt: the ration is per server, so
+     the list the user just opened would otherwise skip its own pull whenever another list's
+     pass took the slot moments earlier.
   3. *Visible rows* — `pullReadingProgressForVisible`, driven by the list's scroll position,
      refreshes what is on screen when its progress is missing or older than
      `VISIBLE_PROGRESS_STALE_AFTER_MS`. Before batching this was the only unbounded path, so
      scrolling was what converged a library; it is now a latency optimisation rather than the
      mechanism.
+
+  The pull runs *before* the content download in the same pipeline: progress decides what the
+  user sees, while a content download changes nothing on the list and can run for minutes.
 
   Only a pull the server actually answered advances the cursor: an id the batch did not come
   back with is "we never found out", not "nothing stored", and holds its row for a retry.
