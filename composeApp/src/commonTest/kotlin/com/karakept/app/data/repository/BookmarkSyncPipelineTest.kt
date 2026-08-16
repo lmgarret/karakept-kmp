@@ -87,6 +87,11 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // Extension functions on BookmarkActionsRepository use underlying DAOs
         coEvery { pendingActionDao.getPendingActionsList(any()) } returns emptyList()
         coEvery { serverRepository.servers } returns flowOf(listOf(testServer))
+        // The server answers every batch, holding no progress for any of them: the common
+        // case, and the one that still advances the rotation.
+        coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } answers {
+            arg<List<String>>(1).associateWith { null }
+        }
 
         coEvery {
             remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
@@ -132,6 +137,20 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
             shouldPullReadingProgress = shouldPullReadingProgress
         )
     }
+
+    private fun makeTarget(
+        localId: Long = 1L,
+        remoteId: Long = 42L,
+        originalRemoteId: String = "remote-$remoteId",
+        readingProgress: Float = 0f,
+        isRead: Boolean = false
+    ) = ProgressPullTarget(
+        localId = localId,
+        remoteId = remoteId,
+        originalRemoteId = originalRemoteId,
+        readingProgress = readingProgress,
+        isRead = isRead
+    )
 
     private fun makeBookmarkEntity(
         localId: Long = 1L,
@@ -857,7 +876,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // progress must run strictly after that, or the spinner outlives the useful work.
         val events = mutableListOf<String>()
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
-        coEvery { bookmarkDao.getReadingProgressPullCandidates(any(), any()) } coAnswers {
+        coEvery { bookmarkDao.getReadingProgressPullCandidates(any(), any(), any()) } coAnswers {
             events += "reading-progress"
             emptyList()
         }
@@ -957,7 +976,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         assertTrue(foregroundCompleted)
         coVerify { bookmarkDao.insertBookmarks(any()) }
         coVerify(exactly = 0) { highlightRepository.syncHighlights(any()) }
-        coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any()) }
+        coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any(), any()) }
     }
 
     @Test
@@ -1410,7 +1429,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         )
         pipeline.execute()
 
-        coVerify { bookmarkDao.getReadingProgressPullCandidates(any(), any()) }
+        coVerify { bookmarkDao.getReadingProgressPullCandidates(any(), any(), any()) }
     }
 
     @Test
@@ -1429,7 +1448,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         )
         pipeline.execute()
 
-        coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any()) }
+        coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any(), any()) }
     }
 
     // ──────────────────────────────────────────────────────────
@@ -1478,15 +1497,46 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     @Test
     fun fullSync_readingProgressUsesRotatingCursor() = runTest(testDispatcher) {
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
-        val candidate = makeBookmarkEntity(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur")
-        coEvery { bookmarkDao.getReadingProgressPullCandidates("server1", 50) } returns listOf(candidate)
+        coEvery {
+            bookmarkDao.getReadingProgressPullCandidates("server1", null, PROGRESS_PULL_ROTATION)
+        } returns listOf(makeTarget(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur"))
 
         val pipeline = createPipeline(SyncConfiguration.Full(testServer))
         pipeline.execute()
 
         // Candidates come from the rotating-cursor query and get stamped after the pull
-        coVerify { bookmarkDao.getReadingProgressPullCandidates("server1", 50) }
+        coVerify { bookmarkDao.getReadingProgressPullCandidates("server1", null, PROGRESS_PULL_ROTATION) }
         coVerify { bookmarkDao.updateProgressSyncedAt(7L, any()) }
+    }
+
+    @Test
+    fun listSync_asksAboutTheListBeingSyncedFirst() = runTest(testDispatcher) {
+        // A pass covers a bounded slice of the library, so which slice decides whether the
+        // list the user is looking at agrees with the server.
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+        coEvery { remoteDataSource.fetchBookmarksForList(any(), any(), any()) } returns emptyList()
+
+        createPipeline(SyncConfiguration.ForList(testServer, "list-a")).execute()
+
+        coVerify { bookmarkDao.getReadingProgressPullCandidates("server1", "list-a", PROGRESS_PULL_ROTATION) }
+    }
+
+    @Test
+    fun readingProgressPull_asksForEveryCandidateInOneBatch() = runTest(testDispatcher) {
+        // One query per bookmark is the server's only shape, but tRPC batches at the
+        // transport: a pass must not cost one round trip per row.
+        coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
+        val targets = (1L..30L).map { makeTarget(localId = it, remoteId = it, originalRemoteId = "bk-$it") }
+        coEvery {
+            bookmarkDao.getReadingProgressPullCandidates(any(), any(), any())
+        } returns targets
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        coVerify(exactly = 1) {
+            remoteDataSource.getReadingProgressBatch(testServer, targets.map { it.originalRemoteId }, any())
+        }
+        coVerify(exactly = 0) { remoteDataSource.getReadingProgress(any(), any()) }
     }
 
     @Test
@@ -1494,8 +1544,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // The rotating cursor alone converged 50 rows per sync, so a library of hundreds
         // needed hundreds of syncs before the unread count was right.
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
-        val firstBatch = (1..50).map { ProgressPullTarget(localId = it.toLong(), remoteId = it.toLong()) }
-        val secondBatch = (51..70).map { ProgressPullTarget(localId = it.toLong(), remoteId = it.toLong()) }
+        val firstBatch = (1..50).map { makeTarget(localId = it.toLong(), remoteId = it.toLong()) }
+        val secondBatch = (51..70).map { makeTarget(localId = it.toLong(), remoteId = it.toLong()) }
         coEvery {
             bookmarkDao.getNeverProgressSyncedTargets("server1", PROGRESS_PULL_BATCH)
         } returnsMany listOf(firstBatch, secondBatch, emptyList())
@@ -1506,7 +1556,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         coVerify { bookmarkDao.updateProgressSyncedAt(1L, any()) }
         coVerify { bookmarkDao.updateProgressSyncedAt(70L, any()) }
         // The rotation is for steady state — a backfill pass does not also run it.
-        coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any()) }
+        coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any(), any()) }
     }
 
     @Test
@@ -1514,12 +1564,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // Nothing gets stamped when the whole batch fails, so the same rows come back —
         // without this guard the loop would never end.
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
-        val batch = listOf(ProgressPullTarget(localId = 7L, remoteId = 99L))
+        val batch = listOf(makeTarget(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur"))
         coEvery { bookmarkDao.getNeverProgressSyncedTargets("server1", PROGRESS_PULL_BATCH) } returns batch
-        coEvery { bookmarkDao.getBookmarkByRemoteId(99L, "server1") } returns
-            makeBookmarkEntity(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur")
         coEvery {
-            remoteDataSource.getReadingProgress(testServer, "bk-cur")
+            remoteDataSource.getReadingProgressBatch(any(), any(), any())
         } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
 
         val pipeline = createPipeline(SyncConfiguration.Full(testServer))
@@ -1533,11 +1581,11 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // Stamping a bookmark whose pull never reached the server would rotate it to the
         // back of the queue for a whole cycle with its progress still missing.
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
-        val candidate = makeBookmarkEntity(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur")
-        coEvery { bookmarkDao.getReadingProgressPullCandidates("server1", 50) } returns listOf(candidate)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(99L, "server1") } returns candidate
         coEvery {
-            remoteDataSource.getReadingProgress(testServer, "bk-cur")
+            bookmarkDao.getReadingProgressPullCandidates("server1", null, PROGRESS_PULL_ROTATION)
+        } returns listOf(makeTarget(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur"))
+        coEvery {
+            remoteDataSource.getReadingProgressBatch(any(), any(), any())
         } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
 
         val pipeline = createPipeline(SyncConfiguration.Full(testServer))

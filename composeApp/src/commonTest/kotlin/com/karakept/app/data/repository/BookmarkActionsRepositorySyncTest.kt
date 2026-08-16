@@ -2,6 +2,7 @@ package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
+import com.karakept.app.data.local.dao.ProgressPullTarget
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.entity.PendingActionType
@@ -243,6 +244,106 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
         // A backfill walks the whole library; only the rows it actually changes may notify.
         assertTrue(events.isEmpty(), "nothing changed, so nothing to re-read")
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // Batched pull + conflict rule
+    // ──────────────────────────────────────────────────────────
+
+    private fun target(
+        localId: Long = 1L,
+        remoteId: Long = 42L,
+        originalRemoteId: String = "remote-$remoteId",
+        readingProgress: Float = 0f,
+        isRead: Boolean = false
+    ) = ProgressPullTarget(localId, remoteId, originalRemoteId, readingProgress, isRead)
+
+    @Test
+    fun batchPull_asksForEveryTargetInOneCall() = runTest(testDispatcher) {
+        val targets = listOf(target(1L, 10L, "a"), target(2L, 20L, "b"), target(3L, 30L, "c"))
+        coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } returns
+            mapOf("a" to 100, "b" to null, "c" to 40)
+
+        val outcomes = repository.pullReadingProgressForTargets(targets, "server1")
+
+        coVerify(exactly = 1) {
+            remoteDataSource.getReadingProgressBatch(testServer, listOf("a", "b", "c"), any())
+        }
+        assertEquals(ReadingProgressPullResult.APPLIED, outcomes[10L])
+        // The server holding nothing is the absence of a statement, not a claim of unread.
+        assertEquals(ReadingProgressPullResult.SKIPPED, outcomes[20L])
+        assertEquals(ReadingProgressPullResult.APPLIED, outcomes[30L])
+        coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(2L, any(), any(), any()) }
+    }
+
+    @Test
+    fun batchPull_neverAsksAboutABookmarkWithAPushOutstanding() = runTest(testDispatcher) {
+        // The conflict rule: a bookmark this device still has something to say about is left
+        // out of the request, so the answer can never arrive and overwrite it. The count
+        // covers failed pushes as well as queued ones — a push that ran out of retries is
+        // still local state the server has never heard.
+        coEvery {
+            pendingActionDao.countActionsForBookmarkByType(
+                20L, "server1", PendingActionType.UPDATE_READING_PROGRESS
+            )
+        } returns 1
+        val targets = listOf(target(1L, 10L, "a"), target(2L, 20L, "b", readingProgress = 1f, isRead = true))
+        coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } returns mapOf("a" to 10)
+
+        val outcomes = repository.pullReadingProgressForTargets(targets, "server1")
+
+        coVerify(exactly = 1) {
+            remoteDataSource.getReadingProgressBatch(testServer, listOf("a"), any())
+        }
+        assertEquals(ReadingProgressPullResult.SKIPPED, outcomes[20L])
+        coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(2L, any(), any(), any()) }
+    }
+
+    @Test
+    fun batchPull_unansweredIdsReportFailedSoTheCursorHolds() = runTest(testDispatcher) {
+        // A partial answer must not stamp the rows it left out: they would rotate to the back
+        // of the queue without the server ever having been asked about them.
+        val targets = listOf(target(1L, 10L, "a"), target(2L, 20L, "b"))
+        coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } returns mapOf("a" to 50)
+
+        val outcomes = repository.pullReadingProgressForTargets(targets, "server1")
+
+        assertEquals(ReadingProgressPullResult.APPLIED, outcomes[10L])
+        assertEquals(ReadingProgressPullResult.FAILED, outcomes[20L])
+    }
+
+    @Test
+    fun batchPull_requestFailure_reportsFailedForEveryMember() = runTest(testDispatcher) {
+        val targets = listOf(target(1L, 10L, "a"), target(2L, 20L, "b"))
+        coEvery {
+            remoteDataSource.getReadingProgressBatch(any(), any(), any())
+        } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
+
+        val outcomes = repository.pullReadingProgressForTargets(targets, "server1")
+
+        assertEquals(ReadingProgressPullResult.FAILED, outcomes[10L])
+        assertEquals(ReadingProgressPullResult.FAILED, outcomes[20L])
+        coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun batchPull_appliedRowsNotifyTheListOnce() = runTest(testDispatcher) {
+        val targets = listOf(target(1L, 10L, "a"), target(2L, 20L, "b"))
+        coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } returns
+            mapOf("a" to 100, "b" to 0)
+
+        val events = mutableListOf<Long>()
+        val collector = backgroundScope.launch {
+            repository.bookmarkChangedEvents.collect { events += it }
+        }
+        runCurrent()
+
+        repository.pullReadingProgressForTargets(targets, "server1")
+        runCurrent()
+        collector.cancel()
+
+        // b was already at 0, so only a moved.
+        assertEquals(listOf(10L), events)
     }
 
     @Test

@@ -33,7 +33,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Instant
 
@@ -184,27 +183,16 @@ class BookmarkRepository(
         if (targets.isEmpty()) return
 
         val now = System.currentTimeMillis()
-        val semaphore = Semaphore(PROGRESS_PULL_CONCURRENCY)
-        coroutineScope {
+        try {
+            val outcomes = bookmarkActionsRepository.pullReadingProgressForTargets(targets, serverId)
             targets.forEach { target ->
-                launch {
-                    semaphore.acquire()
-                    try {
-                        val result = bookmarkActionsRepository.pullReadingProgressFromServer(
-                            target.remoteId, serverId
-                        )
-                        if (result != ReadingProgressPullResult.FAILED) {
-                            bookmarkDao.updateProgressSyncedAt(target.localId, now)
-                        }
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        AppLogger.d("BookmarkRepo", "Visible-row progress pull failed: ${e.message}")
-                    } finally {
-                        semaphore.release()
-                    }
-                }
+                if (outcomes[target.remoteId] == ReadingProgressPullResult.FAILED) return@forEach
+                bookmarkDao.updateProgressSyncedAt(target.localId, now)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLogger.d("BookmarkRepo", "Visible-row progress pull failed: ${e.message}")
         }
     }
 

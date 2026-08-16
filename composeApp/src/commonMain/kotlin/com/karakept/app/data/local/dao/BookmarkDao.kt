@@ -118,23 +118,42 @@ interface BookmarkDao {
     @Query("UPDATE bookmarks SET progressSyncedAt = :syncedAt WHERE localId = :localId")
     suspend fun updateProgressSyncedAt(localId: Long, syncedAt: Long)
 
-    // Reading-progress pull candidates: least-recently-pulled first, then most recently
-    // modified, so large libraries converge across successive syncs (G3).
+    /**
+     * Reading-progress pull candidates for the rotating cursor.
+     *
+     * Ordered by what the user is most likely to be looking at rather than by staleness
+     * alone: the list on screen first, then unread rows — the ones whose progress decides a
+     * count the user can see — and only then the least-recently-pulled. A pass covers a
+     * bounded slice of the library, so which slice it covers is what decides whether the
+     * screen agrees with the server.
+     *
+     * The list match is deliberately a loose `LIKE`: it only orders rows, never selects them,
+     * so a false positive costs nothing and the exact four-way membership test the paged
+     * query needs would buy nothing here.
+     */
     @Query("""
-        SELECT * FROM bookmarks
+        SELECT localId, remoteId, originalRemoteId, readingProgress, isRead FROM bookmarks
         WHERE serverId = :serverId
-        ORDER BY progressSyncedAt ASC, modifiedAt DESC
+        ORDER BY
+            CASE WHEN :listId IS NOT NULL AND listIds LIKE '%' || :listId || '%' THEN 0 ELSE 1 END,
+            isRead ASC,
+            progressSyncedAt ASC,
+            modifiedAt DESC
         LIMIT :limit
     """)
-    suspend fun getReadingProgressPullCandidates(serverId: String, limit: Int): List<BookmarkEntity>
+    suspend fun getReadingProgressPullCandidates(
+        serverId: String,
+        listId: String?,
+        limit: Int
+    ): List<ProgressPullTarget>
 
     // Bookmarks whose progress has never been pulled. Drained in full on a freshly connected
-    // server so the library does not converge 50 rows per sync. A projection rather than
-    // SELECT *: the pull only needs the two ids, and the row carries article content.
+    // server so the library does not converge one bounded slice per sync. A projection rather
+    // than SELECT *: the pull only needs these columns, and the row carries article content.
     @Query("""
-        SELECT localId, remoteId FROM bookmarks
+        SELECT localId, remoteId, originalRemoteId, readingProgress, isRead FROM bookmarks
         WHERE serverId = :serverId AND progressSyncedAt = 0
-        ORDER BY modifiedAt DESC
+        ORDER BY isRead ASC, modifiedAt DESC
         LIMIT :limit
     """)
     suspend fun getNeverProgressSyncedTargets(serverId: String, limit: Int): List<ProgressPullTarget>
@@ -144,7 +163,7 @@ interface BookmarkDao {
     // reaching them. Staleness rather than "never pulled" so that progress changed on
     // another device shows up on the list being looked at, not one rotation later.
     @Query("""
-        SELECT localId, remoteId FROM bookmarks
+        SELECT localId, remoteId, originalRemoteId, readingProgress, isRead FROM bookmarks
         WHERE serverId = :serverId AND progressSyncedAt < :staleBefore AND remoteId IN (:remoteIds)
     """)
     suspend fun getStaleProgressTargetsIn(

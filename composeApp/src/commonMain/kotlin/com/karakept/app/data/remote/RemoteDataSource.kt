@@ -46,6 +46,17 @@ class UnsupportedServerActionException(message: String) : Exception(message)
 private const val NON_LINK_PROGRESS_ERROR = "reading progress can only be saved"
 
 /**
+ * Bookmarks per batched reading-progress request. Conservative on purpose: the batch travels
+ * in the query string and a default nginx refuses a request line much past 8KB, which is well
+ * under what Karakeep's own web client allows itself. Twenty ids is ~2KB encoded and still
+ * turns a thousand-bookmark pass from a thousand requests into fifty.
+ */
+private const val READING_PROGRESS_BATCH_SIZE = 20
+
+/** "URI too long" and "request header fields too large" — the proxy, not the server. */
+private val URL_TOO_LONG_STATUSES = setOf(414, 431)
+
+/**
  * Extension that checks the HTTP status of a generated API response before deserializing.
  * If the response is non-2xx, throws [ApiException] with the status code and response body,
  * preventing cryptic [io.ktor.client.call.NoTransformationFoundException] errors when the
@@ -585,6 +596,94 @@ class RemoteDataSource(
                 ?.jsonObject?.get("json")
                 ?.jsonObject
             data?.get("readingProgressPercent")?.jsonPrimitive?.intOrNull
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException("Error parsing reading progress response: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Fetch reading progress for several bookmarks in one request.
+     *
+     * Returns the progress percent per bookmark id, in the order asked. A `null` entry means
+     * the server holds no progress for that bookmark; ids missing from the map were not
+     * answered and must be treated as "we never found out", not as "nothing stored".
+     *
+     * The whole batch travels in the query string, and how long a URL a deployment accepts is
+     * the reverse proxy's business, not the server's — Karakeep's own client caps itself at
+     * 14000 characters, while a default nginx rejects rather less. [chunkSize] therefore
+     * starts small and halves on the two statuses that mean "your request line is too long",
+     * so a strict proxy costs a retry rather than the whole feature.
+     */
+    suspend fun getReadingProgressBatch(
+        server: Server,
+        bookmarkIds: List<String>,
+        chunkSize: Int = READING_PROGRESS_BATCH_SIZE
+    ): Map<String, Int?> {
+        if (bookmarkIds.isEmpty()) return emptyMap()
+        val results = mutableMapOf<String, Int?>()
+        var index = 0
+        var size = chunkSize.coerceAtLeast(1)
+        while (index < bookmarkIds.size) {
+            val chunk = bookmarkIds.subList(index, minOf(index + size, bookmarkIds.size))
+            val answered = try {
+                fetchReadingProgressChunk(server, chunk)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: ApiException) {
+                if (e.statusCode in URL_TOO_LONG_STATUSES && size > 1) {
+                    size = size / 2
+                    AppLogger.d("RemoteDataSource", "Progress batch too long, retrying at $size")
+                    continue
+                }
+                throw e
+            }
+            chunk.forEachIndexed { position, id -> results[id] = answered.getOrNull(position) }
+            index += chunk.size
+        }
+        return results
+    }
+
+    /** One batched request. Returns the answers positionally; entries may be null. */
+    private suspend fun fetchReadingProgressChunk(
+        server: Server,
+        bookmarkIds: List<String>
+    ): List<Int?> = guardedCall {
+        val response: HttpResponse = try {
+            val trpcBase = getTrpcBaseUrl(server)
+            val path = TrpcPayloadUtils.batchPath("bookmarks.getReadingProgress", bookmarkIds.size)
+            client.get("$trpcBase/api/trpc/$path") {
+                header("Authorization", getAuth(server))
+                parameter("batch", "1")
+                parameter("input", TrpcPayloadUtils.getReadingProgressBatch(bookmarkIds))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException("Error fetching reading progress: ${e.message}", e)
+        }
+
+        if (!response.status.isSuccess()) {
+            val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+            throw ApiException(
+                "Error fetching reading progress: HTTP ${response.status.value}: $errorBody",
+                statusCode = response.status.value
+            )
+        }
+
+        try {
+            val entries = trpcJson.parseToJsonElement(response.bodyAsText()).jsonArray
+            // A batch answers positionally. An entry that carried an error rather than a
+            // result reads as null here, which the caller treats as "not answered".
+            bookmarkIds.indices.map { position ->
+                entries.getOrNull(position)
+                    ?.jsonObject?.get("result")
+                    ?.jsonObject?.get("data")
+                    ?.jsonObject?.get("json")
+                    ?.jsonObject?.get("readingProgressPercent")
+                    ?.jsonPrimitive?.intOrNull
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -1,6 +1,7 @@
 package com.karakept.app.data.repository
 
 import com.karakept.app.utils.AppLogger
+import com.karakept.app.data.local.dao.ProgressPullTarget
 import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.entity.PendingActionType
 import com.karakept.app.data.model.Server
@@ -33,6 +34,100 @@ enum class ReadingProgressPullResult {
 
     /** The server was never asked, or the request failed. */
     FAILED
+}
+
+/**
+ * Pulls reading progress for many bookmarks in as few requests as the server's URL budget
+ * allows, and applies each answer under the same rule the single-bookmark pull uses.
+ *
+ * Batching is what makes a whole-library pass affordable: one query per bookmark is Karakeep's
+ * only shape, but tRPC batches at the transport, so the per-bookmark cost is a few bytes of
+ * query string rather than a round trip. Convergence stops depending on the user scrolling
+ * past a row for it to be asked about.
+ *
+ * Returns the outcome per bookmark remoteId. Targets held back by the conflict rule report
+ * [ReadingProgressPullResult.SKIPPED] — the server was not asked about them, but nothing is
+ * outstanding either, so the caller may advance its cursor past them. A batch that failed
+ * reports [ReadingProgressPullResult.FAILED] for its members, which holds the cursor.
+ */
+suspend fun BookmarkActionsRepository.pullReadingProgressForTargets(
+    targets: List<ProgressPullTarget>,
+    serverId: String
+): Map<Long, ReadingProgressPullResult> {
+    if (targets.isEmpty()) return emptyMap()
+    return withContext(appDispatchers.io) {
+        val server = serverRepository.servers.first().find { it.id == serverId }
+        if (server == null) {
+            AppLogger.w("ReadProgressSync", "batch pull ABORT -- no server for serverId=$serverId")
+            return@withContext targets.associate { it.remoteId to ReadingProgressPullResult.FAILED }
+        }
+
+        val outcomes = mutableMapOf<Long, ReadingProgressPullResult>()
+        // The conflict rule, applied before the request rather than after: a bookmark this
+        // device still has something to say about is not asked, so the answer can never
+        // arrive and overwrite it.
+        val askable = targets.filter { target ->
+            val outstanding = pendingActionDao.countActionsForBookmarkByType(
+                target.remoteId, serverId, PendingActionType.UPDATE_READING_PROGRESS
+            ) > 0
+            if (outstanding) outcomes[target.remoteId] = ReadingProgressPullResult.SKIPPED
+            !outstanding
+        }
+        if (askable.isEmpty()) return@withContext outcomes
+
+        val answers = try {
+            remoteDataSource.getReadingProgressBatch(server, askable.map { it.originalRemoteId })
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLogger.e("ReadProgressSync", "Batch reading-progress pull failed: ${e.message}")
+            askable.forEach { outcomes[it.remoteId] = ReadingProgressPullResult.FAILED }
+            return@withContext outcomes
+        }
+
+        for (target in askable) {
+            if (!answers.containsKey(target.originalRemoteId)) {
+                outcomes[target.remoteId] = ReadingProgressPullResult.FAILED
+                continue
+            }
+            outcomes[target.remoteId] = applyPulledProgress(target, answers[target.originalRemoteId])
+        }
+        AppLogger.d(
+            "ReadProgressSync",
+            "batch pull: ${targets.size} target(s) -> " +
+                "${outcomes.values.count { it == ReadingProgressPullResult.APPLIED }} applied"
+        )
+        outcomes
+    }
+}
+
+/**
+ * Writes one server answer to [target]'s row, or decides there is nothing to write.
+ *
+ * [serverPercent] null means the server holds no progress at all for this bookmark. That is
+ * never a statement that the bookmark is unread — it is the absence of one — so it must not
+ * clear a read flag this device set. The distinction matters most for the bookmarks the
+ * server refuses to store progress for at all: everything that is not a link.
+ */
+private suspend fun BookmarkActionsRepository.applyPulledProgress(
+    target: ProgressPullTarget,
+    serverPercent: Int?
+): ReadingProgressPullResult {
+    if (serverPercent == null) return ReadingProgressPullResult.SKIPPED
+    val serverProgress = serverPercent / 100f
+    if (serverProgress == target.readingProgress) return ReadingProgressPullResult.SKIPPED
+
+    bookmarkDao.applyServerReadingProgress(
+        localId = target.localId,
+        progress = serverProgress,
+        scrollIndex = 0,
+        scrollOffset = 0
+    )
+    // This write moves the read flag — below 100% it clears it — so the row the list is
+    // holding is now wrong. The list keeps a snapshot of its rows while the drawer's unread
+    // count reads the table live, and without this the two disagree (#333).
+    notifyBookmarkChanged(target.remoteId)
+    return ReadingProgressPullResult.APPLIED
 }
 
 /**

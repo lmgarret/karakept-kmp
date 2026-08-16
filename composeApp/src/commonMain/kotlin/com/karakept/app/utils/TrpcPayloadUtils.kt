@@ -53,4 +53,32 @@ object TrpcPayloadUtils {
     fun getReadingProgress(bookmarkId: String): String = envelope(
         buildJsonObject { put("bookmarkId", bookmarkId) }
     )
+
+    /**
+     * The same query for several bookmarks in one request: `{"0":{…},"1":{…},…}`.
+     *
+     * Karakeep has no procedure that returns progress for many bookmarks, but tRPC batches at
+     * the transport, which is what its own web client does (`httpBatchLink`). One call per
+     * bookmark therefore does not have to mean one request per bookmark — the difference
+     * between a library converging over dozens of syncs and converging in one.
+     *
+     * Results come back as an array in the same order the inputs were given.
+     */
+    fun getReadingProgressBatch(bookmarkIds: List<String>): String = envelope(
+        bookmarkIds.map { id -> buildJsonObject { put("bookmarkId", id) } }
+    )
+
+    /** Multi-entry envelope. Indices are the batch's ordering, so insertion order matters. */
+    fun envelope(inputs: List<JsonObject>): String = JsonObject(
+        inputs.mapIndexed { index, input ->
+            index.toString() to JsonObject(mapOf("json" to input))
+        }.toMap()
+    ).toString()
+
+    /**
+     * The batched-query URL path: one copy of [procedure] per input, comma separated, which is
+     * how tRPC names the procedures a batch is made of.
+     */
+    fun batchPath(procedure: String, count: Int): String =
+        List(count) { procedure }.joinToString(",")
 }
