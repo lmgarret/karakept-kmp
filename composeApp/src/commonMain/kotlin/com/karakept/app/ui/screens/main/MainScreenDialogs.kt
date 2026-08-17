@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -40,6 +41,7 @@ import com.karakept.app.ui.components.BookmarkActionsMenu
 import com.karakept.app.ui.components.FilterBottomPanel
 import com.karakept.app.ui.components.ListPickerDialog
 import com.karakept.app.ui.components.TagEditorDialog
+import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.domain.action.ActionSnackbarManager
@@ -62,6 +64,7 @@ fun RenameListDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = einkModalBorder(AlertDialogDefaults.shape),
         title = { Text("Rename list") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -231,6 +234,7 @@ fun BatchDeleteConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = einkModalBorder(AlertDialogDefaults.shape),
         title = { Text("Delete $selectedCount bookmark${if (selectedCount > 1) "s" else ""}?") },
         text = { Text("This action cannot be undone. The selected bookmarks will be permanently deleted from the server.") },
         confirmButton = {

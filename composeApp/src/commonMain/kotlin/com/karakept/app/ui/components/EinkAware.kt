@@ -587,3 +587,20 @@ suspend fun DrawerState.openDrawer(instant: Boolean) {
 suspend fun DrawerState.closeDrawer(instant: Boolean) {
     if (instant) snapTo(DrawerValue.Closed) else close()
 }
+
+/**
+ * Border for a modal (`AlertDialog`, `ModalBottomSheet`) in high-contrast e-ink mode.
+ *
+ * Under `highContrast` a modal's shadow and its tonal surface both collapse into the page
+ * colour, so without a drawn edge it no longer stands out from the content underneath — the same
+ * problem `BaseBottomPanel` already solves for custom panels. [shape] must match the modal's own
+ * `shape` so the border traces its actual corners.
+ */
+@Composable
+fun einkModalBorder(shape: Shape): Modifier {
+    return if (LocalEinkMode.current.highContrast) {
+        Modifier.border(1.dp, MaterialTheme.colorScheme.outline, shape)
+    } else {
+        Modifier
+    }
+}

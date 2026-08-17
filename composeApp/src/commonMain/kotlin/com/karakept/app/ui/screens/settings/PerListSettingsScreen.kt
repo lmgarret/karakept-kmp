@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -59,6 +60,7 @@ import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setListSettings
 import com.karakept.app.data.repository.setListLayoutId
+import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.components.getIcon
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -172,6 +174,7 @@ fun PerListSettingsContent(
     if (showLayoutPickerDialog) {
         AlertDialog(
             onDismissRequest = { showLayoutPickerDialog = false },
+            modifier = einkModalBorder(AlertDialogDefaults.shape),
             title = { Text("Layout") },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -154,6 +155,7 @@ fun ReaderAppearanceBottomPanel(
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
+            modifier = einkModalBorder(AlertDialogDefaults.shape),
             title = { Text("Reset Reader Appearance") },
             text = { Text("This will reset all reader appearance settings to default. Are you sure?") },
             confirmButton = {

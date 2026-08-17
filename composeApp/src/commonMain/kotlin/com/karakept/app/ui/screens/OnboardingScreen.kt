@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -73,6 +74,7 @@ import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
+import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.components.rememberJsonFilePicker
 
 private const val STEP_WELCOME = 0
@@ -792,6 +794,7 @@ private fun BackupPinEntryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = einkModalBorder(AlertDialogDefaults.shape),
         title = { Text("Enter Backup PIN") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

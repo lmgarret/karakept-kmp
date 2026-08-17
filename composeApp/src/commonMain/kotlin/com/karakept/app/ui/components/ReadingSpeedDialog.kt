@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -38,6 +39,7 @@ fun ReadingSpeedDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = einkModalBorder(AlertDialogDefaults.shape),
         title = { Text("Reading Speed") },
         text = {
             Column(
