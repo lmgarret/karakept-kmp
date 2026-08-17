@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpOffset
 import com.karakept.app.ui.components.InlineLoadingDots
+import com.karakept.app.ui.components.einkOutlineBorder
 import com.karakept.app.ui.components.einkTrailingEdgeBorder
 import com.karakept.app.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
@@ -383,7 +384,8 @@ private fun BuiltinDrawerItem(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
                 offset = menuOffset,
-                shape = MaterialTheme.shapes.extraSmall
+                shape = MaterialTheme.shapes.extraSmall,
+                border = einkOutlineBorder()
             ) {
                 DropdownMenuItem(
                     text = { Text("Set as home") },
@@ -529,7 +531,8 @@ private fun ListDrawerItem(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
                 offset = menuOffset,
-                shape = MaterialTheme.shapes.extraSmall
+                shape = MaterialTheme.shapes.extraSmall,
+                border = einkOutlineBorder()
             ) {
                 DropdownMenuItem(
                     text = { Text("Set as home") },

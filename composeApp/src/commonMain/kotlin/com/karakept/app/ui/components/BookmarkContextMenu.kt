@@ -56,7 +56,8 @@ fun BookmarkContextMenu(
         onDismissRequest = onDismiss,
         offset = offset,
         shape = MaterialTheme.shapes.extraSmall,
-        modifier = modifier
+        modifier = modifier,
+        border = einkOutlineBorder()
     ) {
         // Status actions
         DropdownMenuItem(

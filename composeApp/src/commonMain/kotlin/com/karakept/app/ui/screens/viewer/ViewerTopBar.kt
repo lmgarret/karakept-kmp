@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.karakept.app.ui.components.einkOutlineBorder
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.utils.FaviconUtils
 import getPlatform
@@ -221,7 +222,8 @@ internal fun ViewerTopBar(
             DropdownMenu(
                 expanded = showMenu,
                 onDismissRequest = { onMenuToggle(false) },
-                shape = MaterialTheme.shapes.extraSmall
+                shape = MaterialTheme.shapes.extraSmall,
+                border = einkOutlineBorder()
             ) {
                 // Desktop: additional actions from FAB
                 if (isDesktop && bookmark != null) {

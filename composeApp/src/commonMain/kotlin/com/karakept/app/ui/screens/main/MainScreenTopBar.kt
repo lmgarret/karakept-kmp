@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.karakept.app.ui.components.OfflineModeBadge
+import com.karakept.app.ui.components.einkOutlineBorder
 import com.karakept.app.ui.components.shouldShowRefreshButton
 import com.karakept.app.ui.theme.LocalEinkMode
 
@@ -121,7 +122,8 @@ internal fun MainScreenTopBar(
                     }
                     DropdownMenu(
                         expanded = showBatchMenu,
-                        onDismissRequest = { showBatchMenu = false }
+                        onDismissRequest = { showBatchMenu = false },
+                        border = einkOutlineBorder()
                     ) {
                         // Status
                         DropdownMenuItem(
