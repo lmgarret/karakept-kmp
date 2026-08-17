@@ -107,8 +107,12 @@ internal data class ScrollActionSnapshot(
  * [onSnapshot] returns the bookmarks whose scroll action should fire for that snapshot.
  */
 internal class ScrollActionTracker {
+    // The row last seen at the top of the viewport, held as a key rather than an index.
+    // A sync re-indexes every row below whatever it prepends, so an index means different
+    // things before and after one — and the dataset and the layout reach this tracker in
+    // separate snapshots, leaving a window where the two disagree. Keys are the same in
+    // either list, so the comparison is valid whichever half of the swap a snapshot caught.
     private var anchorKey: Long? = null
-    private var anchorIndex = 0
     private var bottomReached = false
 
     // Set only by an observed scroll gesture that actually moved the list. A mutation can
@@ -127,6 +131,7 @@ internal class ScrollActionTracker {
 
     fun onSnapshot(snapshot: ScrollActionSnapshot): List<BookmarkEntity> {
         val previousBookmarks = lastBookmarks
+        val datasetChanged = previousBookmarks != null && snapshot.bookmarks !== previousBookmarks
         val moved = snapshot.firstIndex != lastIndex || snapshot.firstOffset != lastOffset
         val turned = snapshot.pageTurns != lastPageTurns
         lastBookmarks = snapshot.bookmarks
@@ -134,76 +139,26 @@ internal class ScrollActionTracker {
         lastOffset = snapshot.firstOffset
         lastPageTurns = snapshot.pageTurns
 
-        if (previousBookmarks != null && snapshot.bookmarks !== previousBookmarks) {
-            // The dataset and layoutInfo update in separate snapshots, so this snapshot's
-            // indices still describe the outgoing list. Re-baseline only, fire nothing.
-            rebaseline(snapshot)
-            return emptyList()
-        }
-
         // Requiring actual movement keeps an overscroll gesture — a pull-to-refresh at the top
-        // of a list that already fits on screen — from counting as a scroll. A page turn is
-        // counted on its own: pressing the button is the gesture, and an instant turn finishes
-        // inside one frame, so the scroll it performs is never observed in progress.
-        if ((snapshot.isScrolling && moved) || turned) userHasScrolled = true
+        // of a list that already fits on screen — from counting as a scroll, and requiring a
+        // stable dataset keeps a sync's re-indexing from looking like one. A page turn counts
+        // on its own: pressing the button is the gesture, and an instant turn finishes inside
+        // one frame, so the scroll it performs is never observed in progress.
+        if ((snapshot.isScrolling && moved && !datasetChanged) || turned) userHasScrolled = true
 
-        if (anchorKey == null) {
+        val anchor = anchorKey
+        if (anchor == null) {
             // Nothing to compare against yet — adopt the current position silently.
             anchorKey = snapshot.firstKey
-            anchorIndex = snapshot.firstIndex
             return emptyList()
         }
 
-        val fired = mutableListOf<BookmarkEntity>()
-
-        // The dataset is stable, so a change in the first visible index is a genuine scroll:
-        // no re-indexing can have happened.
-        when {
-            snapshot.firstIndex > anchorIndex -> {
-                collectRange(anchorIndex, snapshot.firstIndex, snapshot, fired)
-                anchorIndex = snapshot.firstIndex
-                anchorKey = snapshot.firstKey ?: anchorKey
-                bottomReached = false
-            }
-            snapshot.firstIndex < anchorIndex -> {
-                // Scrolled back up: those items are on screen again, so let them re-fire.
-                for (i in snapshot.firstIndex until anchorIndex) {
-                    snapshot.bookmarks.getOrNull(i)?.let { processedIds.remove(it.remoteId) }
-                }
-                anchorIndex = snapshot.firstIndex
-                anchorKey = snapshot.firstKey ?: anchorKey
-            }
-        }
-
-        // The last screenful never leaves the top, so it needs its own rule. Requiring a real
-        // gesture is what keeps a sync — which can make the list end at the viewport by
-        // prepending rows or by dropping rows off the tail — from firing this on its own.
-        val total = snapshot.bookmarks.size
-        val atBottom = total > 0 && snapshot.lastVisibleIndex >= total - 1
-        if (!bottomReached && atBottom && userHasScrolled) {
-            collectRange(anchorIndex, total, snapshot, fired)
-            bottomReached = true
-        }
-
-        return fired
-    }
-
-    /**
-     * Follows the anchor bookmark to its index in the new dataset so the next comparison is
-     * made in the new list's coordinates. [bottomReached] is deliberately preserved: a
-     * mutation is not a reason to sweep the bottom again, only a fresh scroll down is.
-     */
-    private fun rebaseline(snapshot: ScrollActionSnapshot) {
-        val key = anchorKey ?: return
-        val newIndex = snapshot.bookmarks.indexOfFirst { it.remoteId == key }
-        if (newIndex >= 0) {
-            anchorIndex = newIndex
-        } else {
+        val bookmarks = snapshot.bookmarks
+        val anchorIndex = bookmarks.indexOfFirst { it.remoteId == anchor }
+        if (anchorIndex < 0) {
             // Anchor gone — a full reload replaced the dataset, or the anchor itself was
-            // removed. Re-adopt from the next stable snapshot rather than guessing an index
-            // from layout info that still describes the old list.
-            anchorKey = null
-            anchorIndex = 0
+            // removed. Adopt the row on screen instead.
+            anchorKey = snapshot.firstKey
             // The rows on screen are not the ones the user was scrolling a moment ago, so the
             // gesture that got them here does not carry over. Applying a filter is the case
             // that showed it: the bookmarks it brings into view sit inside one screenful, and
@@ -211,17 +166,72 @@ internal class ScrollActionTracker {
             // before the user could read the one they had gone looking for.
             userHasScrolled = false
             bottomReached = false
+            return emptyList()
         }
+        val topIndex = snapshot.firstKey
+            ?.let { key -> bookmarks.indexOfFirst { it.remoteId == key } }
+            ?: -1
+
+        val fired = mutableListOf<BookmarkEntity>()
+
+        when {
+            topIndex > anchorIndex -> {
+                // The top of the viewport is now below the row that was there before, which
+                // only a scroll can do: a prepend moves both keys together and leaves their
+                // order alone. Rows the dataset gained in this same snapshot are excluded —
+                // the user cannot have scrolled past a row that was not there.
+                val alreadyPresent = if (datasetChanged) {
+                    previousBookmarks?.mapTo(HashSet()) { it.remoteId }
+                } else {
+                    null
+                }
+                collectRange(anchorIndex, topIndex, snapshot, fired, alreadyPresent)
+                anchorKey = snapshot.firstKey
+                bottomReached = false
+            }
+            topIndex in 0 until anchorIndex -> {
+                // Scrolled back up: those items are on screen again, so let them re-fire.
+                for (i in topIndex until anchorIndex) {
+                    bookmarks.getOrNull(i)?.let { processedIds.remove(it.remoteId) }
+                }
+                anchorKey = snapshot.firstKey
+            }
+        }
+
+        // The last screenful never leaves the top, so it needs its own rule. It is index-based
+        // and therefore only meaningful once the dataset and the layout agree again; requiring
+        // a real gesture is what keeps a sync — which can make the list end at the viewport by
+        // prepending rows or by dropping rows off the tail — from firing it on its own.
+        if (!datasetChanged) {
+            val total = bookmarks.size
+            val atBottom = total > 0 && snapshot.lastVisibleIndex >= total - 1
+            if (!bottomReached && atBottom && userHasScrolled) {
+                val from = anchorKey
+                    ?.let { key -> bookmarks.indexOfFirst { it.remoteId == key } }
+                    ?.takeIf { it >= 0 }
+                    ?: 0
+                collectRange(from, total, snapshot, fired, null)
+                bottomReached = true
+            }
+        }
+
+        return fired
     }
 
+    /**
+     * @param alreadyPresent when non-null, only rows in it may fire — the ids the dataset held
+     *   before this snapshot changed it.
+     */
     private fun collectRange(
         from: Int,
         until: Int,
         snapshot: ScrollActionSnapshot,
-        into: MutableList<BookmarkEntity>
+        into: MutableList<BookmarkEntity>,
+        alreadyPresent: Set<Long>?
     ) {
         for (i in from until until) {
             val bookmark = snapshot.bookmarks.getOrNull(i) ?: continue
+            if (alreadyPresent != null && bookmark.remoteId !in alreadyPresent) continue
             if (!processedIds.add(bookmark.remoteId)) continue
             // The user explicitly acted on this bookmark (e.g. moved it to a list that will
             // remove it via async reconciliation) — absorbed above so we never fire on it.
