@@ -96,6 +96,39 @@ class EinkSettingsBackupTest {
     }
 
     @Test
+    fun `page snapping survives an export and import`() = runTest {
+        repo.setPageTurnSnapToContent(false)
+
+        val restoredInto = SettingsRepository(FakeDataStore())
+        restoredInto.restoreSettings(repo.currentSettings())
+
+        assertFalse(restoredInto.pageTurnSnapToContent.first())
+        assertFalse(restoredInto.pageTurnKeyBindings.first().snapToContent)
+    }
+
+    @Test
+    fun `snapping supplies the overlap, so the fixed percentage stands down`() = runTest {
+        repo.setPageTurnOverlapPercent(20)
+
+        // On by default: the stored percentage is kept but not applied.
+        val snapping = repo.pageTurnKeyBindings.first()
+        assertTrue(snapping.snapToContent)
+        assertEquals(20, snapping.overlapPercent)
+        assertEquals(0, snapping.effectiveOverlapPercent)
+
+        repo.setPageTurnSnapToContent(false)
+        assertEquals(20, repo.pageTurnKeyBindings.first().effectiveOverlapPercent)
+    }
+
+    @Test
+    fun `page snapping works with the master e-ink switch off`() = runTest {
+        // Same reasoning as instant page turns: the buttons are ungated, so the paging style
+        // they use has to be too.
+        assertFalse(repo.einkModeEnabled.first())
+        assertTrue(repo.pageTurnKeyBindings.first().snapToContent)
+    }
+
+    @Test
     fun `page turns stay instant even with the master e-ink switch off`() = runTest {
         // Hardware buttons are not gated on e-ink mode, so the scroll style they use must not be
         // either — otherwise every turn animates for anyone who never flipped the master switch.

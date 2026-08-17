@@ -416,6 +416,71 @@ with no Scaffold `topBar` and content running edge to edge under the system bars
 behind the bar. A screen that consumes its Scaffold padding, like the bookmark list, passes
 nothing.
 
+In the **reader**, a page also **ends on a content boundary**, not on an arbitrary pixel —
+`snapToContent` (default on) walks the turn back onto the top of the line of text that would
+otherwise be sliced by the edge. Snapping supplies its own overlap, so `effectiveOverlapPercent`
+returns 0 while it is on and the "Page overlap" slider is disabled; the two would stack otherwise.
+The walk back is capped (`READER_MAX_SNAP_FRACTION` in `ui/utils/PageSnapUtils.kt`) so a fold
+landing inside an image or a table is left alone rather than rewinding most of the turn.
+
+The whole article is a *single* lazy item, so `layoutInfo` knows nothing about lines and
+`PageTurnScrollEffect`'s `predictiveSnap` answers from a registry instead.
+`ReaderSnapRegistry` (`ui/components/reader/ReaderSnapPoints.kt`, provided through
+`LocalReaderSnapRegistry`) collects every line top and bottom in root coordinates, fed from
+`AnnotatedClickableText`'s existing `onGloballyPositioned` and `onTextLayout` callbacks. Since every
+block is eagerly composed — above and below the viewport alike — the landing line is known *before*
+the turn and folds into a single `scrollBy`, so no intermediate position is ever observable to the
+reader's scroll guard.
+
+> The bookmark list deliberately has none of this: its page turns still scroll by a flat delta.
+> Tiling a list of variable-height rows is tracked separately.
+
+> **Rule:** a new reader text renderer that does not go through `AnnotatedClickableText` silently
+> loses line snapping. Register it with `LocalReaderSnapRegistry` or route it through
+> `AnnotatedClickableText`. Report from layout callbacks into the registry's plain map only —
+> snapshot state written during layout drags the whole article into recomposition on every scroll
+> frame. Non-text blocks (images, tables, rules) register nothing on purpose: they have no line to
+> keep whole, and the snap cap then leaves those folds alone.
+
+Snapping aligns the *top* of a page. Both edges cannot sit on a boundary at once — they are one
+page apart and the content decides where the boundaries fall — so whole pages need leftover space,
+and that is what `ui/utils/PagedRendering.kt` adds **under E-ink mode** (the snap itself stays
+ungated):
+
+- `Modifier.pagedBottomEdge` paints over whatever the bottom edge cuts. Its height is
+  `bottomMaskHeight`, defined as the mirror of `computeSnapAdjustment` rather than recomputed, so
+  the band covers *exactly* what the next turn brings back — band more and that content is never
+  seen, band less and a sliver of a line still shows. An element too tall to snap is therefore not
+  banded either, and stays sliced across both pages on purpose.
+- The band is drawn only while the list sits exactly where a turn left it (`PagedPositionState`).
+  Mid-drag it would read as content ending early and rows popping in at the edge; comparing
+  positions catches every other way the list can move — fling, wheel, scroll restoration — without
+  enumerating them.
+- `computeTrailingPagePadding` adds blank space after the content so the final turn lands on the
+  previous page's handover instead of clamping and re-showing a screenful. It is deliberately
+  generous, which is safe only because two things bound it: a clamped turn may still snap
+  (`hasTrailingPadding` lifts the `turnReachedFullPage` guard), and `tailFullyVisible` makes a
+  forward turn a no-op once the end of the content is on screen — without that the padding buys an
+  extra page whose every line the previous one already showed.
+
+> **Rule:** that padding is room for a *turn* to land on a handover, never somewhere to come to
+> rest. Anything that positions the list itself must pull back out of it with `blankBelowContent`,
+> as `ViewerScrollRestoration` does — a finished bookmark restores to `contentHeight × 1.0`, which
+> clamps into the blank space and reopens the article on a page holding a single line.
+
+> **Rule:** a lazy item is not the same shape as the content inside it. The reader's article box runs ~52dp past its final line — the last block's
+> padding, the renderer's `Spacer` and its `Column` padding — so `tailFullyVisible` alone keeps
+> saying "more below" after the last word is read, and the next turn lands on blank space. The
+> reader therefore also passes `moreContentBelow`, answered by `pageWorthTurning` from two registry
+> queries: `hasLineBelow` (an edge inside the final line still has to turn) and the gap to
+> `contentEndInRoot`, reported by one zero-height marker `NativeHtmlRenderer` places above its
+> bottom margin (a closing image registers no lines, and only its extent keeps it reachable).
+
+> **Rule:** anything that changes how a page is bounded has to keep *contiguity* — the visible
+> content of one page ends exactly where the next begins. A gap means a line was skipped, an
+> overlap means one was shown twice. `PageTurnSnapSimulationTest` models the reader's scrolling end
+> to end and asserts it; that is where the spurious final page was caught.
+
 > **Rule:** never put key capture inside a Compose `Dialog`/`AlertDialog`/`ModalBottomSheet`. Those
 > are separate platform windows on Android, and while one holds focus key events go to *its*
 > `Window.Callback` instead of `MainActivity.dispatchKeyEvent` — the only thing that feeds the

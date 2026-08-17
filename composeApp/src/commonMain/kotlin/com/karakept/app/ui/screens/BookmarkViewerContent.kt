@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,7 +69,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.karakept.app.data.model.LinkOpenMode
+import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.EinkAwareSmallFab
@@ -80,10 +84,19 @@ import com.karakept.app.ui.components.scrollToTop
 import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.input.PageTurnScrollEffect
 import com.karakept.app.ui.input.handleDesktopPageKey
+import com.karakept.app.ui.utils.BODY_LINE_HEIGHT_RATIO
+import com.karakept.app.ui.utils.PagedPositionState
+import com.karakept.app.ui.utils.READER_MAX_SNAP_FRACTION
+import com.karakept.app.ui.utils.computeSnapAdjustment
+import com.karakept.app.ui.utils.pageWorthTurning
+import com.karakept.app.ui.utils.pagedBottomEdge
+import com.karakept.app.ui.utils.trailingPagePaddingFor
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.components.reader.GalleryViewerState
 import com.karakept.app.ui.components.reader.ImageGalleryOverlay
 import com.karakept.app.ui.components.reader.LocalGalleryViewerState
+import com.karakept.app.ui.components.reader.LocalReaderSnapRegistry
+import com.karakept.app.ui.components.reader.ReaderSnapRegistry
 import com.karakept.app.ui.components.reader.SearchMatch
 import com.karakept.app.ui.components.rememberCustomTabOpener
 import com.karakept.app.ui.screens.viewer.*
@@ -220,6 +233,11 @@ fun BookmarkViewerContent(
     val density = LocalDensity.current
     val galleryViewerState = remember { GalleryViewerState() }
 
+    val toolbarHeight = 56.dp
+    // The top bar is painted over the list rather than reserved by the Scaffold, so a page is the
+    // viewport minus that chrome — otherwise every turn hides a line or two behind it.
+    val chromeInsets = rememberViewerChromeInsets(toolbarHeight = toolbarHeight)
+
     // Scroll guard + reading progress restoration
     val scrollRestoration = rememberScrollRestoration(
         scrollState = scrollState,
@@ -228,7 +246,8 @@ fun BookmarkViewerContent(
         trackReadingProgress = trackReadingProgress,
         serverProgressChecked = serverProgressChecked,
         contentFetchAttempted = contentFetchAttempted,
-        scrollToHighlightId = scrollToHighlightId
+        scrollToHighlightId = scrollToHighlightId,
+        obscuredBottomPx = chromeInsets.bottomPx
     )
 
     // When a highlight is clicked, scroll to center it
@@ -259,7 +278,6 @@ fun BookmarkViewerContent(
     // Only an estimate, and only the sticky-title threshold uses it: rememberReadingProgress
     // measures the real hero once it has been laid out. A text-only header is roughly this tall.
     val bannerHeight = if (showHeroImage) 320.dp else 120.dp
-    val toolbarHeight = 56.dp
     val isNativeRenderer = viewerMode == com.karakept.app.data.model.ViewerMode.READER
 
     // Scroll to highlight when navigating from Highlights screen
@@ -295,9 +313,31 @@ fun BookmarkViewerContent(
     }
     val displayState = if (loadingState is BookmarkLoadingState.Error && lastValidState is BookmarkLoadingState.FullyLoaded) lastValidState else loadingState
 
-    // The top bar is painted over the list rather than reserved by the Scaffold, so a page is the
-    // viewport minus that chrome — otherwise every turn hides a line or two behind it.
-    val chromeInsets = rememberViewerChromeInsets(toolbarHeight = toolbarHeight)
+    // Line boundaries for page snapping. The whole article is a single lazy item, so the snap
+    // points cannot come from `layoutInfo` — the text blocks report themselves instead.
+    val pageTurnBindings by pageTurnDispatcher.bindings.collectAsState()
+    val snapRegistry = remember { ReaderSnapRegistry() }
+    // The list container itself does not move while scrolling — only its content does — so this
+    // settles after the first layout and changes again only on a resize.
+    var listTopInRoot by remember { mutableStateOf(0f) }
+
+    // Whole-page rendering — a blank bottom edge and a padded last page — changes how ordinary
+    // scrolling looks, not just how a turn lands, so unlike the snap itself it waits for the
+    // master e-ink switch.
+    val pagedRendering = einkMode.enabled && pageTurnBindings.snapToContent
+    val pagedPosition = remember { PagedPositionState() }
+    // One line of body text: the last page can then go no deeper than the final line sitting at
+    // the top, with blank space under it.
+    val readerTailUnitPx = with(density) {
+        (htmlFontSize * BODY_LINE_HEIGHT_RATIO * readerTypography.lineHeightScale).sp.toPx()
+    }.toInt()
+    val readerTrailingPadPx by remember(pagedRendering, readerTailUnitPx) {
+        derivedStateOf {
+            if (!pagedRendering) 0
+            else trailingPagePaddingFor(scrollState.layoutInfo, readerTailUnitPx)
+        }
+    }
+
     PageTurnScrollEffect(
         listState = scrollState,
         // While the image gallery is open it owns the page-turn buttons (flips between
@@ -305,7 +345,46 @@ fun BookmarkViewerContent(
         enabled = galleryViewerState.request == null,
         obscuredTopPx = chromeInsets.topPx,
         obscuredBottomPx = chromeInsets.bottomPx,
-        onScrolled = { scrollRestoration.approveCurrentPosition() }
+        // Predictive rather than corrective: a second, separate scroll would leave an
+        // intermediate position visible to the scroll guard, which reads it as an unintended
+        // jump. Every block is eagerly composed, including those above and below the viewport,
+        // so the registry can answer for a turn in either direction before it happens.
+        predictiveSnap = { direction, pageDelta ->
+            val foldInRoot = listTopInRoot +
+                scrollState.layoutInfo.viewportStartOffset + chromeInsets.topPx
+            // Scrolling forward by `pageDelta` moves content up by the same amount, so the line
+            // that ends up at the fold is the one sitting `pageDelta` below it right now.
+            val landingPoint = when (direction) {
+                PageTurnDirection.NEXT -> foldInRoot + pageDelta
+                PageTurnDirection.PREVIOUS -> foldInRoot - pageDelta
+            }
+            snapRegistry.lineTopAt(landingPoint)?.let { lineTop ->
+                computeSnapAdjustment(
+                    residualPx = landingPoint - lineTop,
+                    pageDeltaPx = pageDelta,
+                    maxSnapFraction = READER_MAX_SNAP_FRACTION
+                )
+            } ?: 0f
+        },
+        hasTrailingPadding = readerTrailingPadPx > 0,
+        // The article box runs past its last line — paragraph padding plus the renderer's own
+        // bottom margin — so a turn measured against the lazy item keeps going after the last
+        // word is read and lands on blank space. The registry knows where the text actually ends.
+        moreContentBelow = {
+            val fold = listTopInRoot +
+                scrollState.layoutInfo.viewportEndOffset - chromeInsets.bottomPx
+            snapRegistry.contentEndInRoot?.let { contentEnd ->
+                pageWorthTurning(
+                    hasLineBelow = snapRegistry.hasLineBelow(fold),
+                    contentEndGapPx = contentEnd - fold,
+                    minAdvancePx = readerTailUnitPx.toFloat()
+                )
+            } ?: true
+        },
+        onScrolled = {
+            scrollRestoration.approveCurrentPosition()
+            pagedPosition.markSettled(scrollState)
+        }
     )
     val (fabVisible, toggleFabVisible) = rememberFabVisibilityState(
         scrollState = scrollState, fabExpanded = fabExpanded, einkTapOnly = einkMode.enabled
@@ -473,7 +552,13 @@ fun BookmarkViewerContent(
                     ) {
                     // Provided here so RenderResolvedImage (deep inside the LazyColumn's HTML
                     // content) can request the full-screen gallery below without a Dialog.
-                    CompositionLocalProvider(LocalGalleryViewerState provides galleryViewerState) {
+                    CompositionLocalProvider(
+                        LocalGalleryViewerState provides galleryViewerState,
+                        // Null switches the reporting off entirely in every text block, so the
+                        // registry costs nothing when the user has snapping turned off.
+                        LocalReaderSnapRegistry provides
+                            snapRegistry.takeIf { pageTurnBindings.snapToContent }
+                    ) {
                     val needsScrollRestore = trackReadingProgress && !scrollRestoration.hasRestoredScroll &&
                         loadingState is BookmarkLoadingState.FullyLoaded &&
                         ((loadingState as BookmarkLoadingState.FullyLoaded).bookmark.readingProgress > 0.02f || !serverProgressChecked)
@@ -489,6 +574,10 @@ fun BookmarkViewerContent(
                     LazyColumn(
                         state = scrollState,
                         modifier = Modifier.fillMaxSize()
+                            // Anchors the snap registry's root coordinates: on the wide desktop
+                            // layout this pane sits beside the bookmark list, so its top is not
+                            // the window's.
+                            .onGloballyPositioned { listTopInRoot = it.positionInRoot().y }
                             .then(
                                 if (!getPlatform().isDesktop) {
                                     // Tap the reading surface to show/hide the FAB. Taps consumed by
@@ -500,7 +589,28 @@ fun BookmarkViewerContent(
                                         })
                                     }
                                 } else Modifier
+                            )
+                            .pagedBottomEdge(
+                                enabled = pagedRendering,
+                                // What NativeHtmlRenderer paints behind the text itself, so the
+                                // band is indistinguishable from the margin below the last line.
+                                color = htmlBackgroundColor ?: MaterialTheme.colorScheme.surface,
+                                maxSnapFraction = READER_MAX_SNAP_FRACTION,
+                                obscuredTopPx = chromeInsets.topPx,
+                                obscuredBottomPx = chromeInsets.bottomPx,
+                                isSettledOnPage = { pagedPosition.isSettled(scrollState) },
+                                residualPx = { visibleBottom ->
+                                    // The registry is a plain map, invisible to the snapshot
+                                    // system, so the scroll offset is read here to make the band
+                                    // repaint as the article moves.
+                                    scrollState.firstVisibleItemScrollOffset
+                                    val edge = listTopInRoot + visibleBottom
+                                    snapRegistry.lineTopAt(edge)?.let { edge - it } ?: 0f
+                                }
                             ),
+                        contentPadding = PaddingValues(
+                            bottom = with(density) { readerTrailingPadPx.toDp() }
+                        ),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         val contentItemModifier = Modifier.widthIn(max = readerTypography.maxWidthDp.dp)

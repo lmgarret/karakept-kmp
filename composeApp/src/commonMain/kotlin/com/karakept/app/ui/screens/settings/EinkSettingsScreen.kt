@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.SwipeVertical
 import androidx.compose.material.icons.filled.Tonality
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -263,26 +264,51 @@ fun EinkSettingsContent(
                             onClear = { screenModel.clearBinding(PageTurnDirection.NEXT) }
                         )
 
-                        EinkSetting.PAGE_OVERLAP -> Card(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "Page overlap: ${keyBindings.overlapPercent}%",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    text = "How much of the current page stays on screen after a turn",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Slider(
-                                    value = keyBindings.overlapPercent.toFloat(),
-                                    onValueChange = { screenModel.setOverlapPercent(it.toInt()) },
-                                    valueRange = PageTurnKeyBindings.MIN_OVERLAP_PERCENT.toFloat()..
-                                        PageTurnKeyBindings.MAX_OVERLAP_PERCENT.toFloat(),
-                                    steps = PageTurnKeyBindings.MAX_OVERLAP_PERCENT - 1
-                                )
+                        EinkSetting.SNAP_TO_CONTENT -> SettingSwitchCard(
+                            title = "Snap pages to content",
+                            description = "Start each page of an article on a whole line of text, " +
+                                "instead of slicing through the one that straddles the edge. With " +
+                                "E-ink mode on, pages also end on a whole line and the last page " +
+                                "carries on from the previous instead of repeating it.",
+                            icon = Icons.Default.VerticalAlignTop,
+                            checked = keyBindings.snapToContent,
+                            onCheckedChange = { screenModel.setSnapToContent(it) }
+                        )
+
+                        EinkSetting.PAGE_OVERLAP -> {
+                            // Snapping produces its own overlap — as much as it takes to keep the
+                            // straddling element whole — so a fixed percentage would stack on it.
+                            val overlapEnabled = !keyBindings.snapToContent
+                            val disabledAlpha = 0.38f
+                            Card(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = "Page overlap: ${keyBindings.overlapPercent}%",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(
+                                            alpha = if (overlapEnabled) 1f else disabledAlpha
+                                        )
+                                    )
+                                    Text(
+                                        text = if (overlapEnabled)
+                                            "How much of the current page stays on screen after a turn"
+                                        else
+                                            "Snapping already keeps whatever straddles the edge on " +
+                                                "screen, so a fixed overlap would stack on top of it",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                            alpha = if (overlapEnabled) 1f else disabledAlpha
+                                        )
+                                    )
+                                    Slider(
+                                        value = keyBindings.overlapPercent.toFloat(),
+                                        onValueChange = { screenModel.setOverlapPercent(it.toInt()) },
+                                        valueRange = PageTurnKeyBindings.MIN_OVERLAP_PERCENT.toFloat()..
+                                            PageTurnKeyBindings.MAX_OVERLAP_PERCENT.toFloat(),
+                                        steps = PageTurnKeyBindings.MAX_OVERLAP_PERCENT - 1,
+                                        enabled = overlapEnabled
+                                    )
+                                }
                             }
                         }
                     }

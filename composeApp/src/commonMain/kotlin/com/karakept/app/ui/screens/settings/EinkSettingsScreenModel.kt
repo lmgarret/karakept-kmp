@@ -16,6 +16,7 @@ import com.karakept.app.data.repository.setPageTurnKeyCode
 import com.karakept.app.data.repository.setPageTurnInvertVolumeKeys
 import com.karakept.app.data.repository.setPageTurnKeysEnabled
 import com.karakept.app.data.repository.setPageTurnOverlapPercent
+import com.karakept.app.data.repository.setPageTurnSnapToContent
 import com.karakept.app.data.repository.setPageTurnUseVolumeKeys
 import com.karakept.app.data.repository.setRowActionMode
 import com.karakept.app.ui.input.PageTurnDispatcher
@@ -103,6 +104,10 @@ class EinkSettingsScreenModel(
 
     fun setOverlapPercent(percent: Int) = launchSetting {
         settingsRepository.setPageTurnOverlapPercent(percent)
+    }
+
+    fun setSnapToContent(enabled: Boolean) = launchSetting {
+        settingsRepository.setPageTurnSnapToContent(enabled)
     }
 
     fun clearBinding(direction: PageTurnDirection) = launchSetting {

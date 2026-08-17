@@ -94,7 +94,8 @@ internal data class StoredEinkSettings(
      * home screen keeps showing the icon long after e-ink mode is switched off, so silently
      * putting the colour artwork back would be a change the user never asked for.
      */
-    val monochromeIcon: Boolean = false
+    val monochromeIcon: Boolean = false,
+    val pageTurnSnapToContent: Boolean = true
 )
 
 /** Swipe-action settings: left/right actions and custom swipe configurations. */

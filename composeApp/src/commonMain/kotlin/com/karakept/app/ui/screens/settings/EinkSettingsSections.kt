@@ -37,6 +37,7 @@ enum class EinkSetting(val group: EinkSettingGroup) {
     INVERT_VOLUME_KEYS(EinkSettingGroup.PAGE_TURN_BUTTONS),
     BIND_PREVIOUS(EinkSettingGroup.PAGE_TURN_BUTTONS),
     BIND_NEXT(EinkSettingGroup.PAGE_TURN_BUTTONS),
+    SNAP_TO_CONTENT(EinkSettingGroup.PAGE_TURN_BUTTONS),
     PAGE_OVERLAP(EinkSettingGroup.PAGE_TURN_BUTTONS)
 }
 
@@ -69,6 +70,7 @@ fun visibleEinkSettings(state: EinkSettingsState): List<EinkSetting> =
             EinkSetting.USE_VOLUME_KEYS,
             EinkSetting.BIND_PREVIOUS,
             EinkSetting.BIND_NEXT,
+            EinkSetting.SNAP_TO_CONTENT,
             EinkSetting.PAGE_OVERLAP -> state.hardwareKeysEnabled
         }
     }
