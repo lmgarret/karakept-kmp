@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpOffset
 import com.karakept.app.ui.components.InlineLoadingDots
+import com.karakept.app.ui.components.einkTrailingEdgeBorder
 import com.karakept.app.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
@@ -251,7 +252,7 @@ internal fun MainScreenDrawer(
     BoxWithConstraints {
         val drawerWidth = modalDrawerWidth(maxWidth)
         val sheet: @Composable () -> Unit = {
-            ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
+            ModalDrawerSheet(modifier = Modifier.width(drawerWidth).then(einkTrailingEdgeBorder())) {
                 DrawerContent(
                     lists = lists,
                     listCounts = listCounts,

@@ -57,6 +57,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
@@ -602,5 +604,43 @@ fun einkModalBorder(shape: Shape): Modifier {
         Modifier.border(1.dp, MaterialTheme.colorScheme.outline, shape)
     } else {
         Modifier
+    }
+}
+
+/**
+ * Outline [BorderStroke] for components with a native `border` parameter (`Surface`, `Card`,
+ * `DropdownMenu`) in high-contrast e-ink mode — `null` outside it, same rationale as
+ * [einkModalBorder].
+ */
+@Composable
+fun einkOutlineBorder(): BorderStroke? {
+    return if (LocalEinkMode.current.highContrast) {
+        BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    } else {
+        null
+    }
+}
+
+/**
+ * Trailing-edge border for a full-height side panel (e.g. the navigation drawer) in
+ * high-contrast e-ink mode.
+ *
+ * Unlike [einkModalBorder], only the edge that actually borders the rest of the content gets a
+ * drawn line — the panel's other edges already sit flush against the screen boundary, so a full
+ * border there would be redundant.
+ */
+@Composable
+fun einkTrailingEdgeBorder(): Modifier {
+    if (!LocalEinkMode.current.highContrast) return Modifier
+    val color = MaterialTheme.colorScheme.outline
+    return Modifier.drawWithContent {
+        drawContent()
+        val strokePx = 1.dp.toPx()
+        drawLine(
+            color = color,
+            start = Offset(size.width - strokePx / 2, 0f),
+            end = Offset(size.width - strokePx / 2, size.height),
+            strokeWidth = strokePx
+        )
     }
 }
