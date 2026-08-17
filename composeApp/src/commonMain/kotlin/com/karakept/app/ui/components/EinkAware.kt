@@ -611,15 +611,13 @@ fun einkModalBorder(shape: Shape): Modifier {
  * Outline [BorderStroke] for components with a native `border` parameter (`Surface`, `Card`,
  * `DropdownMenu`) in high-contrast e-ink mode — `null` outside it, same rationale as
  * [einkModalBorder].
+ *
+ * Delegates to [floatingSurfaceStyle]/[borderStroke] so the outline's width and colour stay
+ * defined in one place; `0.dp` is a no-op shadowElevation off e-ink, since these components
+ * never take that branch.
  */
 @Composable
-fun einkOutlineBorder(): BorderStroke? {
-    return if (LocalEinkMode.current.highContrast) {
-        BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-    } else {
-        null
-    }
-}
+fun einkOutlineBorder(): BorderStroke? = floatingSurfaceStyle(0.dp).borderStroke()
 
 /**
  * Trailing-edge border for a full-height side panel (e.g. the navigation drawer) in
