@@ -125,6 +125,7 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         pageTurnNextKeyCode = eink.nextPageKeyCode,
         pageTurnOverlapPercent = eink.pageTurnOverlapPercent,
         einkMonochromeIcon = eink.monochromeIcon,
+        pageTurnSnapToContent = eink.pageTurnSnapToContent,
         swipeLeftAction = swipe.swipeLeftAction,
         swipeRightAction = swipe.swipeRightAction,
         customSwipeConfigsJson = swipe.customSwipeConfigsJson,
@@ -201,7 +202,8 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                     PageTurnKeyBindings.MIN_OVERLAP_PERCENT,
                     PageTurnKeyBindings.MAX_OVERLAP_PERCENT
                 ),
-                monochromeIcon = s.einkMonochromeIcon
+                monochromeIcon = s.einkMonochromeIcon,
+                pageTurnSnapToContent = s.pageTurnSnapToContent
             )
         )
         prefs[SWIPE_SETTINGS_KEY] = settingsJson.encodeToString(
@@ -402,6 +404,9 @@ suspend fun SettingsRepository.setPageTurnOverlapPercent(percent: Int) = updateE
         )
     )
 }
+
+suspend fun SettingsRepository.setPageTurnSnapToContent(enabled: Boolean) =
+    updateEinkSettings { copy(pageTurnSnapToContent = enabled) }
 
 suspend fun SettingsRepository.setSwipeLeftAction(action: SwipeAction) =
     updateSwipeSettings { copy(swipeLeftAction = action.name) }

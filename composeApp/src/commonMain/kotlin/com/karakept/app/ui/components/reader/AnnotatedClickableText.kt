@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -113,6 +114,18 @@ fun AnnotatedClickableText(
     // re-reports that scrolling triggers.
     val positionSourceKey = remember { Any() }
 
+    // Page snapping needs where every line of this block sits so a turn can stop on a line top
+    // rather than through the middle of one. Position and text layout arrive in either order and
+    // from two different callbacks, so they are staged in a plain holder — snapshot state would
+    // subscribe the layout pass to itself, and this is written on every scroll frame.
+    val snapRegistry = LocalReaderSnapRegistry.current
+    val snapReport = remember { SnapLineReport() }
+    if (snapRegistry != null) {
+        DisposableEffect(snapRegistry, positionSourceKey) {
+            onDispose { snapRegistry.forget(positionSourceKey) }
+        }
+    }
+
     // Report position when layout or root position changes
     LaunchedEffect(selectionRange, layoutResult.value, rootOffset) {
         val layout = layoutResult.value ?: return@LaunchedEffect
@@ -159,7 +172,9 @@ fun AnnotatedClickableText(
     Box(
         modifier = modifier
             .onGloballyPositioned { coords ->
-                rootOffset = coords.positionInRoot()
+                val position = coords.positionInRoot()
+                rootOffset = position
+                snapRegistry?.let { snapReport.onPositioned(it, positionSourceKey, position.y) }
             }
             .pointerInput(text) {
                 awaitEachGesture {
@@ -208,7 +223,10 @@ fun AnnotatedClickableText(
             fontStyle = fontStyle,
             lineHeight = lineHeight,
             overflow = overflow,
-            onTextLayout = { layoutResult.value = it },
+            onTextLayout = {
+                layoutResult.value = it
+                snapRegistry?.let { registry -> snapReport.onTextLayout(registry, positionSourceKey, it) }
+            },
             modifier = Modifier.drawHighlightRules(patternRuns, ruleColor) { layoutResult.value }
         )
     }
@@ -281,4 +299,33 @@ internal fun highlightLineRects(
         )
     }
     return rects
+}
+
+/**
+ * Staging for [ReaderSnapRegistry] reports, which need a block's root position and its line layout
+ * — two values that arrive from separate callbacks in no fixed order, and neither of which may
+ * observe the other as snapshot state without dragging layout into recomposition.
+ */
+private class SnapLineReport {
+    private var topInRoot: Float? = null
+    private var lineTops: FloatArray? = null
+    private var lineBottoms: FloatArray? = null
+
+    fun onPositioned(registry: ReaderSnapRegistry, key: Any, y: Float) {
+        topInRoot = y
+        publish(registry, key)
+    }
+
+    fun onTextLayout(registry: ReaderSnapRegistry, key: Any, layout: TextLayoutResult) {
+        lineTops = FloatArray(layout.lineCount) { line -> layout.getLineTop(line) }
+        lineBottoms = FloatArray(layout.lineCount) { line -> layout.getLineBottom(line) }
+        publish(registry, key)
+    }
+
+    private fun publish(registry: ReaderSnapRegistry, key: Any) {
+        val top = topInRoot ?: return
+        val tops = lineTops ?: return
+        val bottoms = lineBottoms ?: return
+        registry.report(key, top, tops, bottoms)
+    }
 }

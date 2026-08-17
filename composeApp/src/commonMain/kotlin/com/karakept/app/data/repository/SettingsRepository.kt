@@ -398,6 +398,7 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     val einkDisableAnimations: Flow<Boolean> = einkSettingsFlow.map { it.disableAnimations }.distinctUntilChanged()
     val einkHighContrast: Flow<Boolean> = einkSettingsFlow.map { it.highContrast }.distinctUntilChanged()
     val einkInstantPageScroll: Flow<Boolean> = einkSettingsFlow.map { it.instantPageScroll }.distinctUntilChanged()
+    val pageTurnSnapToContent: Flow<Boolean> = einkSettingsFlow.map { it.pageTurnSnapToContent }.distinctUntilChanged()
 
     /** Ungated by the master switch — see [StoredEinkSettings.monochromeIcon]. */
     val einkMonochromeIcon: Flow<Boolean> = einkSettingsFlow.map { it.monochromeIcon }.distinctUntilChanged()
@@ -410,6 +411,7 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
             previousKeyCode = it.previousPageKeyCode,
             nextKeyCode = it.nextPageKeyCode,
             overlapPercent = it.pageTurnOverlapPercent,
+            snapToContent = it.pageTurnSnapToContent,
             // Raw, not folded into the master switch: the buttons work without e-ink mode, so the
             // scroll style they use has to as well.
             instantPageTurn = it.instantPageScroll

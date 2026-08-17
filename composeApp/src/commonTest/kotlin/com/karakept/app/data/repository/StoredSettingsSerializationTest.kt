@@ -344,9 +344,20 @@ class StoredSettingsSerializationTest {
             invertVolumeKeys = true,
             previousPageKeyCode = 24,
             nextPageKeyCode = 25,
-            pageTurnOverlapPercent = 20
+            pageTurnOverlapPercent = 20,
+            pageTurnSnapToContent = false
         )
         assertEquals(original, json.decodeFromString<StoredEinkSettings>(json.encodeToString(original)))
+    }
+
+    @Test
+    fun `StoredEinkSettings snaps pages for installs that predate the toggle`() {
+        // Unlike the volume preset, snapping is the better default everywhere, so an existing
+        // install picks it up rather than keeping the old sliced-row behaviour.
+        val settings = json.decodeFromString<StoredEinkSettings>(
+            """{"einkModeEnabled":true,"pageTurnOverlapPercent":20}"""
+        )
+        assertEquals(true, settings.pageTurnSnapToContent)
     }
 
     @Test

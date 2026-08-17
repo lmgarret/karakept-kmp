@@ -35,7 +35,7 @@ data class EinkDisplaySettings(
  *
  * [instantPageTurn] mirrors the e-ink "Instant scrolling" preference *ungated* by the master e-ink
  * switch, because page-turn buttons themselves are ungated — a smoothly animated jump is the wrong
- * answer on any device with page buttons.
+ * answer on any device with page buttons. [snapToContent] is ungated for the same reason.
  */
 data class PageTurnKeyBindings(
     val enabled: Boolean = true,
@@ -44,8 +44,16 @@ data class PageTurnKeyBindings(
     val previousKeyCode: Int? = null,
     val nextKeyCode: Int? = null,
     val overlapPercent: Int = DEFAULT_OVERLAP_PERCENT,
-    val instantPageTurn: Boolean = true
+    val instantPageTurn: Boolean = true,
+    val snapToContent: Boolean = true
 ) {
+    /**
+     * Snapping produces its own overlap — exactly as much as it takes to keep the bookmark or the
+     * line of text straddling the fold whole — so the fixed percentage would stack on top of it.
+     */
+    val effectiveOverlapPercent: Int
+        get() = if (snapToContent) MIN_OVERLAP_PERCENT else overlapPercent
+
     fun directionFor(keyCode: Int): PageTurnDirection? {
         if (!enabled) return null
         volumeDirectionFor(keyCode)?.let { return it }

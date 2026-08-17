@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.karakept.app.data.model.ViewerMode
+import com.karakept.app.ui.utils.blankBelowContent
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.ui.screens.BookmarkLoadingState
 import kotlinx.coroutines.delay
@@ -63,7 +64,9 @@ fun rememberScrollRestoration(
     trackReadingProgress: Boolean,
     serverProgressChecked: Boolean,
     contentFetchAttempted: Boolean,
-    scrollToHighlightId: String?
+    scrollToHighlightId: String?,
+    /** Chrome painted over the foot of the list; excluded when deciding what "the bottom" is. */
+    obscuredBottomPx: Int = 0
 ): ScrollRestorationState {
     // --- SCROLL GUARD ---
     var approvedIndex by remember { mutableStateOf(0) }
@@ -161,6 +164,18 @@ fun rememberScrollRestoration(
                             delay(250)
                             safeScrollToItem(targetIndex, targetOffset)
                         }
+                    }
+                    // Trailing page padding leaves blank space after the article so a page *turn*
+                    // can land on the previous page's handover. It is not somewhere to come to
+                    // rest: a finished bookmark restores to `contentHeight * 1.0`, which clamps
+                    // into that blank space and reopens the article on a near-empty page. Pull
+                    // back until the text reaches the bottom edge again.
+                    val blank = blankBelowContent(scrollState.layoutInfo, obscuredBottomPx)
+                    if (blank > 0) {
+                        // scrollBy clamps, so an article shorter than the viewport — where the
+                        // blank space is unavoidable — simply settles back at the top.
+                        scrollState.scroll { scrollBy(-blank.toFloat()) }
+                        approveCurrentPosition()
                     }
                     hasScrolledToSavedPosition = true
                     hasRestoredScroll = true

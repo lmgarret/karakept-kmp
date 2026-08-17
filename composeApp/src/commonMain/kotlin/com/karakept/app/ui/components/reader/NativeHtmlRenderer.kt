@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.unit.dp
@@ -248,6 +249,20 @@ fun NativeHtmlRenderer(
                     }
                 }
 
+
+                // Marks where the article itself stops, above the bottom margin below. Page turns
+                // need that boundary: the lazy item holding this Column runs some 50dp further —
+                // this Spacer plus the Column's own bottom padding plus the last block's — and a
+                // turn measured against the item keeps going long after the last word is read.
+                // One node rather than one per block, and it follows the spacing below if it ever
+                // changes, which a hardcoded margin would not.
+                LocalReaderSnapRegistry.current?.let { registry ->
+                    Spacer(
+                        Modifier.height(0.dp).onGloballyPositioned {
+                            registry.reportContentEnd(it.positionInRoot().y)
+                        }
+                    )
+                }
 
                 // Bottom spacing
                 Spacer(Modifier.height(16.dp))
