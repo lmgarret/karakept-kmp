@@ -6,6 +6,8 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.BorderStroke
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.InlineLoadingDots
+import com.karakept.app.ui.components.einkModalBorder
+import com.karakept.app.ui.components.einkOutlineBorder
 import com.karakept.app.ui.theme.LocalEinkMode
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -56,6 +58,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -437,6 +440,7 @@ internal fun BookmarkDetailsPanel(
     assetPendingServerDelete?.let { asset ->
         AlertDialog(
             onDismissRequest = { assetPendingServerDelete = null },
+            modifier = einkModalBorder(AlertDialogDefaults.shape),
             title = { Text("Delete from server?") },
             text = {
                 Text(
@@ -568,7 +572,11 @@ private fun AssetOverflowMenu(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            border = einkOutlineBorder()
+        ) {
             if (hasLocalCopy) {
                 if (canOpenExternally) {
                     AssetMenuItem(Icons.AutoMirrored.Filled.OpenInNew, "Open") {
@@ -677,7 +685,8 @@ private fun ContentSourceRow(
             .padding(bottom = 6.dp)
             .then(rowAction?.let { Modifier.clickable(onClick = it) } ?: Modifier),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isActive) 1.dp else 0.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isActive) 1.dp else 0.dp),
+        border = einkOutlineBorder()
     ) {
         Row(
             modifier = Modifier

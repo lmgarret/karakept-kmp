@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -58,6 +59,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.AutoExportInterval
+import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.components.rememberDirectoryPicker
 import com.karakept.app.ui.components.rememberJsonFilePicker
 import com.karakept.app.utils.FileUtils
@@ -120,6 +122,7 @@ fun BackupRestoreContent(
             when (currentState) {
                 is BackupRestoreScreenModel.BackupState.Success -> AlertDialog(
                     onDismissRequest = { showResultDialog = false; screenModel.clearState() },
+                    modifier = einkModalBorder(AlertDialogDefaults.shape),
                     title = { Text("Done") },
                     text = { Text(currentState.message) },
                     confirmButton = {
@@ -130,6 +133,7 @@ fun BackupRestoreContent(
                 )
                 is BackupRestoreScreenModel.BackupState.Error -> AlertDialog(
                     onDismissRequest = { showResultDialog = false; screenModel.clearState() },
+                    modifier = einkModalBorder(AlertDialogDefaults.shape),
                     icon = { Icon(Icons.Default.Warning, contentDescription = null) },
                     title = { Text("Error") },
                     text = { Text(currentState.message) },
@@ -514,6 +518,7 @@ private fun SetPinDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = einkModalBorder(AlertDialogDefaults.shape),
         title = { Text(if (isChange) "Change Backup PIN" else "Set Backup PIN") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -576,6 +581,7 @@ private fun TestPinDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = einkModalBorder(AlertDialogDefaults.shape),
         title = { Text("Test Backup PIN") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -640,6 +646,7 @@ private fun PinEntryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = einkModalBorder(AlertDialogDefaults.shape),
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

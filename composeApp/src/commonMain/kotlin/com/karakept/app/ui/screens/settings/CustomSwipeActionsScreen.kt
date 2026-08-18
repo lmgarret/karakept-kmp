@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -60,6 +62,7 @@ import com.karakept.app.data.model.CustomSwipeActionType
 import com.karakept.app.ui.components.EinkAwareFab
 import com.karakept.app.ui.components.TagChip
 import com.karakept.app.ui.components.TagEditorDialog
+import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.screens.SettingsScreenModel
 import com.karakept.app.domain.ListHierarchyUtils
 import com.karakept.api.model.KarakeepList
@@ -135,6 +138,7 @@ fun CustomSwipeActionsContent(
     confirmDeleteConfig?.let { config ->
         AlertDialog(
             onDismissRequest = { confirmDeleteConfig = null },
+            modifier = einkModalBorder(AlertDialogDefaults.shape),
             title = { Text("Delete Action") },
             text = { Text("Remove \"${config.getDisplayName()}\"?") },
             confirmButton = {
@@ -305,6 +309,7 @@ private fun CustomActionDialog(
         val hierarchy = remember(availableLists) { ListHierarchyUtils.buildListHierarchy(availableLists) }
         ModalBottomSheet(
             onDismissRequest = { showListPicker = false },
+            modifier = einkModalBorder(BottomSheetDefaults.ExpandedShape),
             sheetState = listSheetState
         ) {
             Text(
@@ -348,6 +353,7 @@ private fun CustomActionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = einkModalBorder(AlertDialogDefaults.shape),
         title = { Text(if (existing != null) "Edit Action" else "New Custom Action") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {

@@ -57,6 +57,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
@@ -586,4 +588,57 @@ suspend fun DrawerState.openDrawer(instant: Boolean) {
 /** Closes the navigation drawer, snapping instead of sliding when [instant]. */
 suspend fun DrawerState.closeDrawer(instant: Boolean) {
     if (instant) snapTo(DrawerValue.Closed) else close()
+}
+
+/**
+ * Border for a modal (`AlertDialog`, `ModalBottomSheet`) in high-contrast e-ink mode.
+ *
+ * Under `highContrast` a modal's shadow and its tonal surface both collapse into the page
+ * colour, so without a drawn edge it no longer stands out from the content underneath — the same
+ * problem `BaseBottomPanel` already solves for custom panels. [shape] must match the modal's own
+ * `shape` so the border traces its actual corners.
+ */
+@Composable
+fun einkModalBorder(shape: Shape): Modifier {
+    return if (LocalEinkMode.current.highContrast) {
+        Modifier.border(1.dp, MaterialTheme.colorScheme.outline, shape)
+    } else {
+        Modifier
+    }
+}
+
+/**
+ * Outline [BorderStroke] for components with a native `border` parameter (`Surface`, `Card`,
+ * `DropdownMenu`) in high-contrast e-ink mode — `null` outside it, same rationale as
+ * [einkModalBorder].
+ *
+ * Delegates to [floatingSurfaceStyle]/[borderStroke] so the outline's width and colour stay
+ * defined in one place; `0.dp` is a no-op shadowElevation off e-ink, since these components
+ * never take that branch.
+ */
+@Composable
+fun einkOutlineBorder(): BorderStroke? = floatingSurfaceStyle(0.dp).borderStroke()
+
+/**
+ * Trailing-edge border for a full-height side panel (e.g. the navigation drawer) in
+ * high-contrast e-ink mode.
+ *
+ * Unlike [einkModalBorder], only the edge that actually borders the rest of the content gets a
+ * drawn line — the panel's other edges already sit flush against the screen boundary, so a full
+ * border there would be redundant.
+ */
+@Composable
+fun einkTrailingEdgeBorder(): Modifier {
+    if (!LocalEinkMode.current.highContrast) return Modifier
+    val color = MaterialTheme.colorScheme.outline
+    return Modifier.drawWithContent {
+        drawContent()
+        val strokePx = 1.dp.toPx()
+        drawLine(
+            color = color,
+            start = Offset(size.width - strokePx / 2, 0f),
+            end = Offset(size.width - strokePx / 2, size.height),
+            strokeWidth = strokePx
+        )
+    }
 }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.outlined.Web
 import com.karakept.app.data.model.ContentSource
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +44,7 @@ import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
 import com.karakept.app.ui.components.HighlightDetailsBottomPanel
+import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.data.model.Highlight
 import getPlatform
 
@@ -61,6 +63,7 @@ internal fun ViewerModeDialog(
     if (visible) {
         AlertDialog(
             onDismissRequest = onDismiss,
+            modifier = einkModalBorder(AlertDialogDefaults.shape),
             title = { Text("Viewer Mode") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -124,6 +127,7 @@ internal fun ModeAndSourceDialog(
 
         AlertDialog(
             onDismissRequest = onDismiss,
+            modifier = einkModalBorder(AlertDialogDefaults.shape),
             title = { Text("Mode & Source") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -211,6 +215,7 @@ internal fun DeleteConfirmationDialog(
     if (visible) {
         AlertDialog(
             onDismissRequest = onDismiss,
+            modifier = einkModalBorder(AlertDialogDefaults.shape),
             title = { Text("Delete Bookmark?") },
             text = { Text("This action cannot be undone. The bookmark will be permanently deleted from the server.") },
             confirmButton = {

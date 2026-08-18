@@ -61,6 +61,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpOffset
 import com.karakept.app.ui.components.InlineLoadingDots
+import com.karakept.app.ui.components.einkOutlineBorder
+import com.karakept.app.ui.components.einkTrailingEdgeBorder
 import com.karakept.app.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
@@ -251,7 +253,7 @@ internal fun MainScreenDrawer(
     BoxWithConstraints {
         val drawerWidth = modalDrawerWidth(maxWidth)
         val sheet: @Composable () -> Unit = {
-            ModalDrawerSheet(modifier = Modifier.width(drawerWidth)) {
+            ModalDrawerSheet(modifier = Modifier.width(drawerWidth).then(einkTrailingEdgeBorder())) {
                 DrawerContent(
                     lists = lists,
                     listCounts = listCounts,
@@ -382,7 +384,8 @@ private fun BuiltinDrawerItem(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
                 offset = menuOffset,
-                shape = MaterialTheme.shapes.extraSmall
+                shape = MaterialTheme.shapes.extraSmall,
+                border = einkOutlineBorder()
             ) {
                 DropdownMenuItem(
                     text = { Text("Set as home") },
@@ -528,7 +531,8 @@ private fun ListDrawerItem(
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
                 offset = menuOffset,
-                shape = MaterialTheme.shapes.extraSmall
+                shape = MaterialTheme.shapes.extraSmall,
+                border = einkOutlineBorder()
             ) {
                 DropdownMenuItem(
                     text = { Text("Set as home") },

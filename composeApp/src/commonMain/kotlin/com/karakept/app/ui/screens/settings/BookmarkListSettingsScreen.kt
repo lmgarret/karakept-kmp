@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Switch
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,6 +51,7 @@ import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.components.ReadingSpeedDialog
+import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.components.getIcon
 import com.karakept.app.ui.screens.SettingsScreenModel
 import com.karakept.app.domain.ListHierarchyUtils
@@ -105,6 +107,7 @@ fun BookmarkListSettingsContent(
             val listSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
             ModalBottomSheet(
                 onDismissRequest = { showListPickerDialog = false },
+                modifier = einkModalBorder(BottomSheetDefaults.ExpandedShape),
                 sheetState = listSheetState
             ) {
                 Text(
@@ -569,6 +572,7 @@ private fun SwipeActionSettingItem(
         val pendingSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { pendingAction = null },
+            modifier = einkModalBorder(BottomSheetDefaults.ExpandedShape),
             sheetState = pendingSheetState
         ) {
             Text(
@@ -624,6 +628,7 @@ private fun SwipeActionSettingItem(
         val actionSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { showDialog = false },
+            modifier = einkModalBorder(BottomSheetDefaults.ExpandedShape),
             sheetState = actionSheetState
         ) {
             Text(

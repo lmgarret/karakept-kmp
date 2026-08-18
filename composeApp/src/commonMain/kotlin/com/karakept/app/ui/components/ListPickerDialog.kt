@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -41,6 +42,7 @@ fun ListPickerDialog(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        modifier = einkModalBorder(BottomSheetDefaults.ExpandedShape),
         sheetState = sheetState
     ) {
         Text(

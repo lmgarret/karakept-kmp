@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Window
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,6 +52,7 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.components.EinkAwareFab
+import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.BookmarkLayout
@@ -134,6 +136,7 @@ fun LayoutsContent(
     pendingDeleteLayout?.let { layout ->
         AlertDialog(
             onDismissRequest = { pendingDeleteLayout = null },
+            modifier = einkModalBorder(AlertDialogDefaults.shape),
             title = { Text("Delete Layout") },
             text = { Text("Delete \"${layout.name}\"? This cannot be undone.") },
             confirmButton = {

@@ -41,7 +41,8 @@ fun AddBookmarkDialog(
                 .fillMaxWidth()
                 .padding(16.dp),
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface
+            color = MaterialTheme.colorScheme.surface,
+            border = einkOutlineBorder()
         ) {
             Column(
                 modifier = Modifier.padding(16.dp)
