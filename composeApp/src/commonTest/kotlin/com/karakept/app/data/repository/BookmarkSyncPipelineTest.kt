@@ -142,14 +142,12 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         localId: Long = 1L,
         remoteId: Long = 42L,
         originalRemoteId: String = "remote-$remoteId",
-        readingProgress: Float = 0f,
-        isRead: Boolean = false
+        readingProgress: Float = 0f
     ) = ProgressPullTarget(
         localId = localId,
         remoteId = remoteId,
         originalRemoteId = originalRemoteId,
-        readingProgress = readingProgress,
-        isRead = isRead
+        readingProgress = readingProgress
     )
 
     private fun makeBookmarkEntity(
@@ -1506,7 +1504,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
         // Candidates come from the rotating-cursor query and get stamped after the pull
         coVerify { bookmarkDao.getReadingProgressPullCandidates("server1", null, PROGRESS_PULL_ROTATION) }
-        coVerify { bookmarkDao.updateProgressSyncedAt(7L, any()) }
+        coVerify { bookmarkDao.markProgressSyncedAt(match { 7L in it }, any()) }
     }
 
     @Test
@@ -1562,7 +1560,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         coVerify(exactly = 1) {
             remoteDataSource.getReadingProgressBatch(testServer, targets.map { it.originalRemoteId }, any())
         }
-        coVerify(exactly = 0) { remoteDataSource.getReadingProgress(any(), any()) }
+        coVerify(exactly = 1) { remoteDataSource.getReadingProgressBatch(any(), any(), any()) }
     }
 
     @Test
@@ -1579,8 +1577,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         val pipeline = createPipeline(SyncConfiguration.Full(testServer))
         pipeline.execute()
 
-        coVerify { bookmarkDao.updateProgressSyncedAt(1L, any()) }
-        coVerify { bookmarkDao.updateProgressSyncedAt(70L, any()) }
+        coVerify { bookmarkDao.markProgressSyncedAt(match { 1L in it }, any()) }
+        coVerify { bookmarkDao.markProgressSyncedAt(match { 70L in it }, any()) }
         // The rotation is for steady state — a backfill pass does not also run it.
         coVerify(exactly = 0) { bookmarkDao.getReadingProgressPullCandidates(any(), any(), any()) }
     }
@@ -1599,7 +1597,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         val pipeline = createPipeline(SyncConfiguration.Full(testServer))
         pipeline.execute()
 
-        coVerify(exactly = 0) { bookmarkDao.updateProgressSyncedAt(any(), any()) }
+        coVerify(exactly = 0) { bookmarkDao.markProgressSyncedAt(any(), any()) }
     }
 
     @Test
@@ -1617,7 +1615,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         val pipeline = createPipeline(SyncConfiguration.Full(testServer))
         pipeline.execute()
 
-        coVerify(exactly = 0) { bookmarkDao.updateProgressSyncedAt(7L, any()) }
+        coVerify(exactly = 0) { bookmarkDao.markProgressSyncedAt(any(), any()) }
     }
 
     // ──────────────────────────────────────────────────────────

@@ -118,6 +118,11 @@ interface BookmarkDao {
     @Query("UPDATE bookmarks SET progressSyncedAt = :syncedAt WHERE localId = :localId")
     suspend fun updateProgressSyncedAt(localId: Long, syncedAt: Long)
 
+    // The same stamp for a whole pass. A pass covers hundreds of rows, and one statement per
+    // row is one implicit transaction per row.
+    @Query("UPDATE bookmarks SET progressSyncedAt = :syncedAt WHERE localId IN (:localIds)")
+    suspend fun markProgressSyncedAt(localIds: List<Long>, syncedAt: Long)
+
     /**
      * Reading-progress pull candidates for the rotating cursor.
      *
@@ -132,7 +137,7 @@ interface BookmarkDao {
      * query needs would buy nothing here.
      */
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, readingProgress, isRead FROM bookmarks
+        SELECT localId, remoteId, originalRemoteId, readingProgress FROM bookmarks
         WHERE serverId = :serverId
         ORDER BY
             CASE WHEN :listId IS NOT NULL AND listIds LIKE '%' || :listId || '%' THEN 0 ELSE 1 END,
@@ -151,7 +156,7 @@ interface BookmarkDao {
     // server so the library does not converge one bounded slice per sync. A projection rather
     // than SELECT *: the pull only needs these columns, and the row carries article content.
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, readingProgress, isRead FROM bookmarks
+        SELECT localId, remoteId, originalRemoteId, readingProgress FROM bookmarks
         WHERE serverId = :serverId AND progressSyncedAt = 0
         ORDER BY isRead ASC, modifiedAt DESC
         LIMIT :limit
@@ -163,7 +168,7 @@ interface BookmarkDao {
     // reaching them. Staleness rather than "never pulled" so that progress changed on
     // another device shows up on the list being looked at, not one rotation later.
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, readingProgress, isRead FROM bookmarks
+        SELECT localId, remoteId, originalRemoteId, readingProgress FROM bookmarks
         WHERE serverId = :serverId AND progressSyncedAt < :staleBefore AND remoteId IN (:remoteIds)
     """)
     suspend fun getStaleProgressTargetsIn(

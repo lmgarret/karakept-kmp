@@ -154,6 +154,12 @@ internal class ScrollActionTracker {
         }
 
         val bookmarks = snapshot.bookmarks
+        // The top row is unchanged on most frames of a scroll, and then neither branch below
+        // can fire — so the scans are only worth paying for when it moved, or when the bottom
+        // rule is armed and might.
+        val bottomRuleCouldFire = !datasetChanged && !bottomReached && userHasScrolled
+        if (anchor == snapshot.firstKey && !bottomRuleCouldFire) return emptyList()
+
         val anchorIndex = bookmarks.indexOfFirst { it.remoteId == anchor }
         if (anchorIndex < 0) {
             // Anchor gone — a full reload replaced the dataset, or the anchor itself was
@@ -206,11 +212,9 @@ internal class ScrollActionTracker {
             val total = bookmarks.size
             val atBottom = total > 0 && snapshot.lastVisibleIndex >= total - 1
             if (!bottomReached && atBottom && userHasScrolled) {
-                val from = anchorKey
-                    ?.let { key -> bookmarks.indexOfFirst { it.remoteId == key } }
-                    ?.takeIf { it >= 0 }
-                    ?: 0
-                collectRange(from, total, snapshot, fired, null)
+                // Whichever branch above ran (if any) left the anchor on a row whose index is
+                // already in hand — no third scan for it.
+                collectRange(if (topIndex >= 0) topIndex else anchorIndex, total, snapshot, fired)
                 bottomReached = true
             }
         }
@@ -227,7 +231,7 @@ internal class ScrollActionTracker {
         until: Int,
         snapshot: ScrollActionSnapshot,
         into: MutableList<BookmarkEntity>,
-        alreadyPresent: Set<Long>?
+        alreadyPresent: Set<Long>? = null
     ) {
         for (i in from until until) {
             val bookmark = snapshot.bookmarks.getOrNull(i) ?: continue

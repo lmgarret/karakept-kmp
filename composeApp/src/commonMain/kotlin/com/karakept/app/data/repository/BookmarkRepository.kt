@@ -152,12 +152,8 @@ class BookmarkRepository(
         lastAutoSyncCompletedAt[serverId] = System.currentTimeMillis()
     }
 
-    // Reading progress has no batch endpoint: each bookmark costs one tRPC call, so a pass
-    // is capped at 50 bookmarks and rotates through the library. Syncing a list used to skip
-    // the pass entirely, which left progress from other devices invisible to anyone who
-    // browses by list. Now every flavour may run it, rationed here: a Full sync always gets
-    // its pass, and the list/filter passes share one slot per interval no matter how many
-    // lists fan out at once.
+    // Rationing for the reading-progress pass. It is per server rather than per sync flavour:
+    // a fan-out of list syncs would otherwise each run their own pass over the same library.
     private val lastProgressPullAt = mutableMapOf<String, Long>()
     private val progressPullMutex = Mutex()
 
@@ -182,13 +178,8 @@ class BookmarkRepository(
         )
         if (targets.isEmpty()) return
 
-        val now = System.currentTimeMillis()
         try {
-            val outcomes = bookmarkActionsRepository.pullReadingProgressForTargets(targets, serverId)
-            targets.forEach { target ->
-                if (outcomes[target.remoteId] == ReadingProgressPullResult.FAILED) return@forEach
-                bookmarkDao.updateProgressSyncedAt(target.localId, now)
-            }
+            bookmarkActionsRepository.pullReadingProgressForTargets(targets, serverId)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

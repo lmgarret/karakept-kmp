@@ -60,7 +60,11 @@ internal data class ApiFilters(
     val favourited: Boolean? = null
 )
 
-/** Rows pulled per round of the reading-progress backfill. */
+/**
+ * Rows read per round of the reading-progress backfill. Smaller than the steady-state slice
+ * only because a backfill loops until the table is drained: a round is a checkpoint, so a
+ * cancelled sync loses at most this many rows' worth of progress rather than the whole pass.
+ */
 internal const val PROGRESS_PULL_BATCH = 200
 
 /**
@@ -604,23 +608,13 @@ internal class BookmarkSyncPipeline(
         return total
     }
 
-    /** Pulls progress for [targets] in batched requests. Returns how many advanced the cursor. */
+    /** Pulls progress for [targets]. Returns how many advanced the rotating cursor. */
     private suspend fun pullProgressFor(targets: List<ProgressPullTarget>): Int {
         if (targets.isEmpty()) return 0
-        val now = System.currentTimeMillis()
         val outcomes = bookmarkActionsRepository.pullReadingProgressForTargets(
             targets, config.server.id
         )
-        var stamped = 0
-        for (target in targets) {
-            // Only a pull the server actually answered advances the cursor. Stamping a failed
-            // one would rotate the bookmark to the back of the queue for a whole cycle without
-            // its progress ever arriving.
-            if (outcomes[target.remoteId] == ReadingProgressPullResult.FAILED) continue
-            bookmarkDao.updateProgressSyncedAt(target.localId, now)
-            stamped++
-        }
-        return stamped
+        return outcomes.count { it.value != ReadingProgressPullResult.FAILED }
     }
 
     // Phase 5: Content Sync

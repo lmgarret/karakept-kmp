@@ -42,19 +42,6 @@ private suspend fun MainScreenModel.loadBookmarkRows(
     return Pair(filtered, rows.size)
 }
 
-/**
- * Loads a single DB page and applies client-side filters.
- *
- * @return Pair(filteredItems, rawDbRowCount). The raw count is used to
- *   detect true DB exhaustion: rawCount < pageSize means no more pages.
- */
-internal suspend fun MainScreenModel.loadBookmarksPage(
-    server: Server,
-    filter: FilterConfig,
-    page: Int
-): Pair<List<BookmarkEntity>, Int> =
-    loadBookmarkRows(server, filter, offset = page * pageSize, limit = pageSize)
-
 /** Index of the page the last of [rowCount] rows falls on. */
 private fun MainScreenModel.lastPageHolding(rowCount: Int): Int =
     if (rowCount <= 0) 0 else (rowCount - 1) / pageSize
@@ -71,7 +58,7 @@ internal suspend fun MainScreenModel.findPageWithItems(
     startPage: Int
 ): Triple<List<BookmarkEntity>, Int, Boolean> =
     advancePagesUntilItemsFound(startPage, pageSize) { page ->
-        loadBookmarksPage(server, filter, page)
+        loadBookmarkRows(server, filter, offset = page * pageSize, limit = pageSize)
     }
 
 /**

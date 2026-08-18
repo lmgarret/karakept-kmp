@@ -115,7 +115,6 @@ class ReadingProgressCandidateOrderTest {
         // The batch keys on the server's own id and compares against local progress, so both
         // travel with the candidate rather than costing a row read each.
         assertEquals("remote-7", target.originalRemoteId)
-        assertEquals(true, target.isRead)
         assertEquals(0f, target.readingProgress)
     }
 }

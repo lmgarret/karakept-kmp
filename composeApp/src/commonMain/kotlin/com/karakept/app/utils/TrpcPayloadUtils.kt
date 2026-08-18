@@ -15,8 +15,7 @@ import kotlinx.serialization.json.put
  */
 object TrpcPayloadUtils {
 
-    fun envelope(input: JsonObject): String =
-        JsonObject(mapOf("0" to JsonObject(mapOf("json" to input)))).toString()
+    fun envelope(input: JsonObject): String = envelope(listOf(input))
 
     /**
      * tRPC mutation `bookmarks.recrawlBookmark`.
@@ -50,9 +49,7 @@ object TrpcPayloadUtils {
     )
 
     /** tRPC query `bookmarks.getReadingProgress` (sent as the `input` query parameter). */
-    fun getReadingProgress(bookmarkId: String): String = envelope(
-        buildJsonObject { put("bookmarkId", bookmarkId) }
-    )
+    fun getReadingProgress(bookmarkId: String): String = getReadingProgressBatch(listOf(bookmarkId))
 
     /**
      * The same query for several bookmarks in one request: `{"0":{…},"1":{…},…}`.

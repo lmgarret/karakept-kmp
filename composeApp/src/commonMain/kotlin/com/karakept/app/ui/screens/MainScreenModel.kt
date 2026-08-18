@@ -321,16 +321,22 @@ class MainScreenModel(
      * scrolled away from the top again, with no sync in between.
      */
     fun markTopVisibleSeen(remoteId: Long) {
-        if (_seenTopRemoteId.value == remoteId) return
-        val window = _accumulatedBookmarks.value
-        val seenIndex = window.indexOfFirst { it.remoteId == remoteId }
-        if (seenIndex < 0) return
-        val anchorIndex = _seenTopRemoteId.value
-            ?.let { anchor -> window.indexOfFirst { it.remoteId == anchor } }
-            ?: -1
-        // An anchor that has left the window can no longer be compared against, and holding on
-        // to it pins the count to zero until the user reaches the top.
-        if (anchorIndex < 0 || seenIndex < anchorIndex) _seenTopRemoteId.value = remoteId
+        val anchor = _seenTopRemoteId.value
+        if (anchor == remoteId) return
+        // Which of the two comes first is the whole question, so one pass that stops at
+        // whichever it meets answers it. Scrolling down would otherwise scan to the row now on
+        // top — further with every row — only to reject the update.
+        for (bookmark in _accumulatedBookmarks.value) {
+            when (bookmark.remoteId) {
+                // The row on screen is above the anchor: it is the topmost one seen now.
+                remoteId -> { _seenTopRemoteId.value = remoteId; return }
+                // The anchor is still above it, so nothing has been seen above the anchor.
+                anchor -> return
+            }
+        }
+        // Neither is in the window. An anchor that has left it can no longer be compared
+        // against, and holding on to it pins the count to zero until the user reaches the top.
+        if (anchor != null) _seenTopRemoteId.value = null
     }
 
     // RemoteIds of bookmarks on which the user has explicitly performed a list-membership
@@ -721,6 +727,24 @@ class MainScreenModel(
             }
         }
 
+        // A pass that touched many rows at once — the reading-progress pull — asks for a
+        // re-read rather than naming each row. One query, and it is the only form that gets
+        // membership right: a row the pull turns back to unread has to be able to join a view
+        // filtered on unread, which patching rows already in the window cannot do.
+        viewModelScope.launch {
+            bookmarkActionsRepository.bookmarksReloaded.conflate().collect {
+                val server = _selectedServer.value ?: return@collect
+                if (_initState.value != InitState.Ready) return@collect
+                try {
+                    refreshLoadedPagesInPlace(server, effectiveFilterNow())
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    AppLogger.w("MainScreenModel", "Post-progress-pass refresh failed: ${e.message}")
+                }
+            }
+        }
+
         // Keep the main list up-to-date when another screen mutates a bookmark.
         viewModelScope.launch {
             bookmarkActionsRepository.bookmarkChangedEvents.collect { remoteId ->
@@ -798,11 +822,10 @@ class MainScreenModel(
     /**
      * Fills in reading progress for the rows currently on screen.
      *
-     * The sync pass converges the library 50 bookmarks at a time because the server has no
-     * batch endpoint for progress, which leaves rows further down the list showing nothing
-     * for a while. Scrolling to them asks for exactly those, so what the user is looking at
-     * is right even when the rotation has not reached it. Only rows that have never been
-     * pulled cost a request, so scrolling back and forth is free.
+     * The sync pass covers a bounded slice of the library, which leaves rows further down the
+     * list showing nothing until a later pass reaches them. Scrolling to them asks for exactly
+     * those, so what the user is looking at is right even when the rotation has not. Only rows
+     * whose progress is missing or stale cost a request, so scrolling back and forth is free.
      */
     fun onBookmarksVisible(remoteIds: List<Long>) {
         val server = _selectedServer.value ?: return
@@ -1072,5 +1095,5 @@ internal fun countBookmarksAbove(
     val above = bookmarks.indexOfFirst { it.remoteId == seenTopRemoteId }
     if (above <= 0) return 0
     if (!excludeRead) return above
-    return bookmarks.take(above).count { !it.isRead }
+    return bookmarks.asSequence().take(above).count { !it.isRead }
 }

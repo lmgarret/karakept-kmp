@@ -201,19 +201,18 @@ internal fun BookmarkListContent(
 
     // Report what is on screen once scrolling settles. Debounced rather than per-frame: the
     // callback issues one network request per never-pulled row, and a fling crosses hundreds.
-    val currentBookmarks = rememberUpdatedState(bookmarks)
     val currentOnBookmarksVisible = rememberUpdatedState(onBookmarksVisible)
     @OptIn(FlowPreview::class)
     LaunchedEffect(listState) {
+        // Read the rows' keys rather than looking their indices up in the dataset: a sync
+        // re-indexes everything below whatever it prepends, and layoutInfo lags that by a
+        // snapshot, so indices resolved against the new list can name rows that are not on
+        // screen — and their progress would be fetched instead of the ones that are.
         snapshotFlow {
-            listState.layoutInfo.visibleItemsInfo.map { info -> info.index }
+            listState.layoutInfo.visibleItemsInfo.mapNotNull { info -> info.key as? Long }
         }
             .debounce(400)
-            .collect { indices ->
-                val visible = currentBookmarks.value
-                val ids = indices.mapNotNull { visible.getOrNull(it)?.remoteId }
-                if (ids.isNotEmpty()) currentOnBookmarksVisible.value(ids)
-            }
+            .collect { ids -> if (ids.isNotEmpty()) currentOnBookmarksVisible.value(ids) }
     }
 
     val einkMode = LocalEinkMode.current
