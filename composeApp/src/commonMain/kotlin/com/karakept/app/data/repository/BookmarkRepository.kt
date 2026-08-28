@@ -426,7 +426,9 @@ class BookmarkRepository(
                 },
                 crawlStatus = dto.content?.crawlStatus?.value ?: existing.crawlStatus,
                 crawledAt = com.karakept.app.utils.parseIsoToEpochMillis(dto.content?.crawledAt)
-                    ?: existing.crawledAt
+                    ?: existing.crawledAt,
+                summary = dto.summary ?: existing.summary,
+                summarizationStatus = dto.summarizationStatus?.value ?: existing.summarizationStatus
             )
 
             // Now handle content if needed
@@ -985,7 +987,9 @@ class BookmarkRepository(
                     readingTimeMinutes = entity.readingTimeMinutes,
                     modifiedAt = entity.modifiedAt,
                     crawlStatus = entity.crawlStatus,
-                    crawledAt = entity.crawledAt
+                    crawledAt = entity.crawledAt,
+                    summary = entity.summary,
+                    summarizationStatus = entity.summarizationStatus
                 )
                 AppLogger.d("BookmarkRepository", "Reconciled list membership for bookmark $bookmarkLocalId: $updatedIds")
             }

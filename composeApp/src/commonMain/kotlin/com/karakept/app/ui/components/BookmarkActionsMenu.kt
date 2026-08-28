@@ -5,11 +5,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.NewLabel
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Share
 import getPlatform
@@ -39,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.repository.AiCapabilities
+import com.karakept.app.domain.action.AiAction
 import com.karakept.api.model.KarakeepList as KarakeepList
 
 /**
@@ -54,6 +58,7 @@ fun BookmarkActionsMenu(
     bookmark: BookmarkEntity,
     availableLists: List<KarakeepList>,
     availableTags: List<String> = emptyList(),
+    aiCapabilities: AiCapabilities = AiCapabilities(),
     onAction: (BookmarkAction) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -137,6 +142,44 @@ fun BookmarkActionsMenu(
         )
 
         HorizontalDivider()
+
+        // AI actions. Each is hidden unless this server has told us it will run it — summarize
+        // needs an inference client, re-tagging needs an admin key.
+        if (aiCapabilities.canSummarize || aiCapabilities.isAdmin) {
+            if (aiCapabilities.canSummarize) {
+                DropdownMenuItem(
+                    text = { Text(AiAction.SUMMARIZE.label) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        onAction(BookmarkAction.Summarize)
+                        onDismiss()
+                    }
+                )
+            }
+
+            if (aiCapabilities.isAdmin) {
+                DropdownMenuItem(
+                    text = { Text(AiAction.RETAG.label) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.NewLabel,
+                            contentDescription = null
+                        )
+                    },
+                    onClick = {
+                        onAction(BookmarkAction.RetagWithAi)
+                        onDismiss()
+                    }
+                )
+            }
+
+            HorizontalDivider()
+        }
 
         // External actions
         DropdownMenuItem(
@@ -274,4 +317,8 @@ sealed class BookmarkAction {
     data object Delete : BookmarkAction()
     /** Enter multi-select mode for this bookmark. */
     data object Select : BookmarkAction()
+    /** Ask the server to generate an AI summary. */
+    data object Summarize : BookmarkAction()
+    /** Ask the server to re-run AI tagging. Admin-only, so only offered when the probe says so. */
+    data object RetagWithAi : BookmarkAction()
 }

@@ -16,7 +16,10 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.api.model.KarakeepList as KarakeepList
+import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.repository.BookmarkActionsRepository
+import com.karakept.app.data.repository.requestAiRetag
+import com.karakept.app.data.repository.summarizeBookmark
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.ReadingProgressPullResult
@@ -52,6 +55,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import com.karakept.app.data.remote.OfflineModeException
 import com.karakept.app.data.remote.UnsupportedServerActionException
+import com.karakept.app.domain.action.AiAction
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
@@ -163,6 +167,14 @@ class BookmarkViewerScreenModel(
     // Non-null while a server-side crawl request is being sent and re-synced
     private val _serverCrawlInFlight = MutableStateFlow<ServerCrawlAction?>(null)
     val serverCrawlInFlight: StateFlow<ServerCrawlAction?> = _serverCrawlInFlight.asStateFlow()
+
+    // Non-null while an AI job is running for this bookmark. One slot, so the two AI actions
+    // disable each other the way the three crawl variants already do.
+    private val _aiActionInFlight = MutableStateFlow<AiAction?>(null)
+    val aiActionInFlight: StateFlow<AiAction?> = _aiActionInFlight.asStateFlow()
+
+    /** Per-server AI capabilities, shared with the list. Callers index it by the bookmark's serverId. */
+    val aiCapabilities: StateFlow<Map<String, AiCapabilities>> = bookmarkActionsRepository.aiCapabilities
 
     // Assets currently downloading, keyed by asset id. The value is the 0f..1f progress
     // fraction, or null when the response has no Content-Length (indeterminate).
@@ -424,6 +436,15 @@ class BookmarkViewerScreenModel(
                 bookmarkDao.observeBookmarkById(id).collect { bookmark ->
                     if (bookmark != null) {
                         if (!hasLoadedOnce) {
+                            // Find out which AI actions this server accepts, so the details panel
+                            // and overflow menu can hide the ones it would reject. The reader can
+                            // be entered directly from a notification, so it cannot rely on the
+                            // list having probed already; the repository caches the answer.
+                            viewModelScope.launch {
+                                val server = serverRepository.servers.first()
+                                    .find { it.id == bookmark.serverId }
+                                if (server != null) bookmarkActionsRepository.refreshAiCapabilities(server)
+                            }
                             // Trigger on-demand sync for highlights
                             viewModelScope.launch {
                                 try {
@@ -833,6 +854,53 @@ class BookmarkViewerScreenModel(
                 }
             } finally {
                 _serverCrawlInFlight.value = null
+            }
+        }
+    }
+
+    /**
+     * Run a server-side AI job for this bookmark.
+     *
+     * [AiAction.SUMMARIZE] returns the finished text, so the summary is on screen by the time this
+     * settles. [AiAction.RETAG] only enqueues a job, so the repository polls for the new tags and
+     * reports back whether they landed inside the budget.
+     */
+    fun runAiAction(bookmark: BookmarkEntity, action: AiAction) {
+        // Claim the slot before launching, for the same reason requestServerCrawl does.
+        if (!_aiActionInFlight.compareAndSet(null, action)) return
+        viewModelScope.launch {
+            try {
+                when (action) {
+                    AiAction.SUMMARIZE -> {
+                        val summary = bookmarkActionsRepository.summarizeBookmark(bookmark)
+                        refreshBookmark(bookmark.remoteId)
+                        snackbarManager.showSnackbar(
+                            if (summary.isNullOrBlank()) "The server returned an empty summary"
+                            else "Summary generated"
+                        )
+                    }
+                    AiAction.RETAG -> {
+                        val landed = bookmarkActionsRepository.requestAiRetag(bookmark)
+                        refreshBookmark(bookmark.remoteId)
+                        snackbarManager.showSnackbar(
+                            if (landed) "Tags updated"
+                            else "Still tagging on the server — pull to refresh later"
+                        )
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: OfflineModeException) {
+                snackbarManager.showSnackbar("Not available in offline mode")
+            } catch (e: UnsupportedServerActionException) {
+                snackbarManager.showSnackbar(e.message ?: "Not supported by this server")
+            } catch (e: Exception) {
+                AppLogger.e("ViewerModel", "AI action ${action.name} failed: ${e.message}", e)
+                snackbarManager.showErrorWithRetry("Couldn't reach the server") {
+                    runAiAction(bookmark, action)
+                }
+            } finally {
+                _aiActionInFlight.value = null
             }
         }
     }

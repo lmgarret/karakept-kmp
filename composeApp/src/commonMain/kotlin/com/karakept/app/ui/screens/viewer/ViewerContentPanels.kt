@@ -2,6 +2,7 @@ package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
@@ -169,12 +170,16 @@ fun ViewerContentPanels(
     val serverCrawlInFlight by screenModel.serverCrawlInFlight.collectAsState()
     val offlineMode by screenModel.offlineMode.collectAsState()
     val assetDownloads by screenModel.assetDownloads.collectAsState()
+    val aiActionInFlight by screenModel.aiActionInFlight.collectAsState()
+    val aiCapabilitiesByServer by screenModel.aiCapabilities.collectAsState()
     BookmarkDetailsPanel(
         visible = showDetailsPanel,
         bookmark = detailsBookmark,
         assets = assets,
         selectedSource = selectedSource,
         serverCrawlInFlight = serverCrawlInFlight,
+        aiActionInFlight = aiActionInFlight,
+        aiCapabilities = aiCapabilitiesByServer[detailsBookmark?.serverId] ?: AiCapabilities(),
         serverActionsEnabled = !offlineMode,
         assetDownloads = assetDownloads,
         onSourceSelected = { source ->
@@ -198,6 +203,9 @@ fun ViewerContentPanels(
         },
         onRequestServerCrawl = { action ->
             if (detailsBookmark != null) screenModel.requestServerCrawl(detailsBookmark, action)
+        },
+        onRunAiAction = { action ->
+            if (detailsBookmark != null) screenModel.runAiAction(detailsBookmark, action)
         },
         onLinkCopied = onLinkCopied,
         onOpenLink = onOpenLink,

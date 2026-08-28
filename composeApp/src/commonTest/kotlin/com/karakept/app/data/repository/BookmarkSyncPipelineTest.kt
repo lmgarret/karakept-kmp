@@ -197,7 +197,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         tags: List<String> = emptyList(),
         htmlContent: String? = null,
         url: String = "https://example.com",
-        modifiedAt: String? = null
+        modifiedAt: String? = null,
+        summary: String? = null,
+        summarizationStatus: Bookmark.SummarizationStatus? = null
     ) = Bookmark(
         id = id,
         title = title,
@@ -210,8 +212,110 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
             htmlContent = htmlContent
         ),
         createdAt = "2026-01-01T00:00:00Z",
-        modifiedAt = modifiedAt
+        modifiedAt = modifiedAt,
+        summary = summary,
+        summarizationStatus = summarizationStatus
     )
+
+    // ──────────────────────────────────────────────────────────
+    // AI summary
+    // ──────────────────────────────────────────────────────────
+
+    @Test
+    fun fullSync_storesASummaryGeneratedElsewhere() = runTest(testDispatcher) {
+        // A summary made in the web UI (or by the crawler's auto-summarization) has to reach the
+        // app through the ordinary sync — nothing else pulls it down.
+        val dto = makeBookmarkDto(
+            id = "bk-1",
+            summary = "The server's summary.",
+            summarizationStatus = Bookmark.SummarizationStatus.SUCCESS
+        )
+        val existingEntity = makeBookmarkEntity(
+            localId = 5L,
+            remoteId = "bk-1".hashCode().toLong(),
+            originalRemoteId = "bk-1"
+        )
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existingEntity)
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        coVerify {
+            bookmarkDao.updateBookmarkMetadata(
+                localId = 5L, title = any(), url = any(), description = any(), imageUrl = any(),
+                bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), listIds = any(),
+                isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(),
+                modifiedAt = any(), crawlStatus = any(), crawledAt = any(),
+                summary = "The server's summary.",
+                summarizationStatus = "success"
+            )
+        }
+    }
+
+    @Test
+    fun fullSync_doesNotSwallowASummaryOnlyChangeAsUnchanged() = runTest(testDispatcher) {
+        // Karakeep does not always bump modifiedAt for a summary, so the unchanged check has to
+        // compare the summary itself — otherwise the write is skipped and the summary never lands.
+        val modifiedAt = "2026-01-02T00:00:00Z"
+        val dto = makeBookmarkDto(id = "bk-1", modifiedAt = modifiedAt, summary = "Fresh summary.")
+        val existingEntity = makeBookmarkEntity(
+            localId = 5L,
+            remoteId = "bk-1".hashCode().toLong(),
+            originalRemoteId = "bk-1"
+        ).copy(
+            title = "Test",
+            modifiedAt = Instant.parse(modifiedAt).toEpochMilliseconds(),
+            summary = null
+        )
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existingEntity)
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        coVerify {
+            bookmarkDao.updateBookmarkMetadata(
+                localId = 5L, title = any(), url = any(), description = any(), imageUrl = any(),
+                bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), listIds = any(),
+                isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(),
+                modifiedAt = any(), crawlStatus = any(), crawledAt = any(),
+                summary = "Fresh summary.", summarizationStatus = any()
+            )
+        }
+    }
+
+    @Test
+    fun fullSync_keepsAKnownSummaryWhenAFilteredSyncOmitsIt() = runTest(testDispatcher) {
+        // Same reasoning as crawlStatus: a response without the field must not blank what we know.
+        val dto = makeBookmarkDto(id = "bk-1", summary = null)
+        val existingEntity = makeBookmarkEntity(
+            localId = 5L,
+            remoteId = "bk-1".hashCode().toLong(),
+            originalRemoteId = "bk-1"
+        ).copy(summary = "Previously stored.", summarizationStatus = "success")
+        coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existingEntity)
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        coVerify {
+            bookmarkDao.updateBookmarkMetadata(
+                localId = 5L, title = any(), url = any(), description = any(), imageUrl = any(),
+                bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), listIds = any(),
+                isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(),
+                modifiedAt = any(), crawlStatus = any(), crawledAt = any(),
+                summary = "Previously stored.", summarizationStatus = "success"
+            )
+        }
+    }
 
     // ──────────────────────────────────────────────────────────
     // Full sync configuration
@@ -354,7 +458,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 readingTimeMinutes = any(),
                 modifiedAt = any(),
                 crawlStatus = any(),
-                crawledAt = any()
+                crawledAt = any(),
+                summary = any(),
+                summarizationStatus = any()
             )
         }
     }
@@ -477,7 +583,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 readingTimeMinutes = any(),
                 modifiedAt = any(),
                 crawlStatus = any(),
-                crawledAt = any()
+                crawledAt = any(),
+                summary = any(),
+                summarizationStatus = any()
             )
         }
         coVerify(exactly = 0) { bookmarkDao.updateBookmarks(any()) }
@@ -540,7 +648,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 readingTimeMinutes = 10,
                 modifiedAt = any(),
                 crawlStatus = any(),
-                crawledAt = any()
+                crawledAt = any(),
+                summary = any(),
+                summarizationStatus = any()
             )
         }
     }
@@ -679,7 +789,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 readingTimeMinutes = 5,
                 modifiedAt = any(),
                 crawlStatus = any(),
-                crawledAt = any()
+                crawledAt = any(),
+                summary = any(),
+                summarizationStatus = any()
             )
         }
     }
@@ -939,7 +1051,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
         createPipeline(SyncConfiguration.ForList(testServer, "list-1")).execute()
 
-        coVerify { bookmarkDao.updateBookmarkMetadata(localId = 77L, listIds = "", title = any(), url = any(), description = any(), imageUrl = any(), bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(), modifiedAt = any(), crawlStatus = any(), crawledAt = any()) }
+        coVerify { bookmarkDao.updateBookmarkMetadata(localId = 77L, listIds = "", title = any(), url = any(), description = any(), imageUrl = any(), bannerImageAssetId = any(), screenshotAssetId = any(), tags = any(), isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(), modifiedAt = any(), crawlStatus = any(), crawledAt = any(), summary = any(), summarizationStatus = any()) }
     }
 
     @Test
@@ -1067,7 +1179,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 readingTimeMinutes = any(),
                 modifiedAt = any(),
                 crawlStatus = any(),
-                crawledAt = any()
+                crawledAt = any(),
+                summary = any(),
+                summarizationStatus = any()
             )
         }
     }
@@ -1120,7 +1234,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 readingTimeMinutes = any(),
                 modifiedAt = any(),
                 crawlStatus = any(),
-                crawledAt = any()
+                crawledAt = any(),
+                summary = any(),
+                summarizationStatus = any()
             )
         }
     }
@@ -1207,7 +1323,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 readingTimeMinutes = any(),
                 modifiedAt = any(),
                 crawlStatus = any(),
-                crawledAt = any()
+                crawledAt = any(),
+                summary = any(),
+                summarizationStatus = any()
             )
         }
     }
@@ -1374,7 +1492,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(),
                 modifiedAt = any(),
                 crawlStatus = any(),
-                crawledAt = any()
+                crawledAt = any(),
+                summary = any(),
+                summarizationStatus = any()
             )
         }
     }
@@ -1406,7 +1526,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 isStarred = any(), isArchived = any(), isRead = any(), readingTimeMinutes = any(),
                 modifiedAt = any(),
                 crawlStatus = any(),
-                crawledAt = any()
+                crawledAt = any(),
+                summary = any(),
+                summarizationStatus = any()
             )
         }
     }
@@ -1683,7 +1805,9 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
                 readingTimeMinutes = any(),
                 modifiedAt = any(),
                 crawlStatus = "success",
-                crawledAt = 999L
+                crawledAt = 999L,
+                summary = any(),
+                summarizationStatus = any()
             )
         }
     }

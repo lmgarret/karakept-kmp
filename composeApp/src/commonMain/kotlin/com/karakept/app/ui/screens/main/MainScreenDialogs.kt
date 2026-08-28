@@ -21,6 +21,7 @@ import com.karakept.app.ui.screens.moveBookmarkToList
 import com.karakept.app.ui.screens.updateBookmarkTags
 import com.karakept.app.ui.screens.deleteBookmark
 import com.karakept.app.ui.screens.enterSelectionMode
+import com.karakept.app.ui.screens.runAiAction
 import com.karakept.app.ui.screens.removeBookmarkFromList
 import com.karakept.app.ui.screens.accumulatedBookmarkPosition
 import com.karakept.app.ui.screens.restoreAndRemoveBookmarkFromList
@@ -34,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.repository.AiCapabilities
+import com.karakept.app.domain.action.AiAction
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.ui.components.AddBookmarkDialog
 import com.karakept.app.ui.components.BookmarkAction
@@ -162,6 +165,7 @@ fun MainScreenBookmarkActionsMenu(
     snackbarManager: ActionSnackbarManager,
     scope: CoroutineScope,
     uriHandler: androidx.compose.ui.platform.UriHandler,
+    aiCapabilities: AiCapabilities,
     onDismiss: () -> Unit
 ) {
     bookmark?.let { bm ->
@@ -169,6 +173,7 @@ fun MainScreenBookmarkActionsMenu(
             bookmark = bm,
             availableLists = lists,
             availableTags = allAvailableTags,
+            aiCapabilities = aiCapabilities,
             onAction = { action ->
                 when (action) {
                     is BookmarkAction.ToggleArchive -> screenModel.toggleBookmarkArchive(bm)
@@ -202,6 +207,8 @@ fun MainScreenBookmarkActionsMenu(
                         }
                     }
                     is BookmarkAction.Select -> screenModel.enterSelectionMode(bm)
+                    is BookmarkAction.Summarize -> screenModel.runAiAction(bm, AiAction.SUMMARIZE)
+                    is BookmarkAction.RetagWithAi -> screenModel.runAiAction(bm, AiAction.RETAG)
                 }
             },
             onDismiss = onDismiss
@@ -246,6 +253,45 @@ fun BatchDeleteConfirmDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
+        }
+    )
+}
+
+/**
+ * Confirmation before running an AI job over a whole selection.
+ *
+ * Worth a prompt where archiving a hundred bookmarks is not: each item is an inference call the
+ * server pays for, the run takes as long as the model does, and none of it can be undone.
+ */
+@Composable
+fun BatchAiConfirmDialog(
+    action: AiAction,
+    selectedCount: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val plural = if (selectedCount > 1) "s" else ""
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = einkModalBorder(AlertDialogDefaults.shape),
+        title = { Text("${action.label} for $selectedCount bookmark$plural?") },
+        text = {
+            Text(
+                when (action) {
+                    AiAction.SUMMARIZE ->
+                        "Each bookmark is summarized on the server, one at a time. This can take a " +
+                            "while and cannot be undone."
+                    AiAction.RETAG ->
+                        "The server re-runs AI tagging on each bookmark, one at a time. Existing " +
+                            "tags may be replaced, and this cannot be undone."
+                }
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(action.label) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }

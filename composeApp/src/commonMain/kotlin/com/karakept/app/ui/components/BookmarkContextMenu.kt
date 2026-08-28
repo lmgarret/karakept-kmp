@@ -2,11 +2,13 @@ package com.karakept.app.ui.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.NewLabel
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -29,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpOffset
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.repository.AiCapabilities
+import com.karakept.app.domain.action.AiAction
 
 /**
  * Desktop context menu for bookmark actions, shown as a DropdownMenu at the right-click position.
@@ -43,6 +47,7 @@ fun BookmarkContextMenu(
     bookmark: BookmarkEntity,
     availableLists: List<KarakeepList> = emptyList(),
     availableTags: List<String> = emptyList(),
+    aiCapabilities: AiCapabilities = AiCapabilities(),
     offset: DpOffset = DpOffset.Zero,
     onAction: (BookmarkAction) -> Unit,
     onDismiss: () -> Unit,
@@ -139,6 +144,33 @@ fun BookmarkContextMenu(
         )
 
         HorizontalDivider()
+
+        // AI actions, gated the same way as in BookmarkActionsMenu.
+        if (aiCapabilities.canSummarize || aiCapabilities.isAdmin) {
+            if (aiCapabilities.canSummarize) {
+                DropdownMenuItem(
+                    text = { Text(AiAction.SUMMARIZE.label) },
+                    leadingIcon = { Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null) },
+                    onClick = {
+                        onAction(BookmarkAction.Summarize)
+                        onDismiss()
+                    }
+                )
+            }
+
+            if (aiCapabilities.isAdmin) {
+                DropdownMenuItem(
+                    text = { Text(AiAction.RETAG.label) },
+                    leadingIcon = { Icon(imageVector = Icons.Default.NewLabel, contentDescription = null) },
+                    onClick = {
+                        onAction(BookmarkAction.RetagWithAi)
+                        onDismiss()
+                    }
+                )
+            }
+
+            HorizontalDivider()
+        }
 
         // Enter multi-select mode
         DropdownMenuItem(

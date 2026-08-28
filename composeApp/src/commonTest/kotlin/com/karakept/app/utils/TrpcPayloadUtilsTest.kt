@@ -93,4 +93,20 @@ class TrpcPayloadUtilsTest {
             TrpcPayloadUtils.batchPath("bookmarks.getReadingProgress", 2)
         )
     }
+
+    @Test
+    fun adminRetagBookmarkCarriesOnlyTheBookmarkId() {
+        assertEquals(
+            """{"0":{"json":{"bookmarkId":"abc123"}}}""",
+            TrpcPayloadUtils.adminRetagBookmark("abc123")
+        )
+    }
+
+    @Test
+    fun adminRetagBookmarkIdIsJsonEscaped() {
+        assertEquals(
+            """{"0":{"json":{"bookmarkId":"a\"b"}}}""",
+            TrpcPayloadUtils.adminRetagBookmark("a\"b")
+        )
+    }
 }

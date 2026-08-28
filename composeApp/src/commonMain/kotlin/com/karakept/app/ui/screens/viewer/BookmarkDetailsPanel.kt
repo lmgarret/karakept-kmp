@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.BorderStroke
+import com.karakept.app.data.repository.AiCapabilities
+import com.karakept.app.domain.action.AiAction
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.InlineLoadingDots
 import com.karakept.app.ui.components.einkModalBorder
@@ -40,6 +42,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -50,6 +53,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NewLabel
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
@@ -112,6 +116,8 @@ internal fun BookmarkDetailsPanel(
     assets: List<AssetEntity> = emptyList(),
     selectedSource: ContentSource = ContentSource.EXTRACTED,
     serverCrawlInFlight: ServerCrawlAction? = null,
+    aiActionInFlight: AiAction? = null,
+    aiCapabilities: AiCapabilities = AiCapabilities(),
     serverActionsEnabled: Boolean = true,
     // Asset id -> download fraction (null fraction = size unknown). Absent = not downloading.
     assetDownloads: Map<String, Float?> = emptyMap(),
@@ -124,6 +130,7 @@ internal fun BookmarkDetailsPanel(
     onDeleteAssetLocal: (AssetEntity) -> Unit = {},
     onDeleteAssetOnServer: (AssetEntity) -> Unit = {},
     onRequestServerCrawl: (ServerCrawlAction) -> Unit = {},
+    onRunAiAction: (AiAction) -> Unit = {},
     onLinkCopied: () -> Unit = {},
     onOpenLink: () -> Unit = {},
     onDismiss: () -> Unit
@@ -430,6 +437,33 @@ internal fun BookmarkDetailsPanel(
                                 )
                             }
 
+                            // AI actions. Each is hidden unless this server accepts it —
+                            // summarizing needs an inference client, re-tagging an admin key.
+                            if (aiCapabilities.canSummarize || aiCapabilities.isAdmin) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                DetailsSectionTitle("AI")
+                                if (aiCapabilities.canSummarize) {
+                                    ServerActionRow(
+                                        icon = Icons.Default.AutoAwesome,
+                                        label = AiAction.SUMMARIZE.label,
+                                        supportingText = "Ask the server's model to summarize this article",
+                                        enabled = serverActionsEnabled && aiActionInFlight == null,
+                                        inFlight = aiActionInFlight == AiAction.SUMMARIZE,
+                                        onClick = { onRunAiAction(AiAction.SUMMARIZE) }
+                                    )
+                                }
+                                if (aiCapabilities.isAdmin) {
+                                    ServerActionRow(
+                                        icon = Icons.Default.NewLabel,
+                                        label = AiAction.RETAG.label,
+                                        supportingText = "Regenerate this bookmark's tags with AI",
+                                        enabled = serverActionsEnabled && aiActionInFlight == null,
+                                        inFlight = aiActionInFlight == AiAction.RETAG,
+                                        onClick = { onRunAiAction(AiAction.RETAG) }
+                                    )
+                                }
+                            }
+
                         }
                     }
                 }
@@ -529,11 +563,16 @@ private fun ServerActionRow(
             )
         }
         if (inFlight) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.primary
-            )
+            // A control-level indeterminate spinner: keep it off e-ink, step through dots on it.
+            if (LocalEinkMode.current.animationsDisabled) {
+                InlineLoadingDots(dotSize = 5.dp)
+            } else {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

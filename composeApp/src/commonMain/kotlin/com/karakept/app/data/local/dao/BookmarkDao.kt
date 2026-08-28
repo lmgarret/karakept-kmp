@@ -92,7 +92,9 @@ interface BookmarkDao {
             readingTimeMinutes = :readingTimeMinutes,
             modifiedAt = :modifiedAt,
             crawlStatus = :crawlStatus,
-            crawledAt = :crawledAt
+            crawledAt = :crawledAt,
+            summary = :summary,
+            summarizationStatus = :summarizationStatus
         WHERE localId = :localId
     """)
     suspend fun updateBookmarkMetadata(
@@ -111,8 +113,14 @@ interface BookmarkDao {
         readingTimeMinutes: Int,
         modifiedAt: Long?,
         crawlStatus: String?,
-        crawledAt: Long?
+        crawledAt: Long?,
+        summary: String?,
+        summarizationStatus: String?
     )
+
+    // Narrow writer for the AI summarize action, which knows nothing about the other metadata.
+    @Query("UPDATE bookmarks SET summary = :summary, summarizationStatus = :status WHERE localId = :localId")
+    suspend fun updateSummary(localId: Long, summary: String?, status: String?)
 
     // Stamp the reading-progress rotating cursor after a pull (G3).
     @Query("UPDATE bookmarks SET progressSyncedAt = :syncedAt WHERE localId = :localId")

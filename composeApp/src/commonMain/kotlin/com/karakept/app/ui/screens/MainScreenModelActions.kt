@@ -6,6 +6,11 @@ import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.domain.action.BookmarkActionEvent
+import com.karakept.app.data.remote.OfflineModeException
+import com.karakept.app.data.remote.UnsupportedServerActionException
+import com.karakept.app.data.repository.requestAiRetag
+import com.karakept.app.data.repository.summarizeBookmark
+import com.karakept.app.domain.action.AiAction
 import com.karakept.app.data.repository.batchMarkRead
 import com.karakept.app.data.repository.batchMarkUnread
 import com.karakept.app.data.repository.flushPendingActions
@@ -458,6 +463,45 @@ fun MainScreenModel.createBookmark(url: String) {
         }.onFailure { e ->
             _pendingBookmarks.value = _pendingBookmarks.value.filter { it.remoteId != tempRemoteId }
             _createBookmarkResult.emit(Result.failure(e))
+        }
+    }
+}
+
+/**
+ * Run a server-side AI job for one bookmark from the list.
+ *
+ * Feedback is a snackbar rather than a spinner on the row: these menus fire and dismiss, and the
+ * updated row arrives on its own through `bookmarkChangedEvents` once the repository writes it.
+ */
+fun MainScreenModel.runAiAction(bookmark: BookmarkEntity, action: AiAction) {
+    viewModelScope.launch {
+        try {
+            snackbarManager.showSnackbar("${action.runningLabel}\u2026")
+            when (action) {
+                AiAction.SUMMARIZE -> {
+                    val summary = bookmarkActionsRepository.summarizeBookmark(bookmark)
+                    snackbarManager.showSnackbar(
+                        if (summary.isNullOrBlank()) "The server returned an empty summary"
+                        else "Summary generated"
+                    )
+                }
+                AiAction.RETAG -> {
+                    val landed = bookmarkActionsRepository.requestAiRetag(bookmark)
+                    snackbarManager.showSnackbar(
+                        if (landed) "Tags updated"
+                        else "Still tagging on the server \u2014 pull to refresh later"
+                    )
+                }
+            }
+        } catch (e: OfflineModeException) {
+            snackbarManager.showSnackbar("Not available in offline mode")
+        } catch (e: UnsupportedServerActionException) {
+            snackbarManager.showSnackbar(e.message ?: "Not supported by this server")
+        } catch (e: Exception) {
+            AppLogger.e("MainScreenModel", "AI action ${action.name} failed: ${e.message}", e)
+            snackbarManager.showErrorWithRetry("Couldn't reach the server") {
+                runAiAction(bookmark, action)
+            }
         }
     }
 }

@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.NewLabel
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -37,6 +39,8 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.repository.AiCapabilities
+import com.karakept.app.domain.action.AiAction
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -95,7 +99,10 @@ internal fun ViewerTopBar(
     // Fullscreen toggle (desktop embedded only)
     isFullscreen: Boolean = false,
     onFullscreenToggle: (() -> Unit)? = null,
-    onDetailsClick: (() -> Unit)? = null
+    onDetailsClick: (() -> Unit)? = null,
+    aiCapabilities: AiCapabilities = AiCapabilities(),
+    aiActionInFlight: AiAction? = null,
+    onRunAiAction: (AiAction) -> Unit = {}
 ) {
     // Status bar background - fades in with top bar for parallax effect
     Box(
@@ -362,6 +369,39 @@ internal fun ViewerTopBar(
                         onMenuToggle(false)
                     }
                 )
+
+                // AI actions, next to Refresh: all three ask the server to redo work on this
+                // bookmark. Each is hidden unless the server accepts it — summarizing needs an
+                // inference client, re-tagging an admin key.
+                if (aiCapabilities.canSummarize || aiCapabilities.isAdmin) {
+                    HorizontalDivider()
+                    if (aiCapabilities.canSummarize) {
+                        DropdownMenuItem(
+                            text = { Text(AiAction.SUMMARIZE.label) },
+                            leadingIcon = {
+                                Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null)
+                            },
+                            enabled = aiActionInFlight == null,
+                            onClick = {
+                                onRunAiAction(AiAction.SUMMARIZE)
+                                onMenuToggle(false)
+                            }
+                        )
+                    }
+                    if (aiCapabilities.isAdmin) {
+                        DropdownMenuItem(
+                            text = { Text(AiAction.RETAG.label) },
+                            leadingIcon = {
+                                Icon(imageVector = Icons.Default.NewLabel, contentDescription = null)
+                            },
+                            enabled = aiActionInFlight == null,
+                            onClick = {
+                                onRunAiAction(AiAction.RETAG)
+                                onMenuToggle(false)
+                            }
+                        )
+                    }
+                }
 
                 // Delete (destructive action)
                 DropdownMenuItem(

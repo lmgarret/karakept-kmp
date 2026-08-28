@@ -50,6 +50,12 @@ class UnsupportedServerActionException(message: String) : Exception(message)
  */
 private const val NON_LINK_PROGRESS_ERROR = "reading progress can only be saved"
 
+/** Karakeep's wording when the instance has no LLM wired up at all. */
+private const val NO_INFERENCE_CLIENT_ERROR = "no inference client configured"
+
+/** tRPC's wording for an unknown procedure — a 404 that is not a missing bookmark. */
+private const val UNKNOWN_TRPC_PROCEDURE_ERROR = "No procedure found"
+
 /**
  * Bookmarks per batched reading-progress request. Conservative on purpose: the batch travels
  * in the query string and a default nginx refuses a request line much past 8KB, which is well
@@ -729,7 +735,112 @@ class RemoteDataSource(
         }
         throw ApiException("HTTP ${response.status}: $errorBody")
     }
+
+    /**
+     * Ask the server to generate an AI summary for a bookmark.
+     *
+     * Unlike the crawl jobs above this is **synchronous** — Karakeep runs the inference inline and
+     * answers with the updated record — so the call can block for as long as the model takes.
+     *
+     * The summary lands in the bookmark's `summary` field, which is separate from `description`:
+     * the crawler reads that one from the page's meta tags and the inference worker never writes it.
+     *
+     * POST /bookmarks/{bookmarkId}/summarize
+     *
+     * @throws UnsupportedServerActionException if the instance has no inference client configured.
+     */
+    suspend fun summarizeBookmark(server: Server, bookmarkId: String): SummarizeResult = guardedCall {
+        try {
+            val dto = bookmarksApi(server).bookmarksBookmarkIdSummarizePost(bookmarkId).checkedBody()
+            SummarizeResult(
+                summary = dto.summary,
+                summarizationStatus = dto.summarizationStatus?.value
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (e.message?.contains(NO_INFERENCE_CLIENT_ERROR, ignoreCase = true) == true) {
+                throw UnsupportedServerActionException(
+                    "This Karakeep server has no AI model configured"
+                )
+            }
+            throw ApiException("Error summarizing bookmark: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Ask the server to re-run AI tagging for a bookmark. The server enqueues an inference job,
+     * so success here only means the request was accepted — the new tags appear on a later sync.
+     *
+     * tRPC mutation: admin.adminRetagBookmark
+     * POST /api/trpc/admin.adminRetagBookmark?batch=1
+     *
+     * @throws UnsupportedServerActionException if the route is missing or the key is not an admin's.
+     */
+    suspend fun requestAiRetag(server: Server, bookmarkId: String): Unit = guardedCall {
+        val trpcBase = getTrpcBaseUrl(server)
+        val url = "$trpcBase/api/trpc/admin.adminRetagBookmark?batch=1"
+        val response: HttpResponse = try {
+            client.post(url) {
+                header("Authorization", getAuth(server))
+                contentType(ContentType.Application.Json)
+                setBody(TrpcPayloadUtils.adminRetagBookmark(bookmarkId))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException("Error requesting AI tagging: ${e.message}", e)
+        }
+
+        if (response.status.isSuccess()) return@guardedCall
+
+        val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+        // Two distinct "this server won't do it" cases: the route is absent, or the key belongs to
+        // a plain user. Neither is worth retrying, and both read the same to the person asking.
+        if (errorBody.contains(UNKNOWN_TRPC_PROCEDURE_ERROR, ignoreCase = true)) {
+            throw UnsupportedServerActionException(
+                "This Karakeep server doesn't support re-running AI tagging from the app"
+            )
+        }
+        if (response.status.value == 401 || response.status.value == 403) {
+            throw UnsupportedServerActionException(
+                "Re-running AI tagging needs an admin account on this server"
+            )
+        }
+        throw ApiException("HTTP ${response.status}: $errorBody", statusCode = response.status.value)
+    }
+
+    /**
+     * Whether this server's API key belongs to an admin.
+     *
+     * Neither `GET /users/me` nor tRPC `users.whoami` reports the user's role, so the only way to
+     * find out is to call something only an admin may call. `admin.getAdminNoticies` is the
+     * cheapest such route — its handler returns an empty object and touches no data.
+     *
+     * A rejected probe answers false; a transport failure throws, so a caller can leave the
+     * capability unknown rather than caching a wrong "not an admin".
+     */
+    suspend fun isServerAdmin(server: Server): Boolean = guardedCall {
+        val trpcBase = getTrpcBaseUrl(server)
+        val response: HttpResponse = try {
+            client.get("$trpcBase/api/trpc/admin.getAdminNoticies") {
+                header("Authorization", getAuth(server))
+                parameter("batch", "1")
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException("Error checking admin status: ${e.message}", e)
+        }
+        response.status.isSuccess()
+    }
 }
+
+/** What [RemoteDataSource.summarizeBookmark] got back from the server. */
+data class SummarizeResult(
+    val summary: String?,
+    val summarizationStatus: String?
+)
 
 class ApiException(
     message: String,

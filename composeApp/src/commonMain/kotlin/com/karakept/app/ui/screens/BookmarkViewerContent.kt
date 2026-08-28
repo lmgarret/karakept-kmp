@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.PageTurnDirection
+import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.ui.components.BookmarkContentLoader
 import com.karakept.app.ui.components.EinkAwareSmallFab
@@ -147,6 +148,8 @@ fun BookmarkViewerContent(
     val showTags by screenModel.showTags.collectAsState()
     val dateDisplayMode by screenModel.dateDisplayMode.collectAsState()
     val isRefreshing by screenModel.isRefreshing.collectAsState()
+    val aiActionInFlight by screenModel.aiActionInFlight.collectAsState()
+    val aiCapabilitiesByServer by screenModel.aiCapabilities.collectAsState()
     val offlineMode by screenModel.offlineMode.collectAsState()
     val highlights by screenModel.highlights.collectAsState()
     val linkOpenMode by screenModel.linkOpenMode.collectAsState()
@@ -635,6 +638,23 @@ fun BookmarkViewerContent(
                             }
                         }
 
+                        // The AI summary is a separate field from the crawler's description, so
+                        // both can be present. It goes first: it describes the article as a whole,
+                        // where the meta description is usually a teaser.
+                        if (!state.bookmark.summary.isNullOrBlank()) {
+                            item(key = "summary_card") {
+                                Box(modifier = contentItemModifier) {
+                                    SummaryCard(
+                                        summary = state.bookmark.summary,
+                                        htmlBackgroundColor = htmlBackgroundColor,
+                                        htmlTextColor = htmlTextColor,
+                                        htmlFontSize = htmlFontSize,
+                                        htmlFontFamily = htmlFontFamily
+                                    )
+                                }
+                            }
+                        }
+
                         if (!description.isNullOrBlank()) {
                             item(key = "description_card") {
                                 Box(modifier = contentItemModifier) {
@@ -827,7 +847,10 @@ fun BookmarkViewerContent(
                             scope.launch { snackbarManager.showSnackbar("Opening in browser") }
                         },
                         isFullscreen = isFullscreen, onFullscreenToggle = onFullscreenToggle,
-                        onDetailsClick = { showDetailsPanel = true }
+                        onDetailsClick = { showDetailsPanel = true },
+                        aiCapabilities = aiCapabilitiesByServer[state.bookmark.serverId] ?: AiCapabilities(),
+                        aiActionInFlight = aiActionInFlight,
+                        onRunAiAction = { action -> screenModel.runAiAction(state.bookmark, action) }
                     )
 
                     // Search bar — floating pill, to the left of FAB on Android
