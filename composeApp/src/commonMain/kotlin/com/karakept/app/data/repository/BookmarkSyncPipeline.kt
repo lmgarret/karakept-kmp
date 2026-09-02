@@ -17,8 +17,6 @@ import com.karakept.app.utils.ImageCacheManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlin.time.Instant
 
@@ -62,11 +60,21 @@ internal data class ApiFilters(
     val favourited: Boolean? = null
 )
 
-/** Rows pulled per round of the reading-progress pass. */
-internal const val PROGRESS_PULL_BATCH = 50
+/**
+ * Rows read per round of the reading-progress backfill. Smaller than the steady-state slice
+ * only because a backfill loops until the table is drained: a round is a checkpoint, so a
+ * cancelled sync loses at most this many rows' worth of progress rather than the whole pass.
+ */
+internal const val PROGRESS_PULL_BATCH = 200
 
-/** Concurrent reading-progress requests. One request per bookmark, so this is the throttle. */
-internal const val PROGRESS_PULL_CONCURRENCY = 5
+/**
+ * Rows the steady-state rotation covers per sync.
+ *
+ * Was 50, when each one cost its own round trip. Batched at the transport, this is a handful
+ * of requests — enough that an ordinary library converges in one pass rather than over the
+ * dozens of syncs it took to walk it 50 at a time.
+ */
+internal const val PROGRESS_PULL_ROTATION = 500
 
 /**
  * Ceiling on a single backfill pass. Only a runaway guard — a library past this size finishes
@@ -110,9 +118,10 @@ internal class BookmarkSyncPipeline(
      */
     private val shouldRunEnrichment: (suspend () -> Boolean)? = null,
     /**
-     * Gate for the reading-progress pull (phase 6). Returning false skips it — the pull
-     * costs one tRPC call per bookmark, so the caller rations it across the sync flavours
-     * instead of letting every list pass run its own.
+     * Gate for the reading-progress pull (phase 6). Returning false skips it — a pass is a
+     * batched request per [READING_PROGRESS_BATCH_SIZE][com.karakept.app.data.remote] rows
+     * rather than a request per row, but it is still a pass, so the caller rations it across
+     * the sync flavours instead of letting every list pass run its own.
      */
     private val shouldPullReadingProgress: (suspend () -> Boolean)? = null
 ) {
@@ -212,18 +221,22 @@ internal class BookmarkSyncPipeline(
             }
         }
 
-        // Phase 5: Content sync. ForList syncs also run this phase — syncContent() is gated
-        // internally by each list's syncOffline setting, so content is only downloaded for
-        // lists explicitly configured for offline reading.
-        syncContent(syncedEntities)
-
-        // Phase 6: Sync reading progress. Every sync flavour is eligible — a user who only
-        // ever opens a list would otherwise never pull progress at all — but the gate keeps
-        // a fan-out of list syncs from multiplying the per-bookmark tRPC calls by the
-        // number of lists.
+        // Reading progress before content, though content was written first: progress decides
+        // what the user sees — the unread count, which rows are faded — while a content
+        // download changes nothing on the list and can run for minutes on a list configured
+        // for offline reading. Behind it, the state the screen is judged by arrived last.
+        //
+        // Every sync flavour is eligible: a user who only ever opens a list would otherwise
+        // never pull progress at all. The gate keeps a fan-out of list syncs from running a
+        // pass apiece.
         if (shouldPullReadingProgress?.invoke() != false) {
             syncReadingProgress()
         }
+
+        // Content sync. ForList syncs also run this phase — syncContent() is gated internally
+        // by each list's syncOffline setting, so content is only downloaded for lists
+        // explicitly configured for offline reading.
+        syncContent(syncedEntities)
 
         syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
 
@@ -555,14 +568,19 @@ internal class BookmarkSyncPipeline(
         // and it only happens once per server: after it, every row carries a stamp.
         val backfilled = backfillReadingProgress()
 
-        // Steady state: rotating cursor, least-recently-pulled first (then most recently
-        // modified), so the library keeps converging across successive syncs instead of
-        // forever re-pulling the same arbitrary first 50.
+        // Steady state: rotating cursor, ordered by what the user is most likely to be looking
+        // at — the list being synced, then unread rows, then least-recently-pulled. A pass is
+        // still bounded, so which rows it covers decides whether the screen agrees with the
+        // server before the next one.
         if (backfilled > 0) return
-        val candidates = bookmarkDao.getReadingProgressPullCandidates(config.server.id, limit = 50)
+        val candidates = bookmarkDao.getReadingProgressPullCandidates(
+            serverId = config.server.id,
+            listId = (config as? SyncConfiguration.ForList)?.listId,
+            limit = PROGRESS_PULL_ROTATION
+        )
         if (candidates.isEmpty()) return
         onProgress?.invoke(ListSyncStatus.FetchingMetadata(candidates.size))
-        pullProgressFor(candidates.map { ProgressPullTarget(it.localId, it.remoteId) })
+        pullProgressFor(candidates)
     }
 
     /**
@@ -590,39 +608,13 @@ internal class BookmarkSyncPipeline(
         return total
     }
 
-    /** Pulls progress for [targets] concurrently. Returns how many advanced the cursor. */
+    /** Pulls progress for [targets]. Returns how many advanced the rotating cursor. */
     private suspend fun pullProgressFor(targets: List<ProgressPullTarget>): Int {
         if (targets.isEmpty()) return 0
-        val now = System.currentTimeMillis()
-        // Bounded concurrency: one request per bookmark, and a backfill can be thousands.
-        val semaphore = kotlinx.coroutines.sync.Semaphore(PROGRESS_PULL_CONCURRENCY)
-        return kotlinx.coroutines.coroutineScope {
-            targets.map { target ->
-                async {
-                    semaphore.acquire()
-                    try {
-                        val result = bookmarkActionsRepository.pullReadingProgressFromServer(
-                            target.remoteId, config.server.id
-                        )
-                        // Only a pull the server actually answered advances the cursor.
-                        // Stamping a failed one would rotate the bookmark to the back of
-                        // the queue for a whole cycle without its progress ever arriving.
-                        if (result != ReadingProgressPullResult.FAILED) {
-                            bookmarkDao.updateProgressSyncedAt(target.localId, now)
-                            true
-                        } else {
-                            false
-                        }
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (_: Exception) {
-                        false
-                    } finally {
-                        semaphore.release()
-                    }
-                }
-            }.awaitAll().count { it }
-        }
+        val outcomes = bookmarkActionsRepository.pullReadingProgressForTargets(
+            targets, config.server.id
+        )
+        return outcomes.count { it.value != ReadingProgressPullResult.FAILED }
     }
 
     // Phase 5: Content Sync

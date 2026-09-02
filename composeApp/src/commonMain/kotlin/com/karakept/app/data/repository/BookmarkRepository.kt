@@ -33,7 +33,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Instant
 
@@ -153,12 +152,8 @@ class BookmarkRepository(
         lastAutoSyncCompletedAt[serverId] = System.currentTimeMillis()
     }
 
-    // Reading progress has no batch endpoint: each bookmark costs one tRPC call, so a pass
-    // is capped at 50 bookmarks and rotates through the library. Syncing a list used to skip
-    // the pass entirely, which left progress from other devices invisible to anyone who
-    // browses by list. Now every flavour may run it, rationed here: a Full sync always gets
-    // its pass, and the list/filter passes share one slot per interval no matter how many
-    // lists fan out at once.
+    // Rationing for the reading-progress pass. It is per server rather than per sync flavour:
+    // a fan-out of list syncs would otherwise each run their own pass over the same library.
     private val lastProgressPullAt = mutableMapOf<String, Long>()
     private val progressPullMutex = Mutex()
 
@@ -183,28 +178,12 @@ class BookmarkRepository(
         )
         if (targets.isEmpty()) return
 
-        val now = System.currentTimeMillis()
-        val semaphore = Semaphore(PROGRESS_PULL_CONCURRENCY)
-        coroutineScope {
-            targets.forEach { target ->
-                launch {
-                    semaphore.acquire()
-                    try {
-                        val result = bookmarkActionsRepository.pullReadingProgressFromServer(
-                            target.remoteId, serverId
-                        )
-                        if (result != ReadingProgressPullResult.FAILED) {
-                            bookmarkDao.updateProgressSyncedAt(target.localId, now)
-                        }
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        AppLogger.d("BookmarkRepo", "Visible-row progress pull failed: ${e.message}")
-                    } finally {
-                        semaphore.release()
-                    }
-                }
-            }
+        try {
+            bookmarkActionsRepository.pullReadingProgressForTargets(targets, serverId)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLogger.d("BookmarkRepo", "Visible-row progress pull failed: ${e.message}")
         }
     }
 
@@ -255,22 +234,44 @@ class BookmarkRepository(
 
     /**
      * Syncs only favorited bookmarks.
+     *
+     * @param isCurrentView true when this is the view on screen — see [syncBookmarksForList].
      */
-    suspend fun syncFavorites(server: Server): Int =
-        executeSyncPipeline(SyncConfiguration.Filtered(server, favourited = true))
+    suspend fun syncFavorites(server: Server, isCurrentView: Boolean = false): Int =
+        executeSyncPipeline(
+            SyncConfiguration.Filtered(server, favourited = true),
+            forceProgressPull = isCurrentView
+        )
 
     /**
      * Syncs only archived bookmarks.
+     *
+     * @param isCurrentView true when this is the view on screen — see [syncBookmarksForList].
      */
-    suspend fun syncArchived(server: Server): Int =
-        executeSyncPipeline(SyncConfiguration.Filtered(server, archived = true))
+    suspend fun syncArchived(server: Server, isCurrentView: Boolean = false): Int =
+        executeSyncPipeline(
+            SyncConfiguration.Filtered(server, archived = true),
+            forceProgressPull = isCurrentView
+        )
 
     /**
      * Syncs only bookmarks from a specific list.
      * Respects content sync mode (NEVER/PER_BOOKMARK/PER_LIST/ALL).
+     *
+     * @param isCurrentView true when this list is the one on screen. The reading-progress
+     *   ration is per server, so a list opened moments after another list's pass took the
+     *   slot would silently skip its own — leaving the view the user is actually looking at
+     *   as the one place the counts stay stale until scrolling fetched them row by row.
+     *   The view on screen is the one that must not be rationed.
      */
-    suspend fun syncBookmarksForList(server: Server, listId: String): Int =
-        executeSyncPipeline(SyncConfiguration.ForList(server, listId))
+    suspend fun syncBookmarksForList(
+        server: Server,
+        listId: String,
+        isCurrentView: Boolean = false
+    ): Int = executeSyncPipeline(
+        SyncConfiguration.ForList(server, listId),
+        forceProgressPull = isCurrentView
+    )
 
     suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<BookmarkEntity> {
         onStatusChange?.invoke("Waiting for server response...")
@@ -503,60 +504,19 @@ class BookmarkRepository(
         return result
     }
 
-    private fun buildPagedQuery(
-        serverId: String,
-        status: FilterStatus,
-        sort: SortOption,
-        listId: String?,
-        limit: Int,
-        offset: Int
-    ): RoomRawQuery {
-        val orderBy = sort.toOrderBySql()
-        return if (listId != null) {
-            RoomRawQuery(
-                """SELECT $BOOKMARK_SELECT FROM bookmarks
-                   WHERE serverId = ?
-                   AND (listIds = ?
-                        OR listIds LIKE ? || ',%'
-                        OR listIds LIKE '%,' || ?
-                        OR listIds LIKE '%,' || ? || ',%')
-                   ORDER BY $orderBy
-                   LIMIT ? OFFSET ?"""
-            ) { stmt ->
-                stmt.bindText(1, serverId)
-                stmt.bindText(2, listId)
-                stmt.bindText(3, listId)
-                stmt.bindText(4, listId)
-                stmt.bindText(5, listId)
-                stmt.bindLong(6, limit.toLong())
-                stmt.bindLong(7, offset.toLong())
-            }
-        } else {
-            val whereClause = when (status) {
-                FilterStatus.ALL -> "serverId = ? AND isArchived = 0"
-                FilterStatus.ALL_INCLUDING_ARCHIVED -> "serverId = ?"
-                FilterStatus.FAVORITES -> "serverId = ? AND isStarred = 1"
-                FilterStatus.ARCHIVED -> "serverId = ? AND isArchived = 1"
-                FilterStatus.OFFLINE -> "serverId = ? AND content IS NOT NULL AND length(content) > 0"
-            }
-            RoomRawQuery(
-                "SELECT $BOOKMARK_SELECT FROM bookmarks WHERE $whereClause ORDER BY $orderBy LIMIT ? OFFSET ?"
-            ) { stmt ->
-                stmt.bindText(1, serverId)
-                stmt.bindLong(2, limit.toLong())
-                stmt.bindLong(3, offset.toLong())
-            }
-        }
-    }
-
     companion object {
         /**
          * Minimum gap between two reading-progress passes triggered by list/filter syncs.
-         * Short enough that refreshing again pulls the next 50 bookmarks rather than
-         * appearing to do nothing, long enough that one fan-out of list syncs still costs
-         * a single pass.
+         *
+         * Was 30s, when a pass cost one request per bookmark and a fan-out of list syncs
+         * could put thousands on the wire. Batched, a pass is a few dozen requests, and the
+         * gap is what decides how long a stale count stays on screen — so it is now short
+         * enough that a burst of list syncs runs a handful of passes (each covering the next
+         * rows in the rotation, so the work compounds rather than repeating) instead of
+         * exactly one, and the list the user opens is not left waiting on a slot another
+         * list took a moment earlier.
          */
-        internal const val PROGRESS_PULL_MIN_INTERVAL_MS = 30_000L
+        internal const val PROGRESS_PULL_MIN_INTERVAL_MS = 5_000L
 
         /**
          * How old a row's reading progress may be before looking at it in the list refetches
@@ -571,13 +531,73 @@ class BookmarkRepository(
                modifiedAt, progressSyncedAt,
                '' as content"""
 
+        /**
+         * Builds the paged query. Lives in the companion so a test can page a real SQLite
+         * table with it rather than restating its SQL — the ORDER BY is what makes paging
+         * well-defined, and a copy of it in a test proves nothing about the query the app runs.
+         */
+        internal fun buildPagedQuery(
+            serverId: String,
+            status: FilterStatus,
+            sort: SortOption,
+            listId: String?,
+            limit: Int,
+            offset: Int
+        ): RoomRawQuery {
+            val orderBy = sort.toOrderBySql()
+            return if (listId != null) {
+                RoomRawQuery(
+                    """SELECT $BOOKMARK_SELECT FROM bookmarks
+                       WHERE serverId = ?
+                       AND (listIds = ?
+                            OR listIds LIKE ? || ',%'
+                            OR listIds LIKE '%,' || ?
+                            OR listIds LIKE '%,' || ? || ',%')
+                       ORDER BY $orderBy
+                       LIMIT ? OFFSET ?"""
+                ) { stmt ->
+                    stmt.bindText(1, serverId)
+                    stmt.bindText(2, listId)
+                    stmt.bindText(3, listId)
+                    stmt.bindText(4, listId)
+                    stmt.bindText(5, listId)
+                    stmt.bindLong(6, limit.toLong())
+                    stmt.bindLong(7, offset.toLong())
+                }
+            } else {
+                val whereClause = when (status) {
+                    FilterStatus.ALL -> "serverId = ? AND isArchived = 0"
+                    FilterStatus.ALL_INCLUDING_ARCHIVED -> "serverId = ?"
+                    FilterStatus.FAVORITES -> "serverId = ? AND isStarred = 1"
+                    FilterStatus.ARCHIVED -> "serverId = ? AND isArchived = 1"
+                    FilterStatus.OFFLINE -> "serverId = ? AND content IS NOT NULL AND length(content) > 0"
+                }
+                RoomRawQuery(
+                    "SELECT $BOOKMARK_SELECT FROM bookmarks WHERE $whereClause ORDER BY $orderBy LIMIT ? OFFSET ?"
+                ) { stmt ->
+                    stmt.bindText(1, serverId)
+                    stmt.bindLong(2, limit.toLong())
+                    stmt.bindLong(3, offset.toLong())
+                }
+            }
+        }
+
+        /**
+         * Every sort ends on `localId`, which is unique, so the row order is total.
+         *
+         * Without it rows sharing a sort key are placed relative to one another by nothing:
+         * two LIMIT/OFFSET reads of the same table are free to disagree about where a tied
+         * row sits, and a row the two reads disagree about lands on both sides of a page
+         * boundary or on neither. Ties are the norm — a feed imports a batch of bookmarks
+         * carrying one timestamp, and `readingTimeMinutes` is 0 across most of a library.
+         */
         private fun SortOption.toOrderBySql(): String = when (this) {
-            SortOption.NEWEST             -> "createdAt DESC"
-            SortOption.OLDEST             -> "createdAt ASC"
-            SortOption.TITLE_AZ           -> "title COLLATE NOCASE ASC"
-            SortOption.TITLE_ZA           -> "title COLLATE NOCASE DESC"
-            SortOption.READING_TIME_SHORT -> "readingTimeMinutes ASC"
-            SortOption.READING_TIME_LONG  -> "readingTimeMinutes DESC"
+            SortOption.NEWEST             -> "createdAt DESC, localId DESC"
+            SortOption.OLDEST             -> "createdAt ASC, localId ASC"
+            SortOption.TITLE_AZ           -> "title COLLATE NOCASE ASC, localId ASC"
+            SortOption.TITLE_ZA           -> "title COLLATE NOCASE DESC, localId DESC"
+            SortOption.READING_TIME_SHORT -> "readingTimeMinutes ASC, localId ASC"
+            SortOption.READING_TIME_LONG  -> "readingTimeMinutes DESC, localId DESC"
         }
     }
 
@@ -683,7 +703,10 @@ class BookmarkRepository(
      * this call returns 0 immediately without starting a new pipeline.
      * Returns the number of new bookmarks inserted.
      */
-    private suspend fun executeSyncPipeline(config: SyncConfiguration): Int = withContext(appDispatchers.io) {
+    private suspend fun executeSyncPipeline(
+        config: SyncConfiguration,
+        forceProgressPull: Boolean = false
+    ): Int = withContext(appDispatchers.io) {
         val key: SyncKey = when (config) {
             is SyncConfiguration.Full -> null
             is SyncConfiguration.Filtered -> if (config.favourited == true) SYNC_KEY_FAVORITES else SYNC_KEY_ARCHIVED
@@ -732,7 +755,9 @@ class BookmarkRepository(
                 shouldPullReadingProgress = {
                     tryAcquireReadingProgressPull(
                         serverId = config.server.id,
-                        force = config is SyncConfiguration.Full
+                        // A full sync covers the library, and the view on screen is the one
+                        // whose staleness the user can see. Everything else takes its turn.
+                        force = config is SyncConfiguration.Full || forceProgressPull
                     )
                 }
             )

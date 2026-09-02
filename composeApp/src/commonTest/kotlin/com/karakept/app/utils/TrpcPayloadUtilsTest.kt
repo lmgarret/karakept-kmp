@@ -64,4 +64,33 @@ class TrpcPayloadUtilsTest {
             TrpcPayloadUtils.getReadingProgress("xyz")
         )
     }
+
+    @Test
+    fun getReadingProgressBatchIndexesEveryBookmarkInOneEnvelope() {
+        // tRPC names a batch's entries by index, and answers positionally, so the order the
+        // ids go in is the order the results come back.
+        val payload = TrpcPayloadUtils.getReadingProgressBatch(listOf("abc", "def", "ghi"))
+
+        assertEquals(
+            """{"0":{"json":{"bookmarkId":"abc"}},"1":{"json":{"bookmarkId":"def"}},""" +
+                """"2":{"json":{"bookmarkId":"ghi"}}}""",
+            payload
+        )
+    }
+
+    @Test
+    fun getReadingProgressBatchOfOneMatchesTheSingleForm() {
+        assertEquals(
+            TrpcPayloadUtils.getReadingProgress("abc"),
+            TrpcPayloadUtils.getReadingProgressBatch(listOf("abc"))
+        )
+    }
+
+    @Test
+    fun batchPathRepeatsTheProcedureOncePerEntry() {
+        assertEquals(
+            "bookmarks.getReadingProgress,bookmarks.getReadingProgress",
+            TrpcPayloadUtils.batchPath("bookmarks.getReadingProgress", 2)
+        )
+    }
 }

@@ -118,23 +118,47 @@ interface BookmarkDao {
     @Query("UPDATE bookmarks SET progressSyncedAt = :syncedAt WHERE localId = :localId")
     suspend fun updateProgressSyncedAt(localId: Long, syncedAt: Long)
 
-    // Reading-progress pull candidates: least-recently-pulled first, then most recently
-    // modified, so large libraries converge across successive syncs (G3).
+    // The same stamp for a whole pass. A pass covers hundreds of rows, and one statement per
+    // row is one implicit transaction per row.
+    @Query("UPDATE bookmarks SET progressSyncedAt = :syncedAt WHERE localId IN (:localIds)")
+    suspend fun markProgressSyncedAt(localIds: List<Long>, syncedAt: Long)
+
+    /**
+     * Reading-progress pull candidates for the rotating cursor.
+     *
+     * Ordered by what the user is most likely to be looking at rather than by staleness
+     * alone: the list on screen first, then unread rows — the ones whose progress decides a
+     * count the user can see — and only then the least-recently-pulled. A pass covers a
+     * bounded slice of the library, so which slice it covers is what decides whether the
+     * screen agrees with the server.
+     *
+     * The list match is deliberately a loose `LIKE`: it only orders rows, never selects them,
+     * so a false positive costs nothing and the exact four-way membership test the paged
+     * query needs would buy nothing here.
+     */
     @Query("""
-        SELECT * FROM bookmarks
+        SELECT localId, remoteId, originalRemoteId, readingProgress FROM bookmarks
         WHERE serverId = :serverId
-        ORDER BY progressSyncedAt ASC, modifiedAt DESC
+        ORDER BY
+            CASE WHEN :listId IS NOT NULL AND listIds LIKE '%' || :listId || '%' THEN 0 ELSE 1 END,
+            isRead ASC,
+            progressSyncedAt ASC,
+            modifiedAt DESC
         LIMIT :limit
     """)
-    suspend fun getReadingProgressPullCandidates(serverId: String, limit: Int): List<BookmarkEntity>
+    suspend fun getReadingProgressPullCandidates(
+        serverId: String,
+        listId: String?,
+        limit: Int
+    ): List<ProgressPullTarget>
 
     // Bookmarks whose progress has never been pulled. Drained in full on a freshly connected
-    // server so the library does not converge 50 rows per sync. A projection rather than
-    // SELECT *: the pull only needs the two ids, and the row carries article content.
+    // server so the library does not converge one bounded slice per sync. A projection rather
+    // than SELECT *: the pull only needs these columns, and the row carries article content.
     @Query("""
-        SELECT localId, remoteId FROM bookmarks
+        SELECT localId, remoteId, originalRemoteId, readingProgress FROM bookmarks
         WHERE serverId = :serverId AND progressSyncedAt = 0
-        ORDER BY modifiedAt DESC
+        ORDER BY isRead ASC, modifiedAt DESC
         LIMIT :limit
     """)
     suspend fun getNeverProgressSyncedTargets(serverId: String, limit: Int): List<ProgressPullTarget>
@@ -144,7 +168,7 @@ interface BookmarkDao {
     // reaching them. Staleness rather than "never pulled" so that progress changed on
     // another device shows up on the list being looked at, not one rotation later.
     @Query("""
-        SELECT localId, remoteId FROM bookmarks
+        SELECT localId, remoteId, originalRemoteId, readingProgress FROM bookmarks
         WHERE serverId = :serverId AND progressSyncedAt < :staleBefore AND remoteId IN (:remoteIds)
     """)
     suspend fun getStaleProgressTargetsIn(
@@ -158,6 +182,13 @@ interface BookmarkDao {
      * *clears* the read flag below 100%: read state is local-only in this app, and the
      * percentage is the only thing that carries it between devices, so a bookmark marked
      * unread elsewhere has to be able to come back as unread here.
+     *
+     * Guarded by `readingProgress = :expectedProgress`: the caller snapshots the row's
+     * progress before asking the server, and the answer can take seconds to come back. A
+     * local mark-as-read/unread landing in that window must win — writing the server's
+     * answer on top of it would silently revert the row the user just acted on (#333). The
+     * WHERE clause makes the write a no-op once the row has moved, and the affected-row
+     * count tells the caller whether that happened.
      */
     @Query("""
         UPDATE bookmarks SET
@@ -165,14 +196,15 @@ interface BookmarkDao {
             readingScrollIndex = :scrollIndex,
             readingScrollOffset = :scrollOffset,
             isRead = CASE WHEN :progress >= 1.0 THEN 1 ELSE 0 END
-        WHERE localId = :localId
+        WHERE localId = :localId AND readingProgress = :expectedProgress
     """)
     suspend fun applyServerReadingProgress(
         localId: Long,
+        expectedProgress: Float,
         progress: Float,
         scrollIndex: Int,
         scrollOffset: Int
-    )
+    ): Int
 
     // Paginated query — ORDER BY is injected dynamically via RoomRawQuery so the
     // sort option from FilterConfig is applied at the DB level rather than in memory.
