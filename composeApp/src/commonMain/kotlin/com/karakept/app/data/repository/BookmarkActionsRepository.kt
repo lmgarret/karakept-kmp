@@ -47,6 +47,21 @@ class BookmarkActionsRepository(
     fun notifyBookmarkChanged(remoteId: Long) {
         _bookmarkChangedEvents.tryEmit(remoteId)
     }
+
+    // "Rows changed underneath you, re-read what you are showing." Emitted by work that
+    // touches many bookmarks at once — a reading-progress pass applies hundreds — where a
+    // per-row event would cost the listener a read and a rebuild apiece, and where sixteen of
+    // them would silently overflow the buffer above. Conflated: one re-read answers any
+    // number of them.
+    private val _bookmarksReloaded = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
+    val bookmarksReloaded: SharedFlow<Unit> = _bookmarksReloaded
+
+    fun notifyBookmarksReloaded() {
+        _bookmarksReloaded.tryEmit(Unit)
+    }
     
     // Audit (Phase 02): No tag cache exists -- markAsRead/markAsUnread use direct DB writes.
     // The originally-feared read/unread race condition does not apply to the current implementation.

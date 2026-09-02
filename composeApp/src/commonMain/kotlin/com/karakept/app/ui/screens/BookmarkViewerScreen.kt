@@ -7,6 +7,7 @@ import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
+import com.karakept.app.domain.action.TagFilterRequests
 import org.koin.compose.koinInject
 
 @Serializable
@@ -23,7 +24,10 @@ data class BookmarkViewerScreen(
     fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinViewModel<BookmarkViewerScreenModel>()
-        val mainScreenModel = koinInject<MainScreenModel>()
+        // A single, not the bookmark list's own model: resolving that here builds a second
+        // MainScreenModel outside any ViewModelStore, so it is never cleared and its repository
+        // collectors keep refreshing for the rest of the process (one leaked per bookmark opened).
+        val tagFilterRequests = koinInject<TagFilterRequests>()
 
         BookmarkViewerContent(
             bookmarkId = bookmarkId,
@@ -33,7 +37,7 @@ data class BookmarkViewerScreen(
             screenModel = screenModel,
             onBack = { navigator.pop() },
             onTagFilterApply = { tag ->
-                mainScreenModel.applyTagFilter(tag, bookmarkId)
+                tagFilterRequests.request(tag, bookmarkId)
                 navigator.pop()
             }
         )

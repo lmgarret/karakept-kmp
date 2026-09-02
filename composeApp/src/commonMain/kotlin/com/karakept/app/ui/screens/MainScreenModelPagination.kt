@@ -10,35 +10,88 @@ import com.karakept.app.domain.BookmarkFilterUtils
 import kotlinx.coroutines.launch
 
 /**
- * Loads a single DB page and applies client-side filters.
+ * Reads the rows in `[offset, offset + limit)` and applies client-side filters.
  *
- * @return Pair(filteredItems, rawDbRowCount). The raw count is used to
- *   detect true DB exhaustion: rawCount < pageSize means no more pages.
+ * @return Pair(filteredItems, rawDbRowCount). The raw count is used to detect true DB
+ *   exhaustion: rawCount < limit means the query has no more rows to offer.
  */
-internal suspend fun MainScreenModel.loadBookmarksPage(
+private suspend fun MainScreenModel.loadBookmarkRows(
     server: Server,
     filter: FilterConfig,
-    page: Int
+    offset: Int,
+    limit: Int
 ): Pair<List<BookmarkEntity>, Int> {
-    // [filter] is the effective filter (see MainScreenModel.effectiveFilter), so a page's
-    // contents depend only on it and the page index — never on state that can change between
+    // [filter] is the effective filter (see MainScreenModel.effectiveFilter), so a read's
+    // contents depend only on it and the row range — never on state that can change between
     // the load of a window and its refresh.
     val singleListId = filter.lists.singleOrNull()
 
-    val pagedBookmarks = bookmarkRepository.getBookmarksPaged(
+    val rows = bookmarkRepository.getBookmarksPaged(
         server = server,
         status = filter.status,
-        offset = page * pageSize,
-        limit = pageSize,
+        offset = offset,
+        limit = limit,
         sort = filter.sort,
         listId = singleListId
     )
 
     val filtered = BookmarkFilterUtils.applyClientSideFilters(
-        pagedBookmarks, filter, skipListFilter = singleListId != null
+        rows, filter, skipListFilter = singleListId != null
     )
 
-    return Pair(filtered, pagedBookmarks.size)
+    return Pair(filtered, rows.size)
+}
+
+/** Index of the page the last of [rowCount] rows falls on. */
+private fun MainScreenModel.lastPageHolding(rowCount: Int): Int =
+    if (rowCount <= 0) 0 else (rowCount - 1) / pageSize
+
+/**
+ * The loaded window read back as a single query.
+ *
+ * The window spans pages `0..lastLoadedPage`, and reading it one page at a time is what let it
+ * tear: a sync commits rows while the reads run, and every row inserted above a read position
+ * shifts the pages below it, so a page-by-page walk re-reads rows it already held and never
+ * reaches the ones those insertions displaced. One query is evaluated against one consistent
+ * snapshot, so it cannot tear — rows committed after it are picked up by the next read instead
+ * of falling into a gap (#333).
+ */
+private data class WindowRead(
+    val rows: List<BookmarkEntity>,
+    val rawCount: Int,
+    val windowSize: Int
+) {
+    /** The query could not fill the window, so the table ends inside it. */
+    val reachedEnd: Boolean get() = rawCount < windowSize
+}
+
+/** Reads pages `0..[lastLoadedPage]` in one query. */
+private suspend fun MainScreenModel.readWholeWindow(
+    server: Server,
+    filter: FilterConfig,
+    lastLoadedPage: Int
+): WindowRead {
+    val windowSize = (lastLoadedPage + 1) * pageSize
+    val (rows, rawCount) = loadBookmarkRows(server, filter, offset = 0, limit = windowSize)
+    return WindowRead(rows, rawCount, windowSize)
+}
+
+/**
+ * Publishes a [WindowRead] as the window on screen.
+ *
+ * A table that has shrunk since the window was loaded shrinks the window with it, so later
+ * reads stop sweeping page ranges the query can no longer fill.
+ */
+private suspend fun MainScreenModel.publishWindow(
+    view: LoadedView,
+    read: WindowRead,
+    lastLoadedPage: Int
+) {
+    _loadedView.value = view
+    updateAccumulatedBookmarks { read.rows }
+    _currentPage.value =
+        if (read.reachedEnd) lastPageHolding(read.rawCount) else lastLoadedPage
+    _hasMoreItems.value = !read.reachedEnd
 }
 
 /**
@@ -53,7 +106,7 @@ internal suspend fun MainScreenModel.findPageWithItems(
     startPage: Int
 ): Triple<List<BookmarkEntity>, Int, Boolean> =
     advancePagesUntilItemsFound(startPage, pageSize) { page ->
-        loadBookmarksPage(server, filter, page)
+        loadBookmarkRows(server, filter, offset = page * pageSize, limit = pageSize)
     }
 
 /**
@@ -97,6 +150,35 @@ fun MainScreenModel.loadNextPage() {
             }
             if (dbExhausted) {
                 _hasMoreItems.value = false
+            }
+
+            // The walk has reached the end of the table, but the window it leaves behind can
+            // still be short of it. Every row a sync commits above the read position shifts the
+            // pages below it, so the walk re-reads rows it already held — dropped just above as
+            // duplicates — and never reaches the rows the same shift displaced past it. Moving
+            // only forward, it never comes back for them. The window then claims to be complete,
+            // `_hasMoreItems` is false, and scrolling can no longer recover anything: the state
+            // #333 reported, with the missing rows being the freshly synced, still-unread ones.
+            //
+            // Re-reading the window as one query closes that gap, and this is the moment to do
+            // it — the walk has just established there is nothing further to page to, so a short
+            // window here has no other way back. Read inline rather than through
+            // [refreshLoadedPagesInPlace]: that manages `_isLoadingMore` itself and would race
+            // this function's own `finally`.
+            if (dbExhausted) {
+                val lastLoadedPage = _currentPage.value
+                val read = readWholeWindow(server, view.filter, lastLoadedPage)
+
+                if (paginationGeneration == generation &&
+                    _loadedView.value == view &&
+                    currentView() == view &&
+                    // A re-read holding fewer rows than the window already does cannot be a
+                    // heal — the walk has just appended what it found — so publishing it would
+                    // drop rows that are legitimately loaded. Leave the window alone.
+                    read.rows.size >= _accumulatedBookmarks.value.size
+                ) {
+                    publishWindow(view, read, lastLoadedPage)
+                }
             }
         } catch (e: Exception) {
             AppLogger.e("MainScreenModel", "Failed to load bookmarks: ${e.message}", e)
@@ -152,10 +234,10 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
         // at the top keeps the count right when the view opens somewhere else — a restored
         // scroll position, or a reload that deliberately holds its place.
         _seenTopRemoteId.value = newItems.firstOrNull()?.remoteId
-        // The window spans pages 0..currentPage and is re-read page by page on every refresh, so
-        // it must end at the page that *contributed* the items. Finding nothing means the search
+        // The window spans pages 0..currentPage and is re-read in full on every refresh, so it
+        // must end at the page that *contributed* the items. Finding nothing means the search
         // walked the table without loading a window — recording the page it gave up on would
-        // make every later refresh walk the whole table too.
+        // make every later refresh ask for the whole table too.
         _currentPage.value = if (newItems.isEmpty()) 0 else lastPage
         if (dbExhausted) {
             _hasMoreItems.value = false
@@ -177,6 +259,15 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
  * to the top. Leaving the version untouched lets [PreserveListScrollAnchor] re-pin the viewport
  * to the bookmark the user is looking at, so the list updates beneath them instead of blinking
  * and jumping to the top when the background sync finishes on open.
+ *
+ * The whole window is read in **one** query rather than one query per page. A sync commits its
+ * rows while this runs, and every row it inserts above the read position shifts the OFFSET of
+ * every page not yet read: the walk then re-read rows it already held (dropped again by
+ * [updateAccumulatedBookmarks]'s de-duplication, see #274) and never read the rows those
+ * insertions had pushed past it. The window came back short a whole batch of freshly synced
+ * bookmarks, with `_currentPage` and `_hasMoreItems` claiming it was complete — so scrolling
+ * to the end never fetched them and only re-selecting the filter brought them back (#333).
+ * A single query is evaluated against one consistent snapshot, so it cannot tear.
  */
 internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, filter: FilterConfig) {
     // A refresh only *observes* paginationGeneration — bumping it would let a background
@@ -191,18 +282,7 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
 
     _isLoadingMore.value = true
     try {
-        val all = mutableListOf<BookmarkEntity>()
-        var page = 0
-        var reachedEnd = false
-        while (page <= lastLoadedPage) {
-            val (items, rawCount) = loadBookmarksPage(server, filter, page)
-            all += items
-            if (rawCount < pageSize) {
-                reachedEnd = true
-                break
-            }
-            page++
-        }
+        val read = readWholeWindow(server, filter, lastLoadedPage)
 
         // A reset or a newer refresh started, or the user switched away, while we fetched.
         if (paginationGeneration != myGeneration ||
@@ -213,10 +293,7 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
         // The "N new" pill counts rows sitting above the last one the user saw, derived from the
         // list itself (see MainScreenModel.newBookmarksAbove) — a refresh publishes the new
         // window and the count follows, with nothing to tally here.
-        _loadedView.value = view
-        updateAccumulatedBookmarks { all }
-        _currentPage.value = if (reachedEnd) page else lastLoadedPage
-        _hasMoreItems.value = !reachedEnd
+        publishWindow(view, read, lastLoadedPage)
     } finally {
         if (paginationGeneration == myGeneration && refreshGeneration == myRefreshGeneration) {
             _isLoadingMore.value = false

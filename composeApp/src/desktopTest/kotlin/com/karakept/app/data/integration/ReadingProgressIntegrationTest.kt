@@ -50,7 +50,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
 
         // Verify reading progress on server via tRPC
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
-        val serverPercent = remoteDataSource.getReadingProgress(testServer, remoteId)
+        val serverPercent = remoteDataSource.getReadingProgressBatch(testServer, listOf(remoteId))[remoteId]
         assertNotNull(serverPercent, "Server should have reading progress after sync")
         assertEquals(42, serverPercent, "Server reading progress should match pushed value")
     }
@@ -85,7 +85,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
         bookmarkActionsRepository.processPendingActions(testServer)
 
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
-        val serverPercent = remoteDataSource.getReadingProgress(testServer, remoteId)
+        val serverPercent = remoteDataSource.getReadingProgressBatch(testServer, listOf(remoteId))[remoteId]
         assertEquals(55, serverPercent, "Server should have the latest (55%) progress")
     }
 
@@ -103,7 +103,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
         // Wait for auto-sync to complete
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
 
-        val serverPercent = remoteDataSource.getReadingProgress(testServer, remoteId)
+        val serverPercent = remoteDataSource.getReadingProgressBatch(testServer, listOf(remoteId))[remoteId]
         assertNotNull(serverPercent, "Server should have reading progress after markAsRead")
         assertEquals(100, serverPercent, "Server should show 100% after marking as read")
     }
@@ -120,14 +120,14 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
         bookmarkActionsRepository.markAsRead(bookmark.remoteId, testServer.id)
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
 
-        val afterRead = remoteDataSource.getReadingProgress(testServer, remoteId)
+        val afterRead = remoteDataSource.getReadingProgressBatch(testServer, listOf(remoteId))[remoteId]
         assertEquals(100, afterRead, "Server should show 100% after markAsRead")
 
         // Then mark as unread with progress reset (0%)
         bookmarkActionsRepository.markAsUnread(bookmark.remoteId, testServer.id, resetProgress = true)
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
 
-        val afterUnread = remoteDataSource.getReadingProgress(testServer, remoteId)
+        val afterUnread = remoteDataSource.getReadingProgressBatch(testServer, listOf(remoteId))[remoteId]
         assertEquals(0, afterUnread, "Server should show 0% after markAsUnread with reset")
     }
 
@@ -201,7 +201,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
         val bookmark = insertLocalBookmark(remoteId, url = url)
 
         // No reading progress seeded on server
-        val serverPercent = remoteDataSource.getReadingProgress(testServer, remoteId)
+        val serverPercent = remoteDataSource.getReadingProgressBatch(testServer, listOf(remoteId))[remoteId]
         // Server returns null for readingProgressPercent when no progress is stored
         // getReadingProgress returns null in that case
         assertTrue(serverPercent == null || serverPercent == 0,
@@ -238,7 +238,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
 
         // Verify device A pushed 75% to server
-        val serverPercent = remoteDataSource.getReadingProgress(testServer, remoteId)
+        val serverPercent = remoteDataSource.getReadingProgressBatch(testServer, listOf(remoteId))[remoteId]
         assertEquals(75, serverPercent, "Server should have 75% after device A push")
 
         // --- Device B: fresh DB entry, pulls progress from server ---
@@ -314,7 +314,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
 
         // Verify the progress reached the server without a manual processPendingActions call
-        val serverPercent = remoteDataSource.getReadingProgress(testServer, remoteId)
+        val serverPercent = remoteDataSource.getReadingProgressBatch(testServer, listOf(remoteId))[remoteId]
         assertNotNull(serverPercent, "Server should have reading progress after auto-sync")
         assertEquals(63, serverPercent, "Server reading progress should match queued value after auto-sync")
     }

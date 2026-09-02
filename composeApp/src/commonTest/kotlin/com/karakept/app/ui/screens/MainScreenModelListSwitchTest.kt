@@ -154,7 +154,7 @@ class MainScreenModelListSwitchTest {
 
     /** Stub a full first page so the model has a loaded window to append to. */
     private fun stubFullFirstPage(): List<BookmarkEntity> {
-        val page0 = (1L..20L).map { makeBookmark(it) }
+        val page0 = (1L..PAGE_SIZE.toLong()).map { makeBookmark(it) }
         coEvery {
             bookmarkRepository.getBookmarksPaged(
                 server = any(), status = any(), offset = 0, limit = any(),
@@ -170,7 +170,7 @@ class MainScreenModelListSwitchTest {
             val page0 = stubFullFirstPage()
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = 20, limit = any(),
+                    server = any(), status = any(), offset = PAGE_SIZE, limit = any(),
                     sort = any(), listId = any()
                 )
             } returns listOf(makeBookmark(99))
@@ -190,7 +190,7 @@ class MainScreenModelListSwitchTest {
             assertEquals(false, model.isLoadingMore.value)
             coVerify(exactly = 0) {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = 20, limit = any(),
+                    server = any(), status = any(), offset = PAGE_SIZE, limit = any(),
                     sort = any(), listId = any()
                 )
             }
@@ -201,7 +201,7 @@ class MainScreenModelListSwitchTest {
         val page0 = stubFullFirstPage()
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = 20, limit = any(),
+                server = any(), status = any(), offset = PAGE_SIZE, limit = any(),
                 sort = any(), listId = any()
             )
         } returns listOf(makeBookmark(99))
@@ -219,7 +219,7 @@ class MainScreenModelListSwitchTest {
     @Test
     fun `an in-place refresh does not discard a reset that is already loading`() =
         runTest(testDispatcher) {
-            val page0 = (1L..20L).map { makeBookmark(it) }
+            val page0 = (1L..PAGE_SIZE.toLong()).map { makeBookmark(it) }
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
                     server = any(), status = any(), offset = 0, limit = any(),

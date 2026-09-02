@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
  */
 class NewBookmarksAboveCountTest {
 
-    private fun bookmark(remoteId: Long) = BookmarkEntity(
+    private fun bookmark(remoteId: Long, isRead: Boolean = false) = BookmarkEntity(
         localId = remoteId,
         remoteId = remoteId,
         originalRemoteId = "orig-$remoteId",
@@ -28,6 +28,7 @@ class NewBookmarksAboveCountTest {
         createdAt = remoteId * 1000L,
         isArchived = false,
         isStarred = false,
+        isRead = isRead,
         listIds = ""
     )
 
@@ -105,5 +106,32 @@ class NewBookmarksAboveCountTest {
         // Under a non-NEWEST sort new bookmarks land at the bottom. The old counter reported
         // them as being above the viewport regardless.
         assertEquals(0, countBookmarksAbove(listOfIds(1, 2, 3, 90, 91), seenTopRemoteId = 1L))
+    }
+
+    // Read bookmarks — the pill offers a trip to the top, and a faded row is not worth one.
+
+    @Test
+    fun excludeRead_leavesReadBookmarksOutOfTheCount() {
+        val window = listOf(bookmark(90), bookmark(91, isRead = true), bookmark(1))
+        assertEquals(1, countBookmarksAbove(window, seenTopRemoteId = 1L, excludeRead = true))
+    }
+
+    @Test
+    fun excludeRead_countsEveryBookmarkWhenFadingIsOff() {
+        val window = listOf(bookmark(90), bookmark(91, isRead = true), bookmark(1))
+        assertEquals(2, countBookmarksAbove(window, seenTopRemoteId = 1L, excludeRead = false))
+    }
+
+    @Test
+    fun excludeRead_allReadAboveCountsZero() {
+        // The pill disappears rather than sending the user to rows they have already read.
+        val window = listOf(bookmark(90, isRead = true), bookmark(91, isRead = true), bookmark(1))
+        assertEquals(0, countBookmarksAbove(window, seenTopRemoteId = 1L, excludeRead = true))
+    }
+
+    @Test
+    fun excludeRead_ignoresReadBookmarksBelowTheAnchor() {
+        val window = listOf(bookmark(90), bookmark(1), bookmark(2, isRead = true))
+        assertEquals(1, countBookmarksAbove(window, seenTopRemoteId = 1L, excludeRead = true))
     }
 }

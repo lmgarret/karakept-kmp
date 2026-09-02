@@ -44,15 +44,25 @@ class ScrollActionTrackerTest {
         firstOffset: Int = 0,
         visibleCount: Int = 5,
         isScrolling: Boolean = false,
-        actedOnIds: Set<Long> = emptySet()
+        actedOnIds: Set<Long> = emptySet(),
+        pageTurns: Int = 0,
+        /**
+         * The key of the row at the top of the viewport. Defaults to the one [firstIndex]
+         * names in [bookmarks], which is what layoutInfo reports once the two agree. Pass it
+         * explicitly to model the window where the dataset has been swapped and the layout
+         * still describes the outgoing list: there the index and the key both come from the
+         * *old* list, so a new list with an old index would name a row layoutInfo never saw.
+         */
+        firstKey: Long? = bookmarks.getOrNull(firstIndex)?.remoteId
     ) = ScrollActionSnapshot(
         firstIndex = firstIndex,
-        firstKey = bookmarks.getOrNull(firstIndex)?.remoteId,
+        firstKey = firstKey,
         firstOffset = firstOffset,
         lastVisibleIndex = minOf(firstIndex + visibleCount - 1, bookmarks.lastIndex),
         bookmarks = bookmarks,
         isScrolling = isScrolling,
-        actedOnIds = actedOnIds
+        actedOnIds = actedOnIds,
+        pageTurns = pageTurns
     )
 
     private fun ids(bookmarks: List<BookmarkEntity>) = bookmarks.map { it.remoteId }
@@ -133,7 +143,9 @@ class ScrollActionTrackerTest {
 
         // Sync prepends 3 rows: Compose re-indexes, so bookmark 11 is now at index 13.
         val grown = listOfIds(101, 102, 103) + longList
-        assertTrue(tracker.onSnapshot(snapshot(grown, firstIndex = 10)).isEmpty())
+        // The dataset has landed but the layout has not been re-measured: it still reports
+        // bookmark 11 at index 10, the position it held in the outgoing list.
+        assertTrue(tracker.onSnapshot(snapshot(grown, firstIndex = 10, firstKey = 11L)).isEmpty())
         assertTrue(tracker.onSnapshot(snapshot(grown, firstIndex = 13)).isEmpty())
 
         // Scrolling one further row down fires only that row, not the re-indexed backlog.
@@ -252,5 +264,113 @@ class ScrollActionTrackerTest {
         assertTrue(tracker.onSnapshot(snapshot(emptyList(), visibleCount = 0)).isEmpty())
         assertTrue(tracker.onSnapshot(snapshot(longList, firstIndex = 0)).isEmpty())
         assertTrue(tracker.onSnapshot(snapshot(longList, firstIndex = 0)).isEmpty())
+    }
+
+    @Test
+    fun filterBringingBookmarksIntoView_doesNotMarkThemOnArrival() {
+        // Applying a filter replaces the dataset with rows that fit in one screenful. The
+        // gesture that got the user here belongs to the list they just left: inheriting it let
+        // the bottom rule fire on arrival, marking the bookmark they had gone looking for read
+        // before they could read it.
+        val tracker = ScrollActionTracker()
+        tracker.onSnapshot(snapshot(longList, firstIndex = 0))
+        tracker.onSnapshot(snapshot(longList, firstIndex = 4, isScrolling = true))
+
+        val filtered = listOfIds(77)
+        assertTrue(tracker.onSnapshot(snapshot(filtered, visibleCount = 1)).isEmpty())
+        assertTrue(tracker.onSnapshot(snapshot(filtered, visibleCount = 1)).isEmpty())
+        assertTrue(tracker.onSnapshot(snapshot(filtered, visibleCount = 1)).isEmpty())
+    }
+
+    // --- hardware page turns ------------------------------------------------------------
+
+    @Test
+    fun instantPageTurn_armsTheBottomSweep() {
+        // An instant turn (the e-ink setting) finishes inside one frame, so isScrolling is
+        // never sampled as true. Without the turn itself counting as the gesture, the last
+        // screenful — the page the user started on — was never marked read.
+        val tracker = ScrollActionTracker()
+        val short = listOfIds(1, 2, 3)
+        tracker.onSnapshot(snapshot(short, visibleCount = 3))
+
+        val fired = tracker.onSnapshot(
+            snapshot(short, visibleCount = 3, firstOffset = 40, pageTurns = 1)
+        )
+
+        assertEquals(listOf(1L, 2L, 3L), ids(fired))
+    }
+
+    @Test
+    fun instantPageTurn_firesOnTheRowsThatLeftTheTop() {
+        val tracker = ScrollActionTracker()
+        tracker.onSnapshot(snapshot(longList, firstIndex = 0))
+
+        val fired = tracker.onSnapshot(snapshot(longList, firstIndex = 4, pageTurns = 1))
+
+        assertEquals(listOf(1L, 2L, 3L, 4L), ids(fired))
+    }
+
+    @Test
+    fun pageTurnLandingWithASyncRefresh_stillFiresOnThePageLeftBehind() {
+        // The reported case: the first page stays unread when the turn to the second one
+        // happens to coincide with a sync publishing a new list — which on the first page is
+        // exactly when refreshes are landing. The comparison used to be by index, so the
+        // snapshot carrying both was thrown away as unreadable; nothing changed afterwards,
+        // so no further snapshot arrived and the page was never marked. Going up and back
+        // down produced fresh snapshots, which is why doing that fixed it by hand.
+        val tracker = ScrollActionTracker()
+        tracker.onSnapshot(snapshot(longList, firstIndex = 0))
+
+        // One snapshot carries the turn *and* the swap: same rows, new list instance.
+        val refreshed = longList.map { it.copy() }
+        val fired = tracker.onSnapshot(
+            snapshot(refreshed, firstIndex = 8, pageTurns = 1)
+        )
+
+        assertEquals(listOf(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L), ids(fired))
+    }
+
+    @Test
+    fun pageTurnWithASyncPrepend_firesOnlyThePageTheUserActuallyTurned() {
+        // The same snapshot, but the sync also prepended rows the user has never seen. Those
+        // sit above the anchor rather than between it and the viewport, so they are not part
+        // of what scrolled past — and must not be marked read on the strength of a turn.
+        val tracker = ScrollActionTracker()
+        tracker.onSnapshot(snapshot(longList, firstIndex = 0))
+
+        val grown = listOfIds(101, 102, 103) + longList
+        // Layout still describes the outgoing list: bookmark 9 at index 8.
+        val fired = tracker.onSnapshot(
+            snapshot(grown, firstIndex = 8, firstKey = 9L, pageTurns = 1)
+        )
+
+        assertEquals(listOf(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L), ids(fired))
+    }
+
+    @Test
+    fun rowsTheSyncAddedBetweenAnchorAndViewport_areNeverFired() {
+        // A row that arrived in the same snapshot cannot be one the user scrolled past.
+        val tracker = ScrollActionTracker()
+        val original = listOfIds(1, 2, 3, 4, 5)
+        tracker.onSnapshot(snapshot(original, firstIndex = 0))
+
+        // 99 lands between the anchor (1) and the row now at the top (4).
+        val grown = listOfIds(1, 2, 99, 3, 4, 5)
+        val fired = tracker.onSnapshot(snapshot(grown, firstIndex = 4, isScrolling = true))
+
+        assertEquals(listOf(1L, 2L, 3L), ids(fired))
+    }
+
+    @Test
+    fun noPageTurn_leavesTheSweepDisarmed() {
+        // The counter standing still must not arm anything — a sync can still end the list at
+        // the viewport by prepending rows or dropping them off the tail.
+        val tracker = ScrollActionTracker()
+        val short = listOfIds(1, 2, 3)
+        tracker.onSnapshot(snapshot(short, visibleCount = 3))
+
+        val fired = tracker.onSnapshot(snapshot(short, visibleCount = 3, pageTurns = 0))
+
+        assertTrue(fired.isEmpty())
     }
 }

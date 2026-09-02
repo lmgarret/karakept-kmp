@@ -231,7 +231,7 @@ class SmartListDeferredRefreshTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
-            bookmarkRepository.syncBookmarksForList(testServer, "smartA")
+            bookmarkRepository.syncBookmarksForList(testServer, "smartA", any())
         }
     }
 
@@ -261,7 +261,7 @@ class SmartListDeferredRefreshTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) {
-            bookmarkRepository.syncBookmarksForList(any(), eq("otherList"))
+            bookmarkRepository.syncBookmarksForList(any(), eq("otherList"), any())
         }
     }
 
@@ -276,7 +276,7 @@ class SmartListDeferredRefreshTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) {
-            bookmarkRepository.syncBookmarksForList(any(), any())
+            bookmarkRepository.syncBookmarksForList(any(), any(), any())
         }
         assertTrue("smartA" in model._smartListsNeedingRefresh.value,
             "Flag should be preserved for later navigation")
@@ -289,7 +289,7 @@ class SmartListDeferredRefreshTest {
 
         model._smartListsNeedingRefresh.value = setOf("smartA")
         coEvery {
-            bookmarkRepository.syncBookmarksForList(any(), eq("smartA"))
+            bookmarkRepository.syncBookmarksForList(any(), eq("smartA"), any())
         } throws RuntimeException("Network error")
 
         model.applyFilter(FilterConfig(lists = listOf("smartA")))
@@ -325,7 +325,7 @@ class SmartListDeferredRefreshTest {
         model.applyFilter(FilterConfig(lists = listOf("smartA")))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA") }
+        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA", any()) }
         assertTrue(model._smartListsNeedingRefresh.value.isEmpty())
     }
 
@@ -349,7 +349,7 @@ class SmartListDeferredRefreshTest {
         model.applyFilter(FilterConfig(lists = listOf("smartA")))
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { bookmarkRepository.syncBookmarksForList(any(), eq("smartA")) }
+        coVerify(exactly = 0) { bookmarkRepository.syncBookmarksForList(any(), eq("smartA"), any()) }
     }
 
     // ---- Flag accumulation ----
@@ -391,8 +391,8 @@ class SmartListDeferredRefreshTest {
         advanceUntilIdle()
         assertEquals(emptySet(), model._smartListsNeedingRefresh.value)
 
-        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA") }
-        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartB") }
+        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA", any()) }
+        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartB", any()) }
     }
 
     /**
@@ -415,14 +415,14 @@ class SmartListDeferredRefreshTest {
         model.applyFilter(FilterConfig(lists = listOf("smartA")))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA") }
-        coVerify(exactly = 0) { bookmarkRepository.syncBookmarksForList(testServer, "smartB") }
+        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA", any()) }
+        coVerify(exactly = 0) { bookmarkRepository.syncBookmarksForList(testServer, "smartB", any()) }
         assertEquals(setOf("smartB"), model._smartListsNeedingRefresh.value)
 
         model.applyFilter(FilterConfig(lists = listOf("smartB")))
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartB") }
+        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartB", any()) }
         assertTrue(
             model._smartListsNeedingRefresh.value.isEmpty(),
             "Both flags should be cleared once the scheduler is drained"
@@ -442,12 +442,12 @@ class SmartListDeferredRefreshTest {
         model._smartListsNeedingRefresh.value = setOf("smartA")
         model.applyFilter(FilterConfig(lists = listOf("smartA")))
 
-        coVerify(exactly = 0) { bookmarkRepository.syncBookmarksForList(any(), any()) }
+        coVerify(exactly = 0) { bookmarkRepository.syncBookmarksForList(any(), any(), any()) }
         assertEquals(setOf("smartA"), model._smartListsNeedingRefresh.value)
 
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA") }
+        coVerify(exactly = 1) { bookmarkRepository.syncBookmarksForList(testServer, "smartA", any()) }
         assertTrue(model._smartListsNeedingRefresh.value.isEmpty())
     }
 }

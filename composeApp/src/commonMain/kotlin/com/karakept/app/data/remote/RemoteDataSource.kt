@@ -20,6 +20,11 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -44,6 +49,24 @@ class UnsupportedServerActionException(message: String) : Exception(message)
  * The only push rejection that is not worth retrying.
  */
 private const val NON_LINK_PROGRESS_ERROR = "reading progress can only be saved"
+
+/**
+ * Bookmarks per batched reading-progress request. Conservative on purpose: the batch travels
+ * in the query string and a default nginx refuses a request line much past 8KB, which is well
+ * under what Karakeep's own web client allows itself. Twenty ids is ~2KB encoded and still
+ * turns a thousand-bookmark pass from a thousand requests into fifty.
+ */
+private const val READING_PROGRESS_BATCH_SIZE = 20
+
+/**
+ * Batched progress requests in flight at once. A pass covers hundreds of bookmarks; issued one
+ * after another the round trips are the whole cost of it, and this is the same ceiling the
+ * per-bookmark pull used before batching.
+ */
+private const val PROGRESS_REQUEST_CONCURRENCY = 5
+
+/** "URI too long" and "request header fields too large" — the proxy, not the server. */
+private val URL_TOO_LONG_STATUSES = setOf(414, 431)
 
 /**
  * Extension that checks the HTTP status of a generated API response before deserializing.
@@ -540,25 +563,94 @@ class RemoteDataSource(
     }
 
     /**
-     * Fetch reading progress from server via tRPC.
-     * Returns the progress percent (0-100), or null when the server has no progress stored
-     * for this bookmark. A failed request throws so callers can tell "nothing to restore"
-     * apart from "we never found out".
+     * Fetch reading progress for several bookmarks, in as few requests as the URL budget allows.
      *
-     * tRPC query: bookmarks.getReadingProgress
-     * GET /api/trpc/bookmarks.getReadingProgress?batch=1&input=...
+     * Returns the progress percent per bookmark id. A `null` entry means the server holds no
+     * progress for that bookmark; an id **missing** from the map was never answered — a chunk
+     * that failed — and must be treated as "we never found out", not as "nothing stored", so
+     * the caller holds its cursor rather than marking the row as asked.
+     *
+     * The batch travels in the query string, and how long a URL a deployment accepts is the
+     * reverse proxy's business rather than the server's — Karakeep's own client caps itself at
+     * 14000 characters, while a default nginx rejects rather less. [chunkSize] therefore starts
+     * small and halves on the two statuses that mean "your request line is too long", so a
+     * strict proxy costs a retry rather than the whole feature.
+     *
+     * Chunks run concurrently up to [PROGRESS_REQUEST_CONCURRENCY]: a pass covers hundreds of
+     * bookmarks, and issued one after another the round trips are the whole cost of the pass.
      */
-    suspend fun getReadingProgress(
+    suspend fun getReadingProgressBatch(
         server: Server,
-        bookmarkId: String
-    ): Int? = guardedCall {
+        bookmarkIds: List<String>,
+        chunkSize: Int = READING_PROGRESS_BATCH_SIZE
+    ): Map<String, Int?> {
+        if (bookmarkIds.isEmpty()) return emptyMap()
+        var size = chunkSize.coerceAtLeast(1)
+        while (true) {
+            val chunks = bookmarkIds.chunked(size)
+            val answers = fetchChunksConcurrently(server, chunks)
+            // A proxy rejects on the request line alone, so every chunk of this size fails the
+            // same way. Halving and starting over costs a round trip and gets the whole pass,
+            // where retrying chunk by chunk would pay that cost once per chunk.
+            if (answers == null && size > 1) {
+                size /= 2
+                AppLogger.d("RemoteDataSource", "Progress batch too long, retrying at $size")
+                continue
+            }
+            return answers ?: emptyMap()
+        }
+    }
+
+    /**
+     * Runs [chunks] with bounded concurrency, merging the answers.
+     *
+     * Returns null when a chunk was refused for being too long — the caller retries smaller.
+     * Any other failure omits just that chunk, leaving its ids out of the map: one unreachable
+     * chunk must not cost the answers the rest of the pass already paid for.
+     */
+    private suspend fun fetchChunksConcurrently(
+        server: Server,
+        chunks: List<List<String>>
+    ): Map<String, Int?>? = coroutineScope {
+        val semaphore = Semaphore(PROGRESS_REQUEST_CONCURRENCY)
+        val outcomes = chunks.map { chunk ->
+            async {
+                semaphore.withPermit {
+                    try {
+                        ChunkOutcome(chunk.zip(fetchReadingProgressChunk(server, chunk)).toMap())
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        val tooLong = e is ApiException && e.statusCode in URL_TOO_LONG_STATUSES
+                        if (!tooLong) {
+                            AppLogger.d("RemoteDataSource", "Progress chunk failed: ${e.message}")
+                        }
+                        ChunkOutcome(emptyMap(), urlTooLong = tooLong)
+                    }
+                }
+            }
+        }.awaitAll()
+        if (outcomes.any { it.urlTooLong }) null else outcomes.fold(emptyMap()) { acc, o -> acc + o.answers }
+    }
+
+    /** One chunk's answers, plus whether it was refused for being too long to send. */
+    private data class ChunkOutcome(
+        val answers: Map<String, Int?>,
+        val urlTooLong: Boolean = false
+    )
+
+    /** One batched request. Returns the answers positionally; entries may be null. */
+    private suspend fun fetchReadingProgressChunk(
+        server: Server,
+        bookmarkIds: List<String>
+    ): List<Int?> = guardedCall {
         val response: HttpResponse = try {
             val trpcBase = getTrpcBaseUrl(server)
-            val url = "$trpcBase/api/trpc/bookmarks.getReadingProgress"
-            client.get(url) {
+            val path = TrpcPayloadUtils.batchPath("bookmarks.getReadingProgress", bookmarkIds.size)
+            client.get("$trpcBase/api/trpc/$path") {
                 header("Authorization", getAuth(server))
                 parameter("batch", "1")
-                parameter("input", TrpcPayloadUtils.getReadingProgress(bookmarkId))
+                parameter("input", TrpcPayloadUtils.getReadingProgressBatch(bookmarkIds))
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -575,16 +667,17 @@ class RemoteDataSource(
         }
 
         try {
-            val responseText = response.bodyAsText()
-            // tRPC batch response: [{"result":{"data":{"json":{...}}}}]
-            val element = trpcJson.parseToJsonElement(responseText)
-            val data = element.jsonArray
-                .firstOrNull()
-                ?.jsonObject?.get("result")
-                ?.jsonObject?.get("data")
-                ?.jsonObject?.get("json")
-                ?.jsonObject
-            data?.get("readingProgressPercent")?.jsonPrimitive?.intOrNull
+            val entries = trpcJson.parseToJsonElement(response.bodyAsText()).jsonArray
+            // A batch answers positionally. An entry that carried an error rather than a
+            // result reads as null here, which the caller treats as "not answered".
+            bookmarkIds.indices.map { position ->
+                entries.getOrNull(position)
+                    ?.jsonObject?.get("result")
+                    ?.jsonObject?.get("data")
+                    ?.jsonObject?.get("json")
+                    ?.jsonObject?.get("readingProgressPercent")
+                    ?.jsonPrimitive?.intOrNull
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -128,7 +128,7 @@ class RemoteDataSourceReadingProgressTest {
             )
         }
 
-        assertEquals(68, sourceFor(engine).getReadingProgress(server, "bm-123"))
+        assertEquals(68, sourceFor(engine).getReadingProgressBatch(server, listOf("bm-123"))["bm-123"])
         val url = captured!!.url.toString()
         assertTrue(url.startsWith("https://kk.example.com/api/trpc/bookmarks.getReadingProgress?batch=1&input="))
     }
@@ -143,16 +143,21 @@ class RemoteDataSourceReadingProgressTest {
             )
         }
 
-        assertNull(sourceFor(engine).getReadingProgress(server, "bm-123"))
+        // Answered, holding nothing: present in the map with a null value.
+        val answers = sourceFor(engine).getReadingProgressBatch(server, listOf("bm-123"))
+        assertTrue(answers.containsKey("bm-123"))
+        assertNull(answers["bm-123"])
     }
 
     @Test
-    fun pull_serverError_throwsInsteadOfLookingLikeNoProgress() = runRealTime {
+    fun pull_serverError_leavesTheIdUnanswered() = runRealTime {
+        // "We never found out" has to stay distinguishable from "nothing stored", and a chunk
+        // that failed must not cost the answers the rest of the pass already paid for — so the
+        // id is simply absent rather than present-and-null, and the other chunks survive.
         val engine = MockEngine { respondError(HttpStatusCode.InternalServerError, "boom") }
 
-        val e = assertFailsWith<ApiException> {
-            sourceFor(engine).getReadingProgress(server, "bm-123")
-        }
-        assertEquals(500, e.statusCode)
+        val answers = sourceFor(engine).getReadingProgressBatch(server, listOf("bm-123"))
+
+        assertTrue(answers.isEmpty())
     }
 }
