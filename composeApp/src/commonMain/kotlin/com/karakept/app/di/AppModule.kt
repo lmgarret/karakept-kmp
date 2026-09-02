@@ -104,6 +104,7 @@ val appModule = module {
 
     // Action system - centralized action handling with undo support
     single { ActionSnackbarManager() }
+    single { com.karakept.app.domain.action.TagFilterRequests() }
     single { BookmarkActionController(get(), get(), get(), get(), get(), get()) }
 
     // Background sync orchestrator — NotificationProvider is registered per-platform
