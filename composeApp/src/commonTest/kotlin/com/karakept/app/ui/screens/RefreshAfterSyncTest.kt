@@ -81,6 +81,13 @@ class RefreshAfterSyncTest {
     /** Number of paged DB reads, so a refresh's cost can be asserted. */
     private var queryCount = 0
 
+    /** Rows enough for pages 0..2, so scrolling twice lands the window on its last page. */
+    private val threePages = (PAGE_SIZE * 3).toLong()
+
+    /** Ten rows newer than anything in the list, as a sync commits them: at the top. */
+    private fun committedMidRefresh() =
+        ((threePages + 1)..(threePages + 10)).map { makeBookmark(it, listIds = "list-a") }
+
     /**
      * Runs after each paged read has been served. Lets a test commit rows the way a sync
      * does — in the middle of a refresh, between two of the reads it is assembled from.
@@ -90,9 +97,10 @@ class RefreshAfterSyncTest {
     /** The drawer's lists, empty until the sync refreshes them — as on a cold start. */
     private val listsFlow = MutableStateFlow<List<KarakeepList>>(emptyList())
 
-    // 25 bookmarks; only the three oldest belong to the home list, so they sit on the second
-    // page of the unfiltered query and the first page of the list query.
-    private var allBookmarks = (1L..25L).map { id ->
+    // A page and a bit of bookmarks; only the three oldest belong to the home list, so they
+    // sit on the second page of the unfiltered query and the first page of the list query.
+    // Sized from PAGE_SIZE so that stays true whatever the page size is tuned to.
+    private var allBookmarks = (1L..(PAGE_SIZE + 5).toLong()).map { id ->
         makeBookmark(id, listIds = if (id <= 3L) "list-a" else "")
     }
 
@@ -321,9 +329,9 @@ class RefreshAfterSyncTest {
     @Test
     fun `a refresh racing a sync insert publishes a whole window, not a torn one`() =
         runTest(testDispatcher) {
-            // A list of 60 bookmarks, the user scrolled three pages into it. No sync at
+            // Three pages of bookmarks, the user scrolled to the end of them. No sync at
             // startup: this test drives the one it cares about by hand.
-            allBookmarks = (1L..60L).map { makeBookmark(it, listIds = "list-a") }
+            allBookmarks = (1L..threePages).map { makeBookmark(it, listIds = "list-a") }
             coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
             coEvery { listRepository.refreshLists(any()) } returns Unit
 
@@ -333,7 +341,7 @@ class RefreshAfterSyncTest {
                 model.loadNextPage()
                 advanceUntilIdle()
             }
-            assertEquals((60L downTo 1L).toList(), window(model), "window after scrolling")
+            assertEquals((threePages downTo 1L).toList(), window(model), "window after scrolling")
             assertEquals(2, model._currentPage.value, "loaded window's last page")
 
             // A concurrent pass commits ten bookmarks the moment the refresh has taken its
@@ -344,13 +352,13 @@ class RefreshAfterSyncTest {
             queryCount = 0
             afterQuery = {
                 afterQuery = null
-                allBookmarks = allBookmarks + (101L..110L).map { makeBookmark(it, listIds = "list-a") }
+                allBookmarks = allBookmarks + committedMidRefresh()
             }
             backgroundSyncCompleted.emit(Unit)
             advanceUntilIdle()
 
             assertEquals(
-                (60L downTo 1L).toList(),
+                (threePages downTo 1L).toList(),
                 window(model),
                 "the window must hold every row of the snapshot it was read from"
             )
@@ -363,8 +371,10 @@ class RefreshAfterSyncTest {
             backgroundSyncCompleted.emit(Unit)
             advanceUntilIdle()
 
+            // Ten rows arriving at the top push the window's last ten out of a fixed page range.
             assertEquals(
-                (110L downTo 101L).toList() + (60L downTo 11L).toList(),
+                (threePages + 10 downTo threePages + 1).toList() +
+                    (threePages downTo 11L).toList(),
                 window(model),
                 "bookmarks committed during the previous refresh must land on the next one"
             )
@@ -376,7 +386,7 @@ class RefreshAfterSyncTest {
         // The user scrolls on after a sync has prepended rows. The window is a fixed page
         // range, so the prepend pushes its last rows out of it; scrolling must bring back
         // exactly those and no less.
-        allBookmarks = (1L..60L).map { makeBookmark(it, listIds = "list-a") }
+        allBookmarks = (1L..threePages).map { makeBookmark(it, listIds = "list-a") }
         coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
         coEvery { listRepository.refreshLists(any()) } returns Unit
 
@@ -387,7 +397,7 @@ class RefreshAfterSyncTest {
             advanceUntilIdle()
         }
 
-        allBookmarks = allBookmarks + (101L..110L).map { makeBookmark(it, listIds = "list-a") }
+        allBookmarks = allBookmarks + committedMidRefresh()
         backgroundSyncCompleted.emit(Unit)
         advanceUntilIdle()
 
@@ -397,7 +407,7 @@ class RefreshAfterSyncTest {
         }
 
         assertEquals(
-            (110L downTo 101L).toList() + (60L downTo 1L).toList(),
+            (threePages + 10 downTo threePages + 1).toList() + (threePages downTo 1L).toList(),
             window(model),
             "every bookmark in the list must be reachable by scrolling to the end"
         )

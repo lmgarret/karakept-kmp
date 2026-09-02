@@ -212,7 +212,7 @@ class MainScreenModelPaginationSortingTest {
     @Test
     fun `subsequent pages are requested with the same sort as the first page`() =
         runTest(testDispatcher) {
-            val pageSize = 20
+            val pageSize = PAGE_SIZE
             val page0 = (1..pageSize).map { makeBookmark(id = it.toLong(), title = "A-$it") }
             coEvery {
                 bookmarkRepository.getBookmarksPaged(

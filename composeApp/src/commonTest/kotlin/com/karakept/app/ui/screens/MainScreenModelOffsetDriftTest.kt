@@ -143,19 +143,27 @@ class MainScreenModelOffsetDriftTest {
         highlightRepository = highlightRepository
     )
 
+    /** One DB read. Derived so tuning [PAGE_SIZE] does not mean rewriting every fixture. */
+    private val page = PAGE_SIZE
+
+    /** Pages 0..1, the window the walk leaves behind after one loadNextPage. */
+    private val window = PAGE_SIZE * 2
+
+    private fun stubPage(offset: Int, limit: Int, returns: List<BookmarkEntity>) {
+        coEvery {
+            bookmarkRepository.getBookmarksPaged(
+                server = any(), status = any(), offset = offset, limit = limit,
+                sort = any(), listId = any()
+            )
+        } returns returns
+    }
+
     @Test
     fun aPageOfEntirelyNewRowsIsAppendedWithoutRereadingTheWindow() = runTest(testDispatcher) {
-        // The undisturbed case: no repeats, so no shift, and the walk simply appends.
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = 0, limit = 20, sort = any(), listId = any()
-            )
-        } returns rows(1L..20L)
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = 20, limit = 20, sort = any(), listId = any()
-            )
-        } returns rows(21L..40L)
+        // The undisturbed case: the second read comes back full, so the table has not ended and
+        // there is nothing to re-read — the walk simply appends.
+        stubPage(offset = 0, limit = page, returns = rows(1L..page.toLong()))
+        stubPage(offset = page, limit = page, returns = rows((page + 1L)..window.toLong()))
 
         val model = createMainScreenModel()
         advanceUntilIdle()
@@ -163,7 +171,10 @@ class MainScreenModelOffsetDriftTest {
         model.loadNextPage()
         advanceUntilIdle()
 
-        assertEquals((1L..40L).toList(), model._accumulatedBookmarks.value.map { it.remoteId }.sorted())
+        assertEquals(
+            (1L..window.toLong()).toList(),
+            model._accumulatedBookmarks.value.map { it.remoteId }.sorted()
+        )
         assertEquals(1, model._currentPage.value)
     }
 
@@ -173,21 +184,10 @@ class MainScreenModelOffsetDriftTest {
         // be a heal — publishing it would drop rows that are legitimately loaded. This is the
         // shape a delete lands in mid-walk: the re-read sees the table after it, the window
         // still holds what the walk read before it.
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = 0, limit = 20, sort = any(), listId = any()
-            )
-        } returns rows(1L..20L)
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = 20, limit = 20, sort = any(), listId = any()
-            )
-        } returns rows(21L..30L)
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = 0, limit = 40, sort = any(), listId = any()
-            )
-        } returns rows(1L..25L)
+        val heldByWalk = page + 10L
+        stubPage(offset = 0, limit = page, returns = rows(1L..page.toLong()))
+        stubPage(offset = page, limit = page, returns = rows((page + 1L)..heldByWalk))
+        stubPage(offset = 0, limit = window, returns = rows(1L..(page + 5L)))
 
         val model = createMainScreenModel()
         advanceUntilIdle()
@@ -196,7 +196,7 @@ class MainScreenModelOffsetDriftTest {
         advanceUntilIdle()
 
         assertEquals(
-            (1L..30L).toList(),
+            (1L..heldByWalk).toList(),
             model._accumulatedBookmarks.value.map { it.remoteId }.sorted(),
             "a smaller re-read must not replace the rows the walk already loaded"
         )
@@ -205,38 +205,27 @@ class MainScreenModelOffsetDriftTest {
     @Test
     fun aDbExhaustedWalkReReadsTheWindowRecoveringRowsACommitDuringTheWalkDisplaced() =
         runTest(testDispatcher) {
-            // Page 0 loads 20 rows. The walk at page 1 reads to the end of the table: 4 rows
-            // survive, dbExhausted is true, and _hasMoreItems is set to false. A sync committed
-            // 4 more rows above the read position during the walk — they shifted everything
-            // below, and the walk's OFFSET-based read never reached them. Without the re-read
-            // the window would sit at 24 rows claiming to be complete, hiding the 4 the sync
-            // added. The inline re-read on dbExhausted reads the whole window as one query
-            // against a consistent snapshot, recovering all 28 (#333).
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = 0, limit = 20, sort = any(), listId = any()
-                )
-            } returns rows(1L..20L)
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = 20, limit = 20, sort = any(), listId = any()
-                )
-            } returns rows(21L..24L)
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = 0, limit = 40, sort = any(), listId = any()
-                )
-            } returns rows(1L..28L)
+            // The second read returns a short page, so the walk concludes the table has ended and
+            // sets _hasMoreItems false. But a sync committed rows above the read position while it
+            // ran: they shifted everything below, and the OFFSET-based read never reached the ones
+            // the shift displaced past it. Without the re-read the window would sit at what the
+            // walk saw, claiming to be complete and hiding what the sync added. Re-reading the
+            // window as one query against a consistent snapshot recovers them (#333).
+            val seenByWalk = page + 4L
+            val actuallyInTable = page + 8L
+            stubPage(offset = 0, limit = page, returns = rows(1L..page.toLong()))
+            stubPage(offset = page, limit = page, returns = rows((page + 1L)..seenByWalk))
+            stubPage(offset = 0, limit = window, returns = rows(1L..actuallyInTable))
 
             val model = createMainScreenModel()
             advanceUntilIdle()
-            assertEquals(20, model._accumulatedBookmarks.value.size)
+            assertEquals(page, model._accumulatedBookmarks.value.size)
 
             model.loadNextPage()
             advanceUntilIdle()
 
             assertEquals(
-                (1L..28L).toList(),
+                (1L..actuallyInTable).toList(),
                 model._accumulatedBookmarks.value.map { it.remoteId }.sorted(),
                 "the dbExhausted re-read must recover rows a mid-walk commit pushed past the walk"
             )
