@@ -87,6 +87,7 @@ class MainScreenSelectAllTest {
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Long>()
+        every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
         every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()

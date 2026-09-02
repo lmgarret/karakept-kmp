@@ -13,6 +13,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.SharedFlow
 import com.karakept.app.utils.AppLogger
 
@@ -31,7 +32,8 @@ class BookmarkActionsRepository(
     internal val jsonSerializer = Json { ignoreUnknownKeys = true }
 
     // Lazy injection to break circular dependency
-    private var _bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository? = null
+    internal var bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository? = null
+        private set
     internal var highlightDao: com.karakept.app.data.local.dao.HighlightDao? = null
         private set
 
@@ -62,12 +64,56 @@ class BookmarkActionsRepository(
     fun notifyBookmarksReloaded() {
         _bookmarksReloaded.tryEmit(Unit)
     }
+
+    // What AI actions each server will accept, keyed by server id. Populated by
+    // refreshAiCapabilities and narrowed when a call comes back "this server can't".
+    // In-memory on purpose: it re-probes on next launch, which is when a reconfigured
+    // server is most likely to have changed its answer.
+    internal val _aiCapabilities =
+        kotlinx.coroutines.flow.MutableStateFlow<Map<String, AiCapabilities>>(emptyMap())
+
+    /** Every server's AI capabilities. ScreenModels narrow this to the server they are showing. */
+    val aiCapabilities: kotlinx.coroutines.flow.StateFlow<Map<String, AiCapabilities>> = _aiCapabilities
+
+    /** What [serverId] will accept right now, defaulting to "summarize yes, admin no" before a probe. */
+    fun aiCapabilitiesFor(serverId: String?): AiCapabilities =
+        _aiCapabilities.value[serverId] ?: AiCapabilities()
+
+    /**
+     * Find out what [server] will let this account do. Only the admin probe needs a request —
+     * summarize availability is learned from the first summarize that comes back rejected.
+     *
+     * A transport failure leaves the entry untouched rather than caching a wrong "not an admin":
+     * demoting a known admin mid-session would make the action disappear under the user.
+     */
+    suspend fun refreshAiCapabilities(server: Server) {
+        withContext(appDispatchers.io) {
+            val isAdmin = try {
+                remoteDataSource.isServerAdmin(server)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLogger.d("BookmarkActionsRepository", "Admin probe failed for ${server.id}: ${e.message}")
+                return@withContext
+            }
+            _aiCapabilities.update { current ->
+                current + (server.id to (current[server.id] ?: AiCapabilities()).copy(isAdmin = isAdmin))
+            }
+        }
+    }
+
+    /** Narrow [serverId]'s capabilities, e.g. after the server refuses an action outright. */
+    internal fun narrowAiCapabilities(serverId: String, transform: AiCapabilities.() -> AiCapabilities) {
+        _aiCapabilities.update { current ->
+            current + (serverId to (current[serverId] ?: AiCapabilities()).transform())
+        }
+    }
     
     // Audit (Phase 02): No tag cache exists -- markAsRead/markAsUnread use direct DB writes.
     // The originally-feared read/unread race condition does not apply to the current implementation.
     
     fun setBookmarkRepository(repository: com.karakept.app.data.repository.BookmarkRepository) {
-        _bookmarkRepository = repository
+        bookmarkRepository = repository
     }
 
     fun setHighlightDao(dao: com.karakept.app.data.local.dao.HighlightDao) {

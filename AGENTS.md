@@ -298,6 +298,22 @@ Feed it into a `Surface` as `shadowElevation = style.shadowElevation` and
 > swap the icon (`Star`/`StarBorder`) and the label ("Favorite"/"Unfavorite") as
 > `BookmarkFabMenu` does.
 
+### AI actions
+
+`AiAction` (`domain/action/AiAction.kt`) covers the two server-side AI jobs — generate a summary,
+re-run AI tagging. Like `ServerCrawlAction`, and unlike `BookmarkActionEvent`, these deliberately
+**bypass `BookmarkActionController` and the pending-action queue**: there is nothing to undo and
+no local optimistic result to show while offline.
+
+Each is hidden unless the server has said it will run it, via
+`BookmarkActionsRepository.aiCapabilities` — summarizing needs an inference client configured,
+re-running AI tagging needs an admin key (Karakeep exposes no user-level re-tag route). A new
+surface offering an AI action must gate on the same flags.
+
+The generated text is `BookmarkEntity.summary`, **not** `description`: the crawler reads
+`description` from the page's meta tags and Karakeep's inference worker never touches it. Both can
+be present, and the reader shows both. See `docs/ai-actions.md`.
+
 ### Highlight colours
 
 Karakeep gives a highlight one of four colours — `yellow`, `blue`, `green`, `red` — stored as a

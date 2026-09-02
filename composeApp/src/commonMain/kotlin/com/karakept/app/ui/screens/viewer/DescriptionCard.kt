@@ -2,6 +2,7 @@ package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -99,5 +100,42 @@ internal fun DescriptionCard(
                     .padding(16.dp)
             )
         }
+    }
+}
+
+/**
+ * The AI-generated summary, shown above the article.
+ *
+ * Reuses [DescriptionCard]'s container so the two read as the same kind of block, with a label on
+ * top: [BookmarkEntity.summary] and [BookmarkEntity.description] are different things — one is the
+ * server's model summarizing the article, the other the page's own meta description — and they can
+ * both be present, so the card has to say which one this is.
+ */
+@Composable
+internal fun SummaryCard(
+    summary: String,
+    htmlBackgroundColor: Color?,
+    htmlTextColor: Color?,
+    htmlFontSize: Int,
+    htmlFontFamily: ReaderFontFamily
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(htmlBackgroundColor ?: MaterialTheme.colorScheme.background)
+    ) {
+        Text(
+            text = "AI summary",
+            style = MaterialTheme.typography.labelMedium,
+            color = (htmlTextColor ?: MaterialTheme.colorScheme.onBackground).copy(alpha = 0.7f),
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp)
+        )
+        DescriptionCard(
+            description = summary,
+            htmlBackgroundColor = htmlBackgroundColor,
+            htmlTextColor = htmlTextColor,
+            htmlFontSize = htmlFontSize,
+            htmlFontFamily = htmlFontFamily
+        )
     }
 }

@@ -19,6 +19,7 @@ import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.remote.hasHttpStatus
+import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.repository.discardFailedActions
 import com.karakept.app.data.repository.retryFailedActions
 import com.karakept.app.data.repository.setDefaultListType
@@ -32,6 +33,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -42,6 +45,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import com.karakept.app.domain.action.AiAction
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.TagFilterRequests
@@ -381,6 +385,24 @@ class MainScreenModel(
     val isSelectionMode: StateFlow<Boolean> = _selectedBookmarkIds
         .map { it.isNotEmpty() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    // True while the current selection came from Select All rather than being hand-picked.
+    // AI actions are withheld in that case: Select All can reach the whole library, and each
+    // bookmark is a separate LLM call on the server.
+    internal val _selectedViaSelectAll = MutableStateFlow(false)
+    val selectedViaSelectAll: StateFlow<Boolean> = _selectedViaSelectAll
+
+    // Non-null while a batch AI run is in progress; drives the selection bar's title and Cancel.
+    internal val _aiBatchProgress = MutableStateFlow<AiBatchProgress?>(null)
+    val aiBatchProgress: StateFlow<AiBatchProgress?> = _aiBatchProgress
+    internal var aiBatchJob: kotlinx.coroutines.Job? = null
+
+    // What the selected server will let this account do. Probed once per server; see
+    // refreshAiCapabilities. Defaults to "summarize yes, admin no" until the probe answers.
+    val aiCapabilities: StateFlow<AiCapabilities> =
+        combine(_selectedServer, bookmarkActionsRepository.aiCapabilities) { server, byServer ->
+            byServer[server?.id] ?: AiCapabilities()
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AiCapabilities())
 
     // Backward-compat for BookmarkListContent's top progress bar.
     // Derived from the current list's sync status rather than the global repository flow.
@@ -758,6 +780,13 @@ class MainScreenModel(
             tagFilterRequests.requests.collect { request ->
                 applyTagFilter(request.tag, request.sourceBookmarkId)
             }
+        }
+
+        // Find out what AI actions the selected server will accept, so the menus can hide the
+        // ones it would only reject. Cheap and idempotent — one tRPC probe per server change.
+        viewModelScope.launch {
+            _selectedServer.filterNotNull().distinctUntilChanged { a, b -> a.id == b.id }
+                .collect { server -> bookmarkActionsRepository.refreshAiCapabilities(server) }
         }
 
         // Keep the main list up-to-date when another screen mutates a bookmark.

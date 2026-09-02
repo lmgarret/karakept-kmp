@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
@@ -155,6 +156,7 @@ internal fun BookmarkListContent(
     onShiftClick: ((Int) -> Unit)? = null,
     contextMenuLists: List<com.karakept.api.model.KarakeepList> = emptyList(),
     contextMenuTags: List<String> = emptyList(),
+    contextMenuAiCapabilities: AiCapabilities = AiCapabilities(),
     onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null,
     newBookmarksAbove: Int = 0,
     onClearNewBookmarksAbove: () -> Unit = {},
@@ -451,6 +453,7 @@ internal fun BookmarkListContent(
                                 bookmark = bookmark,
                                 availableLists = contextMenuLists,
                                 availableTags = contextMenuTags,
+                                aiCapabilities = contextMenuAiCapabilities,
                                 onAction = { action ->
                                     onContextMenuAction.invoke(bookmark, action)
                                 },

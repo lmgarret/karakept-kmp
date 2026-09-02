@@ -20,6 +20,8 @@ import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.repository.AiCapabilities
+import com.karakept.app.domain.action.AiAction
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
@@ -51,6 +53,9 @@ import com.karakept.app.ui.screens.batchFavourite
 import com.karakept.app.ui.screens.batchUnfavourite
 import com.karakept.app.ui.screens.toggleBookmarkSelection
 import com.karakept.app.ui.screens.loadNextPage
+import com.karakept.app.ui.screens.AiBatchProgress
+import com.karakept.app.ui.screens.cancelAiBatchAction
+import com.karakept.app.ui.screens.runAiAction
 import com.karakept.app.ui.screens.enterSelectionMode
 import com.karakept.app.ui.screens.enterSelectionModeWithRange
 import com.karakept.app.ui.screens.selectRange
@@ -150,6 +155,10 @@ fun MainScreenScaffoldContent(
     onSearchQueryChange: (String) -> Unit,
     onSearchClose: () -> Unit,
     contextMenuLists: List<com.karakept.api.model.KarakeepList> = emptyList(),
+    aiCapabilities: AiCapabilities = AiCapabilities(),
+    selectedViaSelectAll: Boolean = false,
+    aiBatchProgress: AiBatchProgress? = null,
+    onShowBatchAiConfirm: (AiAction) -> Unit = {},
     contextMenuTags: List<String> = emptyList(),
     onBookmarkClick: (BookmarkEntity) -> Unit,
     onBookmarkLongClick: (BookmarkEntity) -> Unit,
@@ -222,7 +231,12 @@ fun MainScreenScaffoldContent(
                 onBatchUnfavourite = { screenModel.batchUnfavourite() },
                 onBatchSetTags = onShowBatchTagEditor,
                 onBatchMoveToList = onShowBatchListPicker,
-                onBatchDelete = onShowBatchDeleteConfirm
+                onBatchDelete = onShowBatchDeleteConfirm,
+                aiCapabilities = aiCapabilities,
+                selectedViaSelectAll = selectedViaSelectAll,
+                aiBatchProgress = aiBatchProgress,
+                onBatchAiAction = onShowBatchAiConfirm,
+                onCancelAiBatch = { screenModel.cancelAiBatchAction() }
             )
         },
         floatingActionButton = {
@@ -310,6 +324,7 @@ fun MainScreenScaffoldContent(
                 listState = listState,
                 isDesktop = isDesktop,
                 contextMenuLists = contextMenuLists,
+                contextMenuAiCapabilities = aiCapabilities,
                 contextMenuTags = contextMenuTags,
                 onBookmarkClick = onBookmarkClick,
                 onBookmarkLongClick = onBookmarkLongClick,
@@ -365,6 +380,8 @@ fun MainScreenScaffoldContent(
                                 screenModel.updateBookmarkTags(bookmark, oldTags)
                             }
                         }
+                        is BookmarkAction.Summarize -> screenModel.runAiAction(bookmark, AiAction.SUMMARIZE)
+                        is BookmarkAction.RetagWithAi -> screenModel.runAiAction(bookmark, AiAction.RETAG)
                     }
                 } else null,
                 newBookmarksAbove = newBookmarksAbove,

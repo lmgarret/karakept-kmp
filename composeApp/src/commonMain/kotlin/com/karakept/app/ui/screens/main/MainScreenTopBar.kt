@@ -12,6 +12,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.MenuOpen
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.NewLabel
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Close
@@ -53,6 +55,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.karakept.app.data.repository.AiCapabilities
+import com.karakept.app.domain.action.AiAction
+import com.karakept.app.ui.screens.AiBatchProgress
 import com.karakept.app.ui.components.OfflineModeBadge
 import com.karakept.app.ui.components.einkOutlineBorder
 import com.karakept.app.ui.components.shouldShowRefreshButton
@@ -90,7 +95,13 @@ internal fun MainScreenTopBar(
     onBatchUnfavourite: () -> Unit = {},
     onBatchSetTags: () -> Unit = {},
     onBatchMoveToList: () -> Unit = {},
-    onBatchDelete: () -> Unit = {}
+    onBatchDelete: () -> Unit = {},
+    // AI batch actions. Withheld for Select All selections and for servers that would refuse them.
+    aiCapabilities: AiCapabilities = AiCapabilities(),
+    selectedViaSelectAll: Boolean = false,
+    aiBatchProgress: AiBatchProgress? = null,
+    onBatchAiAction: (AiAction) -> Unit = {},
+    onCancelAiBatch: () -> Unit = {}
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(isSearchActive) {
@@ -102,89 +113,124 @@ internal fun MainScreenTopBar(
     if (isSelectionMode) {
         var showBatchMenu by remember { mutableStateOf(false) }
 
+        // While a batch AI run is going, the bar reports progress and its Close button cancels
+        // instead of clearing. Plain text rather than a progress bar, so it needs no e-ink branch.
+        val running = aiBatchProgress
+
         TopAppBar(
-            title = { Text("$selectedCount selected") },
+            title = {
+                Text(
+                    if (running != null) "${running.action.runningLabel} ${running.done + 1} of ${running.total}"
+                    else "$selectedCount selected"
+                )
+            },
             navigationIcon = {
-                IconButton(onClick = onClearSelection) {
-                    Icon(Icons.Default.Close, contentDescription = "Exit selection mode")
+                IconButton(onClick = if (running != null) onCancelAiBatch else onClearSelection) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = if (running != null) "Cancel" else "Exit selection mode"
+                    )
                 }
             },
             actions = {
-                IconButton(onClick = onSelectAll) {
-                    Icon(
-                        imageVector = if (allSelected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                        contentDescription = if (allSelected) "Deselect all" else "Select all"
-                    )
-                }
-                Box {
-                    IconButton(onClick = { showBatchMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More actions")
+                // Nothing else is actionable mid-run: the selection is already committed to it,
+                // and the only control that stays live is Cancel, in the navigation slot.
+                if (running == null) {
+                    IconButton(onClick = onSelectAll) {
+                        Icon(
+                            imageVector = if (allSelected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                            contentDescription = if (allSelected) "Deselect all" else "Select all"
+                        )
                     }
-                    DropdownMenu(
-                        expanded = showBatchMenu,
-                        onDismissRequest = { showBatchMenu = false },
-                        border = einkOutlineBorder()
-                    ) {
-                        // Status
-                        DropdownMenuItem(
-                            text = { Text("Mark as Read") },
-                            leadingIcon = { Icon(Icons.Default.Visibility, null) },
-                            onClick = { onBatchMarkRead(); showBatchMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Mark as Unread") },
-                            leadingIcon = { Icon(Icons.Default.VisibilityOff, null) },
-                            onClick = { onBatchMarkUnread(); showBatchMenu = false }
-                        )
-                        HorizontalDivider()
-                        // Archive
-                        DropdownMenuItem(
-                            text = { Text("Archive") },
-                            leadingIcon = { Icon(Icons.Default.Archive, null) },
-                            onClick = { onBatchArchive(); showBatchMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Unarchive") },
-                            leadingIcon = { Icon(Icons.Default.Unarchive, null) },
-                            onClick = { onBatchUnarchive(); showBatchMenu = false }
-                        )
-                        HorizontalDivider()
-                        // Favourites
-                        DropdownMenuItem(
-                            text = { Text("Add to Favourites") },
-                            leadingIcon = { Icon(Icons.Default.Star, null) },
-                            onClick = { onBatchFavourite(); showBatchMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Remove from Favourites") },
-                            leadingIcon = { Icon(Icons.Default.StarBorder, null) },
-                            onClick = { onBatchUnfavourite(); showBatchMenu = false }
-                        )
-                        HorizontalDivider()
-                        // Organisation
-                        DropdownMenuItem(
-                            text = { Text("Move to List") },
-                            leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
-                            onClick = { onBatchMoveToList(); showBatchMenu = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Set Tags") },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) },
-                            onClick = { onBatchSetTags(); showBatchMenu = false }
-                        )
-                        HorizontalDivider()
-                        // Destructive
-                        DropdownMenuItem(
-                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    null,
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            },
-                            onClick = { onBatchDelete(); showBatchMenu = false }
-                        )
+                    Box {
+                        IconButton(onClick = { showBatchMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More actions")
+                        }
+                        DropdownMenu(
+                            expanded = showBatchMenu,
+                            onDismissRequest = { showBatchMenu = false },
+                            border = einkOutlineBorder()
+                        ) {
+                            // Status
+                            DropdownMenuItem(
+                                text = { Text("Mark as Read") },
+                                leadingIcon = { Icon(Icons.Default.Visibility, null) },
+                                onClick = { onBatchMarkRead(); showBatchMenu = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Mark as Unread") },
+                                leadingIcon = { Icon(Icons.Default.VisibilityOff, null) },
+                                onClick = { onBatchMarkUnread(); showBatchMenu = false }
+                            )
+                            HorizontalDivider()
+                            // Archive
+                            DropdownMenuItem(
+                                text = { Text("Archive") },
+                                leadingIcon = { Icon(Icons.Default.Archive, null) },
+                                onClick = { onBatchArchive(); showBatchMenu = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Unarchive") },
+                                leadingIcon = { Icon(Icons.Default.Unarchive, null) },
+                                onClick = { onBatchUnarchive(); showBatchMenu = false }
+                            )
+                            HorizontalDivider()
+                            // Favourites
+                            DropdownMenuItem(
+                                text = { Text("Add to Favourites") },
+                                leadingIcon = { Icon(Icons.Default.Star, null) },
+                                onClick = { onBatchFavourite(); showBatchMenu = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Remove from Favourites") },
+                                leadingIcon = { Icon(Icons.Default.StarBorder, null) },
+                                onClick = { onBatchUnfavourite(); showBatchMenu = false }
+                            )
+                            HorizontalDivider()
+                            // Organisation
+                            DropdownMenuItem(
+                                text = { Text("Move to List") },
+                                leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
+                                onClick = { onBatchMoveToList(); showBatchMenu = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Set Tags") },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) },
+                                onClick = { onBatchSetTags(); showBatchMenu = false }
+                            )
+                            // AI actions. Hidden for a Select All selection — that can reach the
+                            // whole library, and every item is a separate inference call.
+                            if (!selectedViaSelectAll && (aiCapabilities.canSummarize || aiCapabilities.isAdmin)) {
+                                HorizontalDivider()
+                                if (aiCapabilities.canSummarize) {
+                                    DropdownMenuItem(
+                                        text = { Text(AiAction.SUMMARIZE.label) },
+                                        leadingIcon = { Icon(Icons.Default.AutoAwesome, null) },
+                                        onClick = { onBatchAiAction(AiAction.SUMMARIZE); showBatchMenu = false }
+                                    )
+                                }
+                                if (aiCapabilities.isAdmin) {
+                                    DropdownMenuItem(
+                                        text = { Text(AiAction.RETAG.label) },
+                                        leadingIcon = { Icon(Icons.Default.NewLabel, null) },
+                                        onClick = { onBatchAiAction(AiAction.RETAG); showBatchMenu = false }
+                                    )
+                                }
+                            }
+                            HorizontalDivider()
+                            // Destructive
+                            DropdownMenuItem(
+                                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                onClick = { onBatchDelete(); showBatchMenu = false }
+                            )
+                        }
                     }
                 }
             }

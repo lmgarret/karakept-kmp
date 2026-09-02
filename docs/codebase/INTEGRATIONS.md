@@ -35,10 +35,34 @@ bodies use the batch envelope `{"0":{"json":{…}}}`, built by
 | `bookmarks.updateReadingProgress` | Push reading progress to the server |
 | `bookmarks.getReadingProgress` | Pull reading progress from the server |
 | `bookmarks.recrawlBookmark` | Refresh / preserve full page archive / preserve PDF |
+| `admin.adminRetagBookmark` | Re-run AI tagging on one bookmark (**admin only**) |
+| `admin.getAdminNoticies` | Probe: does this API key belong to an admin? |
 
 `recrawlBookmark` takes `{ bookmarkId, archiveFullPage, storePdf }` and enqueues a background
 job — a successful response only means the request was accepted, so callers re-sync the
 bookmark afterwards to pick up the result.
+
+**AI actions.** Karakeep exposes exactly one AI capability over the documented REST API:
+`POST /bookmarks/{bookmarkId}/summarize`. It runs the inference **inline** and answers with the
+updated record, so unlike every other server job here the result is available when the call
+returns. The summary lands in the bookmark's `summary` field, which is not `description`: the
+crawler reads that one from the page's meta tags and the inference worker never writes it. Both
+are stored (`BookmarkEntity.summary`, added in schema v12) and both can be shown.
+
+Re-running AI tagging has **no user-level route at all**. The only per-bookmark option is
+`admin.adminRetagBookmark`, an `adminProcedure` that enqueues an inference job; the alternative,
+`recrawlBookmark`, re-downloads the page as a side effect and is already spoken for by "Refresh".
+So the tagging action is offered only to admins.
+
+Admin status cannot be read directly — neither `GET /users/me` nor tRPC `users.whoami` returns a
+role — so it is discovered by calling something only an admin may call. `admin.getAdminNoticies`
+is the cheapest such route: its handler returns an empty object and touches no data. The answer is
+cached per server in memory (`BookmarkActionsRepository.aiCapabilities`) and re-probed on next
+launch. A transport failure leaves the cached value alone rather than demoting a known admin.
+
+Summarize availability is learned the same way, but lazily: a server with no model configured
+answers `400 "No inference client configured"`, which flips `canSummarize` off for that server so
+the action stops being offered.
 
 Reading progress lives in its own server-side table, and there is **no procedure that reads
 many bookmarks at once** — `getReadingProgress` takes a single `bookmarkId`. tRPC batches at

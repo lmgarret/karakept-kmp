@@ -41,6 +41,7 @@ import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.UrlDisplayMode
 import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
+import com.karakept.app.ui.screens.main.BatchAiConfirmDialog
 import com.karakept.app.ui.screens.main.BatchDeleteConfirmDialog
 import com.karakept.app.ui.screens.main.BatchListPickerDialog
 import com.karakept.app.ui.screens.main.BatchTagEditorDialog
@@ -54,6 +55,7 @@ import com.karakept.app.ui.screens.main.MainScreenScrollAction
 import com.karakept.app.ui.screens.main.RenameListDialog
 import com.karakept.app.ui.screens.main.MainScreenAddBookmarkDialog
 import kotlinx.coroutines.launch
+import com.karakept.app.domain.action.AiAction
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
 import com.karakept.app.domain.action.undoableAction
@@ -179,6 +181,10 @@ object MainScreen : NavKey {
         var showBatchDeleteConfirm by remember { mutableStateOf(false) }
         var showBatchListPicker by remember { mutableStateOf(false) }
         var showBatchTagEditor by remember { mutableStateOf(false) }
+        var pendingBatchAiAction by remember { mutableStateOf<AiAction?>(null) }
+        val aiCapabilities by screenModel.aiCapabilities.collectAsState()
+        val selectedViaSelectAll by screenModel.selectedViaSelectAll.collectAsState()
+        val aiBatchProgress by screenModel.aiBatchProgress.collectAsState()
         val snackbarManager = koinInject<ActionSnackbarManager>()
         val snackbarHostState = rememberSnackbarHostState(snackbarManager)
 
@@ -382,6 +388,10 @@ object MainScreen : NavKey {
                     onShowBatchTagEditor = { showBatchTagEditor = true },
                     onShowBatchListPicker = { showBatchListPicker = true },
                     onShowBatchDeleteConfirm = { showBatchDeleteConfirm = true },
+                    aiCapabilities = aiCapabilities,
+                    selectedViaSelectAll = selectedViaSelectAll,
+                    aiBatchProgress = aiBatchProgress,
+                    onShowBatchAiConfirm = { action -> pendingBatchAiAction = action },
                     navigateTo = { screen -> navigator.push(screen) },
                     newBookmarksAbove = newBookmarksAbove,
                     onClearNewBookmarksAbove = { screenModel.clearNewBookmarksAbove() },
@@ -516,6 +526,7 @@ object MainScreen : NavKey {
         MainScreenBookmarkActionsMenu(
             bookmark = selectedBookmarkForActions, lists = lists, allAvailableTags = allAvailableTags,
             screenModel = screenModel, snackbarManager = snackbarManager, scope = scope, uriHandler = uriHandler,
+            aiCapabilities = aiCapabilities,
             onDismiss = { selectedBookmarkForActions = null }
         )
 
@@ -533,6 +544,14 @@ object MainScreen : NavKey {
                 selectedCount = selectedBookmarkIds.size,
                 onConfirm = { screenModel.batchDelete(); showBatchDeleteConfirm = false },
                 onDismiss = { showBatchDeleteConfirm = false }
+            )
+        }
+        pendingBatchAiAction?.let { action ->
+            BatchAiConfirmDialog(
+                action = action,
+                selectedCount = selectedBookmarkIds.size,
+                onConfirm = { screenModel.batchAiAction(action); pendingBatchAiAction = null },
+                onDismiss = { pendingBatchAiAction = null }
             )
         }
         if (showBatchListPicker) {

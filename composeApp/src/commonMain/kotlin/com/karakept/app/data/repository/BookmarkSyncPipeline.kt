@@ -428,7 +428,9 @@ internal class BookmarkSyncPipeline(
             // than blanking the crawl state.
             crawlStatus = dto.content?.crawlStatus?.value ?: existing?.crawlStatus,
             crawledAt = com.karakept.app.utils.parseIsoToEpochMillis(dto.content?.crawledAt)
-                ?: existing?.crawledAt
+                ?: existing?.crawledAt,
+            summary = dto.summary ?: existing?.summary,
+            summarizationStatus = dto.summarizationStatus?.value ?: existing?.summarizationStatus
         )
     }
 
@@ -445,7 +447,8 @@ internal class BookmarkSyncPipeline(
             current.tags == incoming.tags &&
             current.isArchived == incoming.isArchived &&
             current.isStarred == incoming.isStarred &&
-            current.title == incoming.title
+            current.title == incoming.title &&
+            current.summary == incoming.summary
     }
 
     /**
@@ -488,7 +491,9 @@ internal class BookmarkSyncPipeline(
                     readingTimeMinutes = bookmark.readingTimeMinutes,
                     modifiedAt = bookmark.modifiedAt,
                     crawlStatus = bookmark.crawlStatus,
-                    crawledAt = bookmark.crawledAt
+                    crawledAt = bookmark.crawledAt,
+                    summary = bookmark.summary,
+                    summarizationStatus = bookmark.summarizationStatus
                 )
             }
         }
@@ -789,7 +794,9 @@ internal class BookmarkSyncPipeline(
                 readingTimeMinutes = bookmark.readingTimeMinutes,
                 modifiedAt = bookmark.modifiedAt,
                 crawlStatus = bookmark.crawlStatus,
-                crawledAt = bookmark.crawledAt
+                crawledAt = bookmark.crawledAt,
+                summary = bookmark.summary,
+                summarizationStatus = bookmark.summarizationStatus
             )
         }
 

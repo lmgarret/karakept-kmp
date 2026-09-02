@@ -35,5 +35,9 @@ data class BookmarkEntity(
     val modifiedAt: Long? = null, // Server modifiedAt (epoch millis); used to skip unchanged writes
     val progressSyncedAt: Long = 0, // Last time reading progress was pulled (epoch millis); rotating cursor
     val crawlStatus: String? = null, // Server crawl state: "success" | "failure" | "pending"
-    val crawledAt: Long? = null // When the server last crawled this bookmark
+    val crawledAt: Long? = null, // When the server last crawled this bookmark
+    // AI summary generated server-side. Distinct from [description], which the crawler reads from
+    // the page's meta tags — Karakeep's inference worker writes this field and never touches that one.
+    val summary: String? = null,
+    val summarizationStatus: String? = null // "success" | "failure" | "pending"
 )

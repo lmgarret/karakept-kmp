@@ -48,6 +48,17 @@ object TrpcPayloadUtils {
         }
     )
 
+    /**
+     * tRPC mutation `admin.adminRetagBookmark`.
+     *
+     * Karakeep exposes no user-level route that re-runs AI tagging on one bookmark — the only
+     * alternative, `bookmarks.recrawlBookmark`, re-downloads the page as a side effect. This one
+     * is an `adminProcedure`, so it answers UNAUTHORIZED for a non-admin API key.
+     */
+    fun adminRetagBookmark(bookmarkId: String): String = envelope(
+        buildJsonObject { put("bookmarkId", bookmarkId) }
+    )
+
     /** tRPC query `bookmarks.getReadingProgress` (sent as the `input` query parameter). */
     fun getReadingProgress(bookmarkId: String): String = getReadingProgressBatch(listOf(bookmarkId))
 
