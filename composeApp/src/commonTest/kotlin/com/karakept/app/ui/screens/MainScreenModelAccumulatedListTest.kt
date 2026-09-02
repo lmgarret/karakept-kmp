@@ -194,4 +194,49 @@ class MainScreenModelAccumulatedListTest {
         assertEquals(listOf(42L, 43L), latest.remoteIds())
         collector.cancel()
     }
+
+    /**
+     * The loaded window is a snapshot of its rows, so a change written straight to the table
+     * is invisible to it. The reading-progress pull writes the read flag that way — it clears
+     * it below 100% — while the drawer's unread count reads the table live, so the count
+     * reported bookmarks the list went on drawing as read (#333).
+     */
+    @Test
+    fun bookmarkChangedEvent_refreshesTheRowTheListIsHolding() = runTest(testDispatcher) {
+        val events = MutableSharedFlow<Long>(extraBufferCapacity = 4)
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns events
+
+        val model = createMainScreenModel()
+        advanceUntilIdle()
+        model.updateAccumulatedBookmarks { listOf(bookmark(42).copy(isRead = true), bookmark(43)) }
+
+        // The pull takes the server's 0% and clears the read flag in the table.
+        io.mockk.coEvery { bookmarkRepository.getBookmarkByRemoteId(42L, "server-1") } returns
+            bookmark(42).copy(isRead = false, readingProgress = 0f)
+        events.emit(42L)
+        advanceUntilIdle()
+
+        assertEquals(
+            false,
+            model._accumulatedBookmarks.value.first { it.remoteId == 42L }.isRead,
+            "the list must follow the table, or it shows a read row the count calls unread"
+        )
+    }
+
+    @Test
+    fun bookmarkChangedEvent_forARowOutsideTheWindow_isNotReadBack() = runTest(testDispatcher) {
+        // A backfill notifies for rows across the whole library; only the window needs re-reading.
+        val events = MutableSharedFlow<Long>(extraBufferCapacity = 4)
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns events
+
+        val model = createMainScreenModel()
+        advanceUntilIdle()
+        model.updateAccumulatedBookmarks { listOf(bookmark(42)) }
+
+        events.emit(99L)
+        advanceUntilIdle()
+
+        io.mockk.coVerify(exactly = 0) { bookmarkRepository.getBookmarkByRemoteId(99L, any()) }
+        assertEquals(listOf(42L), model._accumulatedBookmarks.value.remoteIds())
+    }
 }

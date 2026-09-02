@@ -160,7 +160,8 @@ fun MainScreenScaffoldContent(
     onShowBatchDeleteConfirm: () -> Unit,
     navigateTo: (androidx.navigation3.runtime.NavKey) -> Unit,
     newBookmarksAbove: Int = 0,
-    onClearNewBookmarksAbove: () -> Unit = {}
+    onClearNewBookmarksAbove: () -> Unit = {},
+    onTopBookmarkVisible: (Long) -> Unit = {}
 ) {
     val pageTurnDispatcher = koinInject<PageTurnDispatcher>()
     Scaffold(
@@ -367,7 +368,8 @@ fun MainScreenScaffoldContent(
                     }
                 } else null,
                 newBookmarksAbove = newBookmarksAbove,
-                onClearNewBookmarksAbove = onClearNewBookmarksAbove
+                onClearNewBookmarksAbove = onClearNewBookmarksAbove,
+                onTopBookmarkVisible = onTopBookmarkVisible
             )
         }
     }
