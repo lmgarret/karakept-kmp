@@ -58,6 +58,7 @@ compose-ui-tooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.r
 compose-ui-tooling-preview = { module = "org.jetbrains.compose.ui:ui-tooling-preview", version.ref = "compose-plugin" }
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose-plugin" }
 compose-components-ui-tooling-preview = { module = "org.jetbrains.compose.components:components-ui-tooling-preview", version.ref = "compose-plugin" }
+compose-desktop-ui-test-junit4 = { module = "org.jetbrains.compose.ui:ui-test-junit4", version.ref = "compose-plugin" }
 # Desktop native binaries are OS/arch-specific; the right one is picked at build-script evaluation
 # time (see currentDesktopComposeDependency() in composeApp/build.gradle.kts), mirroring what the
 # deprecated compose.desktop.currentOs shorthand did internally.
