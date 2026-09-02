@@ -1,3 +1,6 @@
+import org.gradle.api.artifacts.MinimalExternalModuleDependency
+import org.gradle.api.provider.Provider
+import org.gradle.internal.os.OperatingSystem
 import org.gradle.process.ExecOperations
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import java.awt.Color as AwtColor
@@ -17,6 +20,20 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.room)
     alias(libs.plugins.ksp)
+}
+
+// The deprecated `compose.desktop.currentOs` shorthand picks the desktop-jvm-<os>-<arch> artifact
+// matching the machine running the build, using OS/arch detection that lives in an internal
+// (non-public) part of the Compose Gradle plugin. Reimplemented here — matching
+// org.jetbrains.compose.internal.utils.OsUtilsKt — against the explicit catalog entries.
+fun currentDesktopComposeDependency(): Provider<MinimalExternalModuleDependency> {
+    val os = OperatingSystem.current()
+    val isArm64 = System.getProperty("os.arch") == "aarch64"
+    return when {
+        os.isMacOsX -> if (isArm64) libs.compose.desktop.macos.arm64 else libs.compose.desktop.macos.x64
+        os.isWindows -> if (isArm64) libs.compose.desktop.windows.arm64 else libs.compose.desktop.windows.x64
+        else -> if (isArm64) libs.compose.desktop.linux.arm64 else libs.compose.desktop.linux.x64
+    }
 }
 
 kotlin {
@@ -39,14 +56,14 @@ kotlin {
                 // API Client (generated from OpenAPI spec)
                 implementation(project(":api-client"))
                 
-                implementation(compose.runtime)
-                implementation(compose.foundation)
-                implementation(compose.material3)
-                implementation(compose.material)
-                implementation(compose.ui)
-                implementation(compose.components.resources)
-                implementation(compose.components.uiToolingPreview)
-                implementation(compose.materialIconsExtended)
+                implementation(libs.compose.runtime)
+                implementation(libs.compose.foundation)
+                implementation(libs.compose.material3)
+                implementation(libs.compose.material)
+                implementation(libs.compose.ui)
+                implementation(libs.compose.components.resources)
+                implementation(libs.compose.components.ui.tooling.preview)
+                implementation(libs.compose.material.icons.extended)
                 
                 // Navigation 3
                 implementation(libs.navigation3.runtime)
@@ -95,7 +112,7 @@ kotlin {
         }
         val androidMain by getting {
             dependencies {
-                implementation(compose.preview)
+                implementation(libs.compose.ui.tooling.preview)
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.koin.android)
@@ -110,7 +127,7 @@ kotlin {
         }
         val desktopMain by getting {
             dependencies {
-                implementation(compose.desktop.currentOs)
+                implementation(currentDesktopComposeDependency())
                 // ktor-client-darwin is for native macOS/iOS, not JVM desktop.
                 // We use OkHttp for desktop (JVM).
                 implementation(libs.ktor.client.okhttp)
@@ -131,7 +148,7 @@ kotlin {
                 implementation(libs.mockk)
                 // Headless Compose layout assertions — a reader block's geometry is not
                 // observable from a pure unit test, and desktopTest is the PR CI entry point.
-                implementation(compose.desktop.uiTestJUnit4)
+                implementation(libs.compose.desktop.ui.test.junit4)
             }
         }
         val androidUnitTest by getting {
@@ -216,7 +233,7 @@ android {
         }
     }
     dependencies {
-        debugImplementation(compose.uiTooling)
+        debugImplementation(libs.compose.ui.tooling)
     }
 }
 
