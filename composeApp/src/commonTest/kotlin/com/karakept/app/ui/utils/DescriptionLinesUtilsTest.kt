@@ -19,7 +19,7 @@ class DescriptionLinesUtilsTest {
         assertEquals(
             2,
             computeAutoDescriptionLines(
-                thumbnailHeightPx = 80f,
+                availableHeightPx = 80f,
                 consumedHeightPx = 40f,
                 descriptionLineHeightPx = lineHeight
             )

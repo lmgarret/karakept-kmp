@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -309,6 +310,16 @@ fun BookmarkListLayout(
      * rather than per row — a row cannot ask for its own width without a subcomposition.
      */
     rowWidth: Dp? = null,
+    /**
+     * Height this row is held to so an exact number of rows fills the page, or null when rows size
+     * themselves. Only a paged e-ink list imposes one — see `rememberTiledRows`.
+     */
+    fixedRowHeight: Dp? = null,
+    /**
+     * The share of [fixedRowHeight] the thumbnail-and-text band gets, and so the space an automatic
+     * description count fills. Null whenever [fixedRowHeight] is.
+     */
+    descriptionFillHeight: Dp? = null,
     faviconPainter: Painter? = null,
     thumbnailPainter: Painter? = null,
     modifier: Modifier = Modifier
@@ -339,7 +350,14 @@ fun BookmarkListLayout(
             { hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress); callback() }
         }
     }
-    val thumbSizeDp = thumbnailSize.dp
+    // Under a tile the thumbnail is the last few percent the row has to give: the tile is chosen so
+    // that shedding a description line and trimming the image covers the difference, which is what
+    // lets a page hold the number of rows nearest its natural one instead of one fewer.
+    val thumbSizeDp = if (descriptionFillHeight != null) {
+        minOf(thumbnailSize.dp, descriptionFillHeight)
+    } else {
+        thumbnailSize.dp
+    }
     val faviconSizeDp = (thumbnailSize * 16 / 80).coerceIn(10, 20).dp
     val faviconPaddingDp = (thumbnailSize * 4 / 80).coerceIn(2, 6).dp
     val cornerDp = (thumbnailSize * 8 / 80).coerceIn(4, 12).dp
@@ -349,6 +367,7 @@ fun BookmarkListLayout(
         showDivider = showRowDivider,
         isSelected = isSelected,
         isActive = isActive,
+        fixedHeight = fixedRowHeight,
         modifier = modifier
             .fillMaxWidth()
             .then(selectionBorderModifier)
@@ -381,6 +400,9 @@ fun BookmarkListLayout(
                             tags = bookmark.tags,
                             style = TagsDisplayStyle.COMPACT,
                             scrollable = tagsScrollable,
+                            // A second row of chips is the one thing in a row the layout settings
+                            // do not bound, so a row held to a tile keeps them on one line.
+                            maxLines = if (fixedRowHeight != null) 1 else Int.MAX_VALUE,
                             modifier = Modifier.padding(bottom = 4.dp)
                         )
                     }
@@ -484,11 +506,12 @@ fun BookmarkListLayout(
                     requested = descriptionMaxLines,
                     rowWidth = rowWidth,
                     showThumbnail = showThumbnail,
-                    thumbnailSize = thumbnailSize,
+                    thumbnailSize = thumbSizeDp,
                     title = bookmark.title,
                     titleCountsAgainstThumbnail = titlePosition == TitlePosition.BESIDE_THUMBNAIL,
                     showUrlBelowTitle = showUrl && !bookmark.url.isNullOrBlank() &&
-                        urlPosition == UrlPosition.BELOW_TITLE
+                        urlPosition == UrlPosition.BELOW_TITLE,
+                    fillHeight = descriptionFillHeight
                 )
 
                 val titleContent: @Composable () -> Unit = {
@@ -644,9 +667,16 @@ internal fun BookmarkRowContainer(
     showDivider: Boolean,
     isSelected: Boolean,
     isActive: Boolean,
+    /**
+     * Height the row is held to when the list tiles its rows. The content keeps its own size and is
+     * clipped to the tile rather than stretched, but the divider is pushed to the bottom of it: a
+     * rule sitting at each row's own natural height would land at a different place on every row.
+     */
+    fixedHeight: Dp? = null,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val heightModifier = if (fixedHeight != null) Modifier.height(fixedHeight) else Modifier
     if (isFlat) {
         // An opaque page-colour backing, painted before the selection/active tint. Without it the
         // row is transparent and swiping shows the action colour through the whole line instead of
@@ -661,8 +691,13 @@ internal fun BookmarkRowContainer(
             modifier = modifier
                 .background(MaterialTheme.colorScheme.background)
                 .then(if (tint != null) Modifier.background(tint) else Modifier)
+                .then(heightModifier)
         ) {
-            content()
+            if (fixedHeight != null) {
+                Box(modifier = Modifier.weight(1f).clipToBounds()) { content() }
+            } else {
+                content()
+            }
             if (showDivider) {
                 HorizontalDivider(
                     thickness = 1.dp,
@@ -672,7 +707,7 @@ internal fun BookmarkRowContainer(
         }
     } else {
         Card(
-            modifier = modifier,
+            modifier = modifier.then(heightModifier),
             colors = when {
                 isSelected -> CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
@@ -783,14 +818,19 @@ fun SelectionIndicator(
 }
 
 /**
- * Resolves [BookmarkLayout.DESCRIPTION_LINES_AUTO] into a concrete line count.
+ * Resolves a description line count against the space the row has for one.
+ *
+ * [BookmarkLayout.DESCRIPTION_LINES_AUTO] fills whatever the rest of the row leaves over. A fixed
+ * count is honoured as a *cap* rather than a promise: under a tile the row may have room for fewer
+ * lines than the layout asks for, and shedding one is how it gives back the pixels the tile took —
+ * far better than rendering them and having the tile clip the metadata underneath.
  *
  * Measures the title with a [TextMeasurer] rather than assuming a line count — a wrapped title
  * costs a whole line, and guessing wrong either overflows the row or wastes the space this is
  * meant to reclaim. Measuring is synchronous and needs no subcomposition, but it does need the
  * row's width, which only the caller knows.
  *
- * Falls back to the default whenever the space cannot be reasoned about: no thumbnail to fill
+ * Falls back to the requested count whenever the space cannot be reasoned about: nothing to fill
  * against, no width supplied, or metadata sitting in the text column (tags are a `FlowRow` whose
  * height a text measurer cannot predict).
  */
@@ -799,26 +839,43 @@ private fun rememberEffectiveDescriptionLines(
     requested: Int,
     rowWidth: Dp?,
     showThumbnail: Boolean,
-    thumbnailSize: Int,
+    thumbnailSize: Dp,
     title: String,
     titleCountsAgainstThumbnail: Boolean,
-    showUrlBelowTitle: Boolean
+    showUrlBelowTitle: Boolean,
+    /**
+     * Height the thumbnail-and-text band is held to when the list tiles its rows. It replaces the
+     * thumbnail as the space to fill — and unlike the thumbnail it is there even when the layout
+     * shows no image, which is the case e-ink actually uses.
+     */
+    fillHeight: Dp? = null
 ): Int {
-    if (requested != BookmarkLayout.DESCRIPTION_LINES_AUTO) {
-        return requested.coerceIn(1, BookmarkLayout.DESCRIPTION_LINES_MAX)
+    val isAuto = requested == BookmarkLayout.DESCRIPTION_LINES_AUTO
+    val cap = if (isAuto) {
+        BookmarkLayout.DESCRIPTION_LINES_MAX
+    } else {
+        requested.coerceIn(1, BookmarkLayout.DESCRIPTION_LINES_MAX)
     }
-    if (!showThumbnail || rowWidth == null) return BookmarkLayout.DESCRIPTION_LINES_DEFAULT
+    // A fixed count is only worth measuring against a tile — a row sizing itself already fits the
+    // lines it asks for — while automatic needs either a tile or a thumbnail to fill.
+    val measurable = fillHeight != null || (isAuto && showThumbnail)
+    if (!measurable || rowWidth == null) {
+        return if (isAuto) BookmarkLayout.DESCRIPTION_LINES_DEFAULT else cap
+    }
 
     val measurer = rememberTextMeasurer(cacheSize = AUTO_LINES_MEASURE_CACHE)
     val density = LocalDensity.current
     val titleStyle = MaterialTheme.typography.titleMedium
     val bodyStyle = MaterialTheme.typography.bodySmall
 
-    // Row padding (16dp each side) plus the thumbnail and the 12dp gap beside it.
-    val textColumnWidth = rowWidth - 32.dp - thumbnailSize.dp - 12.dp
-    if (textColumnWidth <= 0.dp) return BookmarkLayout.DESCRIPTION_LINES_DEFAULT
+    // Row padding (16dp each side), then the thumbnail and the 12dp gap beside it when there is one.
+    val thumbnailWidth = if (showThumbnail) thumbnailSize + 12.dp else 0.dp
+    val textColumnWidth = rowWidth - 32.dp - thumbnailWidth
+    if (textColumnWidth <= 0.dp) return cap
 
     return with(density) {
+        // A title above the thumbnail is not in the text column at all, and the tile has already
+        // had that band deducted, so either way it costs the description nothing here.
         val titleHeight = if (titleCountsAgainstThumbnail) {
             measurer.measure(
                 text = title,
@@ -833,10 +890,10 @@ private fun rememberEffectiveDescriptionLines(
         // 4dp of top padding.
         val urlHeight = if (showUrlBelowTitle) bodyStyle.lineHeight.toPx() + 4.dp.toPx() else 0f
         computeAutoDescriptionLines(
-            thumbnailHeightPx = thumbnailSize.dp.toPx(),
+            availableHeightPx = (fillHeight ?: thumbnailSize).toPx(),
             consumedHeightPx = titleHeight + urlHeight + 4.dp.toPx(),
             descriptionLineHeightPx = bodyStyle.lineHeight.toPx(),
-            maxLines = BookmarkLayout.DESCRIPTION_LINES_MAX
+            maxLines = cap
         )
     }
 }

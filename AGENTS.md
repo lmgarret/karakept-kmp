@@ -144,7 +144,10 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 **`BookmarkTagsDisplay`** (`ui/components/BookmarkTagsDisplay.kt`)
 - Renders a comma-separated tag string as a `FlowRow` of `TagChip` chips.
-- Accepts `style` (`COMPACT` / `READER`), optional `onTagClick`, and `modifier`.
+- Accepts `style` (`COMPACT` / `READER`), optional `onTagClick`, `scrollable`, and `modifier`.
+- `maxLines` caps how many rows of chips the flow may wrap onto. A caller holding its row to a
+  fixed height has to pass it: a second row of chips is the one part of a bookmark row whose height
+  the layout settings do not bound.
 - **Use whenever a bookmark's full tag list needs to be rendered.**
 
 > **Rule:** Tags must look the same everywhere. Never use `AssistChip`, `FilterChip`, plain `Text`, or custom surfaces for displaying tags. `BookmarkTagsDisplay` delegates to `TagChip` — keep it that way, or e-ink and theming fixes land in one place and not the other.
@@ -182,7 +185,7 @@ control its container rather than its content:
 | `showRowDivider` | Flat rows only — a card already separates itself |
 | `titlePosition` | `BESIDE_THUMBNAIL` or `ABOVE_THUMBNAIL` (title spans the row, image below). No effect without a thumbnail |
 
-| `descriptionMaxLines` | Line cap, or `DESCRIPTION_LINES_AUTO` to fill the space the thumbnail leaves over |
+| `descriptionMaxLines` | Line cap, or `DESCRIPTION_LINES_AUTO` to fill the space the thumbnail leaves over. A cap either way: a row held to a tile renders fewer lines when that is what fits (see "Hardware page-turn buttons") |
 
 Built-ins run densest to richest — **Compact, Rows, Cards, Digest, Magazine** — and that is the
 order the picker shows. `Rows` (flat + divider) is the one to reach for on e-ink; turn its
@@ -448,8 +451,31 @@ block is eagerly composed — above and below the viewport alike — the landing
 the turn and folds into a single `scrollBy`, so no intermediate position is ever observable to the
 reader's scroll guard.
 
-> The bookmark list deliberately has none of this: its page turns still scroll by a flat delta.
-> Tiling a list of variable-height rows is tracked separately.
+The **bookmark list** reaches the same place from the other end. A viewport can only be tiled
+exactly by rows of *uniform* height, so under E-ink mode with snapping on every row is held to one
+(`ui/utils/RowTilingUtils.kt`, resolved for the active layout by `rememberTiledRows`). A page is
+then a whole number of rows, `tiledTurnAdjustment` lands a turn on a row top by arithmetic rather
+than by searching a registry, and the list takes the same `trailingPagePaddingFor` so its last turn
+lands on a handover.
+
+- The row's natural height is **declared, not measured**: `BookmarkRowMetrics` adds up the
+  thumbnail, the title at its two-line cap, the description at its own, the metadata band and the
+  paddings. A live measurement cannot work — applying a tile makes every row report the tile back,
+  so the quantiser would be reading its own output — and reading the layout instead does not depend
+  on whether the list happens to open on two short bookmarks. `BookmarkRowTilingTest` renders the
+  real row for every built-in layout and checks the declaration still matches it.
+- The count of rows is the *nearest* one, not the one that fits, and the row gives the difference
+  back: a description line first (a fixed `descriptionMaxLines` is a cap, not a promise, once a
+  tile is imposed), then a few percent off the thumbnail. `BookmarkRowMetrics.minHeightPx` is where
+  that stops; below it a tile would crop the metadata row rather than trim the description, so one
+  row fewer is taken instead. Tags are capped to a single line under a tile — a second row of chips
+  is the one part of a row whose height the layout settings do not bound.
+- `Magazine` (`LayoutType.CARD`) is left ragged on purpose: its hero image is sized by its own
+  aspect ratio, so no single height is close to two rows and a tile would crop the image.
+
+> **Rule:** a tile is only ever as short as the row can shrink to. Clipping a row to fit does not
+> trim a line of prose off the bottom — the bottom of a row is its date and reading time — which is
+> why `resolveRowTiling` takes a minimum and steps down rather than squeezing past it.
 
 > **Rule:** a new reader text renderer that does not go through `AnnotatedClickableText` silently
 > loses line snapping. Register it with `LocalReaderSnapRegistry` or route it through

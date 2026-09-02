@@ -33,6 +33,10 @@ internal fun parseTagString(tags: String): List<String> {
  * @param tags Comma-separated tag string from BookmarkEntity
  * @param style Visual style variant (COMPACT for main screen, READER for banner)
  * @param scrollable When true, renders tags in a single horizontally-scrollable line
+ * @param maxLines Rows of chips the flow layout may wrap onto. A row held to a fixed height — a
+ *   tiled bookmark list — has to cap it, since a second row of chips is the one part of the row
+ *   whose height the layout settings do not bound. Ignored when [scrollable] is true, which is
+ *   already a single line.
  * @param modifier Modifier for the container
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -42,6 +46,7 @@ fun BookmarkTagsDisplay(
     style: TagsDisplayStyle = TagsDisplayStyle.COMPACT,
     onTagClick: ((String) -> Unit)? = null,
     scrollable: Boolean = false,
+    maxLines: Int = Int.MAX_VALUE,
     modifier: Modifier = Modifier
 ) {
     // Parse tags and filter empty strings
@@ -65,7 +70,8 @@ fun BookmarkTagsDisplay(
         FlowRow(
             modifier = modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            maxLines = maxLines
         ) {
             tagList.forEach { tag ->
                 TagChip(tag = tag, onClick = onTagClick?.let { { it(tag) } })
