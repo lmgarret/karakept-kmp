@@ -173,11 +173,6 @@ class LayoutEditorScreenModel(
     fun updateFaviconByLinkSize(size: Int) {
         _layout.value = _layout.value.copy(faviconByLinkSize = size)
     }
-    @Deprecated("Use updateFaviconEnabled / updateShowFavicon / updateUrlIconMode")
-    fun updateFaviconMode(showFavicon: Boolean, urlIconMode: UrlIconMode) {
-        _layout.value = _layout.value.copy(showFavicon = showFavicon, urlIconMode = urlIconMode.name)
-    }
-
     fun save() {
         viewModelScope.launch {
             // Use NonCancellable so the DataStore write survives scope cancellation

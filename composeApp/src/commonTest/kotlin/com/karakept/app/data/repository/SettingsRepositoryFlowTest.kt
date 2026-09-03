@@ -13,6 +13,7 @@ import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.model.ThemeMode
 import com.karakept.app.data.model.ViewerMode
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -32,6 +33,7 @@ import kotlin.test.assertTrue
  * deduplication (FLOW-03), atomic reset (FLOW-04), complex types (FLOW-05),
  * corrupt data fallback (FLOW-06), and backup paths (FLOW-07/08).
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SettingsRepositoryFlowTest {
 
     private lateinit var fakeDataStore: FakeDataStore

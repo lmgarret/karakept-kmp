@@ -118,41 +118,35 @@ class BookmarkActionController(
                     }
 
                     is BookmarkActionEvent.UpdateTags -> {
-                        val isOffline = false // Get from settings if needed
                         bookmarkActionsRepository.updateTags(
                             event.bookmark.remoteId,
                             event.bookmark.serverId,
-                            event.newTags,
-                            !isOffline
+                            event.newTags
                         )
                         BookmarkActionResult.Success("Tags updated")
                     }
 
                     is BookmarkActionEvent.MoveToList -> {
-                        val isOffline = false
                         bookmarkActionsRepository.moveToList(
                             event.bookmark.remoteId,
                             event.bookmark.serverId,
-                            event.listId,
-                            !isOffline
+                            event.listId
                         )
                         BookmarkActionResult.Success("Moved to list")
                     }
 
                     is BookmarkActionEvent.RemoveFromList -> {
-                        val isOffline = false
                         bookmarkActionsRepository.removeFromList(
                             event.bookmark.remoteId,
                             event.bookmark.serverId,
-                            event.listId,
-                            !isOffline
+                            event.listId
                         )
                         BookmarkActionResult.Success("Removed from list")
                     }
                 }
 
                 // 3. Store undo state and show snackbar
-                if (undoState != null && result is BookmarkActionResult.Success) {
+                if (undoState != null) {
                     storeUndoState(event.bookmark.serverId + "_" + event.bookmark.remoteId, undoState)
 
                     // Show snackbar with undo action
@@ -160,7 +154,7 @@ class BookmarkActionController(
                         message = result.message,
                         onUndo = { undoAction(event.bookmark.serverId + "_" + event.bookmark.remoteId) }
                     )
-                } else if (result is BookmarkActionResult.Success) {
+                } else {
                     snackbarManager.showSnackbar(result.message)
                 }
 

@@ -10,6 +10,15 @@ plugins {
 val generatedSourcesDir = layout.buildDirectory.dir("generated/openapi")
 
 kotlin {
+    // Every source file in this module is emitted by the OpenAPI generator, so a warning here
+    // is a template artefact rather than something a contributor can act on in the file it
+    // points at. The custom templates under `templates/` are kept clean; this silences the one
+    // pattern the generator's own built-in api template still emits — `param?.apply { }` on a
+    // required (non-null) query parameter.
+    compilerOptions {
+        freeCompilerArgs.add("-Xwarning-level=UNNECESSARY_SAFE_CALL:disabled")
+    }
+
     androidTarget {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)

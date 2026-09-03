@@ -327,8 +327,7 @@ class BookmarkActionsRepository(
     suspend fun updateTags(
         bookmarkRemoteId: Long,
         serverId: String,
-        newTags: List<String>,
-        isOnline: Boolean
+        newTags: List<String>
     ) {
         withContext(appDispatchers.io) {
             val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
@@ -361,7 +360,6 @@ class BookmarkActionsRepository(
         bookmarkRemoteId: Long,
         serverId: String,
         listId: String,
-        isOnline: Boolean,
         smartListIds: Set<String> = emptySet()
     ) {
         withContext(appDispatchers.io) {
@@ -403,8 +401,7 @@ class BookmarkActionsRepository(
     suspend fun removeFromList(
         bookmarkRemoteId: Long,
         serverId: String,
-        listId: String,
-        isOnline: Boolean
+        listId: String
     ) {
         withContext(appDispatchers.io) {
             // Update local DB immediately (optimistic update)

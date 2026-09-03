@@ -37,7 +37,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         if (result.isSuccess) {
             val bookmark = result.getOrNull()
             assertNotNull(bookmark, "Bookmark should not be null")
-            assertTrue(bookmark!!.url == targetUrl, "URL should match")
+            assertTrue(bookmark.url == targetUrl, "URL should match")
             println("Bookmark created: ${bookmark.title} (ID: ${bookmark.originalRemoteId})")
         } else {
             println("Bookmark creation failed: ${result.exceptionOrNull()?.message}")
@@ -85,7 +85,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         val before = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertTrue(before?.listIds.isNullOrBlank(), "Bookmark should not be in any list before moveToList")
 
-        bookmarkActionsRepository.moveToList(bookmark.remoteId, testServer.id, listId, isOnline = true)
+        bookmarkActionsRepository.moveToList(bookmark.remoteId, testServer.id, listId)
 
         // After: local DB should be updated immediately (optimistic)
         val afterLocal = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
@@ -127,7 +127,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         val beforeListIds = before?.listIds?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
         assertTrue(beforeListIds.contains(listId), "Bookmark should be in list before removeFromList")
 
-        bookmarkActionsRepository.removeFromList(bookmark.remoteId, testServer.id, listId, isOnline = true)
+        bookmarkActionsRepository.removeFromList(bookmark.remoteId, testServer.id, listId)
 
         // After: local DB should be updated immediately (optimistic)
         val afterLocal = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
@@ -154,7 +154,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         val bookmark = insertLocalBookmark(remoteId, url = bookmarkUrl, tags = "old-tag")
 
         val newTags = listOf("new-tag-1", "new-tag-2")
-        bookmarkActionsRepository.updateTags(bookmark.remoteId, testServer.id, newTags, isOnline = true)
+        bookmarkActionsRepository.updateTags(bookmark.remoteId, testServer.id, newTags)
 
         // Local DB should be updated immediately
         val afterLocal = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
@@ -188,7 +188,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
 
         // 2. Add custom tags
         val customTags = listOf("important", "work", "to-review")
-        bookmarkActionsRepository.updateTags(bookmark.remoteId, bookmark.serverId, customTags, isOnline = true)
+        bookmarkActionsRepository.updateTags(bookmark.remoteId, bookmark.serverId, customTags)
 
         val afterTags = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
         val localTags = afterTags?.tags?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()

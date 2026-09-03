@@ -69,7 +69,7 @@ abstract class BaseDockerIntegrationTest {
         private var skipCleanupOnFailure: Boolean = false
 
         fun postJson(urlStr: String, body: String, token: String? = null): String {
-            val url = java.net.URL(urlStr)
+            val url = java.net.URI(urlStr).toURL()
             val connection = url.openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "POST"
             connection.doOutput = true
@@ -155,7 +155,7 @@ abstract class BaseDockerIntegrationTest {
                 for (host in possibleHosts) {
                     try {
                         val testUrl = "http://$host:3000/api/health"
-                        val connection = java.net.URL(testUrl).openConnection() as java.net.HttpURLConnection
+                        val connection = java.net.URI(testUrl).toURL().openConnection() as java.net.HttpURLConnection
                         connection.connectTimeout = 500
                         connection.readTimeout = 500
                         if (connection.responseCode in 200..499) {
@@ -235,7 +235,7 @@ abstract class BaseDockerIntegrationTest {
                 while (System.currentTimeMillis() - start < 90000) {
                     for (host in possibleHosts) {
                         try {
-                            val connection = java.net.URL("http://$host:3000/api/health").openConnection() as java.net.HttpURLConnection
+                            val connection = java.net.URI("http://$host:3000/api/health").toURL().openConnection() as java.net.HttpURLConnection
                             connection.connectTimeout = 1000
                             connection.readTimeout = 1000
                             if (connection.responseCode in 200..499) {

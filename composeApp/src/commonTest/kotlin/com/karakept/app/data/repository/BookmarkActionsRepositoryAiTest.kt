@@ -12,6 +12,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -30,6 +31,7 @@ import kotlin.test.assertTrue
  * the result is persisted and announced, that a polled re-tag gives up rather than hanging, and
  * that the capability cache narrows only on the one rejection that means "this server never will".
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
 
     private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)

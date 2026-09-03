@@ -4,6 +4,7 @@ import com.karakept.app.data.model.DateDisplayMode
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 
 /** Parses an ISO-8601 timestamp from the API into epoch millis, or null if absent/malformed. */
@@ -45,7 +46,7 @@ fun formatAbsolute(epochMillis: Long): String {
     return try {
         val instant = Instant.fromEpochMilliseconds(epochMillis)
         val localDate = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-        "${localDate.year}-${localDate.monthNumber.toString().padStart(2, '0')}-${localDate.dayOfMonth.toString().padStart(2, '0')}"
+        "${localDate.year}-${localDate.month.number.toString().padStart(2, '0')}-${localDate.day.toString().padStart(2, '0')}"
     } catch (e: Exception) {
         "Unknown"
     }

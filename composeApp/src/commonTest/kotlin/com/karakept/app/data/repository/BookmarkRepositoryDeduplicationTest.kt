@@ -13,6 +13,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -27,6 +28,7 @@ import kotlin.test.assertTrue
  * Tests for BookmarkRepository per-key deduplication.
  * Uses a real BookmarkActionsRepository (with mocked DAOs) so extension functions work correctly.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class BookmarkRepositoryDeduplicationTest : BaseRepositoryTest() {
 
     private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)

@@ -133,7 +133,7 @@ fun rememberScrollRestoration(
         )
 
         if (mayRestore && trackReadingProgress && loadingState is BookmarkLoadingState.FullyLoaded) {
-            val bookmark = (loadingState as BookmarkLoadingState.FullyLoaded).bookmark
+            val bookmark = loadingState.bookmark
             val hasMeaningfulProgress = bookmark.readingProgress > 0.02f
             if (hasMeaningfulProgress && !bookmark.content.isNullOrBlank()) {
                 if (contentRendered) {

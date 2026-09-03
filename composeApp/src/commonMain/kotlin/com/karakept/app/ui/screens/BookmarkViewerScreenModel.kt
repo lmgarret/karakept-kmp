@@ -396,7 +396,7 @@ class BookmarkViewerScreenModel(
                 val servers = serverRepository.servers.first()
                 val server = servers.find { it.id == currentState.bookmark.serverId }
                 if (server != null) {
-                    val remoteId = currentState.bookmark.originalRemoteId ?: currentState.bookmark.remoteId.toString()
+                    val remoteId = currentState.bookmark.originalRemoteId
                     AppLogger.d("ViewerModel", "Syncing highlights for remoteId=$remoteId")
                     highlightRepository.syncHighlightsForBookmark(server, remoteId)
                     AppLogger.d("ViewerModel", "Highlights synced")
@@ -451,7 +451,7 @@ class BookmarkViewerScreenModel(
                                     val servers = serverRepository.servers.first()
                                     val server = servers.find { it.id == bookmark.serverId }
                                     if (server != null) {
-                                        highlightRepository.syncHighlightsForBookmark(server, bookmark.originalRemoteId ?: bookmark.remoteId.toString())
+                                        highlightRepository.syncHighlightsForBookmark(server, bookmark.originalRemoteId)
                                     }
                                 } catch (e: Exception) {
                                     AppLogger.e("ViewerModel", "Failed to sync highlights: ${e.message}", e)
@@ -679,7 +679,7 @@ class BookmarkViewerScreenModel(
                     return@launch
                 }
                 val fullBookmark = remoteDataSource.fetchBookmark(
-                    server, bookmark.originalRemoteId ?: bookmark.remoteId.toString()
+                    server, bookmark.originalRemoteId
                 )
                 val asset = fullBookmark.assets?.find {
                     it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE
@@ -1110,24 +1110,20 @@ class BookmarkViewerScreenModel(
 
     fun moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
         viewModelScope.launch {
-            val isOffline = settingsRepository.offlineMode.first()
             bookmarkActionsRepository.moveToList(
                 bookmark.remoteId,
                 bookmark.serverId,
-                listId,
-                !isOffline
+                listId
             )
         }
     }
 
     fun updateBookmarkTags(bookmark: BookmarkEntity, tags: List<String>) {
         viewModelScope.launch {
-            val isOffline = settingsRepository.offlineMode.first()
             bookmarkActionsRepository.updateTags(
                 bookmark.remoteId,
                 bookmark.serverId,
-                tags,
-                !isOffline
+                tags
             )
         }
     }
@@ -1141,7 +1137,7 @@ class BookmarkViewerScreenModel(
                     AppLogger.w("ViewerModel", "Server not found for serverId=${bookmark.serverId}")
                     return@launch
                 }
-                val remoteId = bookmark.originalRemoteId ?: bookmark.remoteId.toString()
+                val remoteId = bookmark.originalRemoteId
                 AppLogger.d("ViewerModel", "Calling highlightRepository.createHighlight for remoteId=$remoteId")
                 val highlightId = highlightRepository.createHighlight(server, bookmark.localId, remoteId, text, startOffset, endOffset, note, color)
                 AppLogger.d("ViewerModel", "Highlight created successfully, id=$highlightId")

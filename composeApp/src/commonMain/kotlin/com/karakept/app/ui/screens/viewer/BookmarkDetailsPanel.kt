@@ -81,6 +81,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,10 +89,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.AssetEntity
@@ -101,8 +101,11 @@ import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.domain.action.ServerCrawlAction
 import com.karakept.app.ui.components.BookmarkTagsDisplay
 import com.karakept.app.utils.formatBookmarkDate
+import com.karakept.app.utils.setPlainText
 import kotlin.time.Instant
+import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 
 /**
@@ -911,14 +914,15 @@ private fun DetailsSectionTitle(title: String) {
 @Composable
 private fun LinkDetailsRow(url: String, onOpen: () -> Unit, onCopy: () -> Unit) {
     val uriHandler = LocalUriHandler.current
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     val hapticFeedback = LocalHapticFeedback.current
     val openInBrowser = {
         uriHandler.openUri(url)
         onOpen()
     }
     val copyToClipboard = {
-        clipboardManager.setText(AnnotatedString(url))
+        scope.launch { clipboard.setPlainText(url) }
         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
         onCopy()
     }
@@ -997,7 +1001,7 @@ private fun formatEpochMillis(epochMillis: Long): String {
     return try {
         val instant = Instant.fromEpochMilliseconds(epochMillis)
         val localDate = instant.toLocalDateTime(TimeZone.currentSystemDefault())
-        "${localDate.year}-${localDate.monthNumber.toString().padStart(2, '0')}-${localDate.dayOfMonth.toString().padStart(2, '0')}"
+        "${localDate.year}-${localDate.month.number.toString().padStart(2, '0')}-${localDate.day.toString().padStart(2, '0')}"
     } catch (e: Exception) {
         "Unknown"
     }

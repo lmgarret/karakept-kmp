@@ -34,6 +34,7 @@ import com.karakept.app.ui.theme.HighlightPalette
 import com.karakept.app.ui.theme.LocalEinkMode
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 
 @Composable
@@ -112,7 +113,7 @@ fun HighlightCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${date.dayOfMonth}/${date.monthNumber}/${date.year}",
+                        text = "${date.day}/${date.month.number}/${date.year}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )

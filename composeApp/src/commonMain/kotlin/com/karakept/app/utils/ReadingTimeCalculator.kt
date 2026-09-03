@@ -48,7 +48,7 @@ object ReadingTimeCalculator {
             val doc = Ksoup.parse(htmlContent)
 
             // 1. Extract text content (strips all HTML tags)
-            val text = doc.body()?.text() ?: ""
+            val text = doc.body().text()
 
             // 2. Count words (split by whitespace, filter empty) and analyze word length
             val wordsList = text.split("\\s+".toRegex())

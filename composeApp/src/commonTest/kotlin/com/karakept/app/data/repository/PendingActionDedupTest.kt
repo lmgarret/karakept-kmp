@@ -90,7 +90,7 @@ class PendingActionDedupTest {
     fun updateTags_deletesPriorTagUpdateBeforeEnqueue() = runTest(testDispatcher) {
         stubBookmark(2L)
 
-        repository.updateTags(2L, testServer.id, listOf("a", "b"), isOnline = false)
+        repository.updateTags(2L, testServer.id, listOf("a", "b"))
 
         coVerify { pendingActionDao.deleteActionsForBookmarkByType(2L, testServer.id, PendingActionType.UPDATE_TAGS) }
     }
@@ -119,7 +119,7 @@ class PendingActionDedupTest {
             )
         )
 
-        repository.removeFromList(4L, testServer.id, "list-1", isOnline = false)
+        repository.removeFromList(4L, testServer.id, "list-1")
 
         // The matching move row for list-1 is cancelled out before the remove is queued
         coVerify {

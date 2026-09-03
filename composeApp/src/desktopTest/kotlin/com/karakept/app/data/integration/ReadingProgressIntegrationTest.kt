@@ -161,7 +161,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
 
         val afterPull = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertNotNull(afterPull)
-        assertEquals(0.68f, afterPull!!.readingProgress, 0.01f, "Local progress should be restored from server (68%)")
+        assertEquals(0.68f, afterPull.readingProgress, 0.01f, "Local progress should be restored from server (68%)")
     }
 
     @Test
@@ -189,7 +189,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
 
         val afterPull = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertNotNull(afterPull)
-        assertEquals(0.70f, afterPull!!.readingProgress, 0.01f, "Local progress should remain 70%")
+        assertEquals(0.70f, afterPull.readingProgress, 0.01f, "Local progress should remain 70%")
     }
 
     @Test
@@ -288,7 +288,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
 
         val afterPull = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertNotNull(afterPull)
-        assertEquals(0.70f, afterPull!!.readingProgress, 0.01f, "Local progress should be updated to 70%")
+        assertEquals(0.70f, afterPull.readingProgress, 0.01f, "Local progress should be updated to 70%")
     }
 
     // -----------------------------------------------------------------------

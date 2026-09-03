@@ -15,6 +15,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -27,6 +28,7 @@ import kotlin.test.Test
  * injected [com.karakept.app.utils.AppDispatchers], so it is invisible before
  * `advanceUntilIdle()` and guaranteed complete after it.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class AppDispatchersInjectionTest : BaseRepositoryTest() {
 
     private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)

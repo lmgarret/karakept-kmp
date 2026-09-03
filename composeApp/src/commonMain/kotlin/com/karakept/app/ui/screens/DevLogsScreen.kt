@@ -25,10 +25,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,6 +37,8 @@ import androidx.navigation3.runtime.NavKey
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.utils.AppLogger
+import com.karakept.app.utils.setPlainText
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
 /**
@@ -56,7 +58,8 @@ class DevLogsScreen : NavKey {
 @Composable
 fun DevLogsContent(onBack: () -> Unit) {
     val lines by AppLogger.history.collectAsState()
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     var filter by remember { mutableStateOf("") }
 
     val visible = remember(lines, filter) {
@@ -77,7 +80,7 @@ fun DevLogsContent(onBack: () -> Unit) {
                 },
                 actions = {
                     IconButton(onClick = {
-                        clipboard.setText(AnnotatedString(visible.joinToString("\n")))
+                        scope.launch { clipboard.setPlainText(visible.joinToString("\n")) }
                     }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = "Copy logs")
                     }

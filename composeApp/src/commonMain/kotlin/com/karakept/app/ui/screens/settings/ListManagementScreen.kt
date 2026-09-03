@@ -249,7 +249,7 @@ class ListManagementScreen : NavKey {
                         text = when (checkboxState) {
                             CheckboxState.CHECKED_PARENT_ONLY -> "Parent list only"
                             CheckboxState.CHECKED_WITH_CHILDREN -> "Including all child lists"
-                            else -> ""
+                            CheckboxState.UNCHECKED -> ""
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary

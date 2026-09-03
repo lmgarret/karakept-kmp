@@ -51,7 +51,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true) // skip auto-sync
 
-        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-99", isOnline = false)
+        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-99")
 
         val savedSlot = slot<BookmarkEntity>()
         coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
@@ -64,7 +64,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-3", isOnline = false)
+        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-3")
 
         val savedSlot = slot<BookmarkEntity>()
         coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
@@ -81,7 +81,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
         repository.moveToList(
             bookmark.remoteId, bookmark.serverId, "read-later",
-            isOnline = false, smartListIds = setOf("all-feeds")
+            smartListIds = setOf("all-feeds")
         )
 
         val savedSlot = slot<BookmarkEntity>()
@@ -97,7 +97,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-1", isOnline = false)
+        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-1")
 
         // insertBookmark should NOT have been called since the listId already exists
         coVerify(exactly = 0) { bookmarkDao.insertBookmark(any()) }
@@ -109,7 +109,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-99", isOnline = false)
+        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-99")
 
         val actionSlot = slot<PendingActionEntity>()
         coVerify { pendingActionDao.insertAction(capture(actionSlot)) }
@@ -132,7 +132,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         // and the value is lost (SharedFlow has replay=0).
         testDispatcher.scheduler.advanceUntilIdle()
 
-        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-99", isOnline = false)
+        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-99")
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(bookmark.remoteId, emittedId)
@@ -149,7 +149,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.removeFromList(bookmark.remoteId, bookmark.serverId, "list-1", isOnline = false)
+        repository.removeFromList(bookmark.remoteId, bookmark.serverId, "list-1")
 
         val savedSlot = slot<BookmarkEntity>()
         coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
@@ -164,7 +164,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.removeFromList(bookmark.remoteId, bookmark.serverId, "list-1", isOnline = false)
+        repository.removeFromList(bookmark.remoteId, bookmark.serverId, "list-1")
 
         val savedSlot = slot<BookmarkEntity>()
         coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
@@ -178,7 +178,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.removeFromList(bookmark.remoteId, bookmark.serverId, "list-1", isOnline = false)
+        repository.removeFromList(bookmark.remoteId, bookmark.serverId, "list-1")
 
         val actionSlot = slot<PendingActionEntity>()
         coVerify { pendingActionDao.insertAction(capture(actionSlot)) }
@@ -201,7 +201,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         // and the value is lost (SharedFlow has replay=0).
         testDispatcher.scheduler.advanceUntilIdle()
 
-        repository.removeFromList(bookmark.remoteId, bookmark.serverId, "list-1", isOnline = false)
+        repository.removeFromList(bookmark.remoteId, bookmark.serverId, "list-1")
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(bookmark.remoteId, emittedId)
@@ -219,7 +219,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         val newTags = listOf("new-tag-1", "new-tag-2")
-        repository.updateTags(bookmark.remoteId, bookmark.serverId, newTags, isOnline = false)
+        repository.updateTags(bookmark.remoteId, bookmark.serverId, newTags)
 
         val savedSlot = slot<BookmarkEntity>()
         coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
@@ -234,7 +234,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.updateTags(bookmark.remoteId, bookmark.serverId, listOf("tag-a"), isOnline = false)
+        repository.updateTags(bookmark.remoteId, bookmark.serverId, listOf("tag-a"))
 
         val actionSlot = slot<PendingActionEntity>()
         coVerify { pendingActionDao.insertAction(capture(actionSlot)) }

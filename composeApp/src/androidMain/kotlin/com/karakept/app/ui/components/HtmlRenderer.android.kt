@@ -778,7 +778,11 @@ actual fun HtmlRenderer(
         fun onSelectionChanged(left: Float, top: Float, right: Float, bottom: Float) {
             webView?.post {
                 // getBoundingClientRect() returns CSS pixels, need to convert to device pixels
-                val scale = webView?.scale ?: 1f
+                // WebView.scale is deprecated in favour of WebViewClient.onScaleChanged, which
+                // reports the zoom only when it changes; this callback needs the value now and
+                // has no state to read it back from.
+                @Suppress("DEPRECATION")
+                val scale = webView.scale
                 android.util.Log.d("HtmlRenderer", "onSelectionChanged: CSS coords ($left, $top, $right, $bottom), scale=$scale")
                 selectionRect.value = android.graphics.Rect(
                     (left * scale).toInt(),
@@ -857,7 +861,7 @@ actual fun HtmlRenderer(
                         // Let the WebView handle selection rectangle positioning natively
                         // The default implementation properly tracks the selection position
                         if (originalCallback is ActionMode.Callback2) {
-                            (originalCallback as ActionMode.Callback2).onGetContentRect(mode, view, outRect)
+                            originalCallback.onGetContentRect(mode, view, outRect)
                         } else {
                             super.onGetContentRect(mode, view, outRect)
                         }

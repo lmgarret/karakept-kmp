@@ -110,14 +110,14 @@ private fun rememberSearchScrollModifier(
     val ref = remember { YRef() }
     when {
         searchState == null -> SideEffect { ref.y = null }
-        isActive -> SideEffect { ref.y?.let { callback!!(it) } }
+        isActive -> SideEffect { ref.y?.let { callback(it) } }
     }
 
     return if (searchState != null) {
         Modifier.onGloballyPositioned { coords ->
             val wasNull = ref.y == null
             ref.y = coords.positionInRoot().y
-            if (isActive && wasNull) callback!!(ref.y!!)
+            if (isActive && wasNull) callback(ref.y!!)
         }
     } else {
         Modifier
