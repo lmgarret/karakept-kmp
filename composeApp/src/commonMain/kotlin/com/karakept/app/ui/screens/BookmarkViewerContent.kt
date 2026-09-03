@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.utils.AppLogger
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -27,8 +28,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -777,7 +776,7 @@ fun BookmarkViewerContent(
                             }
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ArrowUpward,
+                                imageVector = AppIcons.Default.ArrowUpward,
                                 contentDescription = "Scroll to top"
                             )
                         }

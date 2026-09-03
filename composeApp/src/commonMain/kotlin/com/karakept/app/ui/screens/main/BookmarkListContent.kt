@@ -18,11 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -31,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -478,11 +474,11 @@ internal fun BookmarkListContent(
 
                     // Dynamic icon logic for Mark Read/Unread
                     val leftIcon = if (swipeLeftAction == SwipeAction.MARK_READ) {
-                        if (bookmark.isRead) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                        if (bookmark.isRead) AppIcons.Filled.VisibilityOff else AppIcons.Filled.Visibility
                     } else null
 
                     val rightIcon = if (swipeRightAction == SwipeAction.MARK_READ) {
-                        if (bookmark.isRead) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                        if (bookmark.isRead) AppIcons.Filled.VisibilityOff else AppIcons.Filled.Visibility
                     } else null
 
                     // Compute whether each custom action is already applied to this bookmark
@@ -765,7 +761,7 @@ internal fun BookmarkListContent(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowUpward,
+                        imageVector = AppIcons.Default.ArrowUpward,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -789,7 +785,7 @@ internal fun BookmarkListContent(
                 onClick = { scope.launch { listState.scrollToTop(einkMode.instantScroll) } }
             ) {
                 Icon(
-                    imageVector = Icons.Default.ArrowUpward,
+                    imageVector = AppIcons.Default.ArrowUpward,
                     contentDescription = "Scroll to top"
                 )
             }
@@ -933,7 +929,7 @@ private fun EmptyBookmarkList() {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Icon(
-            imageVector = Icons.Default.BookmarkBorder,
+            imageVector = AppIcons.Default.BookmarkBorder,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(48.dp)

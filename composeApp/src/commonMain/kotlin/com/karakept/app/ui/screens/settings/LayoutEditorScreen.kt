@@ -13,27 +13,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.Notes
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Circle
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Reorder
-import androidx.compose.material.icons.filled.Title
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VerticalSplit
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Window
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -61,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -292,7 +272,7 @@ private fun LayoutEditorContent(
                 title = { Text(if (isEditing) "Edit Layout" else "New Layout") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -368,7 +348,7 @@ private fun LayoutEditorContent(
                             LayoutRadioOption(
                                 title = "Card",
                                 description = "Large hero image with title and metadata below",
-                                icon = Icons.Default.Window,
+                                icon = AppIcons.Default.Window,
                                 isSelected = layout.layoutType == LayoutType.CARD.name,
                                 onClick = { screenModel.updateLayoutType(LayoutType.CARD) }
                             )
@@ -376,7 +356,7 @@ private fun LayoutEditorContent(
                             LayoutRadioOption(
                                 title = "List",
                                 description = "Row layout with thumbnail, title, and metadata",
-                                icon = Icons.AutoMirrored.Filled.ViewList,
+                                icon = AppIcons.AutoMirrored.Filled.ViewList,
                                 isSelected = isList,
                                 onClick = { screenModel.updateLayoutType(LayoutType.LIST) }
                             )
@@ -392,7 +372,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Card",
                                     description = "Each bookmark in its own raised container",
-                                    icon = Icons.Default.Window,
+                                    icon = AppIcons.Default.Window,
                                     isSelected = layout.itemContainerStyle == ItemContainerStyle.CARD.name,
                                     onClick = { screenModel.updateItemContainerStyle(ItemContainerStyle.CARD) }
                                 )
@@ -400,7 +380,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Flat rows",
                                     description = "No container — rows separated by a divider. Best on e-ink",
-                                    icon = Icons.Default.Reorder,
+                                    icon = AppIcons.Default.Reorder,
                                     isSelected = layout.itemContainerStyle == ItemContainerStyle.FLAT.name,
                                     onClick = { screenModel.updateItemContainerStyle(ItemContainerStyle.FLAT) }
                                 )
@@ -408,7 +388,7 @@ private fun LayoutEditorContent(
                                 if (layout.itemContainerStyle == ItemContainerStyle.FLAT.name) {
                                     HorizontalDivider()
                                     ToggleRow(
-                                        icon = Icons.Default.Remove,
+                                        icon = AppIcons.Default.Remove,
                                         title = "Divider between rows",
                                         checked = layout.showRowDivider,
                                         onCheckedChange = { screenModel.updateShowRowDivider(it) }
@@ -425,7 +405,7 @@ private fun LayoutEditorContent(
                                     LayoutRadioOption(
                                         title = "Beside thumbnail",
                                         description = "Title shares the row with the image",
-                                        icon = Icons.Default.VerticalSplit,
+                                        icon = AppIcons.Default.VerticalSplit,
                                         isSelected = layout.titlePosition == TitlePosition.BESIDE_THUMBNAIL.name,
                                         onClick = {
                                             screenModel.updateTitlePosition(TitlePosition.BESIDE_THUMBNAIL)
@@ -435,7 +415,7 @@ private fun LayoutEditorContent(
                                     LayoutRadioOption(
                                         title = "Above thumbnail",
                                         description = "Title spans the full width, image sits below it",
-                                        icon = Icons.Default.Title,
+                                        icon = AppIcons.Default.Title,
                                         isSelected = layout.titlePosition == TitlePosition.ABOVE_THUMBNAIL.name,
                                         onClick = {
                                             screenModel.updateTitlePosition(TitlePosition.ABOVE_THUMBNAIL)
@@ -452,7 +432,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Dim",
                                     description = "Fade read bookmarks",
-                                    icon = Icons.Default.Visibility,
+                                    icon = AppIcons.Default.Visibility,
                                     isSelected = layout.readIndicatorStyle == ReadIndicatorStyle.DIM.name,
                                     onClick = { screenModel.updateReadIndicatorStyle(ReadIndicatorStyle.DIM) }
                                 )
@@ -460,7 +440,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Marker",
                                     description = "Bullet beside unread titles, full contrast throughout",
-                                    icon = Icons.Default.Circle,
+                                    icon = AppIcons.Default.Circle,
                                     isSelected = layout.readIndicatorStyle == ReadIndicatorStyle.MARKER.name,
                                     onClick = { screenModel.updateReadIndicatorStyle(ReadIndicatorStyle.MARKER) }
                                 )
@@ -475,7 +455,7 @@ private fun LayoutEditorContent(
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Column {
                                 ToggleRow(
-                                    icon = Icons.Default.Image,
+                                    icon = AppIcons.Default.Image,
                                     title = "Show thumbnail",
                                     checked = layout.showThumbnail,
                                     onCheckedChange = { screenModel.updateShowThumbnail(it) }
@@ -484,7 +464,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Left",
                                     description = "Thumbnail on the left side",
-                                    icon = Icons.AutoMirrored.Filled.ViewList,
+                                    icon = AppIcons.AutoMirrored.Filled.ViewList,
                                     isSelected = layout.thumbnailSide == ThumbnailSide.LEFT.name,
                                     onClick = { screenModel.updateThumbnailSide(ThumbnailSide.LEFT) }
                                 )
@@ -492,7 +472,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Right",
                                     description = "Thumbnail on the right side",
-                                    icon = Icons.AutoMirrored.Filled.ViewList,
+                                    icon = AppIcons.AutoMirrored.Filled.ViewList,
                                     isSelected = layout.thumbnailSide == ThumbnailSide.RIGHT.name,
                                     onClick = { screenModel.updateThumbnailSide(ThumbnailSide.RIGHT) }
                                 )
@@ -509,7 +489,7 @@ private fun LayoutEditorContent(
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
-                                                imageVector = Icons.Default.Photo,
+                                                imageVector = AppIcons.Default.Photo,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.padding(end = 16.dp)
@@ -540,7 +520,7 @@ private fun LayoutEditorContent(
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             ToggleRow(
-                                icon = Icons.AutoMirrored.Filled.Notes,
+                                icon = AppIcons.AutoMirrored.Filled.Notes,
                                 title = "Show description",
                                 checked = layout.showDescription,
                                 onCheckedChange = { screenModel.updateShowDescription(it) }
@@ -600,7 +580,7 @@ private fun LayoutEditorContent(
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             ToggleRow(
-                                icon = Icons.Default.Link,
+                                icon = AppIcons.Default.Link,
                                 title = "Show link",
                                 checked = layout.showUrl,
                                 onCheckedChange = { screenModel.updateShowUrl(it) }
@@ -642,7 +622,7 @@ private fun LayoutEditorContent(
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             ToggleRow(
-                                icon = Icons.Default.Language,
+                                icon = AppIcons.Default.Language,
                                 title = "Show favicon",
                                 checked = faviconEnabled,
                                 onCheckedChange = { screenModel.updateFaviconEnabled(it) }
@@ -703,7 +683,7 @@ private fun LayoutEditorContent(
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             ToggleRow(
-                                icon = Icons.Default.CalendarToday,
+                                icon = AppIcons.Default.CalendarToday,
                                 title = "Show date",
                                 checked = layout.showDate,
                                 onCheckedChange = { screenModel.updateShowDate(it) }
@@ -732,7 +712,7 @@ private fun LayoutEditorContent(
                 SettingsSection(title = "Reading Time") {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         ToggleRow(
-                            icon = Icons.AutoMirrored.Outlined.MenuBook,
+                            icon = AppIcons.AutoMirrored.Outlined.MenuBook,
                             title = "Show reading time",
                             checked = layout.showReadingTime,
                             onCheckedChange = { screenModel.updateShowReadingTime(it) }
@@ -745,7 +725,7 @@ private fun LayoutEditorContent(
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             ToggleRow(
-                                icon = Icons.AutoMirrored.Filled.Label,
+                                icon = AppIcons.AutoMirrored.Filled.Label,
                                 title = "Show tags",
                                 checked = layout.showTags,
                                 onCheckedChange = { screenModel.updateShowTags(it) }
@@ -772,7 +752,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Below",
                                     description = "Tags, date and reading time below thumbnail and text",
-                                    icon = Icons.AutoMirrored.Filled.List,
+                                    icon = AppIcons.AutoMirrored.Filled.List,
                                     isSelected = layout.metadataPosition == MetadataPosition.BELOW.name,
                                     onClick = { screenModel.updateMetadataPosition(MetadataPosition.BELOW) }
                                 )
@@ -780,7 +760,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Beside",
                                     description = "Tags, date and reading time beside the thumbnail, under the title",
-                                    icon = Icons.Default.VerticalSplit,
+                                    icon = AppIcons.Default.VerticalSplit,
                                     isSelected = layout.metadataPosition == MetadataPosition.BESIDE.name,
                                     onClick = { screenModel.updateMetadataPosition(MetadataPosition.BESIDE) }
                                 )
@@ -788,7 +768,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Above",
                                     description = "Tags, date and reading time above the thumbnail and text",
-                                    icon = Icons.AutoMirrored.Filled.List,
+                                    icon = AppIcons.AutoMirrored.Filled.List,
                                     isSelected = layout.metadataPosition == MetadataPosition.ABOVE.name,
                                     onClick = { screenModel.updateMetadataPosition(MetadataPosition.ABOVE) }
                                 )
@@ -802,7 +782,7 @@ private fun LayoutEditorContent(
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column {
                             ToggleRow(
-                                icon = Icons.Default.VisibilityOff,
+                                icon = AppIcons.Default.VisibilityOff,
                                 title = "Dim read bookmarks",
                                 checked = layout.dimReadBookmarks,
                                 onCheckedChange = { screenModel.updateDimReadBookmarks(it) }
@@ -812,7 +792,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Quick actions — Left",
                                     description = "Quick action buttons on the left side",
-                                    icon = Icons.AutoMirrored.Filled.ViewList,
+                                    icon = AppIcons.AutoMirrored.Filled.ViewList,
                                     isSelected = layout.quickActionPosition == QuickActionPosition.LEFT.name,
                                     onClick = { screenModel.updateQuickActionPosition(QuickActionPosition.LEFT) }
                                 )
@@ -820,7 +800,7 @@ private fun LayoutEditorContent(
                                 LayoutRadioOption(
                                     title = "Quick actions — Right",
                                     description = "Quick action buttons on the right side",
-                                    icon = Icons.AutoMirrored.Filled.ViewList,
+                                    icon = AppIcons.AutoMirrored.Filled.ViewList,
                                     isSelected = layout.quickActionPosition == QuickActionPosition.RIGHT.name,
                                     onClick = { screenModel.updateQuickActionPosition(QuickActionPosition.RIGHT) }
                                 )

@@ -4,10 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,6 +17,7 @@ import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.domain.ListHierarchyUtils
 import com.karakept.api.model.KarakeepList as KarakeepList
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.coroutines.delay
 
 /**
@@ -155,7 +152,7 @@ fun FilterSidePanel(
                         Text("Reset")
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close filter")
+                        Icon(AppIcons.Default.Close, contentDescription = "Close filter")
                     }
                 }
             }
@@ -217,13 +214,13 @@ private fun FilterPanelContent(
             selected = filter.status == FilterStatus.FAVORITES,
             onClick = { onFilterUpdate(filter.copy(status = FilterStatus.FAVORITES)) },
             label = { Text("Favorites") },
-            leadingIcon = { Icon(Icons.Default.Star, null, modifier = Modifier.size(18.dp)) }
+            leadingIcon = { Icon(AppIcons.Default.Star, null, modifier = Modifier.size(18.dp)) }
         )
         FilterChip(
             selected = filter.status == FilterStatus.ARCHIVED,
             onClick = { onFilterUpdate(filter.copy(status = FilterStatus.ARCHIVED)) },
             label = { Text("Archived") },
-            leadingIcon = { Icon(Icons.Default.Archive, null, modifier = Modifier.size(18.dp)) }
+            leadingIcon = { Icon(AppIcons.Default.Archive, null, modifier = Modifier.size(18.dp)) }
         )
     }
 
@@ -243,7 +240,7 @@ private fun FilterPanelContent(
                 ))
             },
             label = { Text("Unread") },
-            leadingIcon = { Icon(Icons.Default.Circle, null, modifier = Modifier.size(18.dp)) }
+            leadingIcon = { Icon(AppIcons.Default.Circle, null, modifier = Modifier.size(18.dp)) }
         )
         FilterChip(
             selected = filter.readFilter == ReadFilter.IN_PROGRESS,
@@ -253,7 +250,7 @@ private fun FilterPanelContent(
                 ))
             },
             label = { Text("In Progress") },
-            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.MenuBook, null, modifier = Modifier.size(18.dp)) }
+            leadingIcon = { Icon(AppIcons.AutoMirrored.Outlined.MenuBook, null, modifier = Modifier.size(18.dp)) }
         )
         FilterChip(
             selected = filter.readFilter == ReadFilter.READ,
@@ -263,7 +260,7 @@ private fun FilterPanelContent(
                 ))
             },
             label = { Text("Read") },
-            leadingIcon = { Icon(Icons.Default.DoneAll, null, modifier = Modifier.size(18.dp)) }
+            leadingIcon = { Icon(AppIcons.Default.DoneAll, null, modifier = Modifier.size(18.dp)) }
         )
     }
 
@@ -283,7 +280,7 @@ private fun FilterPanelContent(
                 ))
             },
             label = { Text("Downloaded") },
-            leadingIcon = { Icon(Icons.Default.OfflinePin, null, modifier = Modifier.size(18.dp)) }
+            leadingIcon = { Icon(AppIcons.Default.OfflinePin, null, modifier = Modifier.size(18.dp)) }
         )
         FilterChip(
             selected = filter.contentFilter == ContentFilter.NOT_DOWNLOADED,
@@ -293,7 +290,7 @@ private fun FilterPanelContent(
                 ))
             },
             label = { Text("Not Downloaded") },
-            leadingIcon = { Icon(Icons.Outlined.CloudOff, null, modifier = Modifier.size(18.dp)) }
+            leadingIcon = { Icon(AppIcons.Outlined.CloudOff, null, modifier = Modifier.size(18.dp)) }
         )
     }
 
@@ -322,14 +319,14 @@ private fun FilterPanelContent(
             leadingIcon = {
                 if (isAddedSelected) {
                     Icon(
-                        imageVector = Icons.Default.ArrowDownward,
+                        imageVector = AppIcons.Default.ArrowDownward,
                         contentDescription = null,
                         modifier = Modifier
                             .size(18.dp)
                             .graphicsLayer { rotationZ = addedRotation }
                     )
                 } else {
-                    Icon(Icons.Default.DateRange, null, modifier = Modifier.size(18.dp))
+                    Icon(AppIcons.Default.DateRange, null, modifier = Modifier.size(18.dp))
                 }
             }
         )
@@ -351,14 +348,14 @@ private fun FilterPanelContent(
             leadingIcon = {
                 if (isTitleSelected) {
                     Icon(
-                        imageVector = Icons.Default.ArrowDownward,
+                        imageVector = AppIcons.Default.ArrowDownward,
                         contentDescription = null,
                         modifier = Modifier
                             .size(18.dp)
                             .graphicsLayer { rotationZ = titleRotation }
                     )
                 } else {
-                    Icon(Icons.Default.SortByAlpha, null, modifier = Modifier.size(18.dp))
+                    Icon(AppIcons.Default.SortByAlpha, null, modifier = Modifier.size(18.dp))
                 }
             }
         )
@@ -383,14 +380,14 @@ private fun FilterPanelContent(
             leadingIcon = {
                 if (isReadingTimeSelected) {
                     Icon(
-                        imageVector = Icons.Default.ArrowDownward,
+                        imageVector = AppIcons.Default.ArrowDownward,
                         contentDescription = null,
                         modifier = Modifier
                             .size(18.dp)
                             .graphicsLayer { rotationZ = readingTimeRotation }
                     )
                 } else {
-                    Icon(Icons.AutoMirrored.Outlined.MenuBook, null, modifier = Modifier.size(18.dp))
+                    Icon(AppIcons.AutoMirrored.Outlined.MenuBook, null, modifier = Modifier.size(18.dp))
                 }
             }
         )
@@ -440,7 +437,7 @@ private fun FilterPanelContent(
                     )
                     if (isSelected) {
                         Icon(
-                            imageVector = Icons.Default.Check,
+                            imageVector = AppIcons.Default.Check,
                             contentDescription = "Selected",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)

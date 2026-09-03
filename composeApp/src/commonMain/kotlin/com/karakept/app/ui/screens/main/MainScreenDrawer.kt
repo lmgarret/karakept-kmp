@@ -20,20 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.Create
-import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.DriveFileRenameOutline
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
@@ -63,6 +49,7 @@ import androidx.compose.ui.unit.DpOffset
 import com.karakept.app.ui.components.InlineLoadingDots
 import com.karakept.app.ui.components.einkOutlineBorder
 import com.karakept.app.ui.components.einkTrailingEdgeBorder
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
@@ -111,7 +98,7 @@ internal fun DrawerContent(
             // Add Bookmark button (desktop: FAB is moved into the drawer)
             if (onAddBookmark != null) {
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    icon = { Icon(AppIcons.Default.Add, contentDescription = null) },
                     label = { Text("Add Bookmark") },
                     selected = false,
                     onClick = onAddBookmark,
@@ -125,7 +112,7 @@ internal fun DrawerContent(
 
             BuiltinDrawerItem(
                 label = "All Bookmarks",
-                icon = { Icon(Icons.Default.Book, contentDescription = null) },
+                icon = { Icon(AppIcons.Default.Book, contentDescription = null) },
                 selected = currentFilter == FilterConfig(),
                 onClick = onClearFilter,
                 onSetAsHome = { onSetAsDefaultType(DefaultListType.ALL_BOOKMARKS) },
@@ -134,7 +121,7 @@ internal fun DrawerContent(
 
             BuiltinDrawerItem(
                 label = "Favorites",
-                icon = { Icon(Icons.Default.Star, contentDescription = null) },
+                icon = { Icon(AppIcons.Default.Star, contentDescription = null) },
                 selected = currentFilter == FilterConfig(status = FilterStatus.FAVORITES),
                 onClick = { onFilterApply(FilterConfig(status = FilterStatus.FAVORITES)) },
                 onSetAsHome = { onSetAsDefaultType(DefaultListType.FAVORITES) },
@@ -143,7 +130,7 @@ internal fun DrawerContent(
 
             BuiltinDrawerItem(
                 label = "Archived",
-                icon = { Icon(Icons.Default.Archive, contentDescription = null) },
+                icon = { Icon(AppIcons.Default.Archive, contentDescription = null) },
                 selected = currentFilter == FilterConfig(status = FilterStatus.ARCHIVED),
                 onClick = { onFilterApply(FilterConfig(status = FilterStatus.ARCHIVED)) },
                 onSetAsHome = { onSetAsDefaultType(DefaultListType.ARCHIVED) },
@@ -152,7 +139,7 @@ internal fun DrawerContent(
 
             BuiltinDrawerItem(
                 label = "Offline",
-                icon = { Icon(Icons.Default.CloudDone, contentDescription = null) },
+                icon = { Icon(AppIcons.Default.CloudDone, contentDescription = null) },
                 selected = currentFilter == FilterConfig(status = FilterStatus.OFFLINE),
                 onClick = { onFilterApply(FilterConfig(status = FilterStatus.OFFLINE)) },
                 onSetAsHome = null,
@@ -161,7 +148,7 @@ internal fun DrawerContent(
 
             BuiltinDrawerItem(
                 label = "Highlights",
-                icon = { Icon(Icons.Default.Create, contentDescription = null) },
+                icon = { Icon(AppIcons.Default.Create, contentDescription = null) },
                 selected = isHighlightsSelected,
                 onClick = onNavigateToHighlights,
                 onSetAsHome = null,
@@ -212,7 +199,7 @@ internal fun DrawerContent(
         NavigationDrawerItem(
             label = { Text("Settings") },
             selected = false,
-            icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+            icon = { Icon(AppIcons.Default.Settings, contentDescription = null) },
             colors = NavigationDrawerItemDefaults.colors(
                 selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                 selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -389,7 +376,7 @@ private fun BuiltinDrawerItem(
             ) {
                 DropdownMenuItem(
                     text = { Text("Set as home") },
-                    leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                    leadingIcon = { Icon(AppIcons.Default.Home, contentDescription = null) },
                     onClick = {
                         showMenu = false
                         onSetAsHome()
@@ -485,9 +472,9 @@ private fun ListDrawerItem(
             ) {
                 Icon(
                     imageVector = if (expandedLists.contains(listId)) {
-                        Icons.Default.KeyboardArrowDown
+                        AppIcons.Default.KeyboardArrowDown
                     } else {
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight
+                        AppIcons.AutoMirrored.Filled.KeyboardArrowRight
                     },
                     contentDescription = if (expandedLists.contains(listId)) "Collapse" else "Expand",
                     modifier = Modifier.size(16.dp)
@@ -536,7 +523,7 @@ private fun ListDrawerItem(
             ) {
                 DropdownMenuItem(
                     text = { Text("Set as home") },
-                    leadingIcon = { Icon(Icons.Default.Home, contentDescription = null) },
+                    leadingIcon = { Icon(AppIcons.Default.Home, contentDescription = null) },
                     onClick = {
                         showMenu = false
                         onSetAsDefault()
@@ -544,7 +531,7 @@ private fun ListDrawerItem(
                 )
                 DropdownMenuItem(
                     text = { Text("Mark all as read") },
-                    leadingIcon = { Icon(Icons.Default.DoneAll, contentDescription = null) },
+                    leadingIcon = { Icon(AppIcons.Default.DoneAll, contentDescription = null) },
                     onClick = {
                         showMenu = false
                         onMarkAllAsRead()
@@ -552,7 +539,7 @@ private fun ListDrawerItem(
                 )
                 DropdownMenuItem(
                     text = { Text("Rename / Change icon") },
-                    leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
+                    leadingIcon = { Icon(AppIcons.Default.DriveFileRenameOutline, contentDescription = null) },
                     onClick = {
                         showMenu = false
                         onRenameList()
@@ -560,7 +547,7 @@ private fun ListDrawerItem(
                 )
                 DropdownMenuItem(
                     text = { Text("List settings") },
-                    leadingIcon = { Icon(Icons.Default.Tune, contentDescription = null) },
+                    leadingIcon = { Icon(AppIcons.Default.Tune, contentDescription = null) },
                     onClick = {
                         showMenu = false
                         onListSettings()

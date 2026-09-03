@@ -11,22 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ImageNotSupported
-import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Photo
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Timeline
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Card
 import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -87,7 +72,7 @@ fun BookmarkViewSettingsContent(
                 navigationIcon = {
                     if (showBackButton) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 }
@@ -112,7 +97,7 @@ fun BookmarkViewSettingsContent(
                 LayoutOption(
                     title = "Reader",
                     description = "Sanitized content with safe HTML only",
-                    icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
+                    icon = AppIcons.AutoMirrored.Filled.ChromeReaderMode,
                     isSelected = currentViewerMode == ViewerMode.READER,
                     onClick = { screenModel.setViewerMode(ViewerMode.READER) }
                 )
@@ -122,7 +107,7 @@ fun BookmarkViewSettingsContent(
                 LayoutOption(
                     title = "Web",
                     description = "Web view with original HTML and stylesheets (JavaScript disabled)",
-                    icon = Icons.Default.Public,
+                    icon = AppIcons.Default.Public,
                     isSelected = currentViewerMode == ViewerMode.WEB,
                     onClick = { screenModel.setViewerMode(ViewerMode.WEB) }
                 )
@@ -151,7 +136,7 @@ fun BookmarkViewSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Timeline,
+                        imageVector = AppIcons.Default.Timeline,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -191,7 +176,7 @@ fun BookmarkViewSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Replay,
+                        imageVector = AppIcons.Default.Replay,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -229,7 +214,7 @@ fun BookmarkViewSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ImageNotSupported,
+                        imageVector = AppIcons.Default.ImageNotSupported,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -269,7 +254,7 @@ fun BookmarkViewSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Photo,
+                        imageVector = AppIcons.Default.Photo,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -307,7 +292,7 @@ fun BookmarkViewSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Label,
+                        imageVector = AppIcons.AutoMirrored.Filled.Label,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -346,7 +331,7 @@ fun BookmarkViewSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Web,
+                        imageVector = AppIcons.Default.Web,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -384,7 +369,7 @@ fun BookmarkViewSettingsContent(
             LayoutOption(
                 title = "Custom Tab",
                 description = "Open links in a custom tab using the default browser session",
-                icon = Icons.AutoMirrored.Filled.OpenInNew,
+                icon = AppIcons.AutoMirrored.Filled.OpenInNew,
                 isSelected = currentLinkOpenMode == LinkOpenMode.CUSTOM_TAB,
                 onClick = { screenModel.setLinkOpenMode(LinkOpenMode.CUSTOM_TAB) }
             )
@@ -394,7 +379,7 @@ fun BookmarkViewSettingsContent(
             LayoutOption(
                 title = "External Browser",
                 description = "Open links in the system default browser",
-                icon = Icons.Default.OpenInBrowser,
+                icon = AppIcons.Default.OpenInBrowser,
                 isSelected = currentLinkOpenMode == LinkOpenMode.EXTERNAL_BROWSER,
                 onClick = { screenModel.setLinkOpenMode(LinkOpenMode.EXTERNAL_BROWSER) }
             )
@@ -420,7 +405,7 @@ fun BookmarkViewSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Palette,
+                        imageVector = AppIcons.Default.Palette,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -437,7 +422,7 @@ fun BookmarkViewSettingsContent(
                         )
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Open"
                     )
                 }
@@ -494,7 +479,7 @@ private fun LayoutOption(
             }
             if (isSelected) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = AppIcons.Default.CheckCircle,
                     contentDescription = "Selected",
                     tint = MaterialTheme.colorScheme.primary
                 )

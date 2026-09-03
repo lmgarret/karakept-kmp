@@ -25,8 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.DrawerValue
@@ -67,6 +65,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.LocalEinkMode
 import kotlinx.coroutines.delay
 
@@ -332,7 +331,7 @@ private fun EinkAwareSnackbar(data: SnackbarData) {
             }
             if (data.visuals.withDismissAction) {
                 IconButton(onClick = { data.dismiss() }) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = "Dismiss")
+                    Icon(imageVector = AppIcons.Default.Close, contentDescription = "Dismiss")
                 }
             }
         }

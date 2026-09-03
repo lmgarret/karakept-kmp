@@ -19,13 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.BottomSheetDefaults
@@ -53,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -160,7 +154,7 @@ fun CustomSwipeActionsContent(
                 navigationIcon = {
                     if (showBackButton) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 }
@@ -168,7 +162,7 @@ fun CustomSwipeActionsContent(
         },
         floatingActionButton = {
             EinkAwareFab(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add custom action")
+                Icon(AppIcons.Default.Add, contentDescription = "Add custom action")
             }
         }
     ) { padding ->
@@ -222,7 +216,7 @@ fun CustomSwipeActionsContent(
                         ) {
                             Icon(
                                 imageVector = if (config.type == CustomSwipeActionType.ADD_TAG)
-                                    Icons.AutoMirrored.Filled.Label else Icons.AutoMirrored.Filled.List,
+                                    AppIcons.AutoMirrored.Filled.Label else AppIcons.AutoMirrored.Filled.List,
                                 contentDescription = null,
                                 tint = config.colorHex?.let { parseColor(it) }
                                     ?: if (config.type == CustomSwipeActionType.ADD_TAG)
@@ -258,10 +252,10 @@ fun CustomSwipeActionsContent(
                                 }
                             }
                             IconButton(onClick = { editingConfig = config }) {
-                                Icon(Icons.Default.Edit, contentDescription = "Edit")
+                                Icon(AppIcons.Default.Edit, contentDescription = "Edit")
                             }
                             IconButton(onClick = { confirmDeleteConfig = config }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Delete")
+                                Icon(AppIcons.Default.Delete, contentDescription = "Delete")
                             }
                         }
                     }
@@ -369,7 +363,7 @@ private fun CustomActionDialog(
                         onClick = { selectedType = CustomSwipeActionType.ADD_TAG }
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(AppIcons.AutoMirrored.Filled.Label, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Add Tag", style = MaterialTheme.typography.bodyLarge)
                     Spacer(modifier = Modifier.width(16.dp))
@@ -378,7 +372,7 @@ private fun CustomActionDialog(
                         onClick = { selectedType = CustomSwipeActionType.ADD_TO_LIST }
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(AppIcons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Add to List", style = MaterialTheme.typography.bodyLarge)
                 }
@@ -406,7 +400,7 @@ private fun CustomActionDialog(
                             onClick = { showTagEditor = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null)
+                            Icon(AppIcons.AutoMirrored.Filled.Label, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Choose tag…")
                         }
@@ -423,7 +417,7 @@ private fun CustomActionDialog(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
+                            Icon(AppIcons.AutoMirrored.Filled.List, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = selectedListName ?: selectedListId ?: "Select a list…",

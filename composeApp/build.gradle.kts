@@ -70,7 +70,6 @@ kotlin {
                 implementation(libs.compose.ui)
                 implementation(libs.compose.components.resources)
                 implementation(libs.compose.components.ui.tooling.preview)
-                implementation(libs.compose.material.icons.extended)
                 
                 // Navigation 3
                 implementation(libs.navigation3.runtime)

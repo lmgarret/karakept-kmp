@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -38,6 +33,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
@@ -79,7 +75,7 @@ fun AboutContent(
                 navigationIcon = {
                     if (showBackButton) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 }
@@ -129,7 +125,7 @@ fun AboutContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Code,
+                            imageVector = AppIcons.Default.Code,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -157,7 +153,7 @@ fun AboutContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Public,
+                            imageVector = AppIcons.Default.Public,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -189,7 +185,7 @@ fun AboutContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.BugReport,
+                                imageVector = AppIcons.Default.BugReport,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -247,6 +243,7 @@ fun AboutContent(
                     FossLibrary("JavaFX", "GPL 2.0 with Classpath Exception", "https://github.com/openjdk/jfx"),
                     FossLibrary("OkHttp", "Apache 2.0", "https://github.com/square/okhttp"),
                     FossLibrary("WorkManager", "Apache 2.0", "https://developer.android.com/jetpack/androidx/releases/work"),
+                    FossLibrary("Material Design Icons", "Apache 2.0", "https://github.com/google/material-design-icons"),
                 )
 
                 items(libraries) { lib ->
@@ -327,7 +324,7 @@ fun FossLibraryCard(library: FossLibrary, onClick: () -> Unit) {
             }
             
             Icon(
-                imageVector = Icons.Default.Public,
+                imageVector = AppIcons.Default.Public,
                 contentDescription = "Open Website",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)

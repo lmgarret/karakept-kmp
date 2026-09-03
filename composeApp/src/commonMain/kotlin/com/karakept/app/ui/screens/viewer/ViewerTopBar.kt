@@ -15,29 +15,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.NewLabel
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.Unarchive
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
@@ -60,6 +37,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.karakept.app.ui.components.einkOutlineBorder
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.utils.FaviconUtils
 import getPlatform
@@ -139,7 +117,7 @@ internal fun ViewerTopBar(
             modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp)
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                imageVector = AppIcons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
             )
@@ -191,7 +169,7 @@ internal fun ViewerTopBar(
                 val iconTint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
                 IconButton(onClick = onFullscreenToggle) {
                     Icon(
-                        imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                        imageVector = if (isFullscreen) AppIcons.Default.FullscreenExit else AppIcons.Default.Fullscreen,
                         contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",
                         tint = iconTint
                     )
@@ -203,14 +181,14 @@ internal fun ViewerTopBar(
                 val iconTint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
                 IconButton(onClick = onFavoriteClick) {
                     Icon(
-                        imageVector = if (bookmark.isStarred) Icons.Default.Star else Icons.Default.StarBorder,
+                        imageVector = if (bookmark.isStarred) AppIcons.Default.Star else AppIcons.Default.StarBorder,
                         contentDescription = if (bookmark.isStarred) "Unfavorite" else "Favorite",
                         tint = iconTint
                     )
                 }
                 IconButton(onClick = onArchiveClick) {
                     Icon(
-                        imageVector = if (bookmark.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
+                        imageVector = if (bookmark.isArchived) AppIcons.Default.Unarchive else AppIcons.Default.Archive,
                         contentDescription = if (bookmark.isArchived) "Unarchive" else "Archive",
                         tint = iconTint
                     )
@@ -220,7 +198,7 @@ internal fun ViewerTopBar(
             Box {
             IconButton(onClick = { onMenuToggle(true) }) {
                 Icon(
-                    imageVector = Icons.Default.MoreVert,
+                    imageVector = AppIcons.Default.MoreVert,
                     contentDescription = "More options",
                     tint = if (showStickyTitle) MaterialTheme.colorScheme.onSurface else Color.White
                 )
@@ -238,7 +216,7 @@ internal fun ViewerTopBar(
                         text = { Text(if (bookmark.isRead) "Mark Unread" else "Mark Read") },
                         leadingIcon = {
                             Icon(
-                                imageVector = if (bookmark.isRead) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                imageVector = if (bookmark.isRead) AppIcons.Default.VisibilityOff else AppIcons.Default.Visibility,
                                 contentDescription = null
                             )
                         },
@@ -249,7 +227,7 @@ internal fun ViewerTopBar(
                     )
                     DropdownMenuItem(
                         text = { Text("Copy Link") },
-                        leadingIcon = { Icon(imageVector = Icons.Default.Link, contentDescription = null) },
+                        leadingIcon = { Icon(imageVector = AppIcons.Default.Link, contentDescription = null) },
                         onClick = {
                             onShareClick()
                             onMenuToggle(false)
@@ -257,7 +235,7 @@ internal fun ViewerTopBar(
                     )
                     DropdownMenuItem(
                         text = { Text("Open in Browser") },
-                        leadingIcon = { Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null) },
+                        leadingIcon = { Icon(imageVector = AppIcons.Default.OpenInBrowser, contentDescription = null) },
                         onClick = {
                             onOpenInBrowserClick()
                             onMenuToggle(false)
@@ -271,7 +249,7 @@ internal fun ViewerTopBar(
                     DropdownMenuItem(
                         text = { Text("Details") },
                         leadingIcon = {
-                            Icon(imageVector = Icons.Default.Info, contentDescription = null)
+                            Icon(imageVector = AppIcons.Default.Info, contentDescription = null)
                         },
                         onClick = {
                             onDetailsClick()
@@ -285,7 +263,7 @@ internal fun ViewerTopBar(
                     text = { Text("Find in Article") },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Search,
+                            imageVector = AppIcons.Default.Search,
                             contentDescription = null
                         )
                     },
@@ -299,7 +277,7 @@ internal fun ViewerTopBar(
                     text = { Text("Reader Appearance") },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Palette,
+                            imageVector = AppIcons.Default.Palette,
                             contentDescription = null
                         )
                     },
@@ -312,7 +290,7 @@ internal fun ViewerTopBar(
                     text = { Text("Viewer Mode") },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Visibility,
+                            imageVector = AppIcons.Default.Visibility,
                             contentDescription = null
                         )
                     },
@@ -330,7 +308,7 @@ internal fun ViewerTopBar(
                     text = { Text("Move to List") },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.FolderOpen,
+                            imageVector = AppIcons.Default.FolderOpen,
                             contentDescription = null
                         )
                     },
@@ -345,7 +323,7 @@ internal fun ViewerTopBar(
                     text = { Text("Edit Tags") },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Edit,
+                            imageVector = AppIcons.Default.Edit,
                             contentDescription = null
                         )
                     },
@@ -360,7 +338,7 @@ internal fun ViewerTopBar(
                     text = { Text("Refresh") },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Refresh,
+                            imageVector = AppIcons.Default.Refresh,
                             contentDescription = null
                         )
                     },
@@ -379,7 +357,7 @@ internal fun ViewerTopBar(
                         DropdownMenuItem(
                             text = { Text(AiAction.SUMMARIZE.label) },
                             leadingIcon = {
-                                Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null)
+                                Icon(imageVector = AppIcons.Default.AutoAwesome, contentDescription = null)
                             },
                             enabled = aiActionInFlight == null,
                             onClick = {
@@ -392,7 +370,7 @@ internal fun ViewerTopBar(
                         DropdownMenuItem(
                             text = { Text(AiAction.RETAG.label) },
                             leadingIcon = {
-                                Icon(imageVector = Icons.Default.NewLabel, contentDescription = null)
+                                Icon(imageVector = AppIcons.Default.NewLabel, contentDescription = null)
                             },
                             enabled = aiActionInFlight == null,
                             onClick = {
@@ -408,7 +386,7 @@ internal fun ViewerTopBar(
                     text = { Text("Delete") },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Delete,
+                            imageVector = AppIcons.Default.Delete,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error
                         )

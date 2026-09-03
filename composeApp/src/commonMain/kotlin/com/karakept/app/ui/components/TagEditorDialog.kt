@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Icon
@@ -31,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.karakept.app.ui.icons.AppIcons
 
 /**
  * Filters [availableTags] to those containing [searchInput] (case-insensitive)
@@ -143,14 +141,14 @@ fun TagEditorDialog(
                     value = searchInput,
                     onValueChange = { searchInput = it },
                     placeholder = { Text(if (canCreateNew) "Search or add tag" else "Search tags") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    leadingIcon = { Icon(AppIcons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (searchInput.isNotBlank()) {
                             IconButton(
                                 enabled = canAdd,
                                 onClick = { addTag(exactMatch ?: searchInput) }
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = "Add tag")
+                                Icon(AppIcons.Default.Add, contentDescription = "Add tag")
                             }
                         }
                     },

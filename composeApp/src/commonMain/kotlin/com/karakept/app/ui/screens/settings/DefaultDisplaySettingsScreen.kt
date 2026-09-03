@@ -11,16 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
 
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Window
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -39,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -67,7 +59,7 @@ class DefaultDisplaySettingsScreen : NavKey {
                     title = { Text("Default Display Settings") },
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 )
@@ -98,7 +90,7 @@ class DefaultDisplaySettingsScreen : NavKey {
                 LayoutOption(
                     title = "Card",
                     description = "Large thumbnails on top with title below",
-                    icon = Icons.Default.Window,
+                    icon = AppIcons.Default.Window,
                     isSelected = currentLayoutType == LayoutType.CARD,
                     onClick = { screenModel.setLayoutType(LayoutType.CARD) }
                 )
@@ -106,7 +98,7 @@ class DefaultDisplaySettingsScreen : NavKey {
                 LayoutOption(
                     title = "List",
                     description = "Thumbnail on the side with title and description",
-                    icon = Icons.AutoMirrored.Filled.List,
+                    icon = AppIcons.AutoMirrored.Filled.List,
                     isSelected = currentLayoutType == LayoutType.LIST,
                     onClick = { screenModel.setLayoutType(LayoutType.LIST) }
                 )
@@ -123,7 +115,7 @@ class DefaultDisplaySettingsScreen : NavKey {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         ToggleSetting(
-                            icon = Icons.Default.VisibilityOff,
+                            icon = AppIcons.Default.VisibilityOff,
                             title = "Dim Read Bookmarks",
                             description = "Fade out read articles",
                             checked = dimReadBookmarks,
@@ -131,7 +123,7 @@ class DefaultDisplaySettingsScreen : NavKey {
                         )
                         HorizontalDivider()
                         ToggleSetting(
-                            icon = Icons.AutoMirrored.Filled.Label,
+                            icon = AppIcons.AutoMirrored.Filled.Label,
                             title = "Tags",
                             description = "Display tags on bookmark cards",
                             checked = showTags,
@@ -139,7 +131,7 @@ class DefaultDisplaySettingsScreen : NavKey {
                         )
                         HorizontalDivider()
                         ToggleSetting(
-                            icon = Icons.AutoMirrored.Outlined.MenuBook,
+                            icon = AppIcons.AutoMirrored.Outlined.MenuBook,
                             title = "Reading Time",
                             description = "Estimated reading time badge",
                             checked = showReadingTimeBadge,
@@ -147,7 +139,7 @@ class DefaultDisplaySettingsScreen : NavKey {
                         )
                         HorizontalDivider()
                         ToggleSetting(
-                            icon = Icons.Default.CalendarToday,
+                            icon = AppIcons.Default.CalendarToday,
                             title = "Date",
                             description = "Display creation date on cards",
                             checked = showDateInList,
@@ -254,7 +246,7 @@ private fun LayoutOption(
             }
             if (isSelected) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = AppIcons.Default.CheckCircle,
                     contentDescription = "Selected",
                     tint = MaterialTheme.colorScheme.primary
                 )

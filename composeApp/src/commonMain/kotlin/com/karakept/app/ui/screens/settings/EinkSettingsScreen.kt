@@ -11,19 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Animation
-import androidx.compose.material.icons.filled.Contrast
-import androidx.compose.material.icons.filled.ImageNotSupported
-import androidx.compose.material.icons.filled.InvertColors
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.SwipeVertical
-import androidx.compose.material.icons.filled.Tonality
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -48,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.data.model.PageTurnKeyBindings
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.input.PlatformKeyCodes
 import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -117,7 +105,7 @@ fun EinkSettingsContent(
                 navigationIcon = {
                     if (showBackButton) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 }
@@ -136,7 +124,7 @@ fun EinkSettingsContent(
                 title = "E-ink mode",
                 description = "Tune the app for an electronic-paper display. Leaves the page-turn " +
                     "buttons and the monochrome icon below alone — those work on any device.",
-                icon = Icons.Default.Tonality,
+                icon = AppIcons.Default.Tonality,
                 checked = einkModeEnabled,
                 onCheckedChange = { screenModel.setEinkModeEnabled(it) }
             )
@@ -163,7 +151,7 @@ fun EinkSettingsContent(
                         EinkSetting.HIGH_CONTRAST -> SettingSwitchCard(
                             title = "High contrast",
                             description = "Pure black on white, with outlines instead of shaded surfaces",
-                            icon = Icons.Default.Contrast,
+                            icon = AppIcons.Default.Contrast,
                             checked = highContrast,
                             onCheckedChange = { screenModel.setHighContrast(it) }
                         )
@@ -171,7 +159,7 @@ fun EinkSettingsContent(
                         EinkSetting.HIDE_ARTICLE_THUMBNAILS -> SettingSwitchCard(
                             title = "Hide article thumbnails",
                             description = "Photos dither poorly on e-ink. Also available under Reader settings",
-                            icon = Icons.Default.ImageNotSupported,
+                            icon = AppIcons.Default.ImageNotSupported,
                             checked = hideArticleThumbnails,
                             onCheckedChange = { screenModel.setHideArticleThumbnails(it) }
                         )
@@ -183,7 +171,7 @@ fun EinkSettingsContent(
                             description = "Black-on-white launcher icon and splash screen. Stays " +
                                 "put when E-ink mode is off; the splash follows from the next " +
                                 "cold start.",
-                            icon = Icons.Default.InvertColors,
+                            icon = AppIcons.Default.InvertColors,
                             checked = monochromeIcon,
                             onCheckedChange = { screenModel.setMonochromeIcon(it) }
                         )
@@ -191,7 +179,7 @@ fun EinkSettingsContent(
                         EinkSetting.DISABLE_ANIMATIONS -> SettingSwitchCard(
                             title = "Disable animations",
                             description = "Screen transitions, fades and spinners refresh the whole panel and leave ghosting",
-                            icon = Icons.Default.Animation,
+                            icon = AppIcons.Default.Animation,
                             checked = disableAnimations,
                             onCheckedChange = { screenModel.setDisableAnimations(it) }
                         )
@@ -201,7 +189,7 @@ fun EinkSettingsContent(
                             description = "Page turns, scroll-to-top and in-article jumps land in " +
                                 "one repaint instead of gliding. Page turns follow this even with " +
                                 "E-ink mode off.",
-                            icon = Icons.Default.SwipeVertical,
+                            icon = AppIcons.Default.SwipeVertical,
                             checked = instantPageScroll,
                             onCheckedChange = { screenModel.setInstantPageScroll(it) }
                         )
@@ -209,7 +197,7 @@ fun EinkSettingsContent(
                         EinkSetting.ROW_ACTION_BUTTONS -> SettingSwitchCard(
                             title = "Action buttons instead of swipe",
                             description = "A swipe must be tracked across many frames; e-ink panels smear or drop it",
-                            icon = Icons.Default.TouchApp,
+                            icon = AppIcons.Default.TouchApp,
                             checked = rowActionMode == RowActionMode.BUTTONS,
                             onCheckedChange = {
                                 screenModel.setRowActionMode(
@@ -221,7 +209,7 @@ fun EinkSettingsContent(
                         EinkSetting.HARDWARE_KEYS_ENABLED -> SettingSwitchCard(
                             title = "Enable hardware buttons",
                             description = "Turn pages with the device's physical buttons",
-                            icon = Icons.Default.Keyboard,
+                            icon = AppIcons.Default.Keyboard,
                             checked = keyBindings.enabled,
                             onCheckedChange = { screenModel.setHardwareKeysEnabled(it) }
                         )
@@ -231,7 +219,7 @@ fun EinkSettingsContent(
                             description = "Most e-ink readers wire their page buttons to the " +
                                 "volume rocker. Volume up turns back, volume down turns forward, " +
                                 "and neither changes the volume while the app is open.",
-                            icon = Icons.AutoMirrored.Filled.VolumeUp,
+                            icon = AppIcons.AutoMirrored.Filled.VolumeUp,
                             checked = keyBindings.useVolumeKeys,
                             onCheckedChange = { screenModel.setUseVolumeKeys(it) }
                         )
@@ -239,7 +227,7 @@ fun EinkSettingsContent(
                         EinkSetting.INVERT_VOLUME_KEYS -> SettingSwitchCard(
                             title = "Invert volume buttons",
                             description = "Swap the two, for holding the device the other way up",
-                            icon = Icons.Default.SwapVert,
+                            icon = AppIcons.Default.SwapVert,
                             checked = keyBindings.invertVolumeKeys,
                             onCheckedChange = { screenModel.setInvertVolumeKeys(it) }
                         )
@@ -270,7 +258,7 @@ fun EinkSettingsContent(
                                 "instead of slicing through the one that straddles the edge. With " +
                                 "E-ink mode on, pages also end on a whole line and the last page " +
                                 "carries on from the previous instead of repeating it.",
-                            icon = Icons.Default.VerticalAlignTop,
+                            icon = AppIcons.Default.VerticalAlignTop,
                             checked = keyBindings.snapToContent,
                             onCheckedChange = { screenModel.setSnapToContent(it) }
                         )

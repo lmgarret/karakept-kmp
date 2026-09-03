@@ -21,13 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.Row
@@ -35,7 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 @Serializable
 class LoginScreen(val serverUrl: String? = null) : NavKey {
@@ -55,7 +52,7 @@ class LoginScreen(val serverUrl: String? = null) : NavKey {
                     navigationIcon = {
                         if (navigator.canPop) {
                             IconButton(onClick = { navigator.pop() }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                             }
                         }
                     }
@@ -90,9 +87,9 @@ class LoginScreen(val serverUrl: String? = null) : NavKey {
                     visualTransformation = if (isPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
                     trailingIcon = {
                         val image = if (isPasswordVisible)
-                            Icons.Filled.Visibility
+                            AppIcons.Filled.Visibility
                         else
-                            Icons.Filled.VisibilityOff
+                            AppIcons.Filled.VisibilityOff
 
                         IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
                             Icon(imageVector = image, contentDescription = if (isPasswordVisible) "Hide password" else "Show password")
