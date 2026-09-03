@@ -365,6 +365,13 @@ solid (yellow) / double (blue) / dashed (green) / dotted (red).
   once per document by `NativeHtmlRenderer` via `collectGalleryImages`.
 - Wired into `RenderResolvedImage` (`HtmlBlockRenderer.kt`) — every `<img>`/`<picture>`
   rendered in Reader mode is tappable to open the gallery positioned on that exact image.
+- The reader's hero banner is page 0 of that list, whichever image was tapped. It is not part of
+  the article's HTML, so `heroGalleryImage(...)` builds its entry (with a null `element` and,
+  for a synced offline copy, a `localPath` the viewer tries before any URL) and
+  `BookmarkViewerContent` publishes it as `GalleryViewerState.heroImage` — at screen level, not
+  from the hero item, which `LazyColumn` disposes as soon as it scrolls away. `NativeHtmlRenderer`
+  prepends it and publishes the combined list back as `GalleryViewerState.images`, which is what
+  the banner's own tap (`openHero()`) opens.
 - **Use whenever an image needs a tap-to-enlarge, swipe-between-siblings full-screen view.**
 
 ### E-ink mode
