@@ -252,7 +252,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         val bookmark = insertLocalBookmark(remoteId)
         val newTags = listOf("integration", "testing", "automated")
 
-        bookmarkActionsRepository.updateTags(bookmark.remoteId, testServer.id, newTags, isOnline = true)
+        bookmarkActionsRepository.updateTags(bookmark.remoteId, testServer.id, newTags)
         bookmarkActionsRepository.processPendingActions(testServer)
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
 
@@ -294,7 +294,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, "https://list-action.example.com/${System.currentTimeMillis()}")
         val bookmark = insertLocalBookmark(remoteId)
 
-        bookmarkActionsRepository.moveToList(bookmark.remoteId, testServer.id, listId, isOnline = true)
+        bookmarkActionsRepository.moveToList(bookmark.remoteId, testServer.id, listId)
         bookmarkActionsRepository.processPendingActions(testServer)
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
 
@@ -314,7 +314,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         remoteDataSource.addBookmarkToList(testServer, listId, remoteId)
 
         // Then queue remove action
-        bookmarkActionsRepository.removeFromList(bookmark.remoteId, testServer.id, listId, isOnline = true)
+        bookmarkActionsRepository.removeFromList(bookmark.remoteId, testServer.id, listId)
         bookmarkActionsRepository.processPendingActions(testServer)
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
 
@@ -337,10 +337,10 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         assertTrue(result.isSuccess, "createBookmark should succeed: ${result.exceptionOrNull()?.message}")
         val bookmark = result.getOrNull()
         assertNotNull(bookmark)
-        assertEquals(url, bookmark?.url)
+        assertEquals(url, bookmark.url)
 
         // Verify it's on the server
-        val remote = remoteDataSource.fetchBookmark(testServer, bookmark!!.originalRemoteId)
+        val remote = remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
         assertEquals(url, remote.content?.url)
     }
 }

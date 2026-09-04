@@ -7,10 +7,16 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.RoomRawQuery
+import androidx.room.RoomWarnings
 import androidx.room.Update
 import com.karakept.app.data.local.entity.BookmarkEntity
 import kotlinx.coroutines.flow.Flow
 
+// List queries project a fixed column set instead of `SELECT *` so the article body never
+// travels with a screenful of rows. The columns left out of that projection — content,
+// crawlStatus, crawledAt, summary, summarizationStatus — come back as entity defaults, which is
+// what `RoomWarnings.QUERY_MISMATCH` is acknowledging on each of them; read those fields through
+// a full-row query (`getBookmarkById`, `getBookmarkByRemoteId`) instead.
 @Dao
 interface BookmarkDao {
     @Query("""
@@ -23,6 +29,7 @@ interface BookmarkDao {
         WHERE serverId = :serverId
         ORDER BY createdAt DESC
     """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     fun getBookmarksForServer(serverId: String): Flow<List<BookmarkEntity>>
 
     @Query("SELECT * FROM bookmarks WHERE localId = :id")
@@ -257,6 +264,7 @@ interface BookmarkDao {
         WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0
         ORDER BY createdAt DESC
     """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     suspend fun getAllOfflineForServer(serverId: String): List<BookmarkEntity>
 
     @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0")
@@ -275,6 +283,7 @@ interface BookmarkDao {
         FROM bookmarks
         WHERE serverId = :serverId
     """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     suspend fun getBookmarksForServerWithContentInfo(serverId: String): List<BookmarkEntity>
 
     // Unpaged queries for select-all (no LIMIT/OFFSET)
@@ -288,6 +297,7 @@ interface BookmarkDao {
         WHERE serverId = :serverId AND isArchived = 0
         ORDER BY createdAt DESC
     """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     suspend fun getAllNotArchivedForServer(serverId: String): List<BookmarkEntity>
 
     @Query("""
@@ -300,6 +310,7 @@ interface BookmarkDao {
         WHERE serverId = :serverId AND isStarred = 1
         ORDER BY createdAt DESC
     """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     suspend fun getAllFavoritesForServer(serverId: String): List<BookmarkEntity>
 
     @Query("""
@@ -312,6 +323,7 @@ interface BookmarkDao {
         WHERE serverId = :serverId AND isArchived = 1
         ORDER BY createdAt DESC
     """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     suspend fun getAllArchivedForServer(serverId: String): List<BookmarkEntity>
 
     @Query("""
@@ -324,6 +336,7 @@ interface BookmarkDao {
         WHERE serverId = :serverId
         ORDER BY createdAt DESC
     """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     suspend fun getAllBookmarksForServerSuspend(serverId: String): List<BookmarkEntity>
 
     @Query("""
@@ -340,5 +353,6 @@ interface BookmarkDao {
              OR listIds LIKE '%,' || :listId || ',%')
         ORDER BY createdAt DESC
     """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     suspend fun getAllBookmarksForList(serverId: String, listId: String): List<BookmarkEntity>
 }

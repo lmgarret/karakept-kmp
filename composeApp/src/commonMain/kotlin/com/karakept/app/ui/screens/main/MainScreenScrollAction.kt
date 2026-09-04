@@ -187,7 +187,7 @@ internal class ScrollActionTracker {
                 // order alone. Rows the dataset gained in this same snapshot are excluded —
                 // the user cannot have scrolled past a row that was not there.
                 val alreadyPresent = if (datasetChanged) {
-                    previousBookmarks?.mapTo(HashSet()) { it.remoteId }
+                    previousBookmarks.mapTo(HashSet()) { it.remoteId }
                 } else {
                     null
                 }

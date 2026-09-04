@@ -87,23 +87,26 @@ class LayoutEditorScreenModelTest {
     }
 
     @Test
-    fun updateFaviconMode_byLink_setsFAVICONandNoThumbnail() {
-        screenModel.updateFaviconMode(showFavicon = false, urlIconMode = UrlIconMode.FAVICON)
+    fun byLinkFavicon_setsFAVICONandNoThumbnail() {
+        screenModel.updateShowFavicon(false)
+        screenModel.updateUrlIconMode(UrlIconMode.FAVICON)
         assertEquals("FAVICON", screenModel.layout.value.urlIconMode)
         assertFalse(screenModel.layout.value.showFavicon)
     }
 
     @Test
-    fun updateFaviconMode_onThumbnail_setsShowFaviconAndNONE() {
-        screenModel.updateFaviconMode(showFavicon = true, urlIconMode = UrlIconMode.NONE)
+    fun thumbnailFavicon_setsShowFaviconAndNONE() {
+        screenModel.updateShowFavicon(true)
+        screenModel.updateUrlIconMode(UrlIconMode.NONE)
         assertTrue(screenModel.layout.value.showFavicon)
         assertEquals("NONE", screenModel.layout.value.urlIconMode)
     }
 
     @Test
-    fun updateFaviconMode_off_setsNONEandNoThumbnail() {
-        screenModel.updateFaviconMode(showFavicon = true, urlIconMode = UrlIconMode.NONE)
-        screenModel.updateFaviconMode(showFavicon = false, urlIconMode = UrlIconMode.NONE)
+    fun faviconOff_setsNONEandNoThumbnail() {
+        screenModel.updateShowFavicon(true)
+        screenModel.updateUrlIconMode(UrlIconMode.NONE)
+        screenModel.updateFaviconEnabled(false)
         assertFalse(screenModel.layout.value.showFavicon)
         assertEquals("NONE", screenModel.layout.value.urlIconMode)
     }

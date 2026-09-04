@@ -143,7 +143,7 @@ class List02RegressionTest {
         model.moveBookmarkToList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any(), any()) }
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 
     @Test
@@ -155,7 +155,7 @@ class List02RegressionTest {
         model.removeBookmarkFromList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+        coVerify { bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, "manual-1") }
     }
 
     @Test
@@ -169,7 +169,7 @@ class List02RegressionTest {
         model.moveBookmarkToList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any(), any()) }
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 
     @Test
@@ -186,6 +186,6 @@ class List02RegressionTest {
         model.executeScrollAction(bookmark, SwipeAction.ADD_TO_LIST, config)
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any(), any()) }
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 }

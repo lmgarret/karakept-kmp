@@ -377,7 +377,7 @@ class RemoteDataSource(
                 val errorBody = response.response.bodyAsText()
                 throw ApiException("Bookmark creation failed with status ${response.status}: $errorBody", statusCode = response.status)
             }
-            response.body() ?: throw ApiException("Empty success response from server")
+            response.body()
         } catch (e: Exception) {
             throw ApiException("Error creating bookmark: ${e.message}", e)
         }

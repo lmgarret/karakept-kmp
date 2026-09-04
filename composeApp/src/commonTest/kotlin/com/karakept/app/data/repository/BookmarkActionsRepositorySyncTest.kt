@@ -11,6 +11,7 @@ import com.karakept.app.data.remote.RemoteDataSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
@@ -25,6 +26,7 @@ import kotlin.test.assertTrue
  * Verifies processPendingActions, getPendingActionBookmarkIds,
  * pullReadingProgressFromServer, and executeAction dispatch and retry logic.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
     private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)

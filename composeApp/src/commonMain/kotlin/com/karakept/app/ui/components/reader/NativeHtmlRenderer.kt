@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.relocation.BringIntoViewResponder
-import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.material3.MaterialTheme
@@ -24,10 +22,13 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.platform.LocalTextToolbar
+import androidx.compose.ui.relocation.BringIntoViewModifierNode
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fleeksoft.ksoup.Ksoup
@@ -174,23 +175,7 @@ fun NativeHtmlRenderer(
             LocalSearchMatchScrollCallback provides searchScrollCallback,
             LocalGalleryImages provides galleryImages
         ) {
-            // Block bringIntoView from propagating to the parent LazyColumn.
-            // SelectionContainer initiates bringIntoView at its OWN layout level
-            // (not from inside the Column), so the responder must be an ANCESTOR
-            // of SelectionContainer to intercept the request.
-            // Scroll-to-highlight uses explicit scrollState.animateScrollToItem()
-            // so this is safe to block.
-            Box(
-                modifier = Modifier.bringIntoViewResponder(remember {
-                    object : BringIntoViewResponder {
-                        override fun calculateRectForParent(localRect: ComposeRect): ComposeRect = localRect
-                        override suspend fun bringChildIntoView(localRect: () -> ComposeRect?) {
-                            // Intentionally blocked — scroll-to-highlight uses
-                            // explicit scrollState.animateScrollToItem() instead.
-                        }
-                    }
-                })
-            ) {
+            Box(modifier = Modifier.then(BlockBringIntoViewElement)) {
             HighlightContextMenuProvider(onHighlightRequested = highlightAction) {
             SelectionContainer {
                 Column(
@@ -279,3 +264,24 @@ fun NativeHtmlRenderer(
     }
 }
 
+/**
+ * Swallows `bringIntoView` requests so they never reach the article's parent LazyColumn.
+ *
+ * SelectionContainer raises the request at its OWN layout level rather than from inside the
+ * Column, so the node has to sit ABOVE SelectionContainer to see it. Handling it here and doing
+ * nothing ends the chain — scroll-to-highlight moves the reader with an explicit
+ * `scrollState.animateScrollToItem()` instead.
+ */
+private object BlockBringIntoViewElement : ModifierNodeElement<BlockBringIntoViewNode>() {
+    override fun create() = BlockBringIntoViewNode()
+    override fun update(node: BlockBringIntoViewNode) = Unit
+    override fun hashCode() = "BlockBringIntoView".hashCode()
+    override fun equals(other: Any?) = other === this
+}
+
+private class BlockBringIntoViewNode : Modifier.Node(), BringIntoViewModifierNode {
+    override suspend fun bringIntoView(
+        childCoordinates: LayoutCoordinates,
+        boundsProvider: () -> ComposeRect?
+    ) = Unit
+}

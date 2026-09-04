@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 
+@OptIn(coil3.annotation.ExperimentalCoilApi::class)
 @Composable
 @Preview
 fun App(

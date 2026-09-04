@@ -1,3 +1,6 @@
+import com.android.build.api.variant.HasHostTestsBuilder
+import com.android.build.api.variant.HostTestBuilder
+import com.android.build.api.variant.VariantBuilder
 import org.gradle.api.artifacts.MinimalExternalModuleDependency
 import org.gradle.api.provider.Provider
 import org.gradle.internal.os.OperatingSystem
@@ -40,6 +43,10 @@ kotlin {
     // Opt in to ExperimentalStdlibApi globally (enum.entries, etc.)
     compilerOptions {
         optIn.add("kotlin.ExperimentalStdlibApi")
+        // `expect`/`actual` classes are still flagged Beta; this is the flag the warning itself
+        // points at. The app relies on them for every platform boundary (AppIconManager,
+        // FileUtils, SecureCredentialStore, ...), so the warning is pure noise.
+        freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
     androidTarget {
@@ -243,8 +250,11 @@ android {
 // zero extra coverage, so only the `debug` variant's unit tests are kept. `./gradlew test`
 // then runs testDebugUnitTest + desktopTest instead of three Android variants + desktop.
 androidComponents {
-    beforeVariants(selector().withBuildType("release")) { it.enableUnitTest = false }
-    beforeVariants(selector().withBuildType("devRelease")) { it.enableUnitTest = false }
+    fun VariantBuilder.disableUnitTests() {
+        (this as HasHostTestsBuilder).hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.enable = false
+    }
+    beforeVariants(selector().withBuildType("release")) { it.disableUnitTests() }
+    beforeVariants(selector().withBuildType("devRelease")) { it.disableUnitTests() }
 }
 
 room {
@@ -425,16 +435,21 @@ tasks.withType<Test> {
     }
     // Log per-class durations and flag individual tests that take > 500ms.
     // This gives the data needed to identify slow test classes and outliers.
-    afterTest(KotlinClosure2({ desc: TestDescriptor, result: TestResult ->
-        val ms = result.endTime - result.startTime
-        if (ms >= 500) println("  [SLOW ${ms}ms] ${desc.className} > ${desc.name}")
-    }))
-    afterSuite(KotlinClosure2({ desc: TestDescriptor, result: TestResult ->
-        if (desc.parent != null) {
+    addTestListener(object : TestListener {
+        override fun beforeSuite(suite: TestDescriptor) = Unit
+        override fun beforeTest(testDescriptor: TestDescriptor) = Unit
+
+        override fun afterTest(testDescriptor: TestDescriptor, result: TestResult) {
             val ms = result.endTime - result.startTime
-            println("  [suite ${ms}ms] ${desc.displayName}: ${result.testCount} tests")
+            if (ms >= 500) println("  [SLOW ${ms}ms] ${testDescriptor.className} > ${testDescriptor.name}")
         }
-    }))
+
+        override fun afterSuite(suite: TestDescriptor, result: TestResult) {
+            if (suite.parent == null) return
+            val ms = result.endTime - result.startTime
+            println("  [suite ${ms}ms] ${suite.displayName}: ${result.testCount} tests")
+        }
+    })
 }
 
 // Gradle 9 removed Project.exec/javaexec; external processes must run through the

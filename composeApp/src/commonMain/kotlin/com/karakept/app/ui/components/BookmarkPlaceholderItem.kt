@@ -68,8 +68,7 @@ fun BookmarkPlaceholderItem(
 
     when (layoutType) {
         LayoutType.CARD -> CardPlaceholder(url, shimmerColor)
-        @Suppress("DEPRECATION")
-        LayoutType.LIST, LayoutType.COMPACT_LIST -> ListPlaceholder(
+        LayoutType.LIST, @Suppress("DEPRECATION") LayoutType.COMPACT_LIST -> ListPlaceholder(
             url = url,
             shimmerColor = shimmerColor,
             itemContainerStyle = itemContainerStyle,

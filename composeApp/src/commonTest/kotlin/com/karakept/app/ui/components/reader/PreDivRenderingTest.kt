@@ -106,7 +106,7 @@ class PreDivRenderingTest {
         assertTrue(pre != null, "Sanitized HTML should still contain <pre>: [$sanitized]")
 
         val offset = TextOffsetTracker()
-        val text = buildInlineAnnotatedString(pre!!, theme, emptyList(), offset, {}, {}).text
+        val text = buildInlineAnnotatedString(pre, theme, emptyList(), offset, {}, {}).text
         val lines = nonBlankLines(text)
         println("Rendered after sanitize: [$text]")
         assertEquals(3, lines.size, "Expected 3 lines after sanitize+render, got: ${lines.size}\nSanitized: [$sanitized]\nRendered: [$text]")
@@ -157,7 +157,7 @@ class PreDivRenderingTest {
         assertTrue(pre != null, "Pre should survive sanitization: [$sanitized]")
 
         val offset = TextOffsetTracker()
-        val text = buildInlineAnnotatedString(pre!!, theme, emptyList(), offset, {}, {}).text
+        val text = buildInlineAnnotatedString(pre, theme, emptyList(), offset, {}, {}).text
         val lines = nonBlankLines(text)
         println("Full pipeline rendered (${lines.size} lines): [$text]")
         assertTrue(lines.size >= 4, "Expected at least 4 visible lines, got: ${lines.size}\nSanitized: [$sanitized]\nRendered: [$text]")

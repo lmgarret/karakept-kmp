@@ -63,6 +63,7 @@ data class QuickFilterCounts(
 /** Identity of a bookmark view: the server plus the filter being displayed. */
 internal data class LoadedView(val serverId: String, val filter: FilterConfig)
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainScreenModel(
     private val serverRepository: ServerRepository,
     internal val bookmarkRepository: BookmarkRepository,
@@ -115,9 +116,6 @@ class MainScreenModel(
     ) { listId, filter, statuses ->
         statuses[resolveCurrentKey(listId, filter)] != null
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    @Deprecated("Use currentSyncStatus instead", ReplaceWith("currentSyncStatus"))
-    internal val _isSyncing = MutableStateFlow(false)
 
     private val _tagFilterSourceBookmarkId = MutableStateFlow<Long?>(null)
     val tagFilterSourceBookmarkId: StateFlow<Long?> = _tagFilterSourceBookmarkId

@@ -9,6 +9,7 @@ import com.karakept.app.utils.FileUtils
 import kotlinx.coroutines.flow.first
 import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -58,7 +59,7 @@ class BackupRepository(
 
         val backup = buildBackup()
         val now = Clock.System.now().toLocalDateTime(TimeZone.UTC)
-        val datePart = "${now.year}-${now.monthNumber.toString().padStart(2, '0')}-${now.dayOfMonth.toString().padStart(2, '0')}"
+        val datePart = "${now.year}-${now.month.number.toString().padStart(2, '0')}-${now.day.toString().padStart(2, '0')}"
         val fileName = "karakept_backup_$datePart.json"
 
         val plaintext = json.encodeToString(backup).encodeToByteArray()

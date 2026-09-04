@@ -654,7 +654,6 @@ internal class BookmarkSyncPipeline(
                 // Only sync content if bookmark doesn't have it yet (readingTimeMinutes == 0)
                 entity.readingTimeMinutes == 0
             }
-            else -> emptyList()
         }
 
         if (bookmarksToSync.isNotEmpty()) {
