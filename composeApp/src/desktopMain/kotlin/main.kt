@@ -32,9 +32,9 @@ import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.services.BackgroundSyncScheduler
 import com.karakept.app.services.DesktopNotificationProvider
 import com.karakept.app.services.NotificationProvider
-import com.kdroid.composetray.tray.api.Tray
-import com.kdroid.composetray.utils.IconRenderProperties
-import com.kdroid.composetray.utils.isMenuBarInDarkMode
+import dev.nucleusframework.composenativetray.tray.api.Tray
+import dev.nucleusframework.composenativetray.utils.IconRenderProperties
+import dev.nucleusframework.composenativetray.utils.isMenuBarInDarkMode
 import io.github.kdroidfilter.knotify.builder.AppConfig
 import io.github.kdroidfilter.knotify.builder.ExperimentalNotificationsApi
 import io.github.kdroidfilter.knotify.builder.Notification
