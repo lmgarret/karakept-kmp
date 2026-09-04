@@ -49,10 +49,10 @@
   - ktor-client-logging: Request/response logging
 
 **Database:**
-- Room 2.8.4 - Local SQLite ORM with KMP support
+- Room 3.0.2 (`androidx.room3`) - Local SQLite ORM with KMP support
   - androidx-room-runtime: Runtime database support
   - androidx-room-compiler: Code generation via KSP
-- SQLite 2.6.2 (bundled) - Embedded database
+- SQLite 2.7.0 (bundled) - Embedded database
   - androidx-sqlite-bundled: Bundled SQLite driver for consistent behavior
 
 **State Management:**

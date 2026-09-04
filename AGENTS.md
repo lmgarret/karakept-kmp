@@ -12,7 +12,7 @@ Key technologies:
 - Compose Navigation 3 (`androidx.navigation3` / `org.jetbrains.androidx.navigation3` 1.1.1) for navigation
 - `androidx.lifecycle` `ViewModel` (multiplatform) for per-screen state (MVVM)
 - Koin 4.2.2 for dependency injection (incl. `koin-compose-viewmodel`, `koin-compose-navigation3`)
-- Room 2.8.4 for local SQLite storage
+- Room 3.0.2 (`androidx.room3`) for local SQLite storage
 - Ktor 3.5.1 for HTTP/API communication
 - kotlinx-serialization, kotlinx-coroutines, kotlinx-datetime
 
@@ -619,7 +619,8 @@ Settings category classes: `StoredThemeSettings`, `StoredDisplaySettings`, `Stor
 2. Create DAO in `data/local/dao/[Name]Dao.kt`.
 3. Add entity to `AppDatabase.kt` entities list and bump the schema version.
 4. Write migration `data/local/migrations/Migration[N]To[N+1].kt`.
-5. Register migration in platform database builders (`androidMain/Database.android.kt`, etc.).
+5. Add the migration to `ALL_MIGRATIONS` (`data/local/migrations/AppMigrations.kt`) — both platform
+   builders read that one array, so a migration left out of it is a silent destructive wipe.
 
 ---
 

@@ -257,7 +257,7 @@ androidComponents {
     beforeVariants(selector().withBuildType("devRelease")) { it.disableUnitTests() }
 }
 
-room {
+room3 {
     schemaDirectory("$projectDir/schemas")
 }
 

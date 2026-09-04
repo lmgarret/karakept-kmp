@@ -1,6 +1,6 @@
 package com.karakept.app.data.local
 
-import androidx.room.Room
+import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.FilterStatus
