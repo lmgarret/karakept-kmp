@@ -13,12 +13,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
-import androidx.compose.material.icons.automirrored.outlined.Article
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.outlined.Web
 import com.karakept.app.data.model.ContentSource
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
@@ -46,6 +40,7 @@ import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
 import com.karakept.app.ui.components.HighlightDetailsBottomPanel
 import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.data.model.Highlight
+import com.karakept.app.ui.icons.AppIcons
 import getPlatform
 
 /**
@@ -76,7 +71,7 @@ internal fun ViewerModeDialog(
                     ViewerModeOptionCard(
                         title = "Reader",
                         description = "Sanitized content with safe HTML only",
-                        icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
+                        icon = AppIcons.AutoMirrored.Filled.ChromeReaderMode,
                         isSelected = viewerMode == ViewerMode.READER,
                         onClick = { onModeSelected(ViewerMode.READER) }
                     )
@@ -87,7 +82,7 @@ internal fun ViewerModeDialog(
                             "Web view with original HTML and stylesheets — not available on desktop"
                         else
                             "Web view with original HTML and stylesheets (JavaScript disabled)",
-                        icon = Icons.Default.Public,
+                        icon = AppIcons.Default.Public,
                         isSelected = viewerMode == ViewerMode.WEB,
                         enabled = !isDesktop,
                         onClick = { if (!isDesktop) onModeSelected(ViewerMode.WEB) }
@@ -140,7 +135,7 @@ internal fun ModeAndSourceDialog(
                     ViewerModeOptionCard(
                         title = "Extracted",
                         description = "Processed article HTML — clean reading view",
-                        icon = Icons.AutoMirrored.Outlined.Article,
+                        icon = AppIcons.AutoMirrored.Outlined.Article,
                         isSelected = pendingSource == ContentSource.EXTRACTED,
                         onClick = { pendingSource = ContentSource.EXTRACTED }
                     )
@@ -153,7 +148,7 @@ internal fun ModeAndSourceDialog(
                     ViewerModeOptionCard(
                         title = "Full Page Archive",
                         description = "Complete page with original layout and images${if (archiveSubtitle != null) " — $archiveSubtitle" else ""}",
-                        icon = Icons.Outlined.Web,
+                        icon = AppIcons.Outlined.Web,
                         isSelected = pendingSource == ContentSource.FULL_PAGE_ARCHIVE,
                         enabled = !archiveOfflineUnavailable,
                         onClick = { if (!archiveOfflineUnavailable) pendingSource = ContentSource.FULL_PAGE_ARCHIVE }
@@ -170,7 +165,7 @@ internal fun ModeAndSourceDialog(
                     ViewerModeOptionCard(
                         title = "Reader",
                         description = "Sanitized content with safe HTML only",
-                        icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
+                        icon = AppIcons.AutoMirrored.Filled.ChromeReaderMode,
                         isSelected = pendingMode == ViewerMode.READER,
                         onClick = { pendingMode = ViewerMode.READER }
                     )
@@ -178,7 +173,7 @@ internal fun ModeAndSourceDialog(
                     ViewerModeOptionCard(
                         title = "Web",
                         description = "Web view with original HTML and stylesheets (JavaScript disabled)${if (isDesktop) " — not available on desktop" else ""}",
-                        icon = Icons.Default.Public,
+                        icon = AppIcons.Default.Public,
                         isSelected = pendingMode == ViewerMode.WEB,
                         enabled = !isDesktop,
                         onClick = { if (!isDesktop) pendingMode = ViewerMode.WEB }
@@ -354,7 +349,7 @@ private fun ViewerModeOptionCard(
             }
             if (isSelected) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = AppIcons.Default.CheckCircle,
                     contentDescription = "Selected",
                     tint = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha)
                 )

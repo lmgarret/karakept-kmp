@@ -8,10 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.utils.AppLogger
@@ -75,17 +72,17 @@ fun DevLogsContent(onBack: () -> Unit) {
                 title = { Text("Logs (${visible.size})") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
                     IconButton(onClick = {
                         scope.launch { clipboard.setPlainText(visible.joinToString("\n")) }
                     }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy logs")
+                        Icon(AppIcons.Default.ContentCopy, contentDescription = "Copy logs")
                     }
                     IconButton(onClick = { AppLogger.clearHistory() }) {
-                        Icon(Icons.Default.DeleteSweep, contentDescription = "Clear logs")
+                        Icon(AppIcons.Default.DeleteSweep, contentDescription = "Clear logs")
                     }
                 }
             )

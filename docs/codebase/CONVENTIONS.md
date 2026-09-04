@@ -45,7 +45,7 @@
 **Order:**
 1. Compose framework imports (`androidx.compose.*`)
 2. Compose Material3 imports (`androidx.compose.material3.*`)
-3. Material icons (`androidx.compose.material.icons.*`)
+3. Material icons (`com.karakept.app.ui.icons.AppIcons`)
 4. Compose runtime (`androidx.compose.runtime.*`)
 5. Compose foundation/layout (`androidx.compose.foundation.*`)
 6. Kotlinx serialization and coroutines imports

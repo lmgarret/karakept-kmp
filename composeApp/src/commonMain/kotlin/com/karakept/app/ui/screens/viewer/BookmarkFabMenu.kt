@@ -18,19 +18,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.Share
+import com.karakept.app.ui.icons.AppIcons
 import getPlatform
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.Unarchive
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -77,7 +66,7 @@ internal fun BookmarkFabMenu(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 FabMenuItem(
-                    icon = if (bookmark.isStarred) Icons.Default.Star else Icons.Default.StarBorder,
+                    icon = if (bookmark.isStarred) AppIcons.Default.Star else AppIcons.Default.StarBorder,
                     label = if (bookmark.isStarred) "Unfavorite" else "Favorite",
                     containerColor = if (bookmark.isStarred) {
                         MaterialTheme.colorScheme.primaryContainer
@@ -93,7 +82,7 @@ internal fun BookmarkFabMenu(
                 )
 
                 FabMenuItem(
-                    icon = if (bookmark.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
+                    icon = if (bookmark.isArchived) AppIcons.Default.Unarchive else AppIcons.Default.Archive,
                     label = if (bookmark.isArchived) "Unarchive" else "Archive",
                     containerColor = if (bookmark.isArchived) {
                         MaterialTheme.colorScheme.tertiaryContainer
@@ -109,7 +98,7 @@ internal fun BookmarkFabMenu(
                 )
 
                 FabMenuItem(
-                    icon = if (bookmark.isRead) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    icon = if (bookmark.isRead) AppIcons.Default.VisibilityOff else AppIcons.Default.Visibility,
                     label = if (bookmark.isRead) "Mark unread" else "Mark read",
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     contentColor = MaterialTheme.colorScheme.onSurface,
@@ -117,7 +106,7 @@ internal fun BookmarkFabMenu(
                 )
 
                 FabMenuItem(
-                    icon = if (getPlatform().isDesktop) Icons.Default.Link else Icons.Default.Share,
+                    icon = if (getPlatform().isDesktop) AppIcons.Default.Link else AppIcons.Default.Share,
                     label = if (getPlatform().isDesktop) "Copy Link" else "Share",
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     contentColor = MaterialTheme.colorScheme.onSurface,
@@ -125,7 +114,7 @@ internal fun BookmarkFabMenu(
                 )
 
                 FabMenuItem(
-                    icon = Icons.Default.OpenInBrowser,
+                    icon = AppIcons.Default.OpenInBrowser,
                     label = "Open",
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     contentColor = MaterialTheme.colorScheme.onSurface,
@@ -173,7 +162,7 @@ internal fun BookmarkFabMenu(
 @Composable
 private fun FabIcon(expanded: Boolean) {
     Icon(
-        imageVector = if (expanded) Icons.Default.Close else Icons.Default.Bookmark,
+        imageVector = if (expanded) AppIcons.Default.Close else AppIcons.Default.Bookmark,
         contentDescription = if (expanded) "Close menu" else "Bookmark actions"
     )
 }

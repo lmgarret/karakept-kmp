@@ -10,6 +10,7 @@ import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.InlineLoadingDots
 import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.components.einkOutlineBorder
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.LocalEinkMode
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -36,31 +37,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ChromeReaderMode
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteForever
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.NewLabel
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Card
@@ -206,7 +182,7 @@ internal fun BookmarkDetailsPanel(
                                 modifier = Modifier.weight(1f)
                             )
                             IconButton(onClick = onDismiss) {
-                                Icon(Icons.Default.Close, contentDescription = "Close")
+                                Icon(AppIcons.Default.Close, contentDescription = "Close")
                             }
                         }
 
@@ -227,13 +203,13 @@ internal fun BookmarkDetailsPanel(
                                 onCopy = onLinkCopied
                             )
                             DetailsRow(
-                                icon = Icons.Default.CalendarToday,
+                                icon = AppIcons.Default.CalendarToday,
                                 label = "Created",
                                 value = formatEpochMillis(bookmark.createdAt)
                             )
                             if (bookmark.readingTimeMinutes > 0) {
                                 DetailsRow(
-                                    icon = Icons.Default.AccessTime,
+                                    icon = AppIcons.Default.AccessTime,
                                     label = "Reading time",
                                     value = "${bookmark.readingTimeMinutes} min"
                                 )
@@ -244,24 +220,24 @@ internal fun BookmarkDetailsPanel(
                             // Status
                             DetailsSectionTitle("Status")
                             DetailsRow(
-                                icon = Icons.Default.Star,
+                                icon = AppIcons.Default.Star,
                                 label = "Favourited",
                                 value = if (bookmark.isStarred) "Yes" else "No",
                                 valueColor = if (bookmark.isStarred) MaterialTheme.colorScheme.primary else null
                             )
                             DetailsRow(
-                                icon = Icons.Default.Archive,
+                                icon = AppIcons.Default.Archive,
                                 label = "Archived",
                                 value = if (bookmark.isArchived) "Yes" else "No"
                             )
                             DetailsRow(
-                                icon = Icons.AutoMirrored.Filled.MenuBook,
+                                icon = AppIcons.AutoMirrored.Filled.MenuBook,
                                 label = "Read",
                                 value = if (bookmark.isRead) "Yes" else "No"
                             )
                             if (bookmark.crawlStatus != null || bookmark.crawledAt != null) {
                                 DetailsRow(
-                                    icon = Icons.Default.Sync,
+                                    icon = AppIcons.Default.Sync,
                                     label = "Crawled",
                                     value = crawlSummary(bookmark.crawlStatus, bookmark.crawledAt),
                                     valueColor = if (bookmark.crawlStatus == "failure") {
@@ -294,7 +270,7 @@ internal fun BookmarkDetailsPanel(
                             } else null
 
                             ContentSourceRow(
-                                icon = Icons.AutoMirrored.Filled.ChromeReaderMode,
+                                icon = AppIcons.AutoMirrored.Filled.ChromeReaderMode,
                                 label = "Extracted content",
                                 statusText = if (hasExtractedContent) "Available" else "Not available",
                                 isActive = selectedSource == ContentSource.EXTRACTED,
@@ -304,7 +280,7 @@ internal fun BookmarkDetailsPanel(
 
                             if (fullPageArchiveAsset != null) {
                                 ContentSourceRow(
-                                    icon = Icons.Default.Web,
+                                    icon = AppIcons.Default.Web,
                                     label = "Full page archive",
                                     statusText = if (fullPageArchiveAsset.localPath != null) "Downloaded" else "On server",
                                     isActive = activeArchiveAsset?.id == fullPageArchiveAsset.id,
@@ -325,7 +301,7 @@ internal fun BookmarkDetailsPanel(
 
                             if (precrawledArchiveAsset != null) {
                                 ContentSourceRow(
-                                    icon = Icons.Default.Archive,
+                                    icon = AppIcons.Default.Archive,
                                     label = "Crawled archive",
                                     statusText = if (precrawledArchiveAsset.localPath != null) "Downloaded" else "On server",
                                     isActive = activeArchiveAsset?.id == precrawledArchiveAsset.id,
@@ -348,7 +324,7 @@ internal fun BookmarkDetailsPanel(
                             // whatever reader the platform has rather than shown inline.
                             assets.find { it.assetType == "pdf" }?.let { pdfAsset ->
                                 ContentSourceRow(
-                                    icon = Icons.Default.PictureAsPdf,
+                                    icon = AppIcons.Default.PictureAsPdf,
                                     label = "PDF",
                                     statusText = if (pdfAsset.localPath != null) "Downloaded" else "On server",
                                     isActive = false,
@@ -375,7 +351,7 @@ internal fun BookmarkDetailsPanel(
                                 DetailsSectionTitle("Media")
                                 bannerAsset?.let { asset ->
                                     MediaAssetRow(
-                                        icon = Icons.Default.Image,
+                                        icon = AppIcons.Default.Image,
                                         label = "Banner image",
                                         isCached = asset.localPath != null,
                                         canDeleteOnServer = serverActionsEnabled,
@@ -389,7 +365,7 @@ internal fun BookmarkDetailsPanel(
                                 }
                                 screenshotAsset?.let { asset ->
                                     MediaAssetRow(
-                                        icon = Icons.Default.PhotoCamera,
+                                        icon = AppIcons.Default.PhotoCamera,
                                         label = "Screenshot",
                                         isCached = asset.localPath != null,
                                         canDeleteOnServer = serverActionsEnabled,
@@ -408,7 +384,7 @@ internal fun BookmarkDetailsPanel(
                             Spacer(modifier = Modifier.height(16.dp))
                             DetailsSectionTitle("Server actions")
                             ServerActionRow(
-                                icon = Icons.Default.Refresh,
+                                icon = AppIcons.Default.Refresh,
                                 label = "Refresh",
                                 supportingText = "Re-crawl metadata and content",
                                 enabled = serverActionsEnabled && serverCrawlInFlight == null,
@@ -416,7 +392,7 @@ internal fun BookmarkDetailsPanel(
                                 onClick = { onRequestServerCrawl(ServerCrawlAction.REFRESH) }
                             )
                             ServerActionRow(
-                                icon = Icons.Default.Save,
+                                icon = AppIcons.Default.Save,
                                 label = "Preserve offline archive",
                                 supportingText = "Ask the server to store a full page archive",
                                 enabled = serverActionsEnabled && serverCrawlInFlight == null,
@@ -424,7 +400,7 @@ internal fun BookmarkDetailsPanel(
                                 onClick = { onRequestServerCrawl(ServerCrawlAction.PRESERVE_ARCHIVE) }
                             )
                             ServerActionRow(
-                                icon = Icons.Default.PictureAsPdf,
+                                icon = AppIcons.Default.PictureAsPdf,
                                 label = "Preserve as PDF",
                                 supportingText = "Ask the server to store a PDF",
                                 enabled = serverActionsEnabled && serverCrawlInFlight == null,
@@ -447,7 +423,7 @@ internal fun BookmarkDetailsPanel(
                                 DetailsSectionTitle("AI")
                                 if (aiCapabilities.canSummarize) {
                                     ServerActionRow(
-                                        icon = Icons.Default.AutoAwesome,
+                                        icon = AppIcons.Default.AutoAwesome,
                                         label = AiAction.SUMMARIZE.label,
                                         supportingText = "Ask the server's model to summarize this article",
                                         enabled = serverActionsEnabled && aiActionInFlight == null,
@@ -457,7 +433,7 @@ internal fun BookmarkDetailsPanel(
                                 }
                                 if (aiCapabilities.isAdmin) {
                                     ServerActionRow(
-                                        icon = Icons.Default.NewLabel,
+                                        icon = AppIcons.Default.NewLabel,
                                         label = AiAction.RETAG.label,
                                         supportingText = "Regenerate this bookmark's tags with AI",
                                         enabled = serverActionsEnabled && aiActionInFlight == null,
@@ -608,7 +584,7 @@ private fun AssetOverflowMenu(
             modifier = Modifier.size(36.dp)
         ) {
             Icon(
-                Icons.Default.MoreVert,
+                AppIcons.Default.MoreVert,
                 contentDescription = "Asset actions",
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -621,21 +597,21 @@ private fun AssetOverflowMenu(
         ) {
             if (hasLocalCopy) {
                 if (canOpenExternally) {
-                    AssetMenuItem(Icons.AutoMirrored.Filled.OpenInNew, "Open") {
+                    AssetMenuItem(AppIcons.AutoMirrored.Filled.OpenInNew, "Open") {
                         expanded = false
                         onOpenExternally()
                     }
                 }
-                AssetMenuItem(Icons.Default.Refresh, "Re-download") {
+                AssetMenuItem(AppIcons.Default.Refresh, "Re-download") {
                     expanded = false
                     onRefresh()
                 }
-                AssetMenuItem(Icons.Default.Delete, "Delete local copy") {
+                AssetMenuItem(AppIcons.Default.Delete, "Delete local copy") {
                     expanded = false
                     onDeleteLocal()
                 }
             } else {
-                AssetMenuItem(Icons.Default.Download, "Download a copy") {
+                AssetMenuItem(AppIcons.Default.Download, "Download a copy") {
                     expanded = false
                     onDownload()
                 }
@@ -643,7 +619,7 @@ private fun AssetOverflowMenu(
             if (canDeleteOnServer) {
                 HorizontalDivider()
                 AssetMenuItem(
-                    icon = Icons.Default.DeleteForever,
+                    icon = AppIcons.Default.DeleteForever,
                     label = "Delete from server",
                     tint = MaterialTheme.colorScheme.error
                 ) {
@@ -797,7 +773,7 @@ private fun ContentSourceRow(
             if (isActive) {
                 Spacer(modifier = Modifier.width(2.dp))
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = AppIcons.Default.CheckCircle,
                     contentDescription = "Active source",
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.primary
@@ -935,7 +911,7 @@ private fun LinkDetailsRow(url: String, onOpen: () -> Unit, onCopy: () -> Unit) 
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Default.Link,
+            imageVector = AppIcons.Default.Link,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -952,7 +928,7 @@ private fun LinkDetailsRow(url: String, onOpen: () -> Unit, onCopy: () -> Unit) 
             modifier = Modifier.size(32.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.ContentCopy,
+                imageVector = AppIcons.Default.ContentCopy,
                 contentDescription = "Copy link",
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant

@@ -30,6 +30,9 @@
 - Jetbrains Compose Multiplatform 1.12.0 - Cross-platform UI framework
 - Material Design 3 (androidx.compose.material3) - Material components and theme system
 - Compose Material 1.x (androidx.compose.material) - Base Material components
+- Material icons - vendored, not a dependency. `material-icons-extended` is frozen at 1.7.3
+  upstream, so the ~120 icons the app draws live in `ui/icons/AppIcons.kt`, generated from
+  google/material-design-icons (Apache 2.0) by `tools/generate_material_icons.py`
 
 **Navigation:**
 - Compose Navigation 3 (1.1.1) - developer-owned back stack of `@Serializable` `NavKey`s rendered by `NavDisplay`; supports Android, desktop, iOS, web

@@ -9,13 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -62,7 +56,7 @@ data class SaveErrorScreen(val errors: List<SaveError>) : NavKey {
                     },
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 )
@@ -111,7 +105,7 @@ private fun SaveErrorCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val isSuccess = retryState is SaveRetryState.Success
                 Icon(
-                    imageVector = if (isSuccess) Icons.Filled.CheckCircle else Icons.Filled.Error,
+                    imageVector = if (isSuccess) AppIcons.Filled.CheckCircle else AppIcons.Filled.Error,
                     contentDescription = null,
                     tint = if (isSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(24.dp).padding(end = 8.dp)
@@ -161,7 +155,7 @@ private fun SaveErrorCard(
                                 )
                             } else {
                                 Icon(
-                                    Icons.Filled.Refresh,
+                                    AppIcons.Filled.Refresh,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -170,7 +164,7 @@ private fun SaveErrorCard(
                         }
                         OutlinedButton(onClick = onOpen) {
                             Icon(
-                                Icons.Filled.OpenInBrowser,
+                                AppIcons.Filled.OpenInBrowser,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -178,7 +172,7 @@ private fun SaveErrorCard(
                         }
                         OutlinedButton(onClick = onShare) {
                             Icon(
-                                Icons.Filled.Share,
+                                AppIcons.Filled.Share,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp)
                             )

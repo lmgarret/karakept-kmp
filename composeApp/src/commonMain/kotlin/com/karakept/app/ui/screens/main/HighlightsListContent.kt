@@ -11,10 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Refresh
 import com.karakept.app.ui.components.BusyIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -34,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.ui.components.HighlightCard
 import com.karakept.app.ui.components.RefreshableBox
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,11 +74,11 @@ fun HighlightsListContent(
                 navigationIcon = {
                     if (onOpenDrawer != null) {
                         IconButton(onClick = onOpenDrawer) {
-                            Icon(Icons.Default.Menu, contentDescription = "Open menu")
+                            Icon(AppIcons.Default.Menu, contentDescription = "Open menu")
                         }
                     } else {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 },
@@ -89,7 +86,7 @@ fun HighlightsListContent(
                     // E-ink mode drops the pull gesture, so the button becomes the only way in.
                     if ((showRefreshButton || einkMode.enabled) && onRefresh != null) {
                         IconButton(onClick = onRefresh, enabled = !isSyncing) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                            Icon(AppIcons.Default.Refresh, contentDescription = "Refresh")
                         }
                     }
                 }

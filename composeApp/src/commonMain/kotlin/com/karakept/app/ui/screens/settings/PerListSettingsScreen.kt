@@ -12,16 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Card
@@ -48,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -243,7 +234,7 @@ fun PerListSettingsContent(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
                     ) {
                         Icon(
-                            Icons.Default.Add,
+                            AppIcons.Default.Add,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -281,7 +272,7 @@ fun PerListSettingsContent(
                 title = { Text("$listName Settings") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -310,7 +301,7 @@ fun PerListSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.WifiOff,
+                        imageVector = AppIcons.Default.WifiOff,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -350,7 +341,7 @@ fun PerListSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Notifications,
+                        imageVector = AppIcons.Default.Notifications,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -395,7 +386,7 @@ fun PerListSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Layers,
+                        imageVector = AppIcons.Default.Layers,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -419,7 +410,7 @@ fun PerListSettingsContent(
                         )
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Select"
                     )
                 }
@@ -434,7 +425,7 @@ fun PerListSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Visibility,
+                        imageVector = AppIcons.Default.Visibility,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -477,7 +468,7 @@ fun PerListSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.TouchApp,
+                        imageVector = AppIcons.Default.TouchApp,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -499,7 +490,7 @@ fun PerListSettingsContent(
                         )
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Select"
                     )
                 }
@@ -522,7 +513,7 @@ fun PerListSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.AccountTree,
+                        imageVector = AppIcons.Default.AccountTree,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary

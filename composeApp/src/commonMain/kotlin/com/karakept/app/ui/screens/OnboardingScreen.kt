@@ -9,6 +9,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
+import com.karakept.app.ui.icons.AppIcons
 import isDevBuild
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,15 +27,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Button
@@ -271,7 +263,7 @@ private fun WelcomeStep(
     ) {
         Box {
             Icon(
-                imageVector = Icons.Default.Bookmark,
+                imageVector = AppIcons.Default.Bookmark,
                 contentDescription = null,
                 modifier = Modifier.size(80.dp),
                 tint = MaterialTheme.colorScheme.primary
@@ -308,19 +300,19 @@ private fun WelcomeStep(
         )
         Spacer(modifier = Modifier.height(24.dp))
         FeatureRow(
-            icon = Icons.Default.Bookmark,
+            icon = AppIcons.Default.Bookmark,
             title = "Save bookmarks",
             description = "Save links, articles, and notes from anywhere."
         )
         Spacer(modifier = Modifier.height(12.dp))
         FeatureRow(
-            icon = Icons.Default.Cloud,
+            icon = AppIcons.Default.Cloud,
             title = "Sync across devices",
             description = "Your bookmarks are synced with your Karakeep server."
         )
         Spacer(modifier = Modifier.height(12.dp))
         FeatureRow(
-            icon = Icons.Default.Notifications,
+            icon = AppIcons.Default.Notifications,
             title = "Get notified",
             description = "Receive notifications when your bookmarks are processed."
         )
@@ -418,7 +410,7 @@ private fun BackgroundSyncStep(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            imageVector = Icons.Default.Sync,
+            imageVector = AppIcons.Default.Sync,
             contentDescription = null,
             modifier = Modifier.size(72.dp),
             tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -518,7 +510,7 @@ private fun PermissionsStep(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            imageVector = if (permissionGranted) Icons.Default.CheckCircle else Icons.Default.Notifications,
+            imageVector = if (permissionGranted) AppIcons.Default.CheckCircle else AppIcons.Default.Notifications,
             contentDescription = null,
             modifier = Modifier.size(72.dp),
             tint = if (permissionGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -541,7 +533,7 @@ private fun PermissionsStep(
         if (permissionGranted) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = AppIcons.Default.CheckCircle,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
@@ -588,7 +580,7 @@ private fun ServerConnectionStep(
         verticalArrangement = Arrangement.Top
     ) {
         Icon(
-            imageVector = Icons.Default.Cloud,
+            imageVector = AppIcons.Default.Cloud,
             contentDescription = null,
             modifier = Modifier.size(72.dp),
             tint = MaterialTheme.colorScheme.primary
@@ -620,7 +612,7 @@ private fun ServerConnectionStep(
                 verticalAlignment = Alignment.Top
             ) {
                 Icon(
-                    imageVector = Icons.Default.Info,
+                    imageVector = AppIcons.Default.Info,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp).padding(top = 2.dp)
@@ -662,7 +654,7 @@ private fun ServerConnectionStep(
             trailingIcon = {
                 IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
                     Icon(
-                        imageVector = if (isPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                        imageVector = if (isPasswordVisible) AppIcons.Filled.Visibility else AppIcons.Filled.VisibilityOff,
                         contentDescription = if (isPasswordVisible) "Hide API key" else "Show API key"
                     )
                 }

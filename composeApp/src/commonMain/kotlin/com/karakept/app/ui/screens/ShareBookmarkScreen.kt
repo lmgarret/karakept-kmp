@@ -8,13 +8,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.repository.BookmarkRepository
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Error
 import org.koin.compose.koinInject
 
 @Serializable
@@ -74,7 +73,7 @@ data class ShareBookmarkScreen(val url: String, @Transient val onClose: (() -> U
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Filled.Error,
+                        imageVector = AppIcons.Filled.Error,
                         contentDescription = "Error",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(48.dp)

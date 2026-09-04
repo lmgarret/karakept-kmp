@@ -23,9 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.ui.components.BackHandler
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.theme.LocalEinkMode
 import kotlin.math.abs
@@ -184,7 +182,7 @@ internal fun ImageGalleryOverlay(
                 .alpha(chromeAlpha)
         ) {
             Icon(
-                imageVector = Icons.Default.Close,
+                imageVector = AppIcons.Default.Close,
                 contentDescription = "Close",
                 tint = Color.White
             )
@@ -351,7 +349,7 @@ private fun ZoomableImagePage(
                     // Every candidate URL for this page failed — show a broken-image
                     // placeholder instead of an empty page.
                     Icon(
-                        imageVector = Icons.Default.ImageNotSupported,
+                        imageVector = AppIcons.Default.ImageNotSupported,
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
                         tint = Color.White.copy(alpha = 0.6f)

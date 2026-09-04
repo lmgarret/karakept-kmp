@@ -7,28 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.automirrored.filled.MenuOpen
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.NewLabel
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.Unarchive
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
@@ -57,6 +35,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.screens.AiBatchProgress
 import com.karakept.app.ui.components.OfflineModeBadge
 import com.karakept.app.ui.components.einkOutlineBorder
@@ -127,7 +106,7 @@ internal fun MainScreenTopBar(
             navigationIcon = {
                 IconButton(onClick = if (running != null) onCancelAiBatch else onClearSelection) {
                     Icon(
-                        Icons.Default.Close,
+                        AppIcons.Default.Close,
                         contentDescription = if (running != null) "Cancel" else "Exit selection mode"
                     )
                 }
@@ -138,13 +117,13 @@ internal fun MainScreenTopBar(
                 if (running == null) {
                     IconButton(onClick = onSelectAll) {
                         Icon(
-                            imageVector = if (allSelected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                            imageVector = if (allSelected) AppIcons.Default.CheckBox else AppIcons.Default.CheckBoxOutlineBlank,
                             contentDescription = if (allSelected) "Deselect all" else "Select all"
                         )
                     }
                     Box {
                         IconButton(onClick = { showBatchMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More actions")
+                            Icon(AppIcons.Default.MoreVert, contentDescription = "More actions")
                         }
                         DropdownMenu(
                             expanded = showBatchMenu,
@@ -154,48 +133,48 @@ internal fun MainScreenTopBar(
                             // Status
                             DropdownMenuItem(
                                 text = { Text("Mark as Read") },
-                                leadingIcon = { Icon(Icons.Default.Visibility, null) },
+                                leadingIcon = { Icon(AppIcons.Default.Visibility, null) },
                                 onClick = { onBatchMarkRead(); showBatchMenu = false }
                             )
                             DropdownMenuItem(
                                 text = { Text("Mark as Unread") },
-                                leadingIcon = { Icon(Icons.Default.VisibilityOff, null) },
+                                leadingIcon = { Icon(AppIcons.Default.VisibilityOff, null) },
                                 onClick = { onBatchMarkUnread(); showBatchMenu = false }
                             )
                             HorizontalDivider()
                             // Archive
                             DropdownMenuItem(
                                 text = { Text("Archive") },
-                                leadingIcon = { Icon(Icons.Default.Archive, null) },
+                                leadingIcon = { Icon(AppIcons.Default.Archive, null) },
                                 onClick = { onBatchArchive(); showBatchMenu = false }
                             )
                             DropdownMenuItem(
                                 text = { Text("Unarchive") },
-                                leadingIcon = { Icon(Icons.Default.Unarchive, null) },
+                                leadingIcon = { Icon(AppIcons.Default.Unarchive, null) },
                                 onClick = { onBatchUnarchive(); showBatchMenu = false }
                             )
                             HorizontalDivider()
                             // Favourites
                             DropdownMenuItem(
                                 text = { Text("Add to Favourites") },
-                                leadingIcon = { Icon(Icons.Default.Star, null) },
+                                leadingIcon = { Icon(AppIcons.Default.Star, null) },
                                 onClick = { onBatchFavourite(); showBatchMenu = false }
                             )
                             DropdownMenuItem(
                                 text = { Text("Remove from Favourites") },
-                                leadingIcon = { Icon(Icons.Default.StarBorder, null) },
+                                leadingIcon = { Icon(AppIcons.Default.StarBorder, null) },
                                 onClick = { onBatchUnfavourite(); showBatchMenu = false }
                             )
                             HorizontalDivider()
                             // Organisation
                             DropdownMenuItem(
                                 text = { Text("Move to List") },
-                                leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
+                                leadingIcon = { Icon(AppIcons.Default.FolderOpen, null) },
                                 onClick = { onBatchMoveToList(); showBatchMenu = false }
                             )
                             DropdownMenuItem(
                                 text = { Text("Set Tags") },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, null) },
+                                leadingIcon = { Icon(AppIcons.AutoMirrored.Filled.Label, null) },
                                 onClick = { onBatchSetTags(); showBatchMenu = false }
                             )
                             // AI actions. Hidden for a Select All selection — that can reach the
@@ -205,14 +184,14 @@ internal fun MainScreenTopBar(
                                 if (aiCapabilities.canSummarize) {
                                     DropdownMenuItem(
                                         text = { Text(AiAction.SUMMARIZE.label) },
-                                        leadingIcon = { Icon(Icons.Default.AutoAwesome, null) },
+                                        leadingIcon = { Icon(AppIcons.Default.AutoAwesome, null) },
                                         onClick = { onBatchAiAction(AiAction.SUMMARIZE); showBatchMenu = false }
                                     )
                                 }
                                 if (aiCapabilities.isAdmin) {
                                     DropdownMenuItem(
                                         text = { Text(AiAction.RETAG.label) },
-                                        leadingIcon = { Icon(Icons.Default.NewLabel, null) },
+                                        leadingIcon = { Icon(AppIcons.Default.NewLabel, null) },
                                         onClick = { onBatchAiAction(AiAction.RETAG); showBatchMenu = false }
                                     )
                                 }
@@ -223,7 +202,7 @@ internal fun MainScreenTopBar(
                                 text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
                                 leadingIcon = {
                                     Icon(
-                                        Icons.Default.Delete,
+                                        AppIcons.Default.Delete,
                                         null,
                                         tint = MaterialTheme.colorScheme.error
                                     )
@@ -271,13 +250,13 @@ internal fun MainScreenTopBar(
         navigationIcon = {
             if (isSearchActive) {
                 IconButton(onClick = onSearchClose) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search")
+                    Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search")
                 }
             } else {
                 IconButton(onClick = onMenuClick) {
                     Icon(
-                        imageVector = if (isExpandedLayout && isDrawerVisible) Icons.AutoMirrored.Filled.MenuOpen
-                                      else Icons.Default.Menu,
+                        imageVector = if (isExpandedLayout && isDrawerVisible) AppIcons.AutoMirrored.Filled.MenuOpen
+                                      else AppIcons.Default.Menu,
                         contentDescription = if (isExpandedLayout) "Toggle drawer" else "Menu"
                     )
                 }
@@ -287,16 +266,16 @@ internal fun MainScreenTopBar(
             if (isSearchActive) {
                 if (searchQuery.isNotEmpty()) {
                     IconButton(onClick = { onSearchQueryChange("") }) {
-                        Icon(Icons.Default.Close, contentDescription = "Clear search")
+                        Icon(AppIcons.Default.Close, contentDescription = "Clear search")
                     }
                 }
             } else {
                 IconButton(onClick = onSearchClick) {
-                    Icon(Icons.Default.Search, contentDescription = "Search")
+                    Icon(AppIcons.Default.Search, contentDescription = "Search")
                 }
                 IconButton(onClick = onFilterClick) {
                     BadgedBox(badge = { if (hasActiveFilter) Badge() }) {
-                        Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                        Icon(AppIcons.Default.FilterList, contentDescription = "Filter")
                     }
                 }
                 // Desktop has no pull-to-refresh gesture, and e-ink mode turns it off — both
@@ -306,7 +285,7 @@ internal fun MainScreenTopBar(
                         onClick = onRefreshClick,
                         enabled = !offlineMode && !isSyncing
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Sync")
+                        Icon(AppIcons.Default.Refresh, contentDescription = "Sync")
                     }
                 }
             }

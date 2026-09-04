@@ -13,13 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.SaveAlt
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -108,7 +102,7 @@ fun SyncDataSettingsContent(
                 navigationIcon = {
                     if (showBackButton) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 }
@@ -135,7 +129,7 @@ fun SyncDataSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.CloudOff,
+                        imageVector = AppIcons.Default.CloudOff,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -204,7 +198,7 @@ fun SyncDataSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Dns,
+                        imageVector = AppIcons.Default.Dns,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -221,7 +215,7 @@ fun SyncDataSettingsContent(
                         )
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Open"
                     )
                 }
@@ -242,7 +236,7 @@ fun SyncDataSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Sync,
+                        imageVector = AppIcons.Default.Sync,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -259,7 +253,7 @@ fun SyncDataSettingsContent(
                         )
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Open"
                     )
                 }
@@ -280,7 +274,7 @@ fun SyncDataSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.SaveAlt,
+                        imageVector = AppIcons.Default.SaveAlt,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -297,7 +291,7 @@ fun SyncDataSettingsContent(
                         )
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Open"
                     )
                 }

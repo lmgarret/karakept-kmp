@@ -13,14 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Button
@@ -54,6 +46,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -134,7 +127,7 @@ fun BackupRestoreContent(
                 is BackupRestoreScreenModel.BackupState.Error -> AlertDialog(
                     onDismissRequest = { showResultDialog = false; screenModel.clearState() },
                     modifier = einkModalBorder(AlertDialogDefaults.shape),
-                    icon = { Icon(Icons.Default.Warning, contentDescription = null) },
+                    icon = { Icon(AppIcons.Default.Warning, contentDescription = null) },
                     title = { Text("Error") },
                     text = { Text(currentState.message) },
                     confirmButton = {
@@ -204,7 +197,7 @@ fun BackupRestoreContent(
                     navigationIcon = {
                         if (showBackButton) {
                             IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                             }
                         }
                     }
@@ -227,7 +220,7 @@ fun BackupRestoreContent(
                         ListItem(
                             leadingContent = {
                                 Icon(
-                                    Icons.Default.Lock,
+                                    AppIcons.Default.Lock,
                                     contentDescription = null,
                                     tint = if (pinIsSet) MaterialTheme.colorScheme.primary
                                            else MaterialTheme.colorScheme.onSurfaceVariant
@@ -275,7 +268,7 @@ fun BackupRestoreContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.Download,
+                                AppIcons.Default.Download,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(end = 12.dp)
@@ -336,7 +329,7 @@ fun BackupRestoreContent(
                         ListItem(
                             leadingContent = {
                                 Icon(
-                                    Icons.Default.Folder,
+                                    AppIcons.Default.Folder,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary
                                 )
@@ -380,7 +373,7 @@ fun BackupRestoreContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.Upload,
+                                AppIcons.Default.Upload,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(end = 12.dp)
@@ -434,7 +427,7 @@ fun BackupRestoreContent(
                             modifier = Modifier.padding(bottom = 8.dp)
                         ) {
                             Icon(
-                                Icons.Default.Schedule,
+                                AppIcons.Default.Schedule,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(end = 12.dp)

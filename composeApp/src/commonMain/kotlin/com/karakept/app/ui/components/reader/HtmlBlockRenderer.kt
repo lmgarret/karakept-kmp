@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +49,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import coil3.compose.AsyncImage
 import com.karakept.app.ui.components.HighlightPosition
 import com.karakept.app.ui.components.LoadingDotsIndicator
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.fleeksoft.ksoup.nodes.Element
 import com.fleeksoft.ksoup.nodes.Node
@@ -994,7 +993,7 @@ private fun RenderResolvedImage(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.ImageNotSupported,
+                imageVector = AppIcons.Default.ImageNotSupported,
                 contentDescription = null,
                 modifier = Modifier.size(28.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)

@@ -17,14 +17,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.FormatColorText
-import androidx.compose.material.icons.filled.FormatSize
-import androidx.compose.material.icons.filled.FontDownload
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Card
@@ -33,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.FormatLineSpacing
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -53,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.rememberFontFamily
 
 @Composable
@@ -93,37 +85,37 @@ fun ReaderAppearanceBottomPanel(
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                icon = { Icon(Icons.Default.FormatSize, contentDescription = "Text Size") }
+                icon = { Icon(AppIcons.Default.FormatSize, contentDescription = "Text Size") }
             )
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                icon = { Icon(Icons.Default.FontDownload, contentDescription = "Font") }
+                icon = { Icon(AppIcons.Default.FontDownload, contentDescription = "Font") }
             )
             Tab(
                 selected = selectedTab == 2,
                 onClick = { selectedTab = 2 },
-                icon = { Icon(Icons.Default.FormatColorText, contentDescription = "Text Color") }
+                icon = { Icon(AppIcons.Default.FormatColorText, contentDescription = "Text Color") }
             )
             Tab(
                 selected = selectedTab == 3,
                 onClick = { selectedTab = 3 },
-                icon = { Icon(Icons.Default.Palette, contentDescription = "Background") }
+                icon = { Icon(AppIcons.Default.Palette, contentDescription = "Background") }
             )
             Tab(
                 selected = selectedTab == 4,
                 onClick = { selectedTab = 4 },
-                icon = { Icon(Icons.Default.FormatLineSpacing, contentDescription = "Layout") }
+                icon = { Icon(AppIcons.Default.FormatLineSpacing, contentDescription = "Layout") }
             )
             Tab(
                 selected = selectedTab == 5,
                 onClick = { selectedTab = 5 },
-                icon = { Icon(Icons.Default.Tune, contentDescription = "Behaviour") }
+                icon = { Icon(AppIcons.Default.Tune, contentDescription = "Behaviour") }
             )
             Tab(
                 selected = selectedTab == 6,
                 onClick = { selectedTab = 6 },
-                icon = { Icon(Icons.Default.RestartAlt, contentDescription = "Reset") }
+                icon = { Icon(AppIcons.Default.RestartAlt, contentDescription = "Reset") }
             )
         }
 
@@ -459,7 +451,7 @@ private fun ColorSwatch(
         ) {
             if (isSelected) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = AppIcons.Default.Check,
                     contentDescription = "Selected",
                     tint = if (color.luminance() > 0.5f) Color.Black else Color.White,
                     modifier = Modifier.size(24.dp)

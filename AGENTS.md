@@ -135,6 +135,23 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 ## Reusable UI Components — ALWAYS use these
 
+### Icons
+
+**`AppIcons`** (`ui/icons/AppIcons.kt`) — the app's only source of Material icons.
+`Icons.Default.X` becomes `AppIcons.Default.X`, `Icons.AutoMirrored.Filled.X` becomes
+`AppIcons.AutoMirrored.Filled.X`, and so on: the shape mirrors upstream, so a call site reads
+the same.
+
+`material-icons-extended` is frozen at 1.7.3 and no longer maintained, so the icons the app
+draws are vendored instead: `tools/material-icons.txt` lists them, and
+`tools/generate_material_icons.py` regenerates `AppIcons.kt` from the 24dp SVGs in
+google/material-design-icons — the same artwork the Compose artifact was generated from.
+The generator needs network access and is run by hand, never from the build.
+
+> **Rule:** never import `androidx.compose.material.icons.*`. To use an icon the app does not
+> draw yet, add its name to `tools/material-icons.txt` and re-run the generator —
+> `AppIconsManifestTest` fails on a manifest and a generated file that disagree.
+
 ### Tag display
 
 **`TagChip`** (`ui/components/TagChip.kt`)

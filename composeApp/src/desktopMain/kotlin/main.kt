@@ -1,9 +1,6 @@
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -32,6 +29,7 @@ import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.services.BackgroundSyncScheduler
 import com.karakept.app.services.DesktopNotificationProvider
 import com.karakept.app.services.NotificationProvider
+import com.karakept.app.ui.icons.AppIcons
 import dev.nucleusframework.composenativetray.tray.api.Tray
 import dev.nucleusframework.composenativetray.utils.IconRenderProperties
 import dev.nucleusframework.composenativetray.utils.isMenuBarInDarkMode
@@ -386,7 +384,7 @@ fun main(args: Array<String> = emptyArray()) {
                     Divider()
                     Item(
                         label = "Save Bookmark from Clipboard",
-                        icon = Icons.Default.ContentPaste,
+                        icon = AppIcons.Default.ContentPaste,
                         iconRenderProperties = retinaMenuIcon,
                         isEnabled = hasServer,
                         onClick = {
@@ -420,7 +418,7 @@ fun main(args: Array<String> = emptyArray()) {
                     )
                     Item(
                         label = "Open in Browser",
-                        icon = Icons.Default.OpenInBrowser,
+                        icon = AppIcons.Default.OpenInBrowser,
                         iconRenderProperties = retinaMenuIcon,
                         isEnabled = hasServer,
                         onClick = {

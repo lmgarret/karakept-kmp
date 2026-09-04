@@ -3,9 +3,6 @@ package com.karakept.app.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -13,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -189,13 +187,13 @@ private fun UrlSaveItem(item: UrlSaveState, onRetry: () -> Unit) {
                     strokeWidth = 2.dp,
                 )
                 UrlSaveStatus.SAVED -> Icon(
-                    imageVector = Icons.Filled.CheckCircle,
+                    imageVector = AppIcons.Filled.CheckCircle,
                     contentDescription = "Saved",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
                 )
                 UrlSaveStatus.ERROR -> Icon(
-                    imageVector = Icons.Filled.Error,
+                    imageVector = AppIcons.Filled.Error,
                     contentDescription = "Error",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(20.dp),
