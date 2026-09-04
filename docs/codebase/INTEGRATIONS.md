@@ -296,12 +296,31 @@ settle on the last one to push.
 ## Desktop Tray & Notifications
 
 **System Tray:**
-- Library: Compose Native Tray 1.3.0
+- Library: Compose Native Tray 2.1.6 (`dev.nucleusframework:composenativetray`)
 - macOS: NSStatusBar menu bar
 - Windows: Taskbar icon
 - Linux: D-Bus StatusNotifierItem (SNI) via native C/JNI bridge
   - Requires: `dbus-x11` package and running D-Bus session
-  - Issue: `platformtools.darkmodedetector` excluded from desktop build to avoid skiko version conflict
+  - `main.kt` skips the tray entirely when `DBUS_SESSION_BUS_ADDRESS` is unset (devcontainer,
+    CI, headless). There has been no AWT fallback since 2.0.0, so the window's close button
+    quits instead of hiding when the tray is unavailable — hiding would strand the process.
+- Menu is built with the **composable** DSL (`ComposableTrayMenuScope`). The non-composable
+  `TrayMenuBuilder` overloads are all `@LowPriorityInOverloadResolution` in 2.x, so a
+  `menuContent = { … }` lambda binds to the composable one: state reads are reactive, and
+  `painterResource` / `DrawableResource` icons work inside menu and submenu bodies.
+- Menu contents (`composeApp/src/desktopMain/kotlin/main.kt`):
+  - Server status header, iconed with `Res.drawable.icon`
+  - Save Bookmark from Clipboard
+  - Recent Bookmarks submenu — the 8 newest, opening in the browser. Reloaded via
+    `onMenuOpened` rather than a permanent query subscription; the callback is dispatched
+    asynchronously, so a refresh lands for the *next* open.
+  - Open in Browser
+  - Background Sync `CheckableItem`, two-way bound to `SettingsRepository`
+  - Show/Hide Window, Quit
+- Icon sizing uses `IconRenderProperties` defaults. Since 2.1.6 they keep the full-resolution
+  master and let each backend downsample at draw time (SNI pixmap pyramid, multi-frame ICO,
+  16 pt NSImage), so passing a hand-picked target size only costs resolution.
+- Icons are not rendered in submenus on GNOME — keep submenu items text-only.
 
 **Notifications:**
 - Library: KMP Notifier 1.6.1

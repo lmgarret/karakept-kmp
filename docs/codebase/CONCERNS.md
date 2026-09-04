@@ -76,7 +76,8 @@
 - Occurrence 2: Compose 1.12.0 moved Skiko 0.144.6 → 0.150.1, which added a parameter to `Image.encodeToData`. `io.github.kdroidfilter:composenativetray:1.3.3` was compiled against the two-argument form and calls it while rendering the tray icon, so the desktop app died on launch with `NoSuchMethodError`.
 - Files: `composeApp/src/desktopMain/kotlin/main.kt`, `gradle/libs.versions.toml`
 - Impact: Desktop-only, but fatal at startup — the tray is composed during `main`, so the app never reaches a window.
-- Fix approach: The library moved from `io.github.kdroidfilter` (abandoned at 1.3.3) to `dev.nucleusframework:composenativetray`, now on 2.1.6 and built against Skiko 0.150.x. Check the tray against the incoming Skiko whenever Compose Multiplatform is bumped, and remember the groupId moved — the old coordinates still resolve and look up to date.
+- Fix approach: The library moved from `io.github.kdroidfilter` (abandoned at 1.3.3) to `dev.nucleusframework:composenativetray`, now on 2.1.6 and built against Skiko 0.150.x. Remember the groupId moved — the old coordinates still resolve and look up to date.
+- Why this should stop recurring: 2.1.1 wrapped the call in a `NoSuchMethodError` catch that retries the legacy two-argument overload by reflection (`ComposableIconUtils.encodeToPngBytes`), so the tray now tolerates a Skiko signature change in *either* direction rather than dying at startup. Still worth a desktop smoke-launch after a Compose bump, but this is no longer expected to be fatal.
 
 **Compose DSL deprecations (FIXED):**
 - Issue: Recent commit `bb8553c` fixed compose DSL deprecations

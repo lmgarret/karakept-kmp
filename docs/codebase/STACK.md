@@ -100,7 +100,12 @@
 - Compose Native Tray 2.1.6 (`dev.nucleusframework`) - System tray integration
   - macOS: Native NSStatusBar
   - Windows: Native taskbar
-  - Linux: D-Bus interface (via DBus-x11)
+  - Linux: D-Bus interface (via DBus-x11); no tray without a D-Bus session, and no AWT
+    fallback since 2.0.0
+  - Menu built with the composable DSL (`ComposableTrayMenuScope`): reactive `Item` /
+    `CheckableItem` / `SubMenu`, `DrawableResource` icons, `onMenuOpened` refresh
+  - Pulls `dev.nucleusframework:nucleus.core-runtime` and `nucleus.darkmode-detector`
+    transitively (replacing `io.github.kdroidfilter:platformtools`)
 - Native File Dialog 1.0.3 - File picker dialogs
   - Linux: GTK file chooser
   - macOS: NSOpenPanel
