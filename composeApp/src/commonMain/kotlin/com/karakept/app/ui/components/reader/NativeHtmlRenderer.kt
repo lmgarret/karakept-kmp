@@ -130,7 +130,15 @@ fun NativeHtmlRenderer(
     }
 
     val body = document.body()
-    val textOffset = remember(html) { TextOffsetTracker() }
+
+    // Walked once: every offset the reader draws with, and the one a new selection
+    // is resolved to, come from here.
+    val offsets = remember(document) { buildReaderTextOffsets(body) }
+
+    // Offsets outlive the document they were taken in — another client, an older
+    // build, a re-crawl — so each highlight is checked against the text it was
+    // created from before it is drawn.
+    val resolvedHighlights = remember(offsets, highlights) { resolveHighlights(highlights, offsets) }
 
     // Pre-scanned once per document so the full-screen viewer can swipe between all of a
     // page's images, not just the one that was tapped — see LocalGalleryImages. The hero
@@ -144,9 +152,9 @@ fun NativeHtmlRenderer(
     SideEffect { galleryViewerState?.images = galleryImages }
 
     // Compute search matches whenever query or document changes
-    val searchMatches = remember(document, searchQuery) {
+    val searchMatches = remember(offsets, searchQuery) {
         if (searchQuery.length < 2) emptyList()
-        else findSearchMatchesInDocument(document, searchQuery)
+        else findSearchMatches(offsets, searchQuery)
     }
 
     LaunchedEffect(searchMatches) {
@@ -160,15 +168,15 @@ fun NativeHtmlRenderer(
     var highlightPositionReported by remember(scrollToHighlightId) { mutableStateOf(false) }
 
     // Find the target highlight for scroll-to
-    val targetHighlight = remember(scrollToHighlightId, highlights) {
-        if (scrollToHighlightId != null) highlights.find { it.id == scrollToHighlightId } else null
+    val targetHighlight = remember(scrollToHighlightId, resolvedHighlights) {
+        if (scrollToHighlightId != null) resolvedHighlights.find { it.id == scrollToHighlightId } else null
     }
 
     // Shared highlight action used by both TextToolbar and ContextMenuDataProvider
     val highlightAction: (String) -> Unit = { selectedText ->
-        val offsets = findTextOffsets(html, selectedText)
-        if (offsets != null) {
-            onCreateHighlight(offsets.matchedText, offsets.startOffset, offsets.endOffset, null, null)
+        val match = findTextOffsets(offsets, selectedText)
+        if (match != null) {
+            onCreateHighlight(match.matchedText, match.startOffset, match.endOffset, null, null)
         }
     }
 
@@ -192,14 +200,11 @@ fun NativeHtmlRenderer(
                         .padding(horizontal = typography.horizontalMarginDp.dp, vertical = 0.dp)
                         .padding(bottom = 28.dp)
                 ) {
-                // Reset offset at start of rendering
-                textOffset.offset = 0
-
                 // Build list of renderable children once, each carrying the offset
                 // its text starts at, so a block's position never depends on how
                 // much of the document has been revealed so far.
-                val renderableChildren = remember(html) {
-                    computeReaderTextSpans(body).filter { it.isRenderable }
+                val renderableChildren = remember(offsets) {
+                    computeReaderTextSpans(body, offsets).filter { it.isRenderable }
                 }
 
                 // Progressive rendering: show first 20 blocks immediately, reveal rest in batches
@@ -217,18 +222,17 @@ fun NativeHtmlRenderer(
 
                 // Render visible children
                 for (span in renderableChildren.take(visibleCount)) {
-                    // Absolute, so partially revealed documents place highlights
-                    // exactly where a fully revealed one does.
-                    textOffset.offset = span.startOffset
                     val child = span.node
                     if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
-                        RenderBlock(child, highlights, textOffset, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
+                        RenderBlock(child, resolvedHighlights, offsets, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
                     } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
                         val text = child.getWholeText()
                         val currentTheme = LocalReaderTheme.current
-                        textOffset.advance(text.length)
+                        val runs = TextRuns().apply { record(0, span.startOffset, text.length) }
                         AnnotatedClickableText(
-                            text = AnnotatedString(text),
+                            text = applyHighlightSpans(
+                                AnnotatedString(text), runs, resolvedHighlights, currentTheme, searchState
+                            ),
                             onLinkClick = onLinkClick,
                             onHighlightClick = onHighlightClick,
                             onHighlightPosition = onHighlightPosition,
@@ -237,7 +241,7 @@ fun NativeHtmlRenderer(
                             fontFamily = currentTheme.fontFamily,
                             lineHeight = currentTheme.bodyLineHeight,
                             selectedHighlightId = selectedHighlightId,
-                            highlights = highlights
+                            highlights = resolvedHighlights
                         )
                     }
                 }

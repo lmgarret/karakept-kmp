@@ -7,19 +7,21 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Regression coverage for #295: highlights were created at the offsets
- * [findTextOffsets] resolves, but drawn at offsets the reader accumulated as it
- * walked the document's top-level children. The two walks disagreed — the
- * renderer's left out the newline that joins block elements and the whitespace
- * between them — so every highlight landed a little earlier than the selection,
- * drifting further with each block.
+ * Holds the reader's top-level spans to the offsets a highlight is created at.
  *
- * [computeReaderTextSpans] is now the single definition of that stream, and
- * these tests hold it to the offsets [findTextOffsets] hands out.
+ * Highlights were created at the offsets [findTextOffsets] resolved and drawn at
+ * offsets the renderer accumulated as it walked, and the two walks disagreed about
+ * what sits between blocks — so every highlight landed a little off, drifting
+ * further down the article (#295, and again for every container the renderer
+ * walked with `children()`). Both now read [ReaderTextOffsets], where nothing sits
+ * between blocks at all.
  */
 class ReaderTextSpanTest {
 
-    private fun spansOf(html: String) = computeReaderTextSpans(Ksoup.parse(html).body())
+    private fun spansOf(html: String): List<ReaderTextSpan> {
+        val body = Ksoup.parse(html).body()
+        return computeReaderTextSpans(body, buildReaderTextOffsets(body))
+    }
 
     /** Offset a selection of [text] would be recorded at. */
     private fun createdOffsetOf(html: String, text: String): Int {
@@ -41,13 +43,13 @@ class ReaderTextSpanTest {
     }
 
     @Test
-    fun blockSeparatorsAreCountedBetweenTopLevelBlocks() {
+    fun blocksAreSeparatedByNothingInTheStream() {
         val html = "<p>abc</p><p>de</p><p>f</p>"
 
         val spans = spansOf(html).filter { it.isRenderable }
 
-        // "abc" + "\n" + "de" + "\n" + "f"
-        assertEquals(listOf(0, 4, 7), spans.map { it.startOffset })
+        // "abc" + "de" + "f" — a boundary matches as whitespace but occupies no offset
+        assertEquals(listOf(0, 3, 5), spans.map { it.startOffset })
     }
 
     @Test
@@ -59,8 +61,8 @@ class ReaderTextSpanTest {
         val paragraphs = spans.filter { it.isRenderable }
         assertEquals(createdOffsetOf(html, "de"), paragraphs[1].startOffset)
         assertTrue(
-            paragraphs[1].startOffset > 4,
-            "Whitespace between blocks has to be counted, not skipped"
+            paragraphs[1].startOffset > 3,
+            "Whitespace between blocks is real text, and has to be counted"
         )
     }
 
@@ -77,7 +79,7 @@ class ReaderTextSpanTest {
     }
 
     @Test
-    fun theFirstBlockGetsNoLeadingSeparator() {
+    fun theFirstBlockStartsAtZero() {
         val spans = spansOf("<p>abc</p><p>de</p>").filter { it.isRenderable }
 
         assertEquals(0, spans.first().startOffset)
@@ -89,8 +91,6 @@ class ReaderTextSpanTest {
 
         val spans = spansOf(html)
 
-        // The span is measured but not drawn; the paragraph still follows a
-        // separator because content precedes it.
         assertEquals(createdOffsetOf(html, "body"), spans.last().startOffset)
     }
 
@@ -103,6 +103,17 @@ class ReaderTextSpanTest {
         assertEquals(2, spans.size, "Only the div and the trailing paragraph are top level")
         assertEquals(0, spans[0].startOffset)
         assertEquals(createdOffsetOf(html, "gamma"), spans[1].startOffset)
+    }
+
+    @Test
+    fun aContainerFollowingContentDoesNotShiftWhatComesAfterIt() {
+        // The container's own subtree used to be measured on its own, which lost the
+        // separator its first block child was given in the document-wide walk.
+        val html = "<p>Intro.</p><div><p>alpha</p><p>beta</p></div><p>gamma</p>"
+
+        val spans = spansOf(html).filter { it.isRenderable }
+
+        assertEquals(createdOffsetOf(html, "gamma"), spans.last().startOffset)
     }
 
     @Test

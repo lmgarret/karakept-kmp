@@ -44,17 +44,19 @@ class ReaderBlockLayoutTest {
     private fun blocks(html: String): List<Element> =
         Ksoup.parse(html).body().children().toList()
 
+    private fun offsetsOf(html: String) = buildReaderTextOffsets(Ksoup.parse(html).body())
+
     private fun runBlocks(html: String, assertions: androidx.compose.ui.test.ComposeUiTest.() -> Unit) =
         runComposeUiTest {
             setContent {
                 CompositionLocalProvider(LocalReaderTheme provides theme) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        val offset = TextOffsetTracker()
+                        val offsets = offsetsOf(html)
                         for (block in blocks(html)) {
                             RenderBlock(
                                 element = block,
                                 highlights = emptyList(),
-                                textOffset = offset,
+                                offsets = offsets,
                                 onLinkClick = {},
                                 onHighlightClick = {},
                                 onHighlightPosition = { _, _ -> }

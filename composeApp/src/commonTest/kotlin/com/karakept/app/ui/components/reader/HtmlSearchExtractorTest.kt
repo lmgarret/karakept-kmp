@@ -3,14 +3,13 @@ package com.karakept.app.ui.components.reader
 import com.fleeksoft.ksoup.Ksoup
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
  * Unit tests for [findSearchMatchesInDocument].
  *
- * The core invariant under test: the [SearchMatch.startOffset] and
- * [SearchMatch.endOffset] values mirror the [TextOffsetTracker] offsets
- * produced during rendering, so that highlight spans land on the correct text.
+ * The core invariant under test: [SearchMatch] offsets are the document's text
+ * stream offsets ([ReaderTextOffsets]) — text-node characters and nothing else —
+ * the same ones a highlight carries, so that both land on the correct text.
  */
 class HtmlSearchExtractorTest {
 
@@ -108,15 +107,12 @@ class HtmlSearchExtractorTest {
     }
 
     @Test
-    fun brElement_offsetConsistentWithRenderer() {
-        // Ksoup may insert a text node adjacent to <br> in the DOM; whatever offset
-        // advance that produces, the extractor mirrors the renderer exactly so that
-        // highlight spans still land correctly.
+    fun brElement_takesNoOffsetOfItsOwn() {
+        // The line the reader draws for a <br> is not text the document holds.
         val matches = search("<p>Hello<br/>World</p>", "World")
         assertEquals(1, matches.size)
-        // "Hello" = 5 chars; Ksoup produces 1 extra char around <br> in this env → 6
-        assertEquals(6, matches[0].startOffset)
-        assertEquals(11, matches[0].endOffset)
+        assertEquals(5, matches[0].startOffset)
+        assertEquals(10, matches[0].endOffset)
     }
 
     @Test
@@ -166,21 +162,27 @@ class HtmlSearchExtractorTest {
     // ── Virtual block separator ───────────────────────────────────────────────
 
     @Test
-    fun nestedBlocks_virtualSpaceSeparatesAdjacentBlocks() {
-        // extractChildrenForSearch inserts a virtual ' ' before the second <p>
-        // when offset > 0. "Hello" (5) + ' ' (1) = "World" starts at 6.
+    fun nestedBlocks_blockBoundaryTakesNoOffset() {
+        // Nothing sits between the two paragraphs in the stream: "Hello" (5) ends
+        // where "World" begins.
         val html = "<div><p>Hello</p><p>World</p></div>"
         val world = search(html, "World")
         assertEquals(1, world.size)
-        assertEquals(6, world[0].startOffset)
-        assertEquals(11, world[0].endOffset)
+        assertEquals(5, world[0].startOffset)
+        assertEquals(10, world[0].endOffset)
     }
 
     @Test
-    fun nestedBlocks_noMatchAcrossSeparator() {
-        // "HelloWorld" cannot match because the virtual space sits between them
+    fun nestedBlocks_boundaryReadsAsWhitespace() {
+        // The boundary occupies no offset but still separates words, so a query
+        // spanning the two paragraphs matches with a space and not without one.
         val html = "<div><p>Hello</p><p>World</p></div>"
         assertEquals(0, search(html, "HelloWorld").size)
+
+        val spanning = search(html, "Hello World")
+        assertEquals(1, spanning.size)
+        assertEquals(0, spanning[0].startOffset)
+        assertEquals(10, spanning[0].endOffset)
     }
 
     // ── Table ─────────────────────────────────────────────────────────────────
