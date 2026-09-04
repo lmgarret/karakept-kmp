@@ -57,6 +57,7 @@ import com.karakept.app.ui.components.BackHandler
 import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.theme.LocalEinkMode
+import java.io.File
 import kotlin.math.abs
 import org.koin.compose.koinInject
 
@@ -210,6 +211,11 @@ private fun ZoomableImagePage(
     onDismiss: () -> Unit
 ) {
     var idx by remember(page) { mutableIntStateOf(0) }
+    // An offline copy on disk comes first, then the remote candidates, each tried in turn
+    // as the one before it fails to load.
+    val sources = remember(galleryImage) {
+        galleryImage.localPath?.let { listOf<Any>(File(it)) }.orEmpty() + galleryImage.urls
+    }
     var scale by remember(page) { mutableStateOf(MIN_IMAGE_ZOOM) }
     var offset by remember(page) { mutableStateOf(Offset.Zero) }
     var containerSize by remember(page) { mutableStateOf(IntSize.Zero) }
@@ -344,8 +350,8 @@ private fun ZoomableImagePage(
                     .onSizeChanged { containerSize = it },
                 contentAlignment = Alignment.Center
             ) {
-                val url = galleryImage.urls.getOrNull(idx)
-                if (url == null) {
+                val source = sources.getOrNull(idx)
+                if (source == null) {
                     // Every candidate URL for this page failed — show a broken-image
                     // placeholder instead of an empty page.
                     Icon(
@@ -356,7 +362,7 @@ private fun ZoomableImagePage(
                     )
                 } else {
                     AsyncImage(
-                        model = url,
+                        model = source,
                         contentDescription = galleryImage.alt.ifBlank { null },
                         contentScale = ContentScale.Fit,
                         onSuccess = { state ->

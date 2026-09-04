@@ -90,6 +90,8 @@ fun HeroImageBanner(
      * image there is no scrim, so the whole header has to switch to theme colours.
      */
     showImage: Boolean = true,
+    /** Opens the banner image full-screen. Null leaves the image inert. */
+    onImageClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (!showImage) {
@@ -131,7 +133,16 @@ fun HeroImageBanner(
                     .crossfade(!LocalEinkMode.current.animationsDisabled)
                     .build(),
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                // The scrim and the title block are drawn over this but only the title's own
+                // controls take pointer input, so a tap anywhere else on the banner lands here.
+                modifier = Modifier.fillMaxSize().then(
+                    if (onImageClick != null) {
+                        Modifier.clickable(
+                            onClickLabel = "View image full-screen",
+                            onClick = onImageClick
+                        )
+                    } else Modifier
+                ),
                 contentScale = ContentScale.Crop
             )
 

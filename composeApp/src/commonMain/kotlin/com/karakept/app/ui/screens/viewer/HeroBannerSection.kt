@@ -22,7 +22,8 @@ internal fun HeroBannerSection(
     screenshotUrl: String? = null,
     bannerImageLocalPath: String? = null,
     screenshotLocalPath: String? = null,
-    showImage: Boolean = true
+    showImage: Boolean = true,
+    onImageClick: (() -> Unit)? = null
 ) {
     HeroImageBanner(
         title = title,
@@ -44,6 +45,7 @@ internal fun HeroBannerSection(
         screenshotUrl = screenshotUrl,
         bannerImageLocalPath = bannerImageLocalPath,
         screenshotLocalPath = screenshotLocalPath,
-        showImage = showImage
+        showImage = showImage,
+        onImageClick = onImageClick
     )
 }

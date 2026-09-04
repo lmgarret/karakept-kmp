@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -132,8 +133,15 @@ fun NativeHtmlRenderer(
     val textOffset = remember(html) { TextOffsetTracker() }
 
     // Pre-scanned once per document so the full-screen viewer can swipe between all of a
-    // page's images, not just the one that was tapped — see LocalGalleryImages.
-    val galleryImages = remember(document) { collectGalleryImages(document) }
+    // page's images, not just the one that was tapped — see LocalGalleryImages. The hero
+    // banner is rendered outside this composable but belongs to the same gallery, first.
+    val galleryViewerState = LocalGalleryViewerState.current
+    val heroImage = galleryViewerState?.heroImage
+    val galleryImages = remember(document, heroImage) {
+        listOfNotNull(heroImage) + collectGalleryImages(document)
+    }
+    // So the hero banner, which cannot read the composition local below, opens the same list.
+    SideEffect { galleryViewerState?.images = galleryImages }
 
     // Compute search matches whenever query or document changes
     val searchMatches = remember(document, searchQuery) {
