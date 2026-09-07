@@ -1,6 +1,6 @@
 package com.karakept.app.data.repository
 
-import androidx.room.RoomRawQuery
+import androidx.room3.RoomRawQuery
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.ListDao

@@ -1,18 +1,9 @@
 package com.karakept.app.data.local
 
 import android.content.Context
-import androidx.room.Room
-import androidx.room.RoomDatabase
-import com.karakept.app.data.local.migrations.MIGRATION_1_2
-import com.karakept.app.data.local.migrations.MIGRATION_2_3
-import com.karakept.app.data.local.migrations.MIGRATION_3_4
-import com.karakept.app.data.local.migrations.MIGRATION_5_6
-import com.karakept.app.data.local.migrations.MIGRATION_6_7
-import com.karakept.app.data.local.migrations.MIGRATION_7_8
-import com.karakept.app.data.local.migrations.MIGRATION_8_9
-import com.karakept.app.data.local.migrations.MIGRATION_9_10
-import com.karakept.app.data.local.migrations.MIGRATION_10_11
-import com.karakept.app.data.local.migrations.MIGRATION_11_12
+import androidx.room3.Room
+import androidx.room3.RoomDatabase
+import com.karakept.app.data.local.migrations.ALL_MIGRATIONS
 
 // We need to pass context somehow. For now, let's assume we can inject it or access it via a singleton/provider.
 // A common pattern in KMP is to pass the context to the Koin module or a factory.
@@ -73,6 +64,6 @@ actual fun getDatabaseBuilder(): RoomDatabase.Builder<AppDatabase> {
         context = ctx,
         name = dbFile.absolutePath
     )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+        .addMigrations(*ALL_MIGRATIONS)
         .fallbackToDestructiveMigration(true)
 }

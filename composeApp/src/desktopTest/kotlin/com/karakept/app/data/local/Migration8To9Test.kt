@@ -3,6 +3,7 @@ package com.karakept.app.data.local
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import com.karakept.app.data.local.migrations.MIGRATION_8_9
+import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,7 +23,7 @@ class Migration8To9Test {
     }
 
     @Test
-    fun migration8To9_addsStatusAndBackoffColumnsWithDefaults() {
+    fun migration8To9_addsStatusAndBackoffColumnsWithDefaults() = runBlocking {
         val driver = BundledSQLiteDriver()
         val connection = driver.open(dbPath)
         try {

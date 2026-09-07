@@ -1,6 +1,6 @@
 package com.karakept.app.data.integration
 
-import androidx.room.Room
+import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.karakept.app.data.local.AppDatabase
 import com.karakept.app.data.model.Server
