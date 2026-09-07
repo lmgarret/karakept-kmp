@@ -331,6 +331,41 @@ The generated text is `BookmarkEntity.summary`, **not** `description`: the crawl
 `description` from the page's meta tags and Karakeep's inference worker never touches it. Both can
 be present, and the reader shows both. See `docs/ai-actions.md`.
 
+### Highlight offsets
+
+A highlight is a character range, and a range means nothing without the stream it counts in. That
+stream is **`ReaderTextOffsets`** (`ui/components/reader/ReaderTextOffsets.kt`): the document's
+text nodes concatenated in document order and nothing else — the same count karakeep's web app
+makes with a `TreeWalker` (`BookmarkHtmlHighlighter.getTextNodeOffset`) and the same one the
+WebView viewer's JS makes, so a highlight means the same thing in both viewers and on the server.
+
+`buildReaderTextOffsets(body)` walks it once per document; the reader remembers the result and
+every renderer reads its offsets rather than counting along as it draws. That counting is what
+drifted: creation resolved a selection through one walk and drawing accumulated another, and
+wherever the second forgot something — a container walked with `children()` instead of
+`childNodes()`, a `<br>`, the whitespace between two `<li>`s — every later highlight moved a
+character or two. Readability wraps an article in a single `<div>`, so nothing ever reset the
+drift and it grew down the page.
+
+> **Rule:** never derive an offset by counting text as you render — ask `offsets.startOf(node)` /
+> `endOf(node)`. To map a stream range onto a string you built, record a `TextRuns` entry per text
+> node and translate through `runs.localRange(start, end)`. The rendered string is not the stream
+> (a `<br>` is a character in one and not the other); what was recorded is the only thing relating
+> them.
+
+Two things follow from the stream carrying no separators of its own:
+
+- A selection spanning two blocks comes back from Compose joined with a newline, and the stream
+  has no character there. Those positions are recorded as **boundaries** instead: they match as
+  whitespace and occupy no offset, so the selection resolves and the offsets stay karakeep's.
+- Reader search runs on the same offsets (`findSearchMatches`), since the same renderers draw a
+  search match and a highlight. It used to keep a walk of its own, written to mirror the renderer
+  rather than the resolver, which left search and highlights on two conventions.
+
+Offsets outlive the document they were taken in — another client, an older build, a re-crawl — so
+`resolveHighlights` checks each highlight against the text it was created from before drawing it,
+and re-resolves the ones that disagree onto the nearest occurrence of that text.
+
 ### Highlight colours
 
 Karakeep gives a highlight one of four colours — `yellow`, `blue`, `green`, `red` — stored as a
