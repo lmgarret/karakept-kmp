@@ -102,7 +102,7 @@ fun ViewerContentPanels(
 
     // Delete Confirmation Dialog
     if (showDeleteConfirmation && loadingState is BookmarkLoadingState.FullyLoaded) {
-        val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+        val fullyLoadedState = loadingState
         DeleteConfirmationDialog(
             visible = true,
             onConfirm = {
@@ -115,7 +115,7 @@ fun ViewerContentPanels(
 
     // List Picker Dialog
     if (showListPicker && loadingState is BookmarkLoadingState.FullyLoaded && lists.isNotEmpty()) {
-        val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+        val fullyLoadedState = loadingState
         com.karakept.app.ui.components.ListPickerDialog(
             lists = lists,
             currentListIds = fullyLoadedState.bookmark.listIds.split(",").filter { it.isNotBlank() },
@@ -129,7 +129,7 @@ fun ViewerContentPanels(
 
     // Tag Editor Dialog
     if (showTagEditor && loadingState is BookmarkLoadingState.FullyLoaded) {
-        val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+        val fullyLoadedState = loadingState
         com.karakept.app.ui.components.TagEditorDialog(
             currentTags = fullyLoadedState.bookmark.tags.split(",").filter { it.isNotBlank() },
             onTagsUpdated = { newTags ->
@@ -148,13 +148,13 @@ fun ViewerContentPanels(
         fontSize = htmlFontSize,
         onUpdateHighlight = { id, note, color ->
             if (loadingState is BookmarkLoadingState.FullyLoaded) {
-                val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+                val fullyLoadedState = loadingState
                 screenModel.updateHighlight(fullyLoadedState.bookmark, id, note, color)
             }
         },
         onDeleteHighlight = { id ->
             if (loadingState is BookmarkLoadingState.FullyLoaded) {
-                val fullyLoadedState = loadingState as BookmarkLoadingState.FullyLoaded
+                val fullyLoadedState = loadingState
                 screenModel.deleteHighlight(fullyLoadedState.bookmark, id)
             }
             onSelectedHighlightIdChanged(null)

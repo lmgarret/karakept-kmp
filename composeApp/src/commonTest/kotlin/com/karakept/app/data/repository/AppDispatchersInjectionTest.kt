@@ -15,6 +15,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -27,6 +28,7 @@ import kotlin.test.Test
  * injected [com.karakept.app.utils.AppDispatchers], so it is invisible before
  * `advanceUntilIdle()` and guaranteed complete after it.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class AppDispatchersInjectionTest : BaseRepositoryTest() {
 
     private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)
@@ -43,8 +45,7 @@ class AppDispatchersInjectionTest : BaseRepositoryTest() {
 
     private val storedBookmark = BookmarkEntity(
         localId = 1L,
-        remoteId = 1L,
-        originalRemoteId = "remote-1",
+        remoteId = "remote-1",
         serverId = testServer.id,
         title = "Created",
         url = "https://example.com",
@@ -127,7 +128,7 @@ class AppDispatchersInjectionTest : BaseRepositoryTest() {
     fun persistFinalReadingProgress_writesAndQueuesOnInjectedDispatcher() = runTest(testDispatcher) {
         actionsRepository.persistFinalReadingProgress(
             bookmarkLocalId = 7L,
-            bookmarkRemoteId = 42L,
+            bookmarkRemoteId = "remote-42",
             serverId = testServer.id,
             progress = 0.5f,
             scrollIndex = 3,
@@ -141,7 +142,7 @@ class AppDispatchersInjectionTest : BaseRepositoryTest() {
         coVerify(exactly = 1) { bookmarkDao.updateReadingProgress(7L, 0.5f, 3, 12) }
         coVerify(exactly = 1) {
             pendingActionDao.insertAction(
-                match { it.bookmarkRemoteId == 42L && it.actionType == PendingActionType.UPDATE_READING_PROGRESS }
+                match { it.bookmarkRemoteId == "remote-42" && it.actionType == PendingActionType.UPDATE_READING_PROGRESS }
             )
         }
     }
@@ -151,7 +152,7 @@ class AppDispatchersInjectionTest : BaseRepositoryTest() {
     fun persistFinalReadingProgress_withoutServerId_writesLocallyOnly() = runTest(testDispatcher) {
         actionsRepository.persistFinalReadingProgress(
             bookmarkLocalId = 8L,
-            bookmarkRemoteId = 43L,
+            bookmarkRemoteId = "remote-43",
             serverId = null,
             progress = 1f,
             scrollIndex = 0,
@@ -173,7 +174,7 @@ class AppDispatchersInjectionTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(any(), any()) } returns null
         coEvery { pendingActionDao.getProcessableActions(any(), any()) } returns emptyList()
 
-        actionsRepository.archiveBookmark(1L, testServer.id)
+        actionsRepository.archiveBookmark("remote-1", testServer.id)
 
         coVerify(exactly = 0) { pendingActionDao.getProcessableActions(any(), any()) }
 

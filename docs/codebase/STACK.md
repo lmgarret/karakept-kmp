@@ -5,7 +5,7 @@
 ## Languages
 
 **Primary:**
-- Kotlin 2.4.0 - Core application logic, multiplatform targets (Android, JVM Desktop)
+- Kotlin 2.4.10 - Core application logic, multiplatform targets (Android, JVM Desktop)
 - JavaScript/TypeScript - Upstream monorepo (Node.js services and tooling)
 
 **Secondary:**
@@ -27,15 +27,18 @@
 ## Frameworks
 
 **Core UI:**
-- Jetbrains Compose Multiplatform 1.11.1 - Cross-platform UI framework
+- Jetbrains Compose Multiplatform 1.12.0 - Cross-platform UI framework
 - Material Design 3 (androidx.compose.material3) - Material components and theme system
 - Compose Material 1.x (androidx.compose.material) - Base Material components
+- Material icons - vendored, not a dependency. `material-icons-extended` is frozen at 1.7.3
+  upstream, so the ~120 icons the app draws live in `ui/icons/AppIcons.kt`, generated from
+  google/material-design-icons (Apache 2.0) by `tools/generate_material_icons.py`
 
 **Navigation:**
 - Compose Navigation 3 (1.1.1) - developer-owned back stack of `@Serializable` `NavKey`s rendered by `NavDisplay`; supports Android, desktop, iOS, web
   - `androidx.navigation3:navigation3-runtime` (1.1.1): `NavKey`, `NavBackStack`, `rememberNavBackStack`, `entryProvider`
   - `org.jetbrains.androidx.navigation3:navigation3-ui` (1.1.1): `NavDisplay` (CMP build) + transition/predictive-back specs
-  - `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (2.10.0): per-entry `ViewModelStore` scoping
+  - `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (2.11.0): per-entry `ViewModelStore` scoping
   - `io.insert-koin:koin-compose-navigation3` + `koin-compose-viewmodel` (4.2.2): `koinViewModel` injection per nav entry
   - App wiring lives in `ui/navigation/` (`AppNavigator`, `LocalNavigator`, `appEntryProvider`, `navKeySerializersModule`, Shared Axis Z specs)
 
@@ -49,10 +52,10 @@
   - ktor-client-logging: Request/response logging
 
 **Database:**
-- Room 2.8.4 - Local SQLite ORM with KMP support
+- Room 3.0.2 (`androidx.room3`) - Local SQLite ORM with KMP support
   - androidx-room-runtime: Runtime database support
   - androidx-room-compiler: Code generation via KSP
-- SQLite 2.6.2 (bundled) - Embedded database
+- SQLite 2.7.0 (bundled) - Embedded database
   - androidx-sqlite-bundled: Bundled SQLite driver for consistent behavior
 
 **State Management:**
@@ -68,7 +71,7 @@
 - kotlinx-datetime 0.8.0 - Multiplatform date/time handling
 
 **Image Loading:**
-- Coil 3.5.0 - Image loading and caching
+- Coil 3.6.0 - Image loading and caching
   - coil-compose: Compose integration with Image() composable
   - coil-network-ktor: Ktor HTTP client engine for image loading
 
@@ -94,10 +97,15 @@
   - Desktop: System notifications
 
 **Desktop-Specific:**
-- Compose Native Tray 1.3.3 - System tray integration
+- Compose Native Tray 2.1.6 (`dev.nucleusframework`) - System tray integration
   - macOS: Native NSStatusBar
   - Windows: Native taskbar
-  - Linux: D-Bus interface (via DBus-x11)
+  - Linux: D-Bus interface (via DBus-x11); no tray without a D-Bus session, and no AWT
+    fallback since 2.0.0
+  - Menu built with the composable DSL (`ComposableTrayMenuScope`): reactive `Item` /
+    `CheckableItem` / `SubMenu`, `DrawableResource` icons, `onMenuOpened` refresh
+  - Pulls `dev.nucleusframework:nucleus.core-runtime` and `nucleus.darkmode-detector`
+    transitively (replacing `io.github.kdroidfilter:platformtools`)
 - Native File Dialog 1.0.3 - File picker dialogs
   - Linux: GTK file chooser
   - macOS: NSOpenPanel
@@ -119,18 +127,18 @@
 ## Build & Code Generation
 
 **Build System:**
-- Gradle 9.5.1 (wrapper) with AGP 8.13.0 (Android Gradle Plugin); requires JDK 17+ to run the build
+- Gradle 9.6.1 (wrapper) with AGP 9.4.0 (Android Gradle Plugin); requires JDK 17+ to run the build
 
 **Code Generation:**
 - KSP 2.3.9 (Kotlin Symbol Processing) - Annotation processor
-- OpenAPI Generator 7.24.0 - Generate API client from OpenAPI spec
+- OpenAPI Generator 7.25.0 - Generate API client from OpenAPI spec
   - Generates Kotlin multiplatform client to `com.karakept.api.*`
   - Located at: `api-client/` module
   - Source spec: `/karakeep-upstream/packages/open-api/karakeep-openapi-spec.json`
 
 **Kotlin Compiler Plugin:**
 - compose-compiler (bundled with kotlin-plugin-compose) - Compose IR compiler
-- org.jetbrains.compose.hot-reload (bundled with CMP 1.11.1) - Compose Hot Reload for desktop dev workflow; adds `hotRunDesktop` Gradle task (requires JBR 21, auto-provisioned via foojay toolchain resolver)
+- org.jetbrains.compose.hot-reload (bundled with CMP 1.12.0) - Compose Hot Reload for desktop dev workflow; adds `hotRunDesktop` Gradle task (requires JBR 21, auto-provisioned via foojay toolchain resolver)
 
 ## Key Dependencies
 

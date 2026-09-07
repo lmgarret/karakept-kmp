@@ -5,7 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -34,8 +34,7 @@ class BookmarkDetailsPanelTest {
 
     private val bookmark = BookmarkEntity(
         localId = 1,
-        remoteId = 1,
-        originalRemoteId = "remote-1",
+        remoteId = "remote-1",
         serverId = "server-1",
         url = longUrl,
         title = "Bookmark 1",

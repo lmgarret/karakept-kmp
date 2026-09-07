@@ -70,7 +70,7 @@ fun MainScreenScrollAction(
                 firstIndex = visibleItems.firstOrNull()?.index ?: 0,
                 // The trailing empty/loading/end rows are unkeyed, so their key is not a
                 // remoteId — treat anything that isn't one as "no anchor".
-                firstKey = visibleItems.firstOrNull()?.key as? Long,
+                firstKey = visibleItems.firstOrNull()?.key as? String,
                 firstOffset = listState.firstVisibleItemScrollOffset,
                 lastVisibleIndex = visibleItems.lastOrNull()?.index ?: -1,
                 bookmarks = currentBookmarksState.value,
@@ -90,12 +90,12 @@ fun MainScreenScrollAction(
 
 internal data class ScrollActionSnapshot(
     val firstIndex: Int,
-    val firstKey: Long?,
+    val firstKey: String?,
     val firstOffset: Int,
     val lastVisibleIndex: Int,
     val bookmarks: List<BookmarkEntity>,
     val isScrolling: Boolean,
-    val actedOnIds: Set<Long> = emptySet(),
+    val actedOnIds: Set<String> = emptySet(),
     /** Hardware page turns so far. A change means the user turned a page. */
     val pageTurns: Int = 0
 )
@@ -112,7 +112,7 @@ internal class ScrollActionTracker {
     // things before and after one — and the dataset and the layout reach this tracker in
     // separate snapshots, leaving a window where the two disagree. Keys are the same in
     // either list, so the comparison is valid whichever half of the swap a snapshot caught.
-    private var anchorKey: Long? = null
+    private var anchorKey: String? = null
     private var bottomReached = false
 
     // Set only by an observed scroll gesture that actually moved the list. A mutation can
@@ -127,7 +127,7 @@ internal class ScrollActionTracker {
     // Guard against double-firing. Entries are dropped for items that become visible again
     // when the user scrolls back up, so a manually-unread bookmark can be re-triggered on the
     // next scroll-down. Kept across dataset swaps so a sync never re-fires a surviving item.
-    private val processedIds = mutableSetOf<Long>()
+    private val processedIds = mutableSetOf<String>()
 
     fun onSnapshot(snapshot: ScrollActionSnapshot): List<BookmarkEntity> {
         val previousBookmarks = lastBookmarks
@@ -187,7 +187,7 @@ internal class ScrollActionTracker {
                 // order alone. Rows the dataset gained in this same snapshot are excluded —
                 // the user cannot have scrolled past a row that was not there.
                 val alreadyPresent = if (datasetChanged) {
-                    previousBookmarks?.mapTo(HashSet()) { it.remoteId }
+                    previousBookmarks.mapTo(HashSet()) { it.remoteId }
                 } else {
                     null
                 }
@@ -231,7 +231,7 @@ internal class ScrollActionTracker {
         until: Int,
         snapshot: ScrollActionSnapshot,
         into: MutableList<BookmarkEntity>,
-        alreadyPresent: Set<Long>? = null
+        alreadyPresent: Set<String>? = null
     ) {
         for (i in from until until) {
             val bookmark = snapshot.bookmarks.getOrNull(i) ?: continue

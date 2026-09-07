@@ -2,7 +2,7 @@ package com.karakept.app.ui.components
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -32,8 +32,7 @@ class BookmarkMenuAiActionsTest {
 
     private val bookmark = BookmarkEntity(
         localId = 1,
-        remoteId = 1,
-        originalRemoteId = "remote-1",
+        remoteId = "remote-1",
         serverId = "server-1",
         url = "https://example.com/1",
         title = "Bookmark 1",

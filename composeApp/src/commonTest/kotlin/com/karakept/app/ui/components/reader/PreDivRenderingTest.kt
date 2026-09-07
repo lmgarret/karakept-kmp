@@ -29,8 +29,8 @@ class PreDivRenderingTest {
     private fun buildText(html: String): String {
         val doc = Ksoup.parse(html)
         val pre = doc.selectFirst("pre")!!
-        val offset = TextOffsetTracker()
-        return buildInlineAnnotatedString(pre, theme, emptyList(), offset, {}, {}).text
+        val offsets = buildReaderTextOffsets(doc.body())
+        return buildInlineAnnotatedString(pre, theme, emptyList(), offsets, {}, {}).text
     }
 
     /** Non-blank lines from rendered text */
@@ -65,8 +65,8 @@ class PreDivRenderingTest {
         val doc = Ksoup.parse(html)
         val pre = doc.selectFirst("pre")!!
         val codeElement = pre.selectFirst("code") ?: pre
-        val offset = TextOffsetTracker()
-        val text = buildInlineAnnotatedString(codeElement, theme, emptyList(), offset, {}, {}).text
+        val offsets = buildReaderTextOffsets(doc.body())
+        val text = buildInlineAnnotatedString(codeElement, theme, emptyList(), offsets, {}, {}).text
 
         assertTrue(text.contains("function hello()"), "Should contain function declaration")
         assertTrue(text.contains("return"), "Should contain return statement")
@@ -105,8 +105,8 @@ class PreDivRenderingTest {
         val pre = doc.selectFirst("pre")
         assertTrue(pre != null, "Sanitized HTML should still contain <pre>: [$sanitized]")
 
-        val offset = TextOffsetTracker()
-        val text = buildInlineAnnotatedString(pre!!, theme, emptyList(), offset, {}, {}).text
+        val offsets = buildReaderTextOffsets(doc.body())
+        val text = buildInlineAnnotatedString(pre, theme, emptyList(), offsets, {}, {}).text
         val lines = nonBlankLines(text)
         println("Rendered after sanitize: [$text]")
         assertEquals(3, lines.size, "Expected 3 lines after sanitize+render, got: ${lines.size}\nSanitized: [$sanitized]\nRendered: [$text]")
@@ -156,8 +156,8 @@ class PreDivRenderingTest {
         val pre = doc.selectFirst("pre")
         assertTrue(pre != null, "Pre should survive sanitization: [$sanitized]")
 
-        val offset = TextOffsetTracker()
-        val text = buildInlineAnnotatedString(pre!!, theme, emptyList(), offset, {}, {}).text
+        val offsets = buildReaderTextOffsets(doc.body())
+        val text = buildInlineAnnotatedString(pre, theme, emptyList(), offsets, {}, {}).text
         val lines = nonBlankLines(text)
         println("Full pipeline rendered (${lines.size} lines): [$text]")
         assertTrue(lines.size >= 4, "Expected at least 4 visible lines, got: ${lines.size}\nSanitized: [$sanitized]\nRendered: [$text]")

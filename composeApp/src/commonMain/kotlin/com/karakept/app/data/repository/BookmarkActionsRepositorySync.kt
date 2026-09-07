@@ -53,7 +53,7 @@ enum class ReadingProgressPullResult {
 suspend fun BookmarkActionsRepository.pullReadingProgressForTargets(
     targets: List<ProgressPullTarget>,
     serverId: String
-): Map<Long, ReadingProgressPullResult> {
+): Map<String, ReadingProgressPullResult> {
     if (targets.isEmpty()) return emptyMap()
     return withContext(appDispatchers.io) {
         val server = serverRepository.servers.first().find { it.id == serverId }
@@ -76,7 +76,7 @@ suspend fun BookmarkActionsRepository.pullReadingProgressForTargets(
         if (askable.isEmpty()) return@withContext outcomes
 
         val answers = try {
-            remoteDataSource.getReadingProgressBatch(server, askable.map { it.originalRemoteId })
+            remoteDataSource.getReadingProgressBatch(server, askable.map { it.remoteId })
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -85,15 +85,15 @@ suspend fun BookmarkActionsRepository.pullReadingProgressForTargets(
             return@withContext outcomes
         }
 
-        val applied = mutableListOf<Long>()
+        val applied = mutableListOf<String>()
         for (target in askable) {
             // An id the batch did not come back with was never answered — a chunk that failed —
             // which is not the same as the server holding nothing for it.
-            if (!answers.containsKey(target.originalRemoteId)) {
+            if (!answers.containsKey(target.remoteId)) {
                 outcomes[target.remoteId] = ReadingProgressPullResult.FAILED
                 continue
             }
-            val outcome = applyPulledProgress(target, answers[target.originalRemoteId])
+            val outcome = applyPulledProgress(target, answers[target.remoteId])
             outcomes[target.remoteId] = outcome
             if (outcome == ReadingProgressPullResult.APPLIED) applied += target.remoteId
         }
@@ -170,7 +170,7 @@ private suspend fun BookmarkActionsRepository.applyPulledProgress(
  * cost is that two devices reading the same article settle on the last one to push.
  */
 suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(
-    bookmarkRemoteId: Long,
+    bookmarkRemoteId: String,
     serverId: String
 ): ReadingProgressPullResult {
     val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
@@ -183,7 +183,6 @@ suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(
     val target = ProgressPullTarget(
         localId = bookmark.localId,
         remoteId = bookmark.remoteId,
-        originalRemoteId = bookmark.originalRemoteId,
         readingProgress = bookmark.readingProgress
     )
     return pullReadingProgressForTargets(listOf(target), serverId)[bookmarkRemoteId]
@@ -193,7 +192,7 @@ suspend fun BookmarkActionsRepository.pullReadingProgressFromServer(
 /**
  * Process all pending actions for a specific bookmark.
  */
-internal suspend fun BookmarkActionsRepository.processPendingActionsForBookmark(serverId: String, bookmarkRemoteId: Long) {
+internal suspend fun BookmarkActionsRepository.processPendingActionsForBookmark(serverId: String, bookmarkRemoteId: String) {
     val actions = pendingActionDao.getProcessableActions(serverId, System.currentTimeMillis())
         .filter { it.bookmarkRemoteId == bookmarkRemoteId }
 
@@ -214,11 +213,11 @@ suspend fun BookmarkActionsRepository.flushPendingActions(server: Server) {
  * Process all pending actions for a server. Called during sync.
  * Returns list of bookmark remote IDs that were processed.
  */
-suspend fun BookmarkActionsRepository.processPendingActions(server: Server): List<Long> {
+suspend fun BookmarkActionsRepository.processPendingActions(server: Server): List<String> {
     return actionMutex.withLock {
         withContext(appDispatchers.io) {
             val actions = pendingActionDao.getProcessableActions(server.id, System.currentTimeMillis())
-            val processedIds = mutableListOf<Long>()
+            val processedIds = mutableListOf<String>()
             AppLogger.d("BookmarkActionsRepositorySync", "Found ${actions.size} processable actions for server ${server.id}")
 
             for (action in actions) {
@@ -250,9 +249,19 @@ suspend fun BookmarkActionsRepository.discardFailedActions(serverId: String) {
 /**
  * Get list of bookmark remote IDs that have pending actions.
  */
-suspend fun BookmarkActionsRepository.getPendingActionBookmarkIds(serverId: String): List<Long> {
+suspend fun BookmarkActionsRepository.getPendingActionBookmarkIds(serverId: String): List<String> {
     return pendingActionDao.getPendingActionsList(serverId).map { it.bookmarkRemoteId }.distinct()
 }
+
+/**
+ * The two actions that name a highlight rather than a bookmark. Their queued row may carry an
+ * empty bookmark id — a highlight whose bookmark row was gone when the v13 migration rebuilt
+ * the queue — and they never use it.
+ */
+private val HIGHLIGHT_ONLY_ACTIONS = setOf(
+    PendingActionType.DELETE_HIGHLIGHT,
+    PendingActionType.UPDATE_HIGHLIGHT
+)
 
 /**
  * Execute a single pending action.
@@ -268,36 +277,19 @@ internal suspend fun BookmarkActionsRepository.executeAction(action: PendingActi
             return
         }
 
-        // Get the bookmark ID to use for the API call
-        // For DELETE, CREATE_HIGHLIGHT, DELETE_HIGHLIGHT, and UPDATE_HIGHLIGHT actions, the bookmark may be deleted/not yet synced,
-        // or we don't need the bookmark ID at all (highlight actions use highlightId directly)
-        // For other actions, we can get it from the bookmark entity
-        val highlightActions = listOf(PendingActionType.DELETE_HIGHLIGHT, PendingActionType.UPDATE_HIGHLIGHT)
-        val bookmarkId: String = if (action.actionType == PendingActionType.DELETE || action.actionType == PendingActionType.CREATE_HIGHLIGHT) {
-            // For DELETE and CREATE_HIGHLIGHT, get originalRemoteId from actionData
-            val data = jsonSerializer.decodeFromString<Map<String, String?>>(action.actionData)
-            val id = data["originalRemoteId"]
-            if (id == null) {
-                AppLogger.e("BookmarkActionsRepositorySync", "${action.actionType} action missing originalRemoteId in actionData")
-                pendingActionDao.deleteAction(action)
-                return
-            }
-            id
-        } else if (action.actionType in highlightActions) {
-            // For DELETE_HIGHLIGHT and UPDATE_HIGHLIGHT, we don't need the bookmark ID
-            // The highlight ID is in the actionData and that's all we need
-            ""  // Placeholder - not used for these actions
-        } else {
-            // For other actions, get the bookmark to retrieve its REAL string ID from the server
-            // The bookmarkRemoteId stored in pending_actions is a hashed long, but the API needs the original string ID
-            val bookmark = bookmarkDao.getBookmarkByRemoteId(action.bookmarkRemoteId, serverId)
-            if (bookmark == null) {
-                AppLogger.w("BookmarkActionsRepositorySync", "Bookmark not found locally: ${action.bookmarkRemoteId}")
-                // Delete the orphaned action
-                pendingActionDao.deleteAction(action)
-                return
-            }
-            bookmark.originalRemoteId
+        // The queued row holds the server's own bookmark id, so it is what the API is called
+        // with — including for a DELETE, whose local row is already gone by the time this runs.
+        // The highlight actions carry a highlightId in their actionData and never use it.
+        //
+        // Deliberately no local lookup first: the action is the user's intent, and the row
+        // being absent locally is not evidence the server has nothing to act on. A 404 comes
+        // back through [recordActionFailure] as a permanent failure, which parks the action
+        // for the user rather than discarding it here.
+        val bookmarkId: String = action.bookmarkRemoteId
+        if (bookmarkId.isEmpty() && action.actionType !in HIGHLIGHT_ONLY_ACTIONS) {
+            AppLogger.e("BookmarkActionsRepositorySync", "${action.actionType} action has no bookmark id")
+            pendingActionDao.deleteAction(action)
+            return
         }
 
         AppLogger.d("BookmarkActionsRepositorySync", "Executing ${action.actionType} on server with bookmark ID $bookmarkId")
@@ -381,14 +373,13 @@ internal suspend fun BookmarkActionsRepository.executeAction(action: PendingActi
             }
             PendingActionType.CREATE_HIGHLIGHT -> {
                 val data = jsonSerializer.decodeFromString<Map<String, String?>>(action.actionData)
-                val bId = data["bookmarkRemoteId"] ?: return
                 val text = data["text"] ?: return
                 val startOffset = data["startOffset"]?.toInt() ?: 0
                 val endOffset = data["endOffset"]?.toInt() ?: 0
                 val note = data["note"]
                 val color = data["color"]
                 val tempId = data["tempId"]  // Get the temp ID we stored
-                val result = remoteDataSource.createHighlight(server, bId, text, startOffset, endOffset, note, color)
+                val result = remoteDataSource.createHighlight(server, bookmarkId, text, startOffset, endOffset, note, color)
 
                 val highlightServerId = result.id
 

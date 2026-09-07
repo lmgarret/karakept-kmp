@@ -90,7 +90,7 @@ class List02RegressionTest {
         every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
         every { listRepository.lists } returns MutableStateFlow(listOf(smartList1, smartList2, manualList))
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
         every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
@@ -118,8 +118,7 @@ class List02RegressionTest {
         listIds: String = ""
     ) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
+        remoteId = "remote-$remoteId",
         serverId = "server-1",
         url = "https://example.com/$remoteId",
         title = "Bookmark $remoteId",
@@ -143,7 +142,7 @@ class List02RegressionTest {
         model.moveBookmarkToList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any(), any()) }
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 
     @Test
@@ -155,7 +154,7 @@ class List02RegressionTest {
         model.removeBookmarkFromList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
+        coVerify { bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, "manual-1") }
     }
 
     @Test
@@ -169,7 +168,7 @@ class List02RegressionTest {
         model.moveBookmarkToList(bookmark, "manual-1")
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any(), any()) }
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 
     @Test
@@ -186,6 +185,6 @@ class List02RegressionTest {
         model.executeScrollAction(bookmark, SwipeAction.ADD_TO_LIST, config)
         advanceUntilIdle()
 
-        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any(), any()) }
+        coVerify { bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "manual-1", any()) }
     }
 }

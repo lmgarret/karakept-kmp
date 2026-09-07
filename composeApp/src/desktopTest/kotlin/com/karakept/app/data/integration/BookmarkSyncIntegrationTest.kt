@@ -39,7 +39,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         bookmarkRepository.syncBookmarks(testServer)
 
         val local = bookmarkRepository.getBookmarks(testServer).first()
-        val localIds = local.map { it.originalRemoteId }
+        val localIds = local.map { it.remoteId }
         assertTrue(id1 in localIds, "Bookmark 1 should be in local DB after sync")
         assertTrue(id2 in localIds, "Bookmark 2 should be in local DB after sync")
     }
@@ -69,7 +69,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         // Sync to populate local DB
         bookmarkRepository.syncBookmarks(testServer)
         val before = bookmarkRepository.getBookmarks(testServer).first()
-        assertTrue(before.any { it.originalRemoteId == remoteId }, "Bookmark should be local after first sync")
+        assertTrue(before.any { it.remoteId == remoteId }, "Bookmark should be local after first sync")
 
         // Delete on server
         remoteDataSource.deleteBookmark(testServer, remoteId)
@@ -77,7 +77,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         // Re-sync: deleted bookmark should be removed locally
         bookmarkRepository.syncBookmarks(testServer)
         val after = bookmarkRepository.getBookmarks(testServer).first()
-        assertTrue(after.none { it.originalRemoteId == remoteId }, "Deleted bookmark should be removed after re-sync")
+        assertTrue(after.none { it.remoteId == remoteId }, "Deleted bookmark should be removed after re-sync")
     }
 
     @Test
@@ -91,7 +91,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
 
         bookmarkRepository.syncBookmarks(testServer)
         assertTrue(
-            bookmarkRepository.getBookmarks(testServer).first().any { it.originalRemoteId == staleId },
+            bookmarkRepository.getBookmarks(testServer).first().any { it.remoteId == staleId },
             "Bookmark should be local after first sync"
         )
 
@@ -102,8 +102,8 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
 
         bookmarkRepository.syncBookmarks(testServer)
         val after = bookmarkRepository.getBookmarks(testServer).first()
-        assertTrue(after.any { it.originalRemoteId == freshId }, "New bookmark should be inserted")
-        assertTrue(after.none { it.originalRemoteId == staleId }, "Deleted bookmark should be removed even when the sync inserts")
+        assertTrue(after.any { it.remoteId == freshId }, "New bookmark should be inserted")
+        assertTrue(after.none { it.remoteId == staleId }, "Deleted bookmark should be removed even when the sync inserts")
     }
 
     // -------------------------------------------------------------------------
@@ -127,7 +127,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
 
         val local = bookmarkRepository.getBookmarks(testServer).first()
         // All locally synced bookmarks from this operation should be starred
-        val syncedById = local.filter { it.originalRemoteId == favId }
+        val syncedById = local.filter { it.remoteId == favId }
         assertTrue(syncedById.isEmpty() || syncedById.all { it.isStarred }, "Favorited sync should only bring starred bookmarks")
     }
 
@@ -143,7 +143,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         bookmarkRepository.syncArchived(testServer)
 
         val local = bookmarkRepository.getBookmarks(testServer).first()
-        val archivedLocally = local.filter { it.originalRemoteId == archivedId }
+        val archivedLocally = local.filter { it.remoteId == archivedId }
         assertTrue(archivedLocally.isEmpty() || archivedLocally.all { it.isArchived }, "Archived sync should have the bookmark marked archived")
     }
 
@@ -167,7 +167,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         bookmarkRepository.syncBookmarksForList(testServer, listId)
 
         val local = bookmarkRepository.getBookmarks(testServer).first()
-        assertTrue(local.any { it.originalRemoteId == memberId }, "List member should be in local DB")
+        assertTrue(local.any { it.remoteId == memberId }, "List member should be in local DB")
     }
 
     // -------------------------------------------------------------------------
@@ -252,7 +252,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         val bookmark = insertLocalBookmark(remoteId)
         val newTags = listOf("integration", "testing", "automated")
 
-        bookmarkActionsRepository.updateTags(bookmark.remoteId, testServer.id, newTags, isOnline = true)
+        bookmarkActionsRepository.updateTags(bookmark.remoteId, testServer.id, newTags)
         bookmarkActionsRepository.processPendingActions(testServer)
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
 
@@ -294,7 +294,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         val remoteId = seedBookmarkViaTrpc(baseUrl, apiKey, "https://list-action.example.com/${System.currentTimeMillis()}")
         val bookmark = insertLocalBookmark(remoteId)
 
-        bookmarkActionsRepository.moveToList(bookmark.remoteId, testServer.id, listId, isOnline = true)
+        bookmarkActionsRepository.moveToList(bookmark.remoteId, testServer.id, listId)
         bookmarkActionsRepository.processPendingActions(testServer)
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
 
@@ -314,7 +314,7 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         remoteDataSource.addBookmarkToList(testServer, listId, remoteId)
 
         // Then queue remove action
-        bookmarkActionsRepository.removeFromList(bookmark.remoteId, testServer.id, listId, isOnline = true)
+        bookmarkActionsRepository.removeFromList(bookmark.remoteId, testServer.id, listId)
         bookmarkActionsRepository.processPendingActions(testServer)
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(1000) }
 
@@ -337,10 +337,10 @@ class BookmarkSyncIntegrationTest : BaseDockerIntegrationTest() {
         assertTrue(result.isSuccess, "createBookmark should succeed: ${result.exceptionOrNull()?.message}")
         val bookmark = result.getOrNull()
         assertNotNull(bookmark)
-        assertEquals(url, bookmark?.url)
+        assertEquals(url, bookmark.url)
 
         // Verify it's on the server
-        val remote = remoteDataSource.fetchBookmark(testServer, bookmark!!.originalRemoteId)
+        val remote = remoteDataSource.fetchBookmark(testServer, bookmark.remoteId)
         assertEquals(url, remote.content?.url)
     }
 }

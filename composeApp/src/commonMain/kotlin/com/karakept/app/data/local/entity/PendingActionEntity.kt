@@ -1,7 +1,7 @@
 package com.karakept.app.data.local.entity
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room3.Entity
+import androidx.room3.PrimaryKey
 
 /**
  * Entity to store bookmark actions that are pending sync with the server.
@@ -13,8 +13,8 @@ data class PendingActionEntity(
     @PrimaryKey(autoGenerate = true) 
     val id: Long = 0,
     
-    /** Remote ID of the bookmark this action applies to */
-    val bookmarkRemoteId: Long,
+    /** The server's own id of the bookmark this action applies to */
+    val bookmarkRemoteId: String,
     
     /** Server ID where this bookmark lives */
     val serverId: String,

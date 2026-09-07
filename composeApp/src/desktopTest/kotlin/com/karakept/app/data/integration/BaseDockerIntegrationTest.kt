@@ -1,6 +1,6 @@
 package com.karakept.app.data.integration
 
-import androidx.room.Room
+import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.karakept.app.data.local.AppDatabase
 import com.karakept.app.data.model.Server
@@ -69,7 +69,7 @@ abstract class BaseDockerIntegrationTest {
         private var skipCleanupOnFailure: Boolean = false
 
         fun postJson(urlStr: String, body: String, token: String? = null): String {
-            val url = java.net.URL(urlStr)
+            val url = java.net.URI(urlStr).toURL()
             val connection = url.openConnection() as java.net.HttpURLConnection
             connection.requestMethod = "POST"
             connection.doOutput = true
@@ -155,7 +155,7 @@ abstract class BaseDockerIntegrationTest {
                 for (host in possibleHosts) {
                     try {
                         val testUrl = "http://$host:3000/api/health"
-                        val connection = java.net.URL(testUrl).openConnection() as java.net.HttpURLConnection
+                        val connection = java.net.URI(testUrl).toURL().openConnection() as java.net.HttpURLConnection
                         connection.connectTimeout = 500
                         connection.readTimeout = 500
                         if (connection.responseCode in 200..499) {
@@ -235,7 +235,7 @@ abstract class BaseDockerIntegrationTest {
                 while (System.currentTimeMillis() - start < 90000) {
                     for (host in possibleHosts) {
                         try {
-                            val connection = java.net.URL("http://$host:3000/api/health").openConnection() as java.net.HttpURLConnection
+                            val connection = java.net.URI("http://$host:3000/api/health").toURL().openConnection() as java.net.HttpURLConnection
                             connection.connectTimeout = 1000
                             connection.readTimeout = 1000
                             if (connection.responseCode in 200..499) {
@@ -451,8 +451,7 @@ abstract class BaseDockerIntegrationTest {
     ): com.karakept.app.data.local.entity.BookmarkEntity {
         val entity = com.karakept.app.data.local.entity.BookmarkEntity(
             localId = 0L,
-            remoteId = remoteId.hashCode().toLong(),
-            originalRemoteId = remoteId,
+            remoteId = remoteId,
             serverId = testServer.id,
             url = url,
             title = title,
@@ -469,7 +468,7 @@ abstract class BaseDockerIntegrationTest {
             listIds = listIds
         )
         db.bookmarkDao().insertBookmark(entity)
-        return db.bookmarkDao().getBookmarkByOriginalRemoteId(remoteId, testServer.id)
+        return db.bookmarkDao().getBookmarkByRemoteId(remoteId, testServer.id)
             ?: throw IllegalStateException("Failed to insert bookmark with remoteId=$remoteId")
     }
 }

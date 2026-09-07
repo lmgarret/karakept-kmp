@@ -161,7 +161,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
 
         val afterPull = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertNotNull(afterPull)
-        assertEquals(0.68f, afterPull!!.readingProgress, 0.01f, "Local progress should be restored from server (68%)")
+        assertEquals(0.68f, afterPull.readingProgress, 0.01f, "Local progress should be restored from server (68%)")
     }
 
     @Test
@@ -189,7 +189,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
 
         val afterPull = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertNotNull(afterPull)
-        assertEquals(0.70f, afterPull!!.readingProgress, 0.01f, "Local progress should remain 70%")
+        assertEquals(0.70f, afterPull.readingProgress, 0.01f, "Local progress should remain 70%")
     }
 
     @Test
@@ -288,7 +288,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
 
         val afterPull = db.bookmarkDao().getBookmarkByRemoteId(bookmark.remoteId, testServer.id)
         assertNotNull(afterPull)
-        assertEquals(0.70f, afterPull!!.readingProgress, 0.01f, "Local progress should be updated to 70%")
+        assertEquals(0.70f, afterPull.readingProgress, 0.01f, "Local progress should be updated to 70%")
     }
 
     // -----------------------------------------------------------------------
@@ -355,8 +355,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
     ): com.karakept.app.data.local.entity.BookmarkEntity {
         val entity = com.karakept.app.data.local.entity.BookmarkEntity(
             localId = 0L,
-            remoteId = remoteId.hashCode().toLong(),
-            originalRemoteId = remoteId,
+            remoteId = remoteId,
             serverId = testServer.id,
             url = url,
             title = title,
@@ -374,7 +373,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
             readingProgress = readingProgress
         )
         db.bookmarkDao().insertBookmark(entity)
-        return db.bookmarkDao().getBookmarkByOriginalRemoteId(remoteId, testServer.id)
+        return db.bookmarkDao().getBookmarkByRemoteId(remoteId, testServer.id)
             ?: throw IllegalStateException("Failed to insert bookmark with remoteId=$remoteId")
     }
 }

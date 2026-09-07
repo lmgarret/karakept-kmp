@@ -46,10 +46,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchArchive_archivesEachBookmarkLocally() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, isArchived = false)
-        val b2 = makeBookmark(remoteId = 2L, isArchived = false)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1", isArchived = false)
+        val b2 = makeBookmark(remoteId = "remote-2", isArchived = false)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchArchive(listOf(b1, b2))
@@ -61,10 +61,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchArchive_queuesPendingActionForEachBookmark() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L)
-        val b2 = makeBookmark(remoteId = 2L)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1")
+        val b2 = makeBookmark(remoteId = "remote-2")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchArchive(listOf(b1, b2))
@@ -80,10 +80,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchUnarchive_unarchivesEachBookmarkLocally() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, isArchived = true)
-        val b2 = makeBookmark(remoteId = 2L, isArchived = true)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1", isArchived = true)
+        val b2 = makeBookmark(remoteId = "remote-2", isArchived = true)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchUnarchive(listOf(b1, b2))
@@ -95,10 +95,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchUnarchive_queuesPendingActionForEachBookmark() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, isArchived = true)
-        val b2 = makeBookmark(remoteId = 2L, isArchived = true)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1", isArchived = true)
+        val b2 = makeBookmark(remoteId = "remote-2", isArchived = true)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchUnarchive(listOf(b1, b2))
@@ -114,10 +114,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchMarkRead_marksEachBookmarkAsReadLocally() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, isRead = false)
-        val b2 = makeBookmark(remoteId = 2L, isRead = false)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1", isRead = false)
+        val b2 = makeBookmark(remoteId = "remote-2", isRead = false)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
 
         repository.batchMarkRead(listOf(b1, b2))
 
@@ -128,8 +128,8 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchMarkRead_queuesReadingProgressPendingAction() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, isRead = false)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
+        val b1 = makeBookmark(remoteId = "remote-1", isRead = false)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
 
         repository.batchMarkRead(listOf(b1))
 
@@ -144,10 +144,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchMarkUnread_marksEachBookmarkAsUnreadLocally() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, isRead = true)
-        val b2 = makeBookmark(remoteId = 2L, isRead = true)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1", isRead = true)
+        val b2 = makeBookmark(remoteId = "remote-2", isRead = true)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
 
         repository.batchMarkUnread(listOf(b1, b2))
 
@@ -158,8 +158,8 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchMarkUnread_withResetProgress_clearsProgressForEachBookmark() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, isRead = true, readingProgress = 0.8f)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
+        val b1 = makeBookmark(remoteId = "remote-1", isRead = true, readingProgress = 0.8f)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
 
         repository.batchMarkUnread(listOf(b1), resetProgress = true)
 
@@ -175,10 +175,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchSetFavourite_makeFavourite_setsStarredOnEachBookmark() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, isStarred = false)
-        val b2 = makeBookmark(remoteId = 2L, isStarred = false)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1", isStarred = false)
+        val b2 = makeBookmark(remoteId = "remote-2", isStarred = false)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchSetFavourite(listOf(b1, b2), makeFavourite = true)
@@ -190,8 +190,8 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchSetFavourite_makeFavourite_queuesFavouriteAction() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, isStarred = false)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
+        val b1 = makeBookmark(remoteId = "remote-1", isStarred = false)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchSetFavourite(listOf(b1), makeFavourite = true)
@@ -203,8 +203,8 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchSetFavourite_removeFavourite_queuesUnfavouriteAction() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, isStarred = true)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
+        val b1 = makeBookmark(remoteId = "remote-1", isStarred = true)
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchSetFavourite(listOf(b1), makeFavourite = false)
@@ -220,10 +220,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchDelete_deletesEachBookmarkFromLocalDb() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L)
-        val b2 = makeBookmark(remoteId = 2L)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1")
+        val b2 = makeBookmark(remoteId = "remote-2")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchDelete(listOf(b1, b2))
@@ -233,10 +233,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchDelete_queuesPendingDeleteActionForEachBookmark() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L)
-        val b2 = makeBookmark(remoteId = 2L)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1")
+        val b2 = makeBookmark(remoteId = "remote-2")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchDelete(listOf(b1, b2))
@@ -252,10 +252,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchMoveToList_addsListIdToEachBookmark() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, listIds = "")
-        val b2 = makeBookmark(remoteId = 2L, listIds = "list-existing")
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1", listIds = "")
+        val b2 = makeBookmark(remoteId = "remote-2", listIds = "list-existing")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchMoveToList(listOf(b1, b2), "list-99")
@@ -269,10 +269,10 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchMoveToList_queuesPendingActionForEachBookmark() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, listIds = "")
-        val b2 = makeBookmark(remoteId = 2L, listIds = "")
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
-        coEvery { bookmarkDao.getBookmarkByRemoteId(2L, "server1") } returns b2
+        val b1 = makeBookmark(remoteId = "remote-1", listIds = "")
+        val b2 = makeBookmark(remoteId = "remote-2", listIds = "")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchMoveToList(listOf(b1, b2), "list-99")
@@ -285,8 +285,8 @@ class BatchOperationsTest : BaseRepositoryTest() {
 
     @Test
     fun batchMoveToList_doesNotDuplicateExistingListId() = runTest(testDispatcher) {
-        val b1 = makeBookmark(remoteId = 1L, listIds = "list-99")
-        coEvery { bookmarkDao.getBookmarkByRemoteId(1L, "server1") } returns b1
+        val b1 = makeBookmark(remoteId = "remote-1", listIds = "list-99")
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
         repository.batchMoveToList(listOf(b1), "list-99")
@@ -300,7 +300,8 @@ class BatchOperationsTest : BaseRepositoryTest() {
     // ──────────────────────────────────────────────────────────
 
     private fun makeBookmark(
-        remoteId: Long = 42L,
+        localId: Long = 1L,
+        remoteId: String = "remote-42",
         serverId: String = "server1",
         tags: String = "",
         listIds: String = "",
@@ -309,9 +310,8 @@ class BatchOperationsTest : BaseRepositoryTest() {
         isStarred: Boolean = false,
         readingProgress: Float = 0f
     ) = BookmarkEntity(
-        localId = remoteId,
+        localId = localId,
         remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
         serverId = serverId,
         title = "Test $remoteId",
         url = "https://example.com/$remoteId",

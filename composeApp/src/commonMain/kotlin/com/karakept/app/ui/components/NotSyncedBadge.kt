@@ -2,14 +2,13 @@ package com.karakept.app.ui.components
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.karakept.app.ui.icons.AppIcons
 
 /**
  * Badge indicating that a bookmark's content has not been synced for offline reading.
@@ -31,7 +30,7 @@ fun NotSyncedBadge(
         shadowElevation = 2.dp
     ) {
         Icon(
-            imageVector = Icons.Outlined.CloudOff,
+            imageVector = AppIcons.Outlined.CloudOff,
             contentDescription = "Not synced for offline",
             modifier = Modifier
                 .padding(6.dp)

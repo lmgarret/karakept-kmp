@@ -3,6 +3,7 @@ package com.karakept.app.ui.screens
 import androidx.compose.material3.SnackbarDuration
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.SnackbarEvent
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -20,6 +21,7 @@ import kotlin.test.assertTrue
  * Part 2 (Tests 6-8): ViewModel-level tests verifying that undo lambdas call the correct
  * reverse repository methods for archive, favorite, and read actions.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SnackbarUndoWiringTest {
 
     private fun manager() = ActionSnackbarManager()
@@ -117,7 +119,7 @@ class SnackbarUndoWiringTest {
         assertEquals(10, collected.size, "extraBufferCapacity=10 must handle 10 rapid emissions")
         collected.forEachIndexed { i, event ->
             assertIs<SnackbarEvent.MessageWithUndo>(event)
-            assertEquals("Action $i", (event as SnackbarEvent.MessageWithUndo).text)
+            assertEquals("Action $i", event.text)
         }
 
         job.cancel()

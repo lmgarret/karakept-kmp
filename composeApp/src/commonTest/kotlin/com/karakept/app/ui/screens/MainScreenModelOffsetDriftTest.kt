@@ -68,8 +68,7 @@ class MainScreenModelOffsetDriftTest {
     /** `createdAt` descends with the id so NEWEST order is simply id ascending. */
     private fun bookmark(id: Long) = BookmarkEntity(
         localId = id,
-        remoteId = id,
-        originalRemoteId = "remote-$id",
+        remoteId = "remote-$id",
         serverId = "server-1",
         url = "https://example.com/$id",
         title = "Bookmark $id",
@@ -118,7 +117,7 @@ class MainScreenModelOffsetDriftTest {
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
         every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns MutableSharedFlow()
@@ -174,7 +173,7 @@ class MainScreenModelOffsetDriftTest {
 
         assertEquals(
             (1L..window.toLong()).toList(),
-            model._accumulatedBookmarks.value.map { it.remoteId }.sorted()
+            model._accumulatedBookmarks.value.map { it.remoteId.substringAfter('-').toLong() }.sorted()
         )
         assertEquals(1, model._currentPage.value)
     }
@@ -198,7 +197,7 @@ class MainScreenModelOffsetDriftTest {
 
         assertEquals(
             (1L..heldByWalk).toList(),
-            model._accumulatedBookmarks.value.map { it.remoteId }.sorted(),
+            model._accumulatedBookmarks.value.map { it.remoteId.substringAfter('-').toLong() }.sorted(),
             "a smaller re-read must not replace the rows the walk already loaded"
         )
     }
@@ -227,7 +226,7 @@ class MainScreenModelOffsetDriftTest {
 
             assertEquals(
                 (1L..actuallyInTable).toList(),
-                model._accumulatedBookmarks.value.map { it.remoteId }.sorted(),
+                model._accumulatedBookmarks.value.map { it.remoteId.substringAfter('-').toLong() }.sorted(),
                 "the dbExhausted re-read must recover rows a mid-walk commit pushed past the walk"
             )
             assertEquals(false, model._hasMoreItems.value, "the table is exhausted after the re-read")

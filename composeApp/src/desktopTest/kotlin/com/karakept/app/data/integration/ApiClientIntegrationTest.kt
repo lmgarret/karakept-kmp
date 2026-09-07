@@ -231,7 +231,7 @@ class ApiClientIntegrationTest : BaseDockerIntegrationTest() {
         assertNotNull(tagId, "Tag should have been attached with an ID")
 
         // Detach by ID
-        val response = remoteDataSource.detachTags(testServer, remoteId, listOf(tagId!!))
+        val response = remoteDataSource.detachTags(testServer, remoteId, listOf(tagId))
 
         assertNotNull(response.detached)
 

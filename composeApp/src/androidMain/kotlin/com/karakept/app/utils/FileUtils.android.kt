@@ -92,8 +92,10 @@ actual object FileUtils {
 
     actual fun getBackupDirectory(): String {
         val context = AndroidContext.context
-        val dir = File(context.getExternalFilesDir(null), "backups")
-            ?: File(context.filesDir, "backups")
+        // getExternalFilesDir returns null when external storage is unavailable, and
+        // File(null, "backups") silently resolves relative to the working directory.
+        val parent = context.getExternalFilesDir(null) ?: context.filesDir
+        val dir = File(parent, "backups")
         if (!dir.exists()) {
             dir.mkdirs()
         }

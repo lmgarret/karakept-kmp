@@ -128,7 +128,6 @@ class HighlightRepository(
 
     suspend fun createHighlight(
         server: Server,
-        bookmarkLocalId: Long,
         bookmarkRemoteId: String,
         text: String,
         startOffset: Int,
@@ -153,21 +152,21 @@ class HighlightRepository(
         ))
 
         // Queue action with tempId so we can update it later
-        bookmarkActionsRepository.queueCreateHighlight(server, bookmarkLocalId, bookmarkRemoteId, text, startOffset, endOffset, note, color, tempId)
+        bookmarkActionsRepository.queueCreateHighlight(server, bookmarkRemoteId, text, startOffset, endOffset, note, color, tempId)
 
         return tempId
     }
 
-    suspend fun deleteHighlight(server: Server, bookmarkLocalId: Long, highlightRemoteId: String) {
-        bookmarkActionsRepository.queueDeleteHighlight(server, bookmarkLocalId, highlightRemoteId)
+    suspend fun deleteHighlight(server: Server, bookmarkRemoteId: String, highlightRemoteId: String) {
+        bookmarkActionsRepository.queueDeleteHighlight(server, bookmarkRemoteId, highlightRemoteId)
         
         // Optimistically delete from local DB
         highlightDao.deleteHighlightByRemoteId(highlightRemoteId)
     }
 
-    suspend fun updateHighlight(server: Server, bookmarkLocalId: Long, highlightRemoteId: String, note: String? = null, color: String? = null) {
+    suspend fun updateHighlight(server: Server, bookmarkRemoteId: String, highlightRemoteId: String, note: String? = null, color: String? = null) {
         AppLogger.d("HighlightRepository", "updateHighlight called - highlightRemoteId=$highlightRemoteId, note=$note, color=$color")
-        bookmarkActionsRepository.queueUpdateHighlight(server, bookmarkLocalId, highlightRemoteId, note, color)
+        bookmarkActionsRepository.queueUpdateHighlight(server, bookmarkRemoteId, highlightRemoteId, note, color)
 
         // Optimistically update local DB
         val existing = highlightDao.getHighlightByRemoteId(highlightRemoteId)

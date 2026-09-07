@@ -39,7 +39,7 @@ suspend fun BookmarkActionsRepository.summarizeBookmark(bookmark: BookmarkEntity
     withContext(appDispatchers.io) {
         val server = requireServer(bookmark.serverId)
         val result = try {
-            remoteDataSource.summarizeBookmark(server, bookmark.originalRemoteId)
+            remoteDataSource.summarizeBookmark(server, bookmark.remoteId)
         } catch (e: UnsupportedServerActionException) {
             narrowAiCapabilities(server.id) { copy(canSummarize = false) }
             throw e
@@ -64,7 +64,7 @@ suspend fun BookmarkActionsRepository.requestAiRetag(
 ): Boolean =
     withContext(appDispatchers.io) {
         val server = requireServer(bookmark.serverId)
-        remoteDataSource.requestAiRetag(server, bookmark.originalRemoteId)
+        remoteDataSource.requestAiRetag(server, bookmark.remoteId)
 
         if (!awaitResult) return@withContext false
         val repository = bookmarkRepository ?: return@withContext false

@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -30,10 +28,12 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.Highlight
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.HighlightPalette
 import com.karakept.app.ui.theme.LocalEinkMode
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
 
 @Composable
@@ -88,7 +88,7 @@ fun HighlightCard(
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete Highlight", tint = MaterialTheme.colorScheme.error)
+                        Icon(AppIcons.Default.Delete, contentDescription = "Delete Highlight", tint = MaterialTheme.colorScheme.error)
                     }
                 }
 
@@ -112,7 +112,7 @@ fun HighlightCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "${date.dayOfMonth}/${date.monthNumber}/${date.year}",
+                        text = "${date.day}/${date.month.number}/${date.year}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )

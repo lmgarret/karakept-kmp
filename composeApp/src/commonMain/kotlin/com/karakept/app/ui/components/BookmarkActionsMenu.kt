@@ -3,23 +3,8 @@ package com.karakept.app.ui.components
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.NewLabel
-import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.Share
+import com.karakept.app.ui.icons.AppIcons
 import getPlatform
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.Unarchive
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.BottomSheetDefaults
@@ -78,7 +63,7 @@ fun BookmarkActionsMenu(
             text = { Text(if (bookmark.isStarred) "Remove from Favorites" else "Add to Favorites") },
             leadingIcon = {
                 Icon(
-                    imageVector = if (bookmark.isStarred) Icons.Default.Star else Icons.Default.StarBorder,
+                    imageVector = if (bookmark.isStarred) AppIcons.Default.Star else AppIcons.Default.StarBorder,
                     contentDescription = null
                 )
             },
@@ -92,7 +77,7 @@ fun BookmarkActionsMenu(
             text = { Text(if (bookmark.isArchived) "Unarchive" else "Archive") },
             leadingIcon = {
                 Icon(
-                    imageVector = if (bookmark.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
+                    imageVector = if (bookmark.isArchived) AppIcons.Default.Unarchive else AppIcons.Default.Archive,
                     contentDescription = null
                 )
             },
@@ -106,7 +91,7 @@ fun BookmarkActionsMenu(
             text = { Text(if (bookmark.isRead) "Mark as Unread" else "Mark as Read") },
             leadingIcon = {
                 Icon(
-                    imageVector = if (bookmark.isRead) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    imageVector = if (bookmark.isRead) AppIcons.Default.VisibilityOff else AppIcons.Default.Visibility,
                     contentDescription = null
                 )
             },
@@ -123,7 +108,7 @@ fun BookmarkActionsMenu(
             text = { Text("Move to List") },
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.FolderOpen,
+                    imageVector = AppIcons.Default.FolderOpen,
                     contentDescription = null
                 )
             },
@@ -134,7 +119,7 @@ fun BookmarkActionsMenu(
             text = { Text("Edit Tags") },
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.Edit,
+                    imageVector = AppIcons.Default.Edit,
                     contentDescription = null
                 )
             },
@@ -151,7 +136,7 @@ fun BookmarkActionsMenu(
                     text = { Text(AiAction.SUMMARIZE.label) },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.AutoAwesome,
+                            imageVector = AppIcons.Default.AutoAwesome,
                             contentDescription = null
                         )
                     },
@@ -167,7 +152,7 @@ fun BookmarkActionsMenu(
                     text = { Text(AiAction.RETAG.label) },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.NewLabel,
+                            imageVector = AppIcons.Default.NewLabel,
                             contentDescription = null
                         )
                     },
@@ -186,7 +171,7 @@ fun BookmarkActionsMenu(
             text = { Text(if (getPlatform().isDesktop) "Copy Link" else "Share") },
             leadingIcon = {
                 Icon(
-                    imageVector = if (getPlatform().isDesktop) Icons.Default.Link else Icons.Default.Share,
+                    imageVector = if (getPlatform().isDesktop) AppIcons.Default.Link else AppIcons.Default.Share,
                     contentDescription = null
                 )
             },
@@ -200,7 +185,7 @@ fun BookmarkActionsMenu(
             text = { Text("Open in Browser") },
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.OpenInBrowser,
+                    imageVector = AppIcons.Default.OpenInBrowser,
                     contentDescription = null
                 )
             },
@@ -217,7 +202,7 @@ fun BookmarkActionsMenu(
             text = { Text("Select") },
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.CheckBox,
+                    imageVector = AppIcons.Default.CheckBox,
                     contentDescription = null
                 )
             },
@@ -234,7 +219,7 @@ fun BookmarkActionsMenu(
             text = { Text("Delete") },
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.Delete,
+                    imageVector = AppIcons.Default.Delete,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.error
                 )

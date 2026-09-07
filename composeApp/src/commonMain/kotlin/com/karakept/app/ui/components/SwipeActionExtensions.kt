@@ -1,31 +1,22 @@
 package com.karakept.app.ui.components
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.SwipeAction
+import com.karakept.app.ui.icons.AppIcons
 
 fun SwipeAction.getIcon(): ImageVector {
     return when (this) {
-        SwipeAction.ARCHIVE -> Icons.Default.Archive
-        SwipeAction.FAVOURITE -> Icons.Default.Star
-        SwipeAction.MARK_READ -> Icons.Default.Visibility
-        SwipeAction.DELETE -> Icons.Default.Delete
-        SwipeAction.SHARE -> Icons.Default.Share
-        SwipeAction.OPEN_IN_BROWSER -> Icons.Default.OpenInBrowser
-        SwipeAction.ADD_TAG -> Icons.AutoMirrored.Filled.Label
-        SwipeAction.ADD_TO_LIST -> Icons.AutoMirrored.Filled.List
-        SwipeAction.NONE -> Icons.Default.Close
+        SwipeAction.ARCHIVE -> AppIcons.Default.Archive
+        SwipeAction.FAVOURITE -> AppIcons.Default.Star
+        SwipeAction.MARK_READ -> AppIcons.Default.Visibility
+        SwipeAction.DELETE -> AppIcons.Default.Delete
+        SwipeAction.SHARE -> AppIcons.Default.Share
+        SwipeAction.OPEN_IN_BROWSER -> AppIcons.Default.OpenInBrowser
+        SwipeAction.ADD_TAG -> AppIcons.AutoMirrored.Filled.Label
+        SwipeAction.ADD_TO_LIST -> AppIcons.AutoMirrored.Filled.List
+        SwipeAction.NONE -> AppIcons.Default.Close
     }
 }
 

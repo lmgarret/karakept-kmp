@@ -13,17 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Window
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Card
@@ -49,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.components.EinkAwareFab
@@ -162,7 +152,7 @@ fun LayoutsContent(
                 navigationIcon = {
                     if (showBackButton) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 }
@@ -177,7 +167,7 @@ fun LayoutsContent(
                     onNavigate(LayoutEditorScreen(layoutId = null))
                 }
             }) {
-                Icon(Icons.Default.Add, contentDescription = "Create layout")
+                Icon(AppIcons.Default.Add, contentDescription = "Create layout")
             }
         }
     ) { padding ->
@@ -220,7 +210,7 @@ fun LayoutsContent(
                         )
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Edit"
                     )
                 }
@@ -292,10 +282,10 @@ private fun LayoutCard(
         ) {
             Icon(
                 imageVector = when (layout?.icon) {
-                    "Window" -> Icons.Default.Window
-                    "ViewList" -> Icons.AutoMirrored.Filled.ViewList
-                    "List" -> Icons.AutoMirrored.Filled.List
-                    else -> Icons.Default.Layers
+                    "Window" -> AppIcons.Default.Window
+                    "ViewList" -> AppIcons.AutoMirrored.Filled.ViewList
+                    "List" -> AppIcons.AutoMirrored.Filled.List
+                    else -> AppIcons.Default.Layers
                 },
                 contentDescription = null,
                 tint = if (isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -325,7 +315,7 @@ private fun LayoutCard(
             }
             if (isDefault) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = AppIcons.Default.CheckCircle,
                     contentDescription = "Default",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
@@ -334,7 +324,7 @@ private fun LayoutCard(
             if (onEdit != null) {
                 IconButton(onClick = onEdit) {
                     Icon(
-                        imageVector = Icons.Default.Edit,
+                        imageVector = AppIcons.Default.Edit,
                         contentDescription = "Edit",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -343,7 +333,7 @@ private fun LayoutCard(
             if (onDelete != null) {
                 IconButton(onClick = onDelete) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
+                        imageVector = AppIcons.Default.Delete,
                         contentDescription = "Delete",
                         tint = MaterialTheme.colorScheme.error
                     )

@@ -59,7 +59,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     private val listDao = mockk<ListDao>(relaxed = true)
     private val syncProgress = MutableStateFlow<SyncProgress>(SyncProgress.Idle)
     private val fetchRemoteContent: suspend (Server, String) -> String? = mockk(relaxed = true)
-    private val cacheHeroAssetsForBookmark: suspend (Server, Long, String, String?, String?) -> Unit =
+    private val cacheHeroAssetsForBookmark: suspend (Server, String, String, String?, String?) -> Unit =
         mockk(relaxed = true)
 
     // Construct a real BookmarkActionsRepository with mocked DAOs so extension functions work
@@ -140,20 +140,17 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
     private fun makeTarget(
         localId: Long = 1L,
-        remoteId: Long = 42L,
-        originalRemoteId: String = "remote-$remoteId",
+        remoteId: String = "remote-42",
         readingProgress: Float = 0f
     ) = ProgressPullTarget(
         localId = localId,
         remoteId = remoteId,
-        originalRemoteId = originalRemoteId,
         readingProgress = readingProgress
     )
 
     private fun makeBookmarkEntity(
         localId: Long = 1L,
-        remoteId: Long = 42L,
-        originalRemoteId: String = "remote-42",
+        remoteId: String = "remote-42",
         serverId: String = "server1",
         listIds: String = "",
         content: String? = null,
@@ -166,7 +163,6 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     ) = BookmarkEntity(
         localId = localId,
         remoteId = remoteId,
-        originalRemoteId = originalRemoteId,
         serverId = serverId,
         title = title,
         url = "https://example.com",
@@ -232,8 +228,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         )
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = "bk-1".hashCode().toLong(),
-            originalRemoteId = "bk-1"
+            remoteId = "bk-1"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
         coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existingEntity)
@@ -263,8 +258,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         val dto = makeBookmarkDto(id = "bk-1", modifiedAt = modifiedAt, summary = "Fresh summary.")
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = "bk-1".hashCode().toLong(),
-            originalRemoteId = "bk-1"
+            remoteId = "bk-1"
         ).copy(
             title = "Test",
             modifiedAt = Instant.parse(modifiedAt).toEpochMilliseconds(),
@@ -295,8 +289,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         val dto = makeBookmarkDto(id = "bk-1", summary = null)
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = "bk-1".hashCode().toLong(),
-            originalRemoteId = "bk-1"
+            remoteId = "bk-1"
         ).copy(summary = "Previously stored.", summarizationStatus = "success")
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
         coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existingEntity)
@@ -345,11 +338,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
     @Test
     fun fullSync_deletesRemovedBookmarks() = runTest(testDispatcher) {
-        val existingRemoteId = "bk-existing".hashCode().toLong()
+        val existingRemoteId = "bk-existing"
         val existingEntity = makeBookmarkEntity(
             localId = 10L,
-            remoteId = existingRemoteId,
-            originalRemoteId = "bk-existing"
+            remoteId = "bk-existing"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
 
@@ -368,11 +360,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     @Test
     fun fullSync_deletesRemovedBookmarksEvenWhenInserting() = runTest(testDispatcher) {
         // Regression: deletions used to be skipped whenever the same sync inserted bookmarks
-        val existingRemoteId = "bk-removed".hashCode().toLong()
+        val existingRemoteId = "bk-removed"
         val existingEntity = makeBookmarkEntity(
             localId = 10L,
-            remoteId = existingRemoteId,
-            originalRemoteId = "bk-removed"
+            remoteId = "bk-removed"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
 
@@ -391,11 +382,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
     @Test
     fun fullSync_doesNotDeleteBookmarksWithPendingActions() = runTest(testDispatcher) {
-        val pendingRemoteId = "bk-pending".hashCode().toLong()
+        val pendingRemoteId = "bk-pending"
         val pendingEntity = makeBookmarkEntity(
             localId = 11L,
-            remoteId = pendingRemoteId,
-            originalRemoteId = "bk-pending"
+            remoteId = "bk-pending"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(pendingEntity))
         coEvery { pendingActionDao.getPendingActionsList("server1") } returns listOf(
@@ -425,11 +415,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     @Test
     fun fullSync_updatesExistingBookmarks() = runTest(testDispatcher) {
         val dto = makeBookmarkDto(id = "bk-1", title = "Updated Title")
-        val remoteId = "bk-1".hashCode().toLong()
+        val remoteId = "bk-1"
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = remoteId,
-            originalRemoteId = "bk-1"
+            remoteId = "bk-1"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
         coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existingEntity)
@@ -471,11 +460,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
     @Test
     fun filteredSync_doesNotDeleteRemovedBookmarks() = runTest(testDispatcher) {
-        val existingRemoteId = "bk-existing".hashCode().toLong()
+        val existingRemoteId = "bk-existing"
         val existingEntity = makeBookmarkEntity(
             localId = 10L,
-            remoteId = existingRemoteId,
-            originalRemoteId = "bk-existing"
+            remoteId = "bk-existing"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
 
@@ -538,11 +526,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     @Test
     fun differentialSync_skipsBookmarksWithPendingActions() = runTest(testDispatcher) {
         val dto = makeBookmarkDto(id = "bk-1", title = "Should Be Skipped")
-        val remoteId = "bk-1".hashCode().toLong()
+        val remoteId = "bk-1"
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = remoteId,
-            originalRemoteId = "bk-1"
+            remoteId = "bk-1"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
         coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existingEntity)
@@ -611,11 +598,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     @Test
     fun differentialSync_preservesLocalReadingProgress() = runTest(testDispatcher) {
         val dto = makeBookmarkDto(id = "bk-1", title = "Updated")
-        val remoteId = "bk-1".hashCode().toLong()
+        val remoteId = "bk-1"
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = remoteId,
-            originalRemoteId = "bk-1",
+            remoteId = "bk-1",
             readingProgress = 0.5f,
             readingTimeMinutes = 10,
             content = "HAS_CONTENT"
@@ -754,11 +740,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
 
         val dto = makeBookmarkDto(id = "bk-1") // no htmlContent
-        val remoteId = "bk-1".hashCode().toLong()
+        val remoteId = "bk-1"
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = remoteId,
-            originalRemoteId = "bk-1",
+            remoteId = "bk-1",
             content = "HAS_CONTENT",
             readingTimeMinutes = 5
         )
@@ -881,8 +866,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         coVerify(exactly = 2) { remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any()) }
         // Pages are committed as they arrive rather than accumulated, so each one is its
         // own insert — that is what lets the first page reach the UI after one round trip.
-        coVerify(exactly = 1) { bookmarkDao.insertBookmarks(match { it.singleOrNull()?.originalRemoteId == "bk-1" }) }
-        coVerify(exactly = 1) { bookmarkDao.insertBookmarks(match { it.singleOrNull()?.originalRemoteId == "bk-2" }) }
+        coVerify(exactly = 1) { bookmarkDao.insertBookmarks(match { it.singleOrNull()?.remoteId == "bk-1" }) }
+        coVerify(exactly = 1) { bookmarkDao.insertBookmarks(match { it.singleOrNull()?.remoteId == "bk-2" }) }
     }
 
     @Test
@@ -905,7 +890,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         }
         coEvery { bookmarkDao.insertBookmarks(any()) } coAnswers {
             val batch = firstArg<List<BookmarkEntity>>()
-            events += "insert-${batch.single().originalRemoteId}"
+            events += "insert-${batch.single().remoteId}"
             listOf(1L)
         }
 
@@ -952,8 +937,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // didn't see" — the pages that did land stay, and no deletion pass runs.
         val existingEntity = makeBookmarkEntity(
             localId = 10L,
-            remoteId = "bk-existing".hashCode().toLong(),
-            originalRemoteId = "bk-existing"
+            remoteId = "bk-existing"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
 
@@ -974,7 +958,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
         assertEquals("connection reset", thrown?.message)
         // Page 1 was committed before the failure...
-        coVerify { bookmarkDao.insertBookmarks(match { it.singleOrNull()?.originalRemoteId == "bk-1" }) }
+        coVerify { bookmarkDao.insertBookmarks(match { it.singleOrNull()?.remoteId == "bk-1" }) }
         // ...and nothing was deleted on the strength of a partial view of the server.
         coVerify(exactly = 0) { bookmarkDao.deleteBookmarks(any()) }
         coVerify(exactly = 0) { bookmarkDao.deleteBookmark(any()) }
@@ -1039,8 +1023,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // stripped listIds reach the DAO. This pins the end-to-end path.
         val stale = makeBookmarkEntity(
             localId = 77L,
-            remoteId = "bk-stale".hashCode().toLong(),
-            originalRemoteId = "bk-stale",
+            remoteId = "bk-stale",
             listIds = "list-1"
         )
         // Server no longer returns bk-stale for list-1
@@ -1123,11 +1106,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
 
         val dto = makeBookmarkDto(id = "bk-1", htmlContent = "<p>New content here</p>")
-        val remoteId = "bk-1".hashCode().toLong()
+        val remoteId = "bk-1"
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = remoteId,
-            originalRemoteId = "bk-1"
+            remoteId = "bk-1"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
         coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existingEntity)
@@ -1145,11 +1127,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     @Test
     fun forListSync_mergesListMembershipWithExisting() = runTest(testDispatcher) {
         val dto = makeBookmarkDto(id = "bk-1")
-        val remoteId = "bk-1".hashCode().toLong()
+        val remoteId = "bk-1"
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = remoteId,
-            originalRemoteId = "bk-1",
+            remoteId = "bk-1",
             listIds = "list-old"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
@@ -1189,11 +1170,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     @Test
     fun fullSync_processedPendingActionsAlsoSkipped() = runTest(testDispatcher) {
         val dto = makeBookmarkDto(id = "bk-1")
-        val remoteId = "bk-1".hashCode().toLong()
+        val remoteId = "bk-1"
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = remoteId,
-            originalRemoteId = "bk-1"
+            remoteId = "bk-1"
         )
         // processPendingActions processes the action and returns the bookmarkRemoteId
         coEvery { pendingActionDao.getPendingActionsList("server1") } returns listOf(
@@ -1288,11 +1268,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     @Test
     fun filteredSync_preservesExistingListIds() = runTest(testDispatcher) {
         val dto = makeBookmarkDto(id = "bk-1")
-        val remoteId = "bk-1".hashCode().toLong()
+        val remoteId = "bk-1"
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = remoteId,
-            originalRemoteId = "bk-1",
+            remoteId = "bk-1",
             listIds = "list-preserved"
         )
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existingEntity))
@@ -1378,11 +1357,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     fun execute_returnsZero_whenNoNewBookmarks() = runTest(testDispatcher) {
         // Remote returns 1 bookmark that already exists in local DB
         val dto = makeBookmarkDto(id = "existing-bk")
-        val existingRemoteId = "existing-bk".hashCode().toLong()
+        val existingRemoteId = "existing-bk"
         val existingEntity = makeBookmarkEntity(
             localId = 5L,
-            remoteId = existingRemoteId,
-            originalRemoteId = "existing-bk"
+            remoteId = "existing-bk"
         )
         coEvery {
             remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
@@ -1465,11 +1443,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
     @Test
     fun fullSync_skipsWriteWhenModifiedAtUnchanged() = runTest(testDispatcher) {
-        val remoteId = "bk-1".hashCode().toLong()
+        val remoteId = "bk-1"
         val existing = makeBookmarkEntity(
             localId = 5L,
-            remoteId = remoteId,
-            originalRemoteId = "bk-1",
+            remoteId = "bk-1",
             title = "Same",
             modifiedAt = 1_700_000_000_000L
         )
@@ -1501,11 +1478,10 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
     @Test
     fun fullSync_writesWhenModifiedAtChanged() = runTest(testDispatcher) {
-        val remoteId = "bk-1".hashCode().toLong()
+        val remoteId = "bk-1"
         val existing = makeBookmarkEntity(
             localId = 5L,
-            remoteId = remoteId,
-            originalRemoteId = "bk-1",
+            remoteId = "bk-1",
             title = "Old",
             modifiedAt = 1_600_000_000_000L
         )
@@ -1619,7 +1595,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
         coEvery {
             bookmarkDao.getReadingProgressPullCandidates("server1", null, PROGRESS_PULL_ROTATION)
-        } returns listOf(makeTarget(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur"))
+        } returns listOf(makeTarget(localId = 7L, remoteId = "bk-cur"))
 
         val pipeline = createPipeline(SyncConfiguration.Full(testServer))
         pipeline.execute()
@@ -1672,7 +1648,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // One query per bookmark is the server's only shape, but tRPC batches at the
         // transport: a pass must not cost one round trip per row.
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
-        val targets = (1L..30L).map { makeTarget(localId = it, remoteId = it, originalRemoteId = "bk-$it") }
+        val targets = (1L..30L).map { makeTarget(localId = it, remoteId = "bk-$it") }
         coEvery {
             bookmarkDao.getReadingProgressPullCandidates(any(), any(), any())
         } returns targets
@@ -1680,7 +1656,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         createPipeline(SyncConfiguration.Full(testServer)).execute()
 
         coVerify(exactly = 1) {
-            remoteDataSource.getReadingProgressBatch(testServer, targets.map { it.originalRemoteId }, any())
+            remoteDataSource.getReadingProgressBatch(testServer, targets.map { it.remoteId }, any())
         }
         coVerify(exactly = 1) { remoteDataSource.getReadingProgressBatch(any(), any(), any()) }
     }
@@ -1690,8 +1666,8 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // The rotating cursor alone converged 50 rows per sync, so a library of hundreds
         // needed hundreds of syncs before the unread count was right.
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
-        val firstBatch = (1..50).map { makeTarget(localId = it.toLong(), remoteId = it.toLong()) }
-        val secondBatch = (51..70).map { makeTarget(localId = it.toLong(), remoteId = it.toLong()) }
+        val firstBatch = (1..50).map { makeTarget(localId = it.toLong(), remoteId = "bk-$it") }
+        val secondBatch = (51..70).map { makeTarget(localId = it.toLong(), remoteId = "bk-$it") }
         coEvery {
             bookmarkDao.getNeverProgressSyncedTargets("server1", PROGRESS_PULL_BATCH)
         } returnsMany listOf(firstBatch, secondBatch, emptyList())
@@ -1710,7 +1686,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // Nothing gets stamped when the whole batch fails, so the same rows come back —
         // without this guard the loop would never end.
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
-        val batch = listOf(makeTarget(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur"))
+        val batch = listOf(makeTarget(localId = 7L, remoteId = "bk-cur"))
         coEvery { bookmarkDao.getNeverProgressSyncedTargets("server1", PROGRESS_PULL_BATCH) } returns batch
         coEvery {
             remoteDataSource.getReadingProgressBatch(any(), any(), any())
@@ -1729,7 +1705,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         coEvery { settingsRepository.trackReadingProgress } returns flowOf(true)
         coEvery {
             bookmarkDao.getReadingProgressPullCandidates("server1", null, PROGRESS_PULL_ROTATION)
-        } returns listOf(makeTarget(localId = 7L, remoteId = 99L, originalRemoteId = "bk-cur"))
+        } returns listOf(makeTarget(localId = 7L, remoteId = "bk-cur"))
         coEvery {
             remoteDataSource.getReadingProgressBatch(any(), any(), any())
         } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
@@ -1775,8 +1751,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // Filtered/list syncs can come back without content, which must not blank the crawl state.
         val existing = makeBookmarkEntity(
             localId = 7L,
-            remoteId = "bk-crawl".hashCode().toLong(),
-            originalRemoteId = "bk-crawl"
+            remoteId = "bk-crawl"
         ).copy(crawlStatus = "success", crawledAt = 999L)
         coEvery { bookmarkDao.getBookmarksForServer("server1") } returns flowOf(listOf(existing))
         coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(existing)

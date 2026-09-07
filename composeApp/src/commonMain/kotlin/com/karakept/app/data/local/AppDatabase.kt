@@ -1,9 +1,9 @@
 package com.karakept.app.data.local
 
-import androidx.room.ConstructedBy
-import androidx.room.Database
-import androidx.room.RoomDatabase
-import androidx.room.RoomDatabaseConstructor
+import androidx.room3.ConstructedBy
+import androidx.room3.Database
+import androidx.room3.RoomDatabase
+import androidx.room3.RoomDatabaseConstructor
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ServerDao
 import com.karakept.app.data.local.entity.BookmarkEntity
@@ -27,7 +27,7 @@ import com.karakept.app.data.local.entity.ListEntity
         HighlightEntity::class,
         ListEntity::class
     ],
-    version = 12
+    version = 13
 )
 @ConstructedBy(AppDatabaseConstructor::class)
 abstract class AppDatabase : RoomDatabase() {

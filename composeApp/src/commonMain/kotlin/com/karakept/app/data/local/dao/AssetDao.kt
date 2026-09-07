@@ -1,15 +1,15 @@
 package com.karakept.app.data.local.dao
 
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
+import androidx.room3.Dao
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
+import androidx.room3.Query
 import com.karakept.app.data.local.entity.AssetEntity
 
 @Dao
 interface AssetDao {
     @Query("SELECT * FROM assets WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId")
-    suspend fun getAssetsForBookmark(bookmarkRemoteId: Long, serverId: String): List<AssetEntity>
+    suspend fun getAssetsForBookmark(bookmarkRemoteId: String, serverId: String): List<AssetEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAssets(assets: List<AssetEntity>)

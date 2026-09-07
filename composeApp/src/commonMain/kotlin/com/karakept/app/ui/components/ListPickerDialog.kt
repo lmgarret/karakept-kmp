@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -25,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.domain.ListHierarchyUtils
+import com.karakept.app.ui.icons.AppIcons
 
 /**
  * Bottom sheet for selecting a list to move a bookmark to.
@@ -75,7 +74,7 @@ fun ListPickerDialog(
                     trailingContent = if (isInList) {
                         {
                             Icon(
-                                imageVector = Icons.Default.Check,
+                                imageVector = AppIcons.Default.Check,
                                 contentDescription = "Currently in list",
                                 tint = MaterialTheme.colorScheme.primary
                             )

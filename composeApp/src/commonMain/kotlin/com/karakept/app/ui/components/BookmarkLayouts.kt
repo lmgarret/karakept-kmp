@@ -22,9 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -63,6 +60,7 @@ import com.karakept.app.data.model.TitlePosition
 import com.karakept.app.data.model.UrlDisplayMode
 import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.utils.computeAutoDescriptionLines
 import com.karakept.app.ui.utils.extractDomain
@@ -764,7 +762,7 @@ private fun UrlDisplay(
                         } else {
                             // Fallback to globe when no favicon URL available
                             Icon(
-                                imageVector = Icons.Default.Language,
+                                imageVector = AppIcons.Default.Language,
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxSize(),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -774,7 +772,7 @@ private fun UrlDisplay(
                 } else {
                     // GLOBE_ONLY mode
                     Icon(
-                        imageVector = Icons.Default.Language,
+                        imageVector = AppIcons.Default.Language,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -808,7 +806,7 @@ fun SelectionIndicator(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Filled.CheckCircle,
+                imageVector = AppIcons.Filled.CheckCircle,
                 contentDescription = "Selected",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)

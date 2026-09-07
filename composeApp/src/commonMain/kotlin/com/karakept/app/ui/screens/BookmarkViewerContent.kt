@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.utils.AppLogger
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -27,8 +28,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -40,6 +39,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -96,6 +96,7 @@ import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.components.reader.GalleryViewerState
 import com.karakept.app.ui.components.reader.ImageGalleryOverlay
 import com.karakept.app.ui.components.reader.LocalGalleryViewerState
+import com.karakept.app.ui.components.reader.heroGalleryImage
 import com.karakept.app.ui.components.reader.LocalReaderSnapRegistry
 import com.karakept.app.ui.components.reader.ReaderSnapRegistry
 import com.karakept.app.ui.components.reader.SearchMatch
@@ -547,6 +548,22 @@ fun BookmarkViewerContent(
                 val bannerImageLocalPath by screenModel.bannerImageLocalPath.collectAsState()
                 val screenshotLocalPath by screenModel.screenshotLocalPath.collectAsState()
 
+                // Resolved here rather than inside the hero item: that item is disposed once
+                // scrolled off, and an image tapped further down still opens on the banner.
+                val heroImage = remember(
+                    showHeroImage, title, bannerImageUrl, screenshotUrl,
+                    bannerImageLocalPath, screenshotLocalPath
+                ) {
+                    if (!showHeroImage) null else heroGalleryImage(
+                        title = title,
+                        bannerImageUrl = bannerImageUrl,
+                        screenshotUrl = screenshotUrl,
+                        bannerImageLocalPath = bannerImageLocalPath,
+                        screenshotLocalPath = screenshotLocalPath
+                    )
+                }
+                SideEffect { galleryViewerState.heroImage = heroImage }
+
                 val viewerContent: @Composable () -> Unit = {
                     Box(modifier = Modifier.fillMaxSize()
                         .then(if (getPlatform().isDesktop)
@@ -626,6 +643,9 @@ fun BookmarkViewerContent(
                                     scrollState = scrollState, createdAt = state.bookmark.createdAt,
                                     dateDisplayMode = dateDisplayMode,
                                     showImage = showHeroImage,
+                                    onImageClick = if (heroImage != null) {
+                                        { galleryViewerState.openHero() }
+                                    } else null,
                                     onUrlClick = if (url.isNotEmpty()) { {
                                         try { when (linkOpenMode) { LinkOpenMode.CUSTOM_TAB -> openInCustomTab(url); LinkOpenMode.EXTERNAL_BROWSER -> uriHandler.openUri(url) } }
                                         catch (e: Exception) { AppLogger.e("ViewerScreen", "Failed to handle reader action: ${e.message}", e) }
@@ -777,7 +797,7 @@ fun BookmarkViewerContent(
                             }
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ArrowUpward,
+                                imageVector = AppIcons.Default.ArrowUpward,
                                 contentDescription = "Scroll to top"
                             )
                         }
@@ -831,7 +851,7 @@ fun BookmarkViewerContent(
                         onViewerModeClick = { showModeDialog = true },
                         onMoveToListClick = { showListPicker = true },
                         onEditTagsClick = { showTagEditor = true },
-                        onRefreshClick = { screenModel.refreshBookmark(bookmarkId) },
+                        onRefreshClick = { screenModel.refreshBookmark() },
                         onDeleteClick = { showDeleteConfirmation = true },
                         onSearchClick = { showSearch = true },
                         isDesktop = getPlatform().isDesktop, bookmark = state.bookmark,
@@ -911,7 +931,7 @@ fun BookmarkViewerContent(
                 // E-ink readers refresh from the overflow menu instead — see RefreshableBox.
                 RefreshableBox(
                     isRefreshing = isRefreshing,
-                    onRefresh = { screenModel.refreshBookmark(bookmarkId) },
+                    onRefresh = { screenModel.refreshBookmark() },
                     enabled = !getPlatform().isDesktop,
                     modifier = Modifier.fillMaxSize()
                 ) {

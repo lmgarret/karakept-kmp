@@ -70,12 +70,14 @@
 
 ## Dependency Version Issues
 
-**Kotlin 2.x multifile-class facade migration issue (FIXED):**
-- Issue: Previous commit `05f1318` forced skiko to 0.9.37.3 due to NoSuchMethodError at startup
-- Details: `composenativetray:1.1.0` → `platformtools.darkmodedetector:0.7.5` → compose 1.9.0 → skiko 0.9.22.2 (compiled with Kotlin 1.9.21). That JAR calls `invokestatic kotlin.io.path.PathsKt.createParentDirectories`, but in Kotlin 2.x the multifile-class facade no longer redeclares static methods (they moved to `PathsKt__PathUtilsKt`).
-- Files: `composeApp/build.gradle.kts` (forces skiko artifacts to 0.9.37.3)
-- Impact: FIXED in current version but demonstrates fragility of transitive dependencies
-- Fix approach: Monitor for updates to `platformtools.darkmodedetector` and `compose-native-tray` that may reintroduce the issue. Consider pinning more platform-critical dependencies.
+**Skiko/tray binary compatibility (RECURRING — currently FIXED):**
+- Issue: The system tray library is compiled against Skiko and breaks at desktop startup whenever a Compose Multiplatform bump moves Skiko across a signature change. It has bitten twice.
+- Occurrence 1: commit `05f1318` forced skiko to 0.9.37.3 after a `NoSuchMethodError` at startup — `composenativetray:1.1.0` → `platformtools.darkmodedetector:0.7.5` → compose 1.9.0 → skiko 0.9.22.2 (built with Kotlin 1.9.21), which called `kotlin.io.path.PathsKt.createParentDirectories`; in Kotlin 2.x that static moved out of the multifile-class facade to `PathsKt__PathUtilsKt`. That force has since been removed.
+- Occurrence 2: Compose 1.12.0 moved Skiko 0.144.6 → 0.150.1, which added a parameter to `Image.encodeToData`. `io.github.kdroidfilter:composenativetray:1.3.3` was compiled against the two-argument form and calls it while rendering the tray icon, so the desktop app died on launch with `NoSuchMethodError`.
+- Files: `composeApp/src/desktopMain/kotlin/main.kt`, `gradle/libs.versions.toml`
+- Impact: Desktop-only, but fatal at startup — the tray is composed during `main`, so the app never reaches a window.
+- Fix approach: The library moved from `io.github.kdroidfilter` (abandoned at 1.3.3) to `dev.nucleusframework:composenativetray`, now on 2.1.6 and built against Skiko 0.150.x. Remember the groupId moved — the old coordinates still resolve and look up to date.
+- Why this should stop recurring: 2.1.1 wrapped the call in a `NoSuchMethodError` catch that retries the legacy two-argument overload by reflection (`ComposableIconUtils.encodeToPngBytes`), so the tray now tolerates a Skiko signature change in *either* direction rather than dying at startup. Still worth a desktop smoke-launch after a Compose bump, but this is no longer expected to be fatal.
 
 **Compose DSL deprecations (FIXED):**
 - Issue: Recent commit `bb8553c` fixed compose DSL deprecations

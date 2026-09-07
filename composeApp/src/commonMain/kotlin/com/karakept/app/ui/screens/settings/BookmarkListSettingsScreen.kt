@@ -11,13 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Switch
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Card
@@ -39,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -177,7 +171,7 @@ fun BookmarkListSettingsContent(
                     navigationIcon = {
                         if (showBackButton) {
                             IconButton(onClick = onBack) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                             }
                         }
                     }
@@ -262,7 +256,7 @@ fun BookmarkListSettingsContent(
                                 }
                             }
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                                 contentDescription = "Select list"
                             )
                         }
@@ -297,7 +291,7 @@ fun BookmarkListSettingsContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.TouchApp,
+                                imageVector = AppIcons.Default.TouchApp,
                                 contentDescription = null,
                                 modifier = Modifier.padding(end = 16.dp),
                                 tint = MaterialTheme.colorScheme.primary
@@ -330,7 +324,7 @@ fun BookmarkListSettingsContent(
                     selectedAction = swipeRightAction,
                     selectedConfigId = swipeRightConfigId,
                     customConfigs = customConfigs,
-                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    icon = AppIcons.AutoMirrored.Filled.ArrowForward,
                     onActionSelected = { screenModel.setSwipeRightAction(it) },
                     onConfigSelected = { screenModel.setSwipeRightConfigId(it) }
                 )
@@ -343,7 +337,7 @@ fun BookmarkListSettingsContent(
                     selectedAction = swipeLeftAction,
                     selectedConfigId = swipeLeftConfigId,
                     customConfigs = customConfigs,
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    icon = AppIcons.AutoMirrored.Filled.ArrowBack,
                     onActionSelected = { screenModel.setSwipeLeftAction(it) },
                     onConfigSelected = { screenModel.setSwipeLeftConfigId(it) }
                 )
@@ -363,7 +357,7 @@ fun BookmarkListSettingsContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Label,
+                            imageVector = AppIcons.AutoMirrored.Filled.Label,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 12.dp),
                             tint = MaterialTheme.colorScheme.primary
@@ -380,7 +374,7 @@ fun BookmarkListSettingsContent(
                             )
                         }
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Open"
                         )
                     }
@@ -407,7 +401,7 @@ fun BookmarkListSettingsContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Speed,
+                            imageVector = AppIcons.Default.Speed,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 12.dp),
                             tint = MaterialTheme.colorScheme.primary
@@ -424,7 +418,7 @@ fun BookmarkListSettingsContent(
                             )
                         }
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Adjust"
                         )
                     }
@@ -447,7 +441,7 @@ fun BookmarkListSettingsContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Notifications,
+                            imageVector = AppIcons.Default.Notifications,
                             contentDescription = null,
                             modifier = Modifier.padding(end = 16.dp),
                             tint = MaterialTheme.colorScheme.primary
@@ -708,7 +702,7 @@ private fun SwipeActionSettingItem(
                 )
             }
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = "Select"
             )
         }

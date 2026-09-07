@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.Highlight
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.HighlightPalette
 import com.karakept.app.ui.theme.HighlightStyle
 import com.karakept.app.ui.theme.LocalEinkMode
@@ -75,7 +73,7 @@ fun HighlightDetailsBottomPanel(
                         // Delete button on the right
                         IconButton(onClick = { onDeleteHighlight(highlight.id) }) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
+                                imageVector = AppIcons.Default.Delete,
                                 contentDescription = "Delete Highlight",
                                 tint = MaterialTheme.colorScheme.error
                             )
@@ -171,7 +169,7 @@ private fun ColorSwatch(
                 }
             } else if (isSelected) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = AppIcons.Default.Check,
                     contentDescription = null,
                     tint = if (style.color.luminance() > 0.5f) Color.Black else Color.White,
                     modifier = Modifier.size(20.dp)

@@ -15,15 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Tonality
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -79,12 +71,12 @@ private enum class SettingsSection(
     val description: String,
     val icon: ImageVector
 ) {
-    APPEARANCE("Appearance", "Theme, accent color, layouts", Icons.Default.Palette),
-    BEHAVIOR("Behavior", "Layout, gestures, reading speed, notifications", Icons.AutoMirrored.Filled.ViewList),
-    READER("Reader", "Viewer mode, progress, tags, link handling", Icons.Default.Visibility),
-    EINK("E-ink", "Contrast, motion, page-turn buttons", Icons.Default.Tonality),
-    SYNC_DATA("Sync & Data", "Offline mode, content sync, server, backup", Icons.Default.Sync),
-    ABOUT("About", "App version and open source licenses", Icons.Default.Info)
+    APPEARANCE("Appearance", "Theme, accent color, layouts", AppIcons.Default.Palette),
+    BEHAVIOR("Behavior", "Layout, gestures, reading speed, notifications", AppIcons.AutoMirrored.Filled.ViewList),
+    READER("Reader", "Viewer mode, progress, tags, link handling", AppIcons.Default.Visibility),
+    EINK("E-ink", "Contrast, motion, page-turn buttons", AppIcons.Default.Tonality),
+    SYNC_DATA("Sync & Data", "Offline mode, content sync, server, backup", AppIcons.Default.Sync),
+    ABOUT("About", "App version and open source licenses", AppIcons.Default.Info)
 }
 
 @Serializable
@@ -123,7 +115,7 @@ class SettingsScreen : NavKey {
                                     title = { Text("Settings") },
                                     navigationIcon = {
                                         IconButton(onClick = { navigator.pop() }) {
-                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                                         }
                                     }
                                 )
@@ -258,7 +250,7 @@ class SettingsScreen : NavKey {
                             title = { Text("Settings") },
                             navigationIcon = {
                                 IconButton(onClick = { navigator.pop() }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                    Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                                 }
                             }
                         )
@@ -280,7 +272,7 @@ class SettingsScreen : NavKey {
                             SettingsNavigationItem(
                                 title = "Appearance",
                                 description = "Theme, accent color, layouts",
-                                icon = Icons.Default.Palette,
+                                icon = AppIcons.Default.Palette,
                                 onClick = { navigator.push(AppearanceSettingsScreen()) }
                             )
 
@@ -289,7 +281,7 @@ class SettingsScreen : NavKey {
                             SettingsNavigationItem(
                                 title = "Behavior",
                                 description = "Layout, gestures, reading speed, notifications",
-                                icon = Icons.AutoMirrored.Filled.ViewList,
+                                icon = AppIcons.AutoMirrored.Filled.ViewList,
                                 onClick = { navigator.push(BookmarkListSettingsScreen()) }
                             )
 
@@ -298,7 +290,7 @@ class SettingsScreen : NavKey {
                             SettingsNavigationItem(
                                 title = "Reader",
                                 description = "Viewer mode, progress, tags, link handling",
-                                icon = Icons.Default.Visibility,
+                                icon = AppIcons.Default.Visibility,
                                 onClick = { navigator.push(BookmarkViewSettingsScreen()) }
                             )
 
@@ -307,7 +299,7 @@ class SettingsScreen : NavKey {
                             SettingsNavigationItem(
                                 title = "E-ink",
                                 description = "Contrast, motion, page-turn buttons",
-                                icon = Icons.Default.Tonality,
+                                icon = AppIcons.Default.Tonality,
                                 onClick = { navigator.push(EinkSettingsScreen()) }
                             )
 
@@ -316,7 +308,7 @@ class SettingsScreen : NavKey {
                             SettingsNavigationItem(
                                 title = "Sync & Data",
                                 description = "Offline mode, content sync, server, backup",
-                                icon = Icons.Default.Sync,
+                                icon = AppIcons.Default.Sync,
                                 onClick = { navigator.push(SyncDataSettingsScreen()) }
                             )
 
@@ -325,7 +317,7 @@ class SettingsScreen : NavKey {
                             SettingsNavigationItem(
                                 title = "About",
                                 description = "App version and open source licenses",
-                                icon = Icons.Default.Info,
+                                icon = AppIcons.Default.Info,
                                 onClick = { navigator.push(AboutScreen()) }
                             )
                         }
@@ -401,7 +393,7 @@ private fun SettingsNavigationItem(
             }
             if (!isSelected) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = "Open"
                 )
             }

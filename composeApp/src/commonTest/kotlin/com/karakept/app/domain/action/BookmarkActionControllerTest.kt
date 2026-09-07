@@ -161,7 +161,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Tags updated", result.message)
         coVerify {
-            bookmarkActionsRepository.updateTags(bookmark.remoteId, bookmark.serverId, newTags, true)
+            bookmarkActionsRepository.updateTags(bookmark.remoteId, bookmark.serverId, newTags)
         }
     }
 
@@ -174,7 +174,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Moved to list", result.message)
         coVerify {
-            bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "list-1", true)
+            bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, "list-1", any())
         }
     }
 
@@ -192,8 +192,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
             bookmarkActionsRepository.removeFromList(
                 bookmark.remoteId,
                 bookmark.serverId,
-                "list-1",
-                true
+                "list-1"
             )
         }
     }
@@ -254,7 +253,8 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     // ──────────────────────────────────────────────────────────
 
     private fun makeBookmark(
-        remoteId: Long = 42L,
+        localId: Long = 1L,
+        remoteId: String = "remote-42",
         serverId: String = "server1",
         tags: String = "",
         listIds: String = "",
@@ -263,7 +263,6 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     ) = BookmarkEntity(
         localId = 1L,
         remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
         serverId = serverId,
         title = "Test",
         url = "https://example.com",

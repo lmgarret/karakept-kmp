@@ -25,13 +25,12 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.karakept.app.ui.icons.AppIcons
 import java.io.File
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.draw.clip
@@ -91,6 +90,8 @@ fun HeroImageBanner(
      * image there is no scrim, so the whole header has to switch to theme colours.
      */
     showImage: Boolean = true,
+    /** Opens the banner image full-screen. Null leaves the image inert. */
+    onImageClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (!showImage) {
@@ -132,7 +133,16 @@ fun HeroImageBanner(
                     .crossfade(!LocalEinkMode.current.animationsDisabled)
                     .build(),
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                // The scrim and the title block are drawn over this but only the title's own
+                // controls take pointer input, so a tap anywhere else on the banner lands here.
+                modifier = Modifier.fillMaxSize().then(
+                    if (onImageClick != null) {
+                        Modifier.clickable(
+                            onClickLabel = "View image full-screen",
+                            onClick = onImageClick
+                        )
+                    } else Modifier
+                ),
                 contentScale = ContentScale.Crop
             )
 
@@ -266,7 +276,7 @@ fun HeroImageBanner(
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Info,
+                                    imageVector = AppIcons.Default.Info,
                                     contentDescription = "Bookmark details",
                                     tint = Color.White.copy(alpha = 0.9f),
                                     modifier = Modifier.size(20.dp)
@@ -366,7 +376,7 @@ private fun TextOnlyHeroHeader(
                 if (onInfoClick != null) {
                     IconButton(onClick = onInfoClick, modifier = Modifier.size(32.dp)) {
                         Icon(
-                            imageVector = Icons.Default.Info,
+                            imageVector = AppIcons.Default.Info,
                             contentDescription = "Bookmark details",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)

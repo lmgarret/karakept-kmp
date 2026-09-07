@@ -89,9 +89,8 @@ fun MainScreenModel.deleteBookmark(bookmark: BookmarkEntity) {
 
 fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<String>) {
     viewModelScope.launch {
-        val isOnline = !_isSyncing.value
         bookmarkActionsRepository.updateTags(
-            bookmark.remoteId, bookmark.serverId, newTags, isOnline
+            bookmark.remoteId, bookmark.serverId, newTags
         )
     }
 }
@@ -148,7 +147,7 @@ internal fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
  */
 internal fun applyReconcileBookmarkTransform(
     current: List<BookmarkEntity>,
-    remoteId: Long,
+    remoteId: String,
     updated: BookmarkEntity?,
     currentListContext: String?
 ): List<BookmarkEntity> {
@@ -169,9 +168,8 @@ fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String)
         .mapNotNull { it.id }
         .toSet()
     viewModelScope.launch {
-        val isOnline = !_isSyncing.value
         bookmarkActionsRepository.moveToList(
-            bookmark.remoteId, bookmark.serverId, listId, isOnline, smartListIds
+            bookmark.remoteId, bookmark.serverId, listId, smartListIds
         )
         updateAccumulatedBookmarks { list ->
             list.map {
@@ -207,8 +205,7 @@ fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String)
  */
 fun MainScreenModel.restoreAndMoveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
     viewModelScope.launch {
-        val isOnline = !_isSyncing.value
-        bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
+        bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, listId)
         val server = _selectedServer.value ?: return@launch
         resetPaginationAndLoad(server, effectiveFilterNow(), scrollToTop = false)
     }
@@ -232,8 +229,7 @@ fun MainScreenModel.accumulatedBookmarkPosition(bookmark: BookmarkEntity): Int =
 
 fun MainScreenModel.restoreAndRemoveBookmarkFromList(bookmark: BookmarkEntity, listId: String, originalPosition: Int = -1) {
     viewModelScope.launch {
-        val isOnline = !_isSyncing.value
-        bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, listId, isOnline)
+        bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, listId)
         updateAccumulatedBookmarks { current ->
             applyRestoreAndRemoveFromListTransform(current, bookmark, listId, originalPosition)
         }
@@ -280,9 +276,8 @@ fun MainScreenModel.addBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
         val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
         if (!currentTags.contains(tagName)) {
             val newTags = currentTags + tagName
-            val isOnline = !_isSyncing.value
             bookmarkActionsRepository.updateTags(
-                bookmark.remoteId, bookmark.serverId, newTags, isOnline
+                bookmark.remoteId, bookmark.serverId, newTags
             )
             updateAccumulatedBookmarks { list ->
                 list.map {
@@ -299,9 +294,8 @@ fun MainScreenModel.removeBookmarkTag(bookmark: BookmarkEntity, tagName: String)
         val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
         if (currentTags.contains(tagName)) {
             val newTags = currentTags.filter { it != tagName }
-            val isOnline = !_isSyncing.value
             bookmarkActionsRepository.updateTags(
-                bookmark.remoteId, bookmark.serverId, newTags, isOnline
+                bookmark.remoteId, bookmark.serverId, newTags
             )
             updateAccumulatedBookmarks { list ->
                 list.map {
@@ -349,9 +343,8 @@ fun applyRemoveBookmarkTransform(
 fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: String) {
     _actedOnBookmarkIds.value += bookmark.remoteId
     viewModelScope.launch {
-        val isOnline = !_isSyncing.value
         bookmarkActionsRepository.removeFromList(
-            bookmark.remoteId, bookmark.serverId, listId, isOnline
+            bookmark.remoteId, bookmark.serverId, listId
         )
         updateAccumulatedBookmarks { currentBookmarks ->
             applyRemoveBookmarkTransform(
@@ -434,10 +427,10 @@ fun MainScreenModel.executeScrollAction(
 fun MainScreenModel.createBookmark(url: String) {
     viewModelScope.launch {
         val server = _selectedServer.value ?: return@launch
-        val tempRemoteId = kotlin.random.Random.nextLong(Long.MIN_VALUE, -1L)
+        // Distinct from any server id, so the placeholder can never collide with a real row.
+        val tempRemoteId = "pending-${kotlin.random.Random.nextLong()}"
         val placeholder = BookmarkEntity(
             remoteId = tempRemoteId,
-            originalRemoteId = "pending-$tempRemoteId",
             serverId = server.id,
             url = url,
             title = url,

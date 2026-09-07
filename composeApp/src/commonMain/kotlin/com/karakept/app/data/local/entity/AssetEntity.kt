@@ -1,14 +1,14 @@
 package com.karakept.app.data.local.entity
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room3.Entity
+import androidx.room3.PrimaryKey
 import androidx.compose.runtime.Immutable
 
 @Immutable
 @Entity(tableName = "assets")
 data class AssetEntity(
     @PrimaryKey val id: String, // Asset ID from remote
-    val bookmarkRemoteId: Long,
+    val bookmarkRemoteId: String,
     val serverId: String,
     val assetType: String,
     val fileName: String?,

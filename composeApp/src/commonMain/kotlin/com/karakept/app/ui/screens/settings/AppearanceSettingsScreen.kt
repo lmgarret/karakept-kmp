@@ -18,16 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Contrast
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.SettingsSystemDaydream
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -47,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -87,7 +78,7 @@ fun AppearanceSettingsContent(
                 navigationIcon = {
                     if (showBackButton) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 }
@@ -115,7 +106,7 @@ fun AppearanceSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Layers,
+                        imageVector = AppIcons.Default.Layers,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 16.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -132,7 +123,7 @@ fun AppearanceSettingsContent(
                         )
                     }
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
                         contentDescription = "Open"
                     )
                 }
@@ -151,7 +142,7 @@ fun AppearanceSettingsContent(
             ThemeModeOption(
                 title = "Light",
                 description = "Light theme",
-                icon = Icons.Default.LightMode,
+                icon = AppIcons.Default.LightMode,
                 isSelected = currentThemeMode == ThemeMode.LIGHT,
                 onClick = { screenModel.setThemeMode(ThemeMode.LIGHT) }
             )
@@ -161,7 +152,7 @@ fun AppearanceSettingsContent(
             ThemeModeOption(
                 title = "Dark",
                 description = "Dark theme",
-                icon = Icons.Default.DarkMode,
+                icon = AppIcons.Default.DarkMode,
                 isSelected = currentThemeMode == ThemeMode.DARK,
                 onClick = { screenModel.setThemeMode(ThemeMode.DARK) }
             )
@@ -171,7 +162,7 @@ fun AppearanceSettingsContent(
             ThemeModeOption(
                 title = "AMOLED",
                 description = "Pure black for AMOLED screens",
-                icon = Icons.Default.Contrast,
+                icon = AppIcons.Default.Contrast,
                 isSelected = currentThemeMode == ThemeMode.AMOLED,
                 onClick = { screenModel.setThemeMode(ThemeMode.AMOLED) }
             )
@@ -181,7 +172,7 @@ fun AppearanceSettingsContent(
             ThemeModeOption(
                 title = "System",
                 description = "Follow system theme",
-                icon = Icons.Default.SettingsSystemDaydream,
+                icon = AppIcons.Default.SettingsSystemDaydream,
                 isSelected = currentThemeMode == ThemeMode.SYSTEM,
                 onClick = { screenModel.setThemeMode(ThemeMode.SYSTEM) }
             )
@@ -252,7 +243,7 @@ private fun ThemeModeOption(
             }
             if (isSelected) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = AppIcons.Default.CheckCircle,
                     contentDescription = "Selected",
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -343,7 +334,7 @@ private fun AppearanceColorSwatch(
         ) {
             if (isSelected) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = AppIcons.Default.Check,
                     contentDescription = "Selected",
                     tint = if (label == "Dynamic" || color.luminance() > 0.5f) Color.Black else Color.White,
                     modifier = Modifier.size(24.dp)

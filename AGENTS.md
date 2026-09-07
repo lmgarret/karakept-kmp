@@ -7,12 +7,12 @@ targeting Android and JVM Desktop (Linux, macOS, Windows).
 The UI follows **Material Design 3 (MD3)** guidelines throughout.
 
 Key technologies:
-- Kotlin 2.4.0 / Compose Multiplatform 1.11.1
+- Kotlin 2.4.10 / Compose Multiplatform 1.12.0
 - Material3 (`androidx.compose.material3`)
 - Compose Navigation 3 (`androidx.navigation3` / `org.jetbrains.androidx.navigation3` 1.1.1) for navigation
 - `androidx.lifecycle` `ViewModel` (multiplatform) for per-screen state (MVVM)
 - Koin 4.2.2 for dependency injection (incl. `koin-compose-viewmodel`, `koin-compose-navigation3`)
-- Room 2.8.4 for local SQLite storage
+- Room 3.0.2 (`androidx.room3`) for local SQLite storage
 - Ktor 3.5.1 for HTTP/API communication
 - kotlinx-serialization, kotlinx-coroutines, kotlinx-datetime
 
@@ -134,6 +134,23 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 ---
 
 ## Reusable UI Components — ALWAYS use these
+
+### Icons
+
+**`AppIcons`** (`ui/icons/AppIcons.kt`) — the app's only source of Material icons.
+`Icons.Default.X` becomes `AppIcons.Default.X`, `Icons.AutoMirrored.Filled.X` becomes
+`AppIcons.AutoMirrored.Filled.X`, and so on: the shape mirrors upstream, so a call site reads
+the same.
+
+`material-icons-extended` is frozen at 1.7.3 and no longer maintained, so the icons the app
+draws are vendored instead: `tools/material-icons.txt` lists them, and
+`tools/generate_material_icons.py` regenerates `AppIcons.kt` from the 24dp SVGs in
+google/material-design-icons — the same artwork the Compose artifact was generated from.
+The generator needs network access and is run by hand, never from the build.
+
+> **Rule:** never import `androidx.compose.material.icons.*`. To use an icon the app does not
+> draw yet, add its name to `tools/material-icons.txt` and re-run the generator —
+> `AppIconsManifestTest` fails on a manifest and a generated file that disagree.
 
 ### Tag display
 
@@ -317,6 +334,41 @@ The generated text is `BookmarkEntity.summary`, **not** `description`: the crawl
 `description` from the page's meta tags and Karakeep's inference worker never touches it. Both can
 be present, and the reader shows both. See `docs/ai-actions.md`.
 
+### Highlight offsets
+
+A highlight is a character range, and a range means nothing without the stream it counts in. That
+stream is **`ReaderTextOffsets`** (`ui/components/reader/ReaderTextOffsets.kt`): the document's
+text nodes concatenated in document order and nothing else — the same count karakeep's web app
+makes with a `TreeWalker` (`BookmarkHtmlHighlighter.getTextNodeOffset`) and the same one the
+WebView viewer's JS makes, so a highlight means the same thing in both viewers and on the server.
+
+`buildReaderTextOffsets(body)` walks it once per document; the reader remembers the result and
+every renderer reads its offsets rather than counting along as it draws. That counting is what
+drifted: creation resolved a selection through one walk and drawing accumulated another, and
+wherever the second forgot something — a container walked with `children()` instead of
+`childNodes()`, a `<br>`, the whitespace between two `<li>`s — every later highlight moved a
+character or two. Readability wraps an article in a single `<div>`, so nothing ever reset the
+drift and it grew down the page.
+
+> **Rule:** never derive an offset by counting text as you render — ask `offsets.startOf(node)` /
+> `endOf(node)`. To map a stream range onto a string you built, record a `TextRuns` entry per text
+> node and translate through `runs.localRange(start, end)`. The rendered string is not the stream
+> (a `<br>` is a character in one and not the other); what was recorded is the only thing relating
+> them.
+
+Two things follow from the stream carrying no separators of its own:
+
+- A selection spanning two blocks comes back from Compose joined with a newline, and the stream
+  has no character there. Those positions are recorded as **boundaries** instead: they match as
+  whitespace and occupy no offset, so the selection resolves and the offsets stay karakeep's.
+- Reader search runs on the same offsets (`findSearchMatches`), since the same renderers draw a
+  search match and a highlight. It used to keep a walk of its own, written to mirror the renderer
+  rather than the resolver, which left search and highlights on two conventions.
+
+Offsets outlive the document they were taken in — another client, an older build, a re-crawl — so
+`resolveHighlights` checks each highlight against the text it was created from before drawing it,
+and re-resolves the ones that disagree onto the nearest occurrence of that text.
+
 ### Highlight colours
 
 Karakeep gives a highlight one of four colours — `yellow`, `blue`, `green`, `red` — stored as a
@@ -368,6 +420,13 @@ solid (yellow) / double (blue) / dashed (green) / dotted (red).
   once per document by `NativeHtmlRenderer` via `collectGalleryImages`.
 - Wired into `RenderResolvedImage` (`HtmlBlockRenderer.kt`) — every `<img>`/`<picture>`
   rendered in Reader mode is tappable to open the gallery positioned on that exact image.
+- The reader's hero banner is page 0 of that list, whichever image was tapped. It is not part of
+  the article's HTML, so `heroGalleryImage(...)` builds its entry (with a null `element` and,
+  for a synced offline copy, a `localPath` the viewer tries before any URL) and
+  `BookmarkViewerContent` publishes it as `GalleryViewerState.heroImage` — at screen level, not
+  from the hero item, which `LazyColumn` disposes as soon as it scrolls away. `NativeHtmlRenderer`
+  prepends it and publishes the combined list back as `GalleryViewerState.images`, which is what
+  the banner's own tap (`openHero()`) opens.
 - **Use whenever an image needs a tap-to-enlarge, swipe-between-siblings full-screen view.**
 
 ### E-ink mode
@@ -645,7 +704,8 @@ Settings category classes: `StoredThemeSettings`, `StoredDisplaySettings`, `Stor
 2. Create DAO in `data/local/dao/[Name]Dao.kt`.
 3. Add entity to `AppDatabase.kt` entities list and bump the schema version.
 4. Write migration `data/local/migrations/Migration[N]To[N+1].kt`.
-5. Register migration in platform database builders (`androidMain/Database.android.kt`, etc.).
+5. Add the migration to `ALL_MIGRATIONS` (`data/local/migrations/AppMigrations.kt`) — both platform
+   builders read that one array, so a migration left out of it is a silent destructive wipe.
 
 ---
 

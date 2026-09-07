@@ -11,6 +11,7 @@ import com.karakept.app.data.remote.RemoteDataSource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
@@ -25,6 +26,7 @@ import kotlin.test.assertTrue
  * Verifies processPendingActions, getPendingActionBookmarkIds,
  * pullReadingProgressFromServer, and executeAction dispatch and retry logic.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
     private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)
@@ -75,25 +77,25 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     fun processPendingActions_withActions_returnsProcessedBookmarkIds() = runTest(testDispatcher) {
         val action1 = makePendingAction(
             actionType = PendingActionType.ARCHIVE,
-            bookmarkRemoteId = 10L
+            bookmarkRemoteId = "remote-10"
         )
         val action2 = makePendingAction(
             actionType = PendingActionType.FAVOURITE,
-            bookmarkRemoteId = 20L
+            bookmarkRemoteId = "remote-20"
         )
         coEvery { pendingActionDao.getProcessableActions("server1", any()) } returns listOf(action1, action2)
         coEvery {
-            bookmarkDao.getBookmarkByRemoteId(10L, "server1")
-        } returns makeBookmark(remoteId = 10L)
+            bookmarkDao.getBookmarkByRemoteId("remote-10", "server1")
+        } returns makeBookmark(remoteId = "remote-10")
         coEvery {
-            bookmarkDao.getBookmarkByRemoteId(20L, "server1")
-        } returns makeBookmark(remoteId = 20L)
+            bookmarkDao.getBookmarkByRemoteId("remote-20", "server1")
+        } returns makeBookmark(remoteId = "remote-20")
 
         val result = repository.processPendingActions(testServer)
 
         assertEquals(2, result.size)
-        assertTrue(result.contains(10L))
-        assertTrue(result.contains(20L))
+        assertTrue(result.contains("remote-10"))
+        assertTrue(result.contains("remote-20"))
     }
 
     // ──────────────────────────────────────────────────────────
@@ -103,17 +105,17 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun getPendingActionBookmarkIds_returnsDistinctIds() = runTest(testDispatcher) {
         val actions = listOf(
-            makePendingAction(bookmarkRemoteId = 10L, actionType = PendingActionType.ARCHIVE),
-            makePendingAction(bookmarkRemoteId = 10L, actionType = PendingActionType.FAVOURITE),
-            makePendingAction(bookmarkRemoteId = 20L, actionType = PendingActionType.DELETE)
+            makePendingAction(bookmarkRemoteId = "remote-10", actionType = PendingActionType.ARCHIVE),
+            makePendingAction(bookmarkRemoteId = "remote-10", actionType = PendingActionType.FAVOURITE),
+            makePendingAction(bookmarkRemoteId = "remote-20", actionType = PendingActionType.DELETE)
         )
         coEvery { pendingActionDao.getPendingActionsList("server1") } returns actions
 
         val result = repository.getPendingActionBookmarkIds("server1")
 
         assertEquals(2, result.size)
-        assertTrue(result.contains(10L))
-        assertTrue(result.contains(20L))
+        assertTrue(result.contains("remote-10"))
+        assertTrue(result.contains("remote-20"))
     }
 
     // ──────────────────────────────────────────────────────────
@@ -124,16 +126,16 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     fun pullReadingProgress_serverNotFound_reportsFailure() = runTest(testDispatcher) {
         coEvery { serverRepository.servers } returns flowOf(emptyList())
 
-        val result = repository.pullReadingProgressFromServer(42L, "server1")
+        val result = repository.pullReadingProgressFromServer("remote-42", "server1")
 
         assertEquals(ReadingProgressPullResult.FAILED, result)
     }
 
     @Test
     fun pullReadingProgress_bookmarkNotFound_reportsFailure() = runTest(testDispatcher) {
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns null
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns null
 
-        val result = repository.pullReadingProgressFromServer(42L, "server1")
+        val result = repository.pullReadingProgressFromServer("remote-42", "server1")
 
         assertEquals(ReadingProgressPullResult.FAILED, result)
     }
@@ -141,12 +143,12 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun pullReadingProgress_serverProgressHigher_updatesLocal_reportsApplied() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 0.2f)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.getReadingProgressBatch(any(), any(), any())
-        } returns mapOf(bookmark.originalRemoteId to 50)
+        } returns mapOf(bookmark.remoteId to 50)
 
-        val result = repository.pullReadingProgressFromServer(42L, "server1")
+        val result = repository.pullReadingProgressFromServer("remote-42", "server1")
 
         assertEquals(ReadingProgressPullResult.APPLIED, result)
         coVerify {
@@ -165,12 +167,12 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun pullReadingProgress_serverProgressLower_stillApplied() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 0.8f)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.getReadingProgressBatch(any(), any(), any())
-        } returns mapOf(bookmark.originalRemoteId to 0)
+        } returns mapOf(bookmark.remoteId to 0)
 
-        val result = repository.pullReadingProgressFromServer(42L, "server1")
+        val result = repository.pullReadingProgressFromServer("remote-42", "server1")
 
         assertEquals(ReadingProgressPullResult.APPLIED, result)
         coVerify {
@@ -189,15 +191,15 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun pullReadingProgress_unsyncedLocalProgress_keepsLocal() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 0.8f)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery { pendingActionDao.getPendingActionsList("server1") } returns listOf(
             makePendingAction(
-                bookmarkRemoteId = 42L,
+                bookmarkRemoteId = "remote-42",
                 actionType = PendingActionType.UPDATE_READING_PROGRESS
             )
         )
 
-        val result = repository.pullReadingProgressFromServer(42L, "server1")
+        val result = repository.pullReadingProgressFromServer("remote-42", "server1")
 
         assertEquals(ReadingProgressPullResult.SKIPPED, result)
         coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(any(), any(), any(), any(), any()) }
@@ -211,10 +213,10 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun pullReadingProgress_applied_asksTheListToReload() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 1f)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.getReadingProgressBatch(any(), any(), any())
-        } returns mapOf(bookmark.originalRemoteId to 0)
+        } returns mapOf(bookmark.remoteId to 0)
 
         var reloads = 0
         val collector = backgroundScope.launch {
@@ -222,7 +224,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         }
         runCurrent()
 
-        val result = repository.pullReadingProgressFromServer(42L, "server1")
+        val result = repository.pullReadingProgressFromServer("remote-42", "server1")
         runCurrent()
         collector.cancel()
 
@@ -233,10 +235,10 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun pullReadingProgress_skipped_asksForNoReload() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 0.3f)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.getReadingProgressBatch(any(), any(), any())
-        } returns mapOf(bookmark.originalRemoteId to 30)
+        } returns mapOf(bookmark.remoteId to 30)
 
         var reloads = 0
         val collector = backgroundScope.launch {
@@ -244,7 +246,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         }
         runCurrent()
 
-        repository.pullReadingProgressFromServer(42L, "server1")
+        repository.pullReadingProgressFromServer("remote-42", "server1")
         runCurrent()
         collector.cancel()
 
@@ -258,14 +260,13 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
     private fun target(
         localId: Long = 1L,
-        remoteId: Long = 42L,
-        originalRemoteId: String = "remote-$remoteId",
+        remoteId: String = "remote-42",
         readingProgress: Float = 0f
-    ) = ProgressPullTarget(localId, remoteId, originalRemoteId, readingProgress)
+    ) = ProgressPullTarget(localId, remoteId, readingProgress)
 
     @Test
     fun batchPull_asksForEveryTargetInOneCall() = runTest(testDispatcher) {
-        val targets = listOf(target(1L, 10L, "a"), target(2L, 20L, "b"), target(3L, 30L, "c"))
+        val targets = listOf(target(1L, "a"), target(2L, "b"), target(3L, "c"))
         coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } returns
             mapOf("a" to 100, "b" to null, "c" to 40)
 
@@ -274,10 +275,10 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         coVerify(exactly = 1) {
             remoteDataSource.getReadingProgressBatch(testServer, listOf("a", "b", "c"), any())
         }
-        assertEquals(ReadingProgressPullResult.APPLIED, outcomes[10L])
+        assertEquals(ReadingProgressPullResult.APPLIED, outcomes["a"])
         // The server holding nothing is the absence of a statement, not a claim of unread.
-        assertEquals(ReadingProgressPullResult.SKIPPED, outcomes[20L])
-        assertEquals(ReadingProgressPullResult.APPLIED, outcomes[30L])
+        assertEquals(ReadingProgressPullResult.SKIPPED, outcomes["b"])
+        assertEquals(ReadingProgressPullResult.APPLIED, outcomes["c"])
         coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(2L, any(), any(), any(), any()) }
     }
 
@@ -289,11 +290,11 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         // still local state the server has never heard.
         coEvery { pendingActionDao.getPendingActionsList("server1") } returns listOf(
             makePendingAction(
-                bookmarkRemoteId = 20L,
+                bookmarkRemoteId = "b",
                 actionType = PendingActionType.UPDATE_READING_PROGRESS
             )
         )
-        val targets = listOf(target(1L, 10L, "a"), target(2L, 20L, "b", readingProgress = 1f))
+        val targets = listOf(target(1L, "a"), target(2L, "b", readingProgress = 1f))
         coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } returns mapOf("a" to 10)
 
         val outcomes = repository.pullReadingProgressForTargets(targets, "server1")
@@ -301,7 +302,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         coVerify(exactly = 1) {
             remoteDataSource.getReadingProgressBatch(testServer, listOf("a"), any())
         }
-        assertEquals(ReadingProgressPullResult.SKIPPED, outcomes[20L])
+        assertEquals(ReadingProgressPullResult.SKIPPED, outcomes["b"])
         coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(2L, any(), any(), any(), any()) }
     }
 
@@ -309,32 +310,32 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     fun batchPull_unansweredIdsReportFailedSoTheCursorHolds() = runTest(testDispatcher) {
         // A partial answer must not stamp the rows it left out: they would rotate to the back
         // of the queue without the server ever having been asked about them.
-        val targets = listOf(target(1L, 10L, "a"), target(2L, 20L, "b"))
+        val targets = listOf(target(1L, "a"), target(2L, "b"))
         coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } returns mapOf("a" to 50)
 
         val outcomes = repository.pullReadingProgressForTargets(targets, "server1")
 
-        assertEquals(ReadingProgressPullResult.APPLIED, outcomes[10L])
-        assertEquals(ReadingProgressPullResult.FAILED, outcomes[20L])
+        assertEquals(ReadingProgressPullResult.APPLIED, outcomes["a"])
+        assertEquals(ReadingProgressPullResult.FAILED, outcomes["b"])
     }
 
     @Test
     fun batchPull_requestFailure_reportsFailedForEveryMember() = runTest(testDispatcher) {
-        val targets = listOf(target(1L, 10L, "a"), target(2L, 20L, "b"))
+        val targets = listOf(target(1L, "a"), target(2L, "b"))
         coEvery {
             remoteDataSource.getReadingProgressBatch(any(), any(), any())
         } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
 
         val outcomes = repository.pullReadingProgressForTargets(targets, "server1")
 
-        assertEquals(ReadingProgressPullResult.FAILED, outcomes[10L])
-        assertEquals(ReadingProgressPullResult.FAILED, outcomes[20L])
+        assertEquals(ReadingProgressPullResult.FAILED, outcomes["a"])
+        assertEquals(ReadingProgressPullResult.FAILED, outcomes["b"])
         coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun batchPull_asksForOneReloadPerPassNotPerRow() = runTest(testDispatcher) {
-        val targets = listOf(target(1L, 10L, "a"), target(2L, 20L, "b"))
+        val targets = listOf(target(1L, "a"), target(2L, "b"))
         coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } returns
             mapOf("a" to 100, "b" to 0)
 
@@ -360,7 +361,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     // pull must treat that the same as "nothing new to apply", not clobber the local write (#333).
     @Test
     fun batchPull_localChangedDuringTheRoundTrip_doesNotClobberIt() = runTest(testDispatcher) {
-        val target = target(1L, 10L, "a", readingProgress = 0.6f)
+        val target = target(1L, "a", readingProgress = 0.6f)
         coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } returns mapOf("a" to 40)
         coEvery {
             bookmarkDao.applyServerReadingProgress(
@@ -374,18 +375,18 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
         val outcomes = repository.pullReadingProgressForTargets(listOf(target), "server1")
 
-        assertEquals(ReadingProgressPullResult.SKIPPED, outcomes[10L])
+        assertEquals(ReadingProgressPullResult.SKIPPED, outcomes["a"])
     }
 
     @Test
     fun pullReadingProgress_serverMatchesLocal_reportsSkipped() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 0.3f)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.getReadingProgressBatch(any(), any(), any())
-        } returns mapOf(bookmark.originalRemoteId to 30)
+        } returns mapOf(bookmark.remoteId to 30)
 
-        val result = repository.pullReadingProgressFromServer(42L, "server1")
+        val result = repository.pullReadingProgressFromServer("remote-42", "server1")
 
         assertEquals(ReadingProgressPullResult.SKIPPED, result)
         coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(any(), any(), any(), any(), any()) }
@@ -394,12 +395,12 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun pullReadingProgress_serverHasNoProgress_reportsSkipped() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.getReadingProgressBatch(any(), any(), any())
-        } returns mapOf(bookmark.originalRemoteId to null)
+        } returns mapOf(bookmark.remoteId to null)
 
-        val result = repository.pullReadingProgressFromServer(42L, "server1")
+        val result = repository.pullReadingProgressFromServer("remote-42", "server1")
 
         assertEquals(ReadingProgressPullResult.SKIPPED, result)
     }
@@ -409,12 +410,12 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun pullReadingProgress_requestFails_reportsFailure() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.getReadingProgressBatch(any(), any(), any())
         } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
 
-        val result = repository.pullReadingProgressFromServer(42L, "server1")
+        val result = repository.pullReadingProgressFromServer("remote-42", "server1")
 
         assertEquals(ReadingProgressPullResult.FAILED, result)
         coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(any(), any(), any(), any(), any()) }
@@ -429,9 +430,9 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun markAsUnread_withResetProgress_pushesClearedProgress() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 1f, isRead = true)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
 
-        repository.markAsUnread(42L, "server1", resetProgress = true)
+        repository.markAsUnread("remote-42", "server1", resetProgress = true)
 
         coVerify {
             pendingActionDao.insertAction(match {
@@ -452,9 +453,9 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun markAsUnread_keepingProgress_staysLocal() = runTest(testDispatcher) {
         val bookmark = makeBookmark(readingProgress = 1f, isRead = true)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
 
-        repository.markAsUnread(42L, "server1", resetProgress = false)
+        repository.markAsUnread("remote-42", "server1", resetProgress = false)
 
         coVerify { bookmarkDao.insertBookmark(match { !it.isRead && it.readingProgress == 1f }) }
         coVerify(exactly = 0) {
@@ -472,26 +473,53 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     fun executeAction_archiveType_callsUpdateBookmarkWithArchivedTrue() = runTest(testDispatcher) {
         val action = makePendingAction(actionType = PendingActionType.ARCHIVE)
         val bookmark = makeBookmark()
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
 
         repository.executeAction(action, "server1")
 
         coVerify {
-            remoteDataSource.updateBookmark(testServer, bookmark.originalRemoteId, match { it.archived == true })
+            remoteDataSource.updateBookmark(testServer, bookmark.remoteId, match { it.archived == true })
         }
         coVerify { pendingActionDao.deleteAction(action) }
     }
 
+    // A DELETE runs after its bookmark row is already gone, so the queued row is the only
+    // thing that still knows which bookmark the server is being asked to delete.
     @Test
-    fun executeAction_deleteType_callsDeleteBookmark() = runTest(testDispatcher) {
-        val action = makePendingAction(
-            actionType = PendingActionType.DELETE,
-            actionData = """{"originalRemoteId":"remote-42"}"""
-        )
+    fun executeAction_deleteType_usesTheQueuedIdWithNoLocalRow() = runTest(testDispatcher) {
+        coEvery { bookmarkDao.getBookmarkByRemoteId(any(), any()) } returns null
+        val action = makePendingAction(actionType = PendingActionType.DELETE)
 
         repository.executeAction(action, "server1")
 
         coVerify { remoteDataSource.deleteBookmark(testServer, "remote-42") }
+        coVerify { pendingActionDao.deleteAction(action) }
+    }
+
+    // The two highlight actions name a highlight, not a bookmark, so the v13 migration may
+    // have left them with an empty bookmark id. They must still run.
+    @Test
+    fun executeAction_highlightAction_runsWithNoBookmarkId() = runTest(testDispatcher) {
+        val action = makePendingAction(
+            bookmarkRemoteId = "",
+            actionType = PendingActionType.DELETE_HIGHLIGHT,
+            actionData = """{"highlightId":"hl-7"}"""
+        )
+
+        repository.executeAction(action, "server1")
+
+        coVerify { remoteDataSource.deleteHighlight(testServer, "hl-7") }
+        coVerify { pendingActionDao.deleteAction(action) }
+    }
+
+    // Anything else with no id has nowhere to go: dropped rather than retried forever.
+    @Test
+    fun executeAction_bookmarkActionWithNoId_isDiscarded() = runTest(testDispatcher) {
+        val action = makePendingAction(bookmarkRemoteId = "", actionType = PendingActionType.ARCHIVE)
+
+        repository.executeAction(action, "server1")
+
+        coVerify(exactly = 0) { remoteDataSource.updateBookmark(any(), any(), any()) }
         coVerify { pendingActionDao.deleteAction(action) }
     }
 
@@ -502,7 +530,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
             retryCount = 0
         )
         val bookmark = makeBookmark()
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.updateBookmark(any(), any(), any())
         } throws RuntimeException("network error")
@@ -522,7 +550,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
             retryCount = 4
         )
         val bookmark = makeBookmark()
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.updateBookmark(any(), any(), any())
         } throws RuntimeException("persistent error")
@@ -545,9 +573,9 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
             actionData = """{"progressPercent":"73"}"""
         )
         val bookmark = makeBookmark()
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
-            remoteDataSource.updateReadingProgress(testServer, bookmark.originalRemoteId, 73)
+            remoteDataSource.updateReadingProgress(testServer, bookmark.remoteId, 73)
         } returns true
 
         repository.executeAction(action, "server1")
@@ -564,7 +592,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
             actionData = """{"progressPercent":"73"}"""
         )
         val bookmark = makeBookmark()
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.updateReadingProgress(any(), any(), any())
         } throws com.karakept.app.data.remote.ApiException("HTTP 500", statusCode = 500)
@@ -584,7 +612,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
             actionData = """{"progressPercent":"73"}"""
         )
         val bookmark = makeBookmark()
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.updateReadingProgress(any(), any(), any())
         } throws com.karakept.app.data.remote.ApiException("HTTP 404", statusCode = 404)
@@ -608,7 +636,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
             actionData = """{"progressPercent":"73"}"""
         )
         val bookmark = makeBookmark()
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns bookmark
         coEvery {
             remoteDataSource.updateReadingProgress(any(), any(), any())
         } returns false
@@ -621,7 +649,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     @Test
     fun executeAction_bookmarkNotFound_deletesOrphanedAction() = runTest(testDispatcher) {
         val action = makePendingAction(actionType = PendingActionType.ARCHIVE)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returns null
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returns null
 
         repository.executeAction(action, "server1")
 
@@ -634,7 +662,7 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
 
     private fun makePendingAction(
         actionType: String = PendingActionType.ARCHIVE,
-        bookmarkRemoteId: Long = 42L,
+        bookmarkRemoteId: String = "remote-42",
         serverId: String = "server1",
         actionData: String = "{}",
         retryCount: Int = 0
@@ -649,7 +677,8 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     )
 
     private fun makeBookmark(
-        remoteId: Long = 42L,
+        localId: Long = 1L,
+        remoteId: String = "remote-42",
         serverId: String = "server1",
         tags: String = "",
         listIds: String = "",
@@ -658,7 +687,6 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
     ) = BookmarkEntity(
         localId = 1L,
         remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
         serverId = serverId,
         title = "Test",
         url = "https://example.com",

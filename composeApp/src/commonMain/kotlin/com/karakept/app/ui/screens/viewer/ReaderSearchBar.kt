@@ -11,11 +11,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.karakept.app.ui.icons.AppIcons
 
 @Composable
 fun ReaderSearchBar(
@@ -71,7 +67,7 @@ fun ReaderSearchBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    imageVector = AppIcons.Default.Search,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 8.dp, end = 4.dp)
@@ -123,21 +119,21 @@ fun ReaderSearchBar(
 
                 IconButton(onClick = onPrevious, enabled = matchCount > 0) {
                     Icon(
-                        imageVector = Icons.Default.ArrowUpward,
+                        imageVector = AppIcons.Default.ArrowUpward,
                         contentDescription = "Previous match"
                     )
                 }
 
                 IconButton(onClick = onNext, enabled = matchCount > 0) {
                     Icon(
-                        imageVector = Icons.Default.ArrowDownward,
+                        imageVector = AppIcons.Default.ArrowDownward,
                         contentDescription = "Next match"
                     )
                 }
 
                 IconButton(onClick = onClose) {
                     Icon(
-                        imageVector = Icons.Default.Close,
+                        imageVector = AppIcons.Default.Close,
                         contentDescription = "Close search"
                     )
                 }

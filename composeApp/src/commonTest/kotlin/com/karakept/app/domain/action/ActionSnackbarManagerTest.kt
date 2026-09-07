@@ -1,5 +1,6 @@
 package com.karakept.app.domain.action
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -12,6 +13,7 @@ import kotlin.test.assertTrue
  * Behavioral tests for [ActionSnackbarManager] — verifies that each public method
  * emits the correct [SnackbarEvent] variant via [ActionSnackbarManager.snackbarEvents].
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ActionSnackbarManagerTest {
 
     private fun manager() = ActionSnackbarManager()

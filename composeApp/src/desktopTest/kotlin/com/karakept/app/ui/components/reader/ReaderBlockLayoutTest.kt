@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.sp
 import com.fleeksoft.ksoup.Ksoup
@@ -44,17 +44,19 @@ class ReaderBlockLayoutTest {
     private fun blocks(html: String): List<Element> =
         Ksoup.parse(html).body().children().toList()
 
+    private fun offsetsOf(html: String) = buildReaderTextOffsets(Ksoup.parse(html).body())
+
     private fun runBlocks(html: String, assertions: androidx.compose.ui.test.ComposeUiTest.() -> Unit) =
         runComposeUiTest {
             setContent {
                 CompositionLocalProvider(LocalReaderTheme provides theme) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        val offset = TextOffsetTracker()
+                        val offsets = offsetsOf(html)
                         for (block in blocks(html)) {
                             RenderBlock(
                                 element = block,
                                 highlights = emptyList(),
-                                textOffset = offset,
+                                offsets = offsets,
                                 onLinkClick = {},
                                 onHighlightClick = {},
                                 onHighlightPosition = { _, _ -> }

@@ -15,8 +15,7 @@ class NewBookmarksAboveCountTest {
 
     private fun bookmark(remoteId: Long, isRead: Boolean = false) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "orig-$remoteId",
+        remoteId = "orig-$remoteId",
         serverId = "server-1",
         url = "https://example.com/$remoteId",
         title = "Bookmark $remoteId",
@@ -41,28 +40,28 @@ class NewBookmarksAboveCountTest {
 
     @Test
     fun seenBookmarkIsStillAtTheTop_countsZero() {
-        assertEquals(0, countBookmarksAbove(listOfIds(1, 2, 3), seenTopRemoteId = 1L))
+        assertEquals(0, countBookmarksAbove(listOfIds(1, 2, 3), seenTopRemoteId = "orig-1"))
     }
 
     @Test
     fun prependedBookmarks_areCounted() {
-        assertEquals(2, countBookmarksAbove(listOfIds(90, 91, 1, 2, 3), seenTopRemoteId = 1L))
+        assertEquals(2, countBookmarksAbove(listOfIds(90, 91, 1, 2, 3), seenTopRemoteId = "orig-1"))
     }
 
     @Test
     fun bookmarksAddedBelowTheSeenRow_areNotCounted() {
         // A diff counted anything new to the window; only rows above the anchor are "new above".
-        assertEquals(0, countBookmarksAbove(listOfIds(1, 2, 3, 90, 91), seenTopRemoteId = 1L))
+        assertEquals(0, countBookmarksAbove(listOfIds(1, 2, 3, 90, 91), seenTopRemoteId = "orig-1"))
     }
 
     @Test
     fun removingARowAboveTheAnchor_bringsTheCountBackDown() {
         // The old counter only ever incremented, so it never recovered from this.
         val afterPrepend = listOfIds(90, 91, 1, 2, 3)
-        assertEquals(2, countBookmarksAbove(afterPrepend, seenTopRemoteId = 1L))
+        assertEquals(2, countBookmarksAbove(afterPrepend, seenTopRemoteId = "orig-1"))
 
         val afterRemoval = listOfIds(91, 1, 2, 3)
-        assertEquals(1, countBookmarksAbove(afterRemoval, seenTopRemoteId = 1L))
+        assertEquals(1, countBookmarksAbove(afterRemoval, seenTopRemoteId = "orig-1"))
     }
 
     @Test
@@ -71,15 +70,15 @@ class NewBookmarksAboveCountTest {
         // later removal at the top pulls one back into the window, a diff called it new even
         // though the user had already seen it. Position-based counting cannot make that mistake.
         val window = listOfIds(1, 2, 3, 4)
-        assertEquals(0, countBookmarksAbove(window, seenTopRemoteId = 1L))
+        assertEquals(0, countBookmarksAbove(window, seenTopRemoteId = "orig-1"))
 
         // Sync prepends two rows; bookmark 4 falls out of the loaded window.
         val afterPrepend = listOfIds(90, 91, 1, 2, 3)
-        assertEquals(2, countBookmarksAbove(afterPrepend, seenTopRemoteId = 1L))
+        assertEquals(2, countBookmarksAbove(afterPrepend, seenTopRemoteId = "orig-1"))
 
         // A removal at the top pulls bookmark 4 back in — still only the prepends are above.
         val afterRestore = listOfIds(91, 1, 2, 3, 4)
-        assertEquals(1, countBookmarksAbove(afterRestore, seenTopRemoteId = 1L))
+        assertEquals(1, countBookmarksAbove(afterRestore, seenTopRemoteId = "orig-1"))
     }
 
     @Test
@@ -87,25 +86,25 @@ class NewBookmarksAboveCountTest {
         // One sync refreshes the window many times: per committed page, plus twice more.
         val window = listOfIds(90, 1, 2, 3)
         repeat(5) {
-            assertEquals(1, countBookmarksAbove(window, seenTopRemoteId = 1L))
+            assertEquals(1, countBookmarksAbove(window, seenTopRemoteId = "orig-1"))
         }
     }
 
     @Test
     fun seenBookmarkNoLongerInTheList_countsZero() {
-        assertEquals(0, countBookmarksAbove(listOfIds(90, 91, 2, 3), seenTopRemoteId = 1L))
+        assertEquals(0, countBookmarksAbove(listOfIds(90, 91, 2, 3), seenTopRemoteId = "orig-1"))
     }
 
     @Test
     fun emptyList_countsZero() {
-        assertEquals(0, countBookmarksAbove(emptyList(), seenTopRemoteId = 1L))
+        assertEquals(0, countBookmarksAbove(emptyList(), seenTopRemoteId = "orig-1"))
     }
 
     @Test
     fun oldestFirstSort_countsOnlyWhatIsActuallyAbove() {
         // Under a non-NEWEST sort new bookmarks land at the bottom. The old counter reported
         // them as being above the viewport regardless.
-        assertEquals(0, countBookmarksAbove(listOfIds(1, 2, 3, 90, 91), seenTopRemoteId = 1L))
+        assertEquals(0, countBookmarksAbove(listOfIds(1, 2, 3, 90, 91), seenTopRemoteId = "orig-1"))
     }
 
     // Read bookmarks — the pill offers a trip to the top, and a faded row is not worth one.
@@ -113,25 +112,25 @@ class NewBookmarksAboveCountTest {
     @Test
     fun excludeRead_leavesReadBookmarksOutOfTheCount() {
         val window = listOf(bookmark(90), bookmark(91, isRead = true), bookmark(1))
-        assertEquals(1, countBookmarksAbove(window, seenTopRemoteId = 1L, excludeRead = true))
+        assertEquals(1, countBookmarksAbove(window, seenTopRemoteId = "orig-1", excludeRead = true))
     }
 
     @Test
     fun excludeRead_countsEveryBookmarkWhenFadingIsOff() {
         val window = listOf(bookmark(90), bookmark(91, isRead = true), bookmark(1))
-        assertEquals(2, countBookmarksAbove(window, seenTopRemoteId = 1L, excludeRead = false))
+        assertEquals(2, countBookmarksAbove(window, seenTopRemoteId = "orig-1", excludeRead = false))
     }
 
     @Test
     fun excludeRead_allReadAboveCountsZero() {
         // The pill disappears rather than sending the user to rows they have already read.
         val window = listOf(bookmark(90, isRead = true), bookmark(91, isRead = true), bookmark(1))
-        assertEquals(0, countBookmarksAbove(window, seenTopRemoteId = 1L, excludeRead = true))
+        assertEquals(0, countBookmarksAbove(window, seenTopRemoteId = "orig-1", excludeRead = true))
     }
 
     @Test
     fun excludeRead_ignoresReadBookmarksBelowTheAnchor() {
         val window = listOf(bookmark(90), bookmark(1), bookmark(2, isRead = true))
-        assertEquals(1, countBookmarksAbove(window, seenTopRemoteId = 1L, excludeRead = true))
+        assertEquals(1, countBookmarksAbove(window, seenTopRemoteId = "orig-1", excludeRead = true))
     }
 }

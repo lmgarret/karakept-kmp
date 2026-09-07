@@ -1,10 +1,7 @@
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +20,10 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.Server
+import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -32,14 +33,16 @@ import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.services.BackgroundSyncScheduler
 import com.karakept.app.services.DesktopNotificationProvider
 import com.karakept.app.services.NotificationProvider
-import com.kdroid.composetray.tray.api.Tray
-import com.kdroid.composetray.utils.IconRenderProperties
-import com.kdroid.composetray.utils.isMenuBarInDarkMode
+import com.karakept.app.ui.icons.AppIcons
+import dev.nucleusframework.composenativetray.tray.api.Tray
+import dev.nucleusframework.composenativetray.utils.isMenuBarInDarkMode
 import io.github.kdroidfilter.knotify.builder.AppConfig
 import io.github.kdroidfilter.knotify.builder.ExperimentalNotificationsApi
 import io.github.kdroidfilter.knotify.builder.Notification
 import io.github.kdroidfilter.knotify.builder.NotificationInitializer
 import io.github.kdroidfilter.knotify.builder.notification
+import karakept.composeapp.generated.resources.Res
+import karakept.composeapp.generated.resources.icon
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -255,6 +258,7 @@ fun main(args: Array<String> = emptyArray()) {
     val savedHeight = runBlocking { settingsRepo.windowHeight.first() }
     val savedX = runBlocking { settingsRepo.windowX.first() }
     val savedY = runBlocking { settingsRepo.windowY.first() }
+    val savedBackgroundSync = runBlocking { settingsRepo.backgroundSyncEnabled.first() }
 
     application {
         // Guard against a Compose 1.11 desktop accessibility NPE that otherwise crashes the app
@@ -267,17 +271,13 @@ fun main(args: Array<String> = emptyArray()) {
         val bookmarkRepo = remember { getKoin().get<BookmarkRepository>() }
         val serverRepo = remember { getKoin().get<ServerRepository>() }
         // Observe server connection status for tray menu
-        var hasServer by remember { mutableStateOf(false) }
-        var serverLabel by remember { mutableStateOf("") }
-        var serverUrl by remember { mutableStateOf("") }
+        var activeServer by remember { mutableStateOf<Server?>(null) }
         LaunchedEffect(Unit) {
-            serverRepo.servers.collect { servers ->
-                hasServer = servers.isNotEmpty()
-                val server = servers.firstOrNull()
-                serverLabel = server?.label?.takeIf { it.isNotBlank() } ?: server?.url ?: ""
-                serverUrl = server?.url ?: ""
-            }
+            serverRepo.servers.collect { servers -> activeServer = servers.firstOrNull() }
         }
+        val hasServer = activeServer != null
+        val serverLabel = activeServer?.label?.takeIf { it.isNotBlank() } ?: activeServer?.url ?: ""
+        val serverUrl = activeServer?.url ?: ""
 
         // Validate saved position — ensure it's at least partially visible on some screen
         val savedPosition = if (savedX != null && savedY != null) {
@@ -319,43 +319,82 @@ fun main(args: Array<String> = emptyArray()) {
         // System tray icon with native menu (ComposeNativeTray).
         //
         // macOS: render the monochrome tray-icon.png as a template-image style silhouette,
-        //   tinted white in dark menu bar and black in light menu bar. padding(16.dp) keeps
-        //   the icon slightly smaller than the 22 pt slot (~18 pt), matching native icons.
+        //   tinted white in dark menu bar and black in light menu bar. No padding — the
+        //   native side already caps the status item at 18 pt of the 22 pt slot.
         //
-        // Linux: render the full-colour app icon. Linux DEs (GNOME, KDE…) display coloured
-        //   tray icons and do not apply automatic template-image inversion.
+        // Linux/Windows: render the full-colour app icon. Neither shell applies the
+        //   automatic template-image inversion macOS does.
         //
         // Dark mode: isMenuBarInDarkMode() handles detection on all platforms
         //   (macOS wallpaper-based, KDE theme-based, GNOME/XFCE/CINNAMON always dark).
+        //
+        // Icon sizing is left to IconRenderProperties defaults on purpose. Since 2.1.6 both
+        // forCurrentOperatingSystem() and forMenuItem() keep the full-resolution master and
+        // let each backend downsample at draw time (SNI pixmap pyramid on Linux, multi-frame
+        // ICO on Windows, 16 pt NSImage on macOS), so a hand-picked target size only throws
+        // resolution away and adds a second resample.
         val isDarkMenuBar = isMenuBarInDarkMode()
         val trayIconTint = if (isDarkMenuBar) Color.White else Color.Black
-        // Render menu-item icons at 32×32 px so Retina displays get a crisp
-        // @2x representation (the Swift side sets NSSize 16×16 pt).
-        val retinaMenuIcon = IconRenderProperties(
-            sceneWidth = 64, sceneHeight = 64,
-            targetWidth = 32, targetHeight = 32
-        )
-        // Linux tray icon: render at 128×128 so the icon stays crisp on HiDPI panels.
-        // The DE downscales to its preferred slot size. Without this, the library default
-        // is 192 scene → 24 target on Linux which looks blurry on modern displays.
-        val linuxTrayIconProps = IconRenderProperties.withoutScalingAndAliasing(
-            sceneWidth = 128, sceneHeight = 128
-        )
-        // On Linux, skip the system tray if there is no D-Bus session — the
-        // energye/systray native bridge panics with a nil-pointer dereference
-        // when DBus is unavailable (e.g. devcontainer, CI, headless servers).
+        // On Linux, skip the system tray if there is no D-Bus session (devcontainer, CI,
+        // headless server): the tray speaks StatusNotifierItem over sd-bus and has nothing
+        // to register with. There is no AWT fallback since 2.0.0 — an unsupported
+        // environment just logs and leaves the app trayless, which is why closing the
+        // window has to quit rather than hide when [trayAvailable] is false.
         val hasDBus = !isLinux ||
             System.getenv("DBUS_SESSION_BUS_ADDRESS") != null
-        if (trayIconImage != null && hasDBus) {
+        val trayAvailable = trayIconImage != null && hasDBus
+
+        // Save window state and shut down. Shared by the tray's Quit item and, when there is
+        // no tray to hide into, by the window's close button.
+        val quitApp: () -> Unit = {
+            runBlocking {
+                val absPos = state.position as? WindowPosition.Absolute
+                settingsRepo.setWindowState(
+                    width = state.size.width.value,
+                    height = state.size.height.value,
+                    x = absPos?.x?.value ?: 0f,
+                    y = absPos?.y?.value ?: 0f,
+                    maximized = state.placement == WindowPlacement.Maximized
+                )
+            }
+            appScope.cancel()
+            exitApplication()
+        }
+
+        // Recent bookmarks for the tray submenu. Primed once at startup, then reloaded on
+        // every tick — the menu being opened, or a bookmark being saved from the tray.
+        // onMenuOpened is dispatched asynchronously by the library, so a reload it triggers
+        // lands in time for the *next* open rather than the one in progress. That is still
+        // far cheaper than holding a query subscription for the whole process lifetime.
+        var recentRefreshTick by remember { mutableStateOf(0) }
+        var recentBookmarks by remember { mutableStateOf<List<BookmarkEntity>>(emptyList()) }
+        LaunchedEffect(activeServer, recentRefreshTick) {
+            val server = activeServer ?: return@LaunchedEffect
+            recentBookmarks = try {
+                bookmarkRepo.getBookmarksPaged(
+                    server = server,
+                    status = FilterStatus.ALL,
+                    offset = 0,
+                    limit = TRAY_RECENT_BOOKMARK_COUNT,
+                    sort = SortOption.NEWEST
+                )
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
+        val backgroundSyncEnabled by settingsRepo.backgroundSyncEnabled
+            .collectAsState(initial = savedBackgroundSync)
+
+        if (trayAvailable) {
             Tray(
-                iconRenderProperties = if (!isMac) linuxTrayIconProps else IconRenderProperties.forCurrentOperatingSystem(),
                 iconContent = {
                     if (isMac) {
                         // macOS: monochrome silhouette, adaptive tint
                         Image(
                             bitmap = trayIconImage,
                             contentDescription = null,
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            modifier = Modifier.fillMaxSize(),
                             colorFilter = ColorFilter.tint(trayIconTint)
                         )
                     } else if (isWindows && winIconImage != null) {
@@ -366,8 +405,7 @@ fun main(args: Array<String> = emptyArray()) {
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else if (iconImage != null) {
-                        // Linux: full-colour app icon, no padding — the 128×128
-                        // scene gives plenty of resolution for crisp rendering.
+                        // Linux: full-colour app icon.
                         Image(
                             bitmap = iconImage,
                             contentDescription = null,
@@ -377,17 +415,23 @@ fun main(args: Array<String> = emptyArray()) {
                 },
                 tooltip = if (isDevBuild) "Karakept (DEV)" else "Karakept",
                 primaryAction = { isWindowVisible = !isWindowVisible },
+                onMenuOpened = { recentRefreshTick++ },
+                // This resolves to the composable menu DSL (ComposableTrayMenuScope), not the
+                // plain TrayMenuBuilder one — the latter's overloads are all marked
+                // @LowPriorityInOverloadResolution since 2.x. So state reads here are reactive
+                // and composable calls (painterResource, DrawableResource icons) are legal,
+                // inside submenu bodies too.
                 menuContent = {
                     // Server status (informational, disabled)
                     Item(
                         label = if (hasServer) serverLabel else "No server configured",
+                        icon = Res.drawable.icon,
                         isEnabled = false
                     )
                     Divider()
                     Item(
                         label = "Save Bookmark from Clipboard",
-                        icon = Icons.Default.ContentPaste,
-                        iconRenderProperties = retinaMenuIcon,
+                        icon = AppIcons.Default.ContentPaste,
                         isEnabled = hasServer,
                         onClick = {
                             coroutineScope.launch {
@@ -405,6 +449,7 @@ fun main(args: Array<String> = emptyArray()) {
                                     if (result.isSuccess) {
                                         val bookmark = result.getOrThrow()
                                         notify(title = "Bookmark Saved", message = bookmark.title)
+                                        recentRefreshTick++
                                     } else {
                                         notify(
                                             title = "Save Failed",
@@ -418,22 +463,32 @@ fun main(args: Array<String> = emptyArray()) {
                             }
                         }
                     )
+                    // No icons on submenu items — GNOME does not render them there.
+                    SubMenu(
+                        label = "Recent Bookmarks",
+                        isEnabled = hasServer && recentBookmarks.isNotEmpty()
+                    ) {
+                        recentBookmarks.forEach { bookmark ->
+                            Item(
+                                label = trayMenuLabel(bookmark.title.ifBlank { bookmark.url }),
+                                onClick = { openInBrowser(bookmark.url) }
+                            )
+                        }
+                    }
                     Item(
                         label = "Open in Browser",
-                        icon = Icons.Default.OpenInBrowser,
-                        iconRenderProperties = retinaMenuIcon,
+                        icon = AppIcons.Default.OpenInBrowser,
                         isEnabled = hasServer,
-                        onClick = {
-                            if (serverUrl.isNotEmpty()) {
-                                try {
-                                    java.awt.Desktop.getDesktop().browse(java.net.URI(serverUrl))
-                                } catch (_: Exception) {
-                                    // Best effort
-                                }
-                            }
-                        }
+                        onClick = { if (serverUrl.isNotEmpty()) openInBrowser(serverUrl) }
                     )
                     Divider()
+                    CheckableItem(
+                        label = "Background Sync",
+                        checked = backgroundSyncEnabled,
+                        onCheckedChange = { enabled ->
+                            coroutineScope.launch { settingsRepo.setBackgroundSyncEnabled(enabled) }
+                        }
+                    )
                     Item(
                         label = if (isWindowVisible) "Hide Window" else "Show Window",
                         onClick = { isWindowVisible = !isWindowVisible }
@@ -441,30 +496,17 @@ fun main(args: Array<String> = emptyArray()) {
                     Divider()
                     Item(
                         label = "Quit Karakept",
-                        onClick = {
-                            // Save window state before exit
-                            runBlocking {
-                                val absPos = state.position as? WindowPosition.Absolute
-                                settingsRepo.setWindowState(
-                                    width = state.size.width.value,
-                                    height = state.size.height.value,
-                                    x = absPos?.x?.value ?: 0f,
-                                    y = absPos?.y?.value ?: 0f,
-                                    maximized = state.placement == WindowPlacement.Maximized
-                                )
-                            }
-                            appScope.cancel()
-                            exitApplication()
-                        }
+                        onClick = quitApp
                     )
                 }
             )
         }
 
-        // Main window — hide to tray on close instead of quitting
+        // Main window — hide to tray on close, or quit outright when there is no tray
+        // (hiding then would leave the app running with no way to bring it back).
         Window(
             visible = isWindowVisible,
-            onCloseRequest = { isWindowVisible = false },
+            onCloseRequest = { if (trayAvailable) isWindowVisible = false else quitApp() },
             title = if (isDevBuild) "Karakept (DEV)" else "Karakept",
             state = state,
             icon = iconImage?.let { BitmapPainter(it) }

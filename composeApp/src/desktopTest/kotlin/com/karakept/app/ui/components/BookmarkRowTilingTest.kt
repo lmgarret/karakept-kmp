@@ -45,8 +45,7 @@ class BookmarkRowTilingTest {
     /** A worst-case row: the title wraps to its two-line cap and the description fills its own. */
     private val bookmark = BookmarkEntity(
         localId = 1,
-        remoteId = 1,
-        originalRemoteId = "1",
+        remoteId = "1",
         serverId = "server",
         url = "https://example.com/a-fairly-long-article-path",
         title = "A bookmark title long enough to wrap onto the second line the row allows for it",

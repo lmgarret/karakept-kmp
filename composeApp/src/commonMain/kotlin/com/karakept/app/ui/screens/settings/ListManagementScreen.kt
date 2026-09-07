@@ -12,13 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Cached
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
@@ -43,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -102,7 +96,7 @@ class ListManagementScreen : NavKey {
                     title = { Text("Content Sync Lists") },
                     navigationIcon = {
                         IconButton(onClick = { navigator.pop() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     }
                 )
@@ -178,7 +172,7 @@ class ListManagementScreen : NavKey {
                             .padding(4.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
+                            imageVector = AppIcons.Default.KeyboardArrowDown,
                             contentDescription = null,
                             modifier = Modifier.size(12.dp),
                             tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
@@ -228,7 +222,7 @@ class ListManagementScreen : NavKey {
                     if (checkboxState == CheckboxState.CHECKED_WITH_CHILDREN) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
+                            imageVector = AppIcons.Default.KeyboardArrowDown,
                             contentDescription = "Syncing with children",
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.tertiary
@@ -249,7 +243,7 @@ class ListManagementScreen : NavKey {
                         text = when (checkboxState) {
                             CheckboxState.CHECKED_PARENT_ONLY -> "Parent list only"
                             CheckboxState.CHECKED_WITH_CHILDREN -> "Including all child lists"
-                            else -> ""
+                            CheckboxState.UNCHECKED -> ""
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary

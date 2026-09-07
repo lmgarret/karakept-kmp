@@ -12,10 +12,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -42,6 +38,7 @@ import com.karakept.app.ui.components.HtmlContent
 import com.karakept.app.ui.components.WebModeBadge
 import com.fleeksoft.ksoup.nodes.Document
 import com.karakept.app.ui.components.reader.SearchMatch
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.screens.BookmarkLoadingState
 
 @Composable
@@ -137,7 +134,7 @@ internal fun ContentBodySection(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.CloudOff,
+                        imageVector = AppIcons.Outlined.CloudOff,
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -171,7 +168,7 @@ internal fun ContentBodySection(
                                 Spacer(modifier = Modifier.width(8.dp))
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.Download,
+                                    imageVector = AppIcons.Default.Download,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -185,7 +182,7 @@ internal fun ContentBodySection(
                             modifier = Modifier.padding(horizontal = 8.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Info,
+                                imageVector = AppIcons.Default.Info,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant

@@ -162,4 +162,85 @@ class ReaderGalleryStateTest {
 
         assertEquals(listOf("https://x/1.jpg", "https://x/2.jpg"), images.map { it.urls.first() })
     }
+
+    @Test
+    fun heroGalleryImage_prefersBannerLocalPathOverEveryRemoteUrl() {
+        val hero = heroGalleryImage(
+            title = "An article",
+            bannerImageUrl = "https://x/banner.jpg",
+            screenshotUrl = "https://x/shot.jpg",
+            bannerImageLocalPath = "/tmp/banner.jpg",
+            screenshotLocalPath = "/tmp/shot.jpg"
+        )
+
+        assertEquals("/tmp/banner.jpg", hero?.localPath)
+        assertEquals(emptyList<String>(), hero?.urls)
+        assertEquals("An article", hero?.alt)
+        assertNull(hero?.element)
+    }
+
+    @Test
+    fun heroGalleryImage_fallsBackThroughBannerUrlThenScreenshot() {
+        assertEquals(
+            "https://x/banner.jpg",
+            heroGalleryImage(
+                title = "t",
+                bannerImageUrl = "https://x/banner.jpg",
+                screenshotUrl = "https://x/shot.jpg",
+                screenshotLocalPath = "/tmp/shot.jpg"
+            )?.urls?.first()
+        )
+        assertEquals(
+            "/tmp/shot.jpg",
+            heroGalleryImage(title = "t", screenshotUrl = "https://x/shot.jpg", screenshotLocalPath = "/tmp/shot.jpg")?.localPath
+        )
+        assertEquals(
+            "https://x/shot.jpg",
+            heroGalleryImage(title = "t", screenshotUrl = "https://x/shot.jpg")?.urls?.first()
+        )
+    }
+
+    @Test
+    fun heroGalleryImage_noImageAtAll_returnsNull() {
+        assertNull(heroGalleryImage(title = "t"))
+    }
+
+    @Test
+    fun openHero_opensOnTheFirstPageOfTheWholeGallery() {
+        val doc = parse("<body><img src=\"https://x/1.jpg\"></body>")
+        val state = GalleryViewerState()
+        val hero = heroGalleryImage(title = "t", bannerImageUrl = "https://x/hero.jpg")!!
+        state.heroImage = hero
+        state.images = listOf(hero) + collectGalleryImages(doc)
+
+        state.openHero()
+
+        val request = state.request!!
+        assertEquals(0, request.initialIndex)
+        assertEquals(
+            listOf("https://x/hero.jpg", "https://x/1.jpg"),
+            request.images.map { it.urls.first() }
+        )
+    }
+
+    @Test
+    fun openHero_beforeTheArticleIsRendered_stillShowsTheBanner() {
+        val state = GalleryViewerState()
+        state.heroImage = heroGalleryImage(title = "t", bannerImageLocalPath = "/tmp/hero.jpg")
+
+        state.openHero()
+
+        assertEquals(1, state.request?.images?.size)
+        assertEquals("/tmp/hero.jpg", state.request?.images?.first()?.localPath)
+    }
+
+    @Test
+    fun openHero_withoutAHeroImage_doesNothing() {
+        val state = GalleryViewerState()
+        state.images = collectGalleryImages(parse("<body><img src=\"https://x/1.jpg\"></body>"))
+
+        state.openHero()
+
+        assertNull(state.request)
+    }
 }

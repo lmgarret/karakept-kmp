@@ -20,11 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -33,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import com.karakept.app.ui.icons.AppIcons
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -150,9 +146,9 @@ internal fun BookmarkListContent(
     titlePosition: TitlePosition = TitlePosition.BESIDE_THUMBNAIL,
     descriptionMaxLines: Int = BookmarkLayout.DESCRIPTION_LINES_DEFAULT,
     offlineMode: Boolean = false,
-    pendingBookmarkRemoteIds: Set<Long> = emptySet(),
+    pendingBookmarkRemoteIds: Set<String> = emptySet(),
     isSelectionMode: Boolean = false,
-    selectedBookmarkIds: Set<Long> = emptySet(),
+    selectedBookmarkIds: Set<String> = emptySet(),
     activeBookmarkId: Long? = null,
     onBookmarkSelectionToggle: (BookmarkEntity) -> Unit = {},
     listState: LazyListState,
@@ -172,7 +168,7 @@ internal fun BookmarkListContent(
     newBookmarksAbove: Int = 0,
     onClearNewBookmarksAbove: () -> Unit = {},
     /** The topmost bookmark on screen, which retires the "N new" count up to that row. */
-    onTopBookmarkVisible: (Long) -> Unit = {},
+    onTopBookmarkVisible: (String) -> Unit = {},
     /**
      * False when a reader pane is open beside the list (wide layout) — the reader owns the
      * hardware page buttons in that case, and both panes would otherwise scroll at once.
@@ -187,7 +183,7 @@ internal fun BookmarkListContent(
      * Reports the bookmarks currently on screen, so their reading progress can be fetched
      * ahead of the sync rotation reaching them. Debounced — this fires on scroll.
      */
-    onBookmarksVisible: (List<Long>) -> Unit = {}
+    onBookmarksVisible: (List<String>) -> Unit = {}
 ) {
     // Detect when scrolled near end. The effect outlives the values it guards on, so they are
     // read through rememberUpdatedState — capturing them would freeze the guards at their
@@ -222,7 +218,7 @@ internal fun BookmarkListContent(
         // snapshot, so indices resolved against the new list can name rows that are not on
         // screen — and their progress would be fetched instead of the ones that are.
         snapshotFlow {
-            listState.layoutInfo.visibleItemsInfo.mapNotNull { info -> info.key as? Long }
+            listState.layoutInfo.visibleItemsInfo.mapNotNull { info -> info.key as? String }
         }
             .debounce(400)
             .collect { ids -> if (ids.isNotEmpty()) currentOnBookmarksVisible.value(ids) }
@@ -258,7 +254,7 @@ internal fun BookmarkListContent(
         // below them, and the row at the top of the viewport is the same row either way.
         // The trailing loading/end rows are unkeyed, so anything that is not a remoteId is
         // not a bookmark.
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key as? Long }
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key as? String }
             .collect { topRemoteId -> topRemoteId?.let { currentOnTopBookmarkVisible.value(it) } }
     }
 
@@ -558,11 +554,11 @@ internal fun BookmarkListContent(
 
                     // Dynamic icon logic for Mark Read/Unread
                     val leftIcon = if (swipeLeftAction == SwipeAction.MARK_READ) {
-                        if (bookmark.isRead) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                        if (bookmark.isRead) AppIcons.Filled.VisibilityOff else AppIcons.Filled.Visibility
                     } else null
 
                     val rightIcon = if (swipeRightAction == SwipeAction.MARK_READ) {
-                        if (bookmark.isRead) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
+                        if (bookmark.isRead) AppIcons.Filled.VisibilityOff else AppIcons.Filled.Visibility
                     } else null
 
                     // Compute whether each custom action is already applied to this bookmark
@@ -847,7 +843,7 @@ internal fun BookmarkListContent(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowUpward,
+                        imageVector = AppIcons.Default.ArrowUpward,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
@@ -871,7 +867,7 @@ internal fun BookmarkListContent(
                 onClick = { scope.launch { listState.scrollToTop(einkMode.instantScroll) } }
             ) {
                 Icon(
-                    imageVector = Icons.Default.ArrowUpward,
+                    imageVector = AppIcons.Default.ArrowUpward,
                     contentDescription = "Scroll to top"
                 )
             }
@@ -1015,7 +1011,7 @@ private fun EmptyBookmarkList() {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Icon(
-            imageVector = Icons.Default.BookmarkBorder,
+            imageVector = AppIcons.Default.BookmarkBorder,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(48.dp)

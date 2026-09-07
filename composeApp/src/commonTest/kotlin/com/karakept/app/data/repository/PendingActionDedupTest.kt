@@ -53,11 +53,10 @@ class PendingActionDedupTest {
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
     }
 
-    private fun stubBookmark(remoteId: Long, listIds: String = "") {
+    private fun stubBookmark(remoteId: String, listIds: String = "") {
         val entity = BookmarkEntity(
-            localId = remoteId,
+            localId = 1L,
             remoteId = remoteId,
-            originalRemoteId = "orig-$remoteId",
             serverId = testServer.id,
             url = "https://test.example.com/$remoteId",
             title = "Bookmark $remoteId",
@@ -76,42 +75,42 @@ class PendingActionDedupTest {
 
     @Test
     fun archiveThenUnarchive_deletesBothPriorTypesBeforeEnqueue() = runTest(testDispatcher) {
-        stubBookmark(1L)
+        stubBookmark("orig-1")
 
-        repository.archiveBookmark(1L, testServer.id)
-        repository.unarchiveBookmark(1L, testServer.id)
+        repository.archiveBookmark("orig-1", testServer.id)
+        repository.unarchiveBookmark("orig-1", testServer.id)
 
         // Each enqueue first clears prior archive+unarchive rows for the bookmark
-        coVerify(atLeast = 2) { pendingActionDao.deleteActionsForBookmarkByType(1L, testServer.id, PendingActionType.ARCHIVE) }
-        coVerify(atLeast = 2) { pendingActionDao.deleteActionsForBookmarkByType(1L, testServer.id, PendingActionType.UNARCHIVE) }
+        coVerify(atLeast = 2) { pendingActionDao.deleteActionsForBookmarkByType("orig-1", testServer.id, PendingActionType.ARCHIVE) }
+        coVerify(atLeast = 2) { pendingActionDao.deleteActionsForBookmarkByType("orig-1", testServer.id, PendingActionType.UNARCHIVE) }
     }
 
     @Test
     fun updateTags_deletesPriorTagUpdateBeforeEnqueue() = runTest(testDispatcher) {
-        stubBookmark(2L)
+        stubBookmark("orig-2")
 
-        repository.updateTags(2L, testServer.id, listOf("a", "b"), isOnline = false)
+        repository.updateTags("orig-2", testServer.id, listOf("a", "b"))
 
-        coVerify { pendingActionDao.deleteActionsForBookmarkByType(2L, testServer.id, PendingActionType.UPDATE_TAGS) }
+        coVerify { pendingActionDao.deleteActionsForBookmarkByType("orig-2", testServer.id, PendingActionType.UPDATE_TAGS) }
     }
 
     @Test
     fun delete_purgesAllOtherQueuedActionsFirst() = runTest(testDispatcher) {
-        stubBookmark(3L)
+        stubBookmark("orig-3")
 
-        repository.deleteBookmark(3L, 3L, testServer.id)
+        repository.deleteBookmark(3L, "orig-3", testServer.id)
 
-        coVerify { pendingActionDao.deleteActionsForBookmark(3L, testServer.id) }
+        coVerify { pendingActionDao.deleteActionsForBookmark("orig-3", testServer.id) }
     }
 
     @Test
     fun moveThenRemoveSameList_cancelsMatchingMembershipRow() = runTest(testDispatcher) {
-        stubBookmark(4L)
+        stubBookmark("orig-4")
         // After the move enqueues, the queue contains a MOVE_TO_LIST for list-1.
         coEvery { pendingActionDao.getPendingActionsList(testServer.id) } returns listOf(
             PendingActionEntity(
                 id = 10L,
-                bookmarkRemoteId = 4L,
+                bookmarkRemoteId = "orig-4",
                 serverId = testServer.id,
                 actionType = PendingActionType.MOVE_TO_LIST,
                 actionData = """{"listId":"list-1"}""",
@@ -119,12 +118,12 @@ class PendingActionDedupTest {
             )
         )
 
-        repository.removeFromList(4L, testServer.id, "list-1", isOnline = false)
+        repository.removeFromList("orig-4", testServer.id, "list-1")
 
         // The matching move row for list-1 is cancelled out before the remove is queued
         coVerify {
             pendingActionDao.deleteAction(match {
-                it.actionType == PendingActionType.MOVE_TO_LIST && it.bookmarkRemoteId == 4L
+                it.actionType == PendingActionType.MOVE_TO_LIST && it.bookmarkRemoteId == "orig-4"
             })
         }
     }

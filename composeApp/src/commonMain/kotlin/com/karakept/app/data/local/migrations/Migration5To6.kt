@@ -1,11 +1,11 @@
 package com.karakept.app.data.local.migrations
 
-import androidx.room.migration.Migration
+import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 
 val MIGRATION_5_6 = object : Migration(5, 6) {
-    override fun migrate(connection: SQLiteConnection) {
+    override suspend fun migrate(connection: SQLiteConnection) {
         // Create lists table for offline access to bookmark lists
         connection.execSQL("""
             CREATE TABLE IF NOT EXISTS lists (

@@ -1,20 +1,5 @@
 package com.karakept.app.ui.components
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.NewLabel
-import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.Unarchive
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -33,6 +18,7 @@ import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
+import com.karakept.app.ui.icons.AppIcons
 
 /**
  * Desktop context menu for bookmark actions, shown as a DropdownMenu at the right-click position.
@@ -69,7 +55,7 @@ fun BookmarkContextMenu(
             text = { Text(if (bookmark.isStarred) "Remove from Favorites" else "Add to Favorites") },
             leadingIcon = {
                 Icon(
-                    imageVector = if (bookmark.isStarred) Icons.Default.Star else Icons.Default.StarBorder,
+                    imageVector = if (bookmark.isStarred) AppIcons.Default.Star else AppIcons.Default.StarBorder,
                     contentDescription = null
                 )
             },
@@ -83,7 +69,7 @@ fun BookmarkContextMenu(
             text = { Text(if (bookmark.isArchived) "Unarchive" else "Archive") },
             leadingIcon = {
                 Icon(
-                    imageVector = if (bookmark.isArchived) Icons.Default.Unarchive else Icons.Default.Archive,
+                    imageVector = if (bookmark.isArchived) AppIcons.Default.Unarchive else AppIcons.Default.Archive,
                     contentDescription = null
                 )
             },
@@ -97,7 +83,7 @@ fun BookmarkContextMenu(
             text = { Text(if (bookmark.isRead) "Mark as Unread" else "Mark as Read") },
             leadingIcon = {
                 Icon(
-                    imageVector = if (bookmark.isRead) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    imageVector = if (bookmark.isRead) AppIcons.Default.VisibilityOff else AppIcons.Default.Visibility,
                     contentDescription = null
                 )
             },
@@ -112,13 +98,13 @@ fun BookmarkContextMenu(
         // Organization actions
         DropdownMenuItem(
             text = { Text("Move to List") },
-            leadingIcon = { Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null) },
+            leadingIcon = { Icon(imageVector = AppIcons.Default.FolderOpen, contentDescription = null) },
             onClick = { showListPicker = true }
         )
 
         DropdownMenuItem(
             text = { Text("Edit Tags") },
-            leadingIcon = { Icon(imageVector = Icons.Default.Edit, contentDescription = null) },
+            leadingIcon = { Icon(imageVector = AppIcons.Default.Edit, contentDescription = null) },
             onClick = { showTagEditor = true }
         )
 
@@ -127,7 +113,7 @@ fun BookmarkContextMenu(
         // External actions
         DropdownMenuItem(
             text = { Text("Copy Link") },
-            leadingIcon = { Icon(imageVector = Icons.Default.Link, contentDescription = null) },
+            leadingIcon = { Icon(imageVector = AppIcons.Default.Link, contentDescription = null) },
             onClick = {
                 onAction(BookmarkAction.Share)
                 onDismiss()
@@ -136,7 +122,7 @@ fun BookmarkContextMenu(
 
         DropdownMenuItem(
             text = { Text("Open in Browser") },
-            leadingIcon = { Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null) },
+            leadingIcon = { Icon(imageVector = AppIcons.Default.OpenInBrowser, contentDescription = null) },
             onClick = {
                 onAction(BookmarkAction.OpenInBrowser)
                 onDismiss()
@@ -150,7 +136,7 @@ fun BookmarkContextMenu(
             if (aiCapabilities.canSummarize) {
                 DropdownMenuItem(
                     text = { Text(AiAction.SUMMARIZE.label) },
-                    leadingIcon = { Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null) },
+                    leadingIcon = { Icon(imageVector = AppIcons.Default.AutoAwesome, contentDescription = null) },
                     onClick = {
                         onAction(BookmarkAction.Summarize)
                         onDismiss()
@@ -161,7 +147,7 @@ fun BookmarkContextMenu(
             if (aiCapabilities.isAdmin) {
                 DropdownMenuItem(
                     text = { Text(AiAction.RETAG.label) },
-                    leadingIcon = { Icon(imageVector = Icons.Default.NewLabel, contentDescription = null) },
+                    leadingIcon = { Icon(imageVector = AppIcons.Default.NewLabel, contentDescription = null) },
                     onClick = {
                         onAction(BookmarkAction.RetagWithAi)
                         onDismiss()
@@ -175,7 +161,7 @@ fun BookmarkContextMenu(
         // Enter multi-select mode
         DropdownMenuItem(
             text = { Text("Select") },
-            leadingIcon = { Icon(imageVector = Icons.Default.CheckBox, contentDescription = null) },
+            leadingIcon = { Icon(imageVector = AppIcons.Default.CheckBox, contentDescription = null) },
             onClick = {
                 onAction(BookmarkAction.Select)
                 onDismiss()
@@ -189,7 +175,7 @@ fun BookmarkContextMenu(
             text = { Text("Delete") },
             leadingIcon = {
                 Icon(
-                    imageVector = Icons.Default.Delete,
+                    imageVector = AppIcons.Default.Delete,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.error
                 )

@@ -1,6 +1,6 @@
 package com.karakept.app.data.repository
 
-import androidx.room.RoomRawQuery
+import androidx.room3.RoomRawQuery
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.ListDao
@@ -61,7 +61,7 @@ class BookmarkRepository(
         return bookmarkDao.getOfflineCountFlow(serverId)
     }
 
-    suspend fun getBookmarkByRemoteId(remoteId: Long, serverId: String): BookmarkEntity? {
+    suspend fun getBookmarkByRemoteId(remoteId: String, serverId: String): BookmarkEntity? {
         return bookmarkDao.getBookmarkByRemoteId(remoteId, serverId)
     }
 
@@ -166,7 +166,7 @@ class BookmarkRepository(
      * Best-effort and silent: this runs off scrolling, and a failed pull here is picked up
      * by the next sync.
      */
-    suspend fun pullReadingProgressForVisible(serverId: String, remoteIds: List<Long>) {
+    suspend fun pullReadingProgressForVisible(serverId: String, remoteIds: List<String>) {
         if (remoteIds.isEmpty()) return
         if (settingsRepository.offlineMode.first()) return
         if (!settingsRepository.trackReadingProgress.first()) return
@@ -308,8 +308,7 @@ class BookmarkRepository(
             // Initial map to entity
             val entity = BookmarkEntity(
                 localId = 0L,
-                remoteId = (dto.id ?: "").hashCode().toLong(),
-                originalRemoteId = dto.id ?: "",
+                remoteId = dto.id ?: "",
                 serverId = server.id,
                 title = dto.title ?: dto.content?.title ?: "Untitled",
                 url = dto.content?.url ?: url,
@@ -351,21 +350,20 @@ class BookmarkRepository(
         }
     }
 
-    suspend fun fetchBookmarkContent(bookmarkId: Long, serverId: String): String? {
+    suspend fun fetchBookmarkContent(bookmarkId: String, serverId: String): String? {
         val server = serverRepository.servers.first().find { it.id == serverId } ?: return null
 
-        // Find the ORIGINAL remote ID (string)
         val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkId, serverId) ?: return null
 
         return try {
-            fetchRemoteContent(server, bookmark.originalRemoteId)
+            fetchRemoteContent(server, bookmark.remoteId)
         } catch (e: Exception) {
             AppLogger.e("BookmarkRepo", "Failed to fetch content: ${e.message}", e)
             null
         }
     }
 
-    suspend fun syncSingleBookmark(bookmarkId: Long, serverId: String) {
+    suspend fun syncSingleBookmark(bookmarkId: String, serverId: String) {
         val server = serverRepository.servers.first().find { it.id == serverId } ?: return
         val existing = bookmarkDao.getBookmarkByRemoteId(bookmarkId, serverId) ?: return
 
@@ -373,7 +371,7 @@ class BookmarkRepository(
             // Note: intentionally NOT updating _syncProgress here. This method is called
             // from a background repositoryScope.launch after createBookmark and should not
             // interfere with the main sync progress state shown in the UI.
-            val dto = remoteDataSource.fetchBookmark(server, existing.originalRemoteId)
+            val dto = remoteDataSource.fetchBookmark(server, existing.remoteId)
 
             // Map DTO to entity, preserving localId and content if not provided in DTO
             val syncStrategy = settingsRepository.contentSyncStrategy.first()
@@ -398,11 +396,11 @@ class BookmarkRepository(
             // Fetch fresh list memberships from the server. Falls back to the existing
             // value on failure so a transient network issue doesn't wipe local state.
             val refreshedListIds = try {
-                remoteDataSource.fetchListsForBookmark(server, existing.originalRemoteId)
+                remoteDataSource.fetchListsForBookmark(server, existing.remoteId)
                     .mapNotNull { it.id }
                     .joinToString(",")
             } catch (e: Exception) {
-                AppLogger.e("BookmarkRepository", "Failed to fetch lists for bookmark ${existing.originalRemoteId}: ${e.message}")
+                AppLogger.e("BookmarkRepository", "Failed to fetch lists for bookmark ${existing.remoteId}: ${e.message}")
                 existing.listIds
             }
 
@@ -527,7 +525,7 @@ class BookmarkRepository(
          */
         internal const val VISIBLE_PROGRESS_STALE_AFTER_MS = 5 * 60_000L
 
-        private const val BOOKMARK_SELECT = """localId, remoteId, originalRemoteId, serverId, title, url,
+        private const val BOOKMARK_SELECT = """localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
@@ -811,7 +809,7 @@ class BookmarkRepository(
      */
     internal suspend fun cacheHeroAssetsForBookmark(
         server: Server,
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         bannerImageAssetId: String?,
         screenshotAssetId: String?
@@ -881,7 +879,7 @@ class BookmarkRepository(
 
     private suspend fun insertContentAssetMetadata(
         dto: com.karakept.api.model.Bookmark,
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String
     ) {
         val typeStrings = mapOf(
@@ -908,7 +906,7 @@ class BookmarkRepository(
 
     private suspend fun cacheArchiveAsset(
         server: Server,
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         asset: com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
     ) {
@@ -961,7 +959,7 @@ class BookmarkRepository(
     ): Boolean {
         val entity = bookmarkDao.getBookmarkById(bookmarkLocalId) ?: return true
         try {
-            val serverListIds = remoteDataSource.fetchListsForBookmark(server, entity.originalRemoteId)
+            val serverListIds = remoteDataSource.fetchListsForBookmark(server, entity.remoteId)
                 .mapNotNull { it.id }.toSet()
 
             val currentIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()

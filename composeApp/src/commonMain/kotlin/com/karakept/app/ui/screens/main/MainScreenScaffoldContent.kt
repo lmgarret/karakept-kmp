@@ -8,8 +8,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -42,6 +40,7 @@ import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.components.BookmarkAction
 import com.karakept.app.ui.components.EinkAwareFab
 import com.karakept.app.ui.components.EinkAwareSnackbarHost
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.clearSelection
 import com.karakept.app.ui.screens.selectAll
@@ -133,9 +132,9 @@ fun MainScreenScaffoldContent(
     rowActionMode: RowActionMode,
     trackReadingProgress: Boolean,
     offlineMode: Boolean,
-    pendingBookmarkRemoteIds: Set<Long>,
+    pendingBookmarkRemoteIds: Set<String>,
     isSelectionMode: Boolean,
-    selectedBookmarkIds: Set<Long>,
+    selectedBookmarkIds: Set<String>,
     activeBookmarkId: Long?,
     isSearchActive: Boolean,
     searchQuery: String,
@@ -170,7 +169,7 @@ fun MainScreenScaffoldContent(
     navigateTo: (androidx.navigation3.runtime.NavKey) -> Unit,
     newBookmarksAbove: Int = 0,
     onClearNewBookmarksAbove: () -> Unit = {},
-    onTopBookmarkVisible: (Long) -> Unit = {}
+    onTopBookmarkVisible: (String) -> Unit = {}
 ) {
     val pageTurnDispatcher = koinInject<PageTurnDispatcher>()
     Scaffold(
@@ -245,7 +244,7 @@ fun MainScreenScaffoldContent(
                     onClick = onShowAddBookmarkDialog
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Add,
+                        imageVector = AppIcons.Default.Add,
                         contentDescription = "Add bookmark"
                     )
                 }

@@ -74,16 +74,18 @@ internal fun sourceMarkSpanStyle(theme: ReaderThemeData): SpanStyle {
 /**
  * Builds an [AnnotatedString] from the inline children of a block-level HTML element.
  *
- * Text offsets are tracked via [textOffset] which is a mutable counter that increments
- * for every text character encountered. This counter produces the same offset values
- * as the JavaScript TreeWalker used in the WebView implementation, ensuring highlights
- * created in one renderer are compatible with the other.
+ * Each text node records where it landed in the rendered string against where it
+ * sits in the document's text stream ([ReaderTextOffsets]), and highlight and
+ * search spans are placed by translating stream offsets through those records.
+ * The string is not the stream — a `<br>` puts a newline in one and nothing in
+ * the other — so the two are related by what was recorded, never by arithmetic
+ * on a running counter.
  *
  * @param element     The block-level element whose children to render.
  * @param theme       Reader theme providing colors, font, etc.
  * @param highlights  All highlights for this bookmark — only those overlapping
  *                    the current block's offset range will be applied.
- * @param textOffset  Running text offset counter (mutated as text nodes are consumed).
+ * @param offsets     The document's text stream.
  * @param onLinkClick Callback when a link is tapped.
  * @param onHighlightClick Callback when a highlight is tapped.
  * @return The styled [AnnotatedString].
@@ -92,54 +94,50 @@ fun buildInlineAnnotatedString(
     element: Element,
     theme: ReaderThemeData,
     highlights: List<Highlight>,
-    textOffset: TextOffsetTracker,
+    offsets: ReaderTextOffsets,
     onLinkClick: (String) -> Unit,
     onHighlightClick: (String) -> Unit,
     selectedHighlightId: String? = null,
     searchState: Pair<List<SearchMatch>, Int>? = null
 ): AnnotatedString {
-    // First pass: build the string and collect span info
-    val blockStartOffset = textOffset.offset
-
     val builder = AnnotatedString.Builder()
-    appendNodeChildren(builder, element, theme, textOffset, onLinkClick)
+    val runs = TextRuns()
+    appendNodeChildren(builder, element, theme, offsets, runs, onLinkClick)
 
-    val blockEndOffset = textOffset.offset
-
-    // Second pass: apply highlight annotations on top
     val result = builder.toAnnotatedString()
+    return applyHighlightSpans(result, runs, highlights, theme, searchState)
+}
 
-    // Find highlights that overlap with this block's offset range
-    val overlapping = highlights.filter { h ->
-        h.startOffset < blockEndOffset && h.endOffset > blockStartOffset
-    }
-
+/**
+ * Draws [highlights] and the active search state over an already-rendered string,
+ * placing each one through [runs].
+ */
+internal fun applyHighlightSpans(
+    result: AnnotatedString,
+    runs: TextRuns,
+    highlights: List<Highlight>,
+    theme: ReaderThemeData,
+    searchState: Pair<List<SearchMatch>, Int>?
+): AnnotatedString {
+    val overlapping = highlights.filter { runs.overlaps(it.startOffset, it.endOffset) }
     if (overlapping.isEmpty() && searchState == null) return result
 
-    // Rebuild with highlight and search spans added on top
     return buildAnnotatedString {
         // append(AnnotatedString) copies text + all existing spans/annotations
         append(result)
 
         for (highlight in overlapping) {
-            // Convert document offsets to local string positions
-            val localStart = (highlight.startOffset - blockStartOffset).coerceIn(0, result.length)
-            val localEnd = (highlight.endOffset - blockStartOffset).coerceIn(0, result.length)
-            if (localStart >= localEnd) continue
-
-            addHighlightSpan(highlight, localStart, localEnd, theme)
+            val local = runs.localRange(highlight.startOffset, highlight.endOffset) ?: continue
+            addHighlightSpan(highlight, local.first, local.last + 1, theme)
         }
 
-        // Apply search match spans (drawn on top of highlights for visibility)
+        // Applied on top of highlights so the active match stays visible over one
         if (searchState != null) {
             val (searchMatches, activeIndex) = searchState
             for ((matchIndex, match) in searchMatches.withIndex()) {
-                if (match.startOffset >= blockEndOffset || match.endOffset <= blockStartOffset) continue
-                val localStart = (match.startOffset - blockStartOffset).coerceIn(0, result.length)
-                val localEnd = (match.endOffset - blockStartOffset).coerceIn(0, result.length)
-                if (localStart >= localEnd) continue
+                val local = runs.localRange(match.startOffset, match.endOffset) ?: continue
                 val bg = if (matchIndex == activeIndex) Color(0xCCFF9800) else Color(0x66FFC107)
-                addStyle(SpanStyle(background = bg, color = Color.Black), localStart, localEnd)
+                addStyle(SpanStyle(background = bg, color = Color.Black), local.first, local.last + 1)
             }
         }
     }
@@ -153,15 +151,16 @@ private fun appendNodeChildren(
     builder: AnnotatedString.Builder,
     node: Node,
     theme: ReaderThemeData,
-    textOffset: TextOffsetTracker,
+    offsets: ReaderTextOffsets,
+    runs: TextRuns,
     onLinkClick: (String) -> Unit
 ) {
     for (child in node.childNodes()) {
         when (child) {
             is TextNode -> {
                 val text = child.getWholeText()
+                runs.record(builder.length, offsets.startOf(child), text.length)
                 builder.append(text)
-                textOffset.advance(text.length)
             }
 
             is Element -> {
@@ -169,31 +168,31 @@ private fun appendNodeChildren(
                 when (tag) {
                     "b", "strong" -> {
                         val start = builder.length
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                         builder.addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, builder.length)
                     }
 
                     "i", "em", "cite", "dfn" -> {
                         val start = builder.length
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                         builder.addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, builder.length)
                     }
 
                     "u" -> {
                         val start = builder.length
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                         builder.addStyle(SpanStyle(textDecoration = TextDecoration.Underline), start, builder.length)
                     }
 
                     "del", "s", "strike" -> {
                         val start = builder.length
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                         builder.addStyle(SpanStyle(textDecoration = TextDecoration.LineThrough), start, builder.length)
                     }
 
                     "code" -> {
                         val start = builder.length
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                         builder.addStyle(
                             SpanStyle(
                                 fontFamily = FontFamily.Monospace,
@@ -208,7 +207,7 @@ private fun appendNodeChildren(
                     "a" -> {
                         val href = child.attr("href")
                         val start = builder.length
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                         val end = builder.length
                         if (href.isNotBlank() && start < end) {
                             builder.addStyle(
@@ -230,7 +229,7 @@ private fun appendNodeChildren(
 
                     "mark" -> {
                         val start = builder.length
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                         // Use the data-id if present (our highlight marks), otherwise generic yellow
                         val highlightId = child.attr("data-id")
                         if (highlightId.isNotBlank()) {
@@ -243,7 +242,7 @@ private fun appendNodeChildren(
 
                     "sup" -> {
                         val start = builder.length
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                         builder.addStyle(
                             SpanStyle(
                                 baselineShift = BaselineShift.Superscript,
@@ -256,7 +255,7 @@ private fun appendNodeChildren(
 
                     "sub" -> {
                         val start = builder.length
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                         builder.addStyle(
                             SpanStyle(
                                 baselineShift = BaselineShift.Subscript,
@@ -268,7 +267,7 @@ private fun appendNodeChildren(
                     }
 
                     "span" -> {
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                     }
 
                     "div", "p", "section", "article", "header", "footer",
@@ -277,16 +276,16 @@ private fun appendNodeChildren(
                         // — render children then add a newline to preserve line structure.
                         // Skip the newline if the last char is already a newline (avoids
                         // double-newlines from nested block elements like <div><p>...</p></div>).
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                         if (builder.length == 0 || builder.toAnnotatedString().text.last() != '\n') {
                             builder.append("\n")
                         }
                     }
 
                     "br" -> {
+                        // A line the reader draws, not text the document holds: it takes a
+                        // character here and none in the stream.
                         builder.append("\n")
-                        // <br> is not a text node, it doesn't increment the text offset counter
-                        // as TreeWalker only counts text nodes
                     }
 
                     "img" -> {
@@ -295,25 +294,14 @@ private fun appendNodeChildren(
                         // but we still need to handle <img> inside <a> or <p> etc.
                         // Add an object replacement character as placeholder
                         builder.append(" ")
-                        textOffset.advance(0) // img has no text content in TreeWalker
                     }
 
                     else -> {
                         // Unknown inline tag — render children
-                        appendNodeChildren(builder, child, theme, textOffset, onLinkClick)
+                        appendNodeChildren(builder, child, theme, offsets, runs, onLinkClick)
                     }
                 }
             }
         }
-    }
-}
-
-/**
- * Mutable offset tracker that mirrors the TreeWalker text offset counting
- * used in the WebView's JavaScript highlight code.
- */
-class TextOffsetTracker(var offset: Int = 0) {
-    fun advance(chars: Int) {
-        offset += chars
     }
 }
