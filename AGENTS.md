@@ -396,6 +396,23 @@ solid (yellow) / double (blue) / dashed (green) / dotted (red).
 - A pattern is only learnable if it is named, so `HighlightCard` and the colour picker spell the
   colour out (`TagChip`, and a label under each swatch) under `highContrast`.
 
+### Reader link hover
+
+A pointer resting on a link in the reader gets a hand cursor and, after a second, a plain tooltip
+naming the URL — the affordances a browser gives. Both live in
+`ReaderLinkHover.kt` (`ui/components/reader/`) and are wired into `AnnotatedClickableText`, which
+every reader text renderer already goes through.
+
+A text block is one composable, so neither can come from a modifier on the link itself: the
+character under the pointer is resolved against the block's own `TextLayoutResult` on every move
+(`characterAt`, which confirms the candidate against its bounding box so the hand stays off the
+margin), and the hand is applied with `overrideDescendants = true` to win over the I-beam the
+selectable text asks for.
+
+Hover is mouse-only by construction — events from any other `PointerType` are ignored — so nothing
+here fires from touch, and the tooltip is placed clear of the pointer hotspot
+(`tooltipPosition`), which would otherwise take the hover from the text and flicker.
+
 ### Empty states
 
 - A list with nothing in it needs an **explicit empty state**, never a blank area — the two
