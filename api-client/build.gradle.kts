@@ -1,8 +1,6 @@
-import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
-
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidLibrary)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.openapi.generator)
 }
@@ -19,12 +17,16 @@ kotlin {
         freeCompilerArgs.add("-Xwarning-level=UNNECESSARY_SAFE_CALL:disabled")
     }
 
-    androidTarget {
+    android {
+        namespace = "com.karakept.api"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
         }
     }
-    
+
     jvm("desktop")
     
     sourceSets {
@@ -41,20 +43,6 @@ kotlin {
                 implementation(libs.kotlin.reflect)
             }
         }
-    }
-}
-
-android {
-    namespace = "com.karakept.api"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
-    
-    defaultConfig {
-        minSdk = libs.versions.android.minSdk.get().toInt()
-    }
-    
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
     }
 }
 
@@ -98,7 +86,7 @@ openApiGenerate {
 // file is LF, so a regex with literal newlines would silently fail to match there.
 // The task is idempotent and throws if it can neither patch nor confirm an existing
 // patch, so a generator format change fails the build instead of shipping unpatched.
-val patchOpenApiClient by tasks.registering {
+val patchOpenApiClient = tasks.register("patchOpenApiClient") {
     dependsOn("openApiGenerate")
 
     // Resolve to a plain File at configuration time so the doLast closure captures only a
@@ -139,5 +127,5 @@ val patchOpenApiClient by tasks.registering {
 
 // Make compilation depend on code generation and patching
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    dependsOn("patchOpenApiClient")
+    dependsOn(patchOpenApiClient)
 }
