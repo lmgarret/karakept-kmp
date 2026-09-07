@@ -110,6 +110,8 @@ fun AnnotatedClickableText(
 
     var rootOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
+    val linkHover = rememberReaderLinkHoverState()
+
     // Identifies this block's contribution to a highlight's mask across the
     // re-reports that scrolling triggers.
     val positionSourceKey = remember { Any() }
@@ -176,6 +178,7 @@ fun AnnotatedClickableText(
                 rootOffset = position
                 snapRegistry?.let { snapReport.onPositioned(it, positionSourceKey, position.y) }
             }
+            .readerLinkHover(linkHover, text) { layoutResult.value }
             .pointerInput(text) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -199,14 +202,10 @@ fun AnnotatedClickableText(
                         }
 
                         // Then check link annotations
-                        val linkAnnotations = text.getStringAnnotations(
-                            tag = LINK_ANNOTATION_TAG,
-                            start = charOffset,
-                            end = charOffset + 1
-                        )
-                        if (linkAnnotations.isNotEmpty()) {
+                        val linkUrl = text.linkAt(charOffset)
+                        if (linkUrl != null) {
                             up.consume()
-                            onLinkClick(linkAnnotations.first().item)
+                            onLinkClick(linkUrl)
                             return@awaitEachGesture
                         }
                     }
@@ -229,6 +228,8 @@ fun AnnotatedClickableText(
             },
             modifier = Modifier.drawHighlightRules(patternRuns, ruleColor) { layoutResult.value }
         )
+
+        linkHover.visibleUrl?.let { url -> LinkUrlTooltip(url, linkHover.anchor) }
     }
 }
 
