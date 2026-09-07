@@ -254,10 +254,12 @@ fun EinkSettingsContent(
 
                         EinkSetting.SNAP_TO_CONTENT -> SettingSwitchCard(
                             title = "Snap pages to content",
-                            description = "Start each page of an article on a whole line of text, " +
-                                "instead of slicing through the one that straddles the edge. With " +
-                                "E-ink mode on, pages also end on a whole line and the last page " +
-                                "carries on from the previous instead of repeating it.",
+                            description = "Start each page on a whole line of text — a whole " +
+                                "bookmark in the list — instead of slicing through the one that " +
+                                "straddles the edge. With E-ink mode on, pages also end whole, " +
+                                "the last one carries on from the previous instead of repeating " +
+                                "it, and the list holds every bookmark to one height so an exact " +
+                                "number of them fills the screen.",
                             icon = AppIcons.Default.VerticalAlignTop,
                             checked = keyBindings.snapToContent,
                             onCheckedChange = { screenModel.setSnapToContent(it) }

@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,6 +32,7 @@ import com.karakept.app.ui.icons.AppIcons
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +44,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -57,6 +61,7 @@ import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.ReadIndicatorStyle
 import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.MetadataPosition
+import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.data.model.QuickActionPosition
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.ThumbnailSide
@@ -81,16 +86,22 @@ import com.karakept.app.ui.components.BookmarkPlaceholderItem
 import com.karakept.app.ui.components.QuickActionBookmarkItem
 import com.karakept.app.ui.components.ScrollCursorIndicator
 import com.karakept.app.ui.components.SwipeableBookmarkItem
+import com.karakept.app.ui.components.rememberBookmarkRowMetrics
+import com.karakept.app.ui.components.rememberTiledRows
 import com.karakept.app.ui.components.getEffectiveColor
 import com.karakept.app.ui.components.scrollToTop
+import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.input.PageTurnScrollEffect
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.utils.onDesktopModifiedClick
+import com.karakept.app.ui.utils.tiledTurnAdjustment
+import com.karakept.app.ui.utils.trailingPagePaddingFor
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
 import com.karakept.app.utils.FileUtils
 import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.utils.AssetUrlUtils
 import com.karakept.app.utils.fileExists
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -214,7 +225,11 @@ internal fun BookmarkListContent(
     }
 
     val einkMode = LocalEinkMode.current
-    PageTurnScrollEffect(listState = listState, enabled = pageTurnEnabled)
+    // Holding every row to one height changes how the list looks while scrolling, not just where a
+    // turn lands, so unlike the snap itself it waits for the master e-ink switch. The page-turn
+    // wiring that reads it sits further down, where the page has been measured.
+    val pageTurnBindings by koinInject<PageTurnDispatcher>().bindings.collectAsState()
+    val pagedRendering = einkMode.enabled && pageTurnBindings.snapToContent
     val animationGate = remember { ItemAnimationGate(bookmarks) }
     val animateItems = animationGate.update(bookmarks) && !einkMode.animationsDisabled
 
@@ -391,9 +406,66 @@ internal fun BookmarkListContent(
         // description line count needs it.
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val rowWidth = maxWidth
+        // The page is the list's own height, read off the constraints rather than off `layoutInfo`:
+        // the tile is settled before the first row is laid out, so the list is never drawn once at
+        // its natural height and then again at the tile.
+        val tiledRows = rememberTiledRows(
+            enabled = pagedRendering,
+            viewportPx = with(density) { maxHeight.roundToPx() },
+            layoutType = layoutType,
+            metrics = rememberBookmarkRowMetrics(
+                itemContainerStyle = itemContainerStyle,
+                showThumbnail = showThumbnail,
+                thumbnailSize = thumbnailSize,
+                titlePosition = titlePosition,
+                showDescription = showDescription,
+                descriptionMaxLines = descriptionMaxLines,
+                descriptionPosition = descriptionPosition,
+                showUrl = showUrl,
+                urlPosition = urlPosition,
+                showTags = showTags,
+                showDate = showDate,
+                showReadingTime = showReadingTimeBadge,
+                metadataPosition = metadataPosition,
+                showRowDivider = showRowDivider
+            )
+        )
+        // Room for the last turn to put the final rows at the top of the page. Without it that turn
+        // clamps against the end of the content and the page it lands on is one the previous page
+        // had already shown almost all of.
+        val trailingPadPx by remember(tiledRows) {
+            derivedStateOf {
+                val tiling = tiledRows?.tiling ?: return@derivedStateOf 0
+                trailingPagePaddingFor(listState.layoutInfo, tiling.rowHeightPx)
+            }
+        }
+        // A page is a whole number of rows once they are tiled, so a turn can be landed on a row top
+        // from wherever it starts — including a position the user dragged to. Untiled, the list
+        // keeps its flat delta: rows of their own heights have no boundary to be pulled onto.
+        val turnSnap: ((PageTurnDirection, Float) -> Float)? = tiledRows?.let { tiled ->
+            { direction, pageDeltaPx ->
+                // The offset is a distance into the *first visible item*, which is only a row while
+                // the list is showing bookmarks rather than its loading or end-of-list footer.
+                if (listState.firstVisibleItemIndex < bookmarks.size) {
+                    tiledTurnAdjustment(
+                        direction = direction,
+                        pageDeltaPx = pageDeltaPx,
+                        tiling = tiled.tiling,
+                        firstVisibleOffsetPx = listState.firstVisibleItemScrollOffset
+                    )
+                } else 0f
+            }
+        }
+        PageTurnScrollEffect(
+            listState = listState,
+            enabled = pageTurnEnabled,
+            predictiveSnap = turnSnap,
+            hasTrailingPadding = trailingPadPx > 0
+        )
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            state = listState
+            state = listState,
+            contentPadding = PaddingValues(bottom = with(density) { trailingPadPx.toDp() })
         ) {
             itemsIndexed(
                 bookmarks,
@@ -402,6 +474,14 @@ internal fun BookmarkListContent(
             ) { itemIndex, bookmark ->
                 Box(
                     modifier = Modifier
+                        // Uniform height is what lets an exact number of rows fill the page. The row
+                        // absorbs the difference through its description budget and its own
+                        // whitespace; the clip catches whatever still will not fit.
+                        .then(
+                            if (tiledRows != null) {
+                                Modifier.height(tiledRows.itemHeight).clipToBounds()
+                            } else Modifier
+                        )
                         // fadeOutSpec = null: a fading-out item is kept in the layout and drawn
                         // over whatever replaces it, using the spec recorded on the *previous*
                         // measure pass — so a dataset swap renders the outgoing list on top of
@@ -665,6 +745,8 @@ internal fun BookmarkListContent(
                                 titlePosition = titlePosition,
                                 descriptionMaxLines = descriptionMaxLines,
                                 rowWidth = rowWidth,
+                                fixedRowHeight = tiledRows?.rowHeight,
+                                descriptionFillHeight = tiledRows?.bodyHeight,
                             )
                         }
                     }
