@@ -32,8 +32,7 @@ class HighlightRepositoryIntegrationTest : BaseDockerIntegrationTest() {
         val highlightText = "Optimistic local highlight"
         val tempId = highlightRepository.createHighlight(
             server = testServer,
-            bookmarkLocalId = bookmark.localId,
-            bookmarkRemoteId = bookmark.originalRemoteId,
+            bookmarkRemoteId = bookmark.remoteId,
             text = highlightText,
             startOffset = 0,
             endOffset = highlightText.length,
@@ -56,8 +55,7 @@ class HighlightRepositoryIntegrationTest : BaseDockerIntegrationTest() {
         val highlightText = "Highlight synced to remote"
         highlightRepository.createHighlight(
             server = testServer,
-            bookmarkLocalId = bookmark.localId,
-            bookmarkRemoteId = bookmark.originalRemoteId,
+            bookmarkRemoteId = bookmark.remoteId,
             text = highlightText,
             startOffset = 0,
             endOffset = highlightText.length,
@@ -85,8 +83,7 @@ class HighlightRepositoryIntegrationTest : BaseDockerIntegrationTest() {
         val highlightText = "Temp ID replacement test"
         val tempId = highlightRepository.createHighlight(
             server = testServer,
-            bookmarkLocalId = bookmark.localId,
-            bookmarkRemoteId = bookmark.originalRemoteId,
+            bookmarkRemoteId = bookmark.remoteId,
             text = highlightText,
             startOffset = 5,
             endOffset = 5 + highlightText.length
@@ -117,7 +114,6 @@ class HighlightRepositoryIntegrationTest : BaseDockerIntegrationTest() {
         // Create and sync highlight to get a real server ID
         highlightRepository.createHighlight(
             server = testServer,
-            bookmarkLocalId = bookmark.localId,
             bookmarkRemoteId = remoteId,
             text = highlightText,
             startOffset = 0,
@@ -135,7 +131,7 @@ class HighlightRepositoryIntegrationTest : BaseDockerIntegrationTest() {
         // Now update it
         highlightRepository.updateHighlight(
             server = testServer,
-            bookmarkLocalId = bookmark.localId,
+            bookmarkRemoteId = bookmark.remoteId,
             highlightRemoteId = realHighlight.id,
             note = "Updated note",
             color = "red"
@@ -169,7 +165,6 @@ class HighlightRepositoryIntegrationTest : BaseDockerIntegrationTest() {
         // Create and sync
         highlightRepository.createHighlight(
             server = testServer,
-            bookmarkLocalId = bookmark.localId,
             bookmarkRemoteId = remoteId,
             text = highlightText,
             startOffset = 0,
@@ -183,7 +178,7 @@ class HighlightRepositoryIntegrationTest : BaseDockerIntegrationTest() {
         assertNotNull(highlight, "Should have synced highlight")
 
         // Delete it
-        highlightRepository.deleteHighlight(testServer, bookmark.localId, highlight.id)
+        highlightRepository.deleteHighlight(testServer, bookmark.remoteId, highlight.id)
 
         // Should be optimistically removed from local DB
         val afterDelete = highlightRepository.getHighlightsForBookmark(remoteId, testServer.id).first()

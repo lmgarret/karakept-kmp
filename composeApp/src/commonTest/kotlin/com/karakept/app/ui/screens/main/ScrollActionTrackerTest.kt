@@ -16,8 +16,7 @@ class ScrollActionTrackerTest {
 
     private fun bookmark(remoteId: Long) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "orig-$remoteId",
+        remoteId = "orig-$remoteId",
         serverId = "server-1",
         url = "https://example.com/$remoteId",
         title = "Bookmark $remoteId",
@@ -44,7 +43,7 @@ class ScrollActionTrackerTest {
         firstOffset: Int = 0,
         visibleCount: Int = 5,
         isScrolling: Boolean = false,
-        actedOnIds: Set<Long> = emptySet(),
+        actedOnIds: Set<String> = emptySet(),
         pageTurns: Int = 0,
         /**
          * The key of the row at the top of the viewport. Defaults to the one [firstIndex]
@@ -53,7 +52,7 @@ class ScrollActionTrackerTest {
          * still describes the outgoing list: there the index and the key both come from the
          * *old* list, so a new list with an old index would name a row layoutInfo never saw.
          */
-        firstKey: Long? = bookmarks.getOrNull(firstIndex)?.remoteId
+        firstKey: String? = bookmarks.getOrNull(firstIndex)?.remoteId
     ) = ScrollActionSnapshot(
         firstIndex = firstIndex,
         firstKey = firstKey,
@@ -65,7 +64,10 @@ class ScrollActionTrackerTest {
         pageTurns = pageTurns
     )
 
-    private fun ids(bookmarks: List<BookmarkEntity>) = bookmarks.map { it.remoteId }
+    // Decodes the fixture id back to the number it was built from, so the assertions
+    // below read as row numbers rather than as "orig-" strings.
+    private fun ids(bookmarks: List<BookmarkEntity>) =
+        bookmarks.map { it.remoteId.substringAfter('-').toLong() }
 
     private val longList = (1L..30L).map { bookmark(it) }
 
@@ -112,7 +114,7 @@ class ScrollActionTrackerTest {
         tracker.onSnapshot(snapshot(longList, firstIndex = 0))
 
         val fired = tracker.onSnapshot(
-            snapshot(longList, firstIndex = 3, isScrolling = true, actedOnIds = setOf(2L))
+            snapshot(longList, firstIndex = 3, isScrolling = true, actedOnIds = setOf("orig-2"))
         )
 
         assertEquals(listOf(1L, 3L), ids(fired))
@@ -145,7 +147,7 @@ class ScrollActionTrackerTest {
         val grown = listOfIds(101, 102, 103) + longList
         // The dataset has landed but the layout has not been re-measured: it still reports
         // bookmark 11 at index 10, the position it held in the outgoing list.
-        assertTrue(tracker.onSnapshot(snapshot(grown, firstIndex = 10, firstKey = 11L)).isEmpty())
+        assertTrue(tracker.onSnapshot(snapshot(grown, firstIndex = 10, firstKey = "orig-11")).isEmpty())
         assertTrue(tracker.onSnapshot(snapshot(grown, firstIndex = 13)).isEmpty())
 
         // Scrolling one further row down fires only that row, not the re-indexed backlog.
@@ -341,7 +343,7 @@ class ScrollActionTrackerTest {
         val grown = listOfIds(101, 102, 103) + longList
         // Layout still describes the outgoing list: bookmark 9 at index 8.
         val fired = tracker.onSnapshot(
-            snapshot(grown, firstIndex = 8, firstKey = 9L, pageTurns = 1)
+            snapshot(grown, firstIndex = 8, firstKey = "orig-9", pageTurns = 1)
         )
 
         assertEquals(listOf(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L), ids(fired))

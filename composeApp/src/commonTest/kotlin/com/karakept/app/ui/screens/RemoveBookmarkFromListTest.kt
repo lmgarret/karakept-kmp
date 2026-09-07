@@ -28,8 +28,7 @@ class RemoveBookmarkFromListTest {
         title: String = "Bookmark $remoteId"
     ) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "orig-$remoteId",
+        remoteId = "orig-$remoteId",
         serverId = "server-1",
         url = "https://example.com/$remoteId",
         title = title,
@@ -103,7 +102,7 @@ class RemoveBookmarkFromListTest {
 
         assertEquals(2, result.size, "Only target bookmark should be removed")
         assertTrue(
-            result.all { it.remoteId != 42L },
+            result.all { it.remoteId != "orig-42" },
             "Target bookmark (remoteId=42) should not be in the result"
         )
         assertEquals("list-A", result[0].listIds, "Other bookmark 1 listIds should be unchanged")

@@ -46,8 +46,7 @@ class BookmarkPagingOrderTest {
         db.bookmarkDao().insertBookmarks(
             (1..rowCount).map { id ->
                 BookmarkEntity(
-                    remoteId = id.toLong(),
-                    originalRemoteId = "remote-$id",
+                    remoteId = "remote-$id",
                     serverId = serverId,
                     url = "https://example.com/$id",
                     title = "Tied title",

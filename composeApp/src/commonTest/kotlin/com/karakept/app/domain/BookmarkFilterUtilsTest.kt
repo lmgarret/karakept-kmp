@@ -34,8 +34,7 @@ class BookmarkFilterUtilsTest {
         description: String? = null
     ) = BookmarkEntity(
         localId = idCounter,
-        remoteId = idCounter++,
-        originalRemoteId = "remote-${idCounter}",
+        remoteId = "remote-${idCounter}",
         serverId = "server-1",
         title = title,
         url = url,

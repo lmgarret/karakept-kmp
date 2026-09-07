@@ -70,14 +70,14 @@ interface PendingActionDao {
      * Delete all pending actions for a bookmark (e.g., if bookmark is deleted).
      */
     @Query("DELETE FROM pending_actions WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId")
-    suspend fun deleteActionsForBookmark(bookmarkRemoteId: Long, serverId: String)
+    suspend fun deleteActionsForBookmark(bookmarkRemoteId: String, serverId: String)
 
     /**
      * Delete all pending actions of a specific type for a bookmark.
      * Used to deduplicate actions (e.g., keep only the latest reading progress update).
      */
     @Query("DELETE FROM pending_actions WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId AND actionType = :actionType")
-    suspend fun deleteActionsForBookmarkByType(bookmarkRemoteId: Long, serverId: String, actionType: String)
+    suspend fun deleteActionsForBookmarkByType(bookmarkRemoteId: String, serverId: String, actionType: String)
     
     /**
      * Whether this bookmark has an unsynced action of [actionType] waiting. Used by the
@@ -86,7 +86,7 @@ interface PendingActionDao {
      */
     @Query("SELECT COUNT(*) FROM pending_actions WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId AND actionType = :actionType")
     suspend fun countActionsForBookmarkByType(
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         actionType: String
     ): Int

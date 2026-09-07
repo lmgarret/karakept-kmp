@@ -96,7 +96,7 @@ class MainScreenModelPaginationSortingTest {
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
         every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
@@ -119,8 +119,7 @@ class MainScreenModelPaginationSortingTest {
 
     private fun makeBookmark(id: Long, title: String, createdAt: Long = id) = BookmarkEntity(
         localId = id,
-        remoteId = id,
-        originalRemoteId = "remote-$id",
+        remoteId = "remote-$id",
         serverId = "server-1",
         url = "https://example.com/$id",
         title = title,
@@ -319,22 +318,22 @@ class MainScreenModelPaginationSortingTest {
             // Three arrived above the row the user had seen.
             model._accumulatedBookmarks.value =
                 listOf(makeBookmark(10, "n1"), makeBookmark(11, "n2"), makeBookmark(12, "n3"), makeBookmark(1, "b1"))
-            model._seenTopRemoteId.value = 1L
+            model._seenTopRemoteId.value = "remote-1"
             advanceUntilIdle()
             assertEquals(3, model.newBookmarksAbove.value)
 
             // The user scrolls up through them. Each row reaching the top of the viewport is
             // one they have now seen.
-            model.markTopVisibleSeen(12L)
+            model.markTopVisibleSeen("remote-12")
             advanceUntilIdle()
             assertEquals(2, model.newBookmarksAbove.value)
 
-            model.markTopVisibleSeen(11L)
+            model.markTopVisibleSeen("remote-11")
             advanceUntilIdle()
             assertEquals(1, model.newBookmarksAbove.value)
 
             // Stopping one row short of the very top must still leave only that one uncounted.
-            assertEquals(11L, model._seenTopRemoteId.value)
+            assertEquals("remote-11", model._seenTopRemoteId.value)
         }
 
     @Test
@@ -344,17 +343,17 @@ class MainScreenModelPaginationSortingTest {
             advanceUntilIdle()
             model._accumulatedBookmarks.value =
                 listOf(makeBookmark(10, "n1"), makeBookmark(11, "n2"), makeBookmark(1, "b1"))
-            model._seenTopRemoteId.value = 10L
+            model._seenTopRemoteId.value = "remote-10"
             advanceUntilIdle()
             assertEquals(0, model.newBookmarksAbove.value)
 
             // Scrolling down puts lower rows at the top of the viewport; the anchor must not
             // follow, or everything above it would be reported as new all over again.
-            model.markTopVisibleSeen(11L)
-            model.markTopVisibleSeen(1L)
+            model.markTopVisibleSeen("remote-11")
+            model.markTopVisibleSeen("remote-1")
             advanceUntilIdle()
 
-            assertEquals(10L, model._seenTopRemoteId.value, "the anchor only moves up the list")
+            assertEquals("remote-10", model._seenTopRemoteId.value, "the anchor only moves up the list")
             assertEquals(0, model.newBookmarksAbove.value)
         }
 
@@ -366,13 +365,13 @@ class MainScreenModelPaginationSortingTest {
             val model = createMainScreenModel()
             advanceUntilIdle()
             model._accumulatedBookmarks.value = listOf(makeBookmark(10, "n1"), makeBookmark(11, "n2"))
-            model._seenTopRemoteId.value = 999L
+            model._seenTopRemoteId.value = "remote-999"
             advanceUntilIdle()
 
-            model.markTopVisibleSeen(11L)
+            model.markTopVisibleSeen("remote-11")
             advanceUntilIdle()
 
-            assertEquals(11L, model._seenTopRemoteId.value)
+            assertEquals("remote-11", model._seenTopRemoteId.value)
             assertEquals(1, model.newBookmarksAbove.value)
         }
 
@@ -383,13 +382,13 @@ class MainScreenModelPaginationSortingTest {
             val model = createMainScreenModel()
             advanceUntilIdle()
             model._accumulatedBookmarks.value = listOf(makeBookmark(10, "n1"), makeBookmark(1, "b1"))
-            model._seenTopRemoteId.value = 1L
+            model._seenTopRemoteId.value = "remote-1"
             advanceUntilIdle()
 
-            model.markTopVisibleSeen(777L)
+            model.markTopVisibleSeen("remote-777")
             advanceUntilIdle()
 
-            assertEquals(1L, model._seenTopRemoteId.value)
+            assertEquals("remote-1", model._seenTopRemoteId.value)
             assertEquals(1, model.newBookmarksAbove.value)
         }
 

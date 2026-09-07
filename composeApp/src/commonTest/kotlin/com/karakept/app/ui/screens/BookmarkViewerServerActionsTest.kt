@@ -67,8 +67,7 @@ class BookmarkViewerServerActionsTest {
 
     private val testBookmark = BookmarkEntity(
         localId = 1L,
-        remoteId = 100L,
-        originalRemoteId = "remote-100",
+        remoteId = "remote-100",
         serverId = "server-1",
         url = "https://example.com/article",
         title = "Test Article",
@@ -85,7 +84,7 @@ class BookmarkViewerServerActionsTest {
 
     private val archiveAsset = AssetEntity(
         id = "asset-1",
-        bookmarkRemoteId = 100L,
+        bookmarkRemoteId = "remote-100",
         serverId = "server-1",
         assetType = "fullPageArchive",
         fileName = null,
@@ -207,7 +206,7 @@ class BookmarkViewerServerActionsTest {
             screenModel.requestServerCrawl(testBookmark, ServerCrawlAction.REFRESH)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { bookmarkRepository.syncSingleBookmark(100L, "server-1") }
+            coVerify(exactly = 1) { bookmarkRepository.syncSingleBookmark("remote-100", "server-1") }
             assertNull(screenModel.serverCrawlInFlight.value)
         }
 
@@ -323,7 +322,7 @@ class BookmarkViewerServerActionsTest {
         advanceUntilIdle()
 
         // One sync per poll, stopping as soon as the asset lands rather than burning the budget.
-        coVerify(exactly = 3) { bookmarkRepository.syncSingleBookmark(100L, "server-1") }
+        coVerify(exactly = 3) { bookmarkRepository.syncSingleBookmark("remote-100", "server-1") }
         coVerify(exactly = 1) { snackbarManager.showSnackbar("Archive ready") }
         assertNull(screenModel.serverCrawlInFlight.value)
     }
@@ -352,7 +351,7 @@ class BookmarkViewerServerActionsTest {
         advanceUntilIdle()
 
         // REFRESH rewrites metadata rather than adding an asset, so one sync is the whole job.
-        coVerify(exactly = 1) { bookmarkRepository.syncSingleBookmark(100L, "server-1") }
+        coVerify(exactly = 1) { bookmarkRepository.syncSingleBookmark("remote-100", "server-1") }
         coVerify(exactly = 0) {
             snackbarManager.showSnackbar("Still processing on the server — pull to refresh later")
         }

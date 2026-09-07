@@ -139,7 +139,7 @@ class RefreshAfterSyncTest {
         every { listRepository.lists } returns listsFlow
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
         every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns MutableSharedFlow()
@@ -190,8 +190,7 @@ class RefreshAfterSyncTest {
 
     private fun makeBookmark(id: Long, listIds: String) = BookmarkEntity(
         localId = id,
-        remoteId = id,
-        originalRemoteId = "remote-$id",
+        remoteId = "remote-$id",
         serverId = "server-1",
         url = "https://example.com/$id",
         title = "Bookmark $id",
@@ -318,7 +317,7 @@ class RefreshAfterSyncTest {
 
         assertEquals(
             listOf(5L, 4L, 3L, 2L, 1L),
-            awaitWindow(model) { window -> window.any { it.remoteId == 5L } },
+            awaitWindow(model) { window -> window.any { it.remoteId == "remote-5" } },
             "bookmarks synced into the current list must appear without navigating away"
         )
         assertTrue(
@@ -434,9 +433,12 @@ class RefreshAfterSyncTest {
             }
         }
 
-    /** The loaded window, read straight off the model — no collector needed. */
+    /**
+     * The loaded window, read straight off the model — no collector needed. Reported as the
+     * number each fixture id was built from, so the assertions read as row numbers.
+     */
     private fun window(model: MainScreenModel): List<Long> =
-        model._accumulatedBookmarks.value.map { it.remoteId }
+        model._accumulatedBookmarks.value.map { it.remoteId.substringAfter('-').toLong() }
 
     /**
      * Waits for the loaded window to satisfy [predicate] and returns its bookmark ids.

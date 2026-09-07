@@ -229,7 +229,7 @@ class MainScreenModel(
      * guards mutations so action handlers capture a position consistent with the
      * list they are about to modify.
      */
-    internal suspend fun lockedPositionOf(remoteId: Long): Int = bookmarksMutex.withLock {
+    internal suspend fun lockedPositionOf(remoteId: String): Int = bookmarksMutex.withLock {
         _accumulatedBookmarks.value.indexOfFirst { it.remoteId == remoteId }
     }
 
@@ -276,7 +276,7 @@ class MainScreenModel(
         }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     // The topmost bookmark the user has actually seen. Everything above it arrived since.
-    internal val _seenTopRemoteId = MutableStateFlow<Long?>(null)
+    internal val _seenTopRemoteId = MutableStateFlow<String?>(null)
 
     /**
      * How many bookmarks sit above the topmost one the user has seen — the "N new" pill.
@@ -325,7 +325,7 @@ class MainScreenModel(
      * pill went on offering a trip to bookmarks the user had just read — every time they
      * scrolled away from the top again, with no sync in between.
      */
-    fun markTopVisibleSeen(remoteId: Long) {
+    fun markTopVisibleSeen(remoteId: String) {
         val anchor = _seenTopRemoteId.value
         if (anchor == remoteId) return
         // Which of the two comes first is the whole question, so one pass that stops at
@@ -349,8 +349,8 @@ class MainScreenModel(
     // bookmark that is about to leave the list via async reconciliation — the reconcile
     // involves network calls so the window can be several seconds long.
     // Cleared on every full list reload (resetPaginationAndLoad).
-    internal val _actedOnBookmarkIds = MutableStateFlow<Set<Long>>(emptySet())
-    val actedOnBookmarkIds: StateFlow<Set<Long>> = _actedOnBookmarkIds
+    internal val _actedOnBookmarkIds = MutableStateFlow<Set<String>>(emptySet())
+    val actedOnBookmarkIds: StateFlow<Set<String>> = _actedOnBookmarkIds
 
     // Hoisted scroll position — survives Voyager push/pop within the same Navigator because
     // the same MainScreenModel instance is reused for the same Navigator's ScreenModelStore.
@@ -370,7 +370,7 @@ class MainScreenModel(
     val createBookmarkResult: SharedFlow<Result<Unit>> = _createBookmarkResult
 
     internal val _pendingBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
-    val pendingBookmarkRemoteIds: StateFlow<Set<Long>> = _pendingBookmarks
+    val pendingBookmarkRemoteIds: StateFlow<Set<String>> = _pendingBookmarks
         .map { list -> list.map { it.remoteId }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
@@ -378,8 +378,8 @@ class MainScreenModel(
     val searchQuery: StateFlow<String> = _searchQuery
 
     // Multi-select state
-    internal val _selectedBookmarkIds = MutableStateFlow<Set<Long>>(emptySet())
-    val selectedBookmarkIds: StateFlow<Set<Long>> = _selectedBookmarkIds
+    internal val _selectedBookmarkIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedBookmarkIds: StateFlow<Set<String>> = _selectedBookmarkIds
     val isSelectionMode: StateFlow<Boolean> = _selectedBookmarkIds
         .map { it.isNotEmpty() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -869,7 +869,7 @@ class MainScreenModel(
      * those, so what the user is looking at is right even when the rotation has not. Only rows
      * whose progress is missing or stale cost a request, so scrolling back and forth is free.
      */
-    fun onBookmarksVisible(remoteIds: List<Long>) {
+    fun onBookmarksVisible(remoteIds: List<String>) {
         val server = _selectedServer.value ?: return
         if (remoteIds.isEmpty()) return
         viewModelScope.launch {
@@ -1145,7 +1145,7 @@ internal const val PAGE_SIZE = 50
  */
 internal fun countBookmarksAbove(
     bookmarks: List<BookmarkEntity>,
-    seenTopRemoteId: Long?,
+    seenTopRemoteId: String?,
     excludeRead: Boolean = false
 ): Int {
     if (seenTopRemoteId == null) return 0

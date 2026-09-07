@@ -63,7 +63,7 @@ class PendingActionQueueTest {
 
     private fun pendingAction(
         actionType: String,
-        bookmarkRemoteId: Long = 100L,
+        bookmarkRemoteId: String = "orig-100",
         createdAt: Long = System.currentTimeMillis(),
         retryCount: Int = 0,
         actionData: String = "{}",
@@ -80,13 +80,12 @@ class PendingActionQueueTest {
 
     /**
      * Stub [bookmarkDao] so that `getBookmarkByRemoteId` returns a minimal
-     * bookmark entity with the given `originalRemoteId`.
+     * bookmark entity with the given `remoteId`.
      */
-    private fun stubBookmarkLookup(remoteId: Long, originalRemoteId: String = "orig-$remoteId") {
+    private fun stubBookmarkLookup(localId: Long, remoteId: String = "orig-$localId") {
         val entity = com.karakept.app.data.local.entity.BookmarkEntity(
-            localId = remoteId,
+            localId = localId,
             remoteId = remoteId,
-            originalRemoteId = originalRemoteId,
             serverId = testServer.id,
             url = "https://test.example.com/$remoteId",
             title = "Test Bookmark $remoteId",
@@ -106,13 +105,13 @@ class PendingActionQueueTest {
 
     @Test
     fun actionsProcessedInCreationOrder() = runTest(testDispatcher) {
-        val action1 = pendingAction(PendingActionType.ARCHIVE, bookmarkRemoteId = 1L, createdAt = 1000, id = 1)
-        val action2 = pendingAction(PendingActionType.FAVOURITE, bookmarkRemoteId = 2L, createdAt = 2000, id = 2)
-        val action3 = pendingAction(PendingActionType.UNARCHIVE, bookmarkRemoteId = 3L, createdAt = 3000, id = 3)
+        val action1 = pendingAction(PendingActionType.ARCHIVE, bookmarkRemoteId = "orig-1", createdAt = 1000, id = 1)
+        val action2 = pendingAction(PendingActionType.FAVOURITE, bookmarkRemoteId = "orig-2", createdAt = 2000, id = 2)
+        val action3 = pendingAction(PendingActionType.UNARCHIVE, bookmarkRemoteId = "orig-3", createdAt = 3000, id = 3)
 
         coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(action1, action2, action3)
 
-        // Stub bookmark lookups so executeAction can resolve originalRemoteId
+        // Stub bookmark lookups so executeAction can resolve remoteId
         stubBookmarkLookup(1L, "orig-1")
         stubBookmarkLookup(2L, "orig-2")
         stubBookmarkLookup(3L, "orig-3")
@@ -134,10 +133,10 @@ class PendingActionQueueTest {
     @Test
     fun conflictingActionsLastWins() = runTest(testDispatcher) {
         val archiveAction = pendingAction(
-            PendingActionType.ARCHIVE, bookmarkRemoteId = 42L, createdAt = 1, id = 1
+            PendingActionType.ARCHIVE, bookmarkRemoteId = "orig-42", createdAt = 1, id = 1
         )
         val unarchiveAction = pendingAction(
-            PendingActionType.UNARCHIVE, bookmarkRemoteId = 42L, createdAt = 2, id = 2
+            PendingActionType.UNARCHIVE, bookmarkRemoteId = "orig-42", createdAt = 2, id = 2
         )
 
         coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(archiveAction, unarchiveAction)
@@ -164,7 +163,7 @@ class PendingActionQueueTest {
     fun exhaustedRetriesMarkActionFailedInsteadOfDeleting() = runTest(testDispatcher) {
         // Action with retryCount = 4: the next transient failure reaches the 5-retry cap
         val staleAction = pendingAction(
-            PendingActionType.ARCHIVE, bookmarkRemoteId = 99L, createdAt = 1000, retryCount = 4, id = 1
+            PendingActionType.ARCHIVE, bookmarkRemoteId = "orig-99", createdAt = 1000, retryCount = 4, id = 1
         )
 
         coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(staleAction)
@@ -191,7 +190,7 @@ class PendingActionQueueTest {
     @Test
     fun transientRejectionIncrementsRetryWithBackoff() = runTest(testDispatcher) {
         val action = pendingAction(
-            PendingActionType.FAVOURITE, bookmarkRemoteId = 55L, createdAt = 1000, retryCount = 1, id = 1
+            PendingActionType.FAVOURITE, bookmarkRemoteId = "orig-55", createdAt = 1000, retryCount = 1, id = 1
         )
 
         coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(action)
@@ -218,7 +217,7 @@ class PendingActionQueueTest {
     @Test
     fun permanentRejectionMarksFailedImmediately() = runTest(testDispatcher) {
         val action = pendingAction(
-            PendingActionType.MOVE_TO_LIST, bookmarkRemoteId = 77L, createdAt = 1000, retryCount = 0, id = 1,
+            PendingActionType.MOVE_TO_LIST, bookmarkRemoteId = "orig-77", createdAt = 1000, retryCount = 0, id = 1,
             actionData = """{"listId":"list-1"}"""
         )
 

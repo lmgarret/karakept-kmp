@@ -355,8 +355,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
     ): com.karakept.app.data.local.entity.BookmarkEntity {
         val entity = com.karakept.app.data.local.entity.BookmarkEntity(
             localId = 0L,
-            remoteId = remoteId.hashCode().toLong(),
-            originalRemoteId = remoteId,
+            remoteId = remoteId,
             serverId = testServer.id,
             url = url,
             title = title,
@@ -374,7 +373,7 @@ class ReadingProgressIntegrationTest : BaseDockerIntegrationTest() {
             readingProgress = readingProgress
         )
         db.bookmarkDao().insertBookmark(entity)
-        return db.bookmarkDao().getBookmarkByOriginalRemoteId(remoteId, testServer.id)
+        return db.bookmarkDao().getBookmarkByRemoteId(remoteId, testServer.id)
             ?: throw IllegalStateException("Failed to insert bookmark with remoteId=$remoteId")
     }
 }

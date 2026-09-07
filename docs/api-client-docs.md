@@ -229,8 +229,7 @@ val bannerImageAssetId = dto.assets
 // Map generated model to entity
 BookmarkEntity(
     localId = 0L,
-    remoteId = (dto.id ?: "").hashCode().toLong(),
-    originalRemoteId = dto.id ?: "",
+    remoteId = dto.id ?: "",
     serverId = server.id,
     title = dto.title ?: dto.content?.title ?: "Untitled",
     url = dto.content?.url ?: "",

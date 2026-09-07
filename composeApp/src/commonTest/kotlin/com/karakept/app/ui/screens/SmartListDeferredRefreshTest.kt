@@ -61,7 +61,7 @@ class SmartListDeferredRefreshTest {
 
     private val serversFlow = MutableStateFlow(listOf(testServer))
     private val listsFlow = MutableStateFlow<List<KarakeepList>>(emptyList())
-    private val bookmarkChangedEvents = MutableSharedFlow<Long>()
+    private val bookmarkChangedEvents = MutableSharedFlow<String>()
     private val undoCompletedEvents = MutableSharedFlow<UndoCompletedEvent>()
 
     private val serverRepository: ServerRepository = mockk(relaxed = true) {
@@ -134,8 +134,7 @@ class SmartListDeferredRefreshTest {
         listIds: String = ""
     ) = BookmarkEntity(
         localId = localId,
-        remoteId = localId,
-        originalRemoteId = "orig-$localId",
+        remoteId = "orig-$localId",
         serverId = testServer.id,
         url = "https://example.com/$localId",
         title = "Bookmark $localId",

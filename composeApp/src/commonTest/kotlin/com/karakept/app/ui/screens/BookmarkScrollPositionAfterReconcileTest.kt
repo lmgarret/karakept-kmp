@@ -68,7 +68,7 @@ class BookmarkScrollPositionAfterReconcileTest {
 
     private val serversFlow = MutableStateFlow(listOf(testServer))
     private val listsFlow = MutableStateFlow<List<KarakeepList>>(listOf(feedsSmartList, readLaterList))
-    private val bookmarkChangedEvents = MutableSharedFlow<Long>()
+    private val bookmarkChangedEvents = MutableSharedFlow<String>()
     private val undoCompletedEvents = MutableSharedFlow<UndoCompletedEvent>()
 
     private val serverRepository: ServerRepository = mockk(relaxed = true) {
@@ -136,8 +136,7 @@ class BookmarkScrollPositionAfterReconcileTest {
 
     private fun bookmark(id: Long, listIds: String = "feeds") = BookmarkEntity(
         localId = id,
-        remoteId = id,
-        originalRemoteId = "orig-$id",
+        remoteId = "orig-$id",
         serverId = testServer.id,
         url = "https://example.com/$id",
         title = "Bookmark $id",
@@ -189,7 +188,7 @@ class BookmarkScrollPositionAfterReconcileTest {
         assertFalse(accumulated.any { it.remoteId == movedBookmark.remoteId },
             "Moved bookmark must be absent from Feeds list")
         // Items from positions well beyond page 0 must still be present
-        val highPageItems = allBookmarks.filter { it.remoteId > 20L && it.remoteId != movedBookmark.remoteId }
+        val highPageItems = allBookmarks.filter { it.localId > 20L && it.remoteId != movedBookmark.remoteId }
         assertTrue(highPageItems.all { expected -> accumulated.any { it.remoteId == expected.remoteId } },
             "Items from page 1+ must be preserved (scroll position protection)")
     }
@@ -349,7 +348,7 @@ class BookmarkScrollPositionAfterReconcileTest {
         val refreshed = accumulated.find { it.remoteId == targetBookmark.remoteId }
         assertEquals("feeds", refreshed?.listIds)
         // Items beyond page 0 must still be present
-        assertTrue(accumulated.any { it.remoteId == 39L }, "Item from page 1 must still be present")
+        assertTrue(accumulated.any { it.remoteId == "orig-39" }, "Item from page 1 must still be present")
     }
 
     /**
@@ -369,7 +368,7 @@ class BookmarkScrollPositionAfterReconcileTest {
 
         // actedOnBookmarkIds must be populated synchronously — before any coroutine runs.
         assertFalse(
-            42L in model.actedOnBookmarkIds.value,
+            "orig-42" in model.actedOnBookmarkIds.value,
             "actedOnBookmarkIds should be empty before the action"
         )
 
@@ -377,7 +376,7 @@ class BookmarkScrollPositionAfterReconcileTest {
 
         // No advanceUntilIdle — the ID must be present synchronously, before coroutines run.
         assertTrue(
-            42L in model.actedOnBookmarkIds.value,
+            "orig-42" in model.actedOnBookmarkIds.value,
             "actedOnBookmarkIds must contain the remoteId immediately after the action is called"
         )
     }
@@ -396,7 +395,7 @@ class BookmarkScrollPositionAfterReconcileTest {
         model.removeBookmarkFromList(bk, "manual-1")
 
         assertTrue(
-            7L in model.actedOnBookmarkIds.value,
+            "orig-7" in model.actedOnBookmarkIds.value,
             "actedOnBookmarkIds must contain the remoteId immediately after removeBookmarkFromList"
         )
     }
@@ -414,7 +413,7 @@ class BookmarkScrollPositionAfterReconcileTest {
         val bk = bookmark(99L, "feeds")
         model._accumulatedBookmarks.value = listOf(bk)
         model.moveBookmarkToList(bk, "read-later")
-        assertTrue(99L in model.actedOnBookmarkIds.value, "pre-condition: ID should be in set")
+        assertTrue("orig-99" in model.actedOnBookmarkIds.value, "pre-condition: ID should be in set")
 
         // Trigger a full list reload (simulates filter change / sync)
         val server = testServer

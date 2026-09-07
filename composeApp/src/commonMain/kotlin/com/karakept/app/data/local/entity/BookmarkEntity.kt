@@ -12,8 +12,9 @@ import androidx.compose.runtime.Immutable
 )
 data class BookmarkEntity(
     @PrimaryKey(autoGenerate = true) val localId: Long = 0,
-    val remoteId: Long, // Hashed ID for local indexing 
-    val originalRemoteId: String, // ORIGINAL string ID from API (used for API calls)
+    // The server's own bookmark id, verbatim. It is both the local identity key (with
+    // [serverId]) and what every API call is keyed on.
+    val remoteId: String,
     val serverId: String,
     val url: String,
     val title: String,
