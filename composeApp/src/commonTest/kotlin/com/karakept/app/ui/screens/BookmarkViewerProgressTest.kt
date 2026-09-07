@@ -66,8 +66,7 @@ class BookmarkViewerProgressTest {
 
     private val testBookmark = BookmarkEntity(
         localId = 1L,
-        remoteId = 100L,
-        originalRemoteId = "remote-100",
+        remoteId = "remote-100",
         serverId = "server-1",
         url = "https://example.com/article",
         title = "Test Article",
@@ -187,11 +186,11 @@ class BookmarkViewerProgressTest {
         val screenModel = createScreenModel()
 
         // Send 5 rapid reading state changes
-        screenModel.onReadingStateChanged(1L, 100L, 0.1f, 1, 0)
-        screenModel.onReadingStateChanged(1L, 100L, 0.2f, 2, 0)
-        screenModel.onReadingStateChanged(1L, 100L, 0.3f, 3, 0)
-        screenModel.onReadingStateChanged(1L, 100L, 0.4f, 4, 0)
-        screenModel.onReadingStateChanged(1L, 100L, 0.5f, 5, 0)
+        screenModel.onReadingStateChanged(1L, "remote-100", 0.1f, 1, 0)
+        screenModel.onReadingStateChanged(1L, "remote-100", 0.2f, 2, 0)
+        screenModel.onReadingStateChanged(1L, "remote-100", 0.3f, 3, 0)
+        screenModel.onReadingStateChanged(1L, "remote-100", 0.4f, 4, 0)
+        screenModel.onReadingStateChanged(1L, "remote-100", 0.5f, 5, 0)
 
         // Advance past the 500ms debounce window
         advanceUntilIdle()
@@ -207,9 +206,9 @@ class BookmarkViewerProgressTest {
         val screenModel = createScreenModel()
 
         // Send rapid updates, last one is 0.8f
-        screenModel.onReadingStateChanged(1L, 100L, 0.1f, 1, 0)
-        screenModel.onReadingStateChanged(1L, 100L, 0.5f, 5, 0)
-        screenModel.onReadingStateChanged(1L, 100L, 0.8f, 8, 0)
+        screenModel.onReadingStateChanged(1L, "remote-100", 0.1f, 1, 0)
+        screenModel.onReadingStateChanged(1L, "remote-100", 0.5f, 5, 0)
+        screenModel.onReadingStateChanged(1L, "remote-100", 0.8f, 8, 0)
 
         advanceUntilIdle()
 
@@ -229,7 +228,7 @@ class BookmarkViewerProgressTest {
         assertFalse(screenModel.serverProgressChecked.value)
 
         // Update reading progress locally (without calling loadBookmark)
-        screenModel.onReadingStateChanged(1L, 100L, 0.5f, 5, 0)
+        screenModel.onReadingStateChanged(1L, "remote-100", 0.5f, 5, 0)
         advanceUntilIdle()
 
         // serverProgressChecked should still be false — it's only for server-to-local sync

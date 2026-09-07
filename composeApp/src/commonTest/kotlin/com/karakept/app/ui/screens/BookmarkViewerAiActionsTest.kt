@@ -71,8 +71,7 @@ class BookmarkViewerAiActionsTest {
 
     private val testBookmark = BookmarkEntity(
         localId = 1L,
-        remoteId = 100L,
-        originalRemoteId = "remote-100",
+        remoteId = "remote-100",
         serverId = "server-1",
         url = "https://example.com/article",
         title = "Test Article",

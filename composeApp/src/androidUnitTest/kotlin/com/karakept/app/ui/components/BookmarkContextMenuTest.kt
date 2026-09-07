@@ -30,8 +30,7 @@ class BookmarkContextMenuTest {
 
     private val bookmark = BookmarkEntity(
         localId = 1,
-        remoteId = 1,
-        originalRemoteId = "remote-1",
+        remoteId = "remote-1",
         serverId = "server-1",
         url = "https://example.com/1",
         title = "Bookmark 1",

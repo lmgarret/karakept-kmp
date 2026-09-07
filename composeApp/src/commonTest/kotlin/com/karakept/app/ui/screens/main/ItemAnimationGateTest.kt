@@ -17,8 +17,7 @@ class ItemAnimationGateTest {
 
     private fun bookmark(remoteId: Long) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "orig-$remoteId",
+        remoteId = "orig-$remoteId",
         serverId = "server-1",
         url = "https://example.com/$remoteId",
         title = "Bookmark $remoteId",

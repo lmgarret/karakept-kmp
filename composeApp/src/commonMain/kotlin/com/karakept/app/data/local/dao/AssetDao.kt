@@ -9,7 +9,7 @@ import com.karakept.app.data.local.entity.AssetEntity
 @Dao
 interface AssetDao {
     @Query("SELECT * FROM assets WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId")
-    suspend fun getAssetsForBookmark(bookmarkRemoteId: Long, serverId: String): List<AssetEntity>
+    suspend fun getAssetsForBookmark(bookmarkRemoteId: String, serverId: String): List<AssetEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAssets(assets: List<AssetEntity>)

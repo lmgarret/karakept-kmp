@@ -92,8 +92,7 @@ class SmartListReconciliationTest {
         listIds: String = ""
     ) = BookmarkEntity(
         localId = localId,
-        remoteId = localId,
-        originalRemoteId = "orig-$localId",
+        remoteId = "orig-$localId",
         serverId = testServer.id,
         url = "https://example.com/$localId",
         title = "Bookmark $localId",
@@ -333,7 +332,7 @@ class SmartListReconciliationTest {
         // Pending REMOVE_FROM_LIST action for listB
         val pendingAction = PendingActionEntity(
             id = 1L,
-            bookmarkRemoteId = 5L,
+            bookmarkRemoteId = "orig-5",
             serverId = testServer.id,
             actionType = PendingActionType.REMOVE_FROM_LIST,
             actionData = """{"listId":"listB"}""",
@@ -342,7 +341,7 @@ class SmartListReconciliationTest {
 
         coEvery { pendingActionDao.getPendingActionsList(testServer.id) } returns listOf(pendingAction)
         coEvery { pendingActionDao.getProcessableActions(testServer.id, any()) } returns listOf(pendingAction)
-        coEvery { bookmarkDao.getBookmarkByRemoteId(5L, testServer.id) } returns bookmark
+        coEvery { bookmarkDao.getBookmarkByRemoteId("orig-5", testServer.id) } returns bookmark
         coEvery { bookmarkDao.getBookmarkById(5L) } returns bookmark
         coEvery { remoteDataSource.fetchListsForBookmark(testServer, "orig-5") } returns
             listOf(karakeepList("listA"))

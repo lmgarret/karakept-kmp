@@ -13,8 +13,8 @@ data class PendingActionEntity(
     @PrimaryKey(autoGenerate = true) 
     val id: Long = 0,
     
-    /** Remote ID of the bookmark this action applies to */
-    val bookmarkRemoteId: Long,
+    /** The server's own id of the bookmark this action applies to */
+    val bookmarkRemoteId: String,
     
     /** Server ID where this bookmark lives */
     val serverId: String,

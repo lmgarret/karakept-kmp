@@ -78,7 +78,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
         coEvery { remoteDataSource.summarizeBookmark(any(), any()) } returns
             SummarizeResult("Summary", "success")
 
-        var emitted: Long? = null
+        var emitted: String? = null
         val job = launch { repository.bookmarkChangedEvents.collect { emitted = it } }
         advanceUntilIdle() // SharedFlow has replay 0 — subscribe before the emit
 
@@ -130,7 +130,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
         repository.setBookmarkRepository(bookmarkRepository)
         val bookmark = makeBookmark(tags = "old")
         // Two polls of nothing, then the inference job's output shows up.
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, "server1") } returnsMany listOf(
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returnsMany listOf(
             bookmark, bookmark, bookmark.copy(tags = "old,ai-generated")
         )
 
@@ -138,7 +138,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
 
         assertTrue(landed)
         coVerify { remoteDataSource.requestAiRetag(testServer, "remote-42") }
-        coVerify(atLeast = 1) { bookmarkRepository.syncSingleBookmark(42L, "server1") }
+        coVerify(atLeast = 1) { bookmarkRepository.syncSingleBookmark("remote-42", "server1") }
     }
 
     @Test
@@ -196,13 +196,13 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
     }
 
     private fun makeBookmark(
-        remoteId: Long = 42L,
+        localId: Long = 1L,
+        remoteId: String = "remote-42",
         serverId: String = "server1",
         tags: String = ""
     ) = BookmarkEntity(
         localId = 1L,
         remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
         serverId = serverId,
         title = "Test",
         url = "https://example.com",

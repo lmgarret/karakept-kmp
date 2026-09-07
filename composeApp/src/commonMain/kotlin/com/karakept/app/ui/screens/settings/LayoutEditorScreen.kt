@@ -171,8 +171,7 @@ class LayoutEditorScreenModel(
 /** Mock bookmark used for live preview in the editor. */
 private val PREVIEW_BOOKMARK = BookmarkEntity(
     localId = -1L,
-    remoteId = -1L,
-    originalRemoteId = "preview",
+    remoteId = "preview",
     serverId = "preview",
     url = "https://karakeep.app/article/bookmarking-best-practices",
     title = "Bookmarking Best Practices",

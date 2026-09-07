@@ -70,7 +70,7 @@ internal data class AnchorScrollTarget(val index: Int, val offset: Int)
  * unit-tested without a composition.
  */
 internal class ListScrollAnchorState(initialVersion: Int) {
-    private var anchorKey: Long? = null
+    private var anchorKey: String? = null
     private var anchorOffset = 0
     private var anchorAtTop = false
     private var lastList: List<BookmarkEntity>? = null
@@ -131,7 +131,7 @@ internal class ListScrollAnchorState(initialVersion: Int) {
  *  - the anchor is already the first visible item (Compose handled it / nothing moved).
  */
 internal fun resolveAnchorScrollTarget(
-    anchorKey: Long?,
+    anchorKey: String?,
     isScrolling: Boolean,
     versionChanged: Boolean,
     currentFirstIndex: Int,

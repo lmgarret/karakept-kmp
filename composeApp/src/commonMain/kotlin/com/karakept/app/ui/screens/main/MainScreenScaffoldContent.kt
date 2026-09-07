@@ -132,9 +132,9 @@ fun MainScreenScaffoldContent(
     rowActionMode: RowActionMode,
     trackReadingProgress: Boolean,
     offlineMode: Boolean,
-    pendingBookmarkRemoteIds: Set<Long>,
+    pendingBookmarkRemoteIds: Set<String>,
     isSelectionMode: Boolean,
-    selectedBookmarkIds: Set<Long>,
+    selectedBookmarkIds: Set<String>,
     activeBookmarkId: Long?,
     isSearchActive: Boolean,
     searchQuery: String,
@@ -169,7 +169,7 @@ fun MainScreenScaffoldContent(
     navigateTo: (androidx.navigation3.runtime.NavKey) -> Unit,
     newBookmarksAbove: Int = 0,
     onClearNewBookmarksAbove: () -> Unit = {},
-    onTopBookmarkVisible: (Long) -> Unit = {}
+    onTopBookmarkVisible: (String) -> Unit = {}
 ) {
     val pageTurnDispatcher = koinInject<PageTurnDispatcher>()
     Scaffold(

@@ -104,7 +104,7 @@ class MainScreenModelListSwitchTest {
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
         every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns MutableSharedFlow()
@@ -127,8 +127,7 @@ class MainScreenModelListSwitchTest {
 
     private fun makeBookmark(id: Long) = BookmarkEntity(
         localId = id,
-        remoteId = id,
-        originalRemoteId = "remote-$id",
+        remoteId = "remote-$id",
         serverId = "server-1",
         url = "https://example.com/$id",
         title = "Bookmark $id",
@@ -214,7 +213,7 @@ class MainScreenModelListSwitchTest {
         advanceUntilIdle()
 
         assertEquals(page0.size + 1, model._accumulatedBookmarks.value.size)
-        assertTrue(model._accumulatedBookmarks.value.any { it.remoteId == 99L })
+        assertTrue(model._accumulatedBookmarks.value.any { it.remoteId == "remote-99" })
     }
 
     @Test

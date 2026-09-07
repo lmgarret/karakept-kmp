@@ -43,10 +43,10 @@ class BookmarkActionsRepository(
 
     // Emits the remoteId of a bookmark whenever it has been locally modified by an action.
     // Observers (e.g. MainScreenModel) can react to keep their lists up-to-date without a full sync.
-    private val _bookmarkChangedEvents = MutableSharedFlow<Long>(extraBufferCapacity = 16)
-    val bookmarkChangedEvents: SharedFlow<Long> = _bookmarkChangedEvents
+    private val _bookmarkChangedEvents = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    val bookmarkChangedEvents: SharedFlow<String> = _bookmarkChangedEvents
 
-    fun notifyBookmarkChanged(remoteId: Long) {
+    fun notifyBookmarkChanged(remoteId: String) {
         _bookmarkChangedEvents.tryEmit(remoteId)
     }
 
@@ -127,7 +127,7 @@ class BookmarkActionsRepository(
     /**
      * Archive a bookmark. Updates locally and queues for sync.
      */
-    suspend fun archiveBookmark(bookmarkRemoteId: Long, serverId: String) {
+    suspend fun archiveBookmark(bookmarkRemoteId: String, serverId: String) {
         performAction {
             withContext(appDispatchers.io) {
                 // Update local copy immediately (optimistic update)
@@ -156,7 +156,7 @@ class BookmarkActionsRepository(
     /**
      * Unarchive a bookmark.
      */
-    suspend fun unarchiveBookmark(bookmarkRemoteId: Long, serverId: String) {
+    suspend fun unarchiveBookmark(bookmarkRemoteId: String, serverId: String) {
         performAction {
             withContext(appDispatchers.io) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
@@ -184,7 +184,7 @@ class BookmarkActionsRepository(
      * Toggle favourite status of a bookmark.
      */
     suspend fun toggleFavourite(
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         currentlyFavourited: Boolean
     ) {
@@ -216,7 +216,7 @@ class BookmarkActionsRepository(
      * Read status is primarily driven by reading progress reaching 1.0,
      * but this allows manual override.
      */
-    suspend fun markAsRead(bookmarkRemoteId: Long, serverId: String) {
+    suspend fun markAsRead(bookmarkRemoteId: String, serverId: String) {
         performAction {
             withContext(appDispatchers.io) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
@@ -240,7 +240,7 @@ class BookmarkActionsRepository(
      * (the `resetProgressOnMarkUnread` setting, on by default) is therefore also the choice
      * between an unread that reaches other devices and one that stays on this one.
      */
-    suspend fun markAsUnread(bookmarkRemoteId: Long, serverId: String, resetProgress: Boolean = false) {
+    suspend fun markAsUnread(bookmarkRemoteId: String, serverId: String, resetProgress: Boolean = false) {
         performAction {
             withContext(appDispatchers.io) {
                 val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
@@ -266,7 +266,7 @@ class BookmarkActionsRepository(
      * Only one pending update per bookmark is kept (latest wins), so stale updates are discarded.
      */
     suspend fun queueReadingProgressUpdate(
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         progressPercent: Int
     ) {
@@ -290,27 +290,23 @@ class BookmarkActionsRepository(
     /**
      * Delete a bookmark.
      */
-    suspend fun deleteBookmark(bookmarkLocalId: Long, bookmarkRemoteId: Long, serverId: String) {
+    suspend fun deleteBookmark(bookmarkLocalId: Long, bookmarkRemoteId: String, serverId: String) {
         performAction {
             withContext(appDispatchers.io) {
-                // Get the bookmark BEFORE deleting to preserve originalRemoteId for the API call
-                val bookmark = bookmarkDao.getBookmarkById(bookmarkLocalId)
-                val originalRemoteId = bookmark?.originalRemoteId
-
-                // Delete locally
-                bookmark?.let {
+                // Delete locally. The queued action carries [bookmarkRemoteId] itself, so it
+                // outlives the row without needing anything read off it first.
+                bookmarkDao.getBookmarkById(bookmarkLocalId)?.let {
                     bookmarkDao.deleteBookmark(it)
                 }
 
                 // A delete supersedes every other queued action for this bookmark
                 pendingActionDao.deleteActionsForBookmark(bookmarkRemoteId, serverId)
 
-                // Queue action with the originalRemoteId stored in actionData
                 queueAction(
                     bookmarkRemoteId = bookmarkRemoteId,
                     serverId = serverId,
                     actionType = PendingActionType.DELETE,
-                    actionData = jsonSerializer.encodeToString(mapOf("originalRemoteId" to originalRemoteId))
+                    actionData = "{}"
                 )
 
                 _bookmarkChangedEvents.emit(bookmarkRemoteId)
@@ -325,7 +321,7 @@ class BookmarkActionsRepository(
      * Update tags on a bookmark.
      */
     suspend fun updateTags(
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         newTags: List<String>
     ) {
@@ -357,7 +353,7 @@ class BookmarkActionsRepository(
      * Move bookmark to a list.
      */
     suspend fun moveToList(
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         listId: String,
         smartListIds: Set<String> = emptySet()
@@ -399,7 +395,7 @@ class BookmarkActionsRepository(
      * Remove bookmark from a list.
      */
     suspend fun removeFromList(
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         listId: String
     ) {
@@ -432,7 +428,6 @@ class BookmarkActionsRepository(
      */
     suspend fun queueCreateHighlight(
         server: Server,
-        bookmarkLocalId: Long,
         bookmarkRemoteId: String,
         text: String,
         startOffset: Int,
@@ -443,12 +438,10 @@ class BookmarkActionsRepository(
     ) {
         withContext(appDispatchers.io) {
             queueAction(
-                bookmarkRemoteId = bookmarkLocalId,
+                bookmarkRemoteId = bookmarkRemoteId,
                 serverId = server.id,
                 actionType = PendingActionType.CREATE_HIGHLIGHT,
                 actionData = jsonSerializer.encodeToString(mapOf(
-                    "originalRemoteId" to bookmarkRemoteId,
-                    "bookmarkRemoteId" to bookmarkRemoteId,
                     "text" to text,
                     "startOffset" to startOffset.toString(),
                     "endOffset" to endOffset.toString(),
@@ -468,12 +461,12 @@ class BookmarkActionsRepository(
      */
     suspend fun queueDeleteHighlight(
         server: Server,
-        bookmarkLocalId: Long,
+        bookmarkRemoteId: String,
         highlightRemoteId: String
     ) {
         withContext(appDispatchers.io) {
             queueAction(
-                bookmarkRemoteId = bookmarkLocalId,
+                bookmarkRemoteId = bookmarkRemoteId,
                 serverId = server.id,
                 actionType = PendingActionType.DELETE_HIGHLIGHT,
                 actionData = jsonSerializer.encodeToString(mapOf(
@@ -489,7 +482,7 @@ class BookmarkActionsRepository(
      */
     suspend fun queueUpdateHighlight(
         server: Server,
-        bookmarkLocalId: Long,
+        bookmarkRemoteId: String,
         highlightRemoteId: String,
         note: String? = null,
         color: String? = null
@@ -503,7 +496,7 @@ class BookmarkActionsRepository(
             ))
             AppLogger.d("BookmarkActionsRepository", "queueUpdateHighlight - actionData=$actionData")
             queueAction(
-                bookmarkRemoteId = bookmarkLocalId,
+                bookmarkRemoteId = bookmarkRemoteId,
                 serverId = server.id,
                 actionType = PendingActionType.UPDATE_HIGHLIGHT,
                 actionData = actionData
@@ -529,7 +522,7 @@ class BookmarkActionsRepository(
      * Queue an action for later sync.
      */
     internal suspend fun queueAction(
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         actionType: String,
         actionData: String
@@ -551,7 +544,7 @@ class BookmarkActionsRepository(
      * toggles collapse to the final one instead of replaying the whole storm).
      */
     internal suspend fun dedupPairedActions(
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         typeA: String,
         typeB: String
@@ -565,7 +558,7 @@ class BookmarkActionsRepository(
      * so only the latest membership intent for that (bookmark, list) pair survives.
      */
     internal suspend fun dedupListMembershipActions(
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String,
         listId: String
     ) {
@@ -622,7 +615,7 @@ class BookmarkActionsRepository(
      */
     fun persistFinalReadingProgress(
         bookmarkLocalId: Long,
-        bookmarkRemoteId: Long,
+        bookmarkRemoteId: String,
         serverId: String?,
         progress: Float,
         scrollIndex: Int,

@@ -19,7 +19,10 @@ import kotlin.test.assertNotNull
  * with it.
  *
  * The v12 DDL below is `schemas/…/12.json` as the Room 2.8 compiler emitted it, identity hash
- * included, so this is byte-for-byte what an upgrading install has on disk.
+ * included, so this is byte-for-byte what an upgrading install has on disk. Opening it also
+ * runs it forward through [MIGRATION_12_13][com.karakept.app.data.local.migrations.MIGRATION_12_13],
+ * which is why the bookmark comes back keyed on the server's own id rather than the old hash —
+ * what that migration does with the row is covered in `Migration12To13Test`.
  */
 class Room2UpgradeTest {
 
@@ -46,7 +49,7 @@ class Room2UpgradeTest {
             assertNotNull(server, "Row written by Room 2.8 survived the upgrade")
             assertEquals("https://karakeep.example", server.url)
 
-            val bookmark = db.bookmarkDao().getBookmarkByRemoteId(42, "server-1")
+            val bookmark = db.bookmarkDao().getBookmarkByRemoteId("remote-42", "server-1")
             assertNotNull(bookmark, "Bookmark written by Room 2.8 survived the upgrade")
             assertEquals("Kept across the major version", bookmark.title)
         } finally {

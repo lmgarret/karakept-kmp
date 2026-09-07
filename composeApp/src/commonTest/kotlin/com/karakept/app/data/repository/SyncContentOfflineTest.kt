@@ -46,7 +46,7 @@ class SyncContentOfflineTest {
         bookmarks: List<BookmarkEntity>,
         listSettings: Map<String, ListSettings>,
         listEntities: List<ListEntity>
-    ): Set<Long> {
+    ): Set<String> {
         val offlineLists = listSettings.filter { it.value.syncOffline }
         if (offlineLists.isEmpty()) return emptySet()
 
@@ -85,8 +85,7 @@ class SyncContentOfflineTest {
         title: String = "Bookmark $remoteId"
     ) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "orig-$remoteId",
+        remoteId = "orig-$remoteId",
         serverId = "server-1",
         url = "https://example.com/$remoteId",
         title = title,
@@ -151,8 +150,8 @@ class SyncContentOfflineTest {
         val targets = computeOfflineSyncTargets(bookmarks, listSettings, allLists)
 
         // Only bookmarkInOfflineList (remoteId=1) should be targeted
-        assertTrue(targets.contains(1L), "Bookmark in offline list without content should be fetched")
-        assertFalse(targets.contains(4L), "Bookmark NOT in offline list should not be fetched")
+        assertTrue(targets.contains("orig-1"), "Bookmark in offline list without content should be fetched")
+        assertFalse(targets.contains("orig-4"), "Bookmark NOT in offline list should not be fetched")
     }
 
     // ---- Test 2: Bookmarks with content in offline list are skipped ----
@@ -167,9 +166,9 @@ class SyncContentOfflineTest {
         val targets = computeOfflineSyncTargets(bookmarks, listSettings, allLists)
 
         // bookmarkInOfflineList (remoteId=1, readingTimeMinutes=0) should be fetched
-        assertTrue(targets.contains(1L), "Bookmark without content should be fetched")
+        assertTrue(targets.contains("orig-1"), "Bookmark without content should be fetched")
         // bookmarkWithContent (remoteId=2, readingTimeMinutes=5) should be skipped
-        assertFalse(targets.contains(2L), "Bookmark with existing content should be skipped")
+        assertFalse(targets.contains("orig-2"), "Bookmark with existing content should be skipped")
     }
 
     // ---- Test 3: Child list bookmarks included when includeChildListBookmarks is true ----
@@ -184,9 +183,9 @@ class SyncContentOfflineTest {
         val targets = computeOfflineSyncTargets(bookmarks, listSettings, allLists)
 
         // Both bookmarkInOfflineList (remoteId=1) and bookmarkInChildList (remoteId=3) should be targeted
-        assertTrue(targets.contains(1L), "Bookmark in parent offline list should be fetched")
-        assertTrue(targets.contains(3L), "Bookmark in child list should be fetched when includeChildListBookmarks=true")
-        assertFalse(targets.contains(4L), "Bookmark in unrelated list should not be fetched")
+        assertTrue(targets.contains("orig-1"), "Bookmark in parent offline list should be fetched")
+        assertTrue(targets.contains("orig-3"), "Bookmark in child list should be fetched when includeChildListBookmarks=true")
+        assertFalse(targets.contains("orig-4"), "Bookmark in unrelated list should not be fetched")
     }
 
     // ---- Test 4: No offline lists -> no extra fetching ----

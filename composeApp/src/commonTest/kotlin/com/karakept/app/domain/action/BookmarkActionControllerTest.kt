@@ -253,7 +253,8 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     // ──────────────────────────────────────────────────────────
 
     private fun makeBookmark(
-        remoteId: Long = 42L,
+        localId: Long = 1L,
+        remoteId: String = "remote-42",
         serverId: String = "server1",
         tags: String = "",
         listIds: String = "",
@@ -262,7 +263,6 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     ) = BookmarkEntity(
         localId = 1L,
         remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
         serverId = serverId,
         title = "Test",
         url = "https://example.com",

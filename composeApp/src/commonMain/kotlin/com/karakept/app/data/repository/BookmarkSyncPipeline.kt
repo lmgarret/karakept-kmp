@@ -101,7 +101,7 @@ internal class BookmarkSyncPipeline(
     private val listDao: ListDao,
     private val syncProgress: MutableStateFlow<com.karakept.app.data.model.SyncProgress>,
     private val fetchRemoteContent: suspend (Server, String) -> String?,
-    private val cacheHeroAssetsForBookmark: suspend (Server, Long, String, String?, String?) -> Unit,
+    private val cacheHeroAssetsForBookmark: suspend (Server, String, String, String?, String?) -> Unit,
     private val onProgress: ((ListSyncStatus) -> Unit)? = null,
     /** Invoked after each page of metadata has been committed to the DB. */
     private val onPageCommitted: (suspend () -> Unit)? = null,
@@ -130,12 +130,10 @@ internal class BookmarkSyncPipeline(
         private set
 
     // Local state for this server, read once and maintained across pages. Streaming the
-    // fetch would otherwise re-read the whole table for every page. Indexed both ways
-    // because mapping needs originalRemoteId and diffing needs remoteId — rebuilding
-    // either index per page would put back the O(rows) cost this is here to avoid.
-    private var existingByOriginalId: MutableMap<String, BookmarkEntity> = mutableMapOf()
-    private var existingByRemoteId: MutableMap<Long, BookmarkEntity> = mutableMapOf()
-    private var ignoredIds: Set<Long> = emptySet()
+    // fetch would otherwise re-read the whole table for every page, and rebuilding the
+    // index per page would put back the O(rows) cost this is here to avoid.
+    private var existingByRemoteId: MutableMap<String, BookmarkEntity> = mutableMapOf()
+    private var ignoredIds: Set<String> = emptySet()
     private var syncStrategy: SyncStrategy = SyncStrategy.NEVER
 
     /** Non-fatal problems accumulated during the last execute() call (Group H). */
@@ -155,7 +153,6 @@ internal class BookmarkSyncPipeline(
         // Snapshot local state once. Each page is diffed against this map and the map is
         // updated in place, so streaming doesn't turn one table read into one per page.
         val localRows = bookmarkDao.getBookmarksForServerWithContentInfo(config.server.id)
-        existingByOriginalId = localRows.associateByTo(mutableMapOf()) { it.originalRemoteId }
         existingByRemoteId = localRows.associateByTo(mutableMapOf()) { it.remoteId }
         ignoredIds = processedIds +
             bookmarkActionsRepository.getPendingActionBookmarkIds(config.server.id).toSet()
@@ -244,7 +241,7 @@ internal class BookmarkSyncPipeline(
     }
 
     // Phase 1: Process Pending Actions
-    private suspend fun processPendingActions(): Set<Long> {
+    private suspend fun processPendingActions(): Set<String> {
         return try {
             val ids = bookmarkActionsRepository.processPendingActions(config.server)
             ids.toSet()
@@ -318,7 +315,7 @@ internal class BookmarkSyncPipeline(
         dtos: List<com.karakept.api.model.Bookmark>,
         bookmarkListMap: Map<String, List<String>>
     ): List<BookmarkEntity> {
-        val existingBookmarks = existingByOriginalId
+        val existingBookmarks = existingByRemoteId
 
         return dtos.mapNotNull { dto ->
             try {
@@ -402,8 +399,7 @@ internal class BookmarkSyncPipeline(
 
         return BookmarkEntity(
             localId = existing?.localId ?: 0L,
-            remoteId = (dto.id ?: "").hashCode().toLong(),
-            originalRemoteId = dto.id ?: "",
+            remoteId = dto.id ?: "",
             serverId = config.server.id,
             title = title,
             url = url,
@@ -524,7 +520,6 @@ internal class BookmarkSyncPipeline(
 
         // Fold this page into the snapshot so later pages diff against current state.
         for (entity in resultEntities) {
-            existingByOriginalId[entity.originalRemoteId] = entity
             existingByRemoteId[entity.remoteId] = entity
         }
 
@@ -542,7 +537,7 @@ internal class BookmarkSyncPipeline(
     private suspend fun deleteRemoved(seenRemoteIds: Set<String>) {
         val local = bookmarkDao.getBookmarksForServer(config.server.id).first()
         val toDelete = local.filter {
-            it.originalRemoteId !in seenRemoteIds && it.remoteId !in ignoredIds
+            it.remoteId !in seenRemoteIds && it.remoteId !in ignoredIds
         }
         if (toDelete.isNotEmpty()) {
             bookmarkDao.deleteBookmarks(toDelete)
@@ -695,7 +690,7 @@ internal class BookmarkSyncPipeline(
         dtos: List<com.karakept.api.model.Bookmark>,
         entities: List<BookmarkEntity>
     ) {
-        val entityByOriginalId = entities.associateBy { it.originalRemoteId }
+        val entityByRemoteId = entities.associateBy { it.remoteId }
         val metadata = mutableListOf<AssetEntity>()
         val typeStrings = mapOf(
             com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT to "linkHtmlContent",
@@ -705,7 +700,7 @@ internal class BookmarkSyncPipeline(
         )
         val trackableTypes = typeStrings.keys
         for (dto in dtos) {
-            val entity = entityByOriginalId[dto.id ?: ""] ?: continue
+            val entity = entityByRemoteId[dto.id ?: ""] ?: continue
             dto.assets?.forEach { asset ->
                 val type = asset.assetType ?: return@forEach
                 if (type !in trackableTypes) return@forEach
@@ -734,7 +729,7 @@ internal class BookmarkSyncPipeline(
 
         bookmarks.forEach { entity ->
             try {
-                val content = fetchRemoteContent(config.server, entity.originalRemoteId)
+                val content = fetchRemoteContent(config.server, entity.remoteId)
 
                 if (!content.isNullOrBlank()) {
                     // Cache images in HTML for offline reading
@@ -831,7 +826,7 @@ internal class BookmarkSyncPipeline(
  * has [listId] stripped from its listIds (but retains other list memberships).
  *
  * @param localBookmarksInList all local BookmarkEntity rows whose listIds contain [listId]
- * @param serverRemoteIds the set of originalRemoteId values the server returned for [listId]
+ * @param serverRemoteIds the set of remoteId values the server returned for [listId]
  * @param listId the list being reconciled
  * @return list of Pair(localId, newListIds) for bookmarks that need updating
  */
@@ -841,7 +836,7 @@ internal fun computeStaleListRemovals(
     listId: String
 ): List<Pair<Long, String>> {
     return localBookmarksInList
-        .filter { it.originalRemoteId !in serverRemoteIds }
+        .filter { it.remoteId !in serverRemoteIds }
         .map { entity ->
             val updatedIds = entity.listIds
                 .split(",")

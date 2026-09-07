@@ -8,7 +8,7 @@ import androidx.compose.runtime.Immutable
 @Entity(tableName = "assets")
 data class AssetEntity(
     @PrimaryKey val id: String, // Asset ID from remote
-    val bookmarkRemoteId: Long,
+    val bookmarkRemoteId: String,
     val serverId: String,
     val assetType: String,
     val fileName: String?,

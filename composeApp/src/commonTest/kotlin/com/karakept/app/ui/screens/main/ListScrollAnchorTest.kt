@@ -17,8 +17,7 @@ class ListScrollAnchorTest {
 
     private fun bookmark(remoteId: Long) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "orig-$remoteId",
+        remoteId = "orig-$remoteId",
         serverId = "server-1",
         url = "https://example.com/$remoteId",
         title = "Bookmark $remoteId",
@@ -51,7 +50,7 @@ class ListScrollAnchorTest {
     fun whileScrolling_returnsNull() {
         // Don't fight an active user scroll gesture.
         val result = resolveAnchorScrollTarget(
-            anchorKey = 10L,
+            anchorKey = "orig-10",
             isScrolling = true,
             versionChanged = false,
             currentFirstIndex = 5,
@@ -66,7 +65,7 @@ class ListScrollAnchorTest {
         // own scroll behaviour (e.g. scroll-to-top) — never re-pin in that case.
         val newList = (0L..49L).filter { it != 5L }.map { bookmark(it) }
         val result = resolveAnchorScrollTarget(
-            anchorKey = 30L,
+            anchorKey = "orig-30",
             isScrolling = false,
             versionChanged = true,
             currentFirstIndex = 30,
@@ -79,7 +78,7 @@ class ListScrollAnchorTest {
     fun anchorRemoved_returnsNull() {
         // The anchor bookmark itself was the removed one — leave position to Compose.
         val result = resolveAnchorScrollTarget(
-            anchorKey = 99L,
+            anchorKey = "orig-99",
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 3,
@@ -93,7 +92,7 @@ class ListScrollAnchorTest {
         // Compose already kept the anchor at the top (or nothing shifted) — no-op.
         val newList = listOfIds(10, 20, 30)
         val result = resolveAnchorScrollTarget(
-            anchorKey = 10L,
+            anchorKey = "orig-10",
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 0,
@@ -108,9 +107,9 @@ class ListScrollAnchorTest {
         // so the anchor now lives at index 29, but firstVisibleItemIndex still reads 30
         // (Compose didn't re-anchor). We must re-pin to 29.
         val newList = (0L..49L).filter { it != 5L }.map { bookmark(it) } // removed id 5
-        val anchorNewIndex = newList.indexOfFirst { it.remoteId == 30L } // 29
+        val anchorNewIndex = newList.indexOfFirst { it.remoteId == "orig-30" } // 29
         val result = resolveAnchorScrollTarget(
-            anchorKey = 30L,
+            anchorKey = "orig-30",
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 30,
@@ -125,7 +124,7 @@ class ListScrollAnchorTest {
         // Remove ids 1,2,3 (all above anchor 30). Anchor shifts up by 3 → index 27.
         val newList = (0L..49L).filter { it !in setOf(1L, 2L, 3L) }.map { bookmark(it) }
         val result = resolveAnchorScrollTarget(
-            anchorKey = 30L,
+            anchorKey = "orig-30",
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 30,
@@ -139,7 +138,7 @@ class ListScrollAnchorTest {
         // load-more appended items at the bottom; the top anchor index is unchanged.
         val newList = listOfIds(10, 20, 30, 40, 50, 60)
         val result = resolveAnchorScrollTarget(
-            anchorKey = 10L,
+            anchorKey = "orig-10",
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 0,

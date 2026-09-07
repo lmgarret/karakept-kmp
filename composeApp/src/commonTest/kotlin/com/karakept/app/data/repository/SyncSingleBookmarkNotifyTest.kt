@@ -48,13 +48,13 @@ class SyncSingleBookmarkNotifyTest : BaseRepositoryTest() {
     private val testServer = Server("s1", "http://localhost", "key", "Label")
 
     private fun makeBookmark(
-        remoteId: Long = 42L,
+        localId: Long = 1L,
+        remoteId: String = "remote-42",
         bannerImageAssetId: String? = null,
         screenshotAssetId: String? = null
     ) = BookmarkEntity(
         localId = 1L,
         remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
         serverId = testServer.id,
         title = "Test",
         url = "https://example.com",
@@ -74,10 +74,10 @@ class SyncSingleBookmarkNotifyTest : BaseRepositoryTest() {
 
     @Test
     fun syncSingleBookmark_emitsBookmarkChangedEvent() = runTest(testDispatcher) {
-        val existing = makeBookmark(remoteId = 42L)
+        val existing = makeBookmark(remoteId = "remote-42")
 
         coEvery { serverRepository.servers } returns flowOf(listOf(testServer))
-        coEvery { bookmarkDao.getBookmarkByRemoteId(42L, testServer.id) } returns existing
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", testServer.id) } returns existing
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
         every { settingsRepository.preferFullPageHtml } returns flowOf(false)
 
@@ -101,8 +101,8 @@ class SyncSingleBookmarkNotifyTest : BaseRepositoryTest() {
         }
         coEvery { remoteDataSource.fetchBookmark(testServer, "remote-42") } returns mockDto
 
-        repository.syncSingleBookmark(42L, testServer.id)
+        repository.syncSingleBookmark("remote-42", testServer.id)
 
-        coVerify { bookmarkActionsRepository.notifyBookmarkChanged(42L) }
+        coVerify { bookmarkActionsRepository.notifyBookmarkChanged("remote-42") }
     }
 }
