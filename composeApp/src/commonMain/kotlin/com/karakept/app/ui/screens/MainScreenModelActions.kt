@@ -147,7 +147,7 @@ internal fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
  */
 internal fun applyReconcileBookmarkTransform(
     current: List<BookmarkEntity>,
-    remoteId: Long,
+    remoteId: String,
     updated: BookmarkEntity?,
     currentListContext: String?
 ): List<BookmarkEntity> {
@@ -427,10 +427,10 @@ fun MainScreenModel.executeScrollAction(
 fun MainScreenModel.createBookmark(url: String) {
     viewModelScope.launch {
         val server = _selectedServer.value ?: return@launch
-        val tempRemoteId = kotlin.random.Random.nextLong(Long.MIN_VALUE, -1L)
+        // Distinct from any server id, so the placeholder can never collide with a real row.
+        val tempRemoteId = "pending-${kotlin.random.Random.nextLong()}"
         val placeholder = BookmarkEntity(
             remoteId = tempRemoteId,
-            originalRemoteId = "pending-$tempRemoteId",
             serverId = server.id,
             url = url,
             title = url,

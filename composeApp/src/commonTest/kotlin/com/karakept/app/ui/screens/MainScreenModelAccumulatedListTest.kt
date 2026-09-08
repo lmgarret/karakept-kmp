@@ -88,7 +88,7 @@ class MainScreenModelAccumulatedListTest {
         every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<Long>()
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
         every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
@@ -113,8 +113,7 @@ class MainScreenModelAccumulatedListTest {
 
     private fun bookmark(remoteId: Long) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
+        remoteId = "remote-$remoteId",
         serverId = "server-1",
         url = "https://example.com/$remoteId",
         title = "Bookmark $remoteId",
@@ -128,7 +127,8 @@ class MainScreenModelAccumulatedListTest {
         isStarred = false
     )
 
-    private fun List<BookmarkEntity>.remoteIds() = map { it.remoteId }
+    // The number each fixture bookmark was built from, so the assertions read as row numbers.
+    private fun List<BookmarkEntity>.remoteIds() = map { it.remoteId.substringAfter('-').toLong() }
 
     @Test
     fun updateAccumulatedBookmarks_dropsDuplicatesIntroducedByTransform() = runTest(testDispatcher) {
@@ -204,7 +204,7 @@ class MainScreenModelAccumulatedListTest {
      */
     @Test
     fun bookmarkChangedEvent_refreshesTheRowTheListIsHolding() = runTest(testDispatcher) {
-        val events = MutableSharedFlow<Long>(extraBufferCapacity = 4)
+        val events = MutableSharedFlow<String>(extraBufferCapacity = 4)
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns events
 
         val model = createMainScreenModel()
@@ -212,14 +212,14 @@ class MainScreenModelAccumulatedListTest {
         model.updateAccumulatedBookmarks { listOf(bookmark(42).copy(isRead = true), bookmark(43)) }
 
         // The pull takes the server's 0% and clears the read flag in the table.
-        io.mockk.coEvery { bookmarkRepository.getBookmarkByRemoteId(42L, "server-1") } returns
+        io.mockk.coEvery { bookmarkRepository.getBookmarkByRemoteId("remote-42", "server-1") } returns
             bookmark(42).copy(isRead = false, readingProgress = 0f)
-        events.emit(42L)
+        events.emit("remote-42")
         advanceUntilIdle()
 
         assertEquals(
             false,
-            model._accumulatedBookmarks.value.first { it.remoteId == 42L }.isRead,
+            model._accumulatedBookmarks.value.first { it.remoteId == "remote-42" }.isRead,
             "the list must follow the table, or it shows a read row the count calls unread"
         )
     }
@@ -227,17 +227,17 @@ class MainScreenModelAccumulatedListTest {
     @Test
     fun bookmarkChangedEvent_forARowOutsideTheWindow_isNotReadBack() = runTest(testDispatcher) {
         // A backfill notifies for rows across the whole library; only the window needs re-reading.
-        val events = MutableSharedFlow<Long>(extraBufferCapacity = 4)
+        val events = MutableSharedFlow<String>(extraBufferCapacity = 4)
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns events
 
         val model = createMainScreenModel()
         advanceUntilIdle()
         model.updateAccumulatedBookmarks { listOf(bookmark(42)) }
 
-        events.emit(99L)
+        events.emit("remote-99")
         advanceUntilIdle()
 
-        io.mockk.coVerify(exactly = 0) { bookmarkRepository.getBookmarkByRemoteId(99L, any()) }
+        io.mockk.coVerify(exactly = 0) { bookmarkRepository.getBookmarkByRemoteId("remote-99", any()) }
         assertEquals(listOf(42L), model._accumulatedBookmarks.value.remoteIds())
     }
 }

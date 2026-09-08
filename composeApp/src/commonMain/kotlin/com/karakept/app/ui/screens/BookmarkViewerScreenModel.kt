@@ -203,7 +203,7 @@ class BookmarkViewerScreenModel(
         // We can get it from the bookmarkDao reactively
         bookmarkDao.observeBookmarkById(id).flatMapLatest { bookmark ->
             if (bookmark == null) flowOf(emptyList())
-            else highlightRepository.getHighlightsForBookmark(bookmark.originalRemoteId, bookmark.serverId)
+            else highlightRepository.getHighlightsForBookmark(bookmark.remoteId, bookmark.serverId)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -217,7 +217,7 @@ class BookmarkViewerScreenModel(
 
     private data class PendingReadingState(
         val localId: Long,
-        val remoteId: Long,
+        val remoteId: String,
         val progress: Float,
         val scrollIndex: Int,
         val scrollOffset: Int
@@ -286,7 +286,7 @@ class BookmarkViewerScreenModel(
      * The latest state is also kept in memory so [onDispose] can persist
      * it if the user navigates away before the debounce window closes.
      */
-    fun onReadingStateChanged(localId: Long, remoteId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
+    fun onReadingStateChanged(localId: Long, remoteId: String, progress: Float, scrollIndex: Int, scrollOffset: Int) {
         // Update pending state and emit for debounced persistence
         val state = PendingReadingState(localId, remoteId, progress, scrollIndex, scrollOffset)
         pendingReadingState = state
@@ -369,7 +369,8 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun refreshBookmark(id: Long) {
+    /** Refreshes whatever bookmark the screen currently holds; a no-op before it is loaded. */
+    fun refreshBookmark() {
         val currentState = _loadingState.value
         if (currentState !is BookmarkLoadingState.FullyLoaded) {
             AppLogger.d("ViewerModel", "refreshBookmark called but state is not FullyLoaded")
@@ -396,7 +397,7 @@ class BookmarkViewerScreenModel(
                 val servers = serverRepository.servers.first()
                 val server = servers.find { it.id == currentState.bookmark.serverId }
                 if (server != null) {
-                    val remoteId = currentState.bookmark.originalRemoteId
+                    val remoteId = currentState.bookmark.remoteId
                     AppLogger.d("ViewerModel", "Syncing highlights for remoteId=$remoteId")
                     highlightRepository.syncHighlightsForBookmark(server, remoteId)
                     AppLogger.d("ViewerModel", "Highlights synced")
@@ -413,7 +414,7 @@ class BookmarkViewerScreenModel(
             } catch (e: Exception) {
                 AppLogger.e("ViewerModel", "Failed to load bookmark content: ${e.message}", e)
                 snackbarManager.showErrorWithRetry("Couldn't refresh bookmark") {
-                    refreshBookmark(id)
+                    refreshBookmark()
                 }
             } finally {
                 _isRefreshing.value = false
@@ -451,7 +452,7 @@ class BookmarkViewerScreenModel(
                                     val servers = serverRepository.servers.first()
                                     val server = servers.find { it.id == bookmark.serverId }
                                     if (server != null) {
-                                        highlightRepository.syncHighlightsForBookmark(server, bookmark.originalRemoteId)
+                                        highlightRepository.syncHighlightsForBookmark(server, bookmark.remoteId)
                                     }
                                 } catch (e: Exception) {
                                     AppLogger.e("ViewerModel", "Failed to sync highlights: ${e.message}", e)
@@ -679,7 +680,7 @@ class BookmarkViewerScreenModel(
                     return@launch
                 }
                 val fullBookmark = remoteDataSource.fetchBookmark(
-                    server, bookmark.originalRemoteId
+                    server, bookmark.remoteId
                 )
                 val asset = fullBookmark.assets?.find {
                     it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE
@@ -796,7 +797,7 @@ class BookmarkViewerScreenModel(
                     snackbarManager.showSnackbar("Server not found")
                     return@launch
                 }
-                remoteDataSource.detachAsset(server, bookmark.originalRemoteId, asset.id)
+                remoteDataSource.detachAsset(server, bookmark.remoteId, asset.id)
                 asset.localPath?.let {
                     try { com.karakept.app.utils.FileUtils.deleteFile(it) } catch (_: Exception) {}
                 }
@@ -829,7 +830,7 @@ class BookmarkViewerScreenModel(
                 }
                 remoteDataSource.recrawlBookmark(
                     server = server,
-                    bookmarkId = bookmark.originalRemoteId,
+                    bookmarkId = bookmark.remoteId,
                     archiveFullPage = action.archiveFullPage,
                     storePdf = action.storePdf
                 )
@@ -873,7 +874,7 @@ class BookmarkViewerScreenModel(
                 when (action) {
                     AiAction.SUMMARIZE -> {
                         val summary = bookmarkActionsRepository.summarizeBookmark(bookmark)
-                        refreshBookmark(bookmark.remoteId)
+                        refreshBookmark()
                         snackbarManager.showSnackbar(
                             if (summary.isNullOrBlank()) "The server returned an empty summary"
                             else "Summary generated"
@@ -881,7 +882,7 @@ class BookmarkViewerScreenModel(
                     }
                     AiAction.RETAG -> {
                         val landed = bookmarkActionsRepository.requestAiRetag(bookmark)
-                        refreshBookmark(bookmark.remoteId)
+                        refreshBookmark()
                         snackbarManager.showSnackbar(
                             if (landed) "Tags updated"
                             else "Still tagging on the server — pull to refresh later"
@@ -1137,9 +1138,9 @@ class BookmarkViewerScreenModel(
                     AppLogger.w("ViewerModel", "Server not found for serverId=${bookmark.serverId}")
                     return@launch
                 }
-                val remoteId = bookmark.originalRemoteId
+                val remoteId = bookmark.remoteId
                 AppLogger.d("ViewerModel", "Calling highlightRepository.createHighlight for remoteId=$remoteId")
-                val highlightId = highlightRepository.createHighlight(server, bookmark.localId, remoteId, text, startOffset, endOffset, note, color)
+                val highlightId = highlightRepository.createHighlight(server, remoteId, text, startOffset, endOffset, note, color)
                 AppLogger.d("ViewerModel", "Highlight created successfully, id=$highlightId")
                 onCreated(highlightId)
             } catch (e: Exception) {
@@ -1153,7 +1154,7 @@ class BookmarkViewerScreenModel(
         viewModelScope.launch {
             val servers = serverRepository.servers.first()
             val server = servers.find { it.id == bookmark.serverId } ?: return@launch
-            highlightRepository.updateHighlight(server, bookmark.localId, highlightId, note, color)
+            highlightRepository.updateHighlight(server, bookmark.remoteId, highlightId, note, color)
         }
     }
 
@@ -1161,7 +1162,7 @@ class BookmarkViewerScreenModel(
         viewModelScope.launch {
             val servers = serverRepository.servers.first()
             val server = servers.find { it.id == bookmark.serverId } ?: return@launch
-            highlightRepository.deleteHighlight(server, bookmark.localId, highlightId)
+            highlightRepository.deleteHighlight(server, bookmark.remoteId, highlightId)
         }
     }
 }

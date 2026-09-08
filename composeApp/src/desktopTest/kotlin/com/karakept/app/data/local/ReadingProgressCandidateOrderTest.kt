@@ -44,8 +44,7 @@ class ReadingProgressCandidateOrderTest {
         db.bookmarkDao().insertBookmarks(
             listOf(
                 BookmarkEntity(
-                    remoteId = id,
-                    originalRemoteId = "remote-$id",
+                    remoteId = "remote-$id",
                     serverId = serverId,
                     url = "https://example.com/$id",
                     title = "Bookmark $id",
@@ -77,7 +76,7 @@ class ReadingProgressCandidateOrderTest {
         insert(3L, listIds = "other,list-a", progressSyncedAt = 999L)
 
         // Both list members outrank the fresher-cursor row, even though they were pulled later.
-        assertEquals(listOf(2L, 3L), candidates("list-a", limit = 2))
+        assertEquals(listOf("remote-2", "remote-3"), candidates("list-a", limit = 2))
     }
 
     @Test
@@ -86,7 +85,7 @@ class ReadingProgressCandidateOrderTest {
         insert(2L, isRead = false, progressSyncedAt = 500L)
 
         // The unread row is the one whose progress decides a count the user can see.
-        assertEquals(listOf(2L, 1L), candidates(listId = null, limit = 2))
+        assertEquals(listOf("remote-2", "remote-1"), candidates(listId = null, limit = 2))
     }
 
     @Test
@@ -95,7 +94,7 @@ class ReadingProgressCandidateOrderTest {
         insert(2L, progressSyncedAt = 100L)
         insert(3L, progressSyncedAt = 500L)
 
-        assertEquals(listOf(2L, 3L, 1L), candidates(listId = null, limit = 3))
+        assertEquals(listOf("remote-2", "remote-3", "remote-1"), candidates(listId = null, limit = 3))
     }
 
     @Test
@@ -114,7 +113,7 @@ class ReadingProgressCandidateOrderTest {
 
         // The batch keys on the server's own id and compares against local progress, so both
         // travel with the candidate rather than costing a row read each.
-        assertEquals("remote-7", target.originalRemoteId)
+        assertEquals("remote-7", target.remoteId)
         assertEquals(0f, target.readingProgress)
     }
 }

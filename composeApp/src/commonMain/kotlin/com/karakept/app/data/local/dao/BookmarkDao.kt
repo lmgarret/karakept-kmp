@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface BookmarkDao {
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
@@ -39,10 +39,7 @@ interface BookmarkDao {
     fun observeBookmarkById(id: Long): Flow<BookmarkEntity?>
     
     @Query("SELECT * FROM bookmarks WHERE remoteId = :remoteId AND serverId = :serverId LIMIT 1")
-    suspend fun getBookmarkByRemoteId(remoteId: Long, serverId: String): BookmarkEntity?
-
-    @Query("SELECT * FROM bookmarks WHERE originalRemoteId = :originalRemoteId AND serverId = :serverId LIMIT 1")
-    suspend fun getBookmarkByOriginalRemoteId(originalRemoteId: String, serverId: String): BookmarkEntity?
+    suspend fun getBookmarkByRemoteId(remoteId: String, serverId: String): BookmarkEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBookmark(bookmark: BookmarkEntity)
@@ -152,7 +149,7 @@ interface BookmarkDao {
      * query needs would buy nothing here.
      */
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, readingProgress FROM bookmarks
+        SELECT localId, remoteId, readingProgress FROM bookmarks
         WHERE serverId = :serverId
         ORDER BY
             CASE WHEN :listId IS NOT NULL AND listIds LIKE '%' || :listId || '%' THEN 0 ELSE 1 END,
@@ -171,7 +168,7 @@ interface BookmarkDao {
     // server so the library does not converge one bounded slice per sync. A projection rather
     // than SELECT *: the pull only needs these columns, and the row carries article content.
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, readingProgress FROM bookmarks
+        SELECT localId, remoteId, readingProgress FROM bookmarks
         WHERE serverId = :serverId AND progressSyncedAt = 0
         ORDER BY isRead ASC, modifiedAt DESC
         LIMIT :limit
@@ -183,12 +180,12 @@ interface BookmarkDao {
     // reaching them. Staleness rather than "never pulled" so that progress changed on
     // another device shows up on the list being looked at, not one rotation later.
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, readingProgress FROM bookmarks
+        SELECT localId, remoteId, readingProgress FROM bookmarks
         WHERE serverId = :serverId AND progressSyncedAt < :staleBefore AND remoteId IN (:remoteIds)
     """)
     suspend fun getStaleProgressTargetsIn(
         serverId: String,
-        remoteIds: List<Long>,
+        remoteIds: List<String>,
         staleBefore: Long
     ): List<ProgressPullTarget>
 
@@ -255,7 +252,7 @@ interface BookmarkDao {
     suspend fun getNotArchivedCount(serverId: String): Int
 
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
@@ -275,7 +272,7 @@ interface BookmarkDao {
 
     // Query for sync that includes content length and reading time to determine if content exists
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
@@ -288,7 +285,7 @@ interface BookmarkDao {
 
     // Unpaged queries for select-all (no LIMIT/OFFSET)
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
@@ -301,7 +298,7 @@ interface BookmarkDao {
     suspend fun getAllNotArchivedForServer(serverId: String): List<BookmarkEntity>
 
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
@@ -314,7 +311,7 @@ interface BookmarkDao {
     suspend fun getAllFavoritesForServer(serverId: String): List<BookmarkEntity>
 
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
@@ -327,7 +324,7 @@ interface BookmarkDao {
     suspend fun getAllArchivedForServer(serverId: String): List<BookmarkEntity>
 
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
@@ -340,7 +337,7 @@ interface BookmarkDao {
     suspend fun getAllBookmarksForServerSuspend(serverId: String): List<BookmarkEntity>
 
     @Query("""
-        SELECT localId, remoteId, originalRemoteId, serverId, title, url,
+        SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,

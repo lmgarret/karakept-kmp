@@ -851,7 +851,7 @@ fun BookmarkViewerContent(
                         onViewerModeClick = { showModeDialog = true },
                         onMoveToListClick = { showListPicker = true },
                         onEditTagsClick = { showTagEditor = true },
-                        onRefreshClick = { screenModel.refreshBookmark(bookmarkId) },
+                        onRefreshClick = { screenModel.refreshBookmark() },
                         onDeleteClick = { showDeleteConfirmation = true },
                         onSearchClick = { showSearch = true },
                         isDesktop = getPlatform().isDesktop, bookmark = state.bookmark,
@@ -931,7 +931,7 @@ fun BookmarkViewerContent(
                 // E-ink readers refresh from the overflow menu instead — see RefreshableBox.
                 RefreshableBox(
                     isRefreshing = isRefreshing,
-                    onRefresh = { screenModel.refreshBookmark(bookmarkId) },
+                    onRefresh = { screenModel.refreshBookmark() },
                     enabled = !getPlatform().isDesktop,
                     modifier = Modifier.fillMaxSize()
                 ) {

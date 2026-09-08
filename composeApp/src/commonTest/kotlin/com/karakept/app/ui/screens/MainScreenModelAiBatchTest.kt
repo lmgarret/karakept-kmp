@@ -99,7 +99,7 @@ class MainScreenModelAiBatchTest {
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Long>()
+        every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<String>()
         every { bookmarkActionsRepository.aiCapabilities } returns MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
@@ -128,8 +128,7 @@ class MainScreenModelAiBatchTest {
 
     private fun bookmark(remoteId: Long) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
+        remoteId = "remote-$remoteId",
         serverId = "server-1",
         url = "https://example.com/$remoteId",
         title = "Bookmark $remoteId",

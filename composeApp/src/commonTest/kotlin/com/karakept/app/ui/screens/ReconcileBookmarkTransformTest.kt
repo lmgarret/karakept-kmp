@@ -24,8 +24,7 @@ class ReconcileBookmarkTransformTest {
         listIds: String = ""
     ) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "orig-$remoteId",
+        remoteId = "orig-$remoteId",
         serverId = "server-1",
         url = "https://example.com/$remoteId",
         title = "Bookmark $remoteId",
@@ -48,7 +47,7 @@ class ReconcileBookmarkTransformTest {
         val bk2 = bookmark(2L, "feeds")
         val result = applyReconcileBookmarkTransform(
             current = listOf(bk1, bk2),
-            remoteId = 1L,
+            remoteId = "orig-1",
             updated = null,
             currentListContext = "feeds"
         )
@@ -61,7 +60,7 @@ class ReconcileBookmarkTransformTest {
         val bk2 = bookmark(2L)
         val result = applyReconcileBookmarkTransform(
             current = listOf(bk1, bk2),
-            remoteId = 1L,
+            remoteId = "orig-1",
             updated = null,
             currentListContext = null
         )
@@ -82,13 +81,13 @@ class ReconcileBookmarkTransformTest {
 
         val result = applyReconcileBookmarkTransform(
             current = listOf(bk1, bk2, bk3),
-            remoteId = 2L,
+            remoteId = "orig-2",
             updated = updatedBk2,
             currentListContext = "feeds"
         )
 
         assertEquals(listOf(bk1, bk3), result)
-        assertFalse(result.any { it.remoteId == 2L }, "Moved bookmark must be absent from Feeds")
+        assertFalse(result.any { it.remoteId == "orig-2" }, "Moved bookmark must be absent from Feeds")
     }
 
     @Test
@@ -123,7 +122,7 @@ class ReconcileBookmarkTransformTest {
 
         val result = applyReconcileBookmarkTransform(
             current = listOf(bk1, bk2),
-            remoteId = 1L,
+            remoteId = "orig-1",
             updated = updatedBk1,
             currentListContext = "feeds"
         )
@@ -138,7 +137,7 @@ class ReconcileBookmarkTransformTest {
 
         val result = applyReconcileBookmarkTransform(
             current = listOf(bk),
-            remoteId = 1L,
+            remoteId = "orig-1",
             updated = updated,
             currentListContext = "feeds"
         )
@@ -156,7 +155,7 @@ class ReconcileBookmarkTransformTest {
 
         val result = applyReconcileBookmarkTransform(
             current = listOf(bk),
-            remoteId = 1L,
+            remoteId = "orig-1",
             updated = updated,
             currentListContext = null
         )
@@ -174,7 +173,7 @@ class ReconcileBookmarkTransformTest {
 
         val result = applyReconcileBookmarkTransform(
             current = listOf(bk1, bk2),
-            remoteId = 3L,
+            remoteId = "orig-3",
             updated = updatedBk3,
             currentListContext = "feeds"
         )
@@ -188,7 +187,7 @@ class ReconcileBookmarkTransformTest {
     fun emptyList_nullUpdated_returnsEmpty() {
         val result = applyReconcileBookmarkTransform(
             current = emptyList(),
-            remoteId = 1L,
+            remoteId = "orig-1",
             updated = null,
             currentListContext = "feeds"
         )
@@ -200,7 +199,7 @@ class ReconcileBookmarkTransformTest {
         val updated = bookmark(1L, "feeds")
         val result = applyReconcileBookmarkTransform(
             current = emptyList(),
-            remoteId = 1L,
+            remoteId = "orig-1",
             updated = updated,
             currentListContext = "feeds"
         )

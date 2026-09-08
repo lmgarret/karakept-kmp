@@ -123,7 +123,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        var emittedId: Long? = null
+        var emittedId: String? = null
         val job = launch {
             repository.bookmarkChangedEvents.collect { emittedId = it }
         }
@@ -192,7 +192,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        var emittedId: Long? = null
+        var emittedId: String? = null
         val job = launch {
             repository.bookmarkChangedEvents.collect { emittedId = it }
         }
@@ -243,7 +243,8 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
     }
 
     private fun makeBookmark(
-        remoteId: Long = 42L,
+        localId: Long = 1L,
+        remoteId: String = "remote-42",
         serverId: String = "server1",
         tags: String = "",
         listIds: String = "",
@@ -251,7 +252,6 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
     ) = BookmarkEntity(
         localId = 1L,
         remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
         serverId = serverId,
         title = "Test",
         url = "https://example.com",

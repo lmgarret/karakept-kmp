@@ -195,7 +195,10 @@ The generator needs network access and is run by hand, never from the build.
 
 **`BookmarkTagsDisplay`** (`ui/components/BookmarkTagsDisplay.kt`)
 - Renders a comma-separated tag string as a `FlowRow` of `TagChip` chips.
-- Accepts `style` (`COMPACT` / `READER`), optional `onTagClick`, and `modifier`.
+- Accepts `style` (`COMPACT` / `READER`), optional `onTagClick`, `scrollable`, and `modifier`.
+- `maxLines` caps how many rows of chips the flow may wrap onto. A caller holding its row to a
+  fixed height has to pass it: a second row of chips is the one part of a bookmark row whose height
+  the layout settings do not bound.
 - **Use whenever a bookmark's full tag list needs to be rendered.**
 
 > **Rule:** Tags must look the same everywhere. Never use `AssistChip`, `FilterChip`, plain `Text`, or custom surfaces for displaying tags. `BookmarkTagsDisplay` delegates to `TagChip` — keep it that way, or e-ink and theming fixes land in one place and not the other.
@@ -233,7 +236,7 @@ control its container rather than its content:
 | `showRowDivider` | Flat rows only — a card already separates itself |
 | `titlePosition` | `BESIDE_THUMBNAIL` or `ABOVE_THUMBNAIL` (title spans the row, image below). No effect without a thumbnail |
 
-| `descriptionMaxLines` | Line cap, or `DESCRIPTION_LINES_AUTO` to fill the space the thumbnail leaves over |
+| `descriptionMaxLines` | Line cap, or `DESCRIPTION_LINES_AUTO` to fill the space the thumbnail leaves over. A cap either way: a row held to a tile renders fewer lines when that is what fits (see "Hardware page-turn buttons") |
 
 Built-ins run densest to richest — **Compact, Rows, Cards, Digest, Magazine** — and that is the
 order the picker shows. `Rows` (flat + divider) is the one to reach for on e-ink; turn its
@@ -365,6 +368,41 @@ The generated text is `BookmarkEntity.summary`, **not** `description`: the crawl
 `description` from the page's meta tags and Karakeep's inference worker never touches it. Both can
 be present, and the reader shows both. See `docs/ai-actions.md`.
 
+### Highlight offsets
+
+A highlight is a character range, and a range means nothing without the stream it counts in. That
+stream is **`ReaderTextOffsets`** (`ui/components/reader/ReaderTextOffsets.kt`): the document's
+text nodes concatenated in document order and nothing else — the same count karakeep's web app
+makes with a `TreeWalker` (`BookmarkHtmlHighlighter.getTextNodeOffset`) and the same one the
+WebView viewer's JS makes, so a highlight means the same thing in both viewers and on the server.
+
+`buildReaderTextOffsets(body)` walks it once per document; the reader remembers the result and
+every renderer reads its offsets rather than counting along as it draws. That counting is what
+drifted: creation resolved a selection through one walk and drawing accumulated another, and
+wherever the second forgot something — a container walked with `children()` instead of
+`childNodes()`, a `<br>`, the whitespace between two `<li>`s — every later highlight moved a
+character or two. Readability wraps an article in a single `<div>`, so nothing ever reset the
+drift and it grew down the page.
+
+> **Rule:** never derive an offset by counting text as you render — ask `offsets.startOf(node)` /
+> `endOf(node)`. To map a stream range onto a string you built, record a `TextRuns` entry per text
+> node and translate through `runs.localRange(start, end)`. The rendered string is not the stream
+> (a `<br>` is a character in one and not the other); what was recorded is the only thing relating
+> them.
+
+Two things follow from the stream carrying no separators of its own:
+
+- A selection spanning two blocks comes back from Compose joined with a newline, and the stream
+  has no character there. Those positions are recorded as **boundaries** instead: they match as
+  whitespace and occupy no offset, so the selection resolves and the offsets stay karakeep's.
+- Reader search runs on the same offsets (`findSearchMatches`), since the same renderers draw a
+  search match and a highlight. It used to keep a walk of its own, written to mirror the renderer
+  rather than the resolver, which left search and highlights on two conventions.
+
+Offsets outlive the document they were taken in — another client, an older build, a re-crawl — so
+`resolveHighlights` checks each highlight against the text it was created from before drawing it,
+and re-resolves the ones that disagree onto the nearest occurrence of that text.
+
 ### Highlight colours
 
 Karakeep gives a highlight one of four colours — `yellow`, `blue`, `green`, `red` — stored as a
@@ -394,6 +432,23 @@ solid (yellow) / double (blue) / dashed (green) / dotted (red).
   both reader paths (`buildInlineAnnotatedString` and `RenderInlineGroup`) go through them.
 - A pattern is only learnable if it is named, so `HighlightCard` and the colour picker spell the
   colour out (`TagChip`, and a label under each swatch) under `highContrast`.
+
+### Reader link hover
+
+A pointer resting on a link in the reader gets a hand cursor and, after a second, a plain tooltip
+naming the URL — the affordances a browser gives. Both live in
+`ReaderLinkHover.kt` (`ui/components/reader/`) and are wired into `AnnotatedClickableText`, which
+every reader text renderer already goes through.
+
+A text block is one composable, so neither can come from a modifier on the link itself: the
+character under the pointer is resolved against the block's own `TextLayoutResult` on every move
+(`characterAt`, which confirms the candidate against its bounding box so the hand stays off the
+margin), and the hand is applied with `overrideDescendants = true` to win over the I-beam the
+selectable text asks for.
+
+Hover is mouse-only by construction — events from any other `PointerType` are ignored — so nothing
+here fires from touch, and the tooltip is placed clear of the pointer hotspot
+(`tooltipPosition`), which would otherwise take the hover from the text and flicker.
 
 ### Empty states
 
@@ -506,8 +561,31 @@ block is eagerly composed — above and below the viewport alike — the landing
 the turn and folds into a single `scrollBy`, so no intermediate position is ever observable to the
 reader's scroll guard.
 
-> The bookmark list deliberately has none of this: its page turns still scroll by a flat delta.
-> Tiling a list of variable-height rows is tracked separately.
+The **bookmark list** reaches the same place from the other end. A viewport can only be tiled
+exactly by rows of *uniform* height, so under E-ink mode with snapping on every row is held to one
+(`ui/utils/RowTilingUtils.kt`, resolved for the active layout by `rememberTiledRows`). A page is
+then a whole number of rows, `tiledTurnAdjustment` lands a turn on a row top by arithmetic rather
+than by searching a registry, and the list takes the same `trailingPagePaddingFor` so its last turn
+lands on a handover.
+
+- The row's natural height is **declared, not measured**: `BookmarkRowMetrics` adds up the
+  thumbnail, the title at its two-line cap, the description at its own, the metadata band and the
+  paddings. A live measurement cannot work — applying a tile makes every row report the tile back,
+  so the quantiser would be reading its own output — and reading the layout instead does not depend
+  on whether the list happens to open on two short bookmarks. `BookmarkRowTilingTest` renders the
+  real row for every built-in layout and checks the declaration still matches it.
+- The count of rows is the *nearest* one, not the one that fits, and the row gives the difference
+  back: a description line first (a fixed `descriptionMaxLines` is a cap, not a promise, once a
+  tile is imposed), then a few percent off the thumbnail. `BookmarkRowMetrics.minHeightPx` is where
+  that stops; below it a tile would crop the metadata row rather than trim the description, so one
+  row fewer is taken instead. Tags are capped to a single line under a tile — a second row of chips
+  is the one part of a row whose height the layout settings do not bound.
+- `Magazine` (`LayoutType.CARD`) is left ragged on purpose: its hero image is sized by its own
+  aspect ratio, so no single height is close to two rows and a tile would crop the image.
+
+> **Rule:** a tile is only ever as short as the row can shrink to. Clipping a row to fit does not
+> trim a line of prose off the bottom — the bottom of a row is its date and reading time — which is
+> why `resolveRowTiling` takes a minimum and steps down rather than squeezing past it.
 
 > **Rule:** a new reader text renderer that does not go through `AnnotatedClickableText` silently
 > loses line snapping. Register it with `LocalReaderSnapRegistry` or route it through

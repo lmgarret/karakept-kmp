@@ -30,9 +30,9 @@ class UndoListMembershipTest {
         val result = applyRestoreAndRemoveFromListTransform(current, bookmark, "listA")
 
         assertEquals(2, result.size)
-        assertEquals("listB", result.first { it.remoteId == 1L }.listIds)
+        assertEquals("listB", result.first { it.remoteId == "remote-1" }.listIds)
         // Other bookmarks untouched
-        assertEquals("", result.first { it.remoteId == 2L }.listIds)
+        assertEquals("", result.first { it.remoteId == "remote-2" }.listIds)
     }
 
     @Test
@@ -67,7 +67,7 @@ class UndoListMembershipTest {
         val result = applyRestoreAndRemoveFromListTransform(current, bookmark, "listA", originalPosition = 1)
 
         assertEquals(4, result.size)
-        assertEquals(99L, result[1].remoteId)
+        assertEquals("remote-99", result[1].remoteId)
     }
 
     @Test
@@ -78,7 +78,7 @@ class UndoListMembershipTest {
         val result = applyRestoreAndRemoveFromListTransform(current, bookmark, "listA", originalPosition = 0)
 
         assertEquals(3, result.size)
-        assertEquals(99L, result[0].remoteId)
+        assertEquals("remote-99", result[0].remoteId)
     }
 
     @Test
@@ -89,7 +89,7 @@ class UndoListMembershipTest {
         val result = applyRestoreAndRemoveFromListTransform(current, bookmark, "listA", originalPosition = 2)
 
         assertEquals(3, result.size)
-        assertEquals(99L, result[2].remoteId)
+        assertEquals("remote-99", result[2].remoteId)
     }
 
     @Test
@@ -100,7 +100,7 @@ class UndoListMembershipTest {
         val result = applyRestoreAndRemoveFromListTransform(current, bookmark, "listA", originalPosition = -1)
 
         assertEquals(3, result.size)
-        assertEquals(99L, result[0].remoteId, "Should insert at index 0 when original position is -1")
+        assertEquals("remote-99", result[0].remoteId, "Should insert at index 0 when original position is -1")
     }
 
     @Test
@@ -111,7 +111,7 @@ class UndoListMembershipTest {
         val result = applyRestoreAndRemoveFromListTransform(current, bookmark, "listA", originalPosition = 100)
 
         assertEquals(2, result.size)
-        assertEquals(99L, result[0].remoteId, "Should insert at index 0 when position exceeds list size")
+        assertEquals("remote-99", result[0].remoteId, "Should insert at index 0 when position exceeds list size")
     }
 
     @Test
@@ -120,7 +120,7 @@ class UndoListMembershipTest {
         val result = applyRestoreAndRemoveFromListTransform(emptyList(), bookmark, "listA", originalPosition = 0)
 
         assertEquals(1, result.size)
-        assertEquals(99L, result[0].remoteId)
+        assertEquals("remote-99", result[0].remoteId)
     }
 
     // ------------------------------------------------------------------
@@ -141,7 +141,7 @@ class UndoListMembershipTest {
         )
 
         assertEquals(1, result.size)
-        assertEquals(2L, result[0].remoteId)
+        assertEquals("remote-2", result[0].remoteId)
     }
 
     @Test
@@ -186,8 +186,7 @@ class UndoListMembershipTest {
         serverId: String = "server-1"
     ) = BookmarkEntity(
         localId = remoteId,
-        remoteId = remoteId,
-        originalRemoteId = "remote-$remoteId",
+        remoteId = "remote-$remoteId",
         serverId = serverId,
         title = "Test Bookmark $remoteId",
         url = "https://example.com/$remoteId",

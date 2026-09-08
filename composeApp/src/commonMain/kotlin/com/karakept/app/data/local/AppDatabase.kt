@@ -27,7 +27,7 @@ import com.karakept.app.data.local.entity.ListEntity
         HighlightEntity::class,
         ListEntity::class
     ],
-    version = 12
+    version = 13
 )
 @ConstructedBy(AppDatabaseConstructor::class)
 abstract class AppDatabase : RoomDatabase() {

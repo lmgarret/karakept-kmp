@@ -318,7 +318,7 @@ fun BatchListPickerDialog(
  */
 @Composable
 fun BatchTagEditorDialog(
-    selectedBookmarkIds: Set<Long>,
+    selectedBookmarkIds: Set<String>,
     bookmarks: List<BookmarkEntity>,
     allAvailableTags: List<String>,
     onTagsUpdated: (List<String>) -> Unit,

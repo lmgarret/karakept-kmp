@@ -100,14 +100,16 @@ class HighlightsScreenModel(
         viewModelScope.launch {
             val server = selectedServer.value ?: return@launch
             _accumulatedHighlights.value = _accumulatedHighlights.value.filter { it.id != highlight.id }
-            val bookmark = bookmarkDao.getBookmarkByOriginalRemoteId(highlight.bookmarkId, server.id) ?: return@launch
-            highlightRepository.deleteHighlight(server, bookmark.localId, highlight.id)
+            // A highlight's bookmarkId is the bookmark's remote id, which is what the queued
+            // action is keyed on — no local row needed, and the highlight is still deletable
+            // when the bookmark itself has not been synced down.
+            highlightRepository.deleteHighlight(server, highlight.bookmarkId, highlight.id)
         }
     }
 
     suspend fun getBookmarkLocalIdForHighlight(highlight: Highlight): Long? {
         val server = selectedServer.value ?: return null
-        val bookmark = bookmarkDao.getBookmarkByOriginalRemoteId(highlight.bookmarkId, server.id)
+        val bookmark = bookmarkDao.getBookmarkByRemoteId(highlight.bookmarkId, server.id)
         return bookmark?.localId
     }
 }

@@ -34,8 +34,7 @@ class BookmarkDetailsPanelTest {
 
     private val bookmark = BookmarkEntity(
         localId = 1,
-        remoteId = 1,
-        originalRemoteId = "remote-1",
+        remoteId = "remote-1",
         serverId = "server-1",
         url = longUrl,
         title = "Bookmark 1",

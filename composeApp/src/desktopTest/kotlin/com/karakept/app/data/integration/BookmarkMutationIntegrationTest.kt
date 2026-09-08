@@ -38,7 +38,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
             val bookmark = result.getOrNull()
             assertNotNull(bookmark, "Bookmark should not be null")
             assertTrue(bookmark.url == targetUrl, "URL should match")
-            println("Bookmark created: ${bookmark.title} (ID: ${bookmark.originalRemoteId})")
+            println("Bookmark created: ${bookmark.title} (ID: ${bookmark.remoteId})")
         } else {
             println("Bookmark creation failed: ${result.exceptionOrNull()?.message}")
         }
@@ -196,7 +196,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
 
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
 
-        val remoteWithTags = remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
+        val remoteWithTags = remoteDataSource.fetchBookmark(testServer, bookmark.remoteId)
         val remoteTags = remoteWithTags.tags?.mapNotNull { it.name }?.filter { it.isNotBlank() } ?: emptyList()
         assertTrue(customTags.all { it in remoteTags }, "Custom tags should be on server: $remoteTags")
 
@@ -204,20 +204,19 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         val highlightText = "Integration test highlight"
         val tempId = highlightRepository.createHighlight(
             server = testServer,
-            bookmarkLocalId = bookmark.localId,
-            bookmarkRemoteId = bookmark.originalRemoteId,
+            bookmarkRemoteId = bookmark.remoteId,
             text = highlightText,
             startOffset = 0,
             endOffset = 10,
             color = "yellow"
         )
 
-        val localHighlights = highlightRepository.getHighlightsForBookmark(bookmark.originalRemoteId, bookmark.serverId).first()
+        val localHighlights = highlightRepository.getHighlightsForBookmark(bookmark.remoteId, bookmark.serverId).first()
         assertTrue(localHighlights.any { it.text == highlightText }, "Highlight should exist locally")
 
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(3000) }
 
-        val remoteHighlights = remoteDataSource.fetchHighlightsForBookmark(testServer, bookmark.originalRemoteId)
+        val remoteHighlights = remoteDataSource.fetchHighlightsForBookmark(testServer, bookmark.remoteId)
         assertTrue(remoteHighlights.any { it.text == highlightText }, "Highlight should be on server")
 
         // 4. Archive
@@ -228,7 +227,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
 
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(2000) }
 
-        val remoteArchived = remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
+        val remoteArchived = remoteDataSource.fetchBookmark(testServer, bookmark.remoteId)
         assertTrue(remoteArchived.archived == true, "Should be archived on server")
 
         // 5. Delete
@@ -240,7 +239,7 @@ class BookmarkMutationIntegrationTest : BaseDockerIntegrationTest() {
         withContext(Dispatchers.Default) { kotlinx.coroutines.delay(2000) }
 
         try {
-            remoteDataSource.fetchBookmark(testServer, bookmark.originalRemoteId)
+            remoteDataSource.fetchBookmark(testServer, bookmark.remoteId)
             throw AssertionError("Should have thrown 404 after deletion")
         } catch (e: Exception) {
             println("Expected error after deletion: ${e.message}")

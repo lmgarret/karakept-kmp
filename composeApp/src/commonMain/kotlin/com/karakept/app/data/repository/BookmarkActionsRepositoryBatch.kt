@@ -122,13 +122,12 @@ suspend fun BookmarkActionsRepository.batchDelete(bookmarks: List<BookmarkEntity
         bookmarks.forEach { bookmark ->
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             if (current != null) {
-                val originalRemoteId = current.originalRemoteId
                 bookmarkDao.deleteBookmark(current)
                 queueAction(
                     bookmarkRemoteId = bookmark.remoteId,
                     serverId = bookmark.serverId,
                     actionType = PendingActionType.DELETE,
-                    actionData = jsonSerializer.encodeToString(mapOf("originalRemoteId" to originalRemoteId))
+                    actionData = "{}"
                 )
                 notifyBookmarkChanged(bookmark.remoteId)
             }
