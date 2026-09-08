@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Overrides :composeApp's default, which is what makes isDevBuild true in a dev build. -->
+    <bool name="karakept_is_dev">true</bool>
+</resources>

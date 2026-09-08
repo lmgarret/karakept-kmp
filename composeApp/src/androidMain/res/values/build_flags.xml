@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Stands in for the BuildConfig.IS_DEV field this module used to generate. A KMP library
+      has no build types and no BuildConfig, so the flag is declared here as false and the
+      dev build overrides it from :androidApp's devRelease resources — app resources win over
+      library resources of the same name during merging.
+    -->
+    <bool name="karakept_is_dev">false</bool>
+</resources>

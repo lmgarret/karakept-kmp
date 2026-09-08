@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The manifest labels. These were `${appName}` manifest placeholders while this module was
+      the application; a KMP library has no manifestPlaceholders, and the Robolectric host-test
+      manifest merge is a real merge that fails on an unresolved one. :androidApp's devRelease
+      source set overrides both — app resources win over library resources of the same name.
+    -->
+    <string name="karakept_app_name">Karakept</string>
+    <string name="karakept_quick_save_label">Karakept (Quick Save)</string>
+</resources>

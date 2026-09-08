@@ -1,6 +1,3 @@
-import com.android.build.api.variant.HasHostTestsBuilder
-import com.android.build.api.variant.HostTestBuilder
-import com.android.build.api.variant.VariantBuilder
 import org.gradle.api.artifacts.MinimalExternalModuleDependency
 import org.gradle.api.provider.Provider
 import org.gradle.internal.os.OperatingSystem
@@ -16,7 +13,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
+    alias(libs.plugins.androidKotlinMultiplatformLibrary)
     alias(libs.plugins.jetbrainsCompose)
     alias(libs.plugins.compose.compiler)
     id("org.jetbrains.compose.hot-reload")
@@ -49,7 +46,24 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
-    androidTarget {
+    android {
+        namespace = "com.karakept.app"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+
+        // The launcher aliases, activities and drawables all live here rather than in
+        // :androidApp; they merge into the APK from this module's AAR.
+        androidResources {
+            enable = true
+        }
+
+        // The Robolectric suite. A KMP library has a single variant, so this compiles and
+        // runs once — the `androidComponents { beforeVariants … }` block that used to switch
+        // the release/devRelease copies off is gone with the build types.
+        withHostTest {
+            isIncludeAndroidResources = true
+        }
+
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
         }
@@ -157,7 +171,7 @@ kotlin {
                 implementation(libs.compose.desktop.ui.test.junit4)
             }
         }
-        val androidUnitTest by getting {
+        val androidHostTest by getting {
             dependencies {
                 implementation(libs.compose.ui.test.junit4)
                 implementation(libs.robolectric)
@@ -176,84 +190,6 @@ kotlin {
             }
         }
     }
-}
-
-android {
-    namespace = "com.karakept.app"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
-
-    sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
-    sourceSets["main"].res.srcDirs("src/androidMain/res")
-    sourceSets["main"].resources.srcDirs("src/commonMain/resources")
-
-    buildFeatures {
-        buildConfig = true
-    }
-
-    defaultConfig {
-        applicationId = "com.karakept.app"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = (project.findProperty("versionName") as String?) ?: "1.0"
-        manifestPlaceholders["appName"] = "Karakept"
-        buildConfigField("boolean", "IS_DEV", "false")
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-    signingConfigs {
-        val keystorePath = System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
-        if (keystorePath != null && file(keystorePath).exists()) {
-            create("ciSigning") {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
-            }
-        }
-    }
-    buildTypes {
-        val ciSigning = signingConfigs.findByName("ciSigning")
-        getByName("release") {
-            isMinifyEnabled = false
-            signingConfig = ciSigning ?: signingConfigs.getByName("debug")
-        }
-        create("devRelease") {
-            initWith(getByName("release"))
-            applicationIdSuffix = ".dev"
-            versionNameSuffix = "-dev"
-            manifestPlaceholders["appName"] = "Karakept Dev"
-            buildConfigField("boolean", "IS_DEV", "true")
-        }
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-        }
-    }
-    dependencies {
-        debugImplementation(libs.compose.ui.tooling)
-    }
-}
-
-// The `release` and `devRelease` build types are non-minified (isMinifyEnabled = false),
-// so their unit tests exercise byte-for-byte the same code as `debug`. Running the
-// (Robolectric-backed) Android unit suite once per build type triples CI test time for
-// zero extra coverage, so only the `debug` variant's unit tests are kept. `./gradlew test`
-// then runs testDebugUnitTest + desktopTest instead of three Android variants + desktop.
-androidComponents {
-    fun VariantBuilder.disableUnitTests() {
-        (this as HasHostTestsBuilder).hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.enable = false
-    }
-    beforeVariants(selector().withBuildType("release")) { it.disableUnitTests() }
-    beforeVariants(selector().withBuildType("devRelease")) { it.disableUnitTests() }
 }
 
 room3 {
@@ -424,6 +360,15 @@ tasks.named<Test>("desktopTest") {
     if (!project.hasProperty("withIntegrationTests")) {
         exclude("**/data/integration/**")
     }
+}
+
+// `test` is an Android/Java lifecycle task, and this module is neither any more — its suites
+// hang off `allTests` (desktopTest + testAndroidHostTest). Without this alias `./gradlew test`
+// resolves to :androidApp's empty unit-test variant and reports success having run nothing.
+tasks.register("test") {
+    group = "verification"
+    description = "Alias for allTests — runs the desktop and Android host test suites."
+    dependsOn("allTests")
 }
 
 tasks.withType<Test> {

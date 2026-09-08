@@ -188,7 +188,8 @@
 - Target SDK: 35 (Android 14)
 - Compile SDK: 36 (Android 15)
 - Application ID: `com.karakept.app`
-- Build variants: debug, release, devRelease (staging)
+- Build variants: debug, release, devRelease (staging) — declared in `:androidApp`, the plain
+  Android application module; `:composeApp` is a KMP library and has no build types
 
 **Desktop Application:**
 - Runs on JVM via Compose Desktop

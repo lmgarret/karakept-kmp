@@ -5,79 +5,13 @@ plugins {
     alias(libs.plugins.openapi.generator)
 }
 
+// Raw generator output. Nothing compiles from here: `patchOpenApiClient` syncs it into
+// `patchedSourcesDir` and fixes it up there. Keeping the two apart is not cosmetic — a task
+// that writes into another task's output directory makes Gradle refuse to cache the producer
+// ("Gradle does not know how file ... was created"), and leaves every consumer of the directory
+// without a dependency on whatever fills it, which AGP's ART profile tasks trip over.
 val generatedSourcesDir = layout.buildDirectory.dir("generated/openapi")
-
-kotlin {
-    // Every source file in this module is emitted by the OpenAPI generator, so a warning here
-    // is a template artefact rather than something a contributor can act on in the file it
-    // points at. The custom templates under `templates/` are kept clean; this silences the one
-    // pattern the generator's own built-in api template still emits — `param?.apply { }` on a
-    // required (non-null) query parameter.
-    compilerOptions {
-        freeCompilerArgs.add("-Xwarning-level=UNNECESSARY_SAFE_CALL:disabled")
-    }
-
-    android {
-        namespace = "com.karakept.api"
-        compileSdk = libs.versions.android.compileSdk.get().toInt()
-        minSdk = libs.versions.android.minSdk.get().toInt()
-
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
-        }
-    }
-
-    jvm("desktop")
-    
-    sourceSets {
-        commonMain {
-            kotlin.srcDir(generatedSourcesDir.map { it.dir("src/main/kotlin") })
-            kotlin.exclude("**/AssetsApi.kt")
-            dependencies {
-                implementation(libs.ktor.client.core)
-                implementation(libs.ktor.client.content.negotiation)
-                implementation(libs.ktor.serialization.kotlinx.json)
-                implementation(libs.kotlinx.serialization.json)
-                implementation(libs.kotlinx.datetime)
-                implementation(libs.kotlinx.coroutines.core)
-                implementation(libs.kotlin.reflect)
-            }
-        }
-    }
-}
-
-// OpenAPI Generator Configuration
-openApiGenerate {
-    generatorName.set("kotlin")
-    templateDir.set("${projectDir}/templates")
-    inputSpec.set("${rootDir}/karakeep-upstream/packages/open-api/karakeep-openapi-spec.json")
-    outputDir.set(generatedSourcesDir.get().asFile.absolutePath)
-    packageName.set("com.karakept.api")
-    apiPackage.set("com.karakept.api.client")
-    modelPackage.set("com.karakept.api.model")
-    
-    configOptions.set(mapOf(
-        "library" to "multiplatform",
-        "dateLibrary" to "kotlinx-datetime",
-        "useCoroutines" to "true",
-        "omitGradleWrapper" to "true",
-        "enumPropertyNaming" to "UPPERCASE",
-        // Without this, every generated file embeds the current timestamp, busting the
-        // Gradle build cache for all downstream api-client compile tasks on every run.
-        "hideGenerationTimestamp" to "true"
-    ))
-    
-    modelNameMappings.set(mapOf(
-        "List" to "KarakeepList"
-    ))
-    
-    typeMappings.set(mapOf(
-        "binary" to "ByteArray"
-    ))
-    
-    // Skip models with invalid names
-    skipValidateSpec.set(true)
-}
+val patchedSourcesDir = layout.buildDirectory.dir("generated/openapi-patched")
 
 // Patch generated code to fix OpenAPI Generator bug with oneOf discriminated unions.
 // The generator only extracts ASSET from the Type enum, missing LINK and TEXT.
@@ -86,14 +20,19 @@ openApiGenerate {
 // file is LF, so a regex with literal newlines would silently fail to match there.
 // The task is idempotent and throws if it can neither patch nor confirm an existing
 // patch, so a generator format change fails the build instead of shipping unpatched.
-val patchOpenApiClient = tasks.register("patchOpenApiClient") {
+val patchOpenApiClient = tasks.register<Sync>("patchOpenApiClient") {
     dependsOn("openApiGenerate")
+    from(generatedSourcesDir.map { it.dir("src/main/kotlin") })
+    into(patchedSourcesDir)
+    // Assets go through RemoteDataSource's own Ktor client — the generated client buffers the
+    // whole body into a ByteArray.
+    exclude("**/AssetsApi.kt")
 
     // Resolve to a plain File at configuration time so the doLast closure captures only a
     // serializable java.io.File, not the Provider/Project script objects (which the
     // configuration cache cannot serialize).
-    val targetFile = generatedSourcesDir.get().asFile
-        .resolve("src/main/kotlin/com/karakept/api/model/BookmarksPostRequest.kt")
+    val targetFile = patchedSourcesDir.get().asFile
+        .resolve("com/karakept/api/model/BookmarksPostRequest.kt")
 
     doLast {
         if (!targetFile.exists()) {
@@ -125,7 +64,74 @@ val patchOpenApiClient = tasks.register("patchOpenApiClient") {
     }
 }
 
-// Make compilation depend on code generation and patching
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    dependsOn(patchOpenApiClient)
+kotlin {
+    // Every source file in this module is emitted by the OpenAPI generator, so a warning here
+    // is a template artefact rather than something a contributor can act on in the file it
+    // points at. The custom templates under `templates/` are kept clean; this silences the one
+    // pattern the generator's own built-in api template still emits — `param?.apply { }` on a
+    // required (non-null) query parameter.
+    compilerOptions {
+        freeCompilerArgs.add("-Xwarning-level=UNNECESSARY_SAFE_CALL:disabled")
+    }
+
+    android {
+        namespace = "com.karakept.api"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
+    }
+
+    jvm("desktop")
+
+    sourceSets {
+        commonMain {
+            // The task provider, not a path: it carries the dependency to every consumer.
+            kotlin.srcDir(patchOpenApiClient)
+            dependencies {
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.content.negotiation)
+                implementation(libs.ktor.serialization.kotlinx.json)
+                implementation(libs.kotlinx.serialization.json)
+                implementation(libs.kotlinx.datetime)
+                implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.kotlin.reflect)
+            }
+        }
+    }
+}
+
+// OpenAPI Generator Configuration
+openApiGenerate {
+    generatorName.set("kotlin")
+    templateDir.set("${projectDir}/templates")
+    inputSpec.set("${rootDir}/karakeep-upstream/packages/open-api/karakeep-openapi-spec.json")
+    outputDir.set(generatedSourcesDir.get().asFile.absolutePath)
+    packageName.set("com.karakept.api")
+    apiPackage.set("com.karakept.api.client")
+    modelPackage.set("com.karakept.api.model")
+
+    configOptions.set(mapOf(
+        "library" to "multiplatform",
+        "dateLibrary" to "kotlinx-datetime",
+        "useCoroutines" to "true",
+        "omitGradleWrapper" to "true",
+        "enumPropertyNaming" to "UPPERCASE",
+        // Without this, every generated file embeds the current timestamp, busting the
+        // Gradle build cache for all downstream api-client compile tasks on every run.
+        "hideGenerationTimestamp" to "true"
+    ))
+
+    modelNameMappings.set(mapOf(
+        "List" to "KarakeepList"
+    ))
+
+    typeMappings.set(mapOf(
+        "binary" to "ByteArray"
+    ))
+
+    // Skip models with invalid names
+    skipValidateSpec.set(true)
 }
