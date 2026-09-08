@@ -81,17 +81,24 @@ private suspend fun MainScreenModel.readWholeWindow(
  *
  * A table that has shrunk since the window was loaded shrinks the window with it, so later
  * reads stop sweeping page ranges the query can no longer fill.
+ *
+ * @param hasMoreBeyondWindow whether rows may still lie past the window. A read can only answer
+ *   that from whether it managed to fill the window, which is a statement about the window and
+ *   not about what lies beyond it — so a caller that knows better says so. The forward walk
+ *   does: it has just paged to the end of the table and found nothing, and a window that
+ *   happens to be full says nothing to the contrary.
  */
 private suspend fun MainScreenModel.publishWindow(
     view: LoadedView,
     read: WindowRead,
-    lastLoadedPage: Int
+    lastLoadedPage: Int,
+    hasMoreBeyondWindow: Boolean = !read.reachedEnd
 ) {
     _loadedView.value = view
     updateAccumulatedBookmarks { read.rows }
     _currentPage.value =
         if (read.reachedEnd) lastPageHolding(read.rawCount) else lastLoadedPage
-    _hasMoreItems.value = !read.reachedEnd
+    _hasMoreItems.value = hasMoreBeyondWindow
 }
 
 /**
@@ -177,7 +184,13 @@ fun MainScreenModel.loadNextPage() {
                     // drop rows that are legitimately loaded. Leave the window alone.
                     read.rows.size >= _accumulatedBookmarks.value.size
                 ) {
-                    publishWindow(view, read, lastLoadedPage)
+                    // The walk has already established there is nothing past the window, and
+                    // that answer stands: letting the re-read decide instead re-enables paging
+                    // whenever the window happens to come back full, and the next scroll walks
+                    // the table again to reach the same conclusion. On a view whose filter
+                    // admits few rows that is a hot loop — the trace behind this fix walked
+                    // thirty-eight pages roughly four times a second, indefinitely.
+                    publishWindow(view, read, lastLoadedPage, hasMoreBeyondWindow = false)
                 }
             }
         } catch (e: Exception) {

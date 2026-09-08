@@ -231,4 +231,32 @@ class MainScreenModelOffsetDriftTest {
             )
             assertEquals(false, model._hasMoreItems.value, "the table is exhausted after the re-read")
         }
+
+    @Test
+    fun aFullWindowDoesNotReopenPagingTheWalkAlreadyClosed() = runTest(testDispatcher) {
+        // The walk pages to the end of the table and finds nothing, so paging is closed. The
+        // re-read that follows then comes back holding a *full* window — which says only that
+        // the window is full, never that there is anything past it.
+        //
+        // Deciding hasMoreItems from that reopened paging every time, and the list has few
+        // enough rows that the load-more trigger fires at once: the walk runs again, reaches
+        // the same conclusion, and the re-read reopens it again. The trace behind this test
+        // showed thirty-eight pages walked roughly four times a second, indefinitely.
+        stubPage(offset = 0, limit = page, returns = rows(1L..page.toLong()))
+        stubPage(offset = page, limit = page, returns = emptyList())
+        // Same size as the window, so `reachedEnd` is false — the shape that reopened paging.
+        stubPage(offset = 0, limit = page, returns = rows(1L..page.toLong()))
+
+        val model = createMainScreenModel()
+        advanceUntilIdle()
+
+        model.loadNextPage()
+        advanceUntilIdle()
+
+        assertEquals(
+            false,
+            model._hasMoreItems.value,
+            "the walk found nothing past the window, so a full window must not reopen paging"
+        )
+    }
 }
