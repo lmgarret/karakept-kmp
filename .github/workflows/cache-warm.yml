@@ -41,6 +41,9 @@ jobs:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
           cache-provider: basic
+          # Without an encryption key setup-gradle saves/restores no configuration-cache
+          # data, so every job recomputes the ~60s configuration phase and discards it.
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
           # Cache the wrapper distribution too (not in the action's defaults) so PR runs
           # restore it instead of re-downloading the ~120MB Gradle dist every time.
           gradle-home-cache-includes: |
@@ -48,6 +51,11 @@ jobs:
             notifications
             wrapper
 
+      # Two invocations, not one: a configuration-cache entry is keyed on the requested
+      # task set, and ci.yml asks for `desktopTest` on its own. A combined warm-up would
+      # store an entry PR CI can never match. The second run is nearly free — everything
+      # it needs is already up-to-date from the first.
+      #
       # `desktopTest` warms the exact compile tasks PR CI reuses: ci.yml runs
       # `desktopTest --rerun`, which forces only the test tasks to re-run while the
       # upstream commonMain/desktopMain/KSP/codegen tasks resolve FROM-CACHE. It also
@@ -57,6 +65,9 @@ jobs:
       # The Android compile path is intentionally NOT warmed here: PR CI no longer
       # compiles the Android target, and the Android unit tests run only as a release
       # gate (release.yml), which self-persists its cache.
-      - name: Warm build & dependency cache
-        run: ./gradlew desktopTest :composeApp:desktopJar
+      - name: Warm desktopTest (the task set ci.yml requests)
+        run: ./gradlew desktopTest
+
+      - name: Warm the Linux release lane
+        run: ./gradlew :composeApp:desktopJar
 

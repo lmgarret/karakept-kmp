@@ -30,6 +30,9 @@ jobs:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
           cache-provider: basic
+          # Without an encryption key setup-gradle saves/restores no configuration-cache
+          # data, so every job recomputes the ~60s configuration phase and discards it.
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
           # Cache the wrapper distribution too (not in the action's defaults), so the
           # ~120MB Gradle dist isn't re-downloaded every run once main has warmed it.
           gradle-home-cache-includes: |
