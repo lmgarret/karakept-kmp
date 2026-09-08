@@ -137,7 +137,7 @@ jobs:
       # PR CI only runs the desktop suite, so validate the Android-only unit tests
       # here before any release artifact is built or published.
       - name: Run Android unit tests
-        run: ./gradlew testDebugUnitTest --rerun
+        run: ./gradlew :composeApp:testAndroidHostTest --rerun
 
   build-android:
     name: Build Android APK
@@ -176,20 +176,20 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.DEV_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.DEV_KEY_ALIAS }}
         run: >
-          ./gradlew :composeApp:assembleRelease
+          ./gradlew :androidApp:assembleRelease
           -PversionName=${{ needs.resolve-version.outputs.name }}
           -PversionCode=${{ github.run_number }}
 
       - name: Rename APK
         run: |
-          APK=$(find composeApp/build/outputs/apk/release -name "*.apk" | head -1)
-          mv "$APK" "composeApp/build/outputs/apk/release/Karakept-${{ needs.resolve-version.outputs.name }}.apk"
+          APK=$(find androidApp/build/outputs/apk/release -name "*.apk" | head -1)
+          mv "$APK" "androidApp/build/outputs/apk/release/Karakept-${{ needs.resolve-version.outputs.name }}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
           name: apk-release
-          path: composeApp/build/outputs/apk/release/Karakept-*.apk
+          path: androidApp/build/outputs/apk/release/Karakept-*.apk
 
   build-macos:
     name: Build macOS DMG

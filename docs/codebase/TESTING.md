@@ -14,9 +14,9 @@
 
 **Run Commands:**
 ```bash
-./gradlew commonTest            # Run all common (multiplatform) tests
-./gradlew desktopTest           # Run desktop-specific tests
-./gradlew test                  # Run all tests across all source sets
+./gradlew desktopTest           # Desktop (JVM) suite — commonTest + desktopTest
+./gradlew :composeApp:testAndroidHostTest   # Android (Robolectric) suite
+./gradlew test                  # Everything (alias for allTests)
 ./gradlew -t test               # Watch mode (continuous testing)
 ```
 
@@ -310,7 +310,7 @@ fun settingsSerializeAndDeserialize() {
 
 **Specific test class:**
 ```bash
-./gradlew :composeApp:commonTest --tests BookmarkRepositoryUnitTest
+./gradlew :composeApp:desktopTest --tests BookmarkRepositoryUnitTest
 ./gradlew :composeApp:desktopTest --tests BookmarkSyncIntegrationTest
 ```
 

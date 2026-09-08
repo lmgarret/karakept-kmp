@@ -53,6 +53,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 | DI module | `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` |
 | Shared utilities | `composeApp/src/commonMain/kotlin/com/karakept/app/utils/` |
 | Android-specific code | `composeApp/src/androidMain/` |
+| Android application shell | `androidApp/` (build types, signing, applicationId — no Kotlin) |
 | Generated API client | `api-client/` (OpenAPI-generated, committed) |
 
 ### Entry Points
@@ -61,6 +62,39 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 - **`MainActivity.kt`** (Android): sets up the Compose activity.
 - **`AppModule.kt`**: all Koin bindings — repositories as `single()`, ScreenModels as `viewModel()`.
 - **`ui/navigation/`**: `AppNavigator`/`LocalNavigator` (back-stack wrapper + CompositionLocal), `appEntryProvider()` + `navKeySerializersModule` (NavKey↔content map and polymorphic registry), and the Shared Axis Z `NavDisplay` transition specs.
+
+### Gradle Modules
+
+| Module | Plugin | Holds |
+|---|---|---|
+| `:composeApp` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Everything — commonMain, desktopMain, **and all of androidMain** (MainActivity, the workers, the manifest, `res/`) |
+| `:androidApp` | `com.android.application` | Nothing but build config: `applicationId`, build types, signing, versioning. **No Kotlin sources.** |
+| `:api-client` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | The OpenAPI-generated client |
+
+AGP 9 refuses to apply `com.android.application` alongside the Kotlin Multiplatform plugin, and
+its replacement (`com.android.kotlin.multiplatform.library`) is library-only. So the KMP module
+stays a library and `:androidApp` supplies the parts a library cannot have. Consequences worth
+knowing before touching any of it:
+
+- **Android code belongs in `composeApp/src/androidMain`, not `:androidApp`.** `:androidApp`
+  having no sources is what keeps the 200-odd `internal` declarations in `commonMain` reachable
+  from `MainActivity` and friends, and what keeps `AppIconManager`'s `ALIAS_PACKAGE` (derived
+  from `MainActivity::class.java.name`) pointing at `com.karakept.app`.
+- **A KMP library has no build types and no `BuildConfig`.** `isDevBuild` reads the
+  `karakept_is_dev` bool resource, declared `false` in `composeApp/src/androidMain/res` and
+  overridden `true` in `androidApp/src/devRelease/res` — app resources win over library
+  resources of the same name. Anything else that used to be a `buildConfigField` goes the
+  same way.
+- **A KMP library has no `manifestPlaceholders` either**, and the Robolectric host-test manifest
+  merge is a real merge that fails on an unresolved one. The app label is
+  `@string/karakept_app_name`, overridden in `androidApp/src/devRelease/res`, for the same
+  reason. `${applicationId}` still works — AGP substitutes that one itself.
+- **Namespaces differ from the applicationId.** `:composeApp` is `com.karakept.app` (two modules
+  cannot share a namespace, and this is the one components resolve against); `:androidApp` is
+  `com.karakept.app.android`; `applicationId` stays `com.karakept.app`.
+- **The Android suite runs once**, as `:composeApp:testAndroidHostTest` — a KMP library has a
+  single variant, so the `androidComponents { beforeVariants … }` block that used to switch off
+  the release/devRelease copies is gone with the build types.
 
 ---
 
@@ -649,7 +683,7 @@ Every new feature or bug fix **must** include new or updated tests. Tests that b
 |---|---|
 | Common unit tests | `composeApp/src/commonTest/kotlin/com/karakept/app/` |
 | Desktop integration tests | `composeApp/src/desktopTest/kotlin/com/karakept/app/data/integration/` |
-| Android unit tests | `composeApp/src/androidUnitTest/kotlin/com/karakept/app/` |
+| Android unit tests | `composeApp/src/androidHostTest/kotlin/com/karakept/app/` |
 
 ### Running the Desktop App
 
@@ -669,11 +703,12 @@ Save a `.kt` file → Terminal 2 compiles + notifies the agent → UI updates in
 ### Running Tests
 
 ```bash
-./gradlew test                  # All tests
-./gradlew commonTest            # Common (multiplatform) tests only
-./gradlew desktopTest           # Desktop integration tests
+./gradlew test                  # All tests (alias for allTests)
+./gradlew allTests              # Desktop + Android host suites
+./gradlew desktopTest           # Desktop (JVM) suite — commonTest + desktopTest
+./gradlew :composeApp:testAndroidHostTest   # Android (Robolectric) suite
 ./gradlew -t test               # Watch mode
-./gradlew :composeApp:commonTest --tests BookmarkRepositoryUnitTest
+./gradlew :composeApp:desktopTest --tests BookmarkRepositoryUnitTest
 ```
 
 ### Test Patterns
@@ -769,7 +804,8 @@ Keep documentation current as the code evolves:
 ## CI / CD
 
 CI runs on every PR targeting `main` (`.github/workflows/ci.yml`):
-- Runs `./gradlew test --rerun` (all tests).
+- Runs `./gradlew desktopTest --rerun` — commonTest + desktopTest, the bulk of coverage.
+  The Android (Robolectric) suite runs as a release gate instead (`release.yml`).
 - PRs must be green before merging.
 
 Releases (`.github/workflows/release.yml`):

@@ -40,9 +40,10 @@ jobs:
             wrapper
 
       # checkDebugAarMetadata is the exact task that catches a bumped AAR requiring
-      # a higher compileSdk/AGP than this project currently targets — it only
+      # a higher compileSdk/AGP than this project currently targets. It lives on
+      # :androidApp — :composeApp is a KMP library and has no build types — and it only
       # resolves the runtime classpath and compares metadata, with no Kotlin/KSP
       # compilation, resource merging, or packaging behind it. That keeps this
       # check fast and secret-free (no signing config is ever touched).
       - name: Check bumped dependencies' AAR metadata
-        run: ./gradlew :composeApp:checkDebugAarMetadata
+        run: ./gradlew :androidApp:checkDebugAarMetadata

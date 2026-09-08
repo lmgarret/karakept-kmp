@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Deliberately empty. Every component, permission and <application> attribute comes from
+  :composeApp's src/androidMain/AndroidManifest.xml and merges in here.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

@@ -33,7 +33,7 @@
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:label="${appName}"
+        android:label="@string/karakept_app_name"
         android:theme="@style/Theme.App.Starting">
         <activity
             android:name=".MainActivity"
@@ -54,7 +54,7 @@
             android:enabled="true"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher"
-            android:label="${appName}">
+            android:label="@string/karakept_app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -68,7 +68,7 @@
             android:enabled="false"
             android:icon="@mipmap/ic_launcher_mono"
             android:roundIcon="@mipmap/ic_launcher_mono"
-            android:label="${appName}">
+            android:label="@string/karakept_app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -78,7 +78,7 @@
         <activity
             android:name=".BookmarkSavingActivity"
             android:exported="true"
-            android:label="${appName}"
+            android:label="@string/karakept_app_name"
             android:launchMode="singleTask"
             android:theme="@style/Theme.App">
             <intent-filter>
@@ -91,7 +91,7 @@
         <activity
             android:name=".QuickShareActivity"
             android:exported="true"
-            android:label="${appName} (Quick Save)"
+            android:label="@string/karakept_quick_save_label"
             android:theme="@style/Theme.App.Translucent">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />

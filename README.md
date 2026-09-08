@@ -85,17 +85,17 @@
 
 ```bash
 # Debug build
-./gradlew assembleDebug
-# APK at: composeApp/build/outputs/apk/debug/composeApp-debug.apk
+./gradlew :androidApp:assembleDebug
+# APK at: androidApp/build/outputs/apk/debug/androidApp-debug.apk
 
 # Install on connected device
-./gradlew installDebug
+./gradlew :androidApp:installDebug
 ```
 
 For a release build:
 ```bash
-./gradlew assembleRelease
-./gradlew installRelease
+./gradlew :androidApp:assembleRelease
+./gradlew :androidApp:installRelease
 ```
 
 > The release build uses debug signing. For production, configure proper release signing in `composeApp/build.gradle.kts`.
