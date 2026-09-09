@@ -140,7 +140,7 @@ class Save02RegressionTest {
             val fakeBookmarks = (1L..5L).map { createBookmarkEntity(it) }
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = any(), limit = any(),
+                    server = any(), status = any(), after = any(), limit = any(),
                     sort = any(), listId = any()
                 )
             } returns fakeBookmarks
@@ -161,7 +161,7 @@ class Save02RegressionTest {
             val fakeBookmarks = (1L..3L).map { createBookmarkEntity(it) }
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = any(), limit = any(),
+                    server = any(), status = any(), after = any(), limit = any(),
                     sort = any(), listId = any()
                 )
             } returns fakeBookmarks
@@ -183,7 +183,7 @@ class Save02RegressionTest {
         val fakeBookmarks = (1L..4L).map { createBookmarkEntity(it) }
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = any(), limit = any(),
+                server = any(), status = any(), after = any(), limit = any(),
                 listId = any()
             )
         } returns fakeBookmarks

@@ -3,6 +3,7 @@ package com.karakept.app.ui.screens
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.Server
@@ -158,17 +159,17 @@ class RefreshAfterSyncTest {
         // and ignores the status, an unfiltered query applies the status.
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = any(), limit = any(),
+                server = any(), status = any(), after = any(), limit = any(),
                 sort = any(), listId = any()
             )
         } answers {
             val status = arg<FilterStatus>(1)
-            val offset = arg<Int>(2)
-            val limit = arg<Int>(3)
+            val limit = arg<Int>(2)
+            val after = arg<BookmarkCursor?>(3)
             val listId = arg<String?>(5)
             queryCount++
-            val rows = allBookmarks
-                .sortedByDescending { it.createdAt }
+            val matching = allBookmarks
+                .sortedWith(compareByDescending<BookmarkEntity> { it.createdAt }.thenByDescending { it.localId })
                 .filter { bookmark ->
                     if (listId != null) {
                         listId in bookmark.listIds.split(",")
@@ -176,7 +177,11 @@ class RefreshAfterSyncTest {
                         status != FilterStatus.ALL || !bookmark.isArchived
                     }
                 }
-                .drop(offset)
+            // Resume strictly after the cursor row, by identity rather than by counting — the
+            // point of the cursor being that rows committed above it do not move it.
+            val rows = matching
+                .dropWhile { after != null && it.localId != after.localId }
+                .drop(if (after == null) 0 else 1)
                 .take(limit)
             afterQuery?.invoke()
             rows

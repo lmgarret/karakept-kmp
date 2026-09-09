@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens
 
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.Server
@@ -106,7 +107,7 @@ class MainScreenModelPaginationSortingTest {
         )
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = any(), limit = any(),
+                server = any(), status = any(), after = any(), limit = any(),
                 sort = any(), listId = any()
             )
         } returns emptyList()
@@ -151,7 +152,7 @@ class MainScreenModelPaginationSortingTest {
 
         coVerify(atLeast = 1) {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = any(), limit = any(),
+                server = any(), status = any(), after = any(), limit = any(),
                 sort = SortOption.NEWEST, listId = any()
             )
         }
@@ -167,7 +168,7 @@ class MainScreenModelPaginationSortingTest {
 
         coVerify(atLeast = 1) {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = any(), limit = any(),
+                server = any(), status = any(), after = any(), limit = any(),
                 sort = SortOption.OLDEST, listId = any()
             )
         }
@@ -183,7 +184,7 @@ class MainScreenModelPaginationSortingTest {
 
         coVerify(atLeast = 1) {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = any(), limit = any(),
+                server = any(), status = any(), after = any(), limit = any(),
                 sort = SortOption.TITLE_AZ, listId = any()
             )
         }
@@ -203,7 +204,7 @@ class MainScreenModelPaginationSortingTest {
 
             coVerify(atLeast = 1) {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = any(), limit = any(),
+                    server = any(), status = any(), after = any(), limit = any(),
                     sort = SortOption.READING_TIME_SHORT, listId = any()
                 )
             }
@@ -216,13 +217,14 @@ class MainScreenModelPaginationSortingTest {
             val page0 = (1..pageSize).map { makeBookmark(id = it.toLong(), title = "A-$it") }
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = 0, limit = any(),
+                    server = any(), status = any(), after = null, limit = any(),
                     sort = any(), listId = any()
                 )
             } returns page0
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = pageSize, limit = any(),
+                    server = any(), status = any(),
+                    after = BookmarkCursor.of(page0.last()), limit = any(),
                     sort = any(), listId = any()
                 )
             } returns listOf(makeBookmark(id = 99, title = "Z-1"))
@@ -238,7 +240,7 @@ class MainScreenModelPaginationSortingTest {
 
             coVerify(atLeast = 2) {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = any(), limit = any(),
+                    server = any(), status = any(), after = any(), limit = any(),
                     sort = SortOption.TITLE_AZ, listId = any()
                 )
             }
@@ -251,9 +253,14 @@ class MainScreenModelPaginationSortingTest {
             // A table of 50 rows, served the way the DAO serves it: sliced by offset/limit.
             val table = (1..50).map { makeBookmark(id = it.toLong(), title = "b$it") }
             coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = any(), limit = any(), sort = any(), listId = any())
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = any(), limit = any(), sort = any(), listId = any())
             } answers {
-                table.drop(arg<Int>(2)).take(arg<Int>(3))
+                val limit = arg<Int>(2)
+                val after = arg<BookmarkCursor?>(3)
+                table
+                    .dropWhile { after != null && it.localId != after.localId }
+                    .drop(if (after == null) 0 else 1)
+                    .take(limit)
             }
 
             val model = createMainScreenModel()
@@ -290,7 +297,7 @@ class MainScreenModelPaginationSortingTest {
                 makeBookmark(1, "b1"), makeBookmark(2, "b2")
             )
             coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
             } returns page0
 
             model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
@@ -404,7 +411,7 @@ class MainScreenModelPaginationSortingTest {
             // Two bookmarks arrive above the one the user saw; one of them is already read —
             // marked on another device, or carried in by the reading progress the sync pulls.
             coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
             } returns listOf(
                 makeBookmark(10, "new1"),
                 makeBookmark(11, "new2").copy(isRead = true),
@@ -431,7 +438,7 @@ class MainScreenModelPaginationSortingTest {
             model.clearNewBookmarksAbove()
 
             coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
             } returns listOf(
                 makeBookmark(10, "new1"),
                 makeBookmark(11, "new2").copy(isRead = true),
@@ -463,7 +470,7 @@ class MainScreenModelPaginationSortingTest {
             model.clearNewBookmarksAbove()
 
             coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
             } returns listOf(
                 makeBookmark(10, "new1"),
                 makeBookmark(11, "new2").copy(isRead = true),
@@ -490,7 +497,7 @@ class MainScreenModelPaginationSortingTest {
 
             // A sync prepends one row; the window is a fixed page range, so b3 falls off the end.
             coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
             } returns listOf(makeBookmark(10, "new1"), makeBookmark(1, "b1"), makeBookmark(2, "b2"))
             model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
             advanceUntilIdle()
@@ -499,7 +506,7 @@ class MainScreenModelPaginationSortingTest {
             // The prepended row then leaves, pulling b3 back into the window. b3 is not new —
             // the user saw it before — and only rows above the seen row may be counted.
             coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), offset = 0, limit = any(), sort = any(), listId = any())
+                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
             } returns listOf(makeBookmark(1, "b1"), makeBookmark(2, "b2"), makeBookmark(3, "b3"))
             model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
             advanceUntilIdle()

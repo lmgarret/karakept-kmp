@@ -4,33 +4,31 @@ package com.karakept.app.ui.screens
 import androidx.lifecycle.viewModelScope
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.Server
 import com.karakept.app.domain.BookmarkFilterUtils
 import kotlinx.coroutines.launch
 
 /**
- * Reads the rows in `[offset, offset + limit)` and applies client-side filters.
- *
- * @return Pair(filteredItems, rawDbRowCount). The raw count is used to detect true DB
- *   exhaustion: rawCount < limit means the query has no more rows to offer.
+ * Reads the [limit] rows following [after] and applies client-side filters.
  */
 private suspend fun MainScreenModel.loadBookmarkRows(
     server: Server,
     filter: FilterConfig,
-    offset: Int,
+    after: BookmarkCursor?,
     limit: Int
-): Pair<List<BookmarkEntity>, Int> {
+): PageRead<BookmarkEntity, BookmarkCursor> {
     // [filter] is the effective filter (see MainScreenModel.effectiveFilter), so a read's
-    // contents depend only on it and the row range — never on state that can change between
-    // the load of a window and its refresh.
+    // contents depend only on it and where it resumes from — never on state that can change
+    // between the load of a window and its refresh.
     val singleListId = filter.lists.singleOrNull()
 
     val rows = bookmarkRepository.getBookmarksPaged(
         server = server,
         status = filter.status,
-        offset = offset,
         limit = limit,
+        after = after,
         sort = filter.sort,
         listId = singleListId
     )
@@ -39,7 +37,9 @@ private suspend fun MainScreenModel.loadBookmarkRows(
         rows, filter, skipListFilter = singleListId != null
     )
 
-    return Pair(filtered, rows.size)
+    // The cursor tracks the *raw* last row, not the last visible one. A page whose rows the
+    // client-side filter all discarded still has to advance, or the walk asks for it again.
+    return PageRead(filtered, rows.size, rows.lastOrNull()?.let(BookmarkCursor::of))
 }
 
 /** Index of the page the last of [rowCount] rows falls on. */
@@ -59,7 +59,8 @@ private fun MainScreenModel.lastPageHolding(rowCount: Int): Int =
 private data class WindowRead(
     val rows: List<BookmarkEntity>,
     val rawCount: Int,
-    val windowSize: Int
+    val windowSize: Int,
+    val endCursor: BookmarkCursor?
 ) {
     /** The query could not fill the window, so the table ends inside it. */
     val reachedEnd: Boolean get() = rawCount < windowSize
@@ -72,8 +73,8 @@ private suspend fun MainScreenModel.readWholeWindow(
     lastLoadedPage: Int
 ): WindowRead {
     val windowSize = (lastLoadedPage + 1) * pageSize
-    val (rows, rawCount) = loadBookmarkRows(server, filter, offset = 0, limit = windowSize)
-    return WindowRead(rows, rawCount, windowSize)
+    val read = loadBookmarkRows(server, filter, after = null, limit = windowSize)
+    return WindowRead(read.items, read.rawCount, windowSize, read.nextCursor)
 }
 
 /**
@@ -98,22 +99,25 @@ private suspend fun MainScreenModel.publishWindow(
     updateAccumulatedBookmarks { read.rows }
     _currentPage.value =
         if (read.reachedEnd) lastPageHolding(read.rawCount) else lastLoadedPage
+    // The window was just re-read whole, so the next page resumes after its own last row —
+    // keeping the cursor from before would re-read rows the window already holds.
+    paginationCursor = read.endCursor
     _hasMoreItems.value = hasMoreBeyondWindow
 }
 
 /**
- * Advances through consecutive DB pages starting at [startPage] until
- * at least one item survives the client-side filter, or the DB is truly
- * exhausted. Delegates to [advancePagesUntilItemsFound] so the algorithm
- * is unit-testable independently.
+ * Advances through consecutive DB pages starting after [startCursor] until at least one item
+ * survives the client-side filter, or the DB is truly exhausted. Delegates to
+ * [advancePagesUntilItemsFound] so the algorithm is unit-testable independently.
  */
 internal suspend fun MainScreenModel.findPageWithItems(
     server: Server,
     filter: FilterConfig,
-    startPage: Int
-): Triple<List<BookmarkEntity>, Int, Boolean> =
-    advancePagesUntilItemsFound(startPage, pageSize) { page ->
-        loadBookmarkRows(server, filter, offset = page * pageSize, limit = pageSize)
+    startPage: Int,
+    startCursor: BookmarkCursor?
+): PageWalk<BookmarkEntity, BookmarkCursor> =
+    advancePagesUntilItemsFound(startPage, startCursor, pageSize) { after ->
+        loadBookmarkRows(server, filter, after, pageSize)
     }
 
 /**
@@ -137,7 +141,10 @@ fun MainScreenModel.loadNextPage() {
             val server = _selectedServer.value ?: return@launch
             val nextPage = _currentPage.value + 1
 
-            val (newItems, lastPage, dbExhausted) = findPageWithItems(server, view.filter, nextPage)
+            val walk = findPageWithItems(server, view.filter, nextPage, paginationCursor)
+            val newItems = walk.items
+            val lastPage = walk.lastPage
+            val dbExhausted = walk.dbExhausted
 
             // Discard results if a reset started, or the user switched view, while we fetched.
             if (paginationGeneration != generation ||
@@ -155,6 +162,9 @@ fun MainScreenModel.loadNextPage() {
                 }
                 _currentPage.value = lastPage
             }
+            // Advance even when the page yielded nothing visible: the rows were read, and the
+            // next walk must not start over on them.
+            paginationCursor = walk.nextCursor
             if (dbExhausted) {
                 _hasMoreItems.value = false
             }
@@ -216,6 +226,8 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
     val view = LoadedView(server.id, filter)
 
     _currentPage.value = 0
+    // A fresh view resumes from the top of the table, not from wherever the previous one ended.
+    paginationCursor = null
     _hasMoreItems.value = true
     _actedOnBookmarkIds.value = emptySet()
     // Fresh view — nothing in it has been seen yet, so the "N new" indicator starts empty and
@@ -227,7 +239,10 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
 
     try {
         // Load items first, then swap atomically to avoid a blank flash.
-        val (newItems, lastPage, dbExhausted) = findPageWithItems(server, filter, 0)
+        val walk = findPageWithItems(server, filter, startPage = 0, startCursor = null)
+        val newItems = walk.items
+        val lastPage = walk.lastPage
+        val dbExhausted = walk.dbExhausted
 
         // Another reset started, or the user switched away, while we were fetching.
         if (paginationGeneration != myGeneration || currentView() != view) return
@@ -252,6 +267,7 @@ internal suspend fun MainScreenModel.resetPaginationAndLoad(server: Server, filt
         // walked the table without loading a window — recording the page it gave up on would
         // make every later refresh ask for the whole table too.
         _currentPage.value = if (newItems.isEmpty()) 0 else lastPage
+        paginationCursor = walk.nextCursor
         if (dbExhausted) {
             _hasMoreItems.value = false
         }

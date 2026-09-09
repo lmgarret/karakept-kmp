@@ -7,6 +7,7 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.BookmarkLayout
+import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
@@ -191,6 +192,11 @@ class MainScreenModel(
     // otherwise the refresh discards the reset's page and the list the user just left stays
     // on screen under the new list's title.
     internal var refreshGeneration = 0
+
+    // Where the next page resumes: the last row the walk actually read, not a count of rows
+    // before it. A row committed above the window shifts every OFFSET below it, which is how
+    // the window ended up short of the table with nothing left to scroll for (#333).
+    internal var paginationCursor: BookmarkCursor? = null
 
     // The view the accumulated window was loaded for. Every write into the window is rejected
     // unless this still matches the view on screen: the requested view flips synchronously when

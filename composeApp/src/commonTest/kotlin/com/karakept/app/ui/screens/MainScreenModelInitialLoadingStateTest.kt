@@ -103,7 +103,7 @@ class MainScreenModelInitialLoadingStateTest {
         coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = any(), limit = any(),
+                server = any(), status = any(), after = any(), limit = any(),
                 sort = any(), listId = any()
             )
         } returns emptyList()
@@ -164,7 +164,7 @@ class MainScreenModelInitialLoadingStateTest {
     fun `stops loading once bookmarks are available`() = runTest(testDispatcher) {
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = any(), limit = any(),
+                server = any(), status = any(), after = any(), limit = any(),
                 sort = any(), listId = any()
             )
         } returns listOf(makeBookmark(1), makeBookmark(2))

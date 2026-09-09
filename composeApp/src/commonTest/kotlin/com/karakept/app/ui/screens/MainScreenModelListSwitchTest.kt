@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens
 
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.ListSettings
@@ -114,7 +115,7 @@ class MainScreenModelListSwitchTest {
         )
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = any(), limit = any(),
+                server = any(), status = any(), after = any(), limit = any(),
                 sort = any(), listId = any()
             )
         } returns emptyList()
@@ -157,7 +158,7 @@ class MainScreenModelListSwitchTest {
         val page0 = (1L..PAGE_SIZE.toLong()).map { makeBookmark(it) }
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = 0, limit = any(),
+                server = any(), status = any(), after = null, limit = any(),
                 sort = any(), listId = any()
             )
         } returns page0
@@ -170,7 +171,8 @@ class MainScreenModelListSwitchTest {
             val page0 = stubFullFirstPage()
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = PAGE_SIZE, limit = any(),
+                    server = any(), status = any(),
+                    after = BookmarkCursor.of(page0.last()), limit = any(),
                     sort = any(), listId = any()
                 )
             } returns listOf(makeBookmark(99))
@@ -190,7 +192,8 @@ class MainScreenModelListSwitchTest {
             assertEquals(false, model.isLoadingMore.value)
             coVerify(exactly = 0) {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = PAGE_SIZE, limit = any(),
+                    server = any(), status = any(),
+                    after = BookmarkCursor.of(page0.last()), limit = any(),
                     sort = any(), listId = any()
                 )
             }
@@ -201,7 +204,8 @@ class MainScreenModelListSwitchTest {
         val page0 = stubFullFirstPage()
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = PAGE_SIZE, limit = any(),
+                server = any(), status = any(),
+                after = BookmarkCursor.of(page0.last()), limit = any(),
                 sort = any(), listId = any()
             )
         } returns listOf(makeBookmark(99))
@@ -222,7 +226,7 @@ class MainScreenModelListSwitchTest {
             val page0 = (1L..PAGE_SIZE.toLong()).map { makeBookmark(it) }
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = 0, limit = any(),
+                    server = any(), status = any(), after = null, limit = any(),
                     sort = any(), listId = any()
                 )
             } coAnswers {
@@ -253,7 +257,7 @@ class MainScreenModelListSwitchTest {
             val listBPage = listOf(makeBookmark(50))
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = 0, limit = any(),
+                    server = any(), status = any(), after = null, limit = any(),
                     sort = any(), listId = "list-a"
                 )
             } coAnswers {
@@ -262,7 +266,7 @@ class MainScreenModelListSwitchTest {
             }
             coEvery {
                 bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), offset = 0, limit = any(),
+                    server = any(), status = any(), after = null, limit = any(),
                     sort = any(), listId = "list-b"
                 )
             } returns listBPage
