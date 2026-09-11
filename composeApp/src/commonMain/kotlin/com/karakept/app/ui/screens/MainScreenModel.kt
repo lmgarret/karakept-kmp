@@ -499,6 +499,23 @@ class MainScreenModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
 
+    /**
+     * Number of bookmarks the current view holds in total, loaded or not.
+     *
+     * The fast-scroll cursor maps its thumb over this rather than over the loaded window, which
+     * grows a page at a time and drags the thumb back up the track on every load (#273).
+     * [allBookmarks] is the whole cache for the server and is already collected here for tags and
+     * list counts, so the exact total for the active filter is one pass over it.
+     *
+     * Search is not covered: that pipeline holds its whole result set already (see [bookmarks]),
+     * so its total is the list itself.
+     */
+    val filteredBookmarkCount: StateFlow<Int> = combine(
+        allBookmarks, effectiveFilter, offlineBookmarkCount
+    ) { all, filter, offline ->
+        BookmarkFilterUtils.countForFilter(all, filter, offline)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     val highlightsCount: StateFlow<Int> = selectedServer
         .flatMapLatest { server ->
             if (server != null) highlightRepository.getHighlightsCount(server.id)

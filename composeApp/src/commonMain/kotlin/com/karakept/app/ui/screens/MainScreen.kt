@@ -159,6 +159,8 @@ object MainScreen : NavKey {
         val listCounts by screenModel.listCounts.collectAsState()
         val listSyncStatuses by screenModel.listSyncStatuses.collectAsState()
         val quickFilterCounts by screenModel.quickFilterCounts.collectAsState()
+        // Denominator for the scroll cursor: the whole filtered view, not the loaded window.
+        val totalBookmarkCount by screenModel.filteredBookmarkCount.collectAsState()
         val highlightsCount by screenModel.highlightsCount.collectAsState()
         val currentListId by screenModel.currentListContext.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
@@ -336,23 +338,6 @@ object MainScreen : NavKey {
         }
 
         // Common scaffold content builder used by both layout modes
-        // Derive the best total count for the scroll cursor denominator.
-        // quickFilterCounts / listCounts are computed from the full (unfiltered) DB so they
-        // represent the true total, not just the currently loaded page.
-        val totalBookmarkCount = when {
-            currentFilter.lists.size == 1 ->
-                listCounts[currentFilter.lists.first()] ?: quickFilterCounts.all
-            currentFilter.lists.size > 1 ->
-                currentFilter.lists.sumOf { listCounts[it] ?: 0 }
-            currentFilter.status == com.karakept.app.data.model.FilterStatus.FAVORITES ->
-                quickFilterCounts.favorites
-            currentFilter.status == com.karakept.app.data.model.FilterStatus.ARCHIVED ->
-                quickFilterCounts.archived
-            currentFilter.status == com.karakept.app.data.model.FilterStatus.ALL_INCLUDING_ARCHIVED ->
-                quickFilterCounts.all + quickFilterCounts.archived
-            else -> quickFilterCounts.all
-        }
-
         val scaffoldContent: @Composable (isExpanded: Boolean, activeBookmarkId: Long?, onBookmarkClick: (com.karakept.app.data.local.entity.BookmarkEntity) -> Unit, onMenuClick: () -> Unit) -> Unit =
             { isExpanded, activeBmId, onBookmarkClick, onMenuClick ->
                 MainScreenScaffoldContent(

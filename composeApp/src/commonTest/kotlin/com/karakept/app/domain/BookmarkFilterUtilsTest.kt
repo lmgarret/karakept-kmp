@@ -1,8 +1,10 @@
 package com.karakept.app.domain
 
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.ContentFilter
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.SortOption
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -436,5 +438,172 @@ class BookmarkFilterUtilsTest {
         val bookmarks = listOf(makeBookmark(title = "Kotlin"), makeBookmark(title = "Swift"))
         val result = BookmarkFilterUtils.applySearchFilter(bookmarks, FilterConfig(), "python")
         assertTrue(result.isEmpty())
+    }
+
+    // -------------------------------------------------------------------------
+    // countForFilter — the scroll cursor's denominator (#273)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun countForFilter_defaultStatus_excludesArchived() {
+        val all = listOf(
+            makeBookmark(),
+            makeBookmark(),
+            makeBookmark(isArchived = true)
+        )
+        assertEquals(2, BookmarkFilterUtils.countForFilter(all, FilterConfig()))
+    }
+
+    @Test
+    fun countForFilter_countsTheWholeTable_notALoadedPage() {
+        val all = (1..250).map { makeBookmark() }
+        assertEquals(250, BookmarkFilterUtils.countForFilter(all, FilterConfig()))
+    }
+
+    @Test
+    fun countForFilter_favorites_includesArchived() {
+        val all = listOf(
+            makeBookmark(isStarred = true),
+            makeBookmark(isStarred = true, isArchived = true),
+            makeBookmark()
+        )
+        assertEquals(
+            2,
+            BookmarkFilterUtils.countForFilter(all, FilterConfig(status = FilterStatus.FAVORITES))
+        )
+    }
+
+    @Test
+    fun countForFilter_archived() {
+        val all = listOf(
+            makeBookmark(isArchived = true),
+            makeBookmark(isArchived = true),
+            makeBookmark()
+        )
+        assertEquals(
+            2,
+            BookmarkFilterUtils.countForFilter(all, FilterConfig(status = FilterStatus.ARCHIVED))
+        )
+    }
+
+    @Test
+    fun countForFilter_allIncludingArchived() {
+        val all = listOf(makeBookmark(), makeBookmark(isArchived = true))
+        assertEquals(
+            2,
+            BookmarkFilterUtils.countForFilter(
+                all,
+                FilterConfig(status = FilterStatus.ALL_INCLUDING_ARCHIVED)
+            )
+        )
+    }
+
+    @Test
+    fun countForFilter_narrowsOnTags() {
+        val all = listOf(
+            makeBookmark(tags = "kotlin"),
+            makeBookmark(tags = "kotlin,android"),
+            makeBookmark(tags = "swift")
+        )
+        assertEquals(
+            2,
+            BookmarkFilterUtils.countForFilter(all, FilterConfig(tags = listOf("kotlin")))
+        )
+    }
+
+    @Test
+    fun countForFilter_narrowsOnReadState() {
+        val all = listOf(
+            makeBookmark(isRead = true),
+            makeBookmark(),
+            makeBookmark()
+        )
+        assertEquals(
+            2,
+            BookmarkFilterUtils.countForFilter(all, FilterConfig(readFilter = ReadFilter.UNREAD))
+        )
+    }
+
+    @Test
+    fun countForFilter_narrowsOnContent() {
+        val all = listOf(
+            makeBookmark(readingTimeMinutes = 5),
+            makeBookmark(readingTimeMinutes = 0)
+        )
+        assertEquals(
+            1,
+            BookmarkFilterUtils.countForFilter(
+                all,
+                FilterConfig(contentFilter = ContentFilter.DOWNLOADED)
+            )
+        )
+    }
+
+    @Test
+    fun countForFilter_singleList_countsArchivedMembersToo() {
+        // A single-list view is queried by membership and applies no status clause, so its
+        // total has to admit archived rows the same way.
+        val all = listOf(
+            makeBookmark(listIds = "list-1"),
+            makeBookmark(listIds = "list-1", isArchived = true),
+            makeBookmark(listIds = "list-2")
+        )
+        assertEquals(
+            2,
+            BookmarkFilterUtils.countForFilter(all, FilterConfig(lists = listOf("list-1")))
+        )
+    }
+
+    @Test
+    fun countForFilter_multipleLists_applyStatusAndUnionMembers() {
+        val all = listOf(
+            makeBookmark(listIds = "list-1"),
+            makeBookmark(listIds = "list-2"),
+            makeBookmark(listIds = "list-2", isArchived = true),
+            makeBookmark(listIds = "list-3")
+        )
+        assertEquals(
+            2,
+            BookmarkFilterUtils.countForFilter(
+                all,
+                FilterConfig(lists = listOf("list-1", "list-2"))
+            )
+        )
+    }
+
+    @Test
+    fun countForFilter_offline_takesTheRepositoryCount() {
+        // `content` is stripped from these rows, so the offline view's own count is the answer.
+        val all = listOf(makeBookmark(), makeBookmark(), makeBookmark())
+        assertEquals(
+            7,
+            BookmarkFilterUtils.countForFilter(
+                all,
+                FilterConfig(status = FilterStatus.OFFLINE),
+                offlineCount = 7
+            )
+        )
+    }
+
+    @Test
+    fun countForFilter_narrowedOffline_fallsBackToTheReadingTimeProxy() {
+        val all = listOf(
+            makeBookmark(tags = "kotlin", readingTimeMinutes = 5),
+            makeBookmark(tags = "kotlin", readingTimeMinutes = 0),
+            makeBookmark(tags = "swift", readingTimeMinutes = 5)
+        )
+        assertEquals(
+            1,
+            BookmarkFilterUtils.countForFilter(
+                all,
+                FilterConfig(status = FilterStatus.OFFLINE, tags = listOf("kotlin")),
+                offlineCount = 7
+            )
+        )
+    }
+
+    @Test
+    fun countForFilter_emptyTable_isZero() {
+        assertEquals(0, BookmarkFilterUtils.countForFilter(emptyList(), FilterConfig()))
     }
 }

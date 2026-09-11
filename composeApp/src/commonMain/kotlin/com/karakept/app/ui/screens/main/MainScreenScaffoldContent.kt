@@ -277,7 +277,10 @@ fun MainScreenScaffoldContent(
                 hasMoreItems = if (isSearchActive) true else hasMoreItems,
                 showScrollCursor = showScrollCursor,
                 sortOption = sortOption,
-                totalBookmarkCount = totalBookmarkCount,
+                // The search pipeline holds its whole result set, so the list is its own total;
+                // the paginated one holds a window and takes the count of the filtered view.
+                totalBookmarkCount =
+                    if (searchQuery.isNotBlank()) bookmarks.size else totalBookmarkCount,
                 layoutType = displayConfig.layoutType,
                 swipeLeftAction = swipeLeftAction,
                 swipeRightAction = swipeRightAction,

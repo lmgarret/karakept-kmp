@@ -893,6 +893,10 @@ internal fun BookmarkListContent(
                 bookmarks = bookmarks,
                 sortOption = sortOption,
                 totalBookmarkCount = totalBookmarkCount,
+                // A drag can aim past the loaded window, and these are how it gets there.
+                hasMoreItems = hasMoreItems,
+                isLoadingMore = isLoadingMore,
+                onLoadMore = onLoadMore,
                 // padding(top) keeps the scrollbar clear of the sync progress bar
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
             )

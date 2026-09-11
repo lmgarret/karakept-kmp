@@ -24,11 +24,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,11 +43,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.SortOption
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
+import com.karakept.app.ui.utils.ScrollCursorStep
+import com.karakept.app.ui.utils.scrollCursorFraction
+import com.karakept.app.ui.utils.scrollCursorIndex
+import com.karakept.app.ui.utils.scrollCursorStep
 import kotlin.time.Clock
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 /**
  * Fast-scroll thumb on the right edge of the bookmark list.
@@ -56,8 +57,14 @@ import kotlin.math.roundToInt
  * tooltip grows from the thumb showing the current position label (date, letter, or
  * reading time) depending on the active sort option.
  *
- * [totalBookmarkCount] should be the full DB count for the current filter so that
- * the thumb position is accurate even when only a partial page has been loaded.
+ * [totalBookmarkCount] is the count of rows the active filter matches in the database, and the
+ * thumb maps linearly over it — over the whole list, not over the pages loaded so far, which
+ * grow as the list is scrolled and would walk the thumb back up the track on every load (#273).
+ *
+ * A drag therefore aims at a row the window may not hold yet. [onLoadMore] is what gets it
+ * there: the jump lands as far as the window reaches, pulls the next page in, and resumes from
+ * the larger window — one page per step until the target is loaded, [hasMoreItems] says the
+ * table ends first, or a request comes back having added nothing (see [scrollCursorStep]).
  */
 @Composable
 fun ScrollCursorIndicator(
@@ -65,32 +72,63 @@ fun ScrollCursorIndicator(
     bookmarks: List<BookmarkEntity>,
     sortOption: SortOption,
     totalBookmarkCount: Int = 0,
+    hasMoreItems: Boolean = false,
+    isLoadingMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (bookmarks.size < 2) return
 
-    val coroutineScope = rememberCoroutineScope()
-    var scrollJob by remember { mutableStateOf<Job?>(null) }
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableStateOf(0f) }
+    // The row the last drag asked for, over the whole list. Outlives the drag: a target past the
+    // loaded window is reached one page at a time, and the finger is long gone by then.
+    var targetIndex by remember { mutableStateOf<Int?>(null) }
+    var pulledAtCount by remember { mutableStateOf<Int?>(null) }
     var trackHeightPx by remember { mutableStateOf(0f) }
     var tooltipHeightPx by remember { mutableStateOf(0f) }
 
     val effectiveTotal = if (totalBookmarkCount > bookmarks.size) totalBookmarkCount else bookmarks.size
     val effectiveTotalState = rememberUpdatedState(effectiveTotal)
-    val bookmarksState = rememberUpdatedState(bookmarks)
+    val currentOnLoadMore by rememberUpdatedState(onLoadMore)
 
     val listScrollFraction by remember {
         derivedStateOf {
-            val total = effectiveTotalState.value
-            if (total <= 1) 0f
-            else listState.firstVisibleItemIndex.toFloat() / (total - 1).toFloat()
+            scrollCursorFraction(listState.firstVisibleItemIndex, effectiveTotalState.value)
         }
     }
 
-    val displayFraction = if (isDragging) dragFraction else listScrollFraction
-    val pointedIndex = (displayFraction * (effectiveTotal - 1))
-        .roundToInt().coerceIn(0, bookmarks.size - 1)
+    // Walking to the target is a loop over page loads, so it lives here rather than in the
+    // gesture, which ends long before the pages it asked for have arrived.
+    LaunchedEffect(targetIndex, bookmarks.size, hasMoreItems, isLoadingMore) {
+        val target = targetIndex ?: return@LaunchedEffect
+        val step = scrollCursorStep(
+            targetIndex = target,
+            loadedCount = bookmarks.size,
+            canLoadMore = hasMoreItems,
+            isLoadingMore = isLoadingMore,
+            pulledAtCount = pulledAtCount
+        )
+        when (step) {
+            is ScrollCursorStep.Land -> {
+                listState.scrollToItem(step.index)
+                targetIndex = null
+                pulledAtCount = null
+            }
+            is ScrollCursorStep.Pull -> {
+                listState.scrollToItem(step.index)
+                pulledAtCount = bookmarks.size
+                currentOnLoadMore()
+            }
+            ScrollCursorStep.Wait -> Unit
+        }
+    }
+
+    // The thumb holds where it was dropped until the walk resolves — following the list instead
+    // would snap it back to the end of the window while the pages it is waiting on load.
+    val displayFraction = if (isDragging || targetIndex != null) dragFraction else listScrollFraction
+    val pointedIndex = scrollCursorIndex(displayFraction, effectiveTotal)
+        .coerceAtMost(bookmarks.size - 1)
     val label = scrollCursorLabel(bookmarks.getOrNull(pointedIndex), sortOption)
 
     val density = LocalDensity.current
@@ -175,31 +213,19 @@ fun ScrollCursorIndicator(
                     down.consume()
                     isDragging = true
                     dragFraction = (down.position.y / size.height).coerceIn(0f, 1f)
-                    scrollJob?.cancel()
-                    scrollJob = coroutineScope.launch {
-                        val t = effectiveTotalState.value
-                        val bs = bookmarksState.value.size
-                        listState.scrollToItem(
-                            (dragFraction * (t - 1)).roundToInt().coerceIn(0, bs - 1)
-                        )
-                    }
+                    targetIndex = scrollCursorIndex(dragFraction, effectiveTotalState.value)
+                    pulledAtCount = null
 
                     // drag() tracks the pointer globally until lifted, regardless of whether
                     // it moves outside this composable's bounds.
                     drag(down.id) { change ->
                         change.consume()
                         dragFraction = (change.position.y / size.height).coerceIn(0f, 1f)
-                        scrollJob?.cancel()
-                        scrollJob = coroutineScope.launch {
-                            val t = effectiveTotalState.value
-                            val bs = bookmarksState.value.size
-                            listState.scrollToItem(
-                                (dragFraction * (t - 1)).roundToInt().coerceIn(0, bs - 1)
-                            )
-                        }
+                        targetIndex = scrollCursorIndex(dragFraction, effectiveTotalState.value)
+                        // A fresh target deserves a fresh attempt at the pages behind it.
+                        pulledAtCount = null
                     }
 
-                    scrollJob?.cancel()
                     isDragging = false
                 }
             }

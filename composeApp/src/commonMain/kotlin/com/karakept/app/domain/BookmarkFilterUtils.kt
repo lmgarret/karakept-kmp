@@ -79,6 +79,51 @@ object BookmarkFilterUtils {
     }
 
     /**
+     * How many of [all] the view for [filter] holds in total, loaded or not.
+     *
+     * This is the denominator the fast-scroll cursor maps its thumb over, and the loaded window
+     * cannot supply it: the window grows a page at a time, so a thumb divided by it walks back up
+     * the track every time a page lands (#273).
+     *
+     * Mirrors what a page goes through on its way to the screen — the status clause
+     * `BookmarkRepository.buildPagedQuery` applies, then [applyClientSideFilters]. A view holding
+     * exactly one list is the one that applies no status clause: it is queried by membership
+     * instead, and admits archived rows like the query does.
+     *
+     * [offlineCount] answers `FilterStatus.OFFLINE`, whose condition — a non-empty `content`
+     * column — cannot be asked of these rows, since the queries behind them strip that column. It
+     * is the count of the unnarrowed offline view, so an offline view narrowed by anything else
+     * falls back to the reading-time proxy [ContentFilter.DOWNLOADED] already stands on.
+     */
+    fun countForFilter(
+        all: List<BookmarkEntity>,
+        filter: FilterConfig,
+        offlineCount: Int = 0
+    ): Int {
+        val singleList = filter.lists.singleOrNull()
+        val narrowed = filter.tags.isNotEmpty() ||
+            filter.lists.isNotEmpty() ||
+            filter.readFilter != ReadFilter.ALL ||
+            filter.contentFilter != ContentFilter.ALL
+        if (filter.status == FilterStatus.OFFLINE && !narrowed) return offlineCount
+
+        val base = if (singleList != null) all else applyStatusFilter(all, filter.status)
+        return applyClientSideFilters(base, filter).size
+    }
+
+    /** The rows [status] admits, matching the clause the paged query applies for it. */
+    private fun applyStatusFilter(
+        bookmarks: List<BookmarkEntity>,
+        status: FilterStatus
+    ): List<BookmarkEntity> = when (status) {
+        FilterStatus.ALL -> bookmarks.filter { !it.isArchived }
+        FilterStatus.ALL_INCLUDING_ARCHIVED -> bookmarks
+        FilterStatus.FAVORITES -> bookmarks.filter { it.isStarred }
+        FilterStatus.ARCHIVED -> bookmarks.filter { it.isArchived }
+        FilterStatus.OFFLINE -> bookmarks.filter { it.readingTimeMinutes > 0 }
+    }
+
+    /**
      * Sorts [bookmarks] according to [sort].
      *
      * Ties break on `localId`, matching the ORDER BY the paged query uses (see
