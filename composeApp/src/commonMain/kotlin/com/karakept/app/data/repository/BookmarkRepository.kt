@@ -6,6 +6,7 @@ import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.ListEntity
+import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncStatus
@@ -490,17 +491,24 @@ class BookmarkRepository(
     }
 
     // Pagination support
+    /**
+     * Reads the [limit] rows that follow [after] in the sort order, or the first [limit] rows
+     * when it is null.
+     *
+     * Paging by cursor rather than by OFFSET is what keeps a walk whole while a sync commits
+     * underneath it — see [BookmarkCursor].
+     */
     suspend fun getBookmarksPaged(
         server: Server,
         status: FilterStatus,
-        offset: Int,
         limit: Int,
+        after: BookmarkCursor? = null,
         sort: SortOption = SortOption.NEWEST,
         listId: String? = null
     ): List<BookmarkEntity> {
-        val query = buildPagedQuery(server.id, status, sort, listId, limit, offset)
+        val query = buildPagedQuery(server.id, status, sort, listId, limit, after)
         val result = bookmarkDao.getBookmarksPaged(query)
-        AppLogger.d("BookmarkRepository", "getBookmarksPaged: status=$status, sort=$sort, listId=$listId, limit=$limit, offset=$offset -> returned ${result.size} bookmarks")
+        AppLogger.d("BookmarkRepository", "getBookmarksPaged: status=$status, sort=$sort, listId=$listId, limit=$limit, after=${after?.localId} -> returned ${result.size} bookmarks")
         return result
     }
 
@@ -542,44 +550,83 @@ class BookmarkRepository(
             sort: SortOption,
             listId: String?,
             limit: Int,
-            offset: Int
+            after: BookmarkCursor? = null
         ): RoomRawQuery {
-            val orderBy = sort.toOrderBySql()
-            return if (listId != null) {
-                RoomRawQuery(
-                    """SELECT $BOOKMARK_SELECT FROM bookmarks
-                       WHERE serverId = ?
-                       AND (listIds = ?
-                            OR listIds LIKE ? || ',%'
-                            OR listIds LIKE '%,' || ?
-                            OR listIds LIKE '%,' || ? || ',%')
-                       ORDER BY $orderBy
-                       LIMIT ? OFFSET ?"""
-                ) { stmt ->
-                    stmt.bindText(1, serverId)
-                    stmt.bindText(2, listId)
-                    stmt.bindText(3, listId)
-                    stmt.bindText(4, listId)
-                    stmt.bindText(5, listId)
-                    stmt.bindLong(6, limit.toLong())
-                    stmt.bindLong(7, offset.toLong())
-                }
-            } else {
-                val whereClause = when (status) {
-                    FilterStatus.ALL -> "serverId = ? AND isArchived = 0"
-                    FilterStatus.ALL_INCLUDING_ARCHIVED -> "serverId = ?"
-                    FilterStatus.FAVORITES -> "serverId = ? AND isStarred = 1"
-                    FilterStatus.ARCHIVED -> "serverId = ? AND isArchived = 1"
-                    FilterStatus.OFFLINE -> "serverId = ? AND content IS NOT NULL AND length(content) > 0"
-                }
-                RoomRawQuery(
-                    "SELECT $BOOKMARK_SELECT FROM bookmarks WHERE $whereClause ORDER BY $orderBy LIMIT ? OFFSET ?"
-                ) { stmt ->
-                    stmt.bindText(1, serverId)
-                    stmt.bindLong(2, limit.toLong())
-                    stmt.bindLong(3, offset.toLong())
+            val binds = mutableListOf<Any>()
+            val conditions = mutableListOf<String>()
+
+            conditions += "serverId = ?"
+            binds += serverId
+
+            if (listId != null) {
+                // Membership in the comma-separated listIds column. A single-list view applies
+                // no status clause, which is what it has always done.
+                conditions += "(listIds = ? OR listIds LIKE ? || ',%' " +
+                    "OR listIds LIKE '%,' || ? OR listIds LIKE '%,' || ? || ',%')"
+                repeat(4) { binds += listId }
+            } else when (status) {
+                FilterStatus.ALL -> conditions += "isArchived = 0"
+                FilterStatus.ALL_INCLUDING_ARCHIVED -> Unit
+                FilterStatus.FAVORITES -> conditions += "isStarred = 1"
+                FilterStatus.ARCHIVED -> conditions += "isArchived = 1"
+                FilterStatus.OFFLINE -> conditions += "content IS NOT NULL AND length(content) > 0"
+            }
+
+            if (after != null) {
+                conditions += sort.keysetPredicateSql()
+                binds.addAll(sort.keysetBinds(after))
+            }
+
+            binds += limit.toLong()
+
+            val sql = "SELECT $BOOKMARK_SELECT FROM bookmarks " +
+                "WHERE ${conditions.joinToString(" AND ")} " +
+                "ORDER BY ${sort.toOrderBySql()} LIMIT ?"
+
+            return RoomRawQuery(sql) { stmt ->
+                binds.forEachIndexed { index, value ->
+                    when (value) {
+                        is Long -> stmt.bindLong(index + 1, value)
+                        is String -> stmt.bindText(index + 1, value)
+                        else -> error("unbindable value $value")
+                    }
                 }
             }
+        }
+
+        /**
+         * "Strictly after the cursor" in this sort's own order — the same comparison
+         * [toOrderBySql] sorts by, so the two cannot disagree about which rows are still to
+         * come. The tie-break on `localId` is what makes it strict: without it a page boundary
+         * falling inside a run of equal keys either repeats that run or skips it.
+         *
+         * The title comparison carries `COLLATE NOCASE` for the same reason — a predicate
+         * comparing case-sensitively against a case-insensitive ORDER BY drops rows.
+         */
+        private fun SortOption.keysetPredicateSql(): String = when (this) {
+            SortOption.NEWEST ->
+                "(createdAt < ? OR (createdAt = ? AND localId < ?))"
+            SortOption.OLDEST ->
+                "(createdAt > ? OR (createdAt = ? AND localId > ?))"
+            SortOption.TITLE_AZ ->
+                "(title COLLATE NOCASE > ? OR (title COLLATE NOCASE = ? AND localId > ?))"
+            SortOption.TITLE_ZA ->
+                "(title COLLATE NOCASE < ? OR (title COLLATE NOCASE = ? AND localId < ?))"
+            SortOption.READING_TIME_SHORT ->
+                "(readingTimeMinutes > ? OR (readingTimeMinutes = ? AND localId > ?))"
+            SortOption.READING_TIME_LONG ->
+                "(readingTimeMinutes < ? OR (readingTimeMinutes = ? AND localId < ?))"
+        }
+
+        /** The three values [keysetPredicateSql] binds, in order. */
+        private fun SortOption.keysetBinds(after: BookmarkCursor): List<Any> {
+            val key: Any = when (this) {
+                SortOption.NEWEST, SortOption.OLDEST -> after.createdAt
+                SortOption.TITLE_AZ, SortOption.TITLE_ZA -> after.title
+                SortOption.READING_TIME_SHORT, SortOption.READING_TIME_LONG ->
+                    after.readingTimeMinutes.toLong()
+            }
+            return listOf(key, key, after.localId)
         }
 
         /**

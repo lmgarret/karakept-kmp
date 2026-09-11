@@ -110,7 +110,7 @@ class MainScreenModelListCountsTest {
         )
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = any(), limit = any(),
+                server = any(), status = any(), after = any(), limit = any(),
                 sort = any(), listId = any()
             )
         } returns emptyList()

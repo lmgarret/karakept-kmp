@@ -374,7 +374,6 @@ fun main(args: Array<String> = emptyArray()) {
                 bookmarkRepo.getBookmarksPaged(
                     server = server,
                     status = FilterStatus.ALL,
-                    offset = 0,
                     limit = TRAY_RECENT_BOOKMARK_COUNT,
                     sort = SortOption.NEWEST
                 )

@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens
 
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.Server
@@ -149,10 +150,13 @@ class MainScreenModelOffsetDriftTest {
     /** Pages 0..1, the window the walk leaves behind after one loadNextPage. */
     private val window = PAGE_SIZE * 2
 
-    private fun stubPage(offset: Int, limit: Int, returns: List<BookmarkEntity>) {
+    /** The cursor a walk holds once it has read up to and including bookmark [id]. */
+    private fun after(id: Long) = BookmarkCursor.of(bookmark(id))
+
+    private fun stubPage(after: BookmarkCursor?, limit: Int, returns: List<BookmarkEntity>) {
         coEvery {
             bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), offset = offset, limit = limit,
+                server = any(), status = any(), limit = limit, after = after,
                 sort = any(), listId = any()
             )
         } returns returns
@@ -162,8 +166,8 @@ class MainScreenModelOffsetDriftTest {
     fun aPageOfEntirelyNewRowsIsAppendedWithoutRereadingTheWindow() = runTest(testDispatcher) {
         // The undisturbed case: the second read comes back full, so the table has not ended and
         // there is nothing to re-read — the walk simply appends.
-        stubPage(offset = 0, limit = page, returns = rows(1L..page.toLong()))
-        stubPage(offset = page, limit = page, returns = rows((page + 1L)..window.toLong()))
+        stubPage(after = null, limit = page, returns = rows(1L..page.toLong()))
+        stubPage(after = after(page.toLong()), limit = page, returns = rows((page + 1L)..window.toLong()))
 
         val model = createMainScreenModel()
         advanceUntilIdle()
@@ -185,9 +189,9 @@ class MainScreenModelOffsetDriftTest {
         // shape a delete lands in mid-walk: the re-read sees the table after it, the window
         // still holds what the walk read before it.
         val heldByWalk = page + 10L
-        stubPage(offset = 0, limit = page, returns = rows(1L..page.toLong()))
-        stubPage(offset = page, limit = page, returns = rows((page + 1L)..heldByWalk))
-        stubPage(offset = 0, limit = window, returns = rows(1L..(page + 5L)))
+        stubPage(after = null, limit = page, returns = rows(1L..page.toLong()))
+        stubPage(after = after(page.toLong()), limit = page, returns = rows((page + 1L)..heldByWalk))
+        stubPage(after = null, limit = window, returns = rows(1L..(page + 5L)))
 
         val model = createMainScreenModel()
         advanceUntilIdle()
@@ -213,9 +217,9 @@ class MainScreenModelOffsetDriftTest {
             // window as one query against a consistent snapshot recovers them (#333).
             val seenByWalk = page + 4L
             val actuallyInTable = page + 8L
-            stubPage(offset = 0, limit = page, returns = rows(1L..page.toLong()))
-            stubPage(offset = page, limit = page, returns = rows((page + 1L)..seenByWalk))
-            stubPage(offset = 0, limit = window, returns = rows(1L..actuallyInTable))
+            stubPage(after = null, limit = page, returns = rows(1L..page.toLong()))
+            stubPage(after = after(page.toLong()), limit = page, returns = rows((page + 1L)..seenByWalk))
+            stubPage(after = null, limit = window, returns = rows(1L..actuallyInTable))
 
             val model = createMainScreenModel()
             advanceUntilIdle()
@@ -231,4 +235,32 @@ class MainScreenModelOffsetDriftTest {
             )
             assertEquals(false, model._hasMoreItems.value, "the table is exhausted after the re-read")
         }
+
+    @Test
+    fun aFullWindowDoesNotReopenPagingTheWalkAlreadyClosed() = runTest(testDispatcher) {
+        // The walk pages to the end of the table and finds nothing, so paging is closed. The
+        // re-read that follows then comes back holding a *full* window — which says only that
+        // the window is full, never that there is anything past it.
+        //
+        // Deciding hasMoreItems from that reopened paging every time, and the list has few
+        // enough rows that the load-more trigger fires at once: the walk runs again, reaches
+        // the same conclusion, and the re-read reopens it again. The trace behind this test
+        // showed thirty-eight pages walked roughly four times a second, indefinitely.
+        stubPage(after = null, limit = page, returns = rows(1L..page.toLong()))
+        stubPage(after = after(page.toLong()), limit = page, returns = emptyList())
+        // Same size as the window, so `reachedEnd` is false — the shape that reopened paging.
+        stubPage(after = null, limit = page, returns = rows(1L..page.toLong()))
+
+        val model = createMainScreenModel()
+        advanceUntilIdle()
+
+        model.loadNextPage()
+        advanceUntilIdle()
+
+        assertEquals(
+            false,
+            model._hasMoreItems.value,
+            "the walk found nothing past the window, so a full window must not reopen paging"
+        )
+    }
 }
