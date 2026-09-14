@@ -115,6 +115,8 @@ internal fun BookmarkListContent(
     showScrollCursor: Boolean = false,
     sortOption: SortOption = SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
+    /** The whole filtered view, for naming the row the scroll cursor points at. */
+    filteredBookmarks: List<BookmarkEntity> = emptyList(),
     layoutType: LayoutType,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -895,6 +897,7 @@ internal fun BookmarkListContent(
                 bookmarks = bookmarks,
                 sortOption = sortOption,
                 totalBookmarkCount = totalBookmarkCount,
+                filteredBookmarks = filteredBookmarks,
                 // A drag can aim past the loaded window, and these are how it gets there.
                 hasMoreItems = hasMoreItems,
                 isLoadingMore = isLoadingMore,

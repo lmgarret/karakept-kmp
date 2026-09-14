@@ -516,25 +516,38 @@ class MainScreenModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
 
     /**
-     * Number of bookmarks the current view holds in total, loaded or not.
+     * Every bookmark the current view holds, in the order the paged query returns them — the list
+     * the loaded window is a prefix of.
      *
-     * The fast-scroll cursor maps its thumb over this rather than over the loaded window, which
-     * grows a page at a time and drags the thumb back up the track on every load (#273).
-     * [allBookmarks] is the whole cache for the server and is already collected here for tags and
-     * list counts, so the exact total for the active filter is one pass over it.
+     * The fast-scroll cursor needs to name the row at an absolute position the moment the thumb
+     * reaches it, and the window cannot: the row is usually hundreds of pages past what has been
+     * read, so the tooltip fell back to naming the last row it *had*, which trails the thumb and
+     * ticks forward as reads land. These rows are already resident — [allBookmarks] is read for
+     * the counts regardless — so the answer costs a filter and a sort rather than a query.
      *
-     * Search is not covered: that pipeline holds its whole result set already (see [bookmarks]),
-     * so its total is the list itself.
+     * Off the main thread, for the same reason the counts are (#273).
      */
-    val filteredBookmarkCount: StateFlow<Int> = combine(
-        allBookmarks, effectiveFilter, offlineBookmarkCount
-    ) { all, filter, offline ->
-        PerfTrace.measure("filteredBookmarkCount", "rows=${all.size}") {
-            BookmarkFilterUtils.countForFilter(all, filter, offline)
+    val filteredBookmarks: StateFlow<List<BookmarkEntity>> = combine(
+        allBookmarks, effectiveFilter
+    ) { all, filter ->
+        PerfTrace.measure("filteredBookmarks", "rows=${all.size}") {
+            BookmarkFilterUtils.orderedViewFor(all, filter)
         }
     }
         .flowOn(appDispatchers.default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * How many bookmarks the current view holds — the denominator the scroll cursor maps over.
+     *
+     * Derived from [filteredBookmarks] so the count and the rows it counts can never disagree:
+     * a thumb at the end of the track has to point at the last row the tooltip can name.
+     */
+    val filteredBookmarkCount: StateFlow<Int> = combine(
+        filteredBookmarks, effectiveFilter, offlineBookmarkCount
+    ) { view, filter, offline ->
+        BookmarkFilterUtils.countForView(view, filter, offline)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val highlightsCount: StateFlow<Int> = selectedServer
         .flatMapLatest { server ->

@@ -124,6 +124,7 @@ fun MainScreenScaffoldContent(
     showScrollCursor: Boolean = false,
     sortOption: com.karakept.app.data.model.SortOption = com.karakept.app.data.model.SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
+    filteredBookmarks: List<BookmarkEntity> = emptyList(),
     displayConfig: MainScreenDisplayConfig,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -278,10 +279,13 @@ fun MainScreenScaffoldContent(
                 hasMoreItems = if (isSearchActive) true else hasMoreItems,
                 showScrollCursor = showScrollCursor,
                 sortOption = sortOption,
-                // The search pipeline holds its whole result set, so the list is its own total;
-                // the paginated one holds a window and takes the count of the filtered view.
+                // The search pipeline holds its whole result set, so the list is its own total
+                // and its own index; the paginated one holds a window, and takes both from the
+                // filtered view.
                 totalBookmarkCount =
                     if (searchQuery.isNotBlank()) bookmarks.size else totalBookmarkCount,
+                filteredBookmarks =
+                    if (searchQuery.isNotBlank()) bookmarks else filteredBookmarks,
                 layoutType = displayConfig.layoutType,
                 swipeLeftAction = swipeLeftAction,
                 swipeRightAction = swipeRightAction,

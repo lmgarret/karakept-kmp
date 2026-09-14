@@ -61,6 +61,11 @@ import kotlin.math.min
  * thumb maps linearly over it — over the whole list, not over the pages loaded so far, which
  * grow as the list is scrolled and would walk the thumb back up the track on every load (#273).
  *
+ * [filteredBookmarks] is that same list in order, which is what the tooltip names the pointed row
+ * from. Naming it out of [bookmarks] instead means naming the last row *loaded* whenever the thumb
+ * is past the window — a label that trails the thumb and then ticks forward as reads land, on
+ * exactly the gesture whose whole purpose is to answer "where am I".
+ *
  * A drag therefore aims at a row the window may not hold yet. [onSeekToIndex] is what gets it
  * there: it asks for the rows out to that one, and the list holds still until they arrive — a
  * jump to the end of a large list must not crawl through everything on the way. The walk stops
@@ -73,6 +78,7 @@ fun ScrollCursorIndicator(
     bookmarks: List<BookmarkEntity>,
     sortOption: SortOption,
     totalBookmarkCount: Int = 0,
+    filteredBookmarks: List<BookmarkEntity> = emptyList(),
     hasMoreItems: Boolean = false,
     isLoadingMore: Boolean = false,
     onSeekToIndex: (Int) -> Unit = {},
@@ -135,8 +141,11 @@ fun ScrollCursorIndicator(
     // would snap it back to the end of the window while the pages it is waiting on load.
     val displayFraction = if (isDragging || targetIndex != null) dragFraction else listScrollFraction
     val pointedIndex = scrollCursorIndex(displayFraction, effectiveTotal)
-        .coerceAtMost(bookmarks.size - 1)
-    val label = scrollCursorLabel(bookmarks.getOrNull(pointedIndex), sortOption)
+    // The loaded window is the fallback, for the frame before the view resolves or a row the
+    // view has not caught up with; it can only ever answer for a thumb inside the window.
+    val pointedBookmark = filteredBookmarks.getOrNull(pointedIndex)
+        ?: bookmarks.getOrNull(pointedIndex.coerceAtMost(bookmarks.size - 1))
+    val label = scrollCursorLabel(pointedBookmark, sortOption)
 
     val density = LocalDensity.current
 

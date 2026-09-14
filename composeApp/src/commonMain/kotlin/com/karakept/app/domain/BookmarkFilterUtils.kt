@@ -79,36 +79,58 @@ object BookmarkFilterUtils {
     }
 
     /**
-     * How many of [all] the view for [filter] holds in total, loaded or not.
+     * Every row [filter] admits, in the order the paged query returns them.
      *
-     * This is the denominator the fast-scroll cursor maps its thumb over, and the loaded window
-     * cannot supply it: the window grows a page at a time, so a thumb divided by it walks back up
-     * the track every time a page lands (#273).
+     * The loaded window is a *prefix* of this: the same rows, as far as paging has got. Holding
+     * the whole of it costs almost nothing — these are references to rows already resident in
+     * `allBookmarks`, which the app reads for its counts anyway — and it answers the two
+     * questions a fast-scroll cursor asks that the window cannot. How many rows are there, so a
+     * thumb maps over the list rather than over the pages loaded so far (#273); and which row is
+     * at absolute position N, so the tooltip can name the row under the thumb without waiting for
+     * a read to reach it.
      *
      * Mirrors what a page goes through on its way to the screen — the status clause
-     * `BookmarkRepository.buildPagedQuery` applies, then [applyClientSideFilters]. A view holding
-     * exactly one list is the one that applies no status clause: it is queried by membership
-     * instead, and admits archived rows like the query does.
+     * `BookmarkRepository.buildPagedQuery` applies, then [applyClientSideFilters], then
+     * [applySorting], whose tie-break matches the query's `ORDER BY`. A view holding exactly one
+     * list is the one that applies no status clause: it is queried by membership instead, and
+     * admits archived rows like the query does.
      *
-     * [offlineCount] answers `FilterStatus.OFFLINE`, whose condition — a non-empty `content`
-     * column — cannot be asked of these rows, since the queries behind them strip that column. It
-     * is the count of the unnarrowed offline view, so an offline view narrowed by anything else
-     * falls back to the reading-time proxy [ContentFilter.DOWNLOADED] already stands on.
+     * The rows are nearly in order already (the query behind them is `createdAt DESC`), so for
+     * the default sort this is a near-linear pass rather than a sort in earnest.
      */
-    fun countForFilter(
-        all: List<BookmarkEntity>,
+    fun orderedViewFor(all: List<BookmarkEntity>, filter: FilterConfig): List<BookmarkEntity> =
+        applySorting(viewFor(all, filter), filter.sort)
+
+    /** [orderedViewFor] without the ordering, for callers that only need to count. */
+    fun viewFor(all: List<BookmarkEntity>, filter: FilterConfig): List<BookmarkEntity> {
+        val base = if (filter.lists.singleOrNull() != null) {
+            all
+        } else {
+            applyStatusFilter(all, filter.status)
+        }
+        return applyClientSideFilters(base, filter)
+    }
+
+    /**
+     * How many rows the view holds in total, loaded or not — [view]'s own size, except offline.
+     *
+     * `FilterStatus.OFFLINE` selects on a non-empty `content` column, and the queries behind an
+     * in-memory row strip that column, so [view] can only approximate it through the reading-time
+     * proxy [ContentFilter.DOWNLOADED] stands on. [offlineCount] is the database's own answer for
+     * the unnarrowed offline view and is preferred where it applies; a narrowed one has no exact
+     * answer here and keeps the proxy, which at least agrees with the rows [view] can name.
+     */
+    fun countForView(
+        view: List<BookmarkEntity>,
         filter: FilterConfig,
         offlineCount: Int = 0
     ): Int {
-        val singleList = filter.lists.singleOrNull()
         val narrowed = filter.tags.isNotEmpty() ||
             filter.lists.isNotEmpty() ||
             filter.readFilter != ReadFilter.ALL ||
             filter.contentFilter != ContentFilter.ALL
         if (filter.status == FilterStatus.OFFLINE && !narrowed) return offlineCount
-
-        val base = if (singleList != null) all else applyStatusFilter(all, filter.status)
-        return applyClientSideFilters(base, filter).size
+        return view.size
     }
 
     /** The rows [status] admits, matching the clause the paged query applies for it. */
@@ -120,6 +142,7 @@ object BookmarkFilterUtils {
         FilterStatus.ALL_INCLUDING_ARCHIVED -> bookmarks
         FilterStatus.FAVORITES -> bookmarks.filter { it.isStarred }
         FilterStatus.ARCHIVED -> bookmarks.filter { it.isArchived }
+        // The column this really selects on is stripped from in-memory rows; see [countForView].
         FilterStatus.OFFLINE -> bookmarks.filter { it.readingTimeMinutes > 0 }
     }
 

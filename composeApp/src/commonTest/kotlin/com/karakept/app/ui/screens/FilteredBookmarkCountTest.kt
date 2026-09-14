@@ -135,7 +135,7 @@ class FilteredBookmarkCountTest {
         bannerImageAssetId = null,
         screenshotAssetId = null,
         description = null,
-        createdAt = 0L,
+        createdAt = remoteId,
         isArchived = isArchived,
         isStarred = isStarred,
         isRead = isRead,
@@ -235,5 +235,48 @@ class FilteredBookmarkCountTest {
 
         assertEquals(3, model.filteredBookmarkCount.value)
         job.cancel()
+    }
+
+    @Test
+    fun `filteredBookmarks names the row at an absolute position`() = runTest(testDispatcher) {
+        // What the scroll cursor's tooltip asks of it: the row a thumb points at, whether or not
+        // paging has reached it.
+        val bookmarks = (1L..300L).map { createBookmarkEntity(it) }
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
+
+        val model = createMainScreenModel()
+        val job = launch { model.filteredBookmarks.collect {} }
+        advanceUntilIdle()
+
+        val view = model.filteredBookmarks.value
+        assertEquals(300, view.size)
+        assertEquals("remote-300", view.first().remoteId, "NEWEST puts the newest row first")
+        assertEquals("remote-1", view.last().remoteId)
+        job.cancel()
+    }
+
+    @Test
+    fun `filteredBookmarks and the count describe the same rows`() = runTest(testDispatcher) {
+        val bookmarks = listOf(
+            createBookmarkEntity(1, tags = "kotlin"),
+            createBookmarkEntity(2, tags = "kotlin"),
+            createBookmarkEntity(3, tags = "swift"),
+            createBookmarkEntity(4, isArchived = true)
+        )
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
+
+        val model = createMainScreenModel()
+        val job = launch { model.filteredBookmarks.collect {} }
+        val countJob = launch { model.filteredBookmarkCount.collect {} }
+        advanceUntilIdle()
+
+        model.applyFilter(FilterConfig(tags = listOf("kotlin")))
+        advanceUntilIdle()
+
+        // A thumb at the end of the track must point at a row the tooltip can name.
+        assertEquals(model.filteredBookmarkCount.value, model.filteredBookmarks.value.size)
+        assertEquals(2, model.filteredBookmarks.value.size)
+        job.cancel()
+        countJob.cancel()
     }
 }

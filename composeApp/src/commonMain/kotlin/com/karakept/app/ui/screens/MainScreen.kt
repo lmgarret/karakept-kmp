@@ -159,8 +159,10 @@ object MainScreen : NavKey {
         val listCounts by screenModel.listCounts.collectAsState()
         val listSyncStatuses by screenModel.listSyncStatuses.collectAsState()
         val quickFilterCounts by screenModel.quickFilterCounts.collectAsState()
-        // Denominator for the scroll cursor: the whole filtered view, not the loaded window.
+        // The whole filtered view, not the loaded window: the scroll cursor maps its thumb over
+        // this and names the row under it from here.
         val totalBookmarkCount by screenModel.filteredBookmarkCount.collectAsState()
+        val filteredBookmarks by screenModel.filteredBookmarks.collectAsState()
         val highlightsCount by screenModel.highlightsCount.collectAsState()
         val currentListId by screenModel.currentListContext.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
@@ -346,6 +348,7 @@ object MainScreen : NavKey {
                     hasMoreItems = hasMoreItems,
                     showScrollCursor = showScrollCursor, sortOption = currentFilter.sort,
                     totalBookmarkCount = totalBookmarkCount,
+                    filteredBookmarks = filteredBookmarks,
                     displayConfig = displayConfig,
                     swipeLeftAction = swipeLeftAction, swipeRightAction = swipeRightAction,
                     customSwipeActionConfigs = customSwipeActionConfigs, swipeLeftConfigId = swipeLeftConfigId, swipeRightConfigId = swipeRightConfigId,
