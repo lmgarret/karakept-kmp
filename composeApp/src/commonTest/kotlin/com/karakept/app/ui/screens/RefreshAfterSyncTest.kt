@@ -40,6 +40,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * A list opened at startup must still show its bookmarks once the startup sync finishes.
@@ -218,7 +219,8 @@ class RefreshAfterSyncTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     @Test

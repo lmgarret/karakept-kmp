@@ -124,7 +124,7 @@ val appModule = module {
     // A Koin single would share one instance across hosts/entries, but the store clears the
     // ViewModel (cancelling viewModelScope) when its entry leaves the back stack — a reused
     // singleton would then have dead coroutines and never load bookmarks (SAVE-02).
-    viewModel { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { SettingsScreenModel(get(), get(), get(), get()) }
     viewModel { HighlightsScreenModel(get(), get(), get(), get()) }

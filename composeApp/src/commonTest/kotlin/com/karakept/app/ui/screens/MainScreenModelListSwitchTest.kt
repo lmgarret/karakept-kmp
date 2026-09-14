@@ -38,6 +38,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Regression tests for the rendering glitches seen when switching between lists quickly:
@@ -150,7 +151,8 @@ class MainScreenModelListSwitchTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     /** Stub a full first page so the model has a loaded window to append to. */

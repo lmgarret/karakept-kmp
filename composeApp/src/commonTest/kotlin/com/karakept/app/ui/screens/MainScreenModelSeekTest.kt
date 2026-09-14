@@ -34,6 +34,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * [MainScreenModel.loadThroughIndex] — the seek behind the fast-scroll cursor.
@@ -139,7 +140,8 @@ class MainScreenModelSeekTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     /** One DB read. Derived so tuning [PAGE_SIZE] does not mean rewriting every fixture. */

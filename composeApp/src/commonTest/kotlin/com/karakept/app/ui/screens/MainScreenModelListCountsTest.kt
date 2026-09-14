@@ -33,6 +33,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Regression tests for #315: the drawer's list count must only fold in a nested list's
@@ -147,7 +148,8 @@ class MainScreenModelListCountsTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     @Test

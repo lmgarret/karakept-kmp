@@ -31,6 +31,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Tests for [MainScreenModel.filteredBookmarkCount] — the denominator the fast-scroll cursor maps
@@ -112,7 +113,8 @@ class FilteredBookmarkCountTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     private fun createBookmarkEntity(

@@ -28,6 +28,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Regression tests for #173: re-authenticating replaces the server row (same id,
@@ -103,7 +104,8 @@ class MainScreenModelServerRefreshTest {
             listRepository = listRepository,
             bookmarkActionController = bookmarkActionController,
             snackbarManager = mockk<ActionSnackbarManager>(relaxed = true),
-            highlightRepository = highlightRepository
+            highlightRepository = highlightRepository,
+            appDispatchers = TestAppDispatchers(testDispatcher)
         )
     }
 

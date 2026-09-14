@@ -32,6 +32,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * The forward walk pages by OFFSET, and a sync commits rows while the user scrolls. Rows that
@@ -141,7 +142,8 @@ class MainScreenModelOffsetDriftTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     /** One DB read. Derived so tuning [PAGE_SIZE] does not mean rewriting every fixture. */

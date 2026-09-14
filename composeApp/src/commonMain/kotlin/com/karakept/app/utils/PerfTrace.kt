@@ -31,8 +31,14 @@ object PerfTrace {
 
     private const val TICK_MS = 16L
 
-    /** A tick this late means the main thread spent the difference not running. */
-    private const val STALL_MS = 100L
+    /**
+     * A tick this late means the main thread spent the difference not running.
+     *
+     * Three frames at 60Hz. The first pass used 100ms and reported almost nothing, while the
+     * thing being hunted turned out to be a 25-57ms block landing once a second — invisible to
+     * that threshold and very visible to the eye.
+     */
+    private const val STALL_MS = 48L
 
     data class Stat(
         val calls: Int = 0,
@@ -48,29 +54,39 @@ object PerfTrace {
     /** Times [block], attributing it to [name]. Returns whatever the block returns. */
     fun <T> measure(name: String, detail: String = "", block: () -> T): T {
         if (!enabled) return block()
+        val startThread = currentThreadName()
         val mark = TimeSource.Monotonic.markNow()
         val result = block()
-        record(name, mark.elapsedNow().inWholeMilliseconds, detail)
+        record(name, mark.elapsedNow().inWholeMilliseconds, detail, startThread)
         return result
     }
 
-    /** As [measure], for work that suspends. The time includes anything it waited on. */
+    /**
+     * As [measure], for work that suspends. The time includes anything it waited on.
+     *
+     * The thread is recorded on both sides, and for suspending work that is the whole point: one
+     * thread name means the block ran where it was called, two mean it hopped and the duration is
+     * wall time rather than time stolen from the caller. Reading a single name off the resumption
+     * is what made the paged read look like it was blocking the UI thread when it was not.
+     */
     suspend fun <T> measureSuspending(name: String, detail: String = "", block: suspend () -> T): T {
         if (!enabled) return block()
+        val startThread = currentThreadName()
         val mark = TimeSource.Monotonic.markNow()
         val result = block()
-        record(name, mark.elapsedNow().inWholeMilliseconds, detail)
+        record(name, mark.elapsedNow().inWholeMilliseconds, detail, startThread)
         return result
     }
 
     /** Records that [name] happened, for work whose frequency is the problem, not its cost. */
     fun count(name: String, detail: String = "") {
         if (!enabled) return
-        record(name, 0, detail)
+        record(name, 0, detail, currentThreadName())
     }
 
-    private fun record(name: String, ms: Long, detail: String) {
-        val thread = currentThreadName()
+    private fun record(name: String, ms: Long, detail: String, startThread: String) {
+        val endThread = currentThreadName()
+        val thread = if (startThread == endThread) startThread else "$startThread>$endThread"
         stats.update { current ->
             val stat = current[name] ?: Stat()
             current + (name to stat.copy(

@@ -25,6 +25,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Regression tests for READER-01: scroll position persistence in MainScreenModel.
@@ -99,7 +100,8 @@ class ScrollPositionRegressionTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     @Test

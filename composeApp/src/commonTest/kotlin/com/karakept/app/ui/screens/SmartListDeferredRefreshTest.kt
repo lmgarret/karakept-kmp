@@ -38,6 +38,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Tests for the deferred smart-list refresh mechanism (LIST-02 fix).
@@ -119,7 +120,8 @@ class SmartListDeferredRefreshTest {
             listRepository = listRepository,
             bookmarkActionController = bookmarkActionController,
             snackbarManager = snackbarManager,
-            highlightRepository = highlightRepository
+            highlightRepository = highlightRepository,
+            appDispatchers = TestAppDispatchers(testDispatcher)
         )
     }
 

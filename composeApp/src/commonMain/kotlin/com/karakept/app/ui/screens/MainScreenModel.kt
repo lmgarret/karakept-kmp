@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -54,6 +55,7 @@ import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.TagFilterRequests
 import com.karakept.app.domain.BookmarkFilterUtils
 import com.karakept.app.domain.DefaultFilterResolver
+import com.karakept.app.domain.ListCountUtils
 import com.karakept.app.domain.ListHierarchyUtils
 
 data class QuickFilterCounts(
@@ -76,6 +78,10 @@ class MainScreenModel(
     internal val bookmarkActionController: BookmarkActionController,
     internal val snackbarManager: ActionSnackbarManager,
     private val highlightRepository: HighlightRepository,
+    // The derived counts below are the one place this model does real work over the whole table,
+    // and viewModelScope is the main dispatcher — so they need somewhere else to run. Injected
+    // rather than taken statically so a test's dispatcher stays in control of them.
+    private val appDispatchers: com.karakept.app.utils.AppDispatchers,
     // Defaulted so a test can construct the model without wiring a request source it never uses.
     private val tagFilterRequests: TagFilterRequests = TagFilterRequests()
 ) : ViewModel() {
@@ -440,6 +446,13 @@ class MainScreenModel(
         .onEach { PerfTrace.count("allBookmarks.emit", "rows=${it.size}") }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /**
+     * Bookmark counts per list, for the drawer.
+     *
+     * Runs off the main thread: it walks the whole table, and every database write re-emits
+     * [allBookmarks] — during a scroll that is roughly once a second, and on the UI thread it
+     * cost 25-57ms a time, which is two to four dropped frames each.
+     */
     val listCounts: StateFlow<Map<String, Int>> = combine(
         selectedServer,
         lists,
@@ -448,22 +461,11 @@ class MainScreenModel(
     ) { server, listItems, bookmarks, allSettings ->
         if (server == null) return@combine emptyMap()
         PerfTrace.measure("listCounts", "lists=${listItems.size} rows=${bookmarks.size}") {
-            listItems.associate { list ->
-                val listId = list.id ?: ""
-                val settings = allSettings[listId] ?: com.karakept.app.data.model.ListSettings()
-                val relevantIds = if (settings.includeChildListBookmarks) {
-                    setOf(listId) + ListHierarchyUtils.getAllDescendantIds(listId, listItems)
-                } else {
-                    setOf(listId)
-                }
-                val count = bookmarks.count { bookmark ->
-                    val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                    bookmarkLists.any { it in relevantIds } && (!settings.countOnlyUnread || !bookmark.isRead)
-                }
-                listId to count
-            }
+            ListCountUtils.countBookmarksPerList(listItems, bookmarks, allSettings)
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    }
+        .flowOn(appDispatchers.default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private val offlineBookmarkCount: StateFlow<Int> = selectedServer
         .flatMapLatest { server ->
@@ -509,7 +511,9 @@ class MainScreenModel(
                 offline = offline
             )
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
+    }
+        .flowOn(appDispatchers.default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
 
     /**
      * Number of bookmarks the current view holds in total, loaded or not.
@@ -528,7 +532,9 @@ class MainScreenModel(
         PerfTrace.measure("filteredBookmarkCount", "rows=${all.size}") {
             BookmarkFilterUtils.countForFilter(all, filter, offline)
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    }
+        .flowOn(appDispatchers.default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val highlightsCount: StateFlow<Int> = selectedServer
         .flatMapLatest { server ->

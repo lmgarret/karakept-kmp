@@ -34,6 +34,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Tests that the [FilterConfig.sort] option is propagated to [BookmarkRepository.getBookmarksPaged]
@@ -142,7 +143,8 @@ class MainScreenModelPaginationSortingTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     @Test

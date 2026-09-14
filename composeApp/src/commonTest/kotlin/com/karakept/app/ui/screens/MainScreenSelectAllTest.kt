@@ -29,6 +29,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Tests for FILT-01: selectAll() behavior on MainScreenModel.
@@ -106,7 +107,8 @@ class MainScreenSelectAllTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     private fun createBookmarkEntity(

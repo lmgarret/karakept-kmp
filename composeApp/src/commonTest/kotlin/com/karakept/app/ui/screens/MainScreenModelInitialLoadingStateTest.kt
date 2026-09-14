@@ -31,6 +31,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * A cold start used to render an empty LazyColumn, which looks exactly like a list that has
@@ -138,7 +139,8 @@ class MainScreenModelInitialLoadingStateTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     @Test

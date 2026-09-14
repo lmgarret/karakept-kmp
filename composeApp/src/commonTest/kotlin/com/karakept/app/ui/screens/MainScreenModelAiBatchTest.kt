@@ -40,6 +40,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Tests for AI actions over a multi-selection.
@@ -123,7 +124,8 @@ class MainScreenModelAiBatchTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     private fun bookmark(remoteId: Long) = BookmarkEntity(

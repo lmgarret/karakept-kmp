@@ -29,6 +29,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Regression tests for #274: the accumulated bookmark list feeds a LazyColumn keyed
@@ -108,7 +109,8 @@ class MainScreenModelAccumulatedListTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     private fun bookmark(remoteId: Long) = BookmarkEntity(

@@ -38,6 +38,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Regression tests for the bookmark scroll-position bug after smart-list reconciliation.
@@ -129,7 +130,8 @@ class BookmarkScrollPositionAfterReconcileTest {
             listRepository = listRepository,
             bookmarkActionController = bookmarkActionController,
             snackbarManager = snackbarManager,
-            highlightRepository = highlightRepository
+            highlightRepository = highlightRepository,
+            appDispatchers = TestAppDispatchers(testDispatcher)
         )
         return model
     }
