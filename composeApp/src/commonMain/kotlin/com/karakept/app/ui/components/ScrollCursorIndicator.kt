@@ -61,10 +61,11 @@ import kotlin.math.min
  * thumb maps linearly over it — over the whole list, not over the pages loaded so far, which
  * grow as the list is scrolled and would walk the thumb back up the track on every load (#273).
  *
- * A drag therefore aims at a row the window may not hold yet. [onLoadMore] is what gets it
- * there: the jump lands as far as the window reaches, pulls the next page in, and resumes from
- * the larger window — one page per step until the target is loaded, [hasMoreItems] says the
- * table ends first, or a request comes back having added nothing (see [scrollCursorStep]).
+ * A drag therefore aims at a row the window may not hold yet. [onSeekToIndex] is what gets it
+ * there: it asks for the rows out to that one, and the list holds still until they arrive — a
+ * jump to the end of a large list must not crawl through everything on the way. The walk stops
+ * when the target is loaded, when [hasMoreItems] says the table ended first, or when a read comes
+ * back having added nothing (see [scrollCursorStep]).
  */
 @Composable
 fun ScrollCursorIndicator(
@@ -74,7 +75,7 @@ fun ScrollCursorIndicator(
     totalBookmarkCount: Int = 0,
     hasMoreItems: Boolean = false,
     isLoadingMore: Boolean = false,
-    onLoadMore: () -> Unit = {},
+    onSeekToIndex: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (bookmarks.size < 2) return
@@ -90,7 +91,7 @@ fun ScrollCursorIndicator(
 
     val effectiveTotal = if (totalBookmarkCount > bookmarks.size) totalBookmarkCount else bookmarks.size
     val effectiveTotalState = rememberUpdatedState(effectiveTotal)
-    val currentOnLoadMore by rememberUpdatedState(onLoadMore)
+    val currentOnSeekToIndex by rememberUpdatedState(onSeekToIndex)
 
     val listScrollFraction by remember {
         derivedStateOf {
@@ -98,8 +99,8 @@ fun ScrollCursorIndicator(
         }
     }
 
-    // Walking to the target is a loop over page loads, so it lives here rather than in the
-    // gesture, which ends long before the pages it asked for have arrived.
+    // Reaching the target can outlast the gesture — a row past the window has to be read in
+    // first — so it is driven from here rather than from the drag.
     LaunchedEffect(targetIndex, bookmarks.size, hasMoreItems, isLoadingMore) {
         val target = targetIndex ?: return@LaunchedEffect
         val step = scrollCursorStep(
@@ -116,9 +117,8 @@ fun ScrollCursorIndicator(
                 pulledAtCount = null
             }
             is ScrollCursorStep.Pull -> {
-                listState.scrollToItem(step.index)
                 pulledAtCount = bookmarks.size
-                currentOnLoadMore()
+                currentOnSeekToIndex(step.throughIndex)
             }
             ScrollCursorStep.Wait -> Unit
         }

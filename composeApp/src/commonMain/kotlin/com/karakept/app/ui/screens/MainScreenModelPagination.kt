@@ -216,6 +216,65 @@ fun MainScreenModel.loadNextPage() {
 }
 
 /**
+ * Grows the loaded window in one read until it holds the row at [index].
+ *
+ * This is the fast-scroll cursor's seek. It can ask for a row hundreds of pages past the window,
+ * and walking there a page at a time is both slow and visible — every page that lands scrolls the
+ * list a screenful further, so holding the thumb at the bottom of a large list crawls through the
+ * whole of it instead of jumping to the end. A window is read as a single query whatever its size
+ * (see [readWholeWindow]), so the seek is one read and the list moves once, when it lands.
+ *
+ * [index] counts rows *after* the client-side filters, while a window is measured in raw rows, so
+ * how far to read is estimated by [seekWindowPage] from what the current window yielded. An
+ * estimate that falls short still leaves the window larger, so the caller asking again converges.
+ */
+fun MainScreenModel.loadThroughIndex(index: Int) {
+    if (_isLoadingMore.value || !_hasMoreItems.value || _searchQuery.value.isNotBlank()) return
+    // Same reasoning as loadNextPage: a window may only be grown for the view it belongs to, and
+    // must be read with that view's own filter.
+    val view = _loadedView.value ?: return
+    if (view != currentView()) return
+
+    val loadedRows = _accumulatedBookmarks.value.size
+    // The row is already on hand — the cursor can jump to it without reading anything.
+    if (index < loadedRows) return
+
+    val lastLoadedPage = _currentPage.value
+    val targetPage = seekWindowPage(
+        targetIndex = index,
+        loadedRows = loadedRows,
+        loadedPage = lastLoadedPage,
+        pageSize = pageSize
+    )
+    if (targetPage <= lastLoadedPage) return
+
+    val generation = paginationGeneration
+    _isLoadingMore.value = true
+
+    viewModelScope.launch {
+        try {
+            val server = _selectedServer.value ?: return@launch
+            val read = readWholeWindow(server, view.filter, targetPage)
+
+            // Discard the read if a reset started, or the user switched view, while it ran.
+            if (paginationGeneration != generation ||
+                _loadedView.value != view ||
+                currentView() != view
+            ) return@launch
+
+            publishWindow(view, read, targetPage)
+        } catch (e: Exception) {
+            AppLogger.e("MainScreenModel", "Failed to seek to bookmark $index: ${e.message}", e)
+            snackbarManager.showErrorWithRetry("Couldn't load bookmarks") {
+                loadThroughIndex(index)
+            }
+        } finally {
+            if (paginationGeneration == generation) _isLoadingMore.value = false
+        }
+    }
+}
+
+/**
  * Clears accumulated bookmarks and loads the first page for [filter].
  * This is the single entry-point for "start displaying a filter".
  */

@@ -158,6 +158,8 @@ internal fun BookmarkListContent(
     onSwipeAction: (BookmarkEntity, SwipeAction, CustomSwipeActionConfig?) -> Unit,
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
+    /** Reads the window out to a row the fast-scroll cursor was dragged to. */
+    onSeekToIndex: (Int) -> Unit = {},
     serverUrl: String? = null,
     onCtrlClick: ((BookmarkEntity) -> Unit)? = null,
     onShiftClick: ((Int) -> Unit)? = null,
@@ -896,7 +898,7 @@ internal fun BookmarkListContent(
                 // A drag can aim past the loaded window, and these are how it gets there.
                 hasMoreItems = hasMoreItems,
                 isLoadingMore = isLoadingMore,
-                onLoadMore = onLoadMore,
+                onSeekToIndex = onSeekToIndex,
                 // padding(top) keeps the scrollbar clear of the sync progress bar
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
             )

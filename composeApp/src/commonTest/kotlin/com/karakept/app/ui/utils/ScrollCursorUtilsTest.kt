@@ -74,9 +74,10 @@ class ScrollCursorUtilsTest {
     }
 
     @Test
-    fun `a target past the window pulls the next page in`() {
+    fun `a target past the window asks for the rows out to it`() {
+        // Out to the target, not one page on: a pull the list can see is a crawl, not a jump.
         assertEquals(
-            ScrollCursorStep.Pull(99),
+            ScrollCursorStep.Pull(800),
             scrollCursorStep(targetIndex = 800, loadedCount = 100, canLoadMore = true, isLoadingMore = false)
         )
     }
@@ -112,9 +113,9 @@ class ScrollCursorUtilsTest {
     }
 
     @Test
-    fun `a pull that grew the window pulls again`() {
+    fun `a read that came back short of the target pulls again`() {
         assertEquals(
-            ScrollCursorStep.Pull(149),
+            ScrollCursorStep.Pull(800),
             scrollCursorStep(
                 targetIndex = 800,
                 loadedCount = 150,
@@ -133,38 +134,58 @@ class ScrollCursorUtilsTest {
         )
     }
 
-    /** Walks a 1000-row list from a drag made on the first page, one page per step. */
+    /** A drag to 75% of a 1000-row list, made on the first page: one read, then the jump. */
     @Test
-    fun `the walk reaches a target far past the window`() {
-        val pageSize = 50
+    fun `a target far past the window is reached in one read`() {
         val total = 1000
         val target = scrollCursorIndex(0.75f, total)
-        var loaded = pageSize
+        var loaded = 50
         var pulledAt: Int? = null
-        var landedOn: Int? = null
-        var steps = 0
 
-        while (landedOn == null && steps < 100) {
-            steps++
+        val first = scrollCursorStep(target, loaded, canLoadMore = true, isLoadingMore = false, pulledAtCount = pulledAt)
+        assertEquals(ScrollCursorStep.Pull(target), first)
+        pulledAt = loaded
+        // The read reaches the target, as seekWindowPage sizes it to.
+        loaded = target + 1
+
+        assertEquals(
+            ScrollCursorStep.Land(target),
+            scrollCursorStep(target, loaded, canLoadMore = true, isLoadingMore = false, pulledAtCount = pulledAt)
+        )
+    }
+
+    /** A filter discarding more than the estimate allowed for: the next read resumes, larger. */
+    @Test
+    fun `a short read is followed by another, not by a crawl`() {
+        val target = 749
+        var loaded = 50
+        var pulledAt: Int? = null
+        var reads = 0
+        var landedOn: Int? = null
+
+        while (landedOn == null && reads < 30) {
             val step = scrollCursorStep(
                 targetIndex = target,
                 loadedCount = loaded,
-                canLoadMore = loaded < total,
+                canLoadMore = true,
                 isLoadingMore = false,
                 pulledAtCount = pulledAt
             )
             when (step) {
                 is ScrollCursorStep.Land -> landedOn = step.index
                 is ScrollCursorStep.Pull -> {
+                    reads++
                     pulledAt = loaded
-                    loaded = minOf(loaded + pageSize, total)
+                    // Each read covers half the remaining distance — a short one, by design.
+                    loaded += (target + 1 - loaded) / 2 + 1
                 }
                 ScrollCursorStep.Wait -> break
             }
         }
 
         assertEquals(target, landedOn)
-        // One page per step, from the page the drag was made on to the page holding the target.
-        assertEquals(target / pageSize, steps - 1)
+        // Converged on reads rather than crawling: a page-at-a-time walk would have taken
+        // fifteen, each one a screenful of scrolling the user watches go past.
+        assertTrue(reads < 15)
     }
 }

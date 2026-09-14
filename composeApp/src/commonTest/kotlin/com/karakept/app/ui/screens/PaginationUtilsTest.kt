@@ -193,4 +193,68 @@ class PaginationUtilsTest {
         }
         assertNull(result.nextCursor)
     }
+
+    // -------------------------------------------------------------------------
+    // seekWindowPage — how far a fast-scroll jump has to read (#273)
+    // -------------------------------------------------------------------------
+
+    /** Nothing is filtered out, so the window needs the target's own page plus the slack one. */
+    @Test
+    fun seekReachesTheTargetsPageWhenNothingIsFilteredOut() {
+        // One page loaded, every row surviving: row 800 sits on page 16.
+        val page = seekWindowPage(targetIndex = 800, loadedRows = 50, loadedPage = 0, pageSize = 50)
+        assertEquals(17, page)
+        assertTrue((page + 1) * 50 > 800)
+    }
+
+    /** Half the rows discarded by the filter, so the window has to reach twice as far. */
+    @Test
+    fun seekReadsFurtherWhenTheFilterDiscardsRows() {
+        // 50 rows survived out of the 100 raw rows read for them.
+        val page = seekWindowPage(targetIndex = 400, loadedRows = 50, loadedPage = 1, pageSize = 50)
+        assertEquals(17, page)
+    }
+
+    @Test
+    fun seekNeverShrinksTheWindow() {
+        assertEquals(
+            9,
+            seekWindowPage(targetIndex = 3, loadedRows = 400, loadedPage = 9, pageSize = 50)
+        )
+    }
+
+    /** A window that yielded nothing says nothing about density — reach one page further. */
+    @Test
+    fun seekExtendsByOnePageWhenNothingSurvivedTheFilter() {
+        assertEquals(
+            3,
+            seekWindowPage(targetIndex = 900, loadedRows = 0, loadedPage = 2, pageSize = 50)
+        )
+    }
+
+    /** A seek to the end of a large list is one read, not a page-at-a-time walk. */
+    @Test
+    fun seekToTheEndOfALargeListIsOneRead() {
+        val pageSize = 50
+        val total = 20_000
+        val page = seekWindowPage(
+            targetIndex = total - 1,
+            loadedRows = pageSize,
+            loadedPage = 0,
+            pageSize = pageSize
+        )
+        assertTrue((page + 1) * pageSize >= total)
+    }
+
+    /** The arithmetic runs in Long: a huge target must not wrap into a tiny window. */
+    @Test
+    fun seekDoesNotOverflowOnAHugeTarget() {
+        val page = seekWindowPage(
+            targetIndex = 5_000_000,
+            loadedRows = 1,
+            loadedPage = 100,
+            pageSize = 50
+        )
+        assertTrue(page > 100)
+    }
 }

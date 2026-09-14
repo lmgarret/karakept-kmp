@@ -29,24 +29,32 @@ sealed interface ScrollCursorStep {
     /** The target is loaded — jump to it and the drag is resolved. */
     data class Land(val index: Int) : ScrollCursorStep
 
-    /** The target lies past the window — go as far as it reaches and pull the next page in. */
-    data class Pull(val index: Int) : ScrollCursorStep
+    /**
+     * The target lies past the window — ask for the rows out to [throughIndex] and stay put.
+     *
+     * The list deliberately does not move on a pull. Scrolling to the end of the window on the
+     * way makes every page that lands visible, which turns a jump to the end of a large list
+     * into a crawl through all of it.
+     */
+    data class Pull(val throughIndex: Int) : ScrollCursorStep
 
-    /** A page is already on its way; it decides where the next step goes. */
+    /** A read is already on its way; it decides where the next step goes. */
     data object Wait : ScrollCursorStep
 }
 
 /**
  * The move that brings the list closest to [targetIndex] given the [loadedCount] rows on hand.
  *
- * A target past the window resolves over several steps — one page per [ScrollCursorStep.Pull] —
- * which is the "fake infinite scroll" the cursor needs to reach an absolute position in a list
- * it has only partly loaded.
+ * A target past the window is normally resolved by one [ScrollCursorStep.Pull] — the read it asks
+ * for reaches the target — and then one [ScrollCursorStep.Land]. A read that comes back short of
+ * the target (a filter discarding more than the estimate allowed for) simply pulls again from the
+ * larger window, which is the "fake infinite scroll" the cursor needs to reach an absolute
+ * position in a list it has only partly loaded.
  *
- * [pulledAtCount] is the window size the last [ScrollCursorStep.Pull] asked from, and is what
- * stops the walk going on forever: a page request that comes back having added nothing, with
- * nothing in flight, cannot be waited out — the load failed, or [total] is ahead of what the
- * table actually holds — so the walk lands on the last row it has instead of asking again.
+ * [pulledAtCount] is the window size the last pull asked from, and is what stops that going on
+ * forever: a read that comes back having added nothing, with nothing in flight, cannot be waited
+ * out — it failed, or the total is ahead of what the table actually holds — so the cursor lands
+ * on the last row it has instead of asking again.
  */
 fun scrollCursorStep(
     targetIndex: Int,
@@ -60,5 +68,5 @@ fun scrollCursorStep(
     if (targetIndex <= lastLoaded) return ScrollCursorStep.Land(targetIndex.coerceAtLeast(0))
     if (isLoadingMore) return ScrollCursorStep.Wait
     if (!canLoadMore || pulledAtCount == loadedCount) return ScrollCursorStep.Land(lastLoaded)
-    return ScrollCursorStep.Pull(lastLoaded)
+    return ScrollCursorStep.Pull(targetIndex)
 }
