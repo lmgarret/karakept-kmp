@@ -105,6 +105,18 @@ object PerfTrace {
     }
 
     /**
+     * Records a duration timed by the caller, for work no single block wraps.
+     *
+     * [PerfTrace.measure] can only time what it encloses, and the most expensive thing a list
+     * publish causes is not enclosed by anything: Compose absorbing the new dataset, which
+     * happens on a later frame, on the main thread, after the state write has returned.
+     */
+    fun report(name: String, millis: Long, detail: String = "") {
+        if (!enabled) return
+        record(name, millis, detail, currentThreadName())
+    }
+
+    /**
      * Dumps and clears the rolling totals once [SUMMARY_EVERY_MS] have passed.
      *
      * Clearing is what makes a summary readable: each one covers the seconds just gone, so a
