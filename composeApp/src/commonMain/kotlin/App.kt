@@ -32,6 +32,7 @@ import io.ktor.client.plugins.HttpSend
 import io.ktor.client.plugins.plugin
 import io.ktor.client.request.header
 import com.karakept.app.utils.AppLogger
+import com.karakept.app.utils.PerfTrace
 import com.karakept.app.data.repository.processPendingActions
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
@@ -49,6 +50,11 @@ fun App(
 ) {
     // Retain log lines in memory for the in-app log viewer (dev builds only).
     remember { AppLogger.captureEnabled = isDevBuild }
+    // Timing instrumentation for the list's main-thread work, same gate.
+    remember { PerfTrace.enabled = isDevBuild }
+    // Runs on the composition's context, which is the main dispatcher: a tick that comes back
+    // late is the main thread having been busy for the difference.
+    androidx.compose.runtime.LaunchedEffect(Unit) { PerfTrace.watchMainThread() }
 
     // Get ServerRepository to access API keys for authentication
     val serverRepository = org.koin.compose.koinInject<com.karakept.app.data.repository.ServerRepository>()

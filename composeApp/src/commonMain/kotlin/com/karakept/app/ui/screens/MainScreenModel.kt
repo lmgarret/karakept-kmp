@@ -2,6 +2,7 @@ package com.karakept.app.ui.screens
 
 import androidx.lifecycle.ViewModel
 import com.karakept.app.utils.AppLogger
+import com.karakept.app.utils.PerfTrace
 import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.RowActionMode
@@ -42,6 +43,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -225,8 +227,13 @@ class MainScreenModel(
         transform: (List<BookmarkEntity>) -> List<BookmarkEntity>
     ) {
         bookmarksMutex.withLock {
-            _accumulatedBookmarks.value = transform(_accumulatedBookmarks.value)
-                .distinctBy { it.remoteId }
+            PerfTrace.measure(
+                "updateAccumulatedBookmarks",
+                "rows=${_accumulatedBookmarks.value.size}"
+            ) {
+                _accumulatedBookmarks.value = transform(_accumulatedBookmarks.value)
+                    .distinctBy { it.remoteId }
+            }
         }
     }
 
@@ -430,6 +437,7 @@ class MainScreenModel(
         .flatMapLatest { server ->
             if (server != null) bookmarkRepository.getBookmarks(server) else flowOf(emptyList())
         }
+        .onEach { PerfTrace.count("allBookmarks.emit", "rows=${it.size}") }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val listCounts: StateFlow<Map<String, Int>> = combine(
@@ -439,19 +447,21 @@ class MainScreenModel(
         settingsRepository.allListSettings
     ) { server, listItems, bookmarks, allSettings ->
         if (server == null) return@combine emptyMap()
-        listItems.associate { list ->
-            val listId = list.id ?: ""
-            val settings = allSettings[listId] ?: com.karakept.app.data.model.ListSettings()
-            val relevantIds = if (settings.includeChildListBookmarks) {
-                setOf(listId) + ListHierarchyUtils.getAllDescendantIds(listId, listItems)
-            } else {
-                setOf(listId)
+        PerfTrace.measure("listCounts", "lists=${listItems.size} rows=${bookmarks.size}") {
+            listItems.associate { list ->
+                val listId = list.id ?: ""
+                val settings = allSettings[listId] ?: com.karakept.app.data.model.ListSettings()
+                val relevantIds = if (settings.includeChildListBookmarks) {
+                    setOf(listId) + ListHierarchyUtils.getAllDescendantIds(listId, listItems)
+                } else {
+                    setOf(listId)
+                }
+                val count = bookmarks.count { bookmark ->
+                    val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                    bookmarkLists.any { it in relevantIds } && (!settings.countOnlyUnread || !bookmark.isRead)
+                }
+                listId to count
             }
-            val count = bookmarks.count { bookmark ->
-                val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                bookmarkLists.any { it in relevantIds } && (!settings.countOnlyUnread || !bookmark.isRead)
-            }
-            listId to count
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
@@ -491,12 +501,14 @@ class MainScreenModel(
         selectedServer, allBookmarks, offlineBookmarkCount
     ) { server, bookmarks, offline ->
         if (server == null) return@combine QuickFilterCounts()
-        QuickFilterCounts(
-            all = bookmarks.count { !it.isArchived },
-            favorites = bookmarks.count { it.isStarred && !it.isArchived },
-            archived = bookmarks.count { it.isArchived },
-            offline = offline
-        )
+        PerfTrace.measure("quickFilterCounts", "rows=${bookmarks.size}") {
+            QuickFilterCounts(
+                all = bookmarks.count { !it.isArchived },
+                favorites = bookmarks.count { it.isStarred && !it.isArchived },
+                archived = bookmarks.count { it.isArchived },
+                offline = offline
+            )
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
 
     /**
@@ -513,7 +525,9 @@ class MainScreenModel(
     val filteredBookmarkCount: StateFlow<Int> = combine(
         allBookmarks, effectiveFilter, offlineBookmarkCount
     ) { all, filter, offline ->
-        BookmarkFilterUtils.countForFilter(all, filter, offline)
+        PerfTrace.measure("filteredBookmarkCount", "rows=${all.size}") {
+            BookmarkFilterUtils.countForFilter(all, filter, offline)
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val highlightsCount: StateFlow<Int> = selectedServer
@@ -594,7 +608,9 @@ class MainScreenModel(
                 }
             } else {
                 combine(allBookmarks, effectiveFilter) { all, filter ->
-                    BookmarkFilterUtils.applySearchFilter(all, filter, query)
+                    PerfTrace.measure("applySearchFilter", "rows=${all.size}") {
+                        BookmarkFilterUtils.applySearchFilter(all, filter, query)
+                    }
                 }
             }
         }
@@ -895,6 +911,7 @@ class MainScreenModel(
     fun onBookmarksVisible(remoteIds: List<String>) {
         val server = _selectedServer.value ?: return
         if (remoteIds.isEmpty()) return
+        PerfTrace.count("visibleRows.progressPull", "rows=${remoteIds.size}")
         viewModelScope.launch {
             try {
                 bookmarkRepository.pullReadingProgressForVisible(server.id, remoteIds)

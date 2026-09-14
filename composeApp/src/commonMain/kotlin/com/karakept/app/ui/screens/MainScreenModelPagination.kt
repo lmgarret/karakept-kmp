@@ -3,6 +3,7 @@ package com.karakept.app.ui.screens
 
 import androidx.lifecycle.viewModelScope
 import com.karakept.app.utils.AppLogger
+import com.karakept.app.utils.PerfTrace
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.FilterConfig
@@ -24,18 +25,22 @@ private suspend fun MainScreenModel.loadBookmarkRows(
     // between the load of a window and its refresh.
     val singleListId = filter.lists.singleOrNull()
 
-    val rows = bookmarkRepository.getBookmarksPaged(
-        server = server,
-        status = filter.status,
-        limit = limit,
-        after = after,
-        sort = filter.sort,
-        listId = singleListId
-    )
+    val rows = PerfTrace.measureSuspending("db.getBookmarksPaged", "limit=$limit") {
+        bookmarkRepository.getBookmarksPaged(
+            server = server,
+            status = filter.status,
+            limit = limit,
+            after = after,
+            sort = filter.sort,
+            listId = singleListId
+        )
+    }
 
-    val filtered = BookmarkFilterUtils.applyClientSideFilters(
-        rows, filter, skipListFilter = singleListId != null
-    )
+    val filtered = PerfTrace.measure("applyClientSideFilters", "rows=${rows.size}") {
+        BookmarkFilterUtils.applyClientSideFilters(
+            rows, filter, skipListFilter = singleListId != null
+        )
+    }
 
     // The cursor tracks the *raw* last row, not the last visible one. A page whose rows the
     // client-side filter all discarded still has to advance, or the walk asks for it again.
@@ -158,7 +163,9 @@ fun MainScreenModel.loadNextPage() {
                     // re-return items already accumulated — drop them to keep keys unique (#274).
                     val existingIds = current.map { it.remoteId }.toSet()
                     val trulyNew = newItems.filter { it.remoteId !in existingIds }
-                    BookmarkFilterUtils.applySorting(current + trulyNew, view.filter.sort)
+                    PerfTrace.measure("applySorting", "rows=${current.size + trulyNew.size}") {
+                        BookmarkFilterUtils.applySorting(current + trulyNew, view.filter.sort)
+                    }
                 }
                 _currentPage.value = lastPage
             }
@@ -254,7 +261,12 @@ fun MainScreenModel.loadThroughIndex(index: Int) {
     viewModelScope.launch {
         try {
             val server = _selectedServer.value ?: return@launch
-            val read = readWholeWindow(server, view.filter, targetPage)
+            val read = PerfTrace.measureSuspending(
+                "seek.readWholeWindow",
+                "index=$index window=${(targetPage + 1) * pageSize}"
+            ) {
+                readWholeWindow(server, view.filter, targetPage)
+            }
 
             // Discard the read if a reset started, or the user switched view, while it ran.
             if (paginationGeneration != generation ||
@@ -262,7 +274,9 @@ fun MainScreenModel.loadThroughIndex(index: Int) {
                 currentView() != view
             ) return@launch
 
-            publishWindow(view, read, targetPage)
+            PerfTrace.measureSuspending("seek.publishWindow", "rows=${read.rows.size}") {
+                publishWindow(view, read, targetPage)
+            }
         } catch (e: Exception) {
             AppLogger.e("MainScreenModel", "Failed to seek to bookmark $index: ${e.message}", e)
             snackbarManager.showErrorWithRetry("Couldn't load bookmarks") {
@@ -370,7 +384,12 @@ internal suspend fun MainScreenModel.refreshLoadedPagesInPlace(server: Server, f
 
     _isLoadingMore.value = true
     try {
-        val read = readWholeWindow(server, filter, lastLoadedPage)
+        val read = PerfTrace.measureSuspending(
+            "refresh.readWholeWindow",
+            "window=${(lastLoadedPage + 1) * pageSize}"
+        ) {
+            readWholeWindow(server, filter, lastLoadedPage)
+        }
 
         // A reset or a newer refresh started, or the user switched away, while we fetched.
         if (paginationGeneration != myGeneration ||
