@@ -47,6 +47,7 @@ import com.karakept.app.ui.utils.ScrollCursorStep
 import com.karakept.app.ui.utils.scrollCursorFraction
 import com.karakept.app.ui.utils.scrollCursorIndex
 import com.karakept.app.ui.utils.scrollCursorStep
+import kotlinx.coroutines.delay
 import kotlin.time.Clock
 import kotlin.math.min
 
@@ -67,6 +68,9 @@ import kotlin.math.min
  * when the target is loaded, when [hasMoreItems] says the table ended first, or when a read comes
  * back having added nothing (see [scrollCursorStep]).
  */
+/** How long the thumb has to hold still before a drag past the window is worth a read. */
+private const val SEEK_SETTLE_MILLIS = 150L
+
 @Composable
 fun ScrollCursorIndicator(
     listState: LazyListState,
@@ -101,7 +105,7 @@ fun ScrollCursorIndicator(
 
     // Reaching the target can outlast the gesture — a row past the window has to be read in
     // first — so it is driven from here rather than from the drag.
-    LaunchedEffect(targetIndex, bookmarks.size, hasMoreItems, isLoadingMore) {
+    LaunchedEffect(targetIndex, isDragging, bookmarks.size, hasMoreItems, isLoadingMore) {
         val target = targetIndex ?: return@LaunchedEffect
         val step = scrollCursorStep(
             targetIndex = target,
@@ -117,6 +121,13 @@ fun ScrollCursorIndicator(
                 pulledAtCount = null
             }
             is ScrollCursorStep.Pull -> {
+                // A moving finger names a new target every few milliseconds, and each one costs a
+                // read of everything up to it: one drag down a long list issued seven, of 200 up
+                // to 1800 rows, and used only the last. Every target change restarts this effect,
+                // so waiting for the finger to settle collapses them into the one that matters.
+                // Lifting the finger is a settled target too — it restarts the effect, and this
+                // branch then runs with nothing to wait for.
+                if (isDragging) delay(SEEK_SETTLE_MILLIS)
                 pulledAtCount = bookmarks.size
                 currentOnSeekToIndex(step.throughIndex)
             }
@@ -256,7 +267,9 @@ fun ScrollCursorIndicator(
 
         // Speech-bubble tooltip: grows from the scrollbar, shrinks away when released.
         AnimatedVisibility(
-            visible = isDragging && label.isNotEmpty(),
+            // Stays up while a seek resolves: the list deliberately holds still until the rows
+            // arrive, and with the tooltip gone too there is nothing on screen saying so.
+            visible = (isDragging || targetIndex != null) && label.isNotEmpty(),
             enter = scaleIn(
                 animationSpec = tween(180),
                 transformOrigin = TransformOrigin(1f, 0.5f)
