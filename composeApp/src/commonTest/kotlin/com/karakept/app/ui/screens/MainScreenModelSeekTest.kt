@@ -173,7 +173,7 @@ class MainScreenModelSeekTest {
         model._accumulatedBookmarks.value.map { it.remoteId.substringAfter('-').toLong() }
 
     @Test
-    fun aSeekReadsTheWindowOutToTheTargetInOneQuery() = runTest(testDispatcher) {
+    fun aSeekReadsTheGapToTheTargetInOneQuery() = runTest(testDispatcher) {
         stubTable()
         val model = createMainScreenModel()
         advanceUntilIdle()
@@ -184,13 +184,40 @@ class MainScreenModelSeekTest {
         model.loadThroughIndex(800)
         advanceUntilIdle()
 
-        val expectedWindow = (seekWindowPage(800, page, 0, page) + 1) * page
-        assertEquals(listOf(expectedWindow), reads, "a seek is one read, not a page-at-a-time walk")
+        val expectedRead = seekReadLimit(800, page, 0, page)
+        assertEquals(listOf(expectedRead), reads, "a seek is one read, not a page-at-a-time walk")
         assertTrue(
             model._accumulatedBookmarks.value.size > 800,
             "the window has to hold the row the cursor asked for"
         )
-        assertEquals((1L..expectedWindow.toLong()).toList(), loadedIds(model))
+        assertEquals((1L..(page + expectedRead).toLong()).toList(), loadedIds(model))
+    }
+
+    @Test
+    fun aSeekReadsPastTheWindowRatherThanOverIt() = runTest(testDispatcher) {
+        stubTable()
+        val model = createMainScreenModel()
+        advanceUntilIdle()
+        reads.clear()
+
+        // Two seeks down the same list: the second must not pay for the first's rows again.
+        model.loadThroughIndex(500)
+        advanceUntilIdle()
+        model.loadThroughIndex(800)
+        advanceUntilIdle()
+
+        assertEquals(2, reads.size)
+        assertTrue(
+            reads[1] < reads[0],
+            "a seek resuming near the target reads less than one starting from the top"
+        )
+        assertTrue(
+            reads.sum() < 800 + 2 * page,
+            "the rows already loaded must not be read a second time"
+        )
+        // Still contiguous from the first row, whatever the reads were sized at.
+        assertEquals(loadedIds(model).sorted(), loadedIds(model))
+        assertEquals(1L, loadedIds(model).first())
     }
 
     @Test
@@ -201,6 +228,7 @@ class MainScreenModelSeekTest {
 
         model.loadThroughIndex(800)
         advanceUntilIdle()
+        val afterSeek = model._accumulatedBookmarks.value.size
         reads.clear()
 
         // Scrolling on from the seeked window resumes after its last row, without re-reading it.
@@ -208,10 +236,7 @@ class MainScreenModelSeekTest {
         advanceUntilIdle()
 
         assertEquals(listOf(page), reads)
-        assertEquals(
-            (1L..(seekWindowPage(800, page, 0, page) + 1).toLong() * page + page).toList(),
-            loadedIds(model)
-        )
+        assertEquals((1L..(afterSeek + page).toLong()).toList(), loadedIds(model))
         assertTrue(model.hasMoreItems.value)
     }
 
@@ -227,7 +252,7 @@ class MainScreenModelSeekTest {
         advanceUntilIdle()
 
         assertEquals(shortTable.size, model._accumulatedBookmarks.value.size)
-        assertFalse(model.hasMoreItems.value, "the read could not fill the window, so the table ended")
+        assertFalse(model.hasMoreItems.value, "the read came back short, so the table ended")
         assertEquals(1, reads.size)
     }
 

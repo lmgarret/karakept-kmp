@@ -195,41 +195,42 @@ class PaginationUtilsTest {
     }
 
     // -------------------------------------------------------------------------
-    // seekWindowPage — how far a fast-scroll jump has to read (#273)
+    // seekReadLimit — how much a fast-scroll jump has to read (#273)
     // -------------------------------------------------------------------------
 
-    /** Nothing is filtered out, so the window needs the target's own page plus the slack one. */
+    /** Nothing is filtered out, so the read is the gap to the target plus the slack page. */
     @Test
-    fun seekReachesTheTargetsPageWhenNothingIsFilteredOut() {
-        // One page loaded, every row surviving: row 800 sits on page 16.
-        val page = seekWindowPage(targetIndex = 800, loadedRows = 50, loadedPage = 0, pageSize = 50)
-        assertEquals(17, page)
-        assertTrue((page + 1) * 50 > 800)
+    fun seekReadsTheGapWhenNothingIsFilteredOut() {
+        // One page loaded, every row surviving: row 800 is 751 rows past the 50 on hand.
+        assertEquals(751 + 50, seekReadLimit(targetIndex = 800, loadedRows = 50, loadedPage = 0, pageSize = 50))
     }
 
-    /** Half the rows discarded by the filter, so the window has to reach twice as far. */
+    /** Half the rows discarded by the filter, so the read has to reach twice as far. */
     @Test
     fun seekReadsFurtherWhenTheFilterDiscardsRows() {
-        // 50 rows survived out of the 100 raw rows read for them.
-        val page = seekWindowPage(targetIndex = 400, loadedRows = 50, loadedPage = 1, pageSize = 50)
-        assertEquals(17, page)
+        // 50 rows survived out of the 100 raw rows read for them: 351 wanted, ~702 raw.
+        assertEquals(702 + 50, seekReadLimit(targetIndex = 400, loadedRows = 50, loadedPage = 1, pageSize = 50))
+    }
+
+    /** The rows already scrolled past are not read again — only the shortfall is. */
+    @Test
+    fun seekDoesNotReReadTheLoadedWindow() {
+        val fromTheStart = seekReadLimit(targetIndex = 2000, loadedRows = 50, loadedPage = 0, pageSize = 50)
+        val fromHalfway = seekReadLimit(targetIndex = 2000, loadedRows = 1500, loadedPage = 29, pageSize = 50)
+        assertTrue(fromHalfway < fromTheStart)
+        // The gap is ~500 rows, so the read is that plus slack — not the 2000 behind it.
+        assertTrue(fromHalfway < 700, "a seek near the target must not re-read what it holds")
     }
 
     @Test
-    fun seekNeverShrinksTheWindow() {
-        assertEquals(
-            9,
-            seekWindowPage(targetIndex = 3, loadedRows = 400, loadedPage = 9, pageSize = 50)
-        )
+    fun seekReadsNothingForARowAlreadyLoaded() {
+        assertEquals(0, seekReadLimit(targetIndex = 3, loadedRows = 400, loadedPage = 7, pageSize = 50))
     }
 
     /** A window that yielded nothing says nothing about density — reach one page further. */
     @Test
-    fun seekExtendsByOnePageWhenNothingSurvivedTheFilter() {
-        assertEquals(
-            3,
-            seekWindowPage(targetIndex = 900, loadedRows = 0, loadedPage = 2, pageSize = 50)
-        )
+    fun seekReadsOnePageWhenNothingSurvivedTheFilter() {
+        assertEquals(50, seekReadLimit(targetIndex = 900, loadedRows = 0, loadedPage = 2, pageSize = 50))
     }
 
     /** A seek to the end of a large list is one read, not a page-at-a-time walk. */
@@ -237,24 +238,24 @@ class PaginationUtilsTest {
     fun seekToTheEndOfALargeListIsOneRead() {
         val pageSize = 50
         val total = 20_000
-        val page = seekWindowPage(
+        val limit = seekReadLimit(
             targetIndex = total - 1,
             loadedRows = pageSize,
             loadedPage = 0,
             pageSize = pageSize
         )
-        assertTrue((page + 1) * pageSize >= total)
+        assertTrue(pageSize + limit >= total)
     }
 
-    /** The arithmetic runs in Long: a huge target must not wrap into a tiny window. */
+    /** The arithmetic runs in Long: a huge target must not wrap into a tiny read. */
     @Test
     fun seekDoesNotOverflowOnAHugeTarget() {
-        val page = seekWindowPage(
+        val limit = seekReadLimit(
             targetIndex = 5_000_000,
             loadedRows = 1,
             loadedPage = 100,
             pageSize = 50
         )
-        assertTrue(page > 100)
+        assertTrue(limit > 5_000_000)
     }
 }

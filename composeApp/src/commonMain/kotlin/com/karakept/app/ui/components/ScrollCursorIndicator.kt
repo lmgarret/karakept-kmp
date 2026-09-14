@@ -47,7 +47,6 @@ import com.karakept.app.ui.utils.ScrollCursorStep
 import com.karakept.app.ui.utils.scrollCursorFraction
 import com.karakept.app.ui.utils.scrollCursorIndex
 import com.karakept.app.ui.utils.scrollCursorStep
-import kotlinx.coroutines.delay
 import kotlin.time.Clock
 import kotlin.math.min
 
@@ -68,9 +67,6 @@ import kotlin.math.min
  * when the target is loaded, when [hasMoreItems] says the table ended first, or when a read comes
  * back having added nothing (see [scrollCursorStep]).
  */
-/** How long the thumb has to hold still before a drag past the window is worth a read. */
-private const val SEEK_SETTLE_MILLIS = 150L
-
 @Composable
 fun ScrollCursorIndicator(
     listState: LazyListState,
@@ -121,13 +117,13 @@ fun ScrollCursorIndicator(
                 pulledAtCount = null
             }
             is ScrollCursorStep.Pull -> {
-                // A moving finger names a new target every few milliseconds, and each one costs a
-                // read of everything up to it: one drag down a long list issued seven, of 200 up
-                // to 1800 rows, and used only the last. Every target change restarts this effect,
-                // so waiting for the finger to settle collapses them into the one that matters.
-                // Lifting the finger is a settled target too — it restarts the effect, and this
-                // branch then runs with nothing to wait for.
-                if (isDragging) delay(SEEK_SETTLE_MILLIS)
+                // Asked for at once, never on a settling delay. A moving finger does name a new
+                // target every few milliseconds, but the read is already one-at-a-time — the
+                // seek refuses while one is in flight, and this effect re-runs against the
+                // current target when it lands — so the reads a drag issues are self-limiting.
+                // Waiting for the finger to hold still instead starves the seek precisely when
+                // the user is wiggling the thumb because nothing appears to be happening: every
+                // twitch restarts this effect and cancels the wait.
                 pulledAtCount = bookmarks.size
                 currentOnSeekToIndex(step.throughIndex)
             }

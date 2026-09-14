@@ -223,17 +223,19 @@ fun MainScreenModel.loadNextPage() {
 }
 
 /**
- * Grows the loaded window in one read until it holds the row at [index].
+ * Extends the loaded window in one read until it holds the row at [index].
  *
  * This is the fast-scroll cursor's seek. It can ask for a row hundreds of pages past the window,
  * and walking there a page at a time is both slow and visible — every page that lands scrolls the
  * list a screenful further, so holding the thumb at the bottom of a large list crawls through the
- * whole of it instead of jumping to the end. A window is read as a single query whatever its size
- * (see [readWholeWindow]), so the seek is one read and the list moves once, when it lands.
+ * whole of it instead of jumping to the end.
  *
- * [index] counts rows *after* the client-side filters, while a window is measured in raw rows, so
- * how far to read is estimated by [seekWindowPage] from what the current window yielded. An
- * estimate that falls short still leaves the window larger, so the caller asking again converges.
+ * The read resumes from the window's own cursor and appends, like [loadNextPage] but sized to the
+ * distance rather than to one page: a seek costs the rows between here and the target, never the
+ * ones already scrolled past. [index] counts rows *after* the client-side filters while a read is
+ * measured in raw rows, so how much to ask for is estimated by [seekReadLimit] from what the
+ * window has yielded so far. An estimate that falls short still leaves the window larger, so the
+ * caller asking again converges.
  */
 fun MainScreenModel.loadThroughIndex(index: Int) {
     if (_isLoadingMore.value || !_hasMoreItems.value || _searchQuery.value.isNotBlank()) return
@@ -247,25 +249,26 @@ fun MainScreenModel.loadThroughIndex(index: Int) {
     if (index < loadedRows) return
 
     val lastLoadedPage = _currentPage.value
-    val targetPage = seekWindowPage(
+    val readLimit = seekReadLimit(
         targetIndex = index,
         loadedRows = loadedRows,
         loadedPage = lastLoadedPage,
         pageSize = pageSize
     )
-    if (targetPage <= lastLoadedPage) return
+    if (readLimit <= 0) return
 
     val generation = paginationGeneration
+    val resumeFrom = paginationCursor
     _isLoadingMore.value = true
 
     viewModelScope.launch {
         try {
             val server = _selectedServer.value ?: return@launch
             val read = PerfTrace.measureSuspending(
-                "seek.readWholeWindow",
-                "index=$index window=${(targetPage + 1) * pageSize}"
+                "seek.read",
+                "index=$index limit=$readLimit"
             ) {
-                readWholeWindow(server, view.filter, targetPage)
+                loadBookmarkRows(server, view.filter, after = resumeFrom, limit = readLimit)
             }
 
             // Discard the read if a reset started, or the user switched view, while it ran.
@@ -274,8 +277,23 @@ fun MainScreenModel.loadThroughIndex(index: Int) {
                 currentView() != view
             ) return@launch
 
-            PerfTrace.measureSuspending("seek.publishWindow", "rows=${read.rows.size}") {
-                publishWindow(view, read, targetPage)
+            if (read.items.isNotEmpty()) {
+                updateAccumulatedBookmarks { current ->
+                    // A sync committing rows mid-read can hand back rows the window already
+                    // holds; dropping them keeps the LazyColumn's keys unique (#274).
+                    val existingIds = current.mapTo(HashSet(current.size)) { it.remoteId }
+                    val trulyNew = read.items.filter { it.remoteId !in existingIds }
+                    PerfTrace.measure("applySorting", "rows=${current.size + trulyNew.size}") {
+                        BookmarkFilterUtils.applySorting(current + trulyNew, view.filter.sort)
+                    }
+                }
+            }
+            // The window now spans the pages its raw rows fall on, which is what a later
+            // whole-window refresh reads back.
+            _currentPage.value = lastLoadedPage + (read.rawCount + pageSize - 1) / pageSize
+            paginationCursor = read.nextCursor ?: paginationCursor
+            if (read.rawCount < readLimit) {
+                _hasMoreItems.value = false
             }
         } catch (e: Exception) {
             AppLogger.e("MainScreenModel", "Failed to seek to bookmark $index: ${e.message}", e)

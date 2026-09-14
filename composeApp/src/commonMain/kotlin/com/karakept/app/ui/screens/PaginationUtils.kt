@@ -73,36 +73,38 @@ internal data class PageRead<T, C>(
 )
 
 /**
- * Index of the last page a window has to span to hold the row at [targetIndex].
+ * How many raw rows a seek has to read, past the window it already holds, to reach [targetIndex].
  *
- * [targetIndex] counts rows that survived the client-side filter, while a window is measured in
- * the raw rows the query returns. The two are related only by what the window already loaded —
+ * [targetIndex] counts rows that survived the client-side filter, while a read is measured in the
+ * raw rows the query returns. The two are related only by what the window already loaded —
  * [loadedRows] visible out of the `(loadedPage + 1) * pageSize` raw rows read for them — so the
  * reach is estimated from that yield, plus a page of slack.
  *
- * A view whose filter discards most of what it reads therefore asks for a proportionally larger
- * window, and the estimate bounds itself: the fewer rows survive, the fewer there are to seek
- * past, so the product stays around the size of the table. An estimate that still falls short
- * leaves the window bigger than it was, so a caller that asks again converges instead of
- * repeating itself — which is why the result is never below [loadedPage].
+ * A view whose filter discards most of what it reads therefore asks for proportionally more, and
+ * the estimate bounds itself: the fewer rows survive, the fewer there are to seek past. A read
+ * that still falls short leaves the window larger than it was, so a caller that asks again
+ * resumes from there instead of repeating itself.
+ *
+ * Only the shortfall is read. The window is left alone and the rows land after it — re-reading
+ * from the first row would make every seek cost everything the user has already scrolled past,
+ * which is the wrong shape for a gesture that is repeated as a thumb moves.
  */
-internal fun seekWindowPage(
+internal fun seekReadLimit(
     targetIndex: Int,
     loadedRows: Int,
     loadedPage: Int,
     pageSize: Int
 ): Int {
-    if (pageSize <= 0) return loadedPage
+    if (pageSize <= 0) return 0
+    val shortfall = targetIndex + 1L - loadedRows
+    if (shortfall <= 0) return 0
     val rawRead = (loadedPage + 1).toLong() * pageSize
     val neededRaw = if (loadedRows <= 0) {
         // Nothing survived the filter, so the window says nothing about how dense the rows are.
         // Reach one page further and let the next read refine it.
-        rawRead + pageSize
+        pageSize.toLong()
     } else {
-        val wanted = (targetIndex.toLong() + 1) * rawRead
-        val scaled = (wanted + loadedRows - 1) / loadedRows
-        scaled + pageSize
+        (shortfall * rawRead + loadedRows - 1) / loadedRows + pageSize
     }
-    val page = (neededRaw - 1) / pageSize
-    return page.coerceIn(loadedPage.toLong(), (Int.MAX_VALUE / pageSize).toLong()).toInt()
+    return neededRaw.coerceIn(pageSize.toLong(), Int.MAX_VALUE.toLong()).toInt()
 }
