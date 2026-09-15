@@ -15,6 +15,7 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,12 @@ import com.karakept.app.utils.TestAppDispatchers
  *
  * It has to describe the whole filtered view, not the window paged in so far: a denominator that
  * grows with the window walks the thumb back up the track every time a page lands (#273).
+ *
+ * The counting itself is now a `COUNT(*)` over the view's own predicate, so what it *means* to
+ * count a tag, a list or the offline view is proved against real SQLite in
+ * `BookmarkViewPredicateTest` — including that the count and the rows agree for every filter
+ * shape. What is left here is the wiring: that the model asks for the count of the filter it is
+ * actually showing, and re-asks when that filter changes.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class FilteredBookmarkCountTest {
@@ -98,7 +105,20 @@ class FilteredBookmarkCountTest {
         every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
         every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
         every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
+
+        countedFilters.clear()
+        every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } answers {
+            val filter = secondArg<FilterConfig>()
+            countedFilters += filter
+            flowOf(countsByFilter[filter] ?: 0)
+        }
     }
+
+    /** Every filter the model has asked the database to count, in order. */
+    private val countedFilters = mutableListOf<FilterConfig>()
+
+    /** What the database answers for a given filter. */
+    private var countsByFilter: Map<FilterConfig, Int> = emptyMap()
 
     @AfterTest
     fun tearDown() {
@@ -156,84 +176,106 @@ class FilteredBookmarkCountTest {
     }
 
     @Test
-    fun `filteredBookmarkCount counts the whole filtered view`() = runTest(testDispatcher) {
-        // Far more than one page: the count must not describe the loaded window.
-        val bookmarks = (1L..250L).map { createBookmarkEntity(it) } +
-            (251L..260L).map { createBookmarkEntity(it, isArchived = true) }
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
+    fun `filteredBookmarkCount counts the whole filtered view, not the loaded window`() =
+        runTest(testDispatcher) {
+            // Far more than one page. The count is answered by the database for the whole view,
+            // so nothing about how far paging has walked can reach it (#273).
+            countsByFilter = mapOf(FilterConfig() to 250)
+            every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+            // Paging has reached 20 rows of the 250 the view holds.
+            val window = (1L..20L).map { createBookmarkEntity(it) }
+            coEvery {
+                bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any(), any())
+            } returns window
 
-        val model = createMainScreenModel()
-        val job = launch { model.filteredBookmarkCount.collect {} }
-        advanceUntilIdle()
+            val model = createMainScreenModel()
+            val job = launch { model.filteredBookmarkCount.collect {} }
+            val windowJob = launch { model.bookmarks.collect {} }
+            advanceUntilIdle()
 
-        assertEquals(250, model.filteredBookmarkCount.value)
-        job.cancel()
-    }
+            assertEquals(20, model.bookmarks.value.size, "the window is what paging has reached")
+            assertEquals(
+                250,
+                model.filteredBookmarkCount.value,
+                "and the count is the whole view regardless — a denominator that grew with the " +
+                    "window walked the thumb back up the track on every page (#273)"
+            )
+            job.cancel()
+            windowJob.cancel()
+        }
 
     @Test
     fun `filteredBookmarkCount follows the active filter`() = runTest(testDispatcher) {
-        val bookmarks = listOf(
-            createBookmarkEntity(1, tags = "kotlin"),
-            createBookmarkEntity(2, tags = "kotlin", isRead = true),
-            createBookmarkEntity(3, tags = "swift"),
-            createBookmarkEntity(4)
-        )
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
+        val kotlinTag = FilterConfig(tags = listOf("kotlin"))
+        val kotlinUnread = FilterConfig(tags = listOf("kotlin"), readFilter = ReadFilter.UNREAD)
+        countsByFilter = mapOf(FilterConfig() to 4, kotlinTag to 2, kotlinUnread to 1)
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
 
         val model = createMainScreenModel()
         val job = launch { model.filteredBookmarkCount.collect {} }
         advanceUntilIdle()
         assertEquals(4, model.filteredBookmarkCount.value)
 
-        model.applyFilter(FilterConfig(tags = listOf("kotlin")))
+        model.applyFilter(kotlinTag)
         advanceUntilIdle()
         assertEquals(2, model.filteredBookmarkCount.value)
 
-        model.applyFilter(FilterConfig(tags = listOf("kotlin"), readFilter = ReadFilter.UNREAD))
+        model.applyFilter(kotlinUnread)
         advanceUntilIdle()
         assertEquals(1, model.filteredBookmarkCount.value)
 
+        // Every narrowing was asked of the database rather than derived from the previous answer.
+        assertEquals(
+            listOf(FilterConfig(), kotlinTag, kotlinUnread),
+            countedFilters.distinct(),
+            "the count must be re-read for the filter on screen"
+        )
         job.cancel()
     }
 
     @Test
-    fun `filteredBookmarkCount counts a list view by membership`() = runTest(testDispatcher) {
-        val bookmarks = listOf(
-            createBookmarkEntity(1, listIds = "list-1"),
-            // A single-list view applies no status clause, so its archived members count too.
-            createBookmarkEntity(2, listIds = "list-1", isArchived = true),
-            createBookmarkEntity(3, listIds = "list-2")
-        )
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
+    fun `a list view is counted by the list filter, not by a status the drawer chose`() =
+        runTest(testDispatcher) {
+            // That a single-list view counts its archived members is a property of the predicate
+            // and is proved against SQLite in BookmarkViewPredicateTest. What matters here is
+            // that the list reaches the query at all.
+            val listView =
+                FilterConfig(status = FilterStatus.ALL_INCLUDING_ARCHIVED, lists = listOf("list-1"))
+            countsByFilter = mapOf(listView to 2)
+            every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
 
-        val model = createMainScreenModel()
-        val job = launch { model.filteredBookmarkCount.collect {} }
-        advanceUntilIdle()
+            val model = createMainScreenModel()
+            val job = launch { model.filteredBookmarkCount.collect {} }
+            advanceUntilIdle()
 
-        model.applyFilter(
-            FilterConfig(status = FilterStatus.ALL_INCLUDING_ARCHIVED, lists = listOf("list-1"))
-        )
-        advanceUntilIdle()
+            model.applyFilter(listView)
+            advanceUntilIdle()
 
-        assertEquals(2, model.filteredBookmarkCount.value)
-        job.cancel()
-    }
+            assertEquals(2, model.filteredBookmarkCount.value)
+            assertEquals(listView, countedFilters.last())
+            job.cancel()
+        }
 
     @Test
-    fun `filteredBookmarkCount takes the offline view's own count`() = runTest(testDispatcher) {
-        // These rows carry no content — the offline condition is a column they were read without.
+    fun `the offline view is counted like every other view`() = runTest(testDispatcher) {
+        // It used to need its own count, because the offline condition reads a `content` column
+        // the in-memory rows are loaded without, and the in-memory view stood on a
+        // reading-time proxy instead. Counting in SQL reads the column it means, so the offline
+        // view goes through the same path as the rest and the special case is gone.
+        val offline = FilterConfig(status = FilterStatus.OFFLINE)
+        countsByFilter = mapOf(offline to 3)
         every { bookmarkRepository.getBookmarks(any()) } returns
             flowOf((1L..5L).map { createBookmarkEntity(it) })
-        every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(3)
 
         val model = createMainScreenModel()
         val job = launch { model.filteredBookmarkCount.collect {} }
         advanceUntilIdle()
 
-        model.applyFilter(FilterConfig(status = FilterStatus.OFFLINE))
+        model.applyFilter(offline)
         advanceUntilIdle()
 
         assertEquals(3, model.filteredBookmarkCount.value)
+        assertEquals(offline, countedFilters.last())
         job.cancel()
     }
 
@@ -256,26 +298,29 @@ class FilteredBookmarkCountTest {
     }
 
     @Test
-    fun `filteredBookmarks and the count describe the same rows`() = runTest(testDispatcher) {
-        val bookmarks = listOf(
-            createBookmarkEntity(1, tags = "kotlin"),
-            createBookmarkEntity(2, tags = "kotlin"),
-            createBookmarkEntity(3, tags = "swift"),
-            createBookmarkEntity(4, isArchived = true)
-        )
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
+    fun `the count is asked for the same filter the rows are read for`() = runTest(testDispatcher) {
+        // A thumb at the end of the track must point at a row the list can name, so the count and
+        // the rows have to be about one view. They agree because they share a predicate — that
+        // agreement is checked directly against SQLite in BookmarkViewPredicateTest; here it is
+        // that the model does not hand the two different filters.
+        val kotlinTag = FilterConfig(tags = listOf("kotlin"))
+        countsByFilter = mapOf(kotlinTag to 2)
+        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
 
         val model = createMainScreenModel()
         val job = launch { model.filteredBookmarks.collect {} }
         val countJob = launch { model.filteredBookmarkCount.collect {} }
         advanceUntilIdle()
 
-        model.applyFilter(FilterConfig(tags = listOf("kotlin")))
+        model.applyFilter(kotlinTag)
         advanceUntilIdle()
 
-        // A thumb at the end of the track must point at a row the tooltip can name.
-        assertEquals(model.filteredBookmarkCount.value, model.filteredBookmarks.value.size)
-        assertEquals(2, model.filteredBookmarks.value.size)
+        assertEquals(2, model.filteredBookmarkCount.value)
+        assertEquals(
+            model.effectiveFilterNow(),
+            countedFilters.last(),
+            "the count must describe the view on screen, not the one requested before it resolved"
+        )
         job.cancel()
         countJob.cancel()
     }

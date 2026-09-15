@@ -539,16 +539,25 @@ class MainScreenModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * How many bookmarks the current view holds — the denominator the scroll cursor maps over.
+     * How many bookmarks the current view holds — the list's total, and the denominator the
+     * scroll cursor maps over.
      *
-     * Derived from [filteredBookmarks] so the count and the rows it counts can never disagree:
-     * a thumb at the end of the track has to point at the last row the tooltip can name.
+     * Asked of the database, from the same `WHERE` that selects the view's rows
+     * ([BookmarkRepository.buildViewPredicate]), so the count and the rows it counts cannot
+     * disagree: a thumb at the end of the track points at a row the query will return.
+     *
+     * It used to be the size of [filteredBookmarks] — the whole view rebuilt in memory on every
+     * database write, to learn one number. It also had to special-case `FilterStatus.OFFLINE`,
+     * whose real predicate reads a `content` column the in-memory rows do not carry; the query
+     * reads the column it means, so that exception is gone.
      */
-    val filteredBookmarkCount: StateFlow<Int> = combine(
-        filteredBookmarks, effectiveFilter, offlineBookmarkCount
-    ) { view, filter, offline ->
-        BookmarkFilterUtils.countForView(view, filter, offline)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    val filteredBookmarkCount: StateFlow<Int> =
+        combine(selectedServer, effectiveFilter) { server, filter -> server to filter }
+            .flatMapLatest { (server, filter) ->
+                if (server == null) flowOf(0)
+                else bookmarkRepository.countBookmarksForViewFlow(server, filter)
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val highlightsCount: StateFlow<Int> = selectedServer
         .flatMapLatest { server ->

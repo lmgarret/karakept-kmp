@@ -229,6 +229,12 @@ interface BookmarkDao {
     @RawQuery
     suspend fun countBookmarks(query: RoomRawQuery): Int
 
+    // The same count, re-emitted whenever the table changes — what a view's total is watched
+    // through. Observing a count rather than the rows is the point: the total used to be the
+    // size of a 4000-row list rebuilt in memory on every write.
+    @RawQuery(observedEntities = [BookmarkEntity::class])
+    fun countBookmarksFlow(query: RoomRawQuery): Flow<Int>
+
     // Count queries for pagination
     @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId")
     suspend fun getTotalBookmarkCount(serverId: String): Int

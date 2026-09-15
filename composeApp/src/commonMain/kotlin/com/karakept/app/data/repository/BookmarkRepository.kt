@@ -529,6 +529,10 @@ class BookmarkRepository(
     suspend fun countBookmarksForView(server: Server, filter: FilterConfig): Int =
         bookmarkDao.countBookmarks(buildCountQuery(server.id, filter))
 
+    /** [countBookmarksForView], re-read whenever the table changes. */
+    fun countBookmarksForViewFlow(server: Server, filter: FilterConfig): Flow<Int> =
+        bookmarkDao.countBookmarksFlow(buildCountQuery(server.id, filter))
+
     companion object {
         /**
          * Minimum gap between two reading-progress passes triggered by list/filter syncs.
