@@ -19,7 +19,6 @@ import com.karakept.app.data.repository.batchSetFavourite
 import com.karakept.app.data.repository.batchDelete
 import com.karakept.app.data.repository.batchUpdateTags
 import com.karakept.app.data.repository.batchMoveToList
-import com.karakept.app.domain.BookmarkFilterUtils
 
 /** Track the last clicked bookmark index (call on every normal click). */
 fun MainScreenModel.trackLastClickedIndex(index: Int) {

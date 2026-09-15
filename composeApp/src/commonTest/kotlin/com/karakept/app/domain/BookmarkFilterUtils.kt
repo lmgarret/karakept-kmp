@@ -9,11 +9,17 @@ import com.karakept.app.data.model.SortOption
 import com.karakept.app.utils.NoCaseCollationUtils
 
 /**
- * Pure, stateless utility functions for applying filters and sorting to
- * in-memory bookmark lists.
+ * The view, as the app used to compute it in memory.
  *
- * All functions here are free of side-effects and require no dependencies,
- * making them straightforward to unit-test.
+ * This is no longer how the app decides what a view holds — `BookmarkRepository.buildViewPredicate`
+ * is, and the list reads its rows from that. It lives in the test source set because that is the
+ * only thing it is still for: an independent statement of what a filter *means*, written before
+ * the SQL and not derived from it, which `BookmarkViewIndexAgreementTest` checks the predicate
+ * against row by row for every sort, status, list and client-side filter.
+ *
+ * Keeping it is what makes that test worth anything — a predicate checked only against itself
+ * proves nothing. Keeping it *here* is what stops it drifting back into a second definition of
+ * the view, which is how the two came to disagree about title order in the first place.
  */
 object BookmarkFilterUtils {
 

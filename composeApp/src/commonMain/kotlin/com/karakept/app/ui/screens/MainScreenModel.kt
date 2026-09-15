@@ -57,7 +57,6 @@ import com.karakept.app.domain.action.AiAction
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.domain.BookmarkFilterUtils
 import com.karakept.app.domain.DefaultFilterResolver
 import com.karakept.app.domain.ListCountUtils
 import com.karakept.app.domain.TagCountUtils
