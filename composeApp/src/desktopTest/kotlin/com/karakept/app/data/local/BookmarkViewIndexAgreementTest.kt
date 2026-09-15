@@ -1,0 +1,316 @@
+package com.karakept.app.data.local
+
+import androidx.room3.Room
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkCursor
+import com.karakept.app.data.model.ContentFilter
+import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.ReadFilter
+import com.karakept.app.data.model.SortOption
+import com.karakept.app.data.repository.BookmarkRepository
+import com.karakept.app.domain.BookmarkFilterUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/**
+ * The in-memory view and the paged query must agree on *which row sits at index n*.
+ *
+ * A virtualized list addresses rows by absolute index, while the paged query addresses them by
+ * sort key. The bridge between the two is the in-memory view: if `orderedViewFor(all, filter)[n]`
+ * is the row the walk returns at position `n`, then a jump to an arbitrary index can seed its
+ * keyset cursor straight out of the resident rows — no walk, no OFFSET, and no page-boundary
+ * index to invalidate on every write.
+ *
+ * That agreement is *built* — `applySorting` ties-break on `localId` to match `toOrderBySql`, and
+ * `viewFor` mirrors the query's status clause — but built is not proven, and every place the two
+ * disagree is a row rendered at the wrong index. These tests prove it against real SQLite, on
+ * data shaped to hit the joins each side makes separately: ties on every sort key, mixed-case and
+ * non-ASCII titles, tag and list filters that only the client side applies, and page boundaries
+ * that fall inside a run of equal keys.
+ */
+class BookmarkViewIndexAgreementTest {
+
+    private lateinit var db: AppDatabase
+    private val serverId = "server-1"
+
+    /**
+     * Rows whose sort keys collide in every way the real table does: a batch import sharing one
+     * `createdAt`, a library where most `readingTimeMinutes` are 0, and titles that differ only
+     * by case. Non-ASCII titles are in deliberately — SQLite's `NOCASE` folds ASCII only, while
+     * Kotlin's `lowercase()` folds all of Unicode, so this is where the two comparators part
+     * company; the emoji is there because it is a surrogate pair, which UTF-16 and code-point
+     * order disagree about.
+     *
+     * The count is prime so that no view built by taking every nth row draws a fixed subset of
+     * titles. At 18 it shared a factor with the list cycle, and the single-list views happened
+     * to hold no case-divergent pair at all — so they agreed for a reason that was not the one
+     * being tested.
+     */
+    private val titles = listOf(
+        "Alpha", "alpha", "ALPHA", "Beta", "beta",
+        "Über alles", "uber alles", "Ångström", "ångström",
+        "Zebra", "zebra", "", " leading space", "Émile", "émile",
+        "日本語のタイトル", "Ωmega", "ωmega", "🚀 rocket"
+    )
+
+    @Before
+    fun setUp(): Unit = runBlocking {
+        db = Room.inMemoryDatabaseBuilder<AppDatabase>()
+            .setDriver(BundledSQLiteDriver())
+            .setQueryCoroutineContext(Dispatchers.IO)
+            .build()
+
+        db.bookmarkDao().insertBookmarks(
+            (1..180).map { id ->
+                val hasContent = id % 4 == 0
+                BookmarkEntity(
+                    remoteId = "remote-$id",
+                    serverId = serverId,
+                    url = "https://example.com/$id",
+                    title = titles[id % titles.size],
+                    // Kept consistent with readingTimeMinutes: the OFFLINE view is the one
+                    // place the two sides genuinely differ, and it has its own test below.
+                    content = if (hasContent) "body of $id" else null,
+                    imageUrl = null,
+                    bannerImageAssetId = null,
+                    screenshotAssetId = null,
+                    description = null,
+                    // Three distinct timestamps across 180 rows: every page boundary lands
+                    // inside a run of tied keys.
+                    createdAt = 1_700_000_000_000L + (id % 3) * 86_400_000L,
+                    isArchived = id % 7 == 0,
+                    isStarred = id % 5 == 0,
+                    isRead = id % 3 == 0,
+                    // Offset from isRead so IN_PROGRESS (progress > 0 and *not* read) is a
+                    // non-empty view — every multiple of 6 is also a multiple of 3.
+                    readingProgress = if (id % 6 == 2) 0.5f else 0f,
+                    tags = when (id % 4) {
+                        0 -> "kotlin,android"
+                        1 -> "kotlin"
+                        2 -> ""
+                        else -> "rust,android"
+                    },
+                    listIds = when (id % 3) {
+                        0 -> "list-a"
+                        1 -> "list-a,list-b"
+                        else -> "list-c"
+                    },
+                    readingTimeMinutes = if (hasContent) (id % 11) + 1 else 0
+                )
+            }
+        )
+    }
+
+    @After
+    fun tearDown() {
+        db.close()
+    }
+
+    /** Every row as `MainScreenModel.allBookmarks` holds it — content stripped by the DAO. */
+    private suspend fun allBookmarks(): List<BookmarkEntity> =
+        db.bookmarkDao().getBookmarksForServer(serverId).first()
+
+    /**
+     * The whole view as the forward walk assembles it: keyset pages, each run through the
+     * client-side filters exactly as `MainScreenModel.loadBookmarkRows` does.
+     */
+    private suspend fun pagedView(
+        filter: FilterConfig,
+        pageSize: Int = 20,
+        maxReads: Int = 200
+    ): List<BookmarkEntity> = buildList {
+        val singleListId = filter.lists.singleOrNull()
+        var cursor: BookmarkCursor? = null
+        var reads = 0
+        while (true) {
+            check(reads++ < maxReads) { "paging did not terminate — is the cursor strict?" }
+            val raw = db.bookmarkDao().getBookmarksPaged(
+                BookmarkRepository.buildPagedQuery(
+                    serverId = serverId,
+                    status = filter.status,
+                    sort = filter.sort,
+                    listId = singleListId,
+                    limit = pageSize,
+                    after = cursor
+                )
+            )
+            if (raw.isEmpty()) break
+            addAll(
+                BookmarkFilterUtils.applyClientSideFilters(
+                    raw, filter, skipListFilter = singleListId != null
+                )
+            )
+            cursor = BookmarkCursor.of(raw.last())
+        }
+    }
+
+    /** Asserts the paged walk and the in-memory view name the same row at every index. */
+    private suspend fun assertAgrees(filter: FilterConfig, label: String) {
+        val paged = pagedView(filter)
+        val inMemory = BookmarkFilterUtils.orderedViewFor(allBookmarks(), filter)
+        assertTrue(paged.isNotEmpty(), "$label: fixture produced an empty view, so it proves nothing")
+        assertEquals(
+            paged.map { it.localId },
+            inMemory.map { it.localId },
+            "$label: the row at each index must be the same on both sides"
+        )
+    }
+
+    @Test
+    fun `every sort option places the same row at each index`() = runBlocking {
+        for (sort in SortOption.entries) {
+            val filter = FilterConfig(sort = sort)
+            assertAgrees(filter, "sort=$sort")
+        }
+    }
+
+    @Test
+    fun `every status clause places the same row at each index`() = runBlocking {
+        // OFFLINE is excluded on purpose and covered by its own test below.
+        val statuses = FilterStatus.entries - FilterStatus.OFFLINE
+        for (status in statuses) {
+            for (sort in SortOption.entries) {
+                val filter = FilterConfig(status = status, sort = sort)
+                assertAgrees(filter, "status=$status sort=$sort")
+            }
+        }
+    }
+
+    @Test
+    fun `a single-list view places the same row at each index`() = runBlocking {
+        // The single-list branch is the one where the query filters and the in-memory view
+        // does not apply a status clause at all — the two are built to meet in the middle.
+        for (listId in listOf("list-a", "list-b", "list-c")) {
+            for (sort in SortOption.entries) {
+                val filter = FilterConfig(
+                    status = FilterStatus.ALL_INCLUDING_ARCHIVED,
+                    lists = listOf(listId),
+                    sort = sort
+                )
+                assertAgrees(filter, "list=$listId sort=$sort")
+            }
+        }
+    }
+
+    @Test
+    fun `client-side filters place the same row at each index`() = runBlocking {
+        val filters = listOf(
+            FilterConfig(tags = listOf("kotlin")),
+            FilterConfig(tags = listOf("kotlin", "rust")),
+            FilterConfig(readFilter = ReadFilter.UNREAD),
+            FilterConfig(readFilter = ReadFilter.READ),
+            FilterConfig(readFilter = ReadFilter.IN_PROGRESS),
+            FilterConfig(contentFilter = ContentFilter.DOWNLOADED),
+            FilterConfig(contentFilter = ContentFilter.NOT_DOWNLOADED),
+            FilterConfig(lists = listOf("list-a", "list-c")),
+            FilterConfig(
+                tags = listOf("android"),
+                readFilter = ReadFilter.UNREAD,
+                sort = SortOption.TITLE_AZ
+            )
+        )
+        for (filter in filters) {
+            assertAgrees(filter, "filter=$filter")
+        }
+    }
+
+    @Test
+    fun `the page size never changes which row sits at an index`() = runBlocking {
+        // A virtualized list reads a page starting anywhere, so a boundary can fall between any
+        // two rows. If the order were not total, a different page size would move rows.
+        val filter = FilterConfig(sort = SortOption.TITLE_AZ)
+        val reference = pagedView(filter, pageSize = 20).map { it.localId }
+        for (pageSize in listOf(1, 3, 7, 50, 1000)) {
+            assertEquals(
+                reference,
+                pagedView(filter, pageSize = pageSize).map { it.localId },
+                "pageSize=$pageSize must not move a row to a different index"
+            )
+        }
+    }
+
+    /**
+     * Seeding a keyset cursor from the in-memory view lands the read on the same rows the walk
+     * would have reached — the property the whole random-access design rests on.
+     */
+    @Test
+    fun `a cursor taken from the in-memory view resumes the walk at that index`() = runBlocking {
+        val pageSize = 20
+        for (sort in SortOption.entries) {
+            val filter = FilterConfig(sort = sort)
+            val view = BookmarkFilterUtils.orderedViewFor(allBookmarks(), filter)
+
+            for (index in listOf(0, 1, 19, 20, 21, 57, 100, view.size - 1)) {
+                if (index !in view.indices) continue
+                // The cursor is the row *before* the target, so the read starts at the target.
+                val seed = if (index == 0) null else BookmarkCursor.of(view[index - 1])
+                val page = db.bookmarkDao().getBookmarksPaged(
+                    BookmarkRepository.buildPagedQuery(
+                        serverId = serverId,
+                        status = filter.status,
+                        sort = sort,
+                        listId = null,
+                        limit = pageSize,
+                        after = seed
+                    )
+                )
+                assertEquals(
+                    view.subList(index, minOf(index + pageSize, view.size)).map { it.localId },
+                    page.map { it.localId },
+                    "$sort: a read seeded at index $index must return the rows at $index onward"
+                )
+            }
+        }
+    }
+
+    /**
+     * The one view that cannot be indexed from memory.
+     *
+     * `FilterStatus.OFFLINE` selects on a non-empty `content` column, and every query behind an
+     * in-memory row strips that column — so the in-memory side stands on the `readingTimeMinutes`
+     * proxy instead (see [BookmarkFilterUtils.countForView]). The proxy is not the same predicate,
+     * and this pins what happens when they part: a row with content but no reading time is in the
+     * query's view and not in memory's, which shifts every index below it.
+     */
+    @Test
+    fun `the offline view cannot be indexed from the in-memory rows`() = runBlocking {
+        db.bookmarkDao().insertBookmarks(
+            listOf(
+                BookmarkEntity(
+                    remoteId = "offline-no-reading-time",
+                    serverId = serverId,
+                    url = "https://example.com/offline",
+                    title = "Downloaded but unmeasured",
+                    content = "body",
+                    imageUrl = null,
+                    bannerImageAssetId = null,
+                    screenshotAssetId = null,
+                    description = null,
+                    createdAt = 1_900_000_000_000L,
+                    isArchived = false,
+                    isStarred = false,
+                    readingTimeMinutes = 0
+                )
+            )
+        )
+        val filter = FilterConfig(status = FilterStatus.OFFLINE)
+        val paged = pagedView(filter).map { it.localId }
+        val inMemory = BookmarkFilterUtils
+            .orderedViewFor(allBookmarks(), filter)
+            .map { it.localId }
+
+        assertTrue(
+            paged != inMemory,
+            "if the proxy has been replaced by a real predicate, index the offline view from " +
+                "memory like every other view and delete this test"
+        )
+    }
+}

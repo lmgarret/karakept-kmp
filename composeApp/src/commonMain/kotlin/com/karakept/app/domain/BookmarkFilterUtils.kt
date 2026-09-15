@@ -6,6 +6,7 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.SortOption
+import com.karakept.app.utils.NoCaseCollationUtils
 
 /**
  * Pure, stateless utility functions for applying filters and sorting to
@@ -153,6 +154,10 @@ object BookmarkFilterUtils {
      * BookmarkRepository.toOrderBySql). Both ends must agree: a page appended to the loaded
      * window is re-sorted here, and a comparator that ordered ties differently from the query
      * would interleave the new page into the old rows in an order no page boundary matches.
+     *
+     * Agreeing on the *key* matters just as much as agreeing on the tie-break, which is why
+     * titles go through [NoCaseCollationUtils] rather than `lowercase()` — the query compares
+     * them with `COLLATE NOCASE`, and the two fold different alphabets.
      */
     fun applySorting(
         bookmarks: List<BookmarkEntity>,
@@ -163,9 +168,15 @@ object BookmarkFilterUtils {
         SortOption.OLDEST ->
             bookmarks.sortedWith(compareBy<BookmarkEntity> { it.createdAt }.thenBy { it.localId })
         SortOption.TITLE_AZ ->
-            bookmarks.sortedWith(compareBy<BookmarkEntity> { it.title.lowercase() }.thenBy { it.localId })
+            bookmarks.sortedWith(
+                compareBy<BookmarkEntity, String>(NoCaseCollationUtils.ascending) { it.title }
+                    .thenBy { it.localId }
+            )
         SortOption.TITLE_ZA ->
-            bookmarks.sortedWith(compareByDescending<BookmarkEntity> { it.title.lowercase() }.thenByDescending { it.localId })
+            bookmarks.sortedWith(
+                compareByDescending<BookmarkEntity, String>(NoCaseCollationUtils.ascending) { it.title }
+                    .thenByDescending { it.localId }
+            )
         SortOption.READING_TIME_SHORT ->
             bookmarks.sortedWith(compareBy<BookmarkEntity> { it.readingTimeMinutes }.thenBy { it.localId })
         SortOption.READING_TIME_LONG ->
