@@ -41,9 +41,14 @@ import com.karakept.app.ui.utils.BookmarkRowMetrics
  * allows, a url line if the layout shows one, and a metadata band on the side it belongs.
  * Describing the row a second time by hand is what would let the two drift apart.
  *
- * Only the title is ruled into lines. The description and the metadata band are each a single
- * block: ruling every line of an excerpt is more detail than a placeholder needs, and one block
- * reads more calmly under a finger that is still moving.
+ * Only the title is ruled into lines, and the description is a single block: ruling every line of
+ * an excerpt is more detail than a placeholder needs, and one block reads more calmly under a
+ * finger that is still moving.
+ *
+ * The metadata band is a thin rule rather than a block. What sits there is tag chips, a date and a
+ * reading time — several small things with air between them — and a block that tall reads as a
+ * paragraph. The rule does not line up with where those items will land, which is the price of
+ * not pretending to know how many chips a bookmark carries.
  *
  * Each bar is inked to a fraction of the space the row gives that element, the rest standing for
  * the leading a line of text carries. Bars drawn at the full line height leave nothing between
@@ -143,7 +148,7 @@ internal fun BookmarkRowSkeleton(
                     }
                     if (metrics.metadataInTextColumn && metrics.metadataPx > 0f) {
                         Spacer(Modifier.height(blockSpacing))
-                        SkeletonBar(metrics.metadataPx.asDp(), BLOCK_INK, METADATA_WIDTH, barColor)
+                        SkeletonBar(metrics.metadataPx.asDp(), RULE_INK, METADATA_WIDTH, barColor)
                     }
                 }
                 if (thumbnailSide == ThumbnailSide.RIGHT) thumbnail()
@@ -151,7 +156,7 @@ internal fun BookmarkRowSkeleton(
 
             if (!metrics.metadataInTextColumn && metrics.metadataPx > 0f) {
                 Spacer(Modifier.height(sectionSpacing))
-                SkeletonBar(metrics.metadataPx.asDp(), BLOCK_INK, METADATA_WIDTH, barColor)
+                SkeletonBar(metrics.metadataPx.asDp(), RULE_INK, METADATA_WIDTH, barColor)
             }
         }
     }
@@ -180,7 +185,9 @@ private fun SkeletonTitle(lineHeight: Dp, count: Int, color: Color) {
 private fun SkeletonBar(boxHeight: Dp, inkFraction: Float, widthFraction: Float, color: Color) {
     Box(
         modifier = Modifier.fillMaxWidth().height(boxHeight),
-        contentAlignment = Alignment.Center
+        // Text starts at the left edge, so a bar standing for a part-width line has to as well.
+        // Centred, a short second title line floated in the middle of the row.
+        contentAlignment = Alignment.CenterStart
     ) {
         Box(
             Modifier
@@ -200,3 +207,6 @@ private const val METADATA_WIDTH = 0.55f
 /** How much of its box a line of text covers, and how much of one a solid block does. */
 private const val LINE_INK = 0.56f
 private const val BLOCK_INK = 0.84f
+
+/** A band of small separate things, stood in for by a rule rather than filled. */
+private const val RULE_INK = 0.22f
