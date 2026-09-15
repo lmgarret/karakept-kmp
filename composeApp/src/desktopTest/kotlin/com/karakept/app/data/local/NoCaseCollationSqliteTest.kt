@@ -3,6 +3,7 @@ package com.karakept.app.data.local
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.repository.BookmarkRepository
@@ -74,9 +75,7 @@ class NoCaseCollationSqliteTest {
         db.bookmarkDao().getBookmarksPaged(
             BookmarkRepository.buildPagedQuery(
                 serverId = serverId,
-                status = FilterStatus.ALL,
-                sort = sort,
-                listId = null,
+                filter = FilterConfig(status = FilterStatus.ALL, sort = sort),
                 limit = titles.size * 2,
                 after = null
             )

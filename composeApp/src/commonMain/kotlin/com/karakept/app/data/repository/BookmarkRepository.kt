@@ -7,6 +7,9 @@ import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.BookmarkCursor
+import com.karakept.app.data.model.ContentFilter
+import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncStatus
@@ -506,11 +509,25 @@ class BookmarkRepository(
         sort: SortOption = SortOption.NEWEST,
         listId: String? = null
     ): List<BookmarkEntity> {
-        val query = buildPagedQuery(server.id, status, sort, listId, limit, after)
+        val query = buildPagedQuery(
+            server.id,
+            FilterConfig(status = status, sort = sort, lists = listOfNotNull(listId)),
+            limit,
+            after
+        )
         val result = bookmarkDao.getBookmarksPaged(query)
         AppLogger.d("BookmarkRepository", "getBookmarksPaged: status=$status, sort=$sort, listId=$listId, limit=$limit, after=${after?.localId} -> returned ${result.size} bookmarks")
         return result
     }
+
+    /**
+     * How many rows [filter] admits, asked of the database rather than counted in memory.
+     *
+     * This is the list's total: the number of slots it renders, whether or not their rows have
+     * been read.
+     */
+    suspend fun countBookmarksForView(server: Server, filter: FilterConfig): Int =
+        bookmarkDao.countBookmarks(buildCountQuery(server.id, filter))
 
     companion object {
         /**
@@ -546,44 +563,115 @@ class BookmarkRepository(
          */
         internal fun buildPagedQuery(
             serverId: String,
-            status: FilterStatus,
-            sort: SortOption,
-            listId: String?,
+            filter: FilterConfig,
             limit: Int,
             after: BookmarkCursor? = null
         ): RoomRawQuery {
+            val where = buildViewPredicate(serverId, filter)
+            val conditions = StringBuilder(where.sql)
+            val binds = where.binds.toMutableList()
+
+            // The keyset clause narrows the same view, so it is appended to its predicate rather
+            // than folded into it — the view is what a count has to agree with, and "after this
+            // row" is not part of the view.
+            if (after != null) {
+                conditions.append(" AND ").append(filter.sort.keysetPredicateSql())
+                binds.addAll(filter.sort.keysetBinds(after))
+            }
+            binds += limit.toLong()
+
+            val sql = "SELECT $BOOKMARK_SELECT FROM bookmarks " +
+                "WHERE $conditions " +
+                "ORDER BY ${filter.sort.toOrderBySql()} LIMIT ?"
+
+            return rawQuery(sql, binds)
+        }
+
+        /**
+         * The whole view as one predicate, shared by the rows and by anything counting them.
+         *
+         * Every clause the view is defined by lives here, including the four that used to be
+         * applied in Kotlin after the read (tags, a multi-list selection, the read filter, the
+         * content filter). Splitting them across the two was what made a row's position in the
+         * view and its position in the query two different numbers — a read had to over-fetch and
+         * guess how much the Kotlin side would discard. With the whole view in one `WHERE`, the
+         * nth row the query returns is the nth row of the view, which is what lets the list ask
+         * for a page by its index.
+         */
+        /** A `WHERE` body and the values its placeholders bind, in order. */
+        internal data class SqlPredicate(val sql: String, val binds: List<Any>)
+
+        internal fun buildViewPredicate(serverId: String, filter: FilterConfig): SqlPredicate {
             val binds = mutableListOf<Any>()
             val conditions = mutableListOf<String>()
 
             conditions += "serverId = ?"
             binds += serverId
 
-            if (listId != null) {
+            val singleListId = filter.lists.singleOrNull()
+            if (singleListId != null) {
                 // Membership in the comma-separated listIds column. A single-list view applies
                 // no status clause, which is what it has always done.
-                conditions += "(listIds = ? OR listIds LIKE ? || ',%' " +
-                    "OR listIds LIKE '%,' || ? OR listIds LIKE '%,' || ? || ',%')"
-                repeat(4) { binds += listId }
-            } else when (status) {
-                FilterStatus.ALL -> conditions += "isArchived = 0"
-                FilterStatus.ALL_INCLUDING_ARCHIVED -> Unit
-                FilterStatus.FAVORITES -> conditions += "isStarred = 1"
-                FilterStatus.ARCHIVED -> conditions += "isArchived = 1"
-                FilterStatus.OFFLINE -> conditions += "content IS NOT NULL AND length(content) > 0"
+                conditions += csvContainsSql("listIds")
+                binds += singleListId
+            } else {
+                when (filter.status) {
+                    FilterStatus.ALL -> conditions += "isArchived = 0"
+                    FilterStatus.ALL_INCLUDING_ARCHIVED -> Unit
+                    FilterStatus.FAVORITES -> conditions += "isStarred = 1"
+                    FilterStatus.ARCHIVED -> conditions += "isArchived = 1"
+                    FilterStatus.OFFLINE ->
+                        conditions += "content IS NOT NULL AND length(content) > 0"
+                }
+                if (filter.lists.isNotEmpty()) {
+                    // Several lists select a row that is in any of them.
+                    conditions += filter.lists.joinToString(" OR ", "(", ")") {
+                        csvContainsSql("listIds")
+                    }
+                    binds.addAll(filter.lists)
+                }
             }
 
-            if (after != null) {
-                conditions += sort.keysetPredicateSql()
-                binds.addAll(sort.keysetBinds(after))
+            if (filter.tags.isNotEmpty()) {
+                conditions += filter.tags.joinToString(" OR ", "(", ")") { csvContainsSql("tags") }
+                binds.addAll(filter.tags)
             }
 
-            binds += limit.toLong()
+            when (filter.readFilter) {
+                ReadFilter.ALL -> Unit
+                ReadFilter.UNREAD -> conditions += "isRead = 0"
+                ReadFilter.READ -> conditions += "isRead = 1"
+                ReadFilter.IN_PROGRESS -> conditions += "(readingProgress > 0 AND isRead = 0)"
+            }
 
-            val sql = "SELECT $BOOKMARK_SELECT FROM bookmarks " +
-                "WHERE ${conditions.joinToString(" AND ")} " +
-                "ORDER BY ${sort.toOrderBySql()} LIMIT ?"
+            when (filter.contentFilter) {
+                ContentFilter.ALL -> Unit
+                ContentFilter.DOWNLOADED -> conditions += "readingTimeMinutes > 0"
+                ContentFilter.NOT_DOWNLOADED -> conditions += "readingTimeMinutes = 0"
+            }
 
-            return RoomRawQuery(sql) { stmt ->
+            return SqlPredicate(conditions.joinToString(" AND "), binds)
+        }
+
+        /** How many rows [filter] admits — the view's size, without reading any of it. */
+        internal fun buildCountQuery(serverId: String, filter: FilterConfig): RoomRawQuery {
+            val where = buildViewPredicate(serverId, filter)
+            return rawQuery("SELECT COUNT(*) FROM bookmarks WHERE ${where.sql}", where.binds)
+        }
+
+        /**
+         * Membership of a bind value in a comma-separated [column].
+         *
+         * `instr` on the delimited column rather than four `LIKE` patterns: a tag is free text
+         * and may hold `%` or `_`, which `LIKE` reads as wildcards, so `LIKE` would match tags
+         * the user never selected. Wrapping both sides in commas makes it an exact element
+         * match — `,kotlin,` is in `,kotlin,android,` and `,lin,` is not.
+         */
+        private fun csvContainsSql(column: String): String =
+            "instr(',' || $column || ',', ',' || ? || ',') > 0"
+
+        private fun rawQuery(sql: String, binds: List<Any>): RoomRawQuery =
+            RoomRawQuery(sql) { stmt ->
                 binds.forEachIndexed { index, value ->
                     when (value) {
                         is Long -> stmt.bindLong(index + 1, value)
@@ -592,7 +680,6 @@ class BookmarkRepository(
                     }
                 }
             }
-        }
 
         /**
          * "Strictly after the cursor" in this sort's own order — the same comparison

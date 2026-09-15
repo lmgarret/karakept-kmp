@@ -4,6 +4,7 @@ import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.BookmarkCursor
+import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.repository.BookmarkRepository
@@ -79,9 +80,11 @@ class BookmarkPagingOrderTest {
     ) = db.bookmarkDao().getBookmarksPaged(
         BookmarkRepository.buildPagedQuery(
             serverId = serverId,
-            status = FilterStatus.ALL,
-            sort = sort,
-            listId = listId,
+            filter = FilterConfig(
+                status = FilterStatus.ALL,
+                sort = sort,
+                lists = listOfNotNull(listId)
+            ),
             limit = limit,
             after = after
         )

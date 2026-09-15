@@ -119,15 +119,14 @@ class BookmarkViewIndexAgreementTest {
         db.bookmarkDao().getBookmarksForServer(serverId).first()
 
     /**
-     * The whole view as the forward walk assembles it: keyset pages, each run through the
-     * client-side filters exactly as `MainScreenModel.loadBookmarkRows` does.
+     * The whole view as the query alone defines it: keyset pages, with nothing applied after the
+     * read. Every clause now lives in the `WHERE`, so what comes back is already the view.
      */
     private suspend fun pagedView(
         filter: FilterConfig,
         pageSize: Int = 20,
         maxReads: Int = 200
     ): List<BookmarkEntity> = buildList {
-        val singleListId = filter.lists.singleOrNull()
         var cursor: BookmarkCursor? = null
         var reads = 0
         while (true) {
@@ -135,19 +134,13 @@ class BookmarkViewIndexAgreementTest {
             val raw = db.bookmarkDao().getBookmarksPaged(
                 BookmarkRepository.buildPagedQuery(
                     serverId = serverId,
-                    status = filter.status,
-                    sort = filter.sort,
-                    listId = singleListId,
+                    filter = filter,
                     limit = pageSize,
                     after = cursor
                 )
             )
             if (raw.isEmpty()) break
-            addAll(
-                BookmarkFilterUtils.applyClientSideFilters(
-                    raw, filter, skipListFilter = singleListId != null
-                )
-            )
+            addAll(raw)
             cursor = BookmarkCursor.of(raw.last())
         }
     }
@@ -268,9 +261,7 @@ class BookmarkViewIndexAgreementTest {
                 val page = db.bookmarkDao().getBookmarksPaged(
                     BookmarkRepository.buildPagedQuery(
                         serverId = serverId,
-                        status = filter.status,
-                        sort = sort,
-                        listId = null,
+                        filter = filter,
                         limit = pageSize,
                         after = seed
                     )
