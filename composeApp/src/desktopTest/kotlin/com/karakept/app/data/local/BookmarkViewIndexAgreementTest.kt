@@ -320,6 +320,80 @@ class BookmarkViewIndexAgreementTest {
     }
 
     /**
+     * "How many rows sort before this one" — what the "N new" pill counts after a sync.
+     *
+     * It has to be the row's own index in the view, for every sort: the pill says how many
+     * arrived above where the user was standing, and the answer must not depend on which pages
+     * happen to be loaded.
+     */
+    @Test
+    fun `counting the rows before a cursor gives that row's index in the view`() = runBlocking {
+        for (sort in SortOption.entries) {
+            val filter = FilterConfig(sort = sort)
+            val view = pagedView(filter)
+
+            for (index in listOf(0, 1, 17, view.size / 2, view.size - 1)) {
+                val counted = db.bookmarkDao().countBookmarks(
+                    BookmarkRepository.buildCountBeforeQuery(
+                        serverId,
+                        filter,
+                        BookmarkCursor.of(view[index]),
+                        excludeRead = false
+                    )
+                )
+                assertEquals(index, counted, "$sort: rows before the row at index $index")
+            }
+        }
+    }
+
+    @Test
+    fun `counting before a cursor can leave out the rows already read`() = runBlocking {
+        val filter = FilterConfig()
+        val view = pagedView(filter)
+        // Far enough down that read rows are above it. The fixture keys `createdAt` and `isRead`
+        // off the same id, so the top of a NEWEST view is entirely unread — picking a fixed
+        // index here would test nothing.
+        val index = view.indexOfFirst { it.isRead }.let { it + 10 }
+        val cursor = BookmarkCursor.of(view[index])
+
+        val all = db.bookmarkDao().countBookmarks(
+            BookmarkRepository.buildCountBeforeQuery(serverId, filter, cursor, excludeRead = false)
+        )
+        val unread = db.bookmarkDao().countBookmarks(
+            BookmarkRepository.buildCountBeforeQuery(serverId, filter, cursor, excludeRead = true)
+        )
+
+        assertEquals(index, all)
+        assertEquals(
+            view.take(index).count { !it.isRead },
+            unread,
+            "the pill offers a trip to what arrived, and a row already read is not that"
+        )
+        assertTrue(unread < all, "the fixture must contain read rows for this to prove anything")
+    }
+
+    /**
+     * A row removed by the sync must still be a usable position, which is why the anchor is a
+     * cursor and not a row id.
+     */
+    @Test
+    fun `a cursor still counts after its own row is gone`() = runBlocking {
+        val filter = FilterConfig(sort = SortOption.OLDEST)
+        val view = pagedView(filter)
+        val cursor = BookmarkCursor.of(view[20])
+
+        db.bookmarkDao().deleteBookmark(view[20])
+
+        assertEquals(
+            20,
+            db.bookmarkDao().countBookmarks(
+                BookmarkRepository.buildCountBeforeQuery(serverId, filter, cursor, excludeRead = false)
+            ),
+            "the rows above it did not move, so the position still means what it meant"
+        )
+    }
+
+    /**
      * The one view that cannot be indexed from memory.
      *
      * `FilterStatus.OFFLINE` selects on a non-empty `content` column, and every query behind an

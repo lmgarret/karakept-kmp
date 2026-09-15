@@ -374,7 +374,6 @@ object MainScreen : NavKey {
                     navigateTo = { screen -> navigator.push(screen) },
                     newBookmarksAbove = newBookmarksAbove,
                     onClearNewBookmarksAbove = { screenModel.clearNewBookmarksAbove() },
-                    onTopBookmarkVisible = { screenModel.markTopVisibleSeen(it) }
                 )
             }
 

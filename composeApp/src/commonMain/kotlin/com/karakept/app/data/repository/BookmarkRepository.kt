@@ -588,6 +588,27 @@ class BookmarkRepository(
         )
     }
 
+    /**
+     * How many rows of [filter]'s view sort **before** [before].
+     *
+     * What the "N new" pill counts: a sync snapshots where the user was as a cursor, and this
+     * says how many rows landed above it. Asking the database means the answer does not depend
+     * on which rows happen to be loaded — the old count walked the rows in memory looking for an
+     * anchor, and once the list started dropping pages it had scrolled away from, the anchor was
+     * usually not among them.
+     *
+     * [excludeRead] leaves out rows the user has already read, for when reading marks a row as
+     * faded: the pill offers a trip to what arrived, and something already read is not that.
+     */
+    suspend fun countBookmarksBefore(
+        server: Server,
+        filter: FilterConfig,
+        before: BookmarkCursor,
+        excludeRead: Boolean = false
+    ): Int = bookmarkDao.countBookmarks(
+        buildCountBeforeQuery(server.id, filter, before, excludeRead)
+    )
+
     /** [countBookmarksForView], re-read whenever the table changes. */
     fun countBookmarksForViewFlow(server: Server, filter: FilterConfig): Flow<Int> =
         bookmarkDao.countBookmarksFlow(buildCountQuery(server.id, filter))
@@ -817,6 +838,24 @@ class BookmarkRepository(
             return rawQuery(sql, where.binds + limit.toLong() + offset.toLong())
         }
 
+        /** Rows of [filter]'s view sorting before [before] — see [countBookmarksBefore]. */
+        internal fun buildCountBeforeQuery(
+            serverId: String,
+            filter: FilterConfig,
+            before: BookmarkCursor,
+            excludeRead: Boolean
+        ): RoomRawQuery {
+            val where = buildViewPredicate(serverId, filter)
+            val conditions = StringBuilder(where.sql)
+                .append(" AND ")
+                .append(filter.sort.keysetBeforePredicateSql())
+            if (excludeRead) conditions.append(" AND isRead = 0")
+            return rawQuery(
+                "SELECT COUNT(*) FROM bookmarks WHERE $conditions",
+                where.binds + filter.sort.keysetBinds(before)
+            )
+        }
+
         /** How many rows [filter] admits — the view's size, without reading any of it. */
         internal fun buildCountQuery(serverId: String, filter: FilterConfig): RoomRawQuery {
             val where = buildViewPredicate(serverId, filter)
@@ -867,6 +906,27 @@ class BookmarkRepository(
                 "(readingTimeMinutes > ? OR (readingTimeMinutes = ? AND localId > ?))"
             SortOption.READING_TIME_LONG ->
                 "(readingTimeMinutes < ? OR (readingTimeMinutes = ? AND localId < ?))"
+        }
+
+        /**
+         * "Strictly before the cursor" — [keysetPredicateSql] with every comparison mirrored.
+         *
+         * The two are inverses, so a row is before the cursor, after it, or is it. Written as the
+         * mirror rather than as `NOT`, because `NOT` would also admit the cursor row itself.
+         */
+        private fun SortOption.keysetBeforePredicateSql(): String = when (this) {
+            SortOption.NEWEST ->
+                "(createdAt > ? OR (createdAt = ? AND localId > ?))"
+            SortOption.OLDEST ->
+                "(createdAt < ? OR (createdAt = ? AND localId < ?))"
+            SortOption.TITLE_AZ ->
+                "(title COLLATE NOCASE < ? OR (title COLLATE NOCASE = ? AND localId < ?))"
+            SortOption.TITLE_ZA ->
+                "(title COLLATE NOCASE > ? OR (title COLLATE NOCASE = ? AND localId > ?))"
+            SortOption.READING_TIME_SHORT ->
+                "(readingTimeMinutes < ? OR (readingTimeMinutes = ? AND localId < ?))"
+            SortOption.READING_TIME_LONG ->
+                "(readingTimeMinutes > ? OR (readingTimeMinutes = ? AND localId > ?))"
         }
 
         /** The three values [keysetPredicateSql] binds, in order. */

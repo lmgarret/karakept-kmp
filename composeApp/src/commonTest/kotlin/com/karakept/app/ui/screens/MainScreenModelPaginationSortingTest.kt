@@ -4,6 +4,7 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.screens.MainScreenModelHarness.Companion.bookmark
+import io.mockk.coVerify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -141,127 +142,190 @@ class MainScreenModelPaginationSortingTest {
 
     // ── the "N new" pill ───────────────────────────────────────
 
-    /** A model showing [rows], with everything currently on screen counted as seen. */
-    private suspend fun modelShowing(rows: List<com.karakept.app.data.local.entity.BookmarkEntity>) =
-        harness.createModel().also {
-            harness.publish(rows)
+    /** A model showing a 200-row view, with the user scrolled to slot 40. */
+    private suspend fun modelScrolledTo(slot: Int): MainScreenModel {
+        harness.publish((1L..200L).map(::bookmark))
+        val model = harness.createModel()
+        model.reportVisibleSlots(slot..(slot + 9))
+        return model
+    }
+
+    @Test
+    fun `scrolling without a sync never raises the pill`() = runTest(testDispatcher) {
+        // The bug this replaces: the count was taken by looking for an anchor row among the
+        // loaded rows, and the list drops the pages it has scrolled away from. The anchor was
+        // then usually missing, the walk moved it down to whatever was on screen, and scrolling
+        // back up reported those rows as new — with no sync anywhere in sight.
+        val model = modelScrolledTo(0)
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+
+        for (slot in listOf(0, 40, 120, 60, 10, 90, 5)) {
+            model.reportVisibleSlots(slot..(slot + 9))
+            advanceUntilIdle()
+            assertEquals(0, model.newBookmarksAbove.value, "scrolled to $slot, no sync")
         }
-
-    @Test
-    fun `bookmarks arriving above the seen row are counted`() = runTest(testDispatcher) {
-        harness.publish(listOf(bookmark(1L)))
-        val model = harness.createModel()
-        val job = launch { model.bookmarkWindow.collect {} }
-        advanceUntilIdle()
-        model.clearNewBookmarksAbove()
-        advanceUntilIdle()
-        assertEquals(0, model.newBookmarksAbove.value)
-
-        harness.publish(listOf(bookmark(10L), bookmark(11L), bookmark(1L)))
-        advanceUntilIdle()
-
-        assertEquals(2, model.newBookmarksAbove.value)
         job.cancel()
     }
 
     @Test
-    fun `scrolling up through new bookmarks retires them row by row`() = runTest(testDispatcher) {
-        harness.publish(listOf(bookmark(10L), bookmark(11L), bookmark(12L), bookmark(1L)))
-        val model = harness.createModel()
+    fun `a sync reports what landed above where the user was`() = runTest(testDispatcher) {
+        val model = modelScrolledTo(40)
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
-        model._seenTopRemoteId.value = "remote-1"
-        advanceUntilIdle()
-        assertEquals(3, model.newBookmarksAbove.value)
 
-        model.markTopVisibleSeen("remote-12")
+        harness.arrivedAbove = 12
+        harness.setSyncing(true)
         advanceUntilIdle()
-        assertEquals(2, model.newBookmarksAbove.value)
-
-        model.markTopVisibleSeen("remote-11")
+        harness.setSyncing(false)
         advanceUntilIdle()
-        assertEquals(1, model.newBookmarksAbove.value)
 
-        // Stopping one row short of the very top must still leave only that one uncounted.
-        assertEquals("remote-11", model._seenTopRemoteId.value)
+        assertEquals(12, model.newBookmarksAbove.value)
+        assertTrue(harness.countedBefore.isNotEmpty(), "the count was asked of the database")
         job.cancel()
     }
 
     @Test
-    fun `scrolling back down does not re-count what was already seen`() = runTest(testDispatcher) {
-        harness.publish(listOf(bookmark(10L), bookmark(11L), bookmark(1L)))
-        val model = harness.createModel()
-        val job = launch { model.bookmarkWindow.collect {} }
-        advanceUntilIdle()
-        model._seenTopRemoteId.value = "remote-10"
-        advanceUntilIdle()
-        assertEquals(0, model.newBookmarksAbove.value)
-
-        // Scrolling down puts lower rows at the top of the viewport; the anchor must not follow,
-        // or everything above it would be reported as new all over again.
-        model.markTopVisibleSeen("remote-11")
-        model.markTopVisibleSeen("remote-1")
-        advanceUntilIdle()
-
-        assertEquals("remote-10", model._seenTopRemoteId.value, "the anchor only moves up the list")
-        assertEquals(0, model.newBookmarksAbove.value)
-        job.cancel()
-    }
-
-    @Test
-    fun `an anchor the list no longer holds is replaced by the row on screen`() =
+    fun `the position the count is taken from is where the user was, not where they end up`() =
         runTest(testDispatcher) {
-            // Holding a row the list no longer has pinned the count to zero until the user
-            // reached the very top.
-            harness.publish(listOf(bookmark(10L), bookmark(11L)))
-            val model = harness.createModel()
+            val model = modelScrolledTo(40)
             val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
-            model._seenTopRemoteId.value = "remote-999"
+            val standingOn = model.bookmarkWindow.value.bookmarkAt(40)
+
+            harness.setSyncing(true)
+            advanceUntilIdle()
+            // The list moves under the user while the sync runs.
+            model.reportVisibleSlots(80..89)
+            harness.setSyncing(false)
             advanceUntilIdle()
 
-            model.markTopVisibleSeen("remote-11")
-            advanceUntilIdle()
-
-            assertEquals("remote-11", model._seenTopRemoteId.value)
-            assertEquals(1, model.newBookmarksAbove.value)
+            assertEquals(standingOn?.localId, harness.countedBefore.last().localId)
             job.cancel()
         }
 
     @Test
-    fun `a row the list does not hold leaves the anchor alone`() = runTest(testDispatcher) {
-        // A just-created bookmark renders above the view as a placeholder.
-        harness.publish(listOf(bookmark(10L), bookmark(1L)))
-        val model = harness.createModel()
+    fun `scrolling up through the arrivals retires them`() = runTest(testDispatcher) {
+        val model = modelScrolledTo(40)
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
-        model._seenTopRemoteId.value = "remote-1"
+        harness.arrivedAbove = 10
+        harness.setSyncing(true)
+        advanceUntilIdle()
+        harness.setSyncing(false)
+        advanceUntilIdle()
+        assertEquals(10, model.newBookmarksAbove.value)
+
+        model.reportVisibleSlots(6..15)
+        advanceUntilIdle()
+        assertEquals(6, model.newBookmarksAbove.value, "four of the ten have been scrolled past")
+
+        model.reportVisibleSlots(0..9)
+        advanceUntilIdle()
+        assertEquals(0, model.newBookmarksAbove.value, "reaching the top retires all of them")
+        job.cancel()
+    }
+
+    @Test
+    fun `scrolling back down does not re-raise what was seen`() = runTest(testDispatcher) {
+        val model = modelScrolledTo(40)
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+        harness.arrivedAbove = 10
+        harness.setSyncing(true)
+        advanceUntilIdle()
+        harness.setSyncing(false)
         advanceUntilIdle()
 
-        model.markTopVisibleSeen("remote-777")
+        model.reportVisibleSlots(3..12)
+        advanceUntilIdle()
+        assertEquals(3, model.newBookmarksAbove.value)
+
+        model.reportVisibleSlots(90..99)
+        advanceUntilIdle()
+        assertEquals(3, model.newBookmarksAbove.value, "the mark only ever falls")
+        job.cancel()
+    }
+
+    @Test
+    fun `a sync landing while the user is at the top raises nothing`() = runTest(testDispatcher) {
+        val model = modelScrolledTo(0)
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
-        assertEquals("remote-1", model._seenTopRemoteId.value)
-        assertEquals(1, model.newBookmarksAbove.value)
+        harness.arrivedAbove = 8
+        harness.setSyncing(true)
+        advanceUntilIdle()
+        harness.setSyncing(false)
+        advanceUntilIdle()
+
+        assertEquals(
+            0,
+            model.newBookmarksAbove.value,
+            "they are on screen, so the user is not being offered a trip to them"
+        )
         job.cancel()
     }
 
     @Test
     fun `the pill leaves out bookmarks already read while they are faded`() =
         runTest(testDispatcher) {
-            // One of the arrivals is already read — marked on another device, or carried in by
-            // the reading progress the sync pulls. The pill offers a trip to what arrived, and a
-            // row already read is not something the user is being sent back for.
-            harness.publish(
-                listOf(bookmark(10L), bookmark(11L, isRead = true), bookmark(1L))
-            )
-            val model = harness.createModel()
+            // Whether a row already read counts is decided by the query; what matters here is
+            // that the list's own fading setting is what it is asked with.
+            val model = modelScrolledTo(40)
             val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
-            model._seenTopRemoteId.value = "remote-1"
+
+            harness.setSyncing(true)
+            advanceUntilIdle()
+            harness.setSyncing(false)
             advanceUntilIdle()
 
-            assertEquals(1, model.newBookmarksAbove.value)
+            coVerify {
+                harness.bookmarkRepository.countBookmarksBefore(any(), any(), any(), excludeRead = true)
+            }
             job.cancel()
         }
+
+    @Test
+    fun `tapping the pill empties it`() = runTest(testDispatcher) {
+        val model = modelScrolledTo(40)
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+        harness.arrivedAbove = 5
+        harness.setSyncing(true)
+        advanceUntilIdle()
+        harness.setSyncing(false)
+        advanceUntilIdle()
+        assertEquals(5, model.newBookmarksAbove.value)
+
+        model.clearNewBookmarksAbove()
+        advanceUntilIdle()
+
+        assertEquals(0, model.newBookmarksAbove.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `switching view forgets what a previous sync reported`() = runTest(testDispatcher) {
+        val model = modelScrolledTo(40)
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+        harness.arrivedAbove = 7
+        harness.setSyncing(true)
+        advanceUntilIdle()
+        harness.setSyncing(false)
+        advanceUntilIdle()
+        assertEquals(7, model.newBookmarksAbove.value)
+
+        model.applyFilter(FilterConfig(status = FilterStatus.ARCHIVED))
+        advanceUntilIdle()
+
+        assertEquals(
+            0,
+            model.newBookmarksAbove.value,
+            "a different view is a different question"
+        )
+        job.cancel()
+    }
 }

@@ -494,7 +494,14 @@ class MainScreenModel(
     /** Reports the slots on screen. Cheap to call often — only a page crossing reads anything. */
     fun reportVisibleSlots(range: IntRange) {
         _visibleSlots.value = range
+        // Scrolling up through what a sync brought in retires it; scrolling back down does not
+        // put it back, so the mark only ever falls.
+        if (range.first < _topSlotLowWater.value) _topSlotLowWater.value = range.first
     }
+
+    /** Where the user is standing, as a sort position the count can be taken against. */
+    private fun topVisibleCursor(): BookmarkCursor? =
+        bookmarkWindow.value.bookmarkAt(_visibleSlots.value.first)?.let(BookmarkCursor::of)
 
     /**
      * How many pages either side of the visible span to keep loaded, so an ordinary scroll
@@ -606,75 +613,50 @@ class MainScreenModel(
         .map { it.loadedRows() }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    // The topmost bookmark the user has actually seen. Everything above it arrived since.
-    internal val _seenTopRemoteId = MutableStateFlow<String?>(null)
+    // How many rows a sync put above where the user was standing. Set when a sync finishes and
+    // at no other time — the pill is a report about a sync, so scrolling must not raise it.
+    internal val _syncedAbove = MutableStateFlow(0)
+
+    // The highest the viewport has reached since that sync, as an absolute slot. Scrolling up
+    // through the arrivals retires them; scrolling back down leaves the count alone, which is
+    // what "low water" means here.
+    internal val _topSlotLowWater = MutableStateFlow(Int.MAX_VALUE)
 
     /**
-     * How many bookmarks sit above the topmost one the user has seen — the "N new" pill.
+     * How many bookmarks a sync brought in above the user — the "N new" pill.
      *
-     * Derived from the loaded window every time rather than accumulated from per-refresh diffs.
-     * A diff counts anything new to the *window*, which over-reports in three ways: it ignores
-     * where the row landed (so a non-NEWEST sort, or an insert below the viewport, still counts
-     * as "above"), it never decrements when rows leave, and because a refresh re-reads a fixed
-     * page range, a row evicted off the tail by a prepend is counted a second time if a later
-     * removal pulls it back into the window. Counting positions asks the list where things
-     * actually are, so it is correct under any sort and self-corrects on every change.
+     * Two numbers, and the smaller wins. [_syncedAbove] is what the database said had landed
+     * above the row the user was on when the sync started; [_topSlotLowWater] is how far up they
+     * have scrolled since. Sitting at slot 3 with ten new rows above means seven are still
+     * unseen, and reaching slot 0 means none are.
      *
-     * Counted against the rows the list has actually read. A row the view holds but has not
-     * loaded cannot be above the anchor without a loaded row above it too, so counting what is
-     * on hand answers the same question — and a bookmark the user just created, prepended and
-     * already scrolled to, is not reported back to them as new.
+     * Both are positions in the *view*, so neither depends on which rows happen to be loaded.
+     * The count used to be taken by walking the loaded rows for an anchor row's id, which the
+     * virtualized list broke: pages the user scrolls away from are dropped, so the anchor was
+     * usually not among the rows walked, and the walk then moved the anchor down to whatever was
+     * on screen. Every scroll down quietly re-armed the pill, and scrolling back up raised it
+     * with no sync anywhere in sight.
      *
-     * Read bookmarks are left out while they are being faded: the pill offers to take the user
-     * to what arrived, and a row already read — marked on another device, or carried in by the
-     * reading progress the sync pulls — is not something they are being sent back for. With
-     * fading off, read and unread rows look alike and the count covers both.
+     * Read bookmarks are left out of the count while they are being faded: the pill offers a
+     * trip to what arrived, and a row already read — marked on another device, or carried in by
+     * the reading progress the sync pulls — is not something the user is being sent back for.
      */
     val newBookmarksAbove: StateFlow<Int> =
-        combine(
-            bookmarkWindow,
-            _seenTopRemoteId,
-            effectiveDimReadBookmarks
-        ) { window, seenTop, dimRead ->
-            countBookmarksAbove(window.loadedRows(), seenTop, excludeRead = dimRead)
+        combine(_syncedAbove, _topSlotLowWater) { above, lowWater ->
+            minOf(above, lowWater).coerceAtLeast(0)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
-    /**
-     * Marks the row currently at the top as seen, which is what empties the pill. Called when
-     * the user taps the pill to jump there.
-     */
+    /** Empties the pill. Called when the user taps it to jump to what arrived. */
     fun clearNewBookmarksAbove() {
-        _seenTopRemoteId.value = bookmarkWindow.value.bookmarkAt(0)?.remoteId
+        resetNewBookmarksAbove()
     }
 
-    /**
-     * Reports the topmost bookmark on screen. The anchor follows the viewport *up* the list and
-     * never back down, so scrolling up through what arrived retires it row by row while
-     * scrolling away downwards leaves the count alone.
-     *
-     * Reaching the exact first row used to be the only thing that moved the anchor. Reading the
-     * new arrivals and stopping a row short of the top therefore left it where it was, and the
-     * pill went on offering a trip to bookmarks the user had just read — every time they
-     * scrolled away from the top again, with no sync in between.
-     */
-    fun markTopVisibleSeen(remoteId: String) {
-        val anchor = _seenTopRemoteId.value
-        if (anchor == remoteId) return
-        // Which of the two comes first is the whole question, so one pass that stops at
-        // whichever it meets answers it. Scrolling down would otherwise scan to the row now on
-        // top — further with every row — only to reject the update.
-        for (bookmark in bookmarkWindow.value.loadedRows()) {
-            when (bookmark.remoteId) {
-                // The row on screen is above the anchor: it is the topmost one seen now.
-                remoteId -> { _seenTopRemoteId.value = remoteId; return }
-                // The anchor is still above it, so nothing has been seen above the anchor.
-                anchor -> return
-            }
-        }
-        // Neither is in the window. An anchor that has left it can no longer be compared
-        // against, and holding on to it pins the count to zero until the user reaches the top.
-        if (anchor != null) _seenTopRemoteId.value = null
+    /** Forgets what a previous sync reported — a different view is a different question. */
+    internal fun resetNewBookmarksAbove() {
+        _syncedAbove.value = 0
+        _topSlotLowWater.value = Int.MAX_VALUE
     }
+
 
     // RemoteIds of bookmarks on which the user has explicitly performed a list-membership
     // action (add/remove list). Prevents the scroll-triggered action from auto-firing on a
@@ -848,15 +830,34 @@ class MainScreenModel(
                 .collect { server -> bookmarkActionsRepository.refreshAiCapabilities(server) }
         }
 
-        // A freshly loaded view counts as seen, so the pill stays empty until a later write puts
-        // something above it. Anchoring on the first rows to arrive rather than on the list
-        // reporting itself at the top keeps the count right when the view opens somewhere else —
-        // a restored scroll position, or a reload that deliberately holds its place.
+        // The "N new" pill reports on a sync, so a sync is the only thing that raises it.
+        //
+        // Where the user is standing is snapshotted as a cursor when the sync starts — a cursor
+        // rather than a row id, so a sync that deletes that row still leaves a position the
+        // count means something against. When it finishes, the database says how many rows of
+        // the view now sort above it.
         viewModelScope.launch {
-            bookmarkWindow.collect { window ->
-                if (_seenTopRemoteId.value == null) {
-                    _seenTopRemoteId.value = window.bookmarkAt(0)?.remoteId
+            var anchor: BookmarkCursor? = null
+            isSyncing.collect { syncing ->
+                if (syncing) {
+                    anchor = topVisibleCursor()
+                    return@collect
                 }
+                val startedAt = anchor ?: return@collect
+                anchor = null
+                val server = _selectedServer.value ?: return@collect
+                val arrived = runCatching {
+                    bookmarkRepository.countBookmarksBefore(
+                        server,
+                        effectiveFilterNow(),
+                        startedAt,
+                        excludeRead = effectiveDimReadBookmarks.value
+                    )
+                }.getOrElse { 0 }
+                _syncedAbove.value = arrived
+                // Whatever is on screen now has been seen, so a sync landing while the user sits
+                // at the top raises nothing.
+                _topSlotLowWater.value = _visibleSlots.value.first
             }
         }
 
@@ -878,9 +879,9 @@ class MainScreenModel(
     private fun switchToView(server: Server, filter: FilterConfig) {
         _loadedView.value = LoadedView(server.id, filter)
         _actedOnBookmarkIds.value = emptySet()
-        // A fresh view has not been seen, so the pill starts empty and re-anchors once the list
-        // renders at the top.
-        _seenTopRemoteId.value = null
+        // A different view is a different question, so whatever a previous sync reported about
+        // the view being left does not carry over.
+        resetNewBookmarksAbove()
         // Announce the reload *before* the rows arrive. The version bump makes the scroll anchor
         // drop its anchor and the scroll request re-pins the viewport to the top; both are
         // applied on the next measure, which is the one that renders the new view.
@@ -1168,25 +1169,3 @@ class MainScreenModel(
 /** Rows to a page. One value, so a slot's index and its page agree everywhere. */
 internal const val PAGE_SIZE = BookmarkWindow.DEFAULT_PAGE_SIZE
 
-/**
- * Number of bookmarks sitting above [seenTopRemoteId] in [bookmarks] — the "N new" pill count.
- *
- * Zero when nothing has been marked seen yet, or when the seen bookmark is no longer in the
- * list: it left the loaded window, so the rows above it are no longer meaningfully "new" and
- * guessing a count from a missing anchor is what a diff-based counter got wrong.
- *
- * @param excludeRead leaves already-read rows out of the count, for when the list fades them.
- *   The rows above the anchor still *are* new to the window — they are simply not worth
- *   offering a trip to the top for.
- */
-internal fun countBookmarksAbove(
-    bookmarks: List<BookmarkEntity>,
-    seenTopRemoteId: String?,
-    excludeRead: Boolean = false
-): Int {
-    if (seenTopRemoteId == null) return 0
-    val above = bookmarks.indexOfFirst { it.remoteId == seenTopRemoteId }
-    if (above <= 0) return 0
-    if (!excludeRead) return above
-    return bookmarks.asSequence().take(above).count { !it.isRead }
-}

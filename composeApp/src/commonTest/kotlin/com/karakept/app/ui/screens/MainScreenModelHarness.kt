@@ -2,7 +2,10 @@ package com.karakept.app.ui.screens
 
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.model.ListSyncStatus
+import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.repository.BookmarkActionsRepository
@@ -60,6 +63,19 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
 
     private val viewRows = MutableStateFlow<List<BookmarkEntity>>(emptyList())
 
+    /**
+     * Whether a sync is running for the view on screen — what drives the sync indicator, and
+     * what the "N new" pill reports on.
+     */
+    private val syncStatuses =
+        MutableStateFlow<Map<SyncKey, ListSyncStatus>>(emptyMap())
+
+    /** Cursors the pill's count was asked about, in order. */
+    val countedBefore = mutableListOf<BookmarkCursor>()
+
+    /** What the database answers when asked how many rows sort before a cursor. */
+    var arrivedAbove: Int = 0
+
     /** Every (offset, limit) a page was read at, in order. */
     val pageReads = mutableListOf<Pair<Int, Int>>()
 
@@ -91,6 +107,13 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
         every { bookmarkActionsRepository.aiCapabilities } returns MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow()
         every { bookmarkRepository.syncReports } returns MutableSharedFlow()
+        every { bookmarkRepository.perKeyProgress } returns syncStatuses
+        coEvery {
+            bookmarkRepository.countBookmarksBefore(any(), any(), any(), any())
+        } answers {
+            countedBefore += thirdArg<BookmarkCursor>()
+            arrivedAbove
+        }
         every { bookmarkRepository.backgroundSyncCompleted } returns MutableSharedFlow()
 
         // The view's size and its pages, answered from the same list — one predicate behind both,
@@ -113,6 +136,12 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
             else all.subList(offset, minOf(offset + limit, all.size))
         }
 
+    }
+
+    /** Starts and stops a sync for the view on screen, as the sync indicator sees it. */
+    fun setSyncing(syncing: Boolean, key: SyncKey = null) {
+        syncStatuses.value =
+            if (syncing) mapOf(key to ListSyncStatus.FetchingMetadata(0)) else emptyMap()
     }
 
     /** Publishes [newRows] as the view, as a database write would. */

@@ -391,7 +391,6 @@ fun MainScreenScaffoldContent(
                 } else null,
                 newBookmarksAbove = newBookmarksAbove,
                 onClearNewBookmarksAbove = onClearNewBookmarksAbove,
-                onTopBookmarkVisible = onTopBookmarkVisible
             )
         }
     }
