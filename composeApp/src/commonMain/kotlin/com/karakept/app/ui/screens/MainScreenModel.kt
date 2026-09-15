@@ -9,6 +9,7 @@ import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.BookmarkCursor
+import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
@@ -634,6 +635,20 @@ class MainScreenModel(
             }
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    /**
+     * [bookmarks] as the list addresses it — by absolute index rather than by position within
+     * whatever has been read.
+     *
+     * Every slot is loaded for now: the forward walk is still what grows the window, so the list
+     * has exactly the rows it has. What changes is that the LazyColumn is sized and keyed by the
+     * window, so an index means a position in the view instead of a position in the window, and
+     * sizing it by a total the walk has not reached is a change to this flow alone.
+     */
+    val bookmarkWindow: StateFlow<BookmarkWindow> =
+        combine(bookmarks, _bookmarkListVersion) { rows, version ->
+            BookmarkWindow.dense(rows, generation = version)
+        }.stateIn(viewModelScope, SharingStarted.Lazily, BookmarkWindow.EMPTY)
 
     private sealed class InitState {
         data object Idle : InitState()

@@ -76,6 +76,7 @@ object MainScreen : NavKey {
         val serverRepository = koinInject<com.karakept.app.data.repository.ServerRepository>()
         val lists by screenModel.lists.collectAsState()
         val bookmarks by screenModel.bookmarks.collectAsState()
+        val bookmarkWindow by screenModel.bookmarkWindow.collectAsState()
         val servers by serverRepository.servers.collectAsState(initial = emptyList())
         val layoutType by settingsScreenModel.layoutType.collectAsState()
         val isSyncing by screenModel.isSyncing.collectAsState()
@@ -343,7 +344,7 @@ object MainScreen : NavKey {
         val scaffoldContent: @Composable (isExpanded: Boolean, activeBookmarkId: Long?, onBookmarkClick: (com.karakept.app.data.local.entity.BookmarkEntity) -> Unit, onMenuClick: () -> Unit) -> Unit =
             { isExpanded, activeBmId, onBookmarkClick, onMenuClick ->
                 MainScreenScaffoldContent(
-                    isExpandedLayout = isExpanded, bookmarks = bookmarks, isSyncing = isSyncing, syncProgress = syncProgress,
+                    isExpandedLayout = isExpanded, bookmarks = bookmarks, window = bookmarkWindow, isSyncing = isSyncing, syncProgress = syncProgress,
                     isLoadingMore = isLoadingMore, isLoadingInitialPage = isLoadingInitialPage,
                     hasMoreItems = hasMoreItems,
                     showScrollCursor = showScrollCursor, sortOption = currentFilter.sort,

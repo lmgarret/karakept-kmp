@@ -18,6 +18,7 @@ import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
 import com.karakept.app.data.model.BookmarkLayout
@@ -116,6 +117,8 @@ data class MainScreenDisplayConfig(
 fun MainScreenScaffoldContent(
     isExpandedLayout: Boolean,
     bookmarks: List<BookmarkEntity>,
+    /** The same rows the list renders, addressed by absolute index. */
+    window: BookmarkWindow,
     isSyncing: Boolean,
     syncProgress: SyncProgress,
     isLoadingMore: Boolean,
@@ -271,7 +274,7 @@ fun MainScreenScaffoldContent(
                 }
         ) {
             BookmarkListContent(
-                bookmarks = bookmarks,
+                window = window,
                 isSyncing = isSyncing,
                 syncProgress = syncProgress,
                 isLoadingMore = if (isSearchActive) false else isLoadingMore,
