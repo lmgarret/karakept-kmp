@@ -74,15 +74,19 @@ import kotlin.math.min
 @Composable
 fun ScrollCursorIndicator(
     listState: LazyListState,
-    bookmarks: List<BookmarkEntity>,
     sortOption: SortOption,
     totalBookmarkCount: Int = 0,
-    /** The row at an absolute index in the view, for the tooltip's label. */
+    /**
+     * The row at an absolute slot, if the list has already read it. Answers without a query for
+     * a thumb over rows that are on screen, which is where it starts and where it ends up.
+     */
+    loadedAt: (Int) -> BookmarkEntity? = { null },
+    /** The row at an absolute slot, read from the database for slots the list does not hold. */
     bookmarkAtIndex: suspend (Int) -> BookmarkEntity? = { null },
     modifier: Modifier = Modifier
 ) {
-    val total = maxOf(totalBookmarkCount, bookmarks.size)
-    if (total < 2) return
+    if (totalBookmarkCount < 2) return
+    val total = totalBookmarkCount
 
     val scope = rememberCoroutineScope()
     var isDragging by remember { mutableStateOf(false) }
@@ -101,16 +105,24 @@ fun ScrollCursorIndicator(
     val displayFraction = if (isDragging) dragFraction else listScrollFraction
     val pointedIndex = scrollCursorIndex(displayFraction, total)
 
-    // Read only while the tooltip is up, and re-read as the thumb moves. The rows already on
-    // hand answer without a query whenever the thumb is over them, which is most of the time.
+    // The slot the thumb points at, answered by the list when it holds that row and by the
+    // database when it does not.
+    //
+    // Both are asked by *slot*. The loaded rows used to be asked by slot too, but they are a
+    // compacted list — the rows that happen to be read, not one entry per slot — so indexing
+    // them by a position in the view named some other row, and the index was then clamped to the
+    // last one read. Dragging anywhere past what was loaded labelled the thumb with the same
+    // wrong bookmark until the page under it arrived.
+    val alreadyLoaded = loadedAt(pointedIndex)
     val currentBookmarkAtIndex = rememberUpdatedState(bookmarkAtIndex)
-    var namedBookmark by remember { mutableStateOf<BookmarkEntity?>(null) }
-    LaunchedEffect(pointedIndex, isDragging) {
-        if (!isDragging) return@LaunchedEffect
-        namedBookmark = currentBookmarkAtIndex.value(pointedIndex)
+    var readBookmark by remember { mutableStateOf<BookmarkEntity?>(null) }
+    LaunchedEffect(pointedIndex, isDragging, alreadyLoaded == null) {
+        if (!isDragging || alreadyLoaded != null) return@LaunchedEffect
+        readBookmark = currentBookmarkAtIndex.value(pointedIndex)
     }
-    val pointedBookmark = namedBookmark
-        ?: bookmarks.getOrNull(pointedIndex.coerceAtMost(bookmarks.size - 1))
+    // While a read is in flight the previous answer stands. It trails the thumb by one row read
+    // rather than naming a row from the wrong place.
+    val pointedBookmark = alreadyLoaded ?: readBookmark
     val label = scrollCursorLabel(pointedBookmark, sortOption)
 
     val density = LocalDensity.current

@@ -170,6 +170,26 @@ class BookmarkWindowTest {
     }
 
     @Test
+    fun `the loaded rows are not indexed by slot`() {
+        // The trap behind the scroll cursor naming the wrong bookmark. `loadedRows` is the rows
+        // that happen to have been read, compacted — not one entry per slot. Anything holding a
+        // position in the *view* has to ask `bookmarkAt`, or it names some other row.
+        val w = window(viewTotal = 1000, 5)
+
+        assertEquals(50L + 1, w.bookmarkAt(50)?.localId, "slot 50 is the first row of page 5")
+        assertEquals(
+            1L + 50,
+            w.loadedRows().first().localId,
+            "and it is also the first of the loaded rows, which is where the two part company"
+        )
+        assertNull(w.bookmarkAt(0), "slot 0 has not been read")
+        assertTrue(
+            w.loadedRows().isNotEmpty(),
+            "yet the loaded rows have a first entry, so indexing them by slot 0 names page 5's"
+        )
+    }
+
+    @Test
     fun `an uncounted window is not an empty view`() {
         // The distinction the empty state hangs on: switching lists rebuilds the window, and for
         // a moment it holds nothing because no answer has arrived — not because there is nothing

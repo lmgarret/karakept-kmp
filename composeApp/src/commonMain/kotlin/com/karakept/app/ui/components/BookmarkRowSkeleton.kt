@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -38,12 +37,17 @@ import com.karakept.app.ui.utils.BookmarkRowMetrics
  *
  * Every block comes from [BookmarkRowMetrics] — the same declaration the list tiles its rows
  * from, and the one `BookmarkRowTilingTest` already pins against the real rendered row. So the
- * skeleton has a thumbnail exactly where the row will put one, as many title and description
- * lines as the layout allows, a url line if the layout shows one, and a metadata band on the side
- * it belongs. Describing the row a second time by hand is what would let the two drift apart.
+ * skeleton has a thumbnail exactly where the row will put one, as many title lines as the layout
+ * allows, a url line if the layout shows one, and a metadata band on the side it belongs.
+ * Describing the row a second time by hand is what would let the two drift apart.
  *
- * The bars are deliberately ragged in width. A column of full-width blocks reads as a loading
- * graphic; lines that stop short of the edge read as text.
+ * Only the title is ruled into lines. The description and the metadata band are each a single
+ * block: ruling every line of an excerpt is more detail than a placeholder needs, and one block
+ * reads more calmly under a finger that is still moving.
+ *
+ * Each bar is inked to a fraction of the space the row gives that element, the rest standing for
+ * the leading a line of text carries. Bars drawn at the full line height leave nothing between
+ * them and run together into a slab.
  */
 @Composable
 internal fun BookmarkRowSkeleton(
@@ -76,11 +80,10 @@ internal fun BookmarkRowSkeleton(
     }
 
     val density = LocalDensity.current
-    // Named apart from Density.toDp so the call below resolves to that one and not to this.
+    // Named apart from Density.toDp so the call inside resolves to that one and not to this.
     fun Float.asDp(): Dp = with(density) { toDp() }
 
     val isFlat = itemContainerStyle == ItemContainerStyle.FLAT
-    val verticalPadding = metrics.verticalPaddingPx.asDp()
     val blockSpacing = metrics.blockSpacingPx.asDp()
     val sectionSpacing = metrics.sectionSpacingPx.asDp()
 
@@ -90,22 +93,18 @@ internal fun BookmarkRowSkeleton(
         isSelected = false,
         isActive = false,
         fixedHeight = fixedRowHeight,
-        // No outer margin: a card row gets its margin from the list's own wrapper, exactly as the
-        // real row does, so adding one here would make every skeleton taller than what it stands for.
+        // No outer margin: a card row takes its margin from the list's own wrapper, exactly as
+        // the real row does, so adding one here makes every skeleton taller than what it stands
+        // for — and a skeleton of the wrong height moves the rows below it as they land.
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = verticalPadding)
+                .padding(horizontal = 16.dp, vertical = metrics.verticalPaddingPx.asDp())
         ) {
             if (metrics.titleAboveThumbnail) {
-                SkeletonLines(
-                    count = metrics.titleLines,
-                    lineHeight = metrics.titleLinePx.asDp(),
-                    widths = TITLE_WIDTHS,
-                    color = barColor
-                )
+                SkeletonTitle(metrics.titleLinePx.asDp(), metrics.titleLines, barColor)
                 Spacer(Modifier.height(sectionSpacing))
             }
 
@@ -126,29 +125,25 @@ internal fun BookmarkRowSkeleton(
                 if (thumbnailSide == ThumbnailSide.LEFT) thumbnail()
                 Column(Modifier.weight(1f)) {
                     if (!metrics.titleAboveThumbnail) {
-                        SkeletonLines(
-                            count = metrics.titleLines,
-                            lineHeight = metrics.titleLinePx.asDp(),
-                                    widths = TITLE_WIDTHS,
-                            color = barColor
-                        )
+                        SkeletonTitle(metrics.titleLinePx.asDp(), metrics.titleLines, barColor)
                     }
                     if (metrics.urlLinePx > 0f) {
                         Spacer(Modifier.height(blockSpacing))
-                        SkeletonBar(metrics.urlLinePx.asDp(), URL_WIDTH, barColor)
+                        SkeletonBar(metrics.urlLinePx.asDp(), LINE_INK, URL_WIDTH, barColor)
                     }
                     if (metrics.descriptionLines > 0) {
                         Spacer(Modifier.height(blockSpacing))
-                        SkeletonLines(
-                            count = metrics.descriptionLines,
-                            lineHeight = metrics.descriptionLinePx.asDp(),
-                                    widths = BODY_WIDTHS,
+                        SkeletonBar(
+                            boxHeight =
+                                (metrics.descriptionLinePx * metrics.descriptionLines).asDp(),
+                            inkFraction = BLOCK_INK,
+                            widthFraction = 1f,
                             color = barColor
                         )
                     }
                     if (metrics.metadataInTextColumn && metrics.metadataPx > 0f) {
                         Spacer(Modifier.height(blockSpacing))
-                        SkeletonBar(metrics.metadataPx.asDp(), METADATA_WIDTH, barColor)
+                        SkeletonBar(metrics.metadataPx.asDp(), BLOCK_INK, METADATA_WIDTH, barColor)
                     }
                 }
                 if (thumbnailSide == ThumbnailSide.RIGHT) thumbnail()
@@ -156,45 +151,52 @@ internal fun BookmarkRowSkeleton(
 
             if (!metrics.metadataInTextColumn && metrics.metadataPx > 0f) {
                 Spacer(Modifier.height(sectionSpacing))
-                SkeletonBar(metrics.metadataPx.asDp(), METADATA_WIDTH, barColor)
+                SkeletonBar(metrics.metadataPx.asDp(), BLOCK_INK, METADATA_WIDTH, barColor)
             }
         }
     }
 }
 
 /**
- * A run of [count] text lines, each stopping at its own width.
+ * The title, as [count] lines of [lineHeight].
  *
- * The lines sit flush against one another: [lineHeight] is a line height, and the lines of one
- * paragraph are separated by that rather than by the spacing *between* blocks. Putting a gap
- * between them made every skeleton taller than the row it stands for.
+ * The lines sit flush against one another, because [lineHeight] is a line height: what separates
+ * them is the leading inside each one, not a gap between them.
  */
 @Composable
-private fun SkeletonLines(
-    count: Int,
-    lineHeight: Dp,
-    widths: List<Float>,
-    color: Color
-) {
+private fun SkeletonTitle(lineHeight: Dp, count: Int, color: Color) {
     repeat(count) { index ->
-        SkeletonBar(lineHeight, widths[index % widths.size], color)
+        SkeletonBar(lineHeight, LINE_INK, TITLE_WIDTHS[index % TITLE_WIDTHS.size], color)
     }
 }
 
+/**
+ * A bar inked to [inkFraction] of [boxHeight] and centred in it.
+ *
+ * The box is the space the row's geometry gives this element; the bar is the part of it that
+ * would be covered in text.
+ */
 @Composable
-private fun SkeletonBar(height: Dp, widthFraction: Float, color: Color) {
+private fun SkeletonBar(boxHeight: Dp, inkFraction: Float, widthFraction: Float, color: Color) {
     Box(
-        Modifier
-            .fillMaxWidth(widthFraction)
-            .height(height)
-            .clip(RoundedCornerShape(4.dp))
-            .background(color)
-    )
+        modifier = Modifier.fillMaxWidth().height(boxHeight),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(widthFraction)
+                .height(boxHeight * inkFraction)
+                .clip(RoundedCornerShape(4.dp))
+                .background(color)
+        )
+    }
 }
 
-// A title runs the width and its second line trails off; body text is fuller; a url and a
-// metadata band are short.
+/** A title runs the width and its second line trails off; a url and a metadata band are short. */
 private val TITLE_WIDTHS = listOf(1f, 0.62f)
-private val BODY_WIDTHS = listOf(1f, 0.94f, 0.71f)
 private const val URL_WIDTH = 0.45f
 private const val METADATA_WIDTH = 0.55f
+
+/** How much of its box a line of text covers, and how much of one a solid block does. */
+private const val LINE_INK = 0.56f
+private const val BLOCK_INK = 0.84f

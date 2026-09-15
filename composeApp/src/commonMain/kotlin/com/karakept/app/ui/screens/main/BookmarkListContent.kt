@@ -930,9 +930,9 @@ internal fun BookmarkListContent(
         if (showScrollCursor) {
             ScrollCursorIndicator(
                 listState = listState,
-                bookmarks = loadedRows,
                 sortOption = sortOption,
                 totalBookmarkCount = totalBookmarkCount,
+                loadedAt = window::bookmarkAt,
                 bookmarkAtIndex = bookmarkAtIndex,
                 // padding(top) keeps the scrollbar clear of the sync progress bar
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
