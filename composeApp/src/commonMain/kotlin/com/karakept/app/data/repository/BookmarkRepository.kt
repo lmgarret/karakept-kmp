@@ -583,15 +583,8 @@ class BookmarkRepository(
         limit: Int = SEARCH_RESULT_LIMIT
     ): List<BookmarkEntity> {
         if (query.isBlank()) return emptyList()
-        val where = buildViewPredicate(server.id, filter)
-        val match = "(instr(lower(title), lower(?)) > 0 " +
-            "OR instr(lower(url), lower(?)) > 0 " +
-            "OR instr(lower(COALESCE(description, '')), lower(?)) > 0)"
-        val sql = "SELECT $BOOKMARK_SELECT FROM bookmarks " +
-            "WHERE ${where.sql} AND $match " +
-            "ORDER BY ${filter.sort.toOrderBySql()} LIMIT ?"
         return bookmarkDao.getBookmarksPaged(
-            rawQuery(sql, where.binds + query + query + query + limit.toLong())
+            buildSearchQuery(server.id, filter, query, limit)
         )
     }
 
@@ -620,16 +613,8 @@ class BookmarkRepository(
      * to read the whole view into the list first, because the only way to have a row's id was to
      * have the row.
      */
-    suspend fun getViewRemoteIds(server: Server, filter: FilterConfig): List<String> {
-        val where = buildViewPredicate(server.id, filter)
-        return bookmarkDao.selectRemoteIds(
-            rawQuery(
-                "SELECT remoteId FROM bookmarks WHERE ${where.sql} " +
-                    "ORDER BY ${filter.sort.toOrderBySql()}",
-                where.binds
-            )
-        )
-    }
+    suspend fun getViewRemoteIds(server: Server, filter: FilterConfig): List<String> =
+        bookmarkDao.selectRemoteIds(buildViewIdsQuery(server.id, filter))
 
     /** The rows behind [remoteIds] — for acting on a selection that outruns what is loaded. */
     suspend fun getBookmarksByRemoteIds(
@@ -783,6 +768,39 @@ class BookmarkRepository(
             }
 
             return SqlPredicate(conditions.joinToString(" AND "), binds)
+        }
+
+        /** [filter]'s view as identities alone, in view order. */
+        internal fun buildViewIdsQuery(serverId: String, filter: FilterConfig): RoomRawQuery {
+            val where = buildViewPredicate(serverId, filter)
+            return rawQuery(
+                "SELECT remoteId FROM bookmarks WHERE ${where.sql} " +
+                    "ORDER BY ${filter.sort.toOrderBySql()}",
+                where.binds
+            )
+        }
+
+        /**
+         * Rows of [filter]'s view whose title, URL or description contain [query].
+         *
+         * Matched with `instr` on the folded values rather than `LIKE`, so a search term holding
+         * `%` or `_` means those characters rather than "anything". `lower` folds the 26 ASCII
+         * letters and no more — see [searchBookmarks].
+         */
+        internal fun buildSearchQuery(
+            serverId: String,
+            filter: FilterConfig,
+            query: String,
+            limit: Int
+        ): RoomRawQuery {
+            val where = buildViewPredicate(serverId, filter)
+            val match = "(instr(lower(title), lower(?)) > 0 " +
+                "OR instr(lower(url), lower(?)) > 0 " +
+                "OR instr(lower(COALESCE(description, '')), lower(?)) > 0)"
+            val sql = "SELECT $BOOKMARK_SELECT FROM bookmarks " +
+                "WHERE ${where.sql} AND $match " +
+                "ORDER BY ${filter.sort.toOrderBySql()} LIMIT ?"
+            return rawQuery(sql, where.binds + query + query + query + limit.toLong())
         }
 
         /** The page of [filter]'s view at [offset], addressed by position. */
