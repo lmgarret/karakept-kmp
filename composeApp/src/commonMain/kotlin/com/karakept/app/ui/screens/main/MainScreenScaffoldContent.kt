@@ -53,7 +53,6 @@ import com.karakept.app.ui.screens.batchFavourite
 import com.karakept.app.ui.screens.batchUnfavourite
 import com.karakept.app.ui.screens.toggleBookmarkSelection
 import com.karakept.app.ui.screens.loadNextPage
-import com.karakept.app.ui.screens.loadThroughIndex
 import com.karakept.app.ui.screens.AiBatchProgress
 import com.karakept.app.ui.screens.cancelAiBatchAction
 import com.karakept.app.ui.screens.runAiAction
@@ -279,7 +278,6 @@ fun MainScreenScaffoldContent(
                 syncProgress = syncProgress,
                 isLoadingMore = if (isSearchActive) false else isLoadingMore,
                 isLoadingInitialPage = if (isSearchActive) false else isLoadingInitialPage,
-                hasMoreItems = if (isSearchActive) true else hasMoreItems,
                 showScrollCursor = showScrollCursor,
                 sortOption = sortOption,
                 // The search pipeline holds its whole result set, so the list is its own total
@@ -341,8 +339,7 @@ fun MainScreenScaffoldContent(
                 serverUrl = serverUrl,
                 onSwipeAction = onSwipeAction,
                 onRefresh = { if (!offlineMode) screenModel.syncBookmarks() },
-                onLoadMore = { screenModel.loadNextPage() },
-                onSeekToIndex = { screenModel.loadThroughIndex(it) },
+                onVisibleSlotsChanged = { screenModel.reportVisibleSlots(it) },
                 onBookmarksVisible = { ids -> screenModel.onBookmarksVisible(ids) },
                 onCtrlClick = if (isDesktop) { bookmark ->
                     if (!isSelectionMode) {

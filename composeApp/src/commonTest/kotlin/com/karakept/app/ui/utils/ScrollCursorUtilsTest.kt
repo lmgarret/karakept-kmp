@@ -1,7 +1,11 @@
 package com.karakept.app.ui.utils
 
+import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkSlot
+import com.karakept.app.data.model.BookmarkWindow
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -62,130 +66,97 @@ class ScrollCursorUtilsTest {
     }
 
     // -------------------------------------------------------------------------
-    // Walking to a target past the loaded window
+    // Reaching a row that has not been read
+    //
+    // These replace the tests for the walk the cursor used to make. The list was indexed by the
+    // rows read so far, so a thumb dropped past them named a row the list had no slot for, and
+    // reaching it meant asking for everything in between: a target past the window pulled, a
+    // pull already in flight was waited for, a read that came back short pulled again, and one
+    // that brought nothing back landed on the last row it had. What every one of those asserted
+    // is that a drag arrives somewhere sensible without crawling. Sizing the list by the view
+    // makes that structural — the slot is already there — and these are the same guarantee in
+    // the terms that now hold it.
     // -------------------------------------------------------------------------
 
-    @Test
-    fun `a loaded target lands straight away`() {
-        assertEquals(
-            ScrollCursorStep.Land(42),
-            scrollCursorStep(targetIndex = 42, loadedCount = 100, canLoadMore = true, isLoadingMore = false)
-        )
-    }
+    /** A large view with only its first page read — the state a drag starts from. */
+    private fun sparseView(total: Int) = BookmarkWindow(
+        viewTotal = total,
+        pageSize = 50,
+        pages = mapOf(0 to (1..50).map(::row))
+    )
+
+    private fun row(id: Int) = BookmarkEntity(
+        localId = id.toLong(),
+        remoteId = "remote-$id",
+        serverId = "server-1",
+        url = "https://example.com/$id",
+        title = "Bookmark $id",
+        content = null,
+        imageUrl = null,
+        bannerImageAssetId = null,
+        screenshotAssetId = null,
+        description = null,
+        createdAt = id.toLong(),
+        isArchived = false,
+        isStarred = false
+    )
 
     @Test
-    fun `a target past the window asks for the rows out to it`() {
-        // Out to the target, not one page on: a pull the list can see is a crawl, not a jump.
-        assertEquals(
-            ScrollCursorStep.Pull(800),
-            scrollCursorStep(targetIndex = 800, loadedCount = 100, canLoadMore = true, isLoadingMore = false)
-        )
-    }
+    fun `every row the thumb can name is a slot the list already holds`() {
+        val window = sparseView(4397)
 
-    @Test
-    fun `a page already in flight is waited for`() {
-        assertEquals(
-            ScrollCursorStep.Wait,
-            scrollCursorStep(targetIndex = 800, loadedCount = 100, canLoadMore = true, isLoadingMore = true)
-        )
-    }
-
-    @Test
-    fun `a target past the end of the table lands on the last row`() {
-        assertEquals(
-            ScrollCursorStep.Land(99),
-            scrollCursorStep(targetIndex = 800, loadedCount = 100, canLoadMore = false, isLoadingMore = false)
-        )
-    }
-
-    @Test
-    fun `a pull that brought nothing back is not asked again`() {
-        assertEquals(
-            ScrollCursorStep.Land(99),
-            scrollCursorStep(
-                targetIndex = 800,
-                loadedCount = 100,
-                canLoadMore = true,
-                isLoadingMore = false,
-                pulledAtCount = 100
+        for (step in 0..100) {
+            val index = scrollCursorIndex(step / 100f, window.viewTotal)
+            assertTrue(
+                index in 0 until window.total,
+                "a thumb at ${step}% names row $index, which the list must have a slot for"
             )
-        )
-    }
-
-    @Test
-    fun `a read that came back short of the target pulls again`() {
-        assertEquals(
-            ScrollCursorStep.Pull(800),
-            scrollCursorStep(
-                targetIndex = 800,
-                loadedCount = 150,
-                canLoadMore = true,
-                isLoadingMore = false,
-                pulledAtCount = 100
-            )
-        )
-    }
-
-    @Test
-    fun `an empty window has nothing to land on`() {
-        assertEquals(
-            ScrollCursorStep.Wait,
-            scrollCursorStep(targetIndex = 0, loadedCount = 0, canLoadMore = true, isLoadingMore = false)
-        )
-    }
-
-    /** A drag to 75% of a 1000-row list, made on the first page: one read, then the jump. */
-    @Test
-    fun `a target far past the window is reached in one read`() {
-        val total = 1000
-        val target = scrollCursorIndex(0.75f, total)
-        var loaded = 50
-        var pulledAt: Int? = null
-
-        val first = scrollCursorStep(target, loaded, canLoadMore = true, isLoadingMore = false, pulledAtCount = pulledAt)
-        assertEquals(ScrollCursorStep.Pull(target), first)
-        pulledAt = loaded
-        // The read reaches the target, as seekWindowPage sizes it to.
-        loaded = target + 1
-
-        assertEquals(
-            ScrollCursorStep.Land(target),
-            scrollCursorStep(target, loaded, canLoadMore = true, isLoadingMore = false, pulledAtCount = pulledAt)
-        )
-    }
-
-    /** A filter discarding more than the estimate allowed for: the next read resumes, larger. */
-    @Test
-    fun `a short read is followed by another, not by a crawl`() {
-        val target = 749
-        var loaded = 50
-        var pulledAt: Int? = null
-        var reads = 0
-        var landedOn: Int? = null
-
-        while (landedOn == null && reads < 30) {
-            val step = scrollCursorStep(
-                targetIndex = target,
-                loadedCount = loaded,
-                canLoadMore = true,
-                isLoadingMore = false,
-                pulledAtCount = pulledAt
-            )
-            when (step) {
-                is ScrollCursorStep.Land -> landedOn = step.index
-                is ScrollCursorStep.Pull -> {
-                    reads++
-                    pulledAt = loaded
-                    // Each read covers half the remaining distance — a short one, by design.
-                    loaded += (target + 1 - loaded) / 2 + 1
-                }
-                ScrollCursorStep.Wait -> break
-            }
         }
+    }
 
-        assertEquals(target, landedOn)
-        // Converged on reads rather than crawling: a page-at-a-time walk would have taken
-        // fifteen, each one a screenful of scrolling the user watches go past.
-        assertTrue(reads < 15)
+    @Test
+    fun `a target past what has been read is addressable, not out of range`() {
+        val window = sparseView(4397)
+        val target = scrollCursorIndex(0.9f, window.viewTotal)
+
+        assertTrue(target > 50, "the fixture must aim past the one page that is loaded")
+        assertEquals(BookmarkSlot.Placeholder, window[target], "its row has not arrived")
+        assertNotNull(window.pageOf(target), "but the list knows which page to read for it")
+    }
+
+    @Test
+    fun `reaching the end of a large list reads one page, not every page on the way`() {
+        // The crawl this replaces: a forward walk to the end of a 4397-row view at 50 rows a page
+        // is 88 reads. A jump reads the page it lands on.
+        val window = sparseView(4397)
+        val last = scrollCursorIndex(1f, window.viewTotal)
+
+        assertEquals(4396, last)
+        assertEquals(
+            listOf(87),
+            window.pagesCovering(last..last),
+            "landing on the last row asks for the page holding it and nothing before it"
+        )
+    }
+
+    @Test
+    fun `a drag across the track asks only for the pages it lands on`() {
+        val window = sparseView(4397)
+
+        // Three positions a finger might stop at, each one page.
+        for (fraction in listOf(0.25f, 0.5f, 0.75f)) {
+            val index = scrollCursorIndex(fraction, window.viewTotal)
+            assertEquals(
+                1,
+                window.pagesCovering(index..index).size,
+                "a thumb resting at $fraction sits inside one page"
+            )
+        }
+    }
+
+    @Test
+    fun `an empty view has nothing to point at`() {
+        assertEquals(0, scrollCursorIndex(0.5f, 0))
+        assertTrue(BookmarkWindow.EMPTY.pagesCovering(0..10).isEmpty())
     }
 }

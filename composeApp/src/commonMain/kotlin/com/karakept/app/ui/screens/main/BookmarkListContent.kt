@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
@@ -117,7 +118,6 @@ internal fun BookmarkListContent(
     syncProgress: com.karakept.app.data.model.SyncProgress?,
     isLoadingMore: Boolean,
     isLoadingInitialPage: Boolean = false,
-    hasMoreItems: Boolean,
     showScrollCursor: Boolean = false,
     sortOption: SortOption = SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
@@ -165,9 +165,8 @@ internal fun BookmarkListContent(
     onBookmarkLongClick: (BookmarkEntity) -> Unit,
     onSwipeAction: (BookmarkEntity, SwipeAction, CustomSwipeActionConfig?) -> Unit,
     onRefresh: () -> Unit,
-    onLoadMore: () -> Unit,
-    /** Reads the window out to a row the fast-scroll cursor was dragged to. */
-    onSeekToIndex: (Int) -> Unit = {},
+    /** Reports the slots on screen, so the pages holding them are the ones read. */
+    onVisibleSlotsChanged: (IntRange) -> Unit = {},
     serverUrl: String? = null,
     onCtrlClick: ((BookmarkEntity) -> Unit)? = null,
     onShiftClick: ((Int) -> Unit)? = null,
@@ -195,27 +194,18 @@ internal fun BookmarkListContent(
      */
     onBookmarksVisible: (List<String>) -> Unit = {}
 ) {
-    // Detect when scrolled near end. The effect outlives the values it guards on, so they are
-    // read through rememberUpdatedState — capturing them would freeze the guards at their
-    // first-composition values and keep firing load-more while a reload is in flight.
-    val currentHasMoreItems = rememberUpdatedState(hasMoreItems)
-    val currentIsLoadingMore = rememberUpdatedState(isLoadingMore)
-    val currentOnLoadMore = rememberUpdatedState(onLoadMore)
+    // Which slots are on screen, so the pages holding them can be read. Reported by index
+    // rather than by key: a placeholder has no row to name, and it is exactly the slots with no
+    // row that this has to ask for. Bucketing and de-duplication happen in the model, so an
+    // ordinary scroll reports often and reads nothing.
+    val currentOnVisibleSlots = rememberUpdatedState(onVisibleSlotsChanged)
     LaunchedEffect(listState) {
-        snapshotFlow { listState.layoutInfo }
-            .collect { layoutInfo ->
-                val totalItems = layoutInfo.totalItemsCount
-                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-
-                if (lastVisibleItem != null && totalItems > 0) {
-                    val threshold = totalItems - 10  // Load when 10 items from end
-                    if (lastVisibleItem.index >= threshold &&
-                        currentHasMoreItems.value && !currentIsLoadingMore.value
-                    ) {
-                        currentOnLoadMore.value()
-                    }
-                }
-            }
+        snapshotFlow {
+            val visible = listState.layoutInfo.visibleItemsInfo
+            if (visible.isEmpty()) 0..0 else visible.first().index..visible.last().index
+        }
+            .distinctUntilChanged()
+            .collect { currentOnVisibleSlots.value(it) }
     }
 
     // Report what is on screen once scrolling settles. Debounced rather than per-frame: the
@@ -425,11 +415,7 @@ internal fun BookmarkListContent(
         // The page is the list's own height, read off the constraints rather than off `layoutInfo`:
         // the tile is settled before the first row is laid out, so the list is never drawn once at
         // its natural height and then again at the tile.
-        val tiledRows = rememberTiledRows(
-            enabled = pagedRendering,
-            viewportPx = with(density) { maxHeight.roundToPx() },
-            layoutType = layoutType,
-            metrics = rememberBookmarkRowMetrics(
+        val rowMetrics = rememberBookmarkRowMetrics(
                 itemContainerStyle = itemContainerStyle,
                 showThumbnail = showThumbnail,
                 thumbnailSize = thumbnailSize,
@@ -442,10 +428,21 @@ internal fun BookmarkListContent(
                 showTags = showTags,
                 showDate = showDate,
                 showReadingTime = showReadingTimeBadge,
-                metadataPosition = metadataPosition,
-                showRowDivider = showRowDivider
-            )
+            metadataPosition = metadataPosition,
+            showRowDivider = showRowDivider
         )
+        val tiledRows = rememberTiledRows(
+            enabled = pagedRendering,
+            viewportPx = with(density) { maxHeight.roundToPx() },
+            layoutType = layoutType,
+            metrics = rowMetrics
+        )
+        // A slot whose page has not arrived is drawn at the height its row will be, declared by
+        // the same metrics the tiling uses. A placeholder of the wrong height moves everything
+        // below it when the row lands, which on a list being scrolled is the position jumping
+        // under the reader.
+        val placeholderHeight = tiledRows?.itemHeight
+            ?: with(density) { rowMetrics.naturalHeightPx.toDp() }
         // Room for the last turn to put the final rows at the top of the page. Without it that turn
         // clamps against the end of the content and the page it lands on is one the previous page
         // had already shown almost all of.
@@ -490,10 +487,22 @@ internal fun BookmarkListContent(
                     if (window.bookmarkAt(index) != null) "bookmark" else "placeholder"
                 }
             ) { itemIndex ->
-                // Unreachable while the walk is what sizes the list — every slot it counts is a
-                // row it holds. It becomes the placeholder branch once the total comes from the
-                // view rather than from the window.
-                val bookmark = window.bookmarkAt(itemIndex) ?: return@items
+                val bookmark = window.bookmarkAt(itemIndex)
+                if (bookmark == null) {
+                    Box(Modifier.height(placeholderHeight)) {
+                        BookmarkPlaceholderItem(
+                            url = "",
+                            layoutType = layoutType,
+                            itemContainerStyle = itemContainerStyle,
+                            showThumbnail = showThumbnail,
+                            thumbnailSize = thumbnailSize,
+                            thumbnailSide = thumbnailSide,
+                            titlePosition = titlePosition,
+                            showRowDivider = showRowDivider
+                        )
+                    }
+                    return@items
+                }
                 Box(
                     modifier = Modifier
                         // Uniform height is what lets an exact number of rows fill the page. The row
@@ -798,7 +807,7 @@ internal fun BookmarkListContent(
             }
 
             // End of list indicator
-            if (!hasMoreItems && !window.isEmpty) {
+            if (!window.isEmpty) {
                 item(contentType = "end") {
                     Box(
                         modifier = Modifier
@@ -916,10 +925,6 @@ internal fun BookmarkListContent(
                 sortOption = sortOption,
                 totalBookmarkCount = totalBookmarkCount,
                 filteredBookmarks = filteredBookmarks,
-                // A drag can aim past the loaded window, and these are how it gets there.
-                hasMoreItems = hasMoreItems,
-                isLoadingMore = isLoadingMore,
-                onSeekToIndex = onSeekToIndex,
                 // padding(top) keeps the scrollbar clear of the sync progress bar
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
             )

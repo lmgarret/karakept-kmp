@@ -29,6 +29,7 @@ import com.karakept.app.data.repository.setDefaultListType
 import com.karakept.app.data.repository.setDefaultListId
 import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -44,7 +45,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -645,19 +648,102 @@ class MainScreenModel(
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    // Which slots the list is showing, reported by it so their pages can be read. The list is
+    // sized by the view, so this is a position in the view and not in what has been loaded.
+    private val _visibleSlots = MutableStateFlow(0..0)
+
+    /** Reports the slots on screen. Cheap to call often — only a page crossing reads anything. */
+    fun reportVisibleSlots(range: IntRange) {
+        _visibleSlots.value = range
+    }
+
     /**
-     * [bookmarks] as the list addresses it — by absolute index rather than by position within
-     * whatever has been read.
-     *
-     * Every slot is loaded for now: the forward walk is still what grows the window, so the list
-     * has exactly the rows it has. What changes is that the LazyColumn is sized and keyed by the
-     * window, so an index means a position in the view instead of a position in the window, and
-     * sizing it by a total the walk has not reached is a change to this flow alone.
+     * How many pages either side of the visible span to keep loaded, so an ordinary scroll
+     * reaches rows that are already there rather than placeholders.
      */
-    val bookmarkWindow: StateFlow<BookmarkWindow> =
-        combine(bookmarks, _bookmarkListVersion) { rows, version ->
-            BookmarkWindow.dense(rows, generation = version)
-        }.stateIn(viewModelScope, SharingStarted.Lazily, BookmarkWindow.EMPTY)
+    private val pageMargin = 1
+
+    /**
+     * The view as the list addresses it: every slot it holds, with the pages under the viewport
+     * read and the rest left as placeholders.
+     *
+     * Sized by a `COUNT(*)` rather than by what has been read, so an index means a position in
+     * the view from the first frame. A jump therefore needs no read to *arrive* — the slot is
+     * already there — and the page under it is fetched by its offset while the list sits where it
+     * was put. Nothing walks, so there is no accumulated position to drift (#333) and no window
+     * to grow: the rows on screen are re-read from their offsets, and rows scrolled away from are
+     * dropped rather than carried.
+     *
+     * Two things drive it, and both have to. The count is re-emitted by Room on every write to
+     * the table, which is also what makes a row edited elsewhere — or a page a sync has just
+     * committed — reappear correctly here: the pages on screen are read again. The visible span
+     * only asks for anything when it crosses a page boundary.
+     */
+    val bookmarkWindow: StateFlow<BookmarkWindow> = _searchQuery
+        .flatMapLatest { query ->
+            if (query.isBlank()) pagedWindow() else searchWindow(query)
+        }
+        .combine(_pendingBookmarks) { window, pending ->
+            // A bookmark being created is on screen before it is in the database, so the view's
+            // total does not count it and it takes the slots above the view.
+            if (pending.isEmpty()) window else window.copy(prepended = pending)
+        }
+        .stateIn(viewModelScope, SharingStarted.Lazily, BookmarkWindow.EMPTY)
+
+    private fun pagedWindow(): Flow<BookmarkWindow> =
+        combine(_selectedServer, effectiveFilter) { server, filter -> server?.let { it to filter } }
+            .flatMapLatest { request ->
+                if (request == null) return@flatMapLatest flowOf(BookmarkWindow.EMPTY)
+                val (server, filter) = request
+                // Bucketed to pages before de-duplicating: scrolling within a page asks for
+                // nothing, and only crossing into a new one does. The count is deliberately not
+                // de-duplicated — a write that edits a row without changing how many there are
+                // still has to re-read the rows on screen.
+                val visiblePages = _visibleSlots
+                    .map { (it.first / pageSize)..(it.last / pageSize) }
+                    .distinctUntilChanged()
+
+                bookmarkRepository.countBookmarksForViewFlow(server, filter)
+                    .combine(visiblePages) { total, pages -> total to pages }
+                    .mapLatest { (total, pages) -> readWindow(server, filter, total, pages) }
+                    .catch { e ->
+                        AppLogger.e("MainScreenModel", "Failed to read bookmarks: ${e.message}", e)
+                        emit(BookmarkWindow.EMPTY)
+                    }
+            }
+            .combine(_bookmarkListVersion) { window, version -> window.copy(generation = version) }
+
+    /** Reads the pages [pageSpan] touches, plus [pageMargin] either side. */
+    private suspend fun readWindow(
+        server: Server,
+        filter: FilterConfig,
+        total: Int,
+        pageSpan: IntRange
+    ): BookmarkWindow {
+        val shape = BookmarkWindow(viewTotal = total, pageSize = pageSize)
+        if (total <= 0) return shape
+        val lastPage = (total - 1) / pageSize
+        val first = (pageSpan.first - pageMargin).coerceIn(0, lastPage)
+        val last = (pageSpan.last + pageMargin).coerceIn(0, lastPage)
+        val pages = PerfTrace.measureSuspending("window.readPages", "pages=${last - first + 1}") {
+            (first..last).associateWith { page ->
+                bookmarkRepository.getBookmarkPage(server, filter, page * pageSize, pageSize)
+            }
+        }
+        return shape.copy(pages = pages)
+    }
+
+    /**
+     * Search results, which are not a paged view: the query is matched in memory over the whole
+     * table, so every row it admits is on hand at once.
+     */
+    private fun searchWindow(query: String): Flow<BookmarkWindow> =
+        combine(allBookmarks, effectiveFilter) { all, filter ->
+            val matches = PerfTrace.measure("applySearchFilter", "rows=${all.size}") {
+                BookmarkFilterUtils.applySearchFilter(all, filter, query)
+            }
+            BookmarkWindow.dense(matches, pageSize = pageSize)
+        }
 
     private sealed class InitState {
         data object Idle : InitState()

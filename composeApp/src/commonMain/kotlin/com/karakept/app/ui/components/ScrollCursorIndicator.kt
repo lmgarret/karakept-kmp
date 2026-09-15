@@ -29,6 +29,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,10 +45,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.SortOption
-import com.karakept.app.ui.utils.ScrollCursorStep
 import com.karakept.app.ui.utils.scrollCursorFraction
 import com.karakept.app.ui.utils.scrollCursorIndex
-import com.karakept.app.ui.utils.scrollCursorStep
 import kotlin.time.Clock
 import kotlin.math.min
 
@@ -66,11 +66,10 @@ import kotlin.math.min
  * is past the window — a label that trails the thumb and then ticks forward as reads land, on
  * exactly the gesture whose whole purpose is to answer "where am I".
  *
- * A drag therefore aims at a row the window may not hold yet. [onSeekToIndex] is what gets it
- * there: it asks for the rows out to that one, and the list holds still until they arrive — a
- * jump to the end of a large list must not crawl through everything on the way. The walk stops
- * when the target is loaded, when [hasMoreItems] says the table ended first, or when a read comes
- * back having added nothing (see [scrollCursorStep]).
+ * A drag lands at once. The list holds a slot for every row the view has, so the row the thumb
+ * names is one it can already scroll to and the page under it arrives afterwards. This used to be
+ * a walk: the list was indexed by the rows read so far, so a drag past them had to ask for the
+ * rows in between and hold the thumb where it was dropped until they came back.
  */
 @Composable
 fun ScrollCursorIndicator(
@@ -79,70 +78,29 @@ fun ScrollCursorIndicator(
     sortOption: SortOption,
     totalBookmarkCount: Int = 0,
     filteredBookmarks: List<BookmarkEntity> = emptyList(),
-    hasMoreItems: Boolean = false,
-    isLoadingMore: Boolean = false,
-    onSeekToIndex: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    if (bookmarks.size < 2) return
+    val total = maxOf(totalBookmarkCount, bookmarks.size)
+    if (total < 2) return
 
+    val scope = rememberCoroutineScope()
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableStateOf(0f) }
-    // The row the last drag asked for, over the whole list. Outlives the drag: a target past the
-    // loaded window is reached one page at a time, and the finger is long gone by then.
-    var targetIndex by remember { mutableStateOf<Int?>(null) }
-    var pulledAtCount by remember { mutableStateOf<Int?>(null) }
     var trackHeightPx by remember { mutableStateOf(0f) }
     var tooltipHeightPx by remember { mutableStateOf(0f) }
 
-    val effectiveTotal = if (totalBookmarkCount > bookmarks.size) totalBookmarkCount else bookmarks.size
-    val effectiveTotalState = rememberUpdatedState(effectiveTotal)
-    val currentOnSeekToIndex by rememberUpdatedState(onSeekToIndex)
+    val totalState = rememberUpdatedState(total)
 
     val listScrollFraction by remember {
         derivedStateOf {
-            scrollCursorFraction(listState.firstVisibleItemIndex, effectiveTotalState.value)
+            scrollCursorFraction(listState.firstVisibleItemIndex, totalState.value)
         }
     }
 
-    // Reaching the target can outlast the gesture — a row past the window has to be read in
-    // first — so it is driven from here rather than from the drag.
-    LaunchedEffect(targetIndex, isDragging, bookmarks.size, hasMoreItems, isLoadingMore) {
-        val target = targetIndex ?: return@LaunchedEffect
-        val step = scrollCursorStep(
-            targetIndex = target,
-            loadedCount = bookmarks.size,
-            canLoadMore = hasMoreItems,
-            isLoadingMore = isLoadingMore,
-            pulledAtCount = pulledAtCount
-        )
-        when (step) {
-            is ScrollCursorStep.Land -> {
-                listState.scrollToItem(step.index)
-                targetIndex = null
-                pulledAtCount = null
-            }
-            is ScrollCursorStep.Pull -> {
-                // Asked for at once, never on a settling delay. A moving finger does name a new
-                // target every few milliseconds, but the read is already one-at-a-time — the
-                // seek refuses while one is in flight, and this effect re-runs against the
-                // current target when it lands — so the reads a drag issues are self-limiting.
-                // Waiting for the finger to hold still instead starves the seek precisely when
-                // the user is wiggling the thumb because nothing appears to be happening: every
-                // twitch restarts this effect and cancels the wait.
-                pulledAtCount = bookmarks.size
-                currentOnSeekToIndex(step.throughIndex)
-            }
-            ScrollCursorStep.Wait -> Unit
-        }
-    }
-
-    // The thumb holds where it was dropped until the walk resolves — following the list instead
-    // would snap it back to the end of the window while the pages it is waiting on load.
-    val displayFraction = if (isDragging || targetIndex != null) dragFraction else listScrollFraction
-    val pointedIndex = scrollCursorIndex(displayFraction, effectiveTotal)
-    // The loaded window is the fallback, for the frame before the view resolves or a row the
-    // view has not caught up with; it can only ever answer for a thumb inside the window.
+    val displayFraction = if (isDragging) dragFraction else listScrollFraction
+    val pointedIndex = scrollCursorIndex(displayFraction, total)
+    // The loaded rows are the fallback, for the frame before the view resolves; they can only
+    // ever answer for a thumb inside what is loaded.
     val pointedBookmark = filteredBookmarks.getOrNull(pointedIndex)
         ?: bookmarks.getOrNull(pointedIndex.coerceAtMost(bookmarks.size - 1))
     val label = scrollCursorLabel(pointedBookmark, sortOption)
@@ -229,17 +187,22 @@ fun ScrollCursorIndicator(
                     down.consume()
                     isDragging = true
                     dragFraction = (down.position.y / size.height).coerceIn(0f, 1f)
-                    targetIndex = scrollCursorIndex(dragFraction, effectiveTotalState.value)
-                    pulledAtCount = null
+                    scope.launch {
+                        listState.scrollToItem(scrollCursorIndex(dragFraction, totalState.value))
+                    }
 
                     // drag() tracks the pointer globally until lifted, regardless of whether
                     // it moves outside this composable's bounds.
                     drag(down.id) { change ->
                         change.consume()
                         dragFraction = (change.position.y / size.height).coerceIn(0f, 1f)
-                        targetIndex = scrollCursorIndex(dragFraction, effectiveTotalState.value)
-                        // A fresh target deserves a fresh attempt at the pages behind it.
-                        pulledAtCount = null
+                        // The slot exists whether or not its row has been read, so the list
+                        // follows the finger and the page under it arrives afterwards.
+                        scope.launch {
+                            listState.scrollToItem(
+                                scrollCursorIndex(dragFraction, totalState.value)
+                            )
+                        }
                     }
 
                     isDragging = false
@@ -272,9 +235,7 @@ fun ScrollCursorIndicator(
 
         // Speech-bubble tooltip: grows from the scrollbar, shrinks away when released.
         AnimatedVisibility(
-            // Stays up while a seek resolves: the list deliberately holds still until the rows
-            // arrive, and with the tooltip gone too there is nothing on screen saying so.
-            visible = (isDragging || targetIndex != null) && label.isNotEmpty(),
+            visible = isDragging && label.isNotEmpty(),
             enter = scaleIn(
                 animationSpec = tween(180),
                 transformOrigin = TransformOrigin(1f, 0.5f)
