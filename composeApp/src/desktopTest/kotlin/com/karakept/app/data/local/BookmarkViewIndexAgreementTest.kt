@@ -152,7 +152,15 @@ class BookmarkViewIndexAgreementTest {
         }
     }
 
-    /** Asserts the paged walk and the in-memory view name the same row at every index. */
+    /**
+     * Asserts the paged walk and the in-memory view hold the same row at every index.
+     *
+     * Compared as whole entities, not just identities. The two queries project the same columns
+     * — both stub `content` out with `'' as content` — so a row read by paging carries nothing
+     * the resident row does not already have. That is a stronger statement than "same order",
+     * and it is the one that decides whether a page read is needed for *content* or only ever
+     * for rows the in-memory view does not hold.
+     */
     private suspend fun assertAgrees(filter: FilterConfig, label: String) {
         val paged = pagedView(filter)
         val inMemory = BookmarkFilterUtils.orderedViewFor(allBookmarks(), filter)
@@ -161,6 +169,11 @@ class BookmarkViewIndexAgreementTest {
             paged.map { it.localId },
             inMemory.map { it.localId },
             "$label: the row at each index must be the same on both sides"
+        )
+        assertEquals(
+            paged,
+            inMemory,
+            "$label: and must carry the same fields — a paged read adds nothing to a resident row"
         )
     }
 
