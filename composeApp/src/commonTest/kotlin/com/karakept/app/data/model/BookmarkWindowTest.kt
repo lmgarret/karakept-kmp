@@ -170,18 +170,31 @@ class BookmarkWindowTest {
     }
 
     @Test
-    fun `an empty window counts nothing and loads nothing`() {
-        assertTrue(BookmarkWindow.EMPTY.isEmpty)
-        assertEquals(0, BookmarkWindow.EMPTY.total)
-        assertEquals(BookmarkSlot.Placeholder, BookmarkWindow.EMPTY[0])
-        assertTrue(BookmarkWindow.dense(emptyList()).isEmpty)
+    fun `an uncounted window is not an empty view`() {
+        // The distinction the empty state hangs on: switching lists rebuilds the window, and for
+        // a moment it holds nothing because no answer has arrived — not because there is nothing
+        // there. Reading those as the same thing is what flashed "nothing here" on every switch.
+        val uncounted = BookmarkWindow.EMPTY
+
+        assertEquals(0, uncounted.total)
+        assertTrue(!uncounted.resolved)
+        assertTrue(!uncounted.isEmpty, "nobody has said the view is empty yet")
+        assertEquals(BookmarkSlot.Placeholder, uncounted[0])
     }
 
     @Test
-    fun `a view with rows is not empty even when none has loaded yet`() {
+    fun `a counted window with no rows is an empty view`() {
+        val counted = BookmarkWindow(viewTotal = 0, resolved = true)
+
+        assertTrue(counted.isEmpty)
+        assertTrue(BookmarkWindow.dense(emptyList()).isEmpty, "a dense window has been counted")
+    }
+
+    @Test
+    fun `a counted view with rows is not empty even when none has loaded yet`() {
         // `isEmpty` asks whether the view holds anything, which is what the empty state renders
         // on — not whether the rows have arrived.
-        val w = window(viewTotal = 100)
+        val w = window(viewTotal = 100).copy(resolved = true)
 
         assertTrue(!w.isEmpty)
         assertEquals(0, w.loadedCount)

@@ -84,6 +84,7 @@ import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkContextMenu
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.BookmarkPlaceholderItem
+import com.karakept.app.ui.components.BookmarkRowSkeleton
 import com.karakept.app.ui.components.QuickActionBookmarkItem
 import com.karakept.app.ui.components.ScrollCursorIndicator
 import com.karakept.app.ui.components.SwipeableBookmarkItem
@@ -431,6 +432,12 @@ internal fun BookmarkListContent(
         // under the reader.
         val placeholderHeight = tiledRows?.itemHeight
             ?: with(density) { rowMetrics.naturalHeightPx.toDp() }
+        // Enough rows to fill the viewport, so an uncounted view looks like a list rather than
+        // like a handful of bars at the top of an empty page.
+        val placeholderScreenful = remember(placeholderHeight, maxHeight) {
+            if (placeholderHeight <= 0.dp) 0
+            else ((maxHeight / placeholderHeight).toInt() + 1).coerceIn(1, 20)
+        }
         // Room for the last turn to put the final rows at the top of the page. Without it that turn
         // clamps against the end of the content and the page it lands on is one the previous page
         // had already shown almost all of.
@@ -477,18 +484,13 @@ internal fun BookmarkListContent(
             ) { itemIndex ->
                 val bookmark = window.bookmarkAt(itemIndex)
                 if (bookmark == null) {
-                    Box(Modifier.height(placeholderHeight)) {
-                        BookmarkPlaceholderItem(
-                            url = "",
-                            layoutType = layoutType,
-                            itemContainerStyle = itemContainerStyle,
-                            showThumbnail = showThumbnail,
-                            thumbnailSize = thumbnailSize,
-                            thumbnailSide = thumbnailSide,
-                            titlePosition = titlePosition,
-                            showRowDivider = showRowDivider
-                        )
-                    }
+                    BookmarkRowSkeleton(
+                        metrics = rowMetrics,
+                        itemContainerStyle = itemContainerStyle,
+                        thumbnailSide = thumbnailSide,
+                        showRowDivider = showRowDivider,
+                        fixedRowHeight = tiledRows?.rowHeight
+                    )
                     return@items
                 }
                 Box(
@@ -772,9 +774,28 @@ internal fun BookmarkListContent(
                 }
             }
 
-            // An explicit empty state, but only once the first page has actually resolved —
-            // otherwise every cold start flashes "nothing here" before the list arrives.
-            if (window.isEmpty && !isLoadingInitialPage) {
+            // Before the view has been counted there are no slots to render, so the list would
+            // be blank. A screenful of the same skeletons says "rows are coming" in the shape
+            // they will come in — and is what stops a list switch flashing the empty state,
+            // since an uncounted view is not an empty one.
+            if (!window.resolved) {
+                items(
+                    count = placeholderScreenful,
+                    contentType = { "placeholder" }
+                ) {
+                    BookmarkRowSkeleton(
+                        metrics = rowMetrics,
+                        itemContainerStyle = itemContainerStyle,
+                        thumbnailSide = thumbnailSide,
+                        showRowDivider = showRowDivider,
+                        fixedRowHeight = tiledRows?.rowHeight
+                    )
+                }
+            }
+
+            // An explicit empty state, and only once the view has actually been counted —
+            // otherwise every switch flashes "nothing here" before the list arrives.
+            if (window.isEmpty) {
                 item(contentType = "empty") {
                     EmptyBookmarkList()
                 }

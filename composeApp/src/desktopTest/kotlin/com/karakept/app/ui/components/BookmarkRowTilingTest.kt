@@ -18,6 +18,7 @@ import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.ItemContainerStyle
 import com.karakept.app.data.model.LayoutType
 import com.karakept.app.data.model.MetadataPosition
+import com.karakept.app.data.model.ThumbnailSide
 import com.karakept.app.data.model.TitlePosition
 import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.utils.BookmarkRowMetrics
@@ -108,6 +109,57 @@ class BookmarkRowTilingTest {
         assertNull(resolveFor(BookmarkLayout.BUILTIN_ROWS, EINK_PAGE_PX, enabled = false))
     }
 
+    /**
+     * A skeleton stands in for a row that has not arrived, so it has to be the size of the row it
+     * stands in for. A skeleton shorter or taller than the real row moves everything below it the
+     * moment the row lands — which on a list being scrolled is the reader's place jumping.
+     *
+     * It is built from the same [BookmarkRowMetrics] the tiling uses, so this is really asking
+     * whether that declaration reaches the skeleton intact. Describing the row a second time by
+     * hand is what the old placeholder did, and it had drifted: no description lines, no url, no
+     * metadata band.
+     */
+    @Test
+    fun `a skeleton is the size of the row it stands in for`() {
+        BookmarkLayout.ALL_BUILTIN
+            .filter { LayoutType.fromString(it.layoutType) != LayoutType.CARD }
+            .forEach { layout ->
+                val (_, rowHeight) = measureRow(layout)
+                val skeletonHeight = measureSkeleton(layout)
+                val error = abs(skeletonHeight - rowHeight) / rowHeight
+                assertTrue(
+                    error <= MAX_ESTIMATE_ERROR,
+                    "${layout.name}: skeleton ${skeletonHeight}px against a row ${rowHeight}px"
+                )
+            }
+    }
+
+    /** What the skeleton really measures, in pixels, for one layout. */
+    private fun measureSkeleton(layout: BookmarkLayout): Float {
+        var measured = 0f
+        runComposeUiTest {
+        var densityScale = 1f
+        setContent {
+            MaterialTheme {
+                densityScale = LocalDensity.current.density
+                Box(modifier = Modifier.width(rowWidth)) {
+                    BookmarkRowSkeleton(
+                        metrics = metricsFor(layout),
+                        itemContainerStyle =
+                            ItemContainerStyle.fromString(layout.itemContainerStyle),
+                        thumbnailSide = ThumbnailSide.fromString(layout.thumbnailSide),
+                        showRowDivider = layout.showRowDivider,
+                        modifier = Modifier.testTag(SKELETON_TAG)
+                    )
+                }
+            }
+        }
+        val bounds = onNodeWithTag(SKELETON_TAG).getBoundsInRoot()
+        measured = (bounds.bottom - bounds.top).value * densityScale
+        }
+        return measured
+    }
+
     /** The estimate and what the row really measures, both in pixels, for one layout. */
     private fun measureRow(layout: BookmarkLayout): Pair<Int, Float> {
         var estimated = 0
@@ -195,6 +247,7 @@ class BookmarkRowTilingTest {
 
     private companion object {
         const val ROW_TAG = "bookmark-row"
+        const val SKELETON_TAG = "bookmark-row-skeleton"
 
         /** A 7.8" reader's page once the top bar has taken its share. */
         const val EINK_PAGE_PX = 1300

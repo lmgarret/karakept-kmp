@@ -566,7 +566,8 @@ class MainScreenModel(
         total: Int,
         pageSpan: IntRange
     ): BookmarkWindow {
-        val shape = BookmarkWindow(viewTotal = total, pageSize = pageSize)
+        // Resolved: the database has answered, so an empty view here means an empty view.
+        val shape = BookmarkWindow(viewTotal = total, pageSize = pageSize, resolved = true)
         if (total <= 0) return shape
         val lastPage = (total - 1) / pageSize
         val first = (pageSpan.first - pageMargin).coerceIn(0, lastPage)
@@ -700,9 +701,9 @@ class MainScreenModel(
      * "still loading" from "no bookmarks here".
      */
     val isLoadingInitialPage: StateFlow<Boolean> =
-        combine(_initState, bookmarkWindow) { init, window ->
-            window.isEmpty && init != InitState.Ready
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+        bookmarkWindow
+            .map { !it.resolved }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     init {
         // Log init state transitions for auditability.

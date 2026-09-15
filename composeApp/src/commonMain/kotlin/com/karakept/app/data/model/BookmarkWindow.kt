@@ -38,12 +38,22 @@ data class BookmarkWindow(
     /** Page index to that page's rows, in view order. */
     val pages: Map<Int, List<BookmarkEntity>> = emptyMap(),
     val prepended: List<BookmarkEntity> = emptyList(),
-    val generation: Int = 0
+    val generation: Int = 0,
+    /**
+     * Whether the database has said how big the view is.
+     *
+     * Until it has, a window is not a view with nothing in it — it is a view nobody has counted.
+     * The two look identical from [total] alone, which is how switching lists came to flash the
+     * empty state: the list is rebuilt for the new view, and for a moment that window is empty
+     * because no answer has arrived, not because there is nothing there.
+     */
+    val resolved: Boolean = false
 ) {
     /** Slots the list renders. */
     val total: Int = prepended.size + viewTotal
 
-    val isEmpty: Boolean get() = total == 0
+    /** The view holds nothing — and is known to, which [resolved] is what settles. */
+    val isEmpty: Boolean get() = resolved && total == 0
 
     /** Rows on hand, however many slots there are. */
     val loadedCount: Int get() = prepended.size + pages.values.sumOf { it.size }
@@ -115,7 +125,8 @@ data class BookmarkWindow(
             viewTotal = rows.size,
             pageSize = pageSize,
             pages = rows.chunked(pageSize).withIndex().associate { (index, page) -> index to page },
-            generation = generation
+            generation = generation,
+            resolved = true
         )
     }
 }
