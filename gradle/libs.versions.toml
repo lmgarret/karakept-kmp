@@ -30,7 +30,7 @@ compose-native-tray = "2.1.6"
 knotify = "0.4.3"
 nativefiledialog = "1.0.3"
 mockk = "1.14.11"
-robolectric = "4.16.1"
+robolectric = "4.17"
 androidx-test-core = "1.6.1"
 androidx-compose-ui-test = "1.11.2"
 
