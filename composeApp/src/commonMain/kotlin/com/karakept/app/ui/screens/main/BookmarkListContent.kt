@@ -245,8 +245,9 @@ internal fun BookmarkListContent(
     val pagedRendering = einkMode.enabled && pageTurnBindings.snapToContent
     // The gate compares the rows themselves — it is asking whether this is the same list
     // shifted or a different list entirely, which only the rows can answer.
-    val animationGate = remember { ItemAnimationGate(window.rows) }
-    val animateItems = animationGate.update(window.rows) && !einkMode.animationsDisabled
+    val loadedRows = remember(window) { window.loadedRows() }
+    val animationGate = remember { ItemAnimationGate(loadedRows) }
+    val animateItems = animationGate.update(loadedRows) && !einkMode.animationsDisabled
 
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember {
@@ -911,7 +912,7 @@ internal fun BookmarkListContent(
         if (showScrollCursor) {
             ScrollCursorIndicator(
                 listState = listState,
-                bookmarks = window.rows,
+                bookmarks = loadedRows,
                 sortOption = sortOption,
                 totalBookmarkCount = totalBookmarkCount,
                 filteredBookmarks = filteredBookmarks,

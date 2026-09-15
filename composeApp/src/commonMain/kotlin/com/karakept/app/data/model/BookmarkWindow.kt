@@ -7,51 +7,75 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 sealed interface BookmarkSlot {
     data class Loaded(val bookmark: BookmarkEntity) : BookmarkSlot
 
-    /** Not read yet — renders as a placeholder and asks for the rows around it. */
+    /** Not read yet — renders as a placeholder and asks for the page holding it. */
     data object Placeholder : BookmarkSlot
 }
 
 /**
- * The list as the UI addresses it: [total] slots, of which a contiguous run is loaded.
+ * The list as the UI addresses it: one slot per row the view holds, of which some are loaded.
  *
- * The LazyColumn used to be indexed by the loaded rows themselves, so it could only scroll to a
- * row the window already held. Everything that wanted to reach an arbitrary position — the
- * fast-scroll cursor above all — had to first *make the window reach it*, which meant a database
- * read between the thumb moving and the list following. Sizing the list by [total] instead makes
- * an index mean the same thing whether or not its row has arrived, so a jump is arithmetic rather
- * than a read.
+ * The LazyColumn used to be indexed by the loaded rows, so it could only scroll to a row already
+ * read. Anything wanting an arbitrary position had to first make the window reach it — a database
+ * read between the input and the list following. Sizing by [viewTotal] instead makes an index mean
+ * a position in the view whether or not its row has arrived, so a jump is arithmetic.
  *
- * The loaded rows are a contiguous run rather than a scattered set because that is what the
- * forward walk produces and what a page read extends. An index outside it is a
- * [BookmarkSlot.Placeholder]; there are none while [total] equals the run's length, which is the
- * state [dense] describes and the only one the walk can currently reach.
+ * Rows are held by **page**, because a page is what a read returns and what a request asks for.
+ * Pages need not be contiguous: a jump loads the page it lands on and nothing in between.
  *
- * [generation] is what makes a stale window droppable: it changes whenever the rows stop being a
- * view of the same thing — a filter or server switch — so a page in flight for the previous view
- * can be recognised on arrival rather than published on top of the new one.
+ * [prepended] are rows sitting above the view because they are not in it yet — a bookmark the user
+ * has just added, held on screen while the request to create it is in flight. They are not in the
+ * database, so [viewTotal] does not count them, and they occupy the first indices.
+ *
+ * [generation] changes when the rows stop being a view of the same thing — a filter or server
+ * switch — so a read in flight for the previous view can be recognised on arrival rather than
+ * published over the new one.
  */
 @Immutable
 data class BookmarkWindow(
-    val total: Int,
-    /** The loaded run, in view order, starting at [loadedFrom]. */
-    val rows: List<BookmarkEntity>,
-    val loadedFrom: Int = 0,
+    /** How many rows the view holds in the database, loaded or not. */
+    val viewTotal: Int,
+    val pageSize: Int = DEFAULT_PAGE_SIZE,
+    /** Page index to that page's rows, in view order. */
+    val pages: Map<Int, List<BookmarkEntity>> = emptyMap(),
+    val prepended: List<BookmarkEntity> = emptyList(),
     val generation: Int = 0
 ) {
-    /** Indices whose row is on hand. */
-    val loadedRange: IntRange = loadedFrom until (loadedFrom + rows.size)
-
-    /** Rows on hand, however many slots the list has. */
-    val loadedCount: Int get() = rows.size
+    /** Slots the list renders. */
+    val total: Int = prepended.size + viewTotal
 
     val isEmpty: Boolean get() = total == 0
+
+    /** Rows on hand, however many slots there are. */
+    val loadedCount: Int get() = prepended.size + pages.values.sumOf { it.size }
 
     operator fun get(index: Int): BookmarkSlot =
         bookmarkAt(index)?.let(BookmarkSlot::Loaded) ?: BookmarkSlot.Placeholder
 
-    /** The row at [index], or null when it has not been read yet. */
-    fun bookmarkAt(index: Int): BookmarkEntity? =
-        if (index in loadedRange) rows[index - loadedFrom] else null
+    /** The row at [index], or null when its page has not been read yet. */
+    fun bookmarkAt(index: Int): BookmarkEntity? {
+        if (index < 0 || index >= total) return null
+        if (index < prepended.size) return prepended[index]
+        val viewIndex = index - prepended.size
+        return pages[viewIndex / pageSize]?.getOrNull(viewIndex % pageSize)
+    }
+
+    /**
+     * The page holding [index], or null for a prepended row — which is on hand by definition and
+     * belongs to no page.
+     */
+    fun pageOf(index: Int): Int? {
+        if (index < prepended.size || index >= total) return null
+        return (index - prepended.size) / pageSize
+    }
+
+    /** Every page [range] touches, clamped to the pages the view actually has. */
+    fun pagesCovering(range: IntRange): List<Int> {
+        if (viewTotal <= 0 || range.isEmpty()) return emptyList()
+        val lastPage = (viewTotal - 1) / pageSize
+        val first = pageOf(range.first.coerceIn(0, total - 1)) ?: 0
+        val last = pageOf(range.last.coerceIn(0, total - 1)) ?: lastPage
+        return (first.coerceAtLeast(0)..last.coerceAtMost(lastPage)).toList()
+    }
 
     /**
      * The LazyColumn key for [index].
@@ -64,20 +88,34 @@ data class BookmarkWindow(
     fun keyAt(index: Int): Any = bookmarkAt(index)?.remoteId ?: index
 
     fun indexOfRemoteId(remoteId: String): Int {
-        val offset = rows.indexOfFirst { it.remoteId == remoteId }
-        return if (offset < 0) -1 else loadedFrom + offset
+        val prependedAt = prepended.indexOfFirst { it.remoteId == remoteId }
+        if (prependedAt >= 0) return prependedAt
+        for ((pageIndex, rows) in pages) {
+            val offset = rows.indexOfFirst { it.remoteId == remoteId }
+            if (offset >= 0) return prepended.size + pageIndex * pageSize + offset
+        }
+        return -1
     }
 
+    /** Every loaded row, in view order — for the callers that want the rows and not the slots. */
+    fun loadedRows(): List<BookmarkEntity> =
+        prepended + pages.entries.sortedBy { it.key }.flatMap { it.value }
+
     companion object {
-        val EMPTY = BookmarkWindow(total = 0, rows = emptyList())
+        const val DEFAULT_PAGE_SIZE = 50
+
+        val EMPTY = BookmarkWindow(viewTotal = 0)
 
         /** Every slot loaded — the whole view on hand, with nothing left to read. */
-        fun dense(rows: List<BookmarkEntity>, generation: Int = 0): BookmarkWindow =
-            BookmarkWindow(
-                total = rows.size,
-                rows = rows,
-                loadedFrom = 0,
-                generation = generation
-            )
+        fun dense(
+            rows: List<BookmarkEntity>,
+            generation: Int = 0,
+            pageSize: Int = DEFAULT_PAGE_SIZE
+        ): BookmarkWindow = BookmarkWindow(
+            viewTotal = rows.size,
+            pageSize = pageSize,
+            pages = rows.chunked(pageSize).withIndex().associate { (index, page) -> index to page },
+            generation = generation
+        )
     }
 }
