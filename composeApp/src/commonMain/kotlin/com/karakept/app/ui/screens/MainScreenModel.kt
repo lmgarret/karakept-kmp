@@ -50,6 +50,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlin.time.ExperimentalTime
+import kotlin.time.TimeSource
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -536,6 +538,7 @@ class MainScreenModel(
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, BookmarkWindow.EMPTY)
 
+    @OptIn(ExperimentalTime::class)
     private fun pagedWindow(): Flow<BookmarkWindow> =
         combine(_selectedServer, effectiveFilter) { server, filter -> server?.let { it to filter } }
             .flatMapLatest { request ->
@@ -549,9 +552,45 @@ class MainScreenModel(
                     .map { (it.first / pageSize)..(it.last / pageSize) }
                     .distinctUntilChanged()
 
+                // How long a view switch takes, split where the cost could be.
+                //
+                // The count and the pages are one chain: the pages cannot be read until the
+                // count has emitted, so switching costs the count *plus* the pages rather than
+                // the larger of the two. Whether a junction table would help turns on which of
+                // those two numbers dominates, and no amount of reasoning about the SQL settles
+                // it — an unindexed COUNT and an unindexed page read are the same shape of scan.
+                //
+                // Timed from the switch rather than around the query, because the query is a
+                // Room flow: what a user waits for is the answer arriving, which includes
+                // whatever Room spent scheduling it.
+                val switchedAt = TimeSource.Monotonic.markNow()
+                var countReported = false
+                var rowsReported = false
+
                 bookmarkRepository.countBookmarksForViewFlow(server, filter)
+                    .onEach { total ->
+                        if (!countReported) {
+                            countReported = true
+                            PerfTrace.report(
+                                "viewSwitch.count",
+                                switchedAt.elapsedNow().inWholeMilliseconds,
+                                "rows=$total"
+                            )
+                        }
+                    }
                     .combine(visiblePages) { total, pages -> total to pages }
                     .mapLatest { (total, pages) -> readWindow(server, filter, total, pages) }
+                    .onEach { window ->
+                        if (!rowsReported) {
+                            rowsReported = true
+                            // The whole wait. Subtract viewSwitch.count for the pages' share.
+                            PerfTrace.report(
+                                "viewSwitch.firstRows",
+                                switchedAt.elapsedNow().inWholeMilliseconds,
+                                "loaded=${window.loadedCount}/${window.total}"
+                            )
+                        }
+                    }
                     .catch { e ->
                         AppLogger.e("MainScreenModel", "Failed to read bookmarks: ${e.message}", e)
                         emit(BookmarkWindow.EMPTY)
