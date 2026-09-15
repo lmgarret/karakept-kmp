@@ -1166,20 +1166,8 @@ class MainScreenModel(
     internal var _lastSelectedIndex: Int = -1
 }
 
-/**
- * Rows per DB read for the bookmark list.
- *
- * The paged query selects `'' as content` (see `BookmarkRepository.BOOKMARK_SELECT`), so a row
- * carries metadata rather than an article body and a larger page costs little. What it buys is a
- * shorter walk: the forward search steps a page at a time until something survives the
- * client-side filters, so a view whose filter admits few rows — an unread filter over a mostly
- * read feed — reads the table this many rows at a time. A 1400-row list took 66 steps at 20 and
- * takes 27 here.
- *
- * Tests derive their fixtures from this rather than restating it, so tuning it stays a one-line
- * change instead of a sweep through every pagination fixture.
- */
-internal const val PAGE_SIZE = 50
+/** Rows to a page. One value, so a slot's index and its page agree everywhere. */
+internal const val PAGE_SIZE = BookmarkWindow.DEFAULT_PAGE_SIZE
 
 /**
  * Number of bookmarks sitting above [seenTopRemoteId] in [bookmarks] — the "N new" pill count.
