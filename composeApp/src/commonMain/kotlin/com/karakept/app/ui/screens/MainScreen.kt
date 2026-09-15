@@ -321,7 +321,6 @@ object MainScreen : NavKey {
                 SwipeAction.ADD_TO_LIST -> {
                     val listId = config?.listId; val listName = config?.listName ?: "list"
                     if (listId != null) {
-                        val position = screenModel.accumulatedBookmarkPosition(bookmark)
                         val bookmarkListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
                         if (bookmarkListIds.contains(listId)) {
                             screenModel.removeBookmarkFromList(bookmark, listId)
@@ -331,7 +330,7 @@ object MainScreen : NavKey {
                         } else {
                             screenModel.moveBookmarkToList(bookmark, listId)
                             scope.undoableAction(snackbarManager, "Added to '$listName'") {
-                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, listId, position)
+                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, listId)
                             }
                         }
                     }

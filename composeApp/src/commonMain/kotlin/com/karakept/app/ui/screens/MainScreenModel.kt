@@ -190,26 +190,6 @@ class MainScreenModel(
     internal val _hasMoreItems = MutableStateFlow(true)
     val hasMoreItems: StateFlow<Boolean> = _hasMoreItems
 
-    internal val _currentPage = MutableStateFlow(0)
-    internal val _accumulatedBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
-
-    // Incremented at the start of every resetPaginationAndLoad call. loadNextPage captures
-    // this value before its DB fetch and discards results if the value changed (i.e. a
-    // reset overtook it), preventing duplicate entries in the LazyColumn.
-    internal var paginationGeneration = 0
-
-    // Incremented by refreshLoadedPagesInPlace only, so two overlapping in-place refreshes
-    // resolve last-one-wins. Refreshes deliberately leave paginationGeneration alone: a
-    // reset is a user-initiated view switch and must always win over a background refresh,
-    // otherwise the refresh discards the reset's page and the list the user just left stays
-    // on screen under the new list's title.
-    internal var refreshGeneration = 0
-
-    // Where the next page resumes: the last row the walk actually read, not a count of rows
-    // before it. A row committed above the window shifts every OFFSET below it, which is how
-    // the window ended up short of the table with nothing left to scroll for (#333).
-    internal var paginationCursor: BookmarkCursor? = null
-
     // The view the accumulated window was loaded for. Every write into the window is rejected
     // unless this still matches the view on screen: the requested view flips synchronously when
     // the user taps a list while the reload it triggers runs on an observer coroutine, so
@@ -219,42 +199,6 @@ class MainScreenModel(
     /** The view the UI is currently asking for, or null while no server is selected. */
     internal fun currentView(): LoadedView? =
         _selectedServer.value?.let { LoadedView(it.id, effectiveFilterNow()) }
-
-    internal val bookmarksMutex = Mutex()
-
-    /**
-     * Thread-safe mutation of _accumulatedBookmarks.
-     * All code that reads-then-writes _accumulatedBookmarks MUST use this helper.
-     * Uses Mutex (not MutableStateFlow.update{}) because some callers need to hold
-     * the lock across suspension points (e.g., bookmarkChangedEvents DB lookup).
-     *
-     * The result is de-duplicated by remoteId: the list feeds a LazyColumn keyed on
-     * remoteId, and a duplicate key crashes the app (#274). Duplicates can slip in
-     * when a background sync inserts rows mid-pagination (OFFSET drift) or when an
-     * undo re-insertion races a concurrent transform.
-     */
-    internal suspend fun updateAccumulatedBookmarks(
-        transform: (List<BookmarkEntity>) -> List<BookmarkEntity>
-    ) {
-        bookmarksMutex.withLock {
-            PerfTrace.measure(
-                "updateAccumulatedBookmarks",
-                "rows=${_accumulatedBookmarks.value.size}"
-            ) {
-                _accumulatedBookmarks.value = transform(_accumulatedBookmarks.value)
-                    .distinctBy { it.remoteId }
-            }
-        }
-    }
-
-    /**
-     * Position of a bookmark in the accumulated list, read under the same mutex that
-     * guards mutations so action handlers capture a position consistent with the
-     * list they are about to modify.
-     */
-    internal suspend fun lockedPositionOf(remoteId: String): Int = bookmarksMutex.withLock {
-        _accumulatedBookmarks.value.indexOfFirst { it.remoteId == remoteId }
-    }
 
     internal val _bookmarkListVersion = MutableStateFlow(0)
     val bookmarkListVersion: StateFlow<Int> = _bookmarkListVersion
@@ -297,100 +241,6 @@ class MainScreenModel(
         combine(activeLayout, dimReadBookmarks) { layout, global ->
             layout?.dimReadBookmarks ?: global
         }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
-
-    // The topmost bookmark the user has actually seen. Everything above it arrived since.
-    internal val _seenTopRemoteId = MutableStateFlow<String?>(null)
-
-    /**
-     * How many bookmarks sit above the topmost one the user has seen — the "N new" pill.
-     *
-     * Derived from the loaded window every time rather than accumulated from per-refresh diffs.
-     * A diff counts anything new to the *window*, which over-reports in three ways: it ignores
-     * where the row landed (so a non-NEWEST sort, or an insert below the viewport, still counts
-     * as "above"), it never decrements when rows leave, and because a refresh re-reads a fixed
-     * page range, a row evicted off the tail by a prepend is counted a second time if a later
-     * removal pulls it back into the window. Counting positions asks the list where things
-     * actually are, so it is correct under any sort and self-corrects on every change.
-     *
-     * Counted against [_accumulatedBookmarks] rather than [bookmarks] so a bookmark the user
-     * just created — prepended as a placeholder, and already scrolled to — is not reported back
-     * to them as new. Eager sharing keeps the value readable without a collector.
-     *
-     * Read bookmarks are left out while they are being faded: the pill offers to take the user
-     * to what arrived, and a row already read — marked on another device, or carried in by the
-     * reading progress the sync pulls — is not something they are being sent back for. With
-     * fading off, read and unread rows look alike and the count covers both.
-     */
-    val newBookmarksAbove: StateFlow<Int> =
-        combine(
-            _accumulatedBookmarks,
-            _seenTopRemoteId,
-            effectiveDimReadBookmarks
-        ) { window, seenTop, dimRead ->
-            countBookmarksAbove(window, seenTop, excludeRead = dimRead)
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
-
-    /**
-     * Marks the row currently at the top as seen, which is what empties the pill. Called when
-     * the user taps the pill to jump there.
-     */
-    fun clearNewBookmarksAbove() {
-        _seenTopRemoteId.value = _accumulatedBookmarks.value.firstOrNull()?.remoteId
-    }
-
-    /**
-     * Reports the topmost bookmark on screen. The anchor follows the viewport *up* the list and
-     * never back down, so scrolling up through what arrived retires it row by row while
-     * scrolling away downwards leaves the count alone.
-     *
-     * Reaching the exact first row used to be the only thing that moved the anchor. Reading the
-     * new arrivals and stopping a row short of the top therefore left it where it was, and the
-     * pill went on offering a trip to bookmarks the user had just read — every time they
-     * scrolled away from the top again, with no sync in between.
-     */
-    fun markTopVisibleSeen(remoteId: String) {
-        val anchor = _seenTopRemoteId.value
-        if (anchor == remoteId) return
-        // Which of the two comes first is the whole question, so one pass that stops at
-        // whichever it meets answers it. Scrolling down would otherwise scan to the row now on
-        // top — further with every row — only to reject the update.
-        for (bookmark in _accumulatedBookmarks.value) {
-            when (bookmark.remoteId) {
-                // The row on screen is above the anchor: it is the topmost one seen now.
-                remoteId -> { _seenTopRemoteId.value = remoteId; return }
-                // The anchor is still above it, so nothing has been seen above the anchor.
-                anchor -> return
-            }
-        }
-        // Neither is in the window. An anchor that has left it can no longer be compared
-        // against, and holding on to it pins the count to zero until the user reaches the top.
-        if (anchor != null) _seenTopRemoteId.value = null
-    }
-
-    // RemoteIds of bookmarks on which the user has explicitly performed a list-membership
-    // action (add/remove list). Prevents the scroll-triggered action from auto-firing on a
-    // bookmark that is about to leave the list via async reconciliation — the reconcile
-    // involves network calls so the window can be several seconds long.
-    // Cleared on every full list reload (resetPaginationAndLoad).
-    internal val _actedOnBookmarkIds = MutableStateFlow<Set<String>>(emptySet())
-    val actedOnBookmarkIds: StateFlow<Set<String>> = _actedOnBookmarkIds
-
-    // Hoisted scroll position — survives Voyager push/pop within the same Navigator because
-    // the same MainScreenModel instance is reused for the same Navigator's ScreenModelStore.
-    // Updated by a LaunchedEffect in MainScreen that observes LazyListState;
-    // read back when the composable re-enters composition to initialise a new LazyListState.
-    @Volatile var savedScrollIndex: Int = 0
-        internal set
-    @Volatile var savedScrollOffset: Int = 0
-        internal set
-
-    fun saveScrollPosition(index: Int, offset: Int) {
-        savedScrollIndex = index
-        savedScrollOffset = offset
-    }
-
-    internal val _createBookmarkResult = MutableSharedFlow<Result<Unit>>(extraBufferCapacity = 1)
-    val createBookmarkResult: SharedFlow<Result<Unit>> = _createBookmarkResult
 
     internal val _pendingBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
     val pendingBookmarkRemoteIds: StateFlow<Set<String>> = _pendingBookmarks
@@ -624,30 +474,6 @@ class MainScreenModel(
             configs.find { it.id == configId }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    // Two independent bookmark pipelines selected by _searchQuery:
-    //  • blank query → paginated view (_pendingBookmarks + _accumulatedBookmarks)
-    //  • non-blank   → live DB search (allBookmarks filtered by query)
-    // Keeping them separate ensures that DB writes during background sync never
-    // trigger recomposition of the normal (non-search) bookmark list.
-    val bookmarks: StateFlow<List<BookmarkEntity>> = _searchQuery
-        .flatMapLatest { query ->
-            if (query.isBlank()) {
-                combine(_pendingBookmarks, _accumulatedBookmarks) { pending, accumulated ->
-                    // Guard against a just-created bookmark appearing in both flows for a
-                    // frame — duplicate remoteIds crash the keyed LazyColumn (#274).
-                    val pendingIds = pending.map { it.remoteId }.toSet()
-                    pending + accumulated.filter { it.remoteId !in pendingIds }
-                }
-            } else {
-                combine(allBookmarks, effectiveFilter) { all, filter ->
-                    PerfTrace.measure("applySearchFilter", "rows=${all.size}") {
-                        BookmarkFilterUtils.applySearchFilter(all, filter, query)
-                    }
-                }
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
     // Which slots the list is showing, reported by it so their pages can be read. The list is
     // sized by the view, so this is a position in the view and not in what has been loaded.
     private val _visibleSlots = MutableStateFlow(0..0)
@@ -745,6 +571,112 @@ class MainScreenModel(
             BookmarkWindow.dense(matches, pageSize = pageSize)
         }
 
+    /**
+     * The rows the list currently has, for the callers that want rows rather than slots — the
+     * reader's next/previous, the expanded layout's selected bookmark, a range selection.
+     *
+     * A view of [bookmarkWindow], so there is one answer to what the list is showing. It used to
+     * be the other way round.
+     */
+    val bookmarks: StateFlow<List<BookmarkEntity>> = bookmarkWindow
+        .map { it.loadedRows() }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    // The topmost bookmark the user has actually seen. Everything above it arrived since.
+    internal val _seenTopRemoteId = MutableStateFlow<String?>(null)
+
+    /**
+     * How many bookmarks sit above the topmost one the user has seen — the "N new" pill.
+     *
+     * Derived from the loaded window every time rather than accumulated from per-refresh diffs.
+     * A diff counts anything new to the *window*, which over-reports in three ways: it ignores
+     * where the row landed (so a non-NEWEST sort, or an insert below the viewport, still counts
+     * as "above"), it never decrements when rows leave, and because a refresh re-reads a fixed
+     * page range, a row evicted off the tail by a prepend is counted a second time if a later
+     * removal pulls it back into the window. Counting positions asks the list where things
+     * actually are, so it is correct under any sort and self-corrects on every change.
+     *
+     * Counted against the rows the list has actually read. A row the view holds but has not
+     * loaded cannot be above the anchor without a loaded row above it too, so counting what is
+     * on hand answers the same question — and a bookmark the user just created, prepended and
+     * already scrolled to, is not reported back to them as new.
+     *
+     * Read bookmarks are left out while they are being faded: the pill offers to take the user
+     * to what arrived, and a row already read — marked on another device, or carried in by the
+     * reading progress the sync pulls — is not something they are being sent back for. With
+     * fading off, read and unread rows look alike and the count covers both.
+     */
+    val newBookmarksAbove: StateFlow<Int> =
+        combine(
+            bookmarkWindow,
+            _seenTopRemoteId,
+            effectiveDimReadBookmarks
+        ) { window, seenTop, dimRead ->
+            countBookmarksAbove(window.loadedRows(), seenTop, excludeRead = dimRead)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    /**
+     * Marks the row currently at the top as seen, which is what empties the pill. Called when
+     * the user taps the pill to jump there.
+     */
+    fun clearNewBookmarksAbove() {
+        _seenTopRemoteId.value = bookmarkWindow.value.bookmarkAt(0)?.remoteId
+    }
+
+    /**
+     * Reports the topmost bookmark on screen. The anchor follows the viewport *up* the list and
+     * never back down, so scrolling up through what arrived retires it row by row while
+     * scrolling away downwards leaves the count alone.
+     *
+     * Reaching the exact first row used to be the only thing that moved the anchor. Reading the
+     * new arrivals and stopping a row short of the top therefore left it where it was, and the
+     * pill went on offering a trip to bookmarks the user had just read — every time they
+     * scrolled away from the top again, with no sync in between.
+     */
+    fun markTopVisibleSeen(remoteId: String) {
+        val anchor = _seenTopRemoteId.value
+        if (anchor == remoteId) return
+        // Which of the two comes first is the whole question, so one pass that stops at
+        // whichever it meets answers it. Scrolling down would otherwise scan to the row now on
+        // top — further with every row — only to reject the update.
+        for (bookmark in bookmarkWindow.value.loadedRows()) {
+            when (bookmark.remoteId) {
+                // The row on screen is above the anchor: it is the topmost one seen now.
+                remoteId -> { _seenTopRemoteId.value = remoteId; return }
+                // The anchor is still above it, so nothing has been seen above the anchor.
+                anchor -> return
+            }
+        }
+        // Neither is in the window. An anchor that has left it can no longer be compared
+        // against, and holding on to it pins the count to zero until the user reaches the top.
+        if (anchor != null) _seenTopRemoteId.value = null
+    }
+
+    // RemoteIds of bookmarks on which the user has explicitly performed a list-membership
+    // action (add/remove list). Prevents the scroll-triggered action from auto-firing on a
+    // bookmark that is about to leave the list via async reconciliation — the reconcile
+    // involves network calls so the window can be several seconds long.
+    // Cleared on every full list reload (resetPaginationAndLoad).
+    internal val _actedOnBookmarkIds = MutableStateFlow<Set<String>>(emptySet())
+    val actedOnBookmarkIds: StateFlow<Set<String>> = _actedOnBookmarkIds
+
+    // Hoisted scroll position — survives Voyager push/pop within the same Navigator because
+    // the same MainScreenModel instance is reused for the same Navigator's ScreenModelStore.
+    // Updated by a LaunchedEffect in MainScreen that observes LazyListState;
+    // read back when the composable re-enters composition to initialise a new LazyListState.
+    @Volatile var savedScrollIndex: Int = 0
+        internal set
+    @Volatile var savedScrollOffset: Int = 0
+        internal set
+
+    fun saveScrollPosition(index: Int, offset: Int) {
+        savedScrollIndex = index
+        savedScrollOffset = offset
+    }
+
+    internal val _createBookmarkResult = MutableSharedFlow<Result<Unit>>(extraBufferCapacity = 1)
+    val createBookmarkResult: SharedFlow<Result<Unit>> = _createBookmarkResult
+
     private sealed class InitState {
         data object Idle : InitState()
         data object ResolvingFilter : InitState()
@@ -762,8 +694,8 @@ class MainScreenModel(
      * "still loading" from "no bookmarks here".
      */
     val isLoadingInitialPage: StateFlow<Boolean> =
-        combine(_initState, _isResettingPagination, _accumulatedBookmarks) { init, resetting, items ->
-            items.isEmpty() && (init != InitState.Ready || resetting)
+        combine(_initState, bookmarkWindow) { init, window ->
+            window.isEmpty && init != InitState.Ready
         }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     init {
@@ -829,7 +761,7 @@ class MainScreenModel(
                         "MainScreenModel",
                         "Loading view: status=${filter.status} lists=${filter.lists} tags=${filter.tags}"
                     )
-                    resetPaginationAndLoad(currentServer, filter)
+                    switchToView(currentServer, filter)
                     refreshStaleSmartList(currentServer, filter)
                 }
             }
@@ -844,51 +776,6 @@ class MainScreenModel(
             if (!isOffline && bookmarkRepository.shouldAutoSync(server.id)) {
                 syncBookmarks()
             }
-        }
-
-        // When a background sync finishes, refresh the currently-displayed list in place so
-        // newly synced bookmarks appear (and bump the "N new" pill) without the user having to
-        // navigate or pull-to-refresh. The foreground syncBookmarks() already refreshes itself.
-        viewModelScope.launch {
-            bookmarkRepository.backgroundSyncCompleted.collect {
-                val server = _selectedServer.value ?: return@collect
-                if (_initState.value == InitState.Ready) {
-                    val filter = effectiveFilterNow()
-                    try {
-                        refreshLoadedPagesInPlace(server, filter)
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        AppLogger.w("MainScreenModel", "Post-background-sync refresh failed: ${e.message}")
-                    }
-                }
-            }
-        }
-
-        // A long sync commits metadata page by page. Refresh in place as pages land, so a
-        // large library fills in progressively instead of appearing all at once at the end.
-        // Only for the key currently on screen — other lists syncing must not touch it.
-        viewModelScope.launch {
-            bookmarkRepository.pageCommitted
-                .filter { key ->
-                    key == resolveCurrentKey(_currentListContext.value, _currentFilter.value) ||
-                        (key == null && _currentListContext.value == null)
-                }
-                .conflate()
-                .collect {
-                    val server = _selectedServer.value ?: return@collect
-                    if (_initState.value != InitState.Ready) return@collect
-                    // The window is loaded with the effective filter, so a refresh must ask for
-                    // it too — the raw filter is a different view and would be rejected.
-                    val filter = effectiveFilterNow()
-                    try {
-                        refreshLoadedPagesInPlace(server, filter)
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        AppLogger.w("MainScreenModel", "Per-page refresh failed: ${e.message}")
-                    }
-                }
         }
 
         // Surface non-fatal sync warnings (swallowed content/highlight failures) once per
@@ -921,24 +808,6 @@ class MainScreenModel(
             }
         }
 
-        // A pass that touched many rows at once — the reading-progress pull — asks for a
-        // re-read rather than naming each row. One query, and it is the only form that gets
-        // membership right: a row the pull turns back to unread has to be able to join a view
-        // filtered on unread, which patching rows already in the window cannot do.
-        viewModelScope.launch {
-            bookmarkActionsRepository.bookmarksReloaded.conflate().collect {
-                val server = _selectedServer.value ?: return@collect
-                if (_initState.value != InitState.Ready) return@collect
-                try {
-                    refreshLoadedPagesInPlace(server, effectiveFilterNow())
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    AppLogger.w("MainScreenModel", "Post-progress-pass refresh failed: ${e.message}")
-                }
-            }
-        }
-
         // Tapping a tag in the reader filters this list by it. The reader cannot call the model
         // on screen — screen models are scoped per back-stack entry — so the request arrives
         // through a shared single instead. See TagFilterRequests.
@@ -955,44 +824,44 @@ class MainScreenModel(
                 .collect { server -> bookmarkActionsRepository.refreshAiCapabilities(server) }
         }
 
-        // Keep the main list up-to-date when another screen mutates a bookmark.
+        // A freshly loaded view counts as seen, so the pill stays empty until a later write puts
+        // something above it. Anchoring on the first rows to arrive rather than on the list
+        // reporting itself at the top keeps the count right when the view opens somewhere else —
+        // a restored scroll position, or a reload that deliberately holds its place.
         viewModelScope.launch {
-            bookmarkActionsRepository.bookmarkChangedEvents.collect { remoteId ->
-                val serverId = _selectedServer.value?.id ?: return@collect
-                // The reading-progress sync notifies for rows anywhere in the library — a
-                // backfill covers all of it — and only the loaded window has anything to
-                // re-read. Nothing to remove either: a row outside it is already not shown.
-                if (_accumulatedBookmarks.value.none { it.remoteId == remoteId }) return@collect
-                val updated = bookmarkRepository.getBookmarkByRemoteId(remoteId, serverId)
-                updateAccumulatedBookmarks { current ->
-                    if (updated != null) {
-                        current.map { if (it.remoteId == remoteId) updated else it }
-                    } else {
-                        current.filter { it.remoteId != remoteId }
-                    }
+            bookmarkWindow.collect { window ->
+                if (_seenTopRemoteId.value == null) {
+                    _seenTopRemoteId.value = window.bookmarkAt(0)?.remoteId
                 }
             }
         }
 
-        // Restore bookmarks on undo.
-        viewModelScope.launch {
-            bookmarkActionController.undoCompletedEvents.collect { event ->
-                updateAccumulatedBookmarks { current ->
-                    val mutable = current.toMutableList()
-                    val existingIndex = mutable.indexOfFirst { it.remoteId == event.restoredBookmark.remoteId }
-                    if (existingIndex >= 0) {
-                        mutable[existingIndex] = event.restoredBookmark
-                    } else {
-                        if (event.originalPosition >= 0 && event.originalPosition <= mutable.size) {
-                            mutable.add(event.originalPosition, event.restoredBookmark)
-                        } else {
-                            mutable.add(0, event.restoredBookmark)
-                        }
-                    }
-                    mutable
-                }
-            }
-        }
+        // A bookmark mutated by another screen, and a bookmark restored by undo, both reach
+        // the list the same way: whoever changed it wrote the row, and the pages on screen are
+        // read again. Patching the list here was a second answer to that, and the one that had
+        // to guess where a restored row belonged — it re-inserted at a remembered index, while
+        // the query puts it where the sort does.
+    }
+
+    /**
+     * Switches the list to [filter]'s view.
+     *
+     * Nothing is loaded here. The window reads whatever view the filter names, so the switch is
+     * already in flight by the time this runs; what is left is the part the window does not know
+     * about — telling the list this is a different view rather than the same one changed, so it
+     * scrolls to the top and drops the anchors belonging to the view being left.
+     */
+    private fun switchToView(server: Server, filter: FilterConfig) {
+        _loadedView.value = LoadedView(server.id, filter)
+        _actedOnBookmarkIds.value = emptySet()
+        // A fresh view has not been seen, so the pill starts empty and re-anchors once the list
+        // renders at the top.
+        _seenTopRemoteId.value = null
+        // Announce the reload *before* the rows arrive. The version bump makes the scroll anchor
+        // drop its anchor and the scroll request re-pins the viewport to the top; both are
+        // applied on the next measure, which is the one that renders the new view.
+        _bookmarkListVersion.value++
+        scrollToTop()
     }
 
     /**
@@ -1009,9 +878,6 @@ class MainScreenModel(
         try {
             // The list just navigated to, so it takes the same exemption as syncCurrentView.
             bookmarkRepository.syncBookmarksForList(server, listId, isCurrentView = true)
-            if (currentView() == LoadedView(server.id, filter)) {
-                refreshLoadedPagesInPlace(server, filter)
-            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -1073,26 +939,15 @@ class MainScreenModel(
                 // sees their bookmarks as soon as possible.
                 syncCurrentView(server, capturedListContext, capturedFilter)
 
-                // Step 3: Refresh the current view in place after its metadata lands, so
-                // newly synced bookmarks appear without the list blinking and jumping to the
-                // top (which a full resetPaginationAndLoad would cause).
-                if (effectiveFilterNow() == capturedEffectiveFilter) {
-                    refreshLoadedPagesInPlace(server, capturedEffectiveFilter)
-                }
-
-                // Step 4: Sync all other named lists concurrently.
+                // Step 3: Sync all other named lists concurrently.
                 // Each call is independently deduplicated by BookmarkRepository.
                 val currentKey = resolveCurrentKey(capturedListContext, capturedFilter)
                 syncOtherLists(server, currentKey)
 
-                // Step 5: Refresh once more now the whole sync is done. Step 3 only sees what
-                // the current view's own pass fetched; a bookmark this view has never seen is
-                // inserted by whichever pass returns it, which for a smart list is usually one
-                // of the passes above. Without this they stay invisible — and uncounted by the
-                // "N new" pill — until the user navigates away and back.
-                if (effectiveFilterNow() == capturedEffectiveFilter) {
-                    refreshLoadedPagesInPlace(server, capturedEffectiveFilter)
-                }
+                // Nothing to refresh at either step: every pass writes the rows it fetched,
+                // and the list re-reads the pages on screen when the table changes. A bookmark
+                // this view has never seen appears as soon as whichever pass returns it commits
+                // it, rather than at the next refresh call someone remembered to make.
 
                 // Record completion so the startup auto-sync is throttled next time (#276).
                 bookmarkRepository.markAutoSyncCompleted(server.id)

@@ -547,6 +547,34 @@ class BookmarkRepository(
      * offset it wants, and every write re-reads the pages on screen, so a row committed above
      * them moves the rows down and the next read reports them where they now are.
      */
+    /**
+     * Every row [filter] admits, by identity only.
+     *
+     * What "select all" needs: the ids to act on, without reading the rows to get them. It used
+     * to read the whole view into the list first, because the only way to have a row's id was to
+     * have the row.
+     */
+    suspend fun getViewRemoteIds(server: Server, filter: FilterConfig): List<String> {
+        val where = buildViewPredicate(server.id, filter)
+        return bookmarkDao.selectRemoteIds(
+            rawQuery(
+                "SELECT remoteId FROM bookmarks WHERE ${where.sql} " +
+                    "ORDER BY ${filter.sort.toOrderBySql()}",
+                where.binds
+            )
+        )
+    }
+
+    /** The rows behind [remoteIds] — for acting on a selection that outruns what is loaded. */
+    suspend fun getBookmarksByRemoteIds(
+        serverId: String,
+        remoteIds: List<String>
+    ): List<BookmarkEntity> =
+        if (remoteIds.isEmpty()) emptyList()
+        else remoteIds.chunked(SQLITE_MAX_BIND_ARGS).flatMap {
+            bookmarkDao.getBookmarksByRemoteIds(serverId, it)
+        }
+
     suspend fun getBookmarkPage(
         server: Server,
         filter: FilterConfig,
@@ -556,6 +584,12 @@ class BookmarkRepository(
         bookmarkDao.getBookmarksPaged(buildPageQuery(server.id, filter, offset, limit))
 
     companion object {
+        /**
+         * SQLite's default limit on host parameters, which a selection can exceed: `IN (?, ?, …)`
+         * binds one per id, and selecting a four-thousand-row view is four thousand of them.
+         */
+        private const val SQLITE_MAX_BIND_ARGS = 900
+
         /**
          * Minimum gap between two reading-progress passes triggered by list/filter syncs.
          *

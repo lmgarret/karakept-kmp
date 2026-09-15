@@ -1,24 +1,8 @@
 package com.karakept.app.ui.screens
 
-import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.model.DefaultListType
-import com.karakept.app.data.model.Server
-import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.HighlightRepository
-import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.domain.action.BookmarkActionController
-import io.mockk.every
-import io.mockk.mockk
+import com.karakept.app.ui.screens.MainScreenModelHarness.Companion.bookmark
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -29,71 +13,32 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import com.karakept.app.utils.TestAppDispatchers
 
 /**
- * Regression tests for #274: the accumulated bookmark list feeds a LazyColumn keyed
- * on remoteId, so any duplicate remoteId crashes the app. Duplicates used to slip in
- * when a background sync inserted rows mid-pagination (page overlap via OFFSET drift)
- * or when undo re-insertions raced other transforms.
+ * #274, in the terms that now hold it.
+ *
+ * The list feeds a LazyColumn keyed on remoteId, and a duplicate key crashes the app. Duplicates
+ * used to slip into the accumulated window from three directions: a page re-returning rows the
+ * window already held after OFFSET drift, an undo re-inserting a bookmark that was still there,
+ * and a just-created bookmark appearing in the pending list and the window at once. The window
+ * was a mutable list that many callers appended to, so the fix was to de-duplicate on every write.
+ *
+ * There is nothing to de-duplicate now. The window's rows are disjoint slices of one query — a
+ * page is the rows at an offset, and two pages cannot overlap — and the only rows not from that
+ * query are the placeholders standing in for bookmarks still being created, which carry ids no
+ * row can have. These tests assert the keys are unique, including in the states that used to
+ * produce collisions.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenModelAccumulatedListTest {
 
     private val testDispatcher = StandardTestDispatcher()
-
-    private lateinit var serverRepository: ServerRepository
-    private lateinit var bookmarkRepository: BookmarkRepository
-    private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var listRepository: ListRepository
-    private lateinit var bookmarkActionController: BookmarkActionController
-    private lateinit var snackbarManager: ActionSnackbarManager
-    private lateinit var highlightRepository: HighlightRepository
-
-    private val fakeServer = Server(
-        id = "server-1",
-        url = "https://example.com",
-        apiKey = "test-key",
-        label = "Test"
-    )
+    private lateinit var harness: MainScreenModelHarness
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-
-        serverRepository = mockk(relaxed = true)
-        bookmarkRepository = mockk(relaxed = true)
-        bookmarkActionsRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        listRepository = mockk(relaxed = true)
-        bookmarkActionController = mockk(relaxed = true)
-        snackbarManager = mockk(relaxed = true)
-        highlightRepository = mockk(relaxed = true)
-
-        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
-        every { settingsRepository.allListSettings } returns flowOf(emptyMap())
-        every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
-        every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
-        every { settingsRepository.customSwipeActionConfigs } returns flowOf(emptyList())
-        every { settingsRepository.swipeLeftConfigId } returns flowOf(null)
-        every { settingsRepository.swipeRightConfigId } returns flowOf(null)
-        every { settingsRepository.dimReadBookmarks } returns flowOf(true)
-        every { settingsRepository.defaultLayoutId } returns flowOf(null)
-        every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(true)
-        every { settingsRepository.activeServerId } returns flowOf("server-1")
-        every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
-        every { settingsRepository.defaultListId } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns MutableStateFlow(emptyList())
-        every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
-        every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
-        every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
-        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
-        every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        harness = MainScreenModelHarness(testDispatcher)
     }
 
     @AfterTest
@@ -101,145 +46,78 @@ class MainScreenModelAccumulatedListTest {
         Dispatchers.resetMain()
     }
 
-    private fun createMainScreenModel() = MainScreenModel(
-        serverRepository = serverRepository,
-        bookmarkRepository = bookmarkRepository,
-        bookmarkActionsRepository = bookmarkActionsRepository,
-        settingsRepository = settingsRepository,
-        listRepository = listRepository,
-        bookmarkActionController = bookmarkActionController,
-        snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository,
-        appDispatchers = TestAppDispatchers(testDispatcher)
-    )
-
-    private fun bookmark(remoteId: Long) = BookmarkEntity(
-        localId = remoteId,
-        remoteId = "remote-$remoteId",
-        serverId = "server-1",
-        url = "https://example.com/$remoteId",
-        title = "Bookmark $remoteId",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = 0L,
-        isArchived = false,
-        isStarred = false
-    )
-
-    // The number each fixture bookmark was built from, so the assertions read as row numbers.
-    private fun List<BookmarkEntity>.remoteIds() = map { it.remoteId.substringAfter('-').toLong() }
-
-    @Test
-    fun updateAccumulatedBookmarks_dropsDuplicatesIntroducedByTransform() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
-        advanceUntilIdle()
-
-        // Simulate a page overlap: the transform naively appends items already present
-        model.updateAccumulatedBookmarks { listOf(bookmark(1), bookmark(2)) }
-        model.updateAccumulatedBookmarks { current -> current + listOf(bookmark(2), bookmark(3)) }
-
-        assertEquals(listOf(1L, 2L, 3L), model._accumulatedBookmarks.value.remoteIds())
+    /** Every key the list would hand the LazyColumn. */
+    private fun keysOf(model: MainScreenModel): List<Any> {
+        val window = model.bookmarkWindow.value
+        return (0 until window.total).map(window::keyAt)
     }
 
     @Test
-    fun updateAccumulatedBookmarks_undoReinsertionOfPresentBookmarkStaysUnique() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+    fun everySlotHasItsOwnKey() = runTest(testDispatcher) {
+        harness.publish((1L..200L).map(::bookmark))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
-        model.updateAccumulatedBookmarks { listOf(bookmark(1), bookmark(2)) }
-        // Undo restores a bookmark at its original position even though a concurrent
-        // sync already brought it back
-        model.updateAccumulatedBookmarks { current ->
-            val mutable = current.toMutableList()
-            mutable.add(0, bookmark(2))
-            mutable
-        }
-
-        assertEquals(listOf(2L, 1L), model._accumulatedBookmarks.value.remoteIds())
+        val keys = keysOf(model)
+        assertEquals(200, keys.size)
+        assertEquals(keys.size, keys.distinct().size, "a duplicate key crashes the LazyColumn")
+        job.cancel()
     }
 
     @Test
-    fun updateAccumulatedBookmarks_concurrentAppendsNeverProduceDuplicates() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+    fun keysStayUniqueAcrossAPageBoundary() = runTest(testDispatcher) {
+        // Where the drift used to put them: two pages both claiming the same rows. A page is the
+        // rows at an offset, so the pages cannot overlap.
+        harness.publish((1L..200L).map(::bookmark))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
-        // Many concurrent appenders re-adding overlapping windows (sync + pagination + undo)
-        val jobs = (0 until 20).map { i ->
-            launch {
-                model.updateAccumulatedBookmarks { current ->
-                    current + (0L..10L).map { bookmark(it + i) }
-                }
-            }
-        }
-        jobs.forEach { it.join() }
+        model.reportVisibleSlots(45..55)
+        advanceUntilIdle()
 
-        val ids = model._accumulatedBookmarks.value.remoteIds()
-        assertEquals(ids.toSet().size, ids.size, "Accumulated list must never contain duplicate remoteIds")
+        val loaded = model.bookmarkWindow.value.loadedRows().map { it.remoteId }
+        assertEquals(loaded.size, loaded.distinct().size, "no row is returned by two pages")
+        job.cancel()
     }
 
     @Test
-    fun bookmarksFlow_pendingAndAccumulatedNeverOverlap() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+    fun aPendingBookmarkNeverCollidesWithTheRowItBecomes() = runTest(testDispatcher) {
+        // The third source: for a moment the created row is in the table while its placeholder is
+        // still on screen. They are different rows with different ids, so both can be shown.
+        harness.publish((1L..20L).map(::bookmark))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
-        val collected = mutableListOf<List<BookmarkEntity>>()
-        val collector = launch { model.bookmarks.collect { collected.add(it) } }
-
-        // A just-created bookmark can briefly exist in both pending and accumulated
-        model._pendingBookmarks.value = listOf(bookmark(42))
-        model.updateAccumulatedBookmarks { listOf(bookmark(42), bookmark(43)) }
+        model._pendingBookmarks.value = listOf(bookmark(999L, remoteId = "temp-abc"))
         advanceUntilIdle()
 
-        val latest = collected.last()
-        assertEquals(listOf(42L, 43L), latest.remoteIds())
-        collector.cancel()
-    }
-
-    /**
-     * The loaded window is a snapshot of its rows, so a change written straight to the table
-     * is invisible to it. The reading-progress pull writes the read flag that way — it clears
-     * it below 100% — while the drawer's unread count reads the table live, so the count
-     * reported bookmarks the list went on drawing as read (#333).
-     */
-    @Test
-    fun bookmarkChangedEvent_refreshesTheRowTheListIsHolding() = runTest(testDispatcher) {
-        val events = MutableSharedFlow<String>(extraBufferCapacity = 4)
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns events
-
-        val model = createMainScreenModel()
-        advanceUntilIdle()
-        model.updateAccumulatedBookmarks { listOf(bookmark(42).copy(isRead = true), bookmark(43)) }
-
-        // The pull takes the server's 0% and clears the read flag in the table.
-        io.mockk.coEvery { bookmarkRepository.getBookmarkByRemoteId("remote-42", "server-1") } returns
-            bookmark(42).copy(isRead = false, readingProgress = 0f)
-        events.emit("remote-42")
-        advanceUntilIdle()
-
-        assertEquals(
-            false,
-            model._accumulatedBookmarks.value.first { it.remoteId == "remote-42" }.isRead,
-            "the list must follow the table, or it shows a read row the count calls unread"
-        )
+        val keys = keysOf(model)
+        assertEquals(21, keys.size, "the placeholder takes a slot above the view")
+        assertEquals(keys.size, keys.distinct().size)
+        assertEquals("temp-abc", keys.first())
+        job.cancel()
     }
 
     @Test
-    fun bookmarkChangedEvent_forARowOutsideTheWindow_isNotReadBack() = runTest(testDispatcher) {
-        // A backfill notifies for rows across the whole library; only the window needs re-reading.
-        val events = MutableSharedFlow<String>(extraBufferCapacity = 4)
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns events
-
-        val model = createMainScreenModel()
-        advanceUntilIdle()
-        model.updateAccumulatedBookmarks { listOf(bookmark(42)) }
-
-        events.emit("remote-99")
+    fun aRowChangedElsewhereIsReplacedRatherThanAdded() = runTest(testDispatcher) {
+        // An update used to be a transform over the window, which is where an undo could
+        // re-insert a bookmark that had never left. The row is read back at its own offset now,
+        // so an update replaces and cannot duplicate.
+        harness.publish((1L..20L).map(::bookmark))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
-        io.mockk.coVerify(exactly = 0) { bookmarkRepository.getBookmarkByRemoteId("remote-99", any()) }
-        assertEquals(listOf(42L), model._accumulatedBookmarks.value.remoteIds())
+        harness.publish(harness.rows.map { if (it.localId == 5L) it.copy(isRead = true) else it })
+        advanceUntilIdle()
+
+        val rows = model.bookmarkWindow.value.loadedRows()
+        assertEquals(20, rows.size)
+        assertEquals(1, rows.count { it.remoteId == "remote-5" })
+        assertEquals(true, rows.first { it.remoteId == "remote-5" }.isRead)
+        job.cancel()
     }
 }

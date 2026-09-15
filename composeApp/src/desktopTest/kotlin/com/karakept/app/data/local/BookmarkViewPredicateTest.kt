@@ -7,6 +7,7 @@ import com.karakept.app.data.model.ContentFilter
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ReadFilter
+import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.repository.BookmarkRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -253,6 +254,102 @@ class BookmarkViewPredicateTest {
             selected(FilterConfig(status = FilterStatus.OFFLINE)).sorted(),
             "downloaded means content is stored, not that a reading time was estimated"
         )
+    }
+
+    /**
+     * What smart-list reconciliation used to be a hand-written transform for.
+     *
+     * After a list-membership action the reconcile writes the bookmark's corrected `listIds`, and
+     * the list is then whatever the query returns. These are the cases that transform enumerated:
+     * a row dropped from the list being viewed disappears from it, the same row stays in every
+     * other view, and the rows around it are untouched. They were asserted against an in-memory
+     * list; here they are asserted against the query that now decides them.
+     */
+    @Test
+    fun `a row dropped from a list leaves that list's view and stays in the others`() =
+        runBlocking {
+            insert(
+                row(1, listIds = "feeds,read-later"),
+                row(2, listIds = "feeds"),
+                row(3, listIds = "feeds"),
+                row(4, listIds = "read-later")
+            )
+            val feeds = FilterConfig(lists = listOf("feeds"))
+            val readLater = FilterConfig(lists = listOf("read-later"))
+
+            assertEquals(listOf("remote-1", "remote-2", "remote-3"), selected(feeds).sorted())
+
+            // The reconcile writes row 1 back without "feeds", as a smart list excluding a
+            // bookmark just added to Read Later would.
+            db.bookmarkDao().insertBookmarks(listOf(row(1, listIds = "read-later")))
+
+            assertEquals(
+                listOf("remote-2", "remote-3"),
+                selected(feeds).sorted(),
+                "the row it no longer belongs to drops out"
+            )
+            assertEquals(
+                listOf("remote-1", "remote-4"),
+                selected(readLater).sorted(),
+                "and it is in the list it was added to"
+            )
+        }
+
+    @Test
+    fun `a row whose memberships change but still match stays, with its new memberships`() =
+        runBlocking {
+            insert(row(1, listIds = "feeds"), row(2, listIds = "feeds"))
+
+            db.bookmarkDao().insertBookmarks(listOf(row(1, listIds = "feeds,archive-me")))
+
+            val feeds = FilterConfig(lists = listOf("feeds"))
+            assertEquals(listOf("remote-1", "remote-2"), selected(feeds).sorted())
+            val updated = db.bookmarkDao().getBookmarksPaged(
+                BookmarkRepository.buildPagedQuery(serverId, feeds, limit = 10)
+            ).first { it.remoteId == "remote-1" }
+            assertEquals("feeds,archive-me", updated.listIds, "updated in place, not removed")
+        }
+
+    /**
+     * Undoing an add-to-list, which the transform it replaces had to guess at.
+     *
+     * That transform re-inserted the row at a remembered index when it could not find it, and at
+     * the top when the index was stale — a position nothing in the view agreed with. The undo
+     * writes the memberships back and the row reappears where the sort puts it.
+     */
+    @Test
+    fun `undoing an add-to-list restores the view it was in`() = runBlocking {
+        insert(
+            row(1, listIds = "feeds"),
+            row(2, listIds = "feeds"),
+            row(3, listIds = "feeds")
+        )
+        val feeds = FilterConfig(lists = listOf("feeds"), sort = SortOption.OLDEST)
+
+        // Adding row 2 to Read Later; the smart list drops it.
+        db.bookmarkDao().insertBookmarks(listOf(row(2, listIds = "read-later")))
+        assertEquals(listOf("remote-1", "remote-3"), selected(feeds))
+
+        // Undo writes the original memberships back.
+        db.bookmarkDao().insertBookmarks(listOf(row(2, listIds = "feeds")))
+        assertEquals(
+            listOf("remote-1", "remote-2", "remote-3"),
+            selected(feeds),
+            "restored between its neighbours, not at the top"
+        )
+    }
+
+    @Test
+    fun `a row deleted from the table leaves every view`() = runBlocking {
+        insert(row(1, listIds = "feeds"), row(2, listIds = "feeds"))
+
+        val stored = db.bookmarkDao().getBookmarksPaged(
+            BookmarkRepository.buildPagedQuery(serverId, FilterConfig(), limit = 10)
+        ).first { it.remoteId == "remote-1" }
+        db.bookmarkDao().deleteBookmark(stored)
+
+        assertEquals(listOf("remote-2"), selected(FilterConfig(lists = listOf("feeds"))).sorted())
+        assertEquals(listOf("remote-2"), selected(FilterConfig()).sorted())
     }
 
     @Test

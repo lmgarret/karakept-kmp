@@ -52,7 +52,6 @@ import com.karakept.app.ui.screens.batchUnarchive
 import com.karakept.app.ui.screens.batchFavourite
 import com.karakept.app.ui.screens.batchUnfavourite
 import com.karakept.app.ui.screens.toggleBookmarkSelection
-import com.karakept.app.ui.screens.loadNextPage
 import com.karakept.app.ui.screens.AiBatchProgress
 import com.karakept.app.ui.screens.cancelAiBatchAction
 import com.karakept.app.ui.screens.runAiAction
@@ -65,7 +64,6 @@ import com.karakept.app.ui.screens.toggleBookmarkRead
 import com.karakept.app.ui.screens.deleteBookmark
 import com.karakept.app.ui.screens.moveBookmarkToList
 import com.karakept.app.ui.screens.updateBookmarkTags
-import com.karakept.app.ui.screens.accumulatedBookmarkPosition
 import com.karakept.app.ui.screens.restoreAndRemoveBookmarkFromList
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.ui.input.PageTurnDispatcher
@@ -374,11 +372,10 @@ fun MainScreenScaffoldContent(
                         }
                         is BookmarkAction.Select -> screenModel.enterSelectionMode(bookmark)
                         is BookmarkAction.MoveToList -> {
-                            val pos = screenModel.accumulatedBookmarkPosition(bookmark)
                             screenModel.moveBookmarkToList(bookmark, action.listId)
                             val listName = contextMenuLists.firstOrNull { it.id == action.listId }?.name ?: "list"
                             scope.undoableAction(snackbarManager, "Moved to '$listName'") {
-                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, action.listId, pos)
+                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, action.listId)
                             }
                         }
                         is BookmarkAction.UpdateTags -> {

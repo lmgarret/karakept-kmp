@@ -182,18 +182,21 @@ class FilteredBookmarkCountTest {
             // so nothing about how far paging has walked can reach it (#273).
             countsByFilter = mapOf(FilterConfig() to 250)
             every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-            // Paging has reached 20 rows of the 250 the view holds.
+            // The list has read 20 rows of the 250 the view holds.
             val window = (1L..20L).map { createBookmarkEntity(it) }
             coEvery {
-                bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any(), any())
-            } returns window
+                bookmarkRepository.getBookmarkPage(any(), any(), any(), any())
+            } answers {
+                val offset = thirdArg<Int>()
+                if (offset >= window.size) emptyList() else window.drop(offset)
+            }
 
             val model = createMainScreenModel()
             val job = launch { model.filteredBookmarkCount.collect {} }
             val windowJob = launch { model.bookmarks.collect {} }
             advanceUntilIdle()
 
-            assertEquals(20, model.bookmarks.value.size, "the window is what paging has reached")
+            assertEquals(20, model.bookmarks.value.size, "the rows the list has read")
             assertEquals(
                 250,
                 model.filteredBookmarkCount.value,

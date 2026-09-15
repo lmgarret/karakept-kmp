@@ -81,7 +81,8 @@ class MainScreenModelAiBatchTest {
         snackbarManager = mockk(relaxed = true)
         highlightRepository = mockk(relaxed = true)
 
-        every { serverRepository.servers } returns flowOf(emptyList())
+        // The rows behind a selection are read by id, which needs a server to read them from.
+        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
         every { settingsRepository.allListSettings } returns flowOf(emptyMap())
         every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
         every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
@@ -144,13 +145,27 @@ class MainScreenModelAiBatchTest {
         isStarred = false
     )
 
-    /** A model with [count] bookmarks loaded and hand-selected. */
+    /**
+     * A model with [count] bookmarks hand-selected.
+     *
+     * The rows behind a selection are read by id, so the view is described to the repository
+     * rather than pushed into the list — a selection can cover rows the list has never shown.
+     */
     private fun MainScreenModel.withHandPickedSelection(count: Int): List<BookmarkEntity> {
         val bookmarks = (1L..count).map { bookmark(it) }
-        _hasMoreItems.value = false
-        _accumulatedBookmarks.value = bookmarks
+        stubView(bookmarks)
         bookmarks.forEach { toggleBookmarkSelection(it) }
         return bookmarks
+    }
+
+    /** Makes [bookmarks] the view the repository answers for. */
+    private fun stubView(bookmarks: List<BookmarkEntity>) {
+        coEvery { bookmarkRepository.getViewRemoteIds(any(), any()) } returns
+            bookmarks.map { it.remoteId }
+        coEvery { bookmarkRepository.getBookmarksByRemoteIds(any(), any()) } answers {
+            val ids = secondArg<List<String>>().toSet()
+            bookmarks.filter { it.remoteId in ids }
+        }
     }
 
     // ── select-all tracking ────────────────────────────────────
@@ -159,8 +174,7 @@ class MainScreenModelAiBatchTest {
     fun `selectAll marks the selection so AI actions can be withheld`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
         advanceUntilIdle()
-        model._hasMoreItems.value = false
-        model._accumulatedBookmarks.value = (1L..3L).map { bookmark(it) }
+        stubView((1L..3L).map { bookmark(it) })
 
         model.selectAll()
         advanceUntilIdle()
@@ -173,8 +187,7 @@ class MainScreenModelAiBatchTest {
         val model = createMainScreenModel()
         advanceUntilIdle()
         val bookmarks = (1L..3L).map { bookmark(it) }
-        model._hasMoreItems.value = false
-        model._accumulatedBookmarks.value = bookmarks
+        stubView(bookmarks)
         model.selectAll()
         advanceUntilIdle()
 
@@ -188,8 +201,7 @@ class MainScreenModelAiBatchTest {
     fun `clearing the selection clears the mark`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
         advanceUntilIdle()
-        model._hasMoreItems.value = false
-        model._accumulatedBookmarks.value = (1L..3L).map { bookmark(it) }
+        stubView((1L..3L).map { bookmark(it) })
         model.selectAll()
         advanceUntilIdle()
 

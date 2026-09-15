@@ -23,7 +23,6 @@ import com.karakept.app.ui.screens.deleteBookmark
 import com.karakept.app.ui.screens.enterSelectionMode
 import com.karakept.app.ui.screens.runAiAction
 import com.karakept.app.ui.screens.removeBookmarkFromList
-import com.karakept.app.ui.screens.accumulatedBookmarkPosition
 import com.karakept.app.ui.screens.restoreAndRemoveBookmarkFromList
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -180,11 +179,10 @@ fun MainScreenBookmarkActionsMenu(
                     is BookmarkAction.ToggleFavorite -> screenModel.toggleBookmarkFavorite(bm)
                     is BookmarkAction.ToggleRead -> screenModel.toggleBookmarkRead(bm)
                     is BookmarkAction.MoveToList -> {
-                        val pos = screenModel.accumulatedBookmarkPosition(bm)
                         screenModel.moveBookmarkToList(bm, action.listId)
                         val listName = lists.firstOrNull { it.id == action.listId }?.name ?: "list"
                         scope.undoableAction(snackbarManager, "Moved to '$listName'") {
-                            screenModel.restoreAndRemoveBookmarkFromList(bm, action.listId, pos)
+                            screenModel.restoreAndRemoveBookmarkFromList(bm, action.listId)
                         }
                     }
                     is BookmarkAction.UpdateTags -> {

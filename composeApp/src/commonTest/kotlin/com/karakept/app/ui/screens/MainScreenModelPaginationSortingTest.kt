@@ -1,30 +1,12 @@
 package com.karakept.app.ui.screens
 
-import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.model.BookmarkCursor
-import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
-import com.karakept.app.data.model.Server
+import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
-import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.HighlightRepository
-import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.domain.action.BookmarkActionController
-import com.karakept.app.domain.action.UndoCompletedEvent
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
+import com.karakept.app.ui.screens.MainScreenModelHarness.Companion.bookmark
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -34,84 +16,28 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import com.karakept.app.utils.TestAppDispatchers
+import kotlin.test.assertTrue
 
 /**
- * Tests that the [FilterConfig.sort] option is propagated to [BookmarkRepository.getBookmarksPaged]
- * so that the database cursor starts in the correct order rather than sorting in memory after
- * pagination has already sliced the collection.
+ * Two things the list has to get right about the view it is showing: that the sort it was asked
+ * for is the sort the rows are read with, and that the "N new" pill counts what actually arrived
+ * above the user.
  *
- * The key invariant: when the user selects OLDEST or TITLE_AZ, the very first page returned by
- * the DB must contain the globally-oldest / alphabetically-first bookmarks, not just the first 20
- * in the DB's default createdAt-DESC order.
+ * The sort half used to be about a walk carrying its sort across pages. The rows are read by
+ * offset now, and the sort is part of the view's own definition, so what is left to check is that
+ * it reaches the query at all — and keeps reaching it, since a page read with a different sort
+ * would return rows belonging at other indices.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenModelPaginationSortingTest {
 
     private val testDispatcher = StandardTestDispatcher()
-
-    private lateinit var serverRepository: ServerRepository
-    private lateinit var bookmarkRepository: BookmarkRepository
-    private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var listRepository: ListRepository
-    private lateinit var bookmarkActionController: BookmarkActionController
-    private lateinit var snackbarManager: ActionSnackbarManager
-    private lateinit var highlightRepository: HighlightRepository
-
-    private val fakeServer = Server(
-        id = "server-1",
-        url = "https://example.com",
-        apiKey = "test-key",
-        label = "Test"
-    )
+    private lateinit var harness: MainScreenModelHarness
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-
-        serverRepository = mockk(relaxed = true)
-        bookmarkRepository = mockk(relaxed = true)
-        bookmarkActionsRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        listRepository = mockk(relaxed = true)
-        bookmarkActionController = mockk(relaxed = true)
-        snackbarManager = mockk(relaxed = true)
-        highlightRepository = mockk(relaxed = true)
-
-        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
-        every { settingsRepository.allListSettings } returns flowOf(emptyMap())
-        every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
-        every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
-        every { settingsRepository.customSwipeActionConfigs } returns flowOf(emptyList())
-        every { settingsRepository.swipeLeftConfigId } returns flowOf(null)
-        every { settingsRepository.swipeRightConfigId } returns flowOf(null)
-        every { settingsRepository.dimReadBookmarks } returns flowOf(true)
-        every { settingsRepository.defaultLayoutId } returns flowOf(null)
-        every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(false)
-        every { settingsRepository.activeServerId } returns flowOf("server-1")
-        every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
-        every { settingsRepository.defaultListId } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns MutableStateFlow(emptyList())
-        every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
-        every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
-        every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
-        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
-        every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
-        every { bookmarkRepository.syncProgress } returns MutableStateFlow(
-            com.karakept.app.data.model.SyncProgress.Idle
-        )
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), after = any(), limit = any(),
-                sort = any(), listId = any()
-            )
-        } returns emptyList()
+        harness = MainScreenModelHarness(testDispatcher)
     }
 
     @AfterTest
@@ -119,261 +45,178 @@ class MainScreenModelPaginationSortingTest {
         Dispatchers.resetMain()
     }
 
-    private fun makeBookmark(id: Long, title: String, createdAt: Long = id) = BookmarkEntity(
-        localId = id,
-        remoteId = "remote-$id",
-        serverId = "server-1",
-        url = "https://example.com/$id",
-        title = title,
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = createdAt,
-        isArchived = false,
-        isStarred = false
-    )
-
-    private fun createMainScreenModel() = MainScreenModel(
-        serverRepository = serverRepository,
-        bookmarkRepository = bookmarkRepository,
-        bookmarkActionsRepository = bookmarkActionsRepository,
-        settingsRepository = settingsRepository,
-        listRepository = listRepository,
-        bookmarkActionController = bookmarkActionController,
-        snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository,
-        appDispatchers = TestAppDispatchers(testDispatcher)
-    )
+    // ── the sort reaches the query ─────────────────────────────
 
     @Test
-    fun `NEWEST sort is passed to repository on initialization`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+    fun `the default sort is the one the first page is read with`() = runTest(testDispatcher) {
+        harness.publish((1L..20L).map(::bookmark))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
-        coVerify(atLeast = 1) {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), after = any(), limit = any(),
-                sort = SortOption.NEWEST, listId = any()
-            )
-        }
+        assertTrue(harness.readFilters.isNotEmpty())
+        assertTrue(harness.readFilters.all { it.sort == SortOption.NEWEST })
+        job.cancel()
     }
 
     @Test
-    fun `OLDEST sort is forwarded to repository when filter changes`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+    fun `changing the sort re-reads the view with it`() = runTest(testDispatcher) {
+        harness.publish((1L..20L).map(::bookmark))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
-        model.applyFilter(FilterConfig(sort = SortOption.OLDEST))
-        advanceUntilIdle()
+        for (sort in listOf(SortOption.OLDEST, SortOption.TITLE_AZ, SortOption.READING_TIME_LONG)) {
+            harness.clearReads()
+            model.applyFilter(FilterConfig(sort = sort))
+            advanceUntilIdle()
 
-        coVerify(atLeast = 1) {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), after = any(), limit = any(),
-                sort = SortOption.OLDEST, listId = any()
+            assertTrue(harness.readFilters.isNotEmpty(), "$sort: the view was re-read")
+            assertTrue(
+                harness.readFilters.all { it.sort == sort },
+                "$sort: a page read with another sort holds rows belonging at other indices"
             )
         }
+        job.cancel()
     }
 
     @Test
-    fun `TITLE_AZ sort is forwarded to repository when filter changes`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+    fun `every page of a view is read with the same sort`() = runTest(testDispatcher) {
+        harness.publish((1L..300L).map(::bookmark))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
-
         model.applyFilter(FilterConfig(sort = SortOption.TITLE_AZ))
         advanceUntilIdle()
+        harness.clearReads()
 
-        coVerify(atLeast = 1) {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), after = any(), limit = any(),
-                sort = SortOption.TITLE_AZ, listId = any()
-            )
-        }
+        model.reportVisibleSlots(200..210)
+        advanceUntilIdle()
+
+        assertTrue(harness.readFilters.isNotEmpty())
+        assertTrue(harness.readFilters.all { it.sort == SortOption.TITLE_AZ })
+        job.cancel()
+    }
+
+    // ── the list version, which decides whether the viewport is re-pinned ──
+
+    @Test
+    fun `a write re-reads the list without bumping its version`() = runTest(testDispatcher) {
+        // The version is what makes PreserveListScrollAnchor drop its anchor and scroll to the
+        // top. A sync landing rows must not do that, or the list blinks away from where the user
+        // was reading.
+        harness.publish((1L..20L).map(::bookmark))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+        val versionBefore = model.bookmarkListVersion.value
+        harness.clearReads()
+
+        harness.publish((1L..30L).map(::bookmark))
+        advanceUntilIdle()
+
+        assertEquals(30, model.bookmarkWindow.value.total, "the rows arrived")
+        assertEquals(versionBefore, model.bookmarkListVersion.value, "and the viewport held")
+        job.cancel()
     }
 
     @Test
-    fun `sort option change is reflected in every subsequent repository call`() =
+    fun `switching view bumps the version so the list scrolls to the top`() =
         runTest(testDispatcher) {
-            val model = createMainScreenModel()
+            harness.publish((1L..20L).map(::bookmark))
+            val model = harness.createModel()
+            val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
-
-            model.applyFilter(FilterConfig(sort = SortOption.TITLE_AZ))
-            advanceUntilIdle()
-
-            model.applyFilter(FilterConfig(sort = SortOption.READING_TIME_SHORT))
-            advanceUntilIdle()
-
-            coVerify(atLeast = 1) {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), after = any(), limit = any(),
-                    sort = SortOption.READING_TIME_SHORT, listId = any()
-                )
-            }
-        }
-
-    @Test
-    fun `subsequent pages are requested with the same sort as the first page`() =
-        runTest(testDispatcher) {
-            val pageSize = PAGE_SIZE
-            val page0 = (1..pageSize).map { makeBookmark(id = it.toLong(), title = "A-$it") }
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), after = null, limit = any(),
-                    sort = any(), listId = any()
-                )
-            } returns page0
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(),
-                    after = BookmarkCursor.of(page0.last()), limit = any(),
-                    sort = any(), listId = any()
-                )
-            } returns listOf(makeBookmark(id = 99, title = "Z-1"))
-
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-
-            model.applyFilter(FilterConfig(sort = SortOption.TITLE_AZ))
-            advanceUntilIdle()
-
-            model.loadNextPage()
-            advanceUntilIdle()
-
-            coVerify(atLeast = 2) {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), after = any(), limit = any(),
-                    sort = SortOption.TITLE_AZ, listId = any()
-                )
-            }
-            assertEquals(pageSize + 1, model._accumulatedBookmarks.value.size)
-        }
-
-    @Test
-    fun `refreshLoadedPagesInPlace keeps the loaded window and does not bump the list version`() =
-        runTest(testDispatcher) {
-            // A table of 50 rows, served the way the DAO serves it: sliced by offset/limit.
-            val table = (1..50).map { makeBookmark(id = it.toLong(), title = "b$it") }
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = any(), limit = any(), sort = any(), listId = any())
-            } answers {
-                val limit = arg<Int>(2)
-                val after = arg<BookmarkCursor?>(3)
-                table
-                    .dropWhile { after != null && it.localId != after.localId }
-                    .drop(if (after == null) 0 else 1)
-                    .take(limit)
-            }
-
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-            // Simulate the user having scrolled through pages 0..2.
-            model._currentPage.value = 2
             val versionBefore = model.bookmarkListVersion.value
 
-            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
+            model.applyFilter(FilterConfig(status = FilterStatus.ARCHIVED))
             advanceUntilIdle()
 
-            // Window preserved (all 50 items reloaded), not shrunk to page 0.
-            assertEquals(50, model._accumulatedBookmarks.value.size)
-            // Version NOT bumped, so PreserveListScrollAnchor keeps the viewport pinned
-            // instead of jumping to the top (no blink).
-            assertEquals(versionBefore, model.bookmarkListVersion.value)
-            // Partial final page → DB exhausted.
-            assertEquals(false, model.hasMoreItems.value)
-        }
-
-    @Test
-    fun `refreshLoadedPagesInPlace counts newly synced bookmarks for the N-new pill`() =
-        runTest(testDispatcher) {
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-            // Existing loaded page 0 holds two bookmarks; no pending "new" indicator.
-            model._accumulatedBookmarks.value = listOf(makeBookmark(1, "b1"), makeBookmark(2, "b2"))
-            model._currentPage.value = 0
-            model.clearNewBookmarksAbove()
-
-            // Sync prepends two new bookmarks (ids 10, 11) to the top of page 0.
-            val page0 = listOf(
-                makeBookmark(10, "new1"), makeBookmark(11, "new2"),
-                makeBookmark(1, "b1"), makeBookmark(2, "b2")
+            assertTrue(
+                model.bookmarkListVersion.value > versionBefore,
+                "a different view is not the same list changed"
             )
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
-            } returns page0
-
-            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
-            advanceUntilIdle()
-
-            assertEquals(2, model.newBookmarksAbove.value)
-
-            // Marking the new top row as seen empties the pill. The count is derived from the
-            // window rather than held as a counter, so it settles on the next dispatch.
-            model.clearNewBookmarksAbove()
-            advanceUntilIdle()
-            assertEquals(0, model.newBookmarksAbove.value)
+            job.cancel()
         }
 
-    // The anchor is "the topmost bookmark the user has actually seen", and it used to move only
-    // when the list reached its very first row. Reading the new arrivals and stopping a row
-    // short left it behind, so the pill went on announcing bookmarks the user had just read
-    // every time they scrolled away from the top, with no sync in between (#333).
+    // ── the "N new" pill ───────────────────────────────────────
 
-    @Test
-    fun `scrolling up through new bookmarks retires them row by row`() =
-        runTest(testDispatcher) {
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-            // Three arrived above the row the user had seen.
-            model._accumulatedBookmarks.value =
-                listOf(makeBookmark(10, "n1"), makeBookmark(11, "n2"), makeBookmark(12, "n3"), makeBookmark(1, "b1"))
-            model._seenTopRemoteId.value = "remote-1"
-            advanceUntilIdle()
-            assertEquals(3, model.newBookmarksAbove.value)
-
-            // The user scrolls up through them. Each row reaching the top of the viewport is
-            // one they have now seen.
-            model.markTopVisibleSeen("remote-12")
-            advanceUntilIdle()
-            assertEquals(2, model.newBookmarksAbove.value)
-
-            model.markTopVisibleSeen("remote-11")
-            advanceUntilIdle()
-            assertEquals(1, model.newBookmarksAbove.value)
-
-            // Stopping one row short of the very top must still leave only that one uncounted.
-            assertEquals("remote-11", model._seenTopRemoteId.value)
+    /** A model showing [rows], with everything currently on screen counted as seen. */
+    private suspend fun modelShowing(rows: List<com.karakept.app.data.local.entity.BookmarkEntity>) =
+        harness.createModel().also {
+            harness.publish(rows)
         }
 
     @Test
-    fun `scrolling back down does not re-count what was already seen`() =
-        runTest(testDispatcher) {
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-            model._accumulatedBookmarks.value =
-                listOf(makeBookmark(10, "n1"), makeBookmark(11, "n2"), makeBookmark(1, "b1"))
-            model._seenTopRemoteId.value = "remote-10"
-            advanceUntilIdle()
-            assertEquals(0, model.newBookmarksAbove.value)
+    fun `bookmarks arriving above the seen row are counted`() = runTest(testDispatcher) {
+        harness.publish(listOf(bookmark(1L)))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+        model.clearNewBookmarksAbove()
+        advanceUntilIdle()
+        assertEquals(0, model.newBookmarksAbove.value)
 
-            // Scrolling down puts lower rows at the top of the viewport; the anchor must not
-            // follow, or everything above it would be reported as new all over again.
-            model.markTopVisibleSeen("remote-11")
-            model.markTopVisibleSeen("remote-1")
-            advanceUntilIdle()
+        harness.publish(listOf(bookmark(10L), bookmark(11L), bookmark(1L)))
+        advanceUntilIdle()
 
-            assertEquals("remote-10", model._seenTopRemoteId.value, "the anchor only moves up the list")
-            assertEquals(0, model.newBookmarksAbove.value)
-        }
+        assertEquals(2, model.newBookmarksAbove.value)
+        job.cancel()
+    }
 
     @Test
-    fun `an anchor that has left the window is replaced by the row on screen`() =
+    fun `scrolling up through new bookmarks retires them row by row`() = runTest(testDispatcher) {
+        harness.publish(listOf(bookmark(10L), bookmark(11L), bookmark(12L), bookmark(1L)))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+        model._seenTopRemoteId.value = "remote-1"
+        advanceUntilIdle()
+        assertEquals(3, model.newBookmarksAbove.value)
+
+        model.markTopVisibleSeen("remote-12")
+        advanceUntilIdle()
+        assertEquals(2, model.newBookmarksAbove.value)
+
+        model.markTopVisibleSeen("remote-11")
+        advanceUntilIdle()
+        assertEquals(1, model.newBookmarksAbove.value)
+
+        // Stopping one row short of the very top must still leave only that one uncounted.
+        assertEquals("remote-11", model._seenTopRemoteId.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `scrolling back down does not re-count what was already seen`() = runTest(testDispatcher) {
+        harness.publish(listOf(bookmark(10L), bookmark(11L), bookmark(1L)))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+        model._seenTopRemoteId.value = "remote-10"
+        advanceUntilIdle()
+        assertEquals(0, model.newBookmarksAbove.value)
+
+        // Scrolling down puts lower rows at the top of the viewport; the anchor must not follow,
+        // or everything above it would be reported as new all over again.
+        model.markTopVisibleSeen("remote-11")
+        model.markTopVisibleSeen("remote-1")
+        advanceUntilIdle()
+
+        assertEquals("remote-10", model._seenTopRemoteId.value, "the anchor only moves up the list")
+        assertEquals(0, model.newBookmarksAbove.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `an anchor the list no longer holds is replaced by the row on screen`() =
         runTest(testDispatcher) {
-            // Holding a row the window no longer has pinned the count to zero until the user
+            // Holding a row the list no longer has pinned the count to zero until the user
             // reached the very top.
-            val model = createMainScreenModel()
+            harness.publish(listOf(bookmark(10L), bookmark(11L)))
+            val model = harness.createModel()
+            val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
-            model._accumulatedBookmarks.value = listOf(makeBookmark(10, "n1"), makeBookmark(11, "n2"))
             model._seenTopRemoteId.value = "remote-999"
             advanceUntilIdle()
 
@@ -382,137 +225,43 @@ class MainScreenModelPaginationSortingTest {
 
             assertEquals("remote-11", model._seenTopRemoteId.value)
             assertEquals(1, model.newBookmarksAbove.value)
+            job.cancel()
         }
 
     @Test
-    fun `a row that is not in the window leaves the anchor alone`() =
+    fun `a row the list does not hold leaves the anchor alone`() = runTest(testDispatcher) {
+        // A just-created bookmark renders above the view as a placeholder.
+        harness.publish(listOf(bookmark(10L), bookmark(1L)))
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+        model._seenTopRemoteId.value = "remote-1"
+        advanceUntilIdle()
+
+        model.markTopVisibleSeen("remote-777")
+        advanceUntilIdle()
+
+        assertEquals("remote-1", model._seenTopRemoteId.value)
+        assertEquals(1, model.newBookmarksAbove.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `the pill leaves out bookmarks already read while they are faded`() =
         runTest(testDispatcher) {
-            // A just-created bookmark renders above the window as a placeholder.
-            val model = createMainScreenModel()
+            // One of the arrivals is already read — marked on another device, or carried in by
+            // the reading progress the sync pulls. The pill offers a trip to what arrived, and a
+            // row already read is not something the user is being sent back for.
+            harness.publish(
+                listOf(bookmark(10L), bookmark(11L, isRead = true), bookmark(1L))
+            )
+            val model = harness.createModel()
+            val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
-            model._accumulatedBookmarks.value = listOf(makeBookmark(10, "n1"), makeBookmark(1, "b1"))
             model._seenTopRemoteId.value = "remote-1"
             advanceUntilIdle()
 
-            model.markTopVisibleSeen("remote-777")
-            advanceUntilIdle()
-
-            assertEquals("remote-1", model._seenTopRemoteId.value)
             assertEquals(1, model.newBookmarksAbove.value)
-        }
-
-    @Test
-    fun `N-new pill leaves out bookmarks that are already read while they are faded`() =
-        runTest(testDispatcher) {
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-            model._accumulatedBookmarks.value = listOf(makeBookmark(1, "b1"))
-            model._currentPage.value = 0
-            model.clearNewBookmarksAbove()
-
-            // Two bookmarks arrive above the one the user saw; one of them is already read —
-            // marked on another device, or carried in by the reading progress the sync pulls.
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
-            } returns listOf(
-                makeBookmark(10, "new1"),
-                makeBookmark(11, "new2").copy(isRead = true),
-                makeBookmark(1, "b1")
-            )
-
-            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
-            advanceUntilIdle()
-
-            assertEquals(1, model.newBookmarksAbove.value)
-        }
-
-    @Test
-    fun `N-new pill counts read bookmarks when fading is turned off`() =
-        runTest(testDispatcher) {
-            // Nothing distinguishes a read row from an unread one in the list, so the pill
-            // reports what actually arrived.
-            every { settingsRepository.dimReadBookmarks } returns flowOf(false)
-
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-            model._accumulatedBookmarks.value = listOf(makeBookmark(1, "b1"))
-            model._currentPage.value = 0
-            model.clearNewBookmarksAbove()
-
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
-            } returns listOf(
-                makeBookmark(10, "new1"),
-                makeBookmark(11, "new2").copy(isRead = true),
-                makeBookmark(1, "b1")
-            )
-
-            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
-            advanceUntilIdle()
-
-            assertEquals(2, model.newBookmarksAbove.value)
-        }
-
-    @Test
-    fun `the active layout decides whether the pill counts read bookmarks`() =
-        runTest(testDispatcher) {
-            // The layout overrides the global setting for the rendering, so it must override it
-            // for the count too — otherwise the pill offers a trip to rows it can see are faded.
-            val layout = com.karakept.app.data.model.BookmarkLayout(
-                id = "custom-1", name = "No fade", dimReadBookmarks = false
-            )
-            every { settingsRepository.dimReadBookmarks } returns flowOf(true)
-            every { settingsRepository.defaultLayoutId } returns flowOf("custom-1")
-            every { settingsRepository.customLayouts } returns flowOf(listOf(layout))
-
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-            model._accumulatedBookmarks.value = listOf(makeBookmark(1, "b1"))
-            model._currentPage.value = 0
-            model.clearNewBookmarksAbove()
-
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
-            } returns listOf(
-                makeBookmark(10, "new1"),
-                makeBookmark(11, "new2").copy(isRead = true),
-                makeBookmark(1, "b1")
-            )
-
-            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
-            advanceUntilIdle()
-
-            assertEquals(false, model.effectiveDimReadBookmarks.value, "layout wins over the setting")
-            assertEquals(2, model.newBookmarksAbove.value)
-        }
-
-    @Test
-    fun `N-new pill does not double-count a bookmark that re-enters the loaded window`() =
-        runTest(testDispatcher) {
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-            model._accumulatedBookmarks.value =
-                listOf(makeBookmark(1, "b1"), makeBookmark(2, "b2"), makeBookmark(3, "b3"))
-            model._currentPage.value = 0
-            model.clearNewBookmarksAbove()
-            advanceUntilIdle()
-
-            // A sync prepends one row; the window is a fixed page range, so b3 falls off the end.
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
-            } returns listOf(makeBookmark(10, "new1"), makeBookmark(1, "b1"), makeBookmark(2, "b2"))
-            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
-            advanceUntilIdle()
-            assertEquals(1, model.newBookmarksAbove.value)
-
-            // The prepended row then leaves, pulling b3 back into the window. b3 is not new —
-            // the user saw it before — and only rows above the seen row may be counted.
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(server = any(), status = any(), after = null, limit = any(), sort = any(), listId = any())
-            } returns listOf(makeBookmark(1, "b1"), makeBookmark(2, "b2"), makeBookmark(3, "b3"))
-            model.refreshLoadedPagesInPlace(fakeServer, FilterConfig())
-            advanceUntilIdle()
-
-            assertEquals(0, model.newBookmarksAbove.value)
+            job.cancel()
         }
 }

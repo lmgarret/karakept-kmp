@@ -235,6 +235,26 @@ interface BookmarkDao {
     @RawQuery(observedEntities = [BookmarkEntity::class])
     fun countBookmarksFlow(query: RoomRawQuery): Flow<Int>
 
+    // Identities only, for selecting a whole view without reading its rows — see
+    // BookmarkRepository.getViewRemoteIds.
+    @RawQuery
+    suspend fun selectRemoteIds(query: RoomRawQuery): List<String>
+
+    @Query("""
+        SELECT localId, remoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
+               '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId AND remoteId IN (:remoteIds)
+    """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
+    suspend fun getBookmarksByRemoteIds(
+        serverId: String,
+        remoteIds: List<String>
+    ): List<BookmarkEntity>
+
     // Count queries for pagination
     @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId")
     suspend fun getTotalBookmarkCount(serverId: String): Int

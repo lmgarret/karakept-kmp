@@ -85,214 +85,137 @@ fun MainScreenModel.clearSelection() {
     _lastSelectedIndex = -1
 }
 
+/**
+ * Selects every bookmark the view holds, loaded or not.
+ *
+ * Asks the database for the ids alone. It used to read the whole view into the list first — the
+ * only way to have a row's id was to have the row — so selecting a four-thousand-row view
+ * materialised four thousand rows to produce four thousand strings.
+ */
 fun MainScreenModel.selectAll() {
     _selectedViaSelectAll.value = true
-    if (!_hasMoreItems.value) {
-        // D-03: All pages already loaded -- current behavior is correct
-        _selectedBookmarkIds.value = _accumulatedBookmarks.value.map { it.remoteId }.toSet()
-        return
-    }
-    // D-01: Fetch all matching entities from DB in one query
     viewModelScope.launch {
         val server = _selectedServer.value ?: return@launch
-        val expandedFilter = effectiveFilterNow()
-
-        // D-04: Apply current filter to DB query
-        val singleListId = expandedFilter.lists.singleOrNull()
-        val allEntities = bookmarkRepository.getAllBookmarks(server, expandedFilter.status, singleListId)
-
-        // Apply client-side filters (tags, multi-list) per Pitfall 1
-        val filtered = BookmarkFilterUtils.applyClientSideFilters(
-            allEntities, expandedFilter, skipListFilter = singleListId != null
-        )
-        val sorted = BookmarkFilterUtils.applySorting(filtered, expandedFilter.sort)
-
-        // Use updateAccumulatedBookmarks for thread safety per Pitfall 3
-        updateAccumulatedBookmarks { sorted }
-        _hasMoreItems.value = false
-        _selectedBookmarkIds.value = sorted.map { it.remoteId }.toSet()
+        _selectedBookmarkIds.value =
+            bookmarkRepository.getViewRemoteIds(server, effectiveFilterNow()).toSet()
     }
 }
 
-internal fun MainScreenModel.getSelectedBookmarks(): List<BookmarkEntity> {
+/**
+ * The rows behind the current selection, read by id.
+ *
+ * A selection can cover rows the list has never shown — "select all" is exactly that — so it
+ * cannot be a filter over what happens to be loaded.
+ */
+internal suspend fun MainScreenModel.getSelectedBookmarks(): List<BookmarkEntity> {
     val ids = _selectedBookmarkIds.value
-    return _accumulatedBookmarks.value.filter { it.remoteId in ids }
+    if (ids.isEmpty()) return emptyList()
+    val server = _selectedServer.value ?: return emptyList()
+    return bookmarkRepository.getBookmarksByRemoteIds(server.id, ids.toList())
 }
 
-fun MainScreenModel.batchArchive() {
-    val bookmarks = getSelectedBookmarks().filter { !it.isArchived }
-    if (bookmarks.isEmpty()) { clearSelection(); return }
+/**
+ * Runs [act] over the selection, then reports it with an undo that runs [undo].
+ *
+ * Neither half touches the list. Each repository call writes its rows to the local database, and
+ * the list re-reads the pages on screen when the table changes — so a batch archive empties those
+ * rows out of an unarchived view, and undoing it puts them back where the sort wants them.
+ */
+private fun MainScreenModel.batchAction(
+    keep: (BookmarkEntity) -> Boolean = { true },
+    message: (Int) -> String,
+    undo: (suspend (List<BookmarkEntity>) -> Unit)? = null,
+    act: suspend (List<BookmarkEntity>) -> Unit
+) {
     viewModelScope.launch {
-        bookmarkActionsRepository.batchArchive(bookmarks)
-        val remoteIds = bookmarks.map { it.remoteId }.toSet()
-        updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
-        clearSelection()
-        val count = bookmarks.size
-        snackbarManager.showSnackbarWithUndo("Archived $count bookmark${if (count > 1) "s" else ""}", onUndo = {
-            bookmarkActionsRepository.batchUnarchive(bookmarks)
-            updateAccumulatedBookmarks { it + bookmarks.map { b -> b.copy(isArchived = false) } }
-        })
-    }
-}
-
-fun MainScreenModel.batchUnarchive() {
-    val bookmarks = getSelectedBookmarks().filter { it.isArchived }
-    if (bookmarks.isEmpty()) { clearSelection(); return }
-    viewModelScope.launch {
-        bookmarkActionsRepository.batchUnarchive(bookmarks)
-        val remoteIds = bookmarks.map { it.remoteId }.toSet()
-        updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in remoteIds } }
-        clearSelection()
-        val count = bookmarks.size
-        snackbarManager.showSnackbarWithUndo("Unarchived $count bookmark${if (count > 1) "s" else ""}", onUndo = {
-            bookmarkActionsRepository.batchArchive(bookmarks)
-            updateAccumulatedBookmarks { it + bookmarks.map { b -> b.copy(isArchived = true) } }
-        })
-    }
-}
-
-fun MainScreenModel.batchMarkRead() {
-    val bookmarks = getSelectedBookmarks().filter { !it.isRead }
-    if (bookmarks.isEmpty()) { clearSelection(); return }
-    viewModelScope.launch {
-        bookmarkActionsRepository.batchMarkRead(bookmarks)
-        val ids = bookmarks.map { it.remoteId }.toSet()
-        updateAccumulatedBookmarks { list ->
-            list.map { if (it.remoteId in ids) it.copy(isRead = true) else it }
+        val bookmarks = getSelectedBookmarks().filter(keep)
+        if (bookmarks.isEmpty()) {
+            clearSelection()
+            return@launch
         }
+        act(bookmarks)
         clearSelection()
-        val count = bookmarks.size
-        snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as read", onUndo = {
-            bookmarkActionsRepository.batchMarkUnread(bookmarks, false)
-            updateAccumulatedBookmarks { list ->
-                list.map { if (it.remoteId in ids) it.copy(isRead = false) else it }
-            }
-        })
+        val text = message(bookmarks.size)
+        if (undo == null) {
+            snackbarManager.showSnackbar(text)
+        } else {
+            snackbarManager.showSnackbarWithUndo(text, onUndo = { undo(bookmarks) })
+        }
     }
 }
 
-fun MainScreenModel.batchMarkUnread() {
-    val bookmarks = getSelectedBookmarks().filter { it.isRead }
-    if (bookmarks.isEmpty()) { clearSelection(); return }
-    viewModelScope.launch {
+private fun plural(count: Int) = if (count > 1) "s" else ""
+
+fun MainScreenModel.batchArchive() = batchAction(
+    keep = { !it.isArchived },
+    message = { "Archived $it bookmark${plural(it)}" },
+    undo = { bookmarkActionsRepository.batchUnarchive(it) },
+    act = { bookmarkActionsRepository.batchArchive(it) }
+)
+
+fun MainScreenModel.batchUnarchive() = batchAction(
+    keep = { it.isArchived },
+    message = { "Unarchived $it bookmark${plural(it)}" },
+    undo = { bookmarkActionsRepository.batchArchive(it) },
+    act = { bookmarkActionsRepository.batchUnarchive(it) }
+)
+
+fun MainScreenModel.batchMarkRead() = batchAction(
+    keep = { !it.isRead },
+    message = { "Marked $it bookmark${plural(it)} as read" },
+    undo = { bookmarkActionsRepository.batchMarkUnread(it, false) },
+    act = { bookmarkActionsRepository.batchMarkRead(it) }
+)
+
+fun MainScreenModel.batchMarkUnread() = batchAction(
+    keep = { it.isRead },
+    message = { "Marked $it bookmark${plural(it)} as unread" },
+    undo = { bookmarkActionsRepository.batchMarkRead(it) },
+    act = {
         val resetProgress = settingsRepository.resetProgressOnMarkUnread.first()
-        bookmarkActionsRepository.batchMarkUnread(bookmarks, resetProgress)
-        val ids = bookmarks.map { it.remoteId }.toSet()
-        updateAccumulatedBookmarks { list ->
-            list.map {
-                if (it.remoteId in ids) {
-                    if (resetProgress) it.copy(isRead = false, readingProgress = 0f, readingScrollIndex = 0, readingScrollOffset = 0)
-                    else it.copy(isRead = false)
-                } else it
-            }
-        }
-        clearSelection()
-        val count = bookmarks.size
-        snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as unread", onUndo = {
-            bookmarkActionsRepository.batchMarkRead(bookmarks)
-            updateAccumulatedBookmarks { list ->
-                list.map { if (it.remoteId in ids) it.copy(isRead = true) else it }
-            }
-        })
+        bookmarkActionsRepository.batchMarkUnread(it, resetProgress)
     }
-}
+)
 
-fun MainScreenModel.batchFavourite() {
-    val bookmarks = getSelectedBookmarks().filter { !it.isStarred }
-    if (bookmarks.isEmpty()) { clearSelection(); return }
-    viewModelScope.launch {
-        bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = true)
-        val ids = bookmarks.map { it.remoteId }.toSet()
-        updateAccumulatedBookmarks { list ->
-            list.map { if (it.remoteId in ids) it.copy(isStarred = true) else it }
-        }
-        clearSelection()
-        val count = bookmarks.size
-        snackbarManager.showSnackbarWithUndo("Added $count bookmark${if (count > 1) "s" else ""} to favorites", onUndo = {
-            bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = false)
-            updateAccumulatedBookmarks { list ->
-                list.map { if (it.remoteId in ids) it.copy(isStarred = false) else it }
-            }
-        })
-    }
-}
+fun MainScreenModel.batchFavourite() = batchAction(
+    keep = { !it.isStarred },
+    message = { "Added $it bookmark${plural(it)} to favorites" },
+    undo = { bookmarkActionsRepository.batchSetFavourite(it, makeFavourite = false) },
+    act = { bookmarkActionsRepository.batchSetFavourite(it, makeFavourite = true) }
+)
 
-fun MainScreenModel.batchUnfavourite() {
-    val bookmarks = getSelectedBookmarks().filter { it.isStarred }
-    if (bookmarks.isEmpty()) { clearSelection(); return }
-    viewModelScope.launch {
-        bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = false)
-        val ids = bookmarks.map { it.remoteId }.toSet()
-        updateAccumulatedBookmarks { list ->
-            list.map { if (it.remoteId in ids) it.copy(isStarred = false) else it }
-        }
-        clearSelection()
-        val count = bookmarks.size
-        snackbarManager.showSnackbarWithUndo("Removed $count bookmark${if (count > 1) "s" else ""} from favorites", onUndo = {
-            bookmarkActionsRepository.batchSetFavourite(bookmarks, makeFavourite = true)
-            updateAccumulatedBookmarks { list ->
-                list.map { if (it.remoteId in ids) it.copy(isStarred = true) else it }
-            }
-        })
-    }
-}
+fun MainScreenModel.batchUnfavourite() = batchAction(
+    keep = { it.isStarred },
+    message = { "Removed $it bookmark${plural(it)} from favorites" },
+    undo = { bookmarkActionsRepository.batchSetFavourite(it, makeFavourite = true) },
+    act = { bookmarkActionsRepository.batchSetFavourite(it, makeFavourite = false) }
+)
 
 fun MainScreenModel.batchDelete() {
-    val bookmarks = getSelectedBookmarks()
-    if (bookmarks.isEmpty()) { clearSelection(); return }
     viewModelScope.launch {
+        val bookmarks = getSelectedBookmarks()
+        if (bookmarks.isEmpty()) {
+            clearSelection()
+            return@launch
+        }
         bookmarkActionsRepository.batchDelete(bookmarks)
-        val ids = bookmarks.map { it.remoteId }.toSet()
-        updateAccumulatedBookmarks { it.filter { b -> b.remoteId !in ids } }
         clearSelection()
     }
 }
 
-fun MainScreenModel.batchSetTags(newTags: List<String>) {
-    val bookmarks = getSelectedBookmarks()
-    if (bookmarks.isEmpty()) { clearSelection(); return }
-    viewModelScope.launch {
-        bookmarkActionsRepository.batchUpdateTags(bookmarks, newTags)
-        val ids = bookmarks.map { it.remoteId }.toSet()
-        val tagString = newTags.joinToString(",")
-        updateAccumulatedBookmarks { list ->
-            list.map { bookmark ->
-                if (bookmark.remoteId in ids) bookmark.copy(tags = tagString) else bookmark
-            }
-        }
-        clearSelection()
-        val count = bookmarks.size
-        snackbarManager.showSnackbar("Tags updated for $count bookmark${if (count > 1) "s" else ""}")
-    }
-}
+fun MainScreenModel.batchSetTags(newTags: List<String>) = batchAction(
+    message = { "Tags updated for $it bookmark${plural(it)}" },
+    act = { bookmarkActionsRepository.batchUpdateTags(it, newTags) }
+)
 
-fun MainScreenModel.batchMoveToList(listId: String) {
-    val bookmarks = getSelectedBookmarks()
-    if (bookmarks.isEmpty()) { clearSelection(); return }
-    viewModelScope.launch {
-        val positions = bookmarks.associate { it.remoteId to accumulatedBookmarkPosition(it) }
-        bookmarkActionsRepository.batchMoveToList(bookmarks, listId)
-        val ids = bookmarks.map { it.remoteId }.toSet()
-        updateAccumulatedBookmarks { list ->
-            list.map { bookmark ->
-                if (bookmark.remoteId in ids) {
-                    val currentListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                    if (!currentListIds.contains(listId)) {
-                        bookmark.copy(listIds = (currentListIds + listId).joinToString(","))
-                    } else bookmark
-                } else bookmark
-            }
-        }
-        bookmarks.firstOrNull()?.let { reconcileBookmarkLists(it) }
-        clearSelection()
-        val count = bookmarks.size
-        snackbarManager.showSnackbarWithUndo("Moved $count bookmark${if (count > 1) "s" else ""} to list", onUndo = {
-            for (bookmark in bookmarks) {
-                restoreAndRemoveBookmarkFromList(bookmark, listId, positions[bookmark.remoteId] ?: -1)
-            }
-        })
+fun MainScreenModel.batchMoveToList(listId: String) = batchAction(
+    message = { "Moved $it bookmark${plural(it)} to list" },
+    undo = { moved -> moved.forEach { restoreAndRemoveBookmarkFromList(it, listId) } },
+    act = { moved ->
+        bookmarkActionsRepository.batchMoveToList(moved, listId)
+        moved.firstOrNull()?.let { reconcileBookmarkLists(it) }
     }
-}
+)
 
 /** How far a batch AI run has got. Drives the selection bar's title while one is in flight. */
 data class AiBatchProgress(
@@ -313,14 +236,14 @@ data class AiBatchProgress(
  * The caller is expected to have confirmed first; [selectedViaSelectAll] selections never reach here.
  */
 fun MainScreenModel.batchAiAction(action: AiAction) {
-    val bookmarks = getSelectedBookmarks()
-    if (bookmarks.isEmpty()) {
-        clearSelection()
-        return
-    }
     if (aiBatchJob?.isActive == true) return
 
     aiBatchJob = viewModelScope.launch {
+        val bookmarks = getSelectedBookmarks()
+        if (bookmarks.isEmpty()) {
+            clearSelection()
+            return@launch
+        }
         var succeeded = 0
         var failed = 0
         try {
