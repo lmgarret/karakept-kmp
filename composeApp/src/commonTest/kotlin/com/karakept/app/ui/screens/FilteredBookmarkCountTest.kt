@@ -16,6 +16,7 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -283,22 +284,20 @@ class FilteredBookmarkCountTest {
     }
 
     @Test
-    fun `filteredBookmarks names the row at an absolute position`() = runTest(testDispatcher) {
-        // What the scroll cursor's tooltip asks of it: the row a thumb points at, whether or not
-        // paging has reached it.
-        val bookmarks = (1L..300L).map { createBookmarkEntity(it) }
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
+    fun `the row at an absolute position is named by a query, not by a resident view`() =
+        runTest(testDispatcher) {
+            // What the scroll cursor's tooltip asks for: the row a thumb points at, whether or
+            // not the list has read it. It used to be answered by keeping the whole view ordered
+            // in memory; it is one row at a position.
+            coEvery { bookmarkRepository.getBookmarkAt(any(), any(), 299) } returns
+                createBookmarkEntity(1)
 
-        val model = createMainScreenModel()
-        val job = launch { model.filteredBookmarks.collect {} }
-        advanceUntilIdle()
+            val model = createMainScreenModel()
+            advanceUntilIdle()
 
-        val view = model.filteredBookmarks.value
-        assertEquals(300, view.size)
-        assertEquals("remote-300", view.first().remoteId, "NEWEST puts the newest row first")
-        assertEquals("remote-1", view.last().remoteId)
-        job.cancel()
-    }
+            assertEquals("remote-1", model.bookmarkAtIndex(299)?.remoteId)
+            coVerify { bookmarkRepository.getBookmarkAt(any(), any(), 299) }
+        }
 
     @Test
     fun `the count is asked for the same filter the rows are read for`() = runTest(testDispatcher) {
@@ -311,7 +310,7 @@ class FilteredBookmarkCountTest {
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
 
         val model = createMainScreenModel()
-        val job = launch { model.filteredBookmarks.collect {} }
+        val job = launch { model.bookmarkWindow.collect {} }
         val countJob = launch { model.filteredBookmarkCount.collect {} }
         advanceUntilIdle()
 

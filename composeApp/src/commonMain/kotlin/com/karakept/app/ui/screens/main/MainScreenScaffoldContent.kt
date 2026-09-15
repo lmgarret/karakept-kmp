@@ -124,7 +124,8 @@ fun MainScreenScaffoldContent(
     showScrollCursor: Boolean = false,
     sortOption: com.karakept.app.data.model.SortOption = com.karakept.app.data.model.SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
-    filteredBookmarks: List<BookmarkEntity> = emptyList(),
+    /** Names the row at an absolute index, for the scroll cursor's tooltip. */
+    bookmarkAtIndex: suspend (Int) -> BookmarkEntity? = { null },
     displayConfig: MainScreenDisplayConfig,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -283,8 +284,7 @@ fun MainScreenScaffoldContent(
                 // filtered view.
                 totalBookmarkCount =
                     if (searchQuery.isNotBlank()) bookmarks.size else totalBookmarkCount,
-                filteredBookmarks =
-                    if (searchQuery.isNotBlank()) bookmarks else filteredBookmarks,
+                bookmarkAtIndex = bookmarkAtIndex,
                 layoutType = displayConfig.layoutType,
                 swipeLeftAction = swipeLeftAction,
                 swipeRightAction = swipeRightAction,

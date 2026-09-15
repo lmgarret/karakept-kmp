@@ -133,6 +133,7 @@ class QuickFilterCountsTest {
     @Test
     fun `quickFilterCounts is zero when no bookmarks`() = runTest(testDispatcher) {
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+        bookmarkRepositoryCountsOf(bookmarkRepository, emptyList())
 
         val model = createMainScreenModel()
         val job = launch { model.quickFilterCounts.collect {} }
@@ -157,6 +158,7 @@ class QuickFilterCountsTest {
             createBookmarkEntity(10)
         )
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
+        bookmarkRepositoryCountsOf(bookmarkRepository, bookmarks)
 
         val model = createMainScreenModel()
         val job = launch { model.quickFilterCounts.collect {} }
@@ -173,6 +175,7 @@ class QuickFilterCountsTest {
     fun `quickFilterCounts counts all archived when all bookmarks archived`() = runTest(testDispatcher) {
         val bookmarks = (1L..5L).map { createBookmarkEntity(it, isArchived = true) }
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(bookmarks)
+        bookmarkRepositoryCountsOf(bookmarkRepository, bookmarks)
 
         val model = createMainScreenModel()
         val job = launch { model.quickFilterCounts.collect {} }
@@ -188,6 +191,7 @@ class QuickFilterCountsTest {
     @Test
     fun `quickFilterCounts offline reflects repository count`() = runTest(testDispatcher) {
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+        bookmarkRepositoryCountsOf(bookmarkRepository, emptyList())
         every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(4)
 
         val model = createMainScreenModel()
@@ -202,6 +206,7 @@ class QuickFilterCountsTest {
     fun `quickFilterCounts offline is zero when no server`() = runTest(testDispatcher) {
         every { serverRepository.servers } returns flowOf(emptyList())
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+        bookmarkRepositoryCountsOf(bookmarkRepository, emptyList())
 
         val model = createMainScreenModel()
         val job = launch { model.quickFilterCounts.collect {} }

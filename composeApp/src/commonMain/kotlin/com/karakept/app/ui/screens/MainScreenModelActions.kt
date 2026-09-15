@@ -190,12 +190,12 @@ fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: Str
 }
 
 fun MainScreenModel.markAllBookmarksInListAsRead(listId: String) {
-    val unreadInList = allBookmarks.value.filter { bookmark ->
-        val bookmarkLists = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        bookmarkLists.contains(listId) && !bookmark.isRead
-    }
-    if (unreadInList.isEmpty()) return
     viewModelScope.launch {
+        val server = _selectedServer.value ?: return@launch
+        // Asked of the database: the list's unread rows are not necessarily rows the list has
+        // shown, and there is no resident copy of the table to filter.
+        val unreadInList = bookmarkRepository.getUnreadInList(server.id, listId)
+        if (unreadInList.isEmpty()) return@launch
         bookmarkActionsRepository.batchMarkRead(unreadInList)
         val count = unreadInList.size
         snackbarManager.showSnackbarWithUndo("Marked $count bookmark${if (count > 1) "s" else ""} as read", onUndo = {

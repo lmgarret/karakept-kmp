@@ -121,8 +121,8 @@ internal fun BookmarkListContent(
     showScrollCursor: Boolean = false,
     sortOption: SortOption = SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
-    /** The whole filtered view, for naming the row the scroll cursor points at. */
-    filteredBookmarks: List<BookmarkEntity> = emptyList(),
+    /** Names the row at an absolute index, for the scroll cursor's tooltip. */
+    bookmarkAtIndex: suspend (Int) -> BookmarkEntity? = { null },
     layoutType: LayoutType,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -924,7 +924,7 @@ internal fun BookmarkListContent(
                 bookmarks = loadedRows,
                 sortOption = sortOption,
                 totalBookmarkCount = totalBookmarkCount,
-                filteredBookmarks = filteredBookmarks,
+                bookmarkAtIndex = bookmarkAtIndex,
                 // padding(top) keeps the scrollbar clear of the sync progress bar
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
             )

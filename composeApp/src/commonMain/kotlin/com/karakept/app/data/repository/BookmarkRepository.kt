@@ -5,6 +5,9 @@ import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.projection.ListMembershipGroup
+import com.karakept.app.data.local.projection.QuickFilterCountRow
+import com.karakept.app.data.local.projection.TagGroup
 import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.ContentFilter
@@ -57,6 +60,14 @@ class BookmarkRepository(
     // single) rather than GlobalScope so the work stays cancellable and test-drainable.
     private val repositoryScope = CoroutineScope(SupervisorJob() + appDispatchers.default)
 
+    /**
+     * Every row for a server, as one list.
+     *
+     * Nothing in the app reads this to *render* with any more — the list is sized by a count and
+     * reads the pages under the viewport, and the drawer's counts come from grouped queries. Kept
+     * for the callers that genuinely want the whole table at once, and deliberately not held in a
+     * StateFlow: residency is what made it expensive, not the query.
+     */
     fun getBookmarks(server: Server): Flow<List<BookmarkEntity>> {
         return bookmarkDao.getBookmarksForServer(server.id)
     }
@@ -529,6 +540,61 @@ class BookmarkRepository(
     suspend fun countBookmarksForView(server: Server, filter: FilterConfig): Int =
         bookmarkDao.countBookmarks(buildCountQuery(server.id, filter))
 
+    /** List memberships and read state, grouped — see BookmarkDao.listMembershipGroups. */
+    fun listMembershipGroups(serverId: String): Flow<List<ListMembershipGroup>> =
+        bookmarkDao.listMembershipGroups(serverId)
+
+    /** Tag sets and how many rows carry each. */
+    fun tagGroups(serverId: String): Flow<List<TagGroup>> = bookmarkDao.tagGroups(serverId)
+
+    /** The drawer's quick-filter counts, in one pass over the table. */
+    fun quickFilterCounts(serverId: String): Flow<QuickFilterCountRow> =
+        bookmarkDao.quickFilterCounts(serverId)
+
+    /** Unread rows of one list, for "mark all as read". */
+    suspend fun getUnreadInList(serverId: String, listId: String): List<BookmarkEntity> =
+        bookmarkDao.getUnreadInList(serverId, listId)
+
+    /**
+     * The single row at [index] in [filter]'s view.
+     *
+     * For naming the row the fast-scroll cursor points at, which is a question about one row at a
+     * position — not a reason to hold the view in memory.
+     */
+    suspend fun getBookmarkAt(server: Server, filter: FilterConfig, index: Int): BookmarkEntity? =
+        if (index < 0) null
+        else bookmarkDao.getBookmarksPaged(
+            buildPageQuery(server.id, filter, offset = index, limit = 1)
+        ).firstOrNull()
+
+    /**
+     * Rows of [filter]'s view whose title, URL or description contain [query].
+     *
+     * Matched by the database rather than over a resident copy of the table. One narrowing comes
+     * with that: SQLite folds case for the 26 ASCII letters only, so searching `uber` no longer
+     * matches a title spelled `Über`. Matching in Kotlin folded the whole of Unicode, but it
+     * could only do so with every row in memory, which is what this removes. A stored
+     * case-folded column would restore it without bringing the rows back.
+     */
+    suspend fun searchBookmarks(
+        server: Server,
+        filter: FilterConfig,
+        query: String,
+        limit: Int = SEARCH_RESULT_LIMIT
+    ): List<BookmarkEntity> {
+        if (query.isBlank()) return emptyList()
+        val where = buildViewPredicate(server.id, filter)
+        val match = "(instr(lower(title), lower(?)) > 0 " +
+            "OR instr(lower(url), lower(?)) > 0 " +
+            "OR instr(lower(COALESCE(description, '')), lower(?)) > 0)"
+        val sql = "SELECT $BOOKMARK_SELECT FROM bookmarks " +
+            "WHERE ${where.sql} AND $match " +
+            "ORDER BY ${filter.sort.toOrderBySql()} LIMIT ?"
+        return bookmarkDao.getBookmarksPaged(
+            rawQuery(sql, where.binds + query + query + query + limit.toLong())
+        )
+    }
+
     /** [countBookmarksForView], re-read whenever the table changes. */
     fun countBookmarksForViewFlow(server: Server, filter: FilterConfig): Flow<Int> =
         bookmarkDao.countBookmarksFlow(buildCountQuery(server.id, filter))
@@ -589,6 +655,12 @@ class BookmarkRepository(
          * binds one per id, and selecting a four-thousand-row view is four thousand of them.
          */
         private const val SQLITE_MAX_BIND_ARGS = 900
+
+        /**
+         * How many search hits to read at once. Search is not paged — the results are a list the
+         * user scans rather than a view they live in — so it is bounded instead.
+         */
+        internal const val SEARCH_RESULT_LIMIT = 500
 
         /**
          * Minimum gap between two reading-progress passes triggered by list/filter syncs.

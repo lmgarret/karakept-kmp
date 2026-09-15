@@ -163,7 +163,6 @@ object MainScreen : NavKey {
         // The whole filtered view, not the loaded window: the scroll cursor maps its thumb over
         // this and names the row under it from here.
         val totalBookmarkCount by screenModel.filteredBookmarkCount.collectAsState()
-        val filteredBookmarks by screenModel.filteredBookmarks.collectAsState()
         val highlightsCount by screenModel.highlightsCount.collectAsState()
         val currentListId by screenModel.currentListContext.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
@@ -274,17 +273,9 @@ object MainScreen : NavKey {
             }
         }
 
-        val allBookmarks by screenModel.allBookmarks.collectAsState()
-        val allAvailableTags = remember(allBookmarks) {
-            allBookmarks.flatMap { it.tags.split(",").filter { tag -> tag.isNotBlank() } }.distinct().sortedBy { it.lowercase() }
-        }
-        val topTagsWithCounts = remember(allBookmarks, currentFilter) {
-            val countMap = allBookmarks.flatMap { it.tags.split(",").filter { tag -> tag.isNotBlank() } }.groupingBy { it }.eachCount()
-            val topTagNames = countMap.entries.sortedByDescending { it.value }.take(10).map { it.key }
-            val topTagsFormatted = topTagNames.map { tag -> "$tag (${countMap[tag]})" }
-            val missingActiveTags = currentFilter.tags.filter { it !in topTagNames }.map { tag -> countMap[tag]?.let { "$tag ($it)" } ?: tag }
-            topTagsFormatted + missingActiveTags
-        }
+        // Counted by the database from grouped rows, not by walking the library on every change.
+        val allAvailableTags by screenModel.allAvailableTags.collectAsState()
+        val topTagsWithCounts by screenModel.topTagsWithCounts.collectAsState()
 
         // Swipe action handler shared between modes
         val handleSwipeAction: (com.karakept.app.data.local.entity.BookmarkEntity, SwipeAction, com.karakept.app.data.model.CustomSwipeActionConfig?) -> Unit = { bookmark, action, config ->
@@ -348,7 +339,7 @@ object MainScreen : NavKey {
                     hasMoreItems = hasMoreItems,
                     showScrollCursor = showScrollCursor, sortOption = currentFilter.sort,
                     totalBookmarkCount = totalBookmarkCount,
-                    filteredBookmarks = filteredBookmarks,
+                    bookmarkAtIndex = { screenModel.bookmarkAtIndex(it) },
                     displayConfig = displayConfig,
                     swipeLeftAction = swipeLeftAction, swipeRightAction = swipeRightAction,
                     customSwipeActionConfigs = customSwipeActionConfigs, swipeLeftConfigId = swipeLeftConfigId, swipeRightConfigId = swipeRightConfigId,

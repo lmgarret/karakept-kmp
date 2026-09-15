@@ -1,6 +1,7 @@
 package com.karakept.app.domain
 
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.projection.ListMembershipGroup
 import com.karakept.app.data.model.ListSettings
 import com.karakept.api.model.KarakeepList
 import kotlin.test.Test
@@ -37,6 +38,17 @@ class ListCountUtilsTest {
         )
     }
 
+    /**
+     * The bookmarks as the database hands them over: grouped on `(listIds, isRead)`, which is
+     * all a count reads from them. Every case below is stated in bookmarks and converted here,
+     * so what is asserted is the counting and not the grouping.
+     */
+    private fun groupsOf(bookmarks: List<BookmarkEntity>): List<ListMembershipGroup> =
+        bookmarks
+            .groupingBy { it.listIds to it.isRead }
+            .eachCount()
+            .map { (key, count) -> ListMembershipGroup(key.first, key.second, count) }
+
     private fun list(id: String, parentId: String? = null) =
         KarakeepList(id = id, name = id, icon = "", parentId = parentId)
 
@@ -44,7 +56,7 @@ class ListCountUtilsTest {
     fun countsDirectMembers() {
         val counts = ListCountUtils.countBookmarksPerList(
             lists = listOf(list("a"), list("b")),
-            bookmarks = listOf(bookmark("a"), bookmark("a"), bookmark("b")),
+            groups = groupsOf(listOf(bookmark("a"), bookmark("a"), bookmark("b"))),
             settings = emptyMap()
         )
         assertEquals(mapOf("a" to 2, "b" to 1), counts)
@@ -54,7 +66,7 @@ class ListCountUtilsTest {
     fun countsAListWithNoMembersAsZero() {
         val counts = ListCountUtils.countBookmarksPerList(
             lists = listOf(list("a"), list("empty")),
-            bookmarks = listOf(bookmark("a")),
+            groups = groupsOf(listOf(bookmark("a"))),
             settings = emptyMap()
         )
         assertEquals(0, counts["empty"])
@@ -65,7 +77,7 @@ class ListCountUtilsTest {
         // Spacing and stray separators are what the column actually looks like in the wild.
         val counts = ListCountUtils.countBookmarksPerList(
             lists = listOf(list("a"), list("b"), list("c")),
-            bookmarks = listOf(bookmark("a, b"), bookmark(",c,"), bookmark("")),
+            groups = groupsOf(listOf(bookmark("a, b"), bookmark(",c,"), bookmark(""))),
             settings = emptyMap()
         )
         assertEquals(mapOf("a" to 1, "b" to 1, "c" to 1), counts)
@@ -75,7 +87,7 @@ class ListCountUtilsTest {
     fun excludesNestedListsByDefault() {
         val counts = ListCountUtils.countBookmarksPerList(
             lists = listOf(list("parent"), list("child", parentId = "parent")),
-            bookmarks = listOf(bookmark("parent"), bookmark("child")),
+            groups = groupsOf(listOf(bookmark("parent"), bookmark("child"))),
             settings = emptyMap()
         )
         assertEquals(1, counts["parent"])
@@ -89,7 +101,7 @@ class ListCountUtilsTest {
                 list("child", parentId = "parent"),
                 list("grandchild", parentId = "child")
             ),
-            bookmarks = listOf(bookmark("parent"), bookmark("child"), bookmark("grandchild")),
+            groups = groupsOf(listOf(bookmark("parent"), bookmark("child"), bookmark("grandchild"))),
             settings = mapOf("parent" to ListSettings(includeChildListBookmarks = true))
         )
         assertEquals(3, counts["parent"])
@@ -103,7 +115,7 @@ class ListCountUtilsTest {
                 list("one", parentId = "parent"),
                 list("two", parentId = "parent")
             ),
-            bookmarks = listOf(bookmark("one,two")),
+            groups = groupsOf(listOf(bookmark("one,two"))),
             settings = mapOf("parent" to ListSettings(includeChildListBookmarks = true))
         )
         assertEquals(1, counts["parent"])
@@ -113,7 +125,7 @@ class ListCountUtilsTest {
     fun countsOnlyUnreadWhenConfigured() {
         val counts = ListCountUtils.countBookmarksPerList(
             lists = listOf(list("a")),
-            bookmarks = listOf(bookmark("a"), bookmark("a", isRead = true)),
+            groups = groupsOf(listOf(bookmark("a"), bookmark("a", isRead = true))),
             settings = mapOf("a" to ListSettings(countOnlyUnread = true))
         )
         assertEquals(1, counts["a"])
@@ -123,11 +135,11 @@ class ListCountUtilsTest {
     fun countsOnlyUnreadAcrossNestedLists() {
         val counts = ListCountUtils.countBookmarksPerList(
             lists = listOf(list("parent"), list("child", parentId = "parent")),
-            bookmarks = listOf(
+            groups = groupsOf(listOf(
                 bookmark("parent"),
                 bookmark("child", isRead = true),
                 bookmark("child")
-            ),
+            )),
             settings = mapOf(
                 "parent" to ListSettings(includeChildListBookmarks = true, countOnlyUnread = true)
             )
@@ -139,7 +151,7 @@ class ListCountUtilsTest {
     fun aCycleInTheHierarchyDoesNotHang() {
         val counts = ListCountUtils.countBookmarksPerList(
             lists = listOf(list("a", parentId = "b"), list("b", parentId = "a")),
-            bookmarks = listOf(bookmark("a"), bookmark("b")),
+            groups = groupsOf(listOf(bookmark("a"), bookmark("b"))),
             settings = mapOf("a" to ListSettings(includeChildListBookmarks = true))
         )
         assertEquals(2, counts["a"])
@@ -149,7 +161,11 @@ class ListCountUtilsTest {
     fun noListsMeansNoCounts() {
         assertEquals(
             emptyMap(),
-            ListCountUtils.countBookmarksPerList(emptyList(), listOf(bookmark("a")), emptyMap())
+            ListCountUtils.countBookmarksPerList(
+                emptyList(),
+                groupsOf(listOf(bookmark("a"))),
+                emptyMap()
+            )
         )
     }
 
@@ -187,6 +203,10 @@ class ListCountUtilsTest {
             }
         }
 
-        assertEquals(expected, ListCountUtils.countBookmarksPerList(lists, bookmarks, settings))
+        assertEquals(
+            expected,
+            ListCountUtils.countBookmarksPerList(lists, groupsOf(bookmarks), settings),
+            "grouping the rows first must not change what they count to"
+        )
     }
 }

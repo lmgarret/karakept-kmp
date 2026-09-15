@@ -1,6 +1,6 @@
 package com.karakept.app.domain
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.projection.ListMembershipGroup
 import com.karakept.app.data.model.ListSettings
 import com.karakept.api.model.KarakeepList
 
@@ -10,30 +10,29 @@ import com.karakept.api.model.KarakeepList
 object ListCountUtils {
 
     /**
-     * Counts [bookmarks] into each of [lists], honouring that list's [ListSettings].
+     * Counts [groups] into each of [lists], honouring that list's [ListSettings].
      *
-     * Reads the rows **once**, not once per list. The straightforward nesting — for every list,
-     * walk every bookmark and split its `listIds` to see whether it belongs — re-splits the same
-     * column as many times as there are lists: sixteen lists over four thousand bookmarks is
-     * ~69,000 splits and a quarter of a million allocations to produce sixteen numbers, which
-     * measured at 25-57ms and ran on every database write. Inverted, each row is split once and
-     * dropped into the buckets it names.
+     * [groups] are rows already collapsed by the database on `(listIds, isRead)`, which is the
+     * only thing a count needs from them. Most of a library shares very few distinct
+     * combinations, so this walks buckets rather than bookmarks — and the rows themselves never
+     * have to be in memory, which is what they used to be here for.
      *
      * A list configured with `includeChildListBookmarks` counts its descendants' bookmarks too,
      * and a bookmark filed under two of them counts once — hence the union rather than a sum.
+     * Grouping makes that exact rather than careful: a bucket belonging to both is one bucket.
      */
     fun countBookmarksPerList(
         lists: List<KarakeepList>,
-        bookmarks: List<BookmarkEntity>,
+        groups: List<ListMembershipGroup>,
         settings: Map<String, ListSettings>
     ): Map<String, Int> {
         if (lists.isEmpty()) return emptyMap()
 
-        val membersByList = HashMap<String, MutableList<BookmarkEntity>>()
-        bookmarks.forEach { bookmark ->
-            forEachListId(bookmark.listIds) { listId ->
-                membersByList.getOrPut(listId) { mutableListOf() } += bookmark
-            }
+        // Each bucket is split once, not once per list, and carries how many rows it stands for.
+        val membership = groups.map { group ->
+            val ids = HashSet<String>()
+            forEachListId(group.listIds) { ids += it }
+            Membership(ids, group.isRead, group.rowCount)
         }
 
         return lists.associate { list ->
@@ -45,21 +44,22 @@ object ListCountUtils {
                 setOf(listId)
             }
 
-            val count = if (counted.size == 1) {
-                val members = membersByList[listId].orEmpty()
-                if (listSettings.countOnlyUnread) members.count { !it.isRead } else members.size
-            } else {
-                // One bookmark filed under two counted lists is still one bookmark.
-                val seen = HashSet<String>()
-                counted.sumOf { id ->
-                    membersByList[id].orEmpty().count { bookmark ->
-                        (!listSettings.countOnlyUnread || !bookmark.isRead) && seen.add(bookmark.remoteId)
-                    }
-                }
+            // A bucket is counted once however many of the counted lists it belongs to — the
+            // rows in it are the same rows.
+            val count = membership.sumOf { bucket ->
+                if ((!listSettings.countOnlyUnread || !bucket.isRead) &&
+                    bucket.listIds.any { it in counted }
+                ) bucket.rowCount else 0
             }
             listId to count
         }
     }
+
+    private class Membership(
+        val listIds: Set<String>,
+        val isRead: Boolean,
+        val rowCount: Int
+    )
 
     /**
      * Visits each id in a comma-separated `listIds` column without building the intermediate

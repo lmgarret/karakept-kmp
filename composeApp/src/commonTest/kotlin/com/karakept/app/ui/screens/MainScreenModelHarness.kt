@@ -168,3 +168,38 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
         )
     }
 }
+
+/**
+ * The bookmarks as the database now reports them for counting: grouped, and summed.
+ *
+ * The counts are read from SQL rather than from a resident copy of the table, so a test that
+ * wants to describe a library states it in bookmarks and converts here.
+ */
+internal fun bookmarkRepositoryCountsOf(
+    repository: com.karakept.app.data.repository.BookmarkRepository,
+    bookmarks: List<com.karakept.app.data.local.entity.BookmarkEntity>
+) {
+    io.mockk.every { repository.listMembershipGroups(any()) } returns kotlinx.coroutines.flow.flowOf(
+        bookmarks
+            .filter { it.listIds.isNotEmpty() }
+            .groupingBy { it.listIds to it.isRead }
+            .eachCount()
+            .map { (key, count) ->
+                com.karakept.app.data.local.projection.ListMembershipGroup(key.first, key.second, count)
+            }
+    )
+    io.mockk.every { repository.tagGroups(any()) } returns kotlinx.coroutines.flow.flowOf(
+        bookmarks
+            .filter { it.tags.isNotEmpty() }
+            .groupingBy { it.tags }
+            .eachCount()
+            .map { (tags, count) -> com.karakept.app.data.local.projection.TagGroup(tags, count) }
+    )
+    io.mockk.every { repository.quickFilterCounts(any()) } returns kotlinx.coroutines.flow.flowOf(
+        com.karakept.app.data.local.projection.QuickFilterCountRow(
+            all_ = bookmarks.count { !it.isArchived },
+            favorites = bookmarks.count { it.isStarred && !it.isArchived },
+            archived = bookmarks.count { it.isArchived }
+        )
+    )
+}

@@ -61,10 +61,10 @@ import kotlin.math.min
  * thumb maps linearly over it — over the whole list, not over the pages loaded so far, which
  * grow as the list is scrolled and would walk the thumb back up the track on every load (#273).
  *
- * [filteredBookmarks] is that same list in order, which is what the tooltip names the pointed row
- * from. Naming it out of [bookmarks] instead means naming the last row *loaded* whenever the thumb
- * is past the window — a label that trails the thumb and then ticks forward as reads land, on
- * exactly the gesture whose whole purpose is to answer "where am I".
+ * [bookmarkAtIndex] names the row the thumb points at. The thumb can be over rows the list has
+ * not read, and naming one out of what *is* read means naming the nearest row it happens to have
+ * — a label that trails the thumb, on exactly the gesture whose purpose is to answer "where am
+ * I". One row at a position is a query, so the label asks for it.
  *
  * A drag lands at once. The list holds a slot for every row the view has, so the row the thumb
  * names is one it can already scroll to and the page under it arrives afterwards. This used to be
@@ -77,7 +77,8 @@ fun ScrollCursorIndicator(
     bookmarks: List<BookmarkEntity>,
     sortOption: SortOption,
     totalBookmarkCount: Int = 0,
-    filteredBookmarks: List<BookmarkEntity> = emptyList(),
+    /** The row at an absolute index in the view, for the tooltip's label. */
+    bookmarkAtIndex: suspend (Int) -> BookmarkEntity? = { null },
     modifier: Modifier = Modifier
 ) {
     val total = maxOf(totalBookmarkCount, bookmarks.size)
@@ -99,9 +100,16 @@ fun ScrollCursorIndicator(
 
     val displayFraction = if (isDragging) dragFraction else listScrollFraction
     val pointedIndex = scrollCursorIndex(displayFraction, total)
-    // The loaded rows are the fallback, for the frame before the view resolves; they can only
-    // ever answer for a thumb inside what is loaded.
-    val pointedBookmark = filteredBookmarks.getOrNull(pointedIndex)
+
+    // Read only while the tooltip is up, and re-read as the thumb moves. The rows already on
+    // hand answer without a query whenever the thumb is over them, which is most of the time.
+    val currentBookmarkAtIndex = rememberUpdatedState(bookmarkAtIndex)
+    var namedBookmark by remember { mutableStateOf<BookmarkEntity?>(null) }
+    LaunchedEffect(pointedIndex, isDragging) {
+        if (!isDragging) return@LaunchedEffect
+        namedBookmark = currentBookmarkAtIndex.value(pointedIndex)
+    }
+    val pointedBookmark = namedBookmark
         ?: bookmarks.getOrNull(pointedIndex.coerceAtMost(bookmarks.size - 1))
     val label = scrollCursorLabel(pointedBookmark, sortOption)
 

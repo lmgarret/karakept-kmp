@@ -60,6 +60,7 @@ import com.karakept.app.domain.action.TagFilterRequests
 import com.karakept.app.domain.BookmarkFilterUtils
 import com.karakept.app.domain.DefaultFilterResolver
 import com.karakept.app.domain.ListCountUtils
+import com.karakept.app.domain.TagCountUtils
 import com.karakept.app.domain.ListHierarchyUtils
 
 data class QuickFilterCounts(
@@ -290,32 +291,48 @@ class MainScreenModel(
             com.karakept.app.data.model.SyncProgress.Idle
         )
 
-    // All bookmarks without filtering — for tag extraction and list counts.
-    // Uses SharingStarted.WhileSubscribed so Room observers are released when
-    // no collectors are active (e.g. app in background).
-    val allBookmarks = selectedServer
+    /** Tag sets and their row counts, for the tag picker and the drawer's top tags. */
+    private val tagGroups = selectedServer
         .flatMapLatest { server ->
-            if (server != null) bookmarkRepository.getBookmarks(server) else flowOf(emptyList())
+            if (server != null) bookmarkRepository.tagGroups(server.id) else flowOf(emptyList())
         }
-        .onEach { PerfTrace.count("allBookmarks.emit", "rows=${it.size}") }
+
+    /** Every tag in use, for the tag editor's suggestions. */
+    val allAvailableTags: StateFlow<List<String>> = tagGroups
+        .map { TagCountUtils.allTags(it) }
+        .flowOn(appDispatchers.default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** The drawer's most-used tags, with whatever the filter is currently on kept visible. */
+    val topTagsWithCounts: StateFlow<List<String>> =
+        combine(tagGroups, _currentFilter) { groups, filter ->
+            TagCountUtils.topTagsWithCounts(groups, filter.tags)
+        }
+            .flowOn(appDispatchers.default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Rows collapsed to what the drawer's counts need: memberships and read state. */
+    private val listMembershipGroups = selectedServer
+        .flatMapLatest { server ->
+            if (server != null) bookmarkRepository.listMembershipGroups(server.id)
+            else flowOf(emptyList())
+        }
 
     /**
      * Bookmark counts per list, for the drawer.
      *
-     * Runs off the main thread: it walks the whole table, and every database write re-emits
-     * [allBookmarks] — during a scroll that is roughly once a second, and on the UI thread it
-     * cost 25-57ms a time, which is two to four dropped frames each.
+     * Counted from buckets the database groups, not from the rows. It used to walk the whole
+     * table on every database write — roughly once a second during a scroll — which cost 25-57ms
+     * a time on the main thread, two to four dropped frames each. Off the main thread still,
+     * because the bucketing is the model's own work.
      */
     val listCounts: StateFlow<Map<String, Int>> = combine(
-        selectedServer,
+        listMembershipGroups,
         lists,
-        allBookmarks,
         settingsRepository.allListSettings
-    ) { server, listItems, bookmarks, allSettings ->
-        if (server == null) return@combine emptyMap()
-        PerfTrace.measure("listCounts", "lists=${listItems.size} rows=${bookmarks.size}") {
-            ListCountUtils.countBookmarksPerList(listItems, bookmarks, allSettings)
+    ) { groups, listItems, allSettings ->
+        PerfTrace.measure("listCounts", "lists=${listItems.size} groups=${groups.size}") {
+            ListCountUtils.countBookmarksPerList(listItems, groups, allSettings)
         }
     }
         .flowOn(appDispatchers.default)
@@ -353,43 +370,40 @@ class MainScreenModel(
         }
     }
 
-    val quickFilterCounts: StateFlow<QuickFilterCounts> = combine(
-        selectedServer, allBookmarks, offlineBookmarkCount
-    ) { server, bookmarks, offline ->
-        if (server == null) return@combine QuickFilterCounts()
-        PerfTrace.measure("quickFilterCounts", "rows=${bookmarks.size}") {
-            QuickFilterCounts(
-                all = bookmarks.count { !it.isArchived },
-                favorites = bookmarks.count { it.isStarred && !it.isArchived },
-                archived = bookmarks.count { it.isArchived },
-                offline = offline
-            )
+    /**
+     * The drawer's quick-filter counts, read in one pass over the table rather than counted over
+     * every row of it in memory.
+     */
+    val quickFilterCounts: StateFlow<QuickFilterCounts> = selectedServer
+        .flatMapLatest { server ->
+            if (server == null) flowOf(QuickFilterCounts())
+            else combine(
+                bookmarkRepository.quickFilterCounts(server.id),
+                offlineBookmarkCount
+            ) { counts, offline ->
+                QuickFilterCounts(
+                    all = counts.all_,
+                    favorites = counts.favorites,
+                    archived = counts.archived,
+                    offline = offline
+                )
+            }
         }
-    }
-        .flowOn(appDispatchers.default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
 
     /**
-     * Every bookmark the current view holds, in the order the paged query returns them — the list
-     * the loaded window is a prefix of.
+     * Names the row at [index] in the view on screen, for the fast-scroll cursor's tooltip.
      *
-     * The fast-scroll cursor needs to name the row at an absolute position the moment the thumb
-     * reaches it, and the window cannot: the row is usually hundreds of pages past what has been
-     * read, so the tooltip fell back to naming the last row it *had*, which trails the thumb and
-     * ticks forward as reads land. These rows are already resident — [allBookmarks] is read for
-     * the counts regardless — so the answer costs a filter and a sort rather than a query.
-     *
-     * Off the main thread, for the same reason the counts are (#273).
+     * One row, read at its position. The tooltip has to answer "where am I" for a thumb that can
+     * be anywhere, including over rows the list has not read — and the old answer was to keep the
+     * whole view ordered in memory so any index could be looked up. A row is a query.
      */
-    val filteredBookmarks: StateFlow<List<BookmarkEntity>> = combine(
-        allBookmarks, effectiveFilter
-    ) { all, filter ->
-        PerfTrace.measure("filteredBookmarks", "rows=${all.size}") {
-            BookmarkFilterUtils.orderedViewFor(all, filter)
-        }
+    suspend fun bookmarkAtIndex(index: Int): BookmarkEntity? {
+        val server = _selectedServer.value ?: return null
+        return runCatching {
+            bookmarkRepository.getBookmarkAt(server, effectiveFilterNow(), index)
+        }.getOrNull()
     }
-        .flowOn(appDispatchers.default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
      * How many bookmarks the current view holds — the list's total, and the denominator the
@@ -560,16 +574,27 @@ class MainScreenModel(
     }
 
     /**
-     * Search results, which are not a paged view: the query is matched in memory over the whole
-     * table, so every row it admits is on hand at once.
+     * Search results, which are not a paged view: they are a bounded list the user scans, so
+     * every row is on hand at once.
+     *
+     * Matched by the database. It used to be matched in Kotlin over a resident copy of the whole
+     * table, which is the copy this work removes; see BookmarkRepository.searchBookmarks for the
+     * one narrowing that comes with the move.
      */
     private fun searchWindow(query: String): Flow<BookmarkWindow> =
-        combine(allBookmarks, effectiveFilter) { all, filter ->
-            val matches = PerfTrace.measure("applySearchFilter", "rows=${all.size}") {
-                BookmarkFilterUtils.applySearchFilter(all, filter, query)
+        combine(_selectedServer, effectiveFilter) { server, filter -> server?.let { it to filter } }
+            .flatMapLatest { request ->
+                if (request == null) return@flatMapLatest flowOf(BookmarkWindow.EMPTY)
+                val (server, filter) = request
+                // Re-run when the table changes, so a row edited while a search is on screen
+                // updates there too.
+                bookmarkRepository.countBookmarksForViewFlow(server, filter).mapLatest {
+                    val matches = PerfTrace.measureSuspending("searchBookmarks", "q=${query.length}") {
+                        bookmarkRepository.searchBookmarks(server, filter, query)
+                    }
+                    BookmarkWindow.dense(matches, pageSize = pageSize)
+                }
             }
-            BookmarkWindow.dense(matches, pageSize = pageSize)
-        }
 
     /**
      * The rows the list currently has, for the callers that want rows rather than slots — the

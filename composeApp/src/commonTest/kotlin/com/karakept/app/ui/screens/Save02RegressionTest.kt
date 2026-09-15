@@ -93,6 +93,7 @@ class Save02RegressionTest {
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+        bookmarkRepositoryCountsOf(bookmarkRepository, emptyList())
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
         every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
@@ -191,6 +192,7 @@ class Save02RegressionTest {
         } returns fakeBookmarks
 
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(fakeBookmarks)
+        bookmarkRepositoryCountsOf(bookmarkRepository, fakeBookmarks)
 
         val model = createMainScreenModel()
         val job = launch { model.quickFilterCounts.collect {} }
