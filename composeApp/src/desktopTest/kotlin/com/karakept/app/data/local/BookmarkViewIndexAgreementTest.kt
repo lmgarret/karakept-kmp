@@ -276,6 +276,50 @@ class BookmarkViewIndexAgreementTest {
     }
 
     /**
+     * The property the virtualized list rests on: the page at offset *n* holds the view's rows
+     * from *n* onward.
+     *
+     * This is only true because the whole view is one `WHERE`. While four of its clauses were
+     * applied in Kotlin after the read, a SQL offset counted rows the view did not contain, so a
+     * read had to over-fetch and estimate how many the Kotlin side would discard.
+     */
+    @Test
+    fun `a page read at an offset returns the view's rows from that offset`() = runBlocking {
+        val pageSize = 20
+        val filters = listOf(
+            FilterConfig(),
+            FilterConfig(sort = SortOption.TITLE_AZ),
+            FilterConfig(tags = listOf("kotlin")),
+            FilterConfig(readFilter = ReadFilter.UNREAD),
+            FilterConfig(status = FilterStatus.ALL_INCLUDING_ARCHIVED, lists = listOf("list-a")),
+            FilterConfig(contentFilter = ContentFilter.DOWNLOADED, sort = SortOption.OLDEST)
+        )
+        for (filter in filters) {
+            val whole = pagedView(filter)
+            assertTrue(whole.size > pageSize, "filter=$filter: need more than one page to prove it")
+
+            for (offset in listOf(0, 1, pageSize - 1, pageSize, pageSize + 3, whole.size - 1)) {
+                val page = db.bookmarkDao().getBookmarksPaged(
+                    BookmarkRepository.buildPageQuery(serverId, filter, offset, pageSize)
+                )
+                assertEquals(
+                    whole.subList(offset, minOf(offset + pageSize, whole.size)),
+                    page,
+                    "filter=$filter: the page at offset $offset must be the view from $offset"
+                )
+            }
+
+            // And the pages tile the view exactly — no gap, no overlap.
+            val tiled = (0 until whole.size step pageSize).flatMap { offset ->
+                db.bookmarkDao().getBookmarksPaged(
+                    BookmarkRepository.buildPageQuery(serverId, filter, offset, pageSize)
+                )
+            }
+            assertEquals(whole, tiled, "filter=$filter: pages must tile the view")
+        }
+    }
+
+    /**
      * The one view that cannot be indexed from memory.
      *
      * `FilterStatus.OFFLINE` selects on a non-empty `content` column, and every query behind an

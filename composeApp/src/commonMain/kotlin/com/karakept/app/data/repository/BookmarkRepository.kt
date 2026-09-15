@@ -533,6 +533,28 @@ class BookmarkRepository(
     fun countBookmarksForViewFlow(server: Server, filter: FilterConfig): Flow<Int> =
         bookmarkDao.countBookmarksFlow(buildCountQuery(server.id, filter))
 
+    /**
+     * The [limit] rows of [filter]'s view starting at [offset] — a page named by its position.
+     *
+     * Addressed by offset rather than by cursor because the list addresses rows by index: it
+     * renders the view's whole length and asks for the page under the viewport, which may be
+     * anywhere. A cursor names a position by the row at it, which is what a walk needs and what a
+     * jump does not have.
+     *
+     * The drift that made OFFSET unusable for the walk (#333) needed a position *accumulated* by
+     * that walk: a row committed above it shifted every page below, and a forward-only walk never
+     * came back for what the shift displaced. Nothing accumulates here. Each read states the
+     * offset it wants, and every write re-reads the pages on screen, so a row committed above
+     * them moves the rows down and the next read reports them where they now are.
+     */
+    suspend fun getBookmarkPage(
+        server: Server,
+        filter: FilterConfig,
+        offset: Int,
+        limit: Int
+    ): List<BookmarkEntity> =
+        bookmarkDao.getBookmarksPaged(buildPageQuery(server.id, filter, offset, limit))
+
     companion object {
         /**
          * Minimum gap between two reading-progress passes triggered by list/filter syncs.
@@ -655,6 +677,20 @@ class BookmarkRepository(
             }
 
             return SqlPredicate(conditions.joinToString(" AND "), binds)
+        }
+
+        /** The page of [filter]'s view at [offset], addressed by position. */
+        internal fun buildPageQuery(
+            serverId: String,
+            filter: FilterConfig,
+            offset: Int,
+            limit: Int
+        ): RoomRawQuery {
+            val where = buildViewPredicate(serverId, filter)
+            val sql = "SELECT $BOOKMARK_SELECT FROM bookmarks " +
+                "WHERE ${where.sql} " +
+                "ORDER BY ${filter.sort.toOrderBySql()} LIMIT ? OFFSET ?"
+            return rawQuery(sql, where.binds + limit.toLong() + offset.toLong())
         }
 
         /** How many rows [filter] admits — the view's size, without reading any of it. */
