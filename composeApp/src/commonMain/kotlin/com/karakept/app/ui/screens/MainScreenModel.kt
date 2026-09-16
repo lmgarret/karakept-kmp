@@ -30,6 +30,7 @@ import com.karakept.app.data.repository.setDefaultListId
 import com.karakept.api.model.KarakeepList as KarakeepList
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -50,6 +51,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformLatest
+import kotlinx.coroutines.flow.withIndex
 import kotlin.time.ExperimentalTime
 import kotlin.time.TimeSource
 import kotlinx.coroutines.launch
@@ -567,6 +570,10 @@ class MainScreenModel(
                 var countReported = false
                 var rowsReported = false
 
+                // What the view already holds, so a scroll re-reads nothing. Per request: a
+                // switch arrives as a new inner flow and starts with nothing in hand.
+                val cache = BookmarkPageCache()
+
                 bookmarkRepository.countBookmarksForViewFlow(server, filter)
                     .onEach { total ->
                         if (!countReported) {
@@ -578,8 +585,13 @@ class MainScreenModel(
                             )
                         }
                     }
-                    .combine(visiblePages) { total, pages -> total to pages }
-                    .mapLatest { (total, pages) -> readWindow(server, filter, total, pages) }
+                    // Indexed, not de-duplicated: Room emits once per invalidation whether or not
+                    // the count moved, and the index is what tells the cache a write happened.
+                    .withIndex()
+                    .combine(visiblePages) { counted, pages -> counted to pages }
+                    .transformLatest { (counted, pages) ->
+                        readWindow(server, filter, counted.value, counted.index, pages, cache)
+                    }
                     .onEach { window ->
                         if (!rowsReported) {
                             rowsReported = true
@@ -591,6 +603,10 @@ class MainScreenModel(
                             )
                         }
                     }
+                    // A re-read that produced the same rows is not news. Sync invalidates the
+                    // table continuously, and without this every one of those re-reads costs a
+                    // publish and a recomposition to say nothing changed.
+                    .distinctUntilChanged()
                     .catch { e ->
                         AppLogger.e("MainScreenModel", "Failed to read bookmarks: ${e.message}", e)
                         emit(BookmarkWindow.EMPTY)
@@ -598,25 +614,72 @@ class MainScreenModel(
             }
             .combine(_bookmarkListVersion) { window, version -> window.copy(generation = version) }
 
-    /** Reads the pages [pageSpan] touches, plus [pageMargin] either side. */
-    private suspend fun readWindow(
+    /**
+     * Emits the pages [pageSpan] touches, then those plus [pageMargin] either side.
+     *
+     * Two emissions rather than one because they answer different questions. The pages under the
+     * viewport are what the user is waiting for; the margin pages are what a scroll will want
+     * next, and holding the first back until the second has been read makes a view switch cost
+     * every page in the span when only one of them is being looked at. The margin pass is skipped
+     * when there is nothing outside the viewport left to read, so the ordinary case stays a
+     * single publish.
+     *
+     * Only pages [cache] does not already hold are read. On a scroll that is the page just
+     * uncovered; on a write to the table it is all of them, because a write can change any row.
+     */
+    private suspend fun FlowCollector<BookmarkWindow>.readWindow(
         server: Server,
         filter: FilterConfig,
         total: Int,
-        pageSpan: IntRange
-    ): BookmarkWindow {
+        revision: Int,
+        pageSpan: IntRange,
+        cache: BookmarkPageCache
+    ) {
         // Resolved: the database has answered, so an empty view here means an empty view.
         val shape = BookmarkWindow(viewTotal = total, pageSize = pageSize, resolved = true)
-        if (total <= 0) return shape
+        if (total <= 0) {
+            cache.store(revision, emptyMap())
+            emit(shape)
+            return
+        }
         val lastPage = (total - 1) / pageSize
-        val first = (pageSpan.first - pageMargin).coerceIn(0, lastPage)
-        val last = (pageSpan.last + pageMargin).coerceIn(0, lastPage)
-        val pages = PerfTrace.measureSuspending("window.readPages", "pages=${last - first + 1}") {
-            (first..last).associateWith { page ->
-                bookmarkRepository.getBookmarkPage(server, filter, page * pageSize, pageSize)
+        val core = pageSpan.first.coerceIn(0, lastPage)..pageSpan.last.coerceIn(0, lastPage)
+        val span = (core.first - pageMargin).coerceAtLeast(0)..
+            (core.last + pageMargin).coerceAtMost(lastPage)
+
+        val pages = cache.held(revision, span).toMutableMap()
+        val marginsPending = span.any { it !in core && it !in pages }
+
+        readMissing(server, filter, pages, core)
+        if (marginsPending) {
+            cache.store(revision, pages.toMap())
+            emit(shape.copy(pages = pages.toMap()))
+        }
+        readMissing(server, filter, pages, span)
+        cache.store(revision, pages.toMap())
+        emit(shape.copy(pages = pages.toMap()))
+    }
+
+    /** Reads whichever pages of [range] are not in [pages] yet, into [pages]. */
+    private suspend fun readMissing(
+        server: Server,
+        filter: FilterConfig,
+        pages: MutableMap<Int, List<BookmarkEntity>>,
+        range: IntRange
+    ) {
+        val missing = range.filterNot { it in pages }
+        if (missing.isEmpty()) return
+        val reused = (range.count() - missing.size)
+        PerfTrace.measureSuspending("window.readPages", "read=${missing.size} reused=$reused") {
+            missing.forEach { page ->
+                pages[page] = bookmarkRepository.getBookmarkPage(
+                    server,
+                    filter,
+                    page * pageSize,
+                    pageSize
+                )
             }
         }
-        return shape.copy(pages = pages)
     }
 
     /**
