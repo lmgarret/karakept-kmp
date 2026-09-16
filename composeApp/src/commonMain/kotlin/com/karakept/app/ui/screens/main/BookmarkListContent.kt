@@ -100,7 +100,6 @@ import com.karakept.app.ui.utils.tiledTurnAdjustment
 import com.karakept.app.ui.utils.trailingPagePaddingFor
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
 import com.karakept.app.utils.FileUtils
-import com.karakept.app.utils.TraceFramesAfterChange
 import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.utils.AssetUrlUtils
 import com.karakept.app.utils.fileExists
@@ -222,9 +221,6 @@ internal fun BookmarkListContent(
             .debounce(400)
             .collect { ids -> if (ids.isNotEmpty()) currentOnBookmarksVisible.value(ids) }
     }
-
-    // What a window publish costs Compose, which no measurement around the publish itself can see.
-    TraceFramesAfterChange("listPublish", window, "rows=${window.loadedCount}/${window.total}")
 
     val einkMode = LocalEinkMode.current
     // Holding every row to one height changes how the list looks while scrolling, not just where a

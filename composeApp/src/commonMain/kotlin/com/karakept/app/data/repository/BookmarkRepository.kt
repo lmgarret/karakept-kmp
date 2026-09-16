@@ -24,7 +24,6 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppLogger
-import com.karakept.app.utils.PerfTrace
 import com.karakept.app.utils.ReadingTimeCalculator
 import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.utils.AppDispatchers
@@ -608,12 +607,7 @@ class BookmarkRepository(
         before: BookmarkCursor,
         excludeRead: Boolean = false
     ): Int =
-        // A COUNT over the view's predicate, which is the same scan the list's total does — and
-        // unlike that one it is a plain suspend call, so this is the query's own cost with none
-        // of Room's flow scheduling folded in.
-        PerfTrace.measureSuspending("db.countBefore") {
-            bookmarkDao.countBookmarks(buildCountBeforeQuery(server.id, filter, before, excludeRead))
-        }
+        bookmarkDao.countBookmarks(buildCountBeforeQuery(server.id, filter, before, excludeRead))
 
     /** [countBookmarksForView], re-read whenever the table changes. */
     fun countBookmarksForViewFlow(server: Server, filter: FilterConfig): Flow<Int> =
@@ -659,11 +653,7 @@ class BookmarkRepository(
         offset: Int,
         limit: Int
     ): List<BookmarkEntity> =
-        // One page read, timed on its own: `window.readPages` covers however many a switch asks
-        // for, and what an index would change is the cost of one.
-        PerfTrace.measureSuspending("db.pageQuery", "offset=$offset") {
-            bookmarkDao.getBookmarksPaged(buildPageQuery(server.id, filter, offset, limit))
-        }
+        bookmarkDao.getBookmarksPaged(buildPageQuery(server.id, filter, offset, limit))
 
     companion object {
         /**

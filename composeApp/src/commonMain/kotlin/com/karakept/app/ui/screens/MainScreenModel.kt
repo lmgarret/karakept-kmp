@@ -2,7 +2,6 @@ package com.karakept.app.ui.screens
 
 import androidx.lifecycle.ViewModel
 import com.karakept.app.utils.AppLogger
-import com.karakept.app.utils.PerfTrace
 import androidx.lifecycle.viewModelScope
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.RowActionMode
@@ -49,12 +48,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.withIndex
-import kotlin.time.ExperimentalTime
-import kotlin.time.TimeSource
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -335,9 +331,7 @@ class MainScreenModel(
         lists,
         settingsRepository.allListSettings
     ) { groups, listItems, allSettings ->
-        PerfTrace.measure("listCounts", "lists=${listItems.size} groups=${groups.size}") {
-            ListCountUtils.countBookmarksPerList(listItems, groups, allSettings)
-        }
+        ListCountUtils.countBookmarksPerList(listItems, groups, allSettings)
     }
         .flowOn(appDispatchers.default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
@@ -541,7 +535,6 @@ class MainScreenModel(
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, BookmarkWindow.EMPTY)
 
-    @OptIn(ExperimentalTime::class)
     private fun pagedWindow(): Flow<BookmarkWindow> =
         combine(_selectedServer, effectiveFilter) { server, filter -> server?.let { it to filter } }
             .flatMapLatest { request ->
@@ -555,53 +548,17 @@ class MainScreenModel(
                     .map { (it.first / pageSize)..(it.last / pageSize) }
                     .distinctUntilChanged()
 
-                // How long a view switch takes, split where the cost could be.
-                //
-                // The count and the pages are one chain: the pages cannot be read until the
-                // count has emitted, so switching costs the count *plus* the pages rather than
-                // the larger of the two. Whether a junction table would help turns on which of
-                // those two numbers dominates, and no amount of reasoning about the SQL settles
-                // it — an unindexed COUNT and an unindexed page read are the same shape of scan.
-                //
-                // Timed from the switch rather than around the query, because the query is a
-                // Room flow: what a user waits for is the answer arriving, which includes
-                // whatever Room spent scheduling it.
-                val switchedAt = TimeSource.Monotonic.markNow()
-                var countReported = false
-                var rowsReported = false
-
                 // What the view already holds, so a scroll re-reads nothing. Per request: a
                 // switch arrives as a new inner flow and starts with nothing in hand.
                 val cache = BookmarkPageCache()
 
                 bookmarkRepository.countBookmarksForViewFlow(server, filter)
-                    .onEach { total ->
-                        if (!countReported) {
-                            countReported = true
-                            PerfTrace.report(
-                                "viewSwitch.count",
-                                switchedAt.elapsedNow().inWholeMilliseconds,
-                                "rows=$total"
-                            )
-                        }
-                    }
                     // Indexed, not de-duplicated: Room emits once per invalidation whether or not
                     // the count moved, and the index is what tells the cache a write happened.
                     .withIndex()
                     .combine(visiblePages) { counted, pages -> counted to pages }
                     .transformLatest { (counted, pages) ->
                         readWindow(server, filter, counted.value, counted.index, pages, cache)
-                    }
-                    .onEach { window ->
-                        if (!rowsReported) {
-                            rowsReported = true
-                            // The whole wait. Subtract viewSwitch.count for the pages' share.
-                            PerfTrace.report(
-                                "viewSwitch.firstRows",
-                                switchedAt.elapsedNow().inWholeMilliseconds,
-                                "loaded=${window.loadedCount}/${window.total}"
-                            )
-                        }
                     }
                     // A re-read that produced the same rows is not news. Sync invalidates the
                     // table continuously, and without this every one of those re-reads costs a
@@ -667,18 +624,13 @@ class MainScreenModel(
         pages: MutableMap<Int, List<BookmarkEntity>>,
         range: IntRange
     ) {
-        val missing = range.filterNot { it in pages }
-        if (missing.isEmpty()) return
-        val reused = (range.count() - missing.size)
-        PerfTrace.measureSuspending("window.readPages", "read=${missing.size} reused=$reused") {
-            missing.forEach { page ->
-                pages[page] = bookmarkRepository.getBookmarkPage(
-                    server,
-                    filter,
-                    page * pageSize,
-                    pageSize
-                )
-            }
+        range.filterNot { it in pages }.forEach { page ->
+            pages[page] = bookmarkRepository.getBookmarkPage(
+                server,
+                filter,
+                page * pageSize,
+                pageSize
+            )
         }
     }
 
@@ -698,9 +650,7 @@ class MainScreenModel(
                 // Re-run when the table changes, so a row edited while a search is on screen
                 // updates there too.
                 bookmarkRepository.countBookmarksForViewFlow(server, filter).mapLatest {
-                    val matches = PerfTrace.measureSuspending("searchBookmarks", "q=${query.length}") {
-                        bookmarkRepository.searchBookmarks(server, filter, query)
-                    }
+                    val matches = bookmarkRepository.searchBookmarks(server, filter, query)
                     BookmarkWindow.dense(matches, pageSize = pageSize)
                 }
             }
@@ -1034,7 +984,6 @@ class MainScreenModel(
     fun onBookmarksVisible(remoteIds: List<String>) {
         val server = _selectedServer.value ?: return
         if (remoteIds.isEmpty()) return
-        PerfTrace.count("visibleRows.progressPull", "rows=${remoteIds.size}")
         viewModelScope.launch {
             try {
                 bookmarkRepository.pullReadingProgressForVisible(server.id, remoteIds)
