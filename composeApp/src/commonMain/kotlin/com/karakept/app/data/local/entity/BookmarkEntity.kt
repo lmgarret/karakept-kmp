@@ -8,7 +8,12 @@ import androidx.compose.runtime.Immutable
 @Immutable
 @Entity(
     tableName = "bookmarks",
-    indices = [Index(value = ["remoteId", "serverId"], unique = true)]
+    indices = [
+        Index(value = ["remoteId", "serverId"], unique = true),
+        // The offline view: which rows have an article body, in the default sort. See
+        // [OFFLINE_PREDICATE] for why the view cannot ask about [content] itself.
+        Index(value = ["serverId", "hasContent", "createdAt", "localId"]),
+    ]
 )
 data class BookmarkEntity(
     @PrimaryKey(autoGenerate = true) val localId: Long = 0,
@@ -19,6 +24,11 @@ data class BookmarkEntity(
     val url: String,
     val title: String,
     val content: String?,
+    // Whether [content] holds an article body, so the offline view can be answered without
+    // reading one. Defaulted from [content], so constructing a bookmark cannot get it wrong;
+    // the one place that writes [content] without rebuilding the row is
+    // BookmarkDao.updateBookmarkContent, which sets both.
+    val hasContent: Boolean = !content.isNullOrEmpty(),
     val imageUrl: String?,
     val bannerImageAssetId: String?,
     val screenshotAssetId: String?,
@@ -42,3 +52,14 @@ data class BookmarkEntity(
     val summary: String? = null,
     val summarizationStatus: String? = null // "success" | "failure" | "pending"
 )
+
+/**
+ * What the offline view selects.
+ *
+ * Not a test on [BookmarkEntity.content]: that column holds the whole article, and SQLite has to
+ * load a value to compare it — `length(content) > 0` also decodes the UTF-8 to count characters.
+ * Counting the offline view that way read every article body in the table, which measured 523ms
+ * against 861 rows on a real library while the 4280-row archive counted in 15ms. Asking a boolean
+ * column with an index over it is 0.1ms.
+ */
+const val OFFLINE_PREDICATE = "hasContent = 1"

@@ -5,7 +5,7 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import com.karakept.app.data.local.entity.PendingActionType
-import com.karakept.app.data.local.migrations.ALL_MIGRATIONS
+import com.karakept.app.data.local.migrations.withAppSchema
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -309,7 +309,7 @@ class Migration12To13Test {
 
     private fun openMigrated(): AppDatabase =
         Room.databaseBuilder<AppDatabase>(name = dbPath)
-            .addMigrations(*ALL_MIGRATIONS)
+            .withAppSchema()
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)
             .build()

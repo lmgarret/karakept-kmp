@@ -5,6 +5,7 @@ import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.OFFLINE_PREDICATE
 import com.karakept.app.data.local.projection.ListMembershipGroup
 import com.karakept.app.data.local.projection.QuickFilterCountRow
 import com.karakept.app.data.local.projection.TagGroup
@@ -767,8 +768,7 @@ class BookmarkRepository(
                     FilterStatus.ALL_INCLUDING_ARCHIVED -> Unit
                     FilterStatus.FAVORITES -> conditions += "isStarred = 1"
                     FilterStatus.ARCHIVED -> conditions += "isArchived = 1"
-                    FilterStatus.OFFLINE ->
-                        conditions += "content IS NOT NULL AND length(content) > 0"
+                    FilterStatus.OFFLINE -> conditions += OFFLINE_PREDICATE
                 }
                 if (filter.lists.isNotEmpty()) {
                     // Several lists select a row that is in any of them.

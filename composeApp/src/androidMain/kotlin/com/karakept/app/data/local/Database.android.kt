@@ -3,7 +3,7 @@ package com.karakept.app.data.local
 import android.content.Context
 import androidx.room3.Room
 import androidx.room3.RoomDatabase
-import com.karakept.app.data.local.migrations.ALL_MIGRATIONS
+import com.karakept.app.data.local.migrations.withAppSchema
 
 // We need to pass context somehow. For now, let's assume we can inject it or access it via a singleton/provider.
 // A common pattern in KMP is to pass the context to the Koin module or a factory.
@@ -64,6 +64,6 @@ actual fun getDatabaseBuilder(): RoomDatabase.Builder<AppDatabase> {
         context = ctx,
         name = dbFile.absolutePath
     )
-        .addMigrations(*ALL_MIGRATIONS)
+        .withAppSchema()
         .fallbackToDestructiveMigration(true)
 }

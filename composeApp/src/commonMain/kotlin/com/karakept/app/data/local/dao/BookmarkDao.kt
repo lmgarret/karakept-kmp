@@ -10,6 +10,7 @@ import androidx.room3.RoomRawQuery
 import androidx.room3.RoomWarnings
 import androidx.room3.Update
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.OFFLINE_PREDICATE
 import com.karakept.app.data.local.projection.ListMembershipGroup
 import com.karakept.app.data.local.projection.QuickFilterCountRow
 import com.karakept.app.data.local.projection.TagGroup
@@ -64,7 +65,10 @@ interface BookmarkDao {
     @Query("DELETE FROM bookmarks WHERE serverId = :serverId")
     suspend fun deleteAllBookmarksForServer(serverId: String)
 
-    @Query("UPDATE bookmarks SET content = :content, readingTimeMinutes = :readingTime WHERE localId = :localId")
+    @Query(
+        "UPDATE bookmarks SET content = :content, readingTimeMinutes = :readingTime, " +
+            "hasContent = (:content IS NOT NULL AND :content <> '') WHERE localId = :localId"
+    )
     suspend fun updateContent(localId: Long, content: String, readingTime: Int)
 
     @Query("""
@@ -338,23 +342,21 @@ interface BookmarkDao {
     @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND isArchived = 0")
     suspend fun getNotArchivedCount(serverId: String): Int
 
-    @Query("""
-        SELECT localId, remoteId, serverId, title, url,
-               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
-               modifiedAt, progressSyncedAt,
-               '' as content
-        FROM bookmarks
-        WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0
-        ORDER BY createdAt DESC
-    """)
+    @Query(
+        "SELECT localId, remoteId, serverId, title, url, description, imageUrl, " +
+            "bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived, " +
+            "isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, " +
+            "readingScrollOffset, modifiedAt, progressSyncedAt, '' as content " +
+            "FROM bookmarks WHERE serverId = :serverId AND " + OFFLINE_PREDICATE +
+            " ORDER BY createdAt DESC"
+    )
     @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     suspend fun getAllOfflineForServer(serverId: String): List<BookmarkEntity>
 
-    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0")
+    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND " + OFFLINE_PREDICATE)
     fun getOfflineCountFlow(serverId: String): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0")
+    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND " + OFFLINE_PREDICATE)
     suspend fun getOfflineCount(serverId: String): Int
 
     // Query for sync that includes content length and reading time to determine if content exists
@@ -363,7 +365,7 @@ interface BookmarkDao {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               CASE WHEN length(content) > 0 THEN 'HAS_CONTENT' ELSE '' END as content
+               CASE WHEN hasContent = 1 THEN 'HAS_CONTENT' ELSE '' END as content
         FROM bookmarks
         WHERE serverId = :serverId
     """)

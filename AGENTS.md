@@ -756,8 +756,9 @@ Settings category classes: `StoredThemeSettings`, `StoredDisplaySettings`, `Stor
 2. Create DAO in `data/local/dao/[Name]Dao.kt`.
 3. Add entity to `AppDatabase.kt` entities list and bump the schema version.
 4. Write migration `data/local/migrations/Migration[N]To[N+1].kt`.
-5. Add the migration to `ALL_MIGRATIONS` (`data/local/migrations/AppMigrations.kt`) — both platform
-   builders read that one array, so a migration left out of it is a silent destructive wipe.
+5. Add the migration to `ALL_MIGRATIONS` (`data/local/migrations/AppMigrations.kt`). Every builder
+   applies it through `withAppSchema()` — both platforms and the tests that open a real file — so
+   a migration left out of that one array is a silent destructive wipe.
 
 ---
 
