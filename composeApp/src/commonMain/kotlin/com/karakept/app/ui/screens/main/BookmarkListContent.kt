@@ -231,8 +231,8 @@ internal fun BookmarkListContent(
     // The gate compares the rows themselves — it is asking whether this is the same list
     // shifted or a different list entirely, which only the rows can answer.
     val loadedRows = remember(window) { window.loadedRows() }
-    val animationGate = remember { ItemAnimationGate(loadedRows) }
-    val animateItems = animationGate.update(loadedRows) && !einkMode.animationsDisabled
+    val animationGate = remember { ItemAnimationGate(window) }
+    val animateItems = animationGate.update(window) && !einkMode.animationsDisabled
 
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember {
@@ -956,26 +956,38 @@ internal fun BookmarkListContent(
  * Plain fields rather than snapshot state: updating them must not invalidate the composition
  * that is reading them.
  */
-internal class ItemAnimationGate(initial: List<BookmarkEntity>) {
+internal class ItemAnimationGate(initial: BookmarkWindow) {
     private var previous = initial
+    private var previousRows = initial.loadedRows()
     private var enabled = true
 
-    fun update(bookmarks: List<BookmarkEntity>): Boolean {
-        if (bookmarks === previous) return enabled
-        val previousIds = previous.mapTo(HashSet(previous.size)) { it.remoteId }
-        val survivors = bookmarks.count { it.remoteId in previousIds }
+    fun update(window: BookmarkWindow): Boolean {
+        if (window === previous) return enabled
+        val previousIds = previousRows.mapTo(HashSet(previousRows.size)) { it.remoteId }
+        val rows = window.loadedRows()
+        val survivors = rows.count { it.remoteId in previousIds }
         // Half of the shorter list surviving still reads as "the same list, changed".
-        val sameList = previous.isEmpty() || bookmarks.isEmpty() ||
-            survivors * 2 >= minOf(previous.size, bookmarks.size)
-        enabled = sameList && !isPrepend(bookmarks)
-        previous = bookmarks
+        val sameList = previousRows.isEmpty() || rows.isEmpty() ||
+            survivors * 2 >= minOf(previousRows.size, rows.size)
+        enabled = sameList && !isPrepend(window)
+        previous = window
+        previousRows = rows
         return enabled
     }
 
-    /** True when rows were inserted above the row that used to be first. */
-    private fun isPrepend(bookmarks: List<BookmarkEntity>): Boolean {
-        val previousFirstId = previous.firstOrNull()?.remoteId ?: return false
-        return bookmarks.indexOfFirst { it.remoteId == previousFirstId } > 0
+    /**
+     * True when rows were inserted above the row that used to be first.
+     *
+     * Asked of slots rather than of the loaded rows. Those are the window compacted, and they
+     * slide as the user scrolls — so the row that was at their head lands further down them on
+     * every scroll back up, which read as a prepend and switched the animations off. A slot is a
+     * position in the view: it only moves when something really was inserted above it.
+     */
+    private fun isPrepend(window: BookmarkWindow): Boolean {
+        val previousFirstId = previousRows.firstOrNull()?.remoteId ?: return false
+        val was = previous.indexOfRemoteId(previousFirstId)
+        val now = window.indexOfRemoteId(previousFirstId)
+        return was >= 0 && now > was
     }
 }
 

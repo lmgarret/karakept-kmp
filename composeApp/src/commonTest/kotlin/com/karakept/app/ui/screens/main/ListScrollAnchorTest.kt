@@ -41,7 +41,7 @@ class ListScrollAnchorTest {
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 5,
-            newBookmarks = listOfIds(1, 2, 3)
+            window = viewWindow(listOfIds(1, 2, 3))
         )
         assertNull(result)
     }
@@ -54,7 +54,7 @@ class ListScrollAnchorTest {
             isScrolling = true,
             versionChanged = false,
             currentFirstIndex = 5,
-            newBookmarks = listOfIds(1, 10, 2)
+            window = viewWindow(listOfIds(1, 10, 2))
         )
         assertNull(result)
     }
@@ -69,7 +69,7 @@ class ListScrollAnchorTest {
             isScrolling = false,
             versionChanged = true,
             currentFirstIndex = 30,
-            newBookmarks = newList
+            window = viewWindow(newList)
         )
         assertNull(result)
     }
@@ -82,7 +82,7 @@ class ListScrollAnchorTest {
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 3,
-            newBookmarks = listOfIds(1, 2, 3, 4)
+            window = viewWindow(listOfIds(1, 2, 3, 4))
         )
         assertNull(result)
     }
@@ -96,7 +96,7 @@ class ListScrollAnchorTest {
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 0,
-            newBookmarks = newList
+            window = viewWindow(newList)
         )
         assertNull(result)
     }
@@ -113,7 +113,7 @@ class ListScrollAnchorTest {
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 30,
-            newBookmarks = newList
+            window = viewWindow(newList)
         )
         assertEquals(anchorNewIndex, result)
         assertEquals(29, result)
@@ -128,7 +128,7 @@ class ListScrollAnchorTest {
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 30,
-            newBookmarks = newList
+            window = viewWindow(newList)
         )
         assertEquals(27, result)
     }
@@ -142,18 +142,31 @@ class ListScrollAnchorTest {
             isScrolling = false,
             versionChanged = false,
             currentFirstIndex = 0,
-            newBookmarks = newList
+            window = viewWindow(newList)
         )
         assertNull(result)
     }
 
+    /**
+     * The window a view of [bookmarks] produces, with its generation tied to [listVersion].
+     *
+     * They are the same number in production — the model stamps the list version onto the window
+     * it publishes — and the anchor uses the pair to tell a reload from a surgical change.
+     */
     private fun snapshot(
         bookmarks: List<BookmarkEntity>,
         firstIndex: Int = 0,
         firstOffset: Int = 0,
         isScrolling: Boolean = false,
-        listVersion: Int = 0
-    ) = AnchorSnapshot(bookmarks, firstIndex, firstOffset, isScrolling, listVersion)
+        listVersion: Int = 0,
+        loadedPages: Set<Int>? = null
+    ) = AnchorSnapshot(
+        viewWindow(bookmarks, generation = listVersion, loadedPages = loadedPages),
+        firstIndex,
+        firstOffset,
+        isScrolling,
+        listVersion
+    )
 
     @Test
     fun reloadAnnouncedBeforeDatasetArrives_doesNotRePinToThePreviousListsAnchor() {
@@ -253,5 +266,57 @@ class ListScrollAnchorTest {
 
         val other = listOfIds(50, 51, 52)
         assertNull(anchor.onSnapshot(snapshot(other, firstIndex = 0, listVersion = 1)))
+    }
+
+    @Test
+    fun deepInASparseView_theAnchorIsTheRowAtThatSlot() {
+        // The rows in hand are a few pages of a long view, so slot 260 is somewhere in the
+        // middle of them and not their 260th entry — of which there is none. Read out of the
+        // rows this returned null, and the viewport went unanchored for the whole list.
+        val view = listOfIds(*(1L..400L).toList().toLongArray())
+        val anchor = ListScrollAnchorState(initialVersion = 0)
+        anchor.onSnapshot(
+            snapshot(view, firstIndex = 260, firstOffset = 7, loadedPages = setOf(4, 5, 6))
+        )
+
+        // A row above the viewport is removed: everything below it moves up one slot.
+        val afterRemoval = view.filterNot { it.remoteId == "orig-3" }
+        assertEquals(
+            AnchorScrollTarget(index = 259, offset = 7),
+            anchor.onSnapshot(
+                snapshot(afterRemoval, firstIndex = 260, loadedPages = setOf(4, 5, 6))
+            )
+        )
+    }
+
+    @Test
+    fun aRePinTargetIsASlot_notAPositionAmongTheRowsInHand() {
+        // The whole failure in one assertion: found among the rows in hand, the anchor's
+        // position is bounded by how many are loaded, so re-pinning to it could only ever land
+        // the user back near the top of the view.
+        val view = listOfIds(*(1L..400L).toList().toLongArray())
+        val loaded = setOf(4, 5, 6)
+        val target = resolveAnchorScrollTarget(
+            anchorKey = "orig-261",
+            isScrolling = false,
+            versionChanged = false,
+            currentFirstIndex = 999,
+            window = viewWindow(view, loadedPages = loaded)
+        )
+        assertEquals(260, target)
+    }
+
+    @Test
+    fun aPageBeingDroppedIsNotAMutation() {
+        // A sync invalidates every page on every write, so the window is rebuilt constantly.
+        // None of that moves a row: re-pinning on it fought the user's own scrolling.
+        val view = listOfIds(*(1L..400L).toList().toLongArray())
+        val anchor = ListScrollAnchorState(initialVersion = 0)
+        anchor.onSnapshot(snapshot(view, firstIndex = 260, loadedPages = setOf(4, 5, 6)))
+
+        assertNull(anchor.onSnapshot(snapshot(view, firstIndex = 260, loadedPages = setOf(5))))
+        assertNull(
+            anchor.onSnapshot(snapshot(view, firstIndex = 260, loadedPages = setOf(4, 5, 6)))
+        )
     }
 }

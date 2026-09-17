@@ -44,5 +44,20 @@ internal class BookmarkPageCache {
     fun store(revision: Int, read: Map<Int, List<BookmarkEntity>>) {
         this.revision = revision
         pages = read
+        if (read.isNotEmpty()) primed = true
     }
+
+    /**
+     * Whether this view has ever put rows on screen.
+     *
+     * The span is read in two passes so a view switch does not wait for pages nobody is looking
+     * at, and that is only ever an improvement while the screen is empty. On a re-read it is the
+     * opposite: publishing the viewport's pages alone takes the margin pages *away* from a list
+     * that already had them, and any of them on screen — a scroll the read has not caught up
+     * with — blinks back to a skeleton. A write to the table invalidates every page, so with a
+     * sync running that is continuous.
+     */
+    fun isPrimed(): Boolean = primed
+
+    private var primed = false
 }

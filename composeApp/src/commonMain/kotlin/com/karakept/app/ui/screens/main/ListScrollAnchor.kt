@@ -5,11 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkWindow
 
 /**
- * Keeps the viewport pinned to the same bookmark when [bookmarks] mutates beneath
- * the user.
+ * Keeps the viewport pinned to the same bookmark when the view mutates beneath the user.
  *
  * Concretely: after a quick action adds a bookmark to a list that the current smart
  * list excludes (e.g. adding a Feeds bookmark to Read Later), an asynchronous
@@ -30,17 +29,17 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 @Composable
 internal fun PreserveListScrollAnchor(
     listState: LazyListState,
-    bookmarks: List<BookmarkEntity>,
+    window: BookmarkWindow,
     bookmarkListVersion: Int
 ) {
-    val currentBookmarks = rememberUpdatedState(bookmarks)
+    val currentWindow = rememberUpdatedState(window)
     val currentVersion = rememberUpdatedState(bookmarkListVersion)
     LaunchedEffect(listState) {
         val anchor = ListScrollAnchorState(initialVersion = currentVersion.value)
 
         snapshotFlow {
             AnchorSnapshot(
-                bookmarks = currentBookmarks.value,
+                window = currentWindow.value,
                 firstIndex = listState.firstVisibleItemIndex,
                 firstOffset = listState.firstVisibleItemScrollOffset,
                 isScrolling = listState.isScrollInProgress,
@@ -56,7 +55,16 @@ internal fun PreserveListScrollAnchor(
 }
 
 internal data class AnchorSnapshot(
-    val bookmarks: List<BookmarkEntity>,
+    /**
+     * The view as the list renders it, so a slot here is the slot the layout reports.
+     *
+     * Not the loaded rows: those are the window compacted — a hundred-odd entries sliding along
+     * a view thousands long — while [firstIndex] comes from the layout. Reading the anchor out
+     * of them by [firstIndex] named the wrong row, and re-pinning to a position found in them
+     * could only ever land inside the first screenfuls, which is how scrolling down came to
+     * throw the user back towards the top.
+     */
+    val window: BookmarkWindow,
     val firstIndex: Int,
     val firstOffset: Int,
     val isScrolling: Boolean,
@@ -73,7 +81,7 @@ internal class ListScrollAnchorState(initialVersion: Int) {
     private var anchorKey: String? = null
     private var anchorOffset = 0
     private var anchorAtTop = false
-    private var lastList: List<BookmarkEntity>? = null
+    private var lastWindow: BookmarkWindow? = null
     private var lastVersion = initialVersion
 
     // A full reload bumps the version *and* swaps the dataset, but the two reach the UI
@@ -87,12 +95,18 @@ internal class ListScrollAnchorState(initialVersion: Int) {
         if (snap.listVersion != lastVersion) reloadPending = true
         lastVersion = snap.listVersion
 
-        val listChanged = lastList != null && snap.bookmarks !== lastList
-        lastList = snap.bookmarks
+        // What can move a row, and nothing else. Pages loading and being dropped change the
+        // window constantly — a sync invalidates every one of them on each write — but a slot is
+        // a position in the view, so none of that re-indexes anything. Reference inequality
+        // counted all of it as a mutation.
+        val previous = lastWindow
+        val listChanged = previous != null &&
+            (snap.window.total != previous.total || snap.window.generation != previous.generation)
+        lastWindow = snap.window
 
         if (!listChanged) {
-            // List is stable: record the bookmark currently at the top of the viewport.
-            anchorKey = snap.bookmarks.getOrNull(snap.firstIndex)?.remoteId
+            // View is stable: record the bookmark currently at the top of the viewport.
+            anchorKey = snap.window.bookmarkAt(snap.firstIndex)?.remoteId
             anchorOffset = snap.firstOffset
             anchorAtTop = snap.firstIndex == 0 && snap.firstOffset == 0
             return null
@@ -112,7 +126,7 @@ internal class ListScrollAnchorState(initialVersion: Int) {
             isScrolling = snap.isScrolling,
             versionChanged = reloadPending,
             currentFirstIndex = snap.firstIndex,
-            newBookmarks = snap.bookmarks
+            window = snap.window
         )
         reloadPending = false
         return target?.let { AnchorScrollTarget(it, anchorOffset) }
@@ -127,7 +141,7 @@ internal class ListScrollAnchorState(initialVersion: Int) {
  *  - no anchor recorded yet, or
  *  - the user is actively scrolling (don't fight the gesture), or
  *  - the list version changed — a full reload that wants its own scroll behaviour, or
- *  - the anchor bookmark is gone (it was the removed one), or
+ *  - the anchor bookmark is gone, or its page is no longer loaded, or
  *  - the anchor is already the first visible item (Compose handled it / nothing moved).
  */
 internal fun resolveAnchorScrollTarget(
@@ -135,10 +149,11 @@ internal fun resolveAnchorScrollTarget(
     isScrolling: Boolean,
     versionChanged: Boolean,
     currentFirstIndex: Int,
-    newBookmarks: List<BookmarkEntity>
+    window: BookmarkWindow
 ): Int? {
     if (anchorKey == null || isScrolling || versionChanged) return null
-    val newIndex = newBookmarks.indexOfFirst { it.remoteId == anchorKey }
+    // A slot, so it is comparable with the layout's index and usable as a scroll target.
+    val newIndex = window.indexOfRemoteId(anchorKey)
     if (newIndex < 0 || newIndex == currentFirstIndex) return null
     return newIndex
 }

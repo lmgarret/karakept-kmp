@@ -107,6 +107,20 @@ data class BookmarkWindow(
         return -1
     }
 
+    /**
+     * The ids of the rows between slots [from] and [to], either order, both ends included.
+     *
+     * Slots the window has not read are skipped rather than waited for. A shift-click range runs
+     * between two rows the user can see, and the window always holds the viewport's pages and one
+     * either side, so the rows in between are loaded by construction.
+     */
+    fun remoteIdsInSlots(from: Int, to: Int): Set<String> {
+        val start = minOf(from, to).coerceAtLeast(0)
+        val end = maxOf(from, to).coerceAtMost(total - 1)
+        if (start > end) return emptySet()
+        return (start..end).mapNotNullTo(mutableSetOf()) { bookmarkAt(it)?.remoteId }
+    }
+
     /** Every loaded row, in view order — for the callers that want the rows and not the slots. */
     fun loadedRows(): List<BookmarkEntity> =
         prepended + pages.entries.sortedBy { it.key }.flatMap { it.value }

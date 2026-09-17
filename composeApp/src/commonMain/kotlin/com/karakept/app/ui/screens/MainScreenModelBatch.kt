@@ -20,7 +20,12 @@ import com.karakept.app.data.repository.batchDelete
 import com.karakept.app.data.repository.batchUpdateTags
 import com.karakept.app.data.repository.batchMoveToList
 
-/** Track the last clicked bookmark index (call on every normal click). */
+/**
+ * Track the last clicked bookmark's **slot** (call on every normal click).
+ *
+ * A slot, because that is what the list hands back from a shift-click, and a range runs between
+ * the two. The loaded rows are the window compacted and cannot name a position in the view.
+ */
 fun MainScreenModel.trackLastClickedIndex(index: Int) {
     _lastSelectedIndex = index
 }
@@ -28,7 +33,7 @@ fun MainScreenModel.trackLastClickedIndex(index: Int) {
 fun MainScreenModel.enterSelectionMode(bookmark: BookmarkEntity) {
     _selectedViaSelectAll.value = false
     _selectedBookmarkIds.value = setOf(bookmark.remoteId)
-    _lastSelectedIndex = bookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+    _lastSelectedIndex = bookmarkWindow.value.indexOfRemoteId(bookmark.remoteId)
 }
 
 /**
@@ -38,15 +43,12 @@ fun MainScreenModel.enterSelectionMode(bookmark: BookmarkEntity) {
  */
 fun MainScreenModel.enterSelectionModeWithRange(toIndex: Int) {
     _selectedViaSelectAll.value = false
-    val list = bookmarks.value
-    val anchor = _lastSelectedIndex.takeIf { it >= 0 && it <= list.lastIndex }
+    val window = bookmarkWindow.value
+    val anchor = _lastSelectedIndex.takeIf { it in 0 until window.total }
     if (anchor != null) {
-        val start = minOf(anchor, toIndex)
-        val end = minOf(maxOf(anchor, toIndex), list.lastIndex)
-        val rangeIds = (start..end).map { list[it].remoteId }.toSet()
-        _selectedBookmarkIds.value = rangeIds
+        _selectedBookmarkIds.value = window.remoteIdsInSlots(anchor, toIndex)
     } else {
-        val bookmark = list.getOrNull(toIndex) ?: return
+        val bookmark = window.bookmarkAt(toIndex) ?: return
         _selectedBookmarkIds.value = setOf(bookmark.remoteId)
     }
     _lastSelectedIndex = toIndex
@@ -60,7 +62,7 @@ fun MainScreenModel.toggleBookmarkSelection(bookmark: BookmarkEntity) {
     } else {
         current + bookmark.remoteId
     }
-    _lastSelectedIndex = bookmarks.value.indexOfFirst { it.remoteId == bookmark.remoteId }
+    _lastSelectedIndex = bookmarkWindow.value.indexOfRemoteId(bookmark.remoteId)
 }
 
 /**
@@ -70,11 +72,8 @@ fun MainScreenModel.toggleBookmarkSelection(bookmark: BookmarkEntity) {
 fun MainScreenModel.selectRange(toIndex: Int) {
     _selectedViaSelectAll.value = false
     val fromIndex = _lastSelectedIndex.takeIf { it >= 0 } ?: return
-    val list = bookmarks.value
-    val start = minOf(fromIndex, toIndex)
-    val end = minOf(maxOf(fromIndex, toIndex), list.lastIndex)
-    val rangeIds = (start..end).map { list[it].remoteId }.toSet()
-    _selectedBookmarkIds.value = _selectedBookmarkIds.value + rangeIds
+    _selectedBookmarkIds.value =
+        _selectedBookmarkIds.value + bookmarkWindow.value.remoteIdsInSlots(fromIndex, toIndex)
     _lastSelectedIndex = toIndex
 }
 

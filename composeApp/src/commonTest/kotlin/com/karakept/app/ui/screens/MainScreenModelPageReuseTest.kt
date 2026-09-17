@@ -170,4 +170,38 @@ class MainScreenModelPageReuseTest {
         )
         job.cancel()
     }
+
+    @Test
+    fun `a re-read never publishes fewer rows than the list already had`() =
+        runTest(testDispatcher) {
+            // The viewport's pages are published before the margins so a view switch does not
+            // wait on pages nobody is looking at. On a re-read that is the opposite of a
+            // favour: the margins are already on screen, and a window without them blinks them
+            // back to skeletons. A sync writes to the table continuously, so it blinked
+            // continuously.
+            val rows = (1L..500L).map { bookmark(it) }
+            harness.publish(rows)
+            val model = harness.createModel()
+
+            val settled = mutableListOf<Int>()
+            val job = launch {
+                model.bookmarkWindow.collect { if (it.resolved) settled += it.loadedCount }
+            }
+            advanceUntilIdle()
+
+            val onScreen = model.bookmarkWindow.value.loadedCount
+            assertTrue(onScreen > pageSize, "the margin page is loaded to begin with")
+            settled.clear()
+
+            // A row edited without the count moving — the shape every sync write takes.
+            harness.publish((1L..500L).map { bookmark(it, isRead = it == 1L) })
+            advanceUntilIdle()
+
+            assertTrue(settled.isNotEmpty(), "the write reached the screen")
+            assertTrue(
+                settled.all { it >= onScreen },
+                "a re-read dipped to $settled from $onScreen — those rows are on screen"
+            )
+            job.cancel()
+        }
 }

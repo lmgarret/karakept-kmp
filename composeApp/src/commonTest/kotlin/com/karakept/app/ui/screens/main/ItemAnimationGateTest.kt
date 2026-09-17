@@ -38,35 +38,35 @@ class ItemAnimationGateTest {
     fun switchingToAnUnrelatedList_disablesAnimations() {
         val listA = listOfIds(1L..20L)
         val listB = listOfIds(100L..119L)
-        val gate = ItemAnimationGate(listA)
+        val gate = ItemAnimationGate(viewWindow(listA))
 
-        assertFalse(gate.update(listB))
+        assertFalse(gate.update(viewWindow(listB)))
     }
 
     @Test
-    fun sameListInstance_keepsThePreviousDecision() {
+    fun sameWindowInstance_keepsThePreviousDecision() {
         val listA = listOfIds(1L..20L)
-        val listB = listOfIds(100L..119L)
-        val gate = ItemAnimationGate(listA)
+        val windowB = viewWindow(listOfIds(100L..119L))
+        val gate = ItemAnimationGate(viewWindow(listA))
 
-        assertFalse(gate.update(listB))
-        assertFalse(gate.update(listB))
+        assertFalse(gate.update(windowB))
+        assertFalse(gate.update(windowB))
     }
 
     @Test
     fun loadMoreAppend_keepsAnimations() {
         val page0 = listOfIds(1L..20L)
-        val gate = ItemAnimationGate(page0)
+        val gate = ItemAnimationGate(viewWindow(page0))
 
-        assertTrue(gate.update(listOfIds(1L..40L)))
+        assertTrue(gate.update(viewWindow(listOfIds(1L..40L))))
     }
 
     @Test
     fun reconciliationRemoval_keepsAnimations() {
         val loaded = listOfIds(1L..20L)
-        val gate = ItemAnimationGate(loaded)
+        val gate = ItemAnimationGate(viewWindow(loaded))
 
-        assertTrue(gate.update(listOfIds((1L..20L).filter { it != 7L })))
+        assertTrue(gate.update(viewWindow(listOfIds((1L..20L).filter { it != 7L }))))
     }
 
     @Test
@@ -75,66 +75,66 @@ class ItemAnimationGateTest {
         // for a user who has not scrolled — animating that springs the whole visible list down
         // from the top edge, which reads as the order shuffling and settling back.
         val loaded = listOfIds(1L..20L)
-        val gate = ItemAnimationGate(loaded)
+        val gate = ItemAnimationGate(viewWindow(loaded))
 
-        assertFalse(gate.update(listOfIds(90L..94L) + loaded))
+        assertFalse(gate.update(viewWindow(listOfIds(90L..94L) + loaded)))
     }
 
     @Test
     fun repeatedSyncPrepends_stayDisabled() {
         // A sync commits page by page, so prepends keep landing while the user watches.
         var current = listOfIds(1L..20L)
-        val gate = ItemAnimationGate(current)
+        val gate = ItemAnimationGate(viewWindow(current))
 
         repeat(3) { round ->
             current = listOfIds(listOf(90L + round)) + current
-            assertFalse(gate.update(current))
+            assertFalse(gate.update(viewWindow(current)))
         }
     }
 
     @Test
     fun gateRecoversAfterAPrepend() {
         val loaded = listOfIds(1L..20L)
-        val gate = ItemAnimationGate(loaded)
-        assertFalse(gate.update(listOfIds(90L..94L) + loaded))
+        val gate = ItemAnimationGate(viewWindow(loaded))
+        assertFalse(gate.update(viewWindow(listOfIds(90L..94L) + loaded)))
 
         // A later removal within the same list animates again.
-        assertTrue(gate.update(listOfIds(90L..94L) + listOfIds((1L..20L).filter { it != 7L })))
+        assertTrue(gate.update(viewWindow(listOfIds(90L..94L) + listOfIds((1L..20L).filter { it != 7L }))))
     }
 
     @Test
     fun removalAtTheHead_keepsAnimations() {
         // The previously-first row is gone rather than displaced — nothing shifts down.
         val loaded = listOfIds(1L..20L)
-        val gate = ItemAnimationGate(loaded)
+        val gate = ItemAnimationGate(viewWindow(loaded))
 
-        assertTrue(gate.update(listOfIds(2L..20L)))
+        assertTrue(gate.update(viewWindow(listOfIds(2L..20L))))
     }
 
     @Test
     fun firstLoadIntoAnEmptyList_keepsAnimations() {
-        val gate = ItemAnimationGate(emptyList())
+        val gate = ItemAnimationGate(viewWindow(emptyList()))
 
-        assertTrue(gate.update(listOfIds(1L..20L)))
+        assertTrue(gate.update(viewWindow(listOfIds(1L..20L))))
     }
 
     @Test
     fun switchingToAnEmptyList_keepsAnimations() {
         // Nothing is drawn over anything when the incoming list is empty.
-        val gate = ItemAnimationGate(listOfIds(1L..20L))
+        val gate = ItemAnimationGate(viewWindow(listOfIds(1L..20L)))
 
-        assertTrue(gate.update(emptyList()))
+        assertTrue(gate.update(viewWindow(emptyList())))
     }
 
     @Test
     fun gateRecoversAfterASwap() {
         val listA = listOfIds(1L..20L)
         val listB = listOfIds(100L..119L)
-        val gate = ItemAnimationGate(listA)
+        val gate = ItemAnimationGate(viewWindow(listA))
 
-        assertFalse(gate.update(listB))
+        assertFalse(gate.update(viewWindow(listB)))
         // A surgical change within list B animates again.
-        assertTrue(gate.update(listOfIds((100L..119L).filter { it != 105L })))
+        assertTrue(gate.update(viewWindow(listOfIds((100L..119L).filter { it != 105L }))))
     }
 
     @Test
@@ -143,8 +143,31 @@ class ItemAnimationGateTest {
         // of items — that is still a swap, not a surgical change.
         val listA = listOfIds(1L..20L)
         val listB = listOfIds(listOf(3L, 11L) + (100L..117L))
-        val gate = ItemAnimationGate(listA)
+        val gate = ItemAnimationGate(viewWindow(listA))
 
-        assertFalse(gate.update(listB))
+        assertFalse(gate.update(viewWindow(listB)))
+    }
+
+    @Test
+    fun scrollingBackUpThroughASparseView_isNotAPrepend() {
+        // The window slides as the user scrolls, so the row at the head of the rows in hand is a
+        // different row each time. Asked of those rows, scrolling back up put the previous head
+        // further down the list and read as an insertion above it — which switched the item
+        // animations off for the rest of the session. Asked of slots, nothing moved.
+        val view = listOfIds(1L..400L)
+        val gate = ItemAnimationGate(viewWindow(view, loadedPages = setOf(2, 3, 4)))
+
+        assertTrue(gate.update(viewWindow(view, loadedPages = setOf(1, 2, 3))))
+        assertTrue(gate.update(viewWindow(view, loadedPages = setOf(0, 1, 2))))
+    }
+
+    @Test
+    fun aPrependIntoASparseView_isStillAPrepend() {
+        val view = listOfIds(1L..400L)
+        val gate = ItemAnimationGate(viewWindow(view, loadedPages = setOf(0, 1)))
+
+        assertFalse(
+            gate.update(viewWindow(listOfIds(900L..904L) + view, loadedPages = setOf(0, 1)))
+        )
     }
 }

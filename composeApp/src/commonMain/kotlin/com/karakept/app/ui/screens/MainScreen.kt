@@ -253,12 +253,13 @@ object MainScreen : NavKey {
         // the user (e.g. a bookmark removed by smart-list reconciliation after a quick
         // action), so the list doesn't jump.
         com.karakept.app.ui.screens.main.PreserveListScrollAnchor(
-            listState = listState, bookmarks = bookmarks, bookmarkListVersion = bookmarkListVersion
+            listState = listState, window = bookmarkWindow,
+            bookmarkListVersion = bookmarkListVersion
         )
 
         // Scroll-triggered action
         MainScreenScrollAction(
-            listState = listState, bookmarks = bookmarks,
+            listState = listState, window = bookmarkWindow,
             currentListId = currentListId,
             currentListScrollAction = currentListScrollAction, currentListScrollActionConfig = currentListScrollActionConfig,
             screenModel = screenModel
@@ -409,7 +410,7 @@ object MainScreen : NavKey {
                     listSyncStatuses = listSyncStatuses,
                     scaffoldContent = { isExpanded ->
                         scaffoldContent(isExpanded, selectedBookmarkId, { bookmark ->
-                            val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
+                            val idx = bookmarkWindow.indexOfRemoteId(bookmark.remoteId)
                             if (idx >= 0) screenModel.trackLastClickedIndex(idx)
                             selectedBookmarkId = bookmark.localId; scrollToHighlightId = null; activeHighlightId = null
                         }, { isDrawerVisible = !isDrawerVisible })
@@ -465,7 +466,7 @@ object MainScreen : NavKey {
                         )
                     } else {
                         scaffoldContent(false, null, { bookmark ->
-                            val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
+                            val idx = bookmarkWindow.indexOfRemoteId(bookmark.remoteId)
                             if (idx >= 0) screenModel.trackLastClickedIndex(idx)
                             navigator.push(
                                 BookmarkViewerScreen(

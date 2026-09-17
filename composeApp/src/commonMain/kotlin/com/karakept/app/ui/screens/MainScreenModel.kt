@@ -574,12 +574,12 @@ class MainScreenModel(
     /**
      * Emits the pages [pageSpan] touches, then those plus [pageMargin] either side.
      *
-     * Two emissions rather than one because they answer different questions. The pages under the
-     * viewport are what the user is waiting for; the margin pages are what a scroll will want
-     * next, and holding the first back until the second has been read makes a view switch cost
-     * every page in the span when only one of them is being looked at. The margin pass is skipped
-     * when there is nothing outside the viewport left to read, so the ordinary case stays a
-     * single publish.
+     * Two emissions rather than one **on a first load only**. The pages under the viewport are
+     * what the user is waiting for; the margin pages are what a scroll will want next, and
+     * holding the first back until the second has been read makes a view switch cost every page
+     * in the span when only one of them is being looked at. Once the view has rows on screen the
+     * split stops paying: the viewport's pages are fewer rows than the list already holds, so
+     * publishing them on their own takes the margins away and blinks them back to skeletons.
      *
      * Only pages [cache] does not already hold are read. On a scroll that is the page just
      * uncovered; on a write to the table it is all of them, because a write can change any row.
@@ -605,7 +605,9 @@ class MainScreenModel(
             (core.last + pageMargin).coerceAtMost(lastPage)
 
         val pages = cache.held(revision, span).toMutableMap()
-        val marginsPending = span.any { it !in core && it !in pages }
+        // Only while the screen is still empty. On a re-read the viewport's pages alone are
+        // fewer rows than the list already has, so publishing them first blanks the margins.
+        val marginsPending = !cache.isPrimed() && span.any { it !in core && it !in pages }
 
         readMissing(server, filter, pages, core)
         if (marginsPending) {
