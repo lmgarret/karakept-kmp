@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -21,6 +22,8 @@ import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.ThumbnailSide
 import com.karakept.app.data.model.TitlePosition
 import com.karakept.app.data.model.UrlPosition
+import com.karakept.app.ui.theme.EinkMode
+import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.utils.BookmarkRowMetrics
 import kotlin.math.abs
 import kotlin.test.Test
@@ -170,13 +173,20 @@ class BookmarkRowTilingTest {
     }
 
     /** What the skeleton really measures, in pixels, for one layout. */
-    private fun measureSkeleton(layout: BookmarkLayout): Float {
+    private fun measureSkeleton(layout: BookmarkLayout, eink: Boolean = false): Float {
         var measured = 0f
         runComposeUiTest {
         var densityScale = 1f
         setContent {
             MaterialTheme {
                 densityScale = LocalDensity.current.density
+                CompositionLocalProvider(
+                    LocalEinkMode provides EinkMode(
+                        enabled = eink,
+                        animationsDisabled = eink,
+                        highContrast = eink
+                    )
+                ) {
                 Box(modifier = Modifier.width(rowWidth)) {
                     BookmarkRowSkeleton(
                         metrics = metricsFor(layout),
@@ -186,6 +196,7 @@ class BookmarkRowTilingTest {
                         showRowDivider = layout.showRowDivider,
                         modifier = Modifier.testTag(SKELETON_TAG)
                     )
+                }
                 }
             }
         }
@@ -291,6 +302,29 @@ class BookmarkRowTilingTest {
         val m = metricsOf(layout)
         assertTrue(m.tagsPx > 0f, "${layout.name} shows tags but declares no tag row")
         assertTrue(m.metadataLinePx > 0f, "${layout.name} shows a date but declares no trailing row")
+    }
+
+    /**
+     * On e-ink a row that has not arrived draws nothing — but it still holds the row's space.
+     *
+     * The space is the part that matters: rows below a placeholder move the moment the real one
+     * lands if the two are different heights, and a paged screen only tiles exactly when every
+     * row is the same height. So the blank version has to measure the same as the drawn one.
+     */
+    @Test
+    fun `an e-ink placeholder holds the same space as the one it replaces`() {
+        BookmarkLayout.ALL_BUILTIN
+            .filter { LayoutType.fromString(it.layoutType) != LayoutType.CARD }
+            .forEach { layout ->
+                val drawn = measureSkeleton(layout)
+                val blank = measureSkeleton(layout, eink = true)
+                assertEquals(
+                    drawn,
+                    blank,
+                    absoluteTolerance = 1f,
+                    message = "${layout.name}: blank ${blank}px against drawn ${drawn}px"
+                )
+            }
     }
 
     /** [metricsFor] hoisted out of a composition, so a test can read all of it. */

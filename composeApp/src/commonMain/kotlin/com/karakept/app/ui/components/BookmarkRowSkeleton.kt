@@ -55,6 +55,14 @@ import com.karakept.app.ui.utils.BookmarkRowMetrics
  * Each bar is inked to a fraction of the space the row gives that element, the rest standing for
  * the leading a line of text carries. Bars drawn at the full line height leave nothing between
  * them and run together into a slab.
+ *
+ * **On e-ink it draws nothing at all** — the row's space and nothing in it. Every other skeleton
+ * in the app swaps itself for [LoadingDotsIndicator] there, but a list has one placeholder per
+ * unloaded row rather than one per screen, and the answer that works for a single loading block
+ * does not: a screenful of dots is a screenful of animations, and a screenful of bars is a
+ * screenful of ink laid down only to be erased a moment later, which is what ghosts. Holding the
+ * space keeps the rows below from moving as the real ones land — and on a paged screen it is what
+ * keeps a page a whole number of rows.
  */
 @Composable
 internal fun BookmarkRowSkeleton(
@@ -67,30 +75,42 @@ internal fun BookmarkRowSkeleton(
     fixedRowHeight: Dp? = null
 ) {
     val einkMode = LocalEinkMode.current
-    // A screenful of skeletons is a screenful of animations, which on e-ink is the worst case
-    // there is — so the bars simply sit still. They are the same bars either way: what a panel
-    // that ghosts cannot have is the shimmer moving across them.
-    val barColor = if (einkMode.animationsDisabled) {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-    } else {
-        val transition = rememberInfiniteTransition(label = "row_skeleton")
-        val alpha by transition.animateFloat(
-            initialValue = 0.2f,
-            targetValue = 0.7f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(900, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "row_skeleton_alpha"
-        )
-        MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.2f)
-    }
 
     val density = LocalDensity.current
     // Named apart from Density.toDp so the call inside resolves to that one and not to this.
     fun Float.asDp(): Dp = with(density) { toDp() }
 
     val isFlat = itemContainerStyle == ItemContainerStyle.FLAT
+
+    if (einkMode.enabled) {
+        // The row's space, kept, with nothing drawn in it. Gated on the master switch rather than
+        // on `animationsDisabled`: what makes a placeholder wrong here is the ink, not the motion,
+        // so it holds however the display sub-toggles are left.
+        BookmarkRowContainer(
+            isFlat = isFlat,
+            showDivider = showRowDivider,
+            isSelected = false,
+            isActive = false,
+            // Nothing inside to give the container a height, so it is stated: the row's own,
+            // less the margin the wrapper adds around it.
+            fixedHeight = fixedRowHeight
+                ?: (metrics.naturalHeightPx - metrics.wrapperPaddingPx).asDp(),
+            modifier = modifier.bookmarkRowMargin(isFlat).fillMaxWidth()
+        ) {}
+        return
+    }
+
+    val transition = rememberInfiniteTransition(label = "row_skeleton")
+    val alpha by transition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "row_skeleton_alpha"
+    )
+    val barColor = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.2f)
     val blockSpacing = metrics.blockSpacingPx.asDp()
     val sectionSpacing = metrics.sectionSpacingPx.asDp()
 

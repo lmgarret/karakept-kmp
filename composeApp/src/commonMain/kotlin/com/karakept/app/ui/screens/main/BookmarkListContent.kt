@@ -774,18 +774,33 @@ internal fun BookmarkListContent(
             // be blank. A screenful of the same skeletons says "rows are coming" in the shape
             // they will come in — and is what stops a list switch flashing the empty state,
             // since an uncounted view is not an empty one.
+            //
+            // On e-ink a placeholder row draws nothing, so a screenful of them says nothing —
+            // a blank page, which is the one thing an uncounted view must not look like. One
+            // indicator for the screen instead, which is what the rest of the app does there.
             if (!window.resolved) {
-                items(
-                    count = placeholderScreenful,
-                    contentType = { "placeholder" }
-                ) {
-                    BookmarkRowSkeleton(
-                        metrics = rowMetrics,
-                        itemContainerStyle = itemContainerStyle,
-                        thumbnailSide = thumbnailSide,
-                        showRowDivider = showRowDivider,
-                        fixedRowHeight = tiledRows?.rowHeight
-                    )
+                if (einkMode.enabled) {
+                    item(contentType = "placeholder") {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            BusyIndicator()
+                        }
+                    }
+                } else {
+                    items(
+                        count = placeholderScreenful,
+                        contentType = { "placeholder" }
+                    ) {
+                        BookmarkRowSkeleton(
+                            metrics = rowMetrics,
+                            itemContainerStyle = itemContainerStyle,
+                            thumbnailSide = thumbnailSide,
+                            showRowDivider = showRowDivider,
+                            fixedRowHeight = tiledRows?.rowHeight
+                        )
+                    }
                 }
             }
 
