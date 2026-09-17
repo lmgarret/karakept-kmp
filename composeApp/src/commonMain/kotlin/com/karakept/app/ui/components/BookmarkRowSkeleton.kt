@@ -190,26 +190,31 @@ private fun SkeletonMetadata(
         Spacer(Modifier.height(blockSpacing))
     }
     if (metrics.metadataLinePx > 0f) {
+        val lineHeight = metrics.metadataLinePx.asDp()
         Row(
-            modifier = Modifier.fillMaxWidth().height(metrics.metadataLinePx.asDp()),
+            modifier = Modifier.fillMaxWidth().height(lineHeight),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SkeletonMark(DATE_WIDTH, color)
+            // Inked to what really lands there rather than to a fixed height: the row is as tall
+            // as the reading-time badge, and a short mark centred in it leaves as much space
+            // above and below as the mark itself.
+            SkeletonMark(DATE_WIDTH, lineHeight * LINE_INK, color)
             Spacer(Modifier.weight(1f))
-            SkeletonMark(LINK_WIDTH, color)
+            SkeletonMark(LINK_WIDTH, lineHeight * LINE_INK, color)
             Spacer(Modifier.width(6.dp))
-            SkeletonMark(TIME_WIDTH, color)
+            // A badge, so it fills its line the way a chip does.
+            SkeletonMark(TIME_WIDTH, lineHeight * CHIP_INK, color)
         }
     }
 }
 
 /** One of the small marks in the trailing row — a date, a link, a reading time. */
 @Composable
-private fun RowScope.SkeletonMark(widthFraction: Float, color: Color) {
+private fun RowScope.SkeletonMark(widthFraction: Float, height: Dp, color: Color) {
     Box(
         Modifier
             .fillMaxWidth(widthFraction)
-            .height(MARK_HEIGHT)
+            .height(height)
             .clip(RoundedCornerShape(4.dp))
             .background(color)
     )
@@ -263,7 +268,6 @@ private const val TAGS_WIDTH = 0.45f
 private const val DATE_WIDTH = 0.18f
 private const val LINK_WIDTH = 0.14f
 private const val TIME_WIDTH = 0.1f
-private val MARK_HEIGHT = 8.dp
 
 /** How much of its box a line of text covers, and how much of one a solid block does. */
 private const val LINE_INK = 0.56f

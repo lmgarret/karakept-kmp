@@ -31,12 +31,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -133,21 +130,24 @@ fun ScrollCursorIndicator(
     val currentBookmarkAtIndex = rememberUpdatedState(bookmarkAtIndex)
     var readBookmark by remember { mutableStateOf<BookmarkEntity?>(null) }
 
-    // One read per drag, restarted as the thumb settles — not one per slot it passes.
+    // Reads sampled at a fixed rate for as long as the drag lasts, and never cancelled.
     //
-    // Keyed on the slot, every read was cancelled by the next frame's slot and none of them ever
-    // returned: for the whole of a moving drag there was no row, so no label, and the bubble was
-    // hidden. It came back the moment the thumb stopped, which is what made it look like it was
-    // opening and closing rather than never having opened.
+    // Restarting the read whenever the thumb moved meant it never finished: a drag changes the
+    // slot most frames, a read takes tens of milliseconds, and the one cancels the other. Nothing
+    // resolved until the thumb stopped, which is why the label only ever caught up at the end of
+    // a gesture. Asking for wherever the thumb *is* each time the previous answer lands gives a
+    // label that keeps up with it instead — a few rows behind while it moves, exact when it stops.
     LaunchedEffect(isDragging) {
         if (!isDragging) return@LaunchedEffect
-        snapshotFlow { pointedIndex }
-            .distinctUntilChanged()
-            .collectLatest { slot ->
-                if (loadedAtState.value(slot) != null) return@collectLatest
-                delay(LABEL_READ_SETTLE_MS)
+        var lastAsked = -1
+        while (true) {
+            val slot = pointedIndex
+            if (slot != lastAsked && loadedAtState.value(slot) == null) {
+                lastAsked = slot
                 currentBookmarkAtIndex.value(slot)?.let { readBookmark = it }
             }
+            delay(LABEL_SAMPLE_MS)
+        }
     }
     // Whatever the list is already holding is both the freshest answer and a free one, so it is
     // worth keeping for the stretches where the thumb is over rows that have not been read.
@@ -403,10 +403,10 @@ private fun formatScrollCursorDate(epochMillis: Long): String {
 }
 
 /**
- * How long the thumb has to hold a slot before its row is read.
+ * How long to wait between one label read landing and asking for the next.
  *
- * A drag crosses a slot per frame, and a read takes tens of milliseconds; asking for every one of
- * them means none of them ever arrives. Waiting for the thumb to slow means the label updates a
- * few times a second while it moves and lands the moment it stops.
+ * A drag crosses a slot per frame and a read takes tens of milliseconds, so the thumb will always
+ * outrun the database. What matters is that the label keeps moving: one read in flight at a time,
+ * for wherever the thumb has reached by the time the last one answered.
  */
-private const val LABEL_READ_SETTLE_MS = 60L
+private const val LABEL_SAMPLE_MS = 50L
