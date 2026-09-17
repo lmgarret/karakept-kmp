@@ -261,14 +261,49 @@ class BookmarkRowTilingTest {
         return tiled
     }
 
-    /** [BookmarkRowMetrics.wrapperPaddingPx] for [layout] — read inside a composition. */
-    private fun wrapperPaddingFor(layout: BookmarkLayout): Float {
-        var padding = 0f
-        runComposeUiTest {
-            setContent { MaterialTheme { padding = metricsFor(layout).wrapperPaddingPx } }
+    /**
+     * The metadata band is declared twice over: as a total, which the tiling adds into the row's
+     * height, and as the three rows it is made of, which the skeleton draws separately. A total
+     * that stops matching its parts makes every skeleton the wrong height again.
+     */
+    @Test
+    fun `the metadata band's parts add up to the band`() {
+        BookmarkLayout.ALL_BUILTIN.forEach { layout ->
+            val m = metricsOf(layout)
+            val parts = listOf(
+                if (m.metadataDescriptionPx > 0f) m.metadataDescriptionPx + m.blockSpacingPx else 0f,
+                if (m.tagsPx > 0f) m.tagsPx + m.blockSpacingPx else 0f,
+                m.metadataLinePx
+            ).sum()
+            assertEquals(
+                m.metadataPx,
+                parts,
+                absoluteTolerance = 0.01f,
+                message = "${layout.name}: band ${m.metadataPx}px against parts ${parts}px"
+            )
         }
-        return padding
     }
+
+    /** A layout showing tags and a date has both rows of the band, not one lumped together. */
+    @Test
+    fun `a band with tags and a date declares both of its rows`() {
+        val layout = BookmarkLayout.ALL_BUILTIN.first { it.showTags && it.showDate }
+        val m = metricsOf(layout)
+        assertTrue(m.tagsPx > 0f, "${layout.name} shows tags but declares no tag row")
+        assertTrue(m.metadataLinePx > 0f, "${layout.name} shows a date but declares no trailing row")
+    }
+
+    /** [metricsFor] hoisted out of a composition, so a test can read all of it. */
+    private fun metricsOf(layout: BookmarkLayout): BookmarkRowMetrics {
+        lateinit var metrics: BookmarkRowMetrics
+        runComposeUiTest {
+            setContent { MaterialTheme { metrics = metricsFor(layout) } }
+        }
+        return metrics
+    }
+
+    /** [BookmarkRowMetrics.wrapperPaddingPx] for [layout] — read inside a composition. */
+    private fun wrapperPaddingFor(layout: BookmarkLayout): Float = metricsOf(layout).wrapperPaddingPx
 
     @Composable
     private fun metricsFor(layout: BookmarkLayout): BookmarkRowMetrics =

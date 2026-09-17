@@ -30,9 +30,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -105,7 +109,16 @@ fun ScrollCursorIndicator(
     }
 
     val displayFraction = if (isDragging) dragFraction else listScrollFraction
-    val pointedIndex = scrollCursorIndex(displayFraction, total)
+
+    // Snapshot state rather than a plain value, so the read below can watch it move.
+    val pointedIndex by remember {
+        derivedStateOf {
+            scrollCursorIndex(
+                if (isDragging) dragFraction else listScrollFraction,
+                totalState.value
+            )
+        }
+    }
 
     // The slot the thumb points at, answered by the list when it holds that row and by the
     // database when it does not.
@@ -116,16 +129,36 @@ fun ScrollCursorIndicator(
     // last one read. Dragging anywhere past what was loaded labelled the thumb with the same
     // wrong bookmark until the page under it arrived.
     val alreadyLoaded = loadedAt(pointedIndex)
+    val loadedAtState = rememberUpdatedState(loadedAt)
     val currentBookmarkAtIndex = rememberUpdatedState(bookmarkAtIndex)
     var readBookmark by remember { mutableStateOf<BookmarkEntity?>(null) }
-    LaunchedEffect(pointedIndex, isDragging, alreadyLoaded == null) {
-        if (!isDragging || alreadyLoaded != null) return@LaunchedEffect
-        readBookmark = currentBookmarkAtIndex.value(pointedIndex)
+
+    // One read per drag, restarted as the thumb settles — not one per slot it passes.
+    //
+    // Keyed on the slot, every read was cancelled by the next frame's slot and none of them ever
+    // returned: for the whole of a moving drag there was no row, so no label, and the bubble was
+    // hidden. It came back the moment the thumb stopped, which is what made it look like it was
+    // opening and closing rather than never having opened.
+    LaunchedEffect(isDragging) {
+        if (!isDragging) return@LaunchedEffect
+        snapshotFlow { pointedIndex }
+            .distinctUntilChanged()
+            .collectLatest { slot ->
+                if (loadedAtState.value(slot) != null) return@collectLatest
+                delay(LABEL_READ_SETTLE_MS)
+                currentBookmarkAtIndex.value(slot)?.let { readBookmark = it }
+            }
     }
-    // While a read is in flight the previous answer stands. It trails the thumb by one row read
-    // rather than naming a row from the wrong place.
-    val pointedBookmark = alreadyLoaded ?: readBookmark
-    val label = scrollCursorLabel(pointedBookmark, sortOption)
+    // Whatever the list is already holding is both the freshest answer and a free one, so it is
+    // worth keeping for the stretches where the thumb is over rows that have not been read.
+    LaunchedEffect(alreadyLoaded) { alreadyLoaded?.let { readBookmark = it } }
+
+    // The last answer stands while the next is on its way. The thumb outruns the database on a
+    // list this long, and a label one row out of date is the point of the bubble; no label is not.
+    val resolvedLabel = scrollCursorLabel(alreadyLoaded ?: readBookmark, sortOption)
+    var lastLabel by remember { mutableStateOf("") }
+    LaunchedEffect(resolvedLabel) { if (resolvedLabel.isNotEmpty()) lastLabel = resolvedLabel }
+    val label = resolvedLabel.ifEmpty { lastLabel }
 
     val density = LocalDensity.current
 
@@ -368,3 +401,12 @@ private fun formatScrollCursorDate(epochMillis: Long): String {
         ""
     }
 }
+
+/**
+ * How long the thumb has to hold a slot before its row is read.
+ *
+ * A drag crosses a slot per frame, and a read takes tens of milliseconds; asking for every one of
+ * them means none of them ever arrives. Waiting for the thumb to slow means the label updates a
+ * few times a second while it moves and lands the moment it stops.
+ */
+private const val LABEL_READ_SETTLE_MS = 60L

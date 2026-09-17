@@ -11,11 +11,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -149,7 +151,7 @@ internal fun BookmarkRowSkeleton(
                     }
                     if (metrics.metadataInTextColumn && metrics.metadataPx > 0f) {
                         Spacer(Modifier.height(blockSpacing))
-                        SkeletonBar(metrics.metadataPx.asDp(), RULE_INK, METADATA_WIDTH, barColor)
+                        SkeletonMetadata(metrics, blockSpacing, barColor) { asDp() }
                     }
                 }
                 if (thumbnailSide == ThumbnailSide.RIGHT) thumbnail()
@@ -157,10 +159,60 @@ internal fun BookmarkRowSkeleton(
 
             if (!metrics.metadataInTextColumn && metrics.metadataPx > 0f) {
                 Spacer(Modifier.height(sectionSpacing))
-                SkeletonBar(metrics.metadataPx.asDp(), RULE_INK, METADATA_WIDTH, barColor)
+                SkeletonMetadata(metrics, blockSpacing, barColor) { asDp() }
             }
         }
     }
+}
+
+/**
+ * The metadata band: an excerpt where the layout puts one there, a row of tag chips, and the
+ * trailing row — a date at the leading edge, a link and a reading time at the trailing one.
+ *
+ * Drawn as the three rows it really is. One bar the height of all of them put a thin rule in the
+ * middle of a tall box, which reads as an oversized gap under the description and a tag row too
+ * small for what lands in it.
+ */
+@Composable
+private fun SkeletonMetadata(
+    metrics: BookmarkRowMetrics,
+    blockSpacing: Dp,
+    color: Color,
+    asDp: Float.() -> Dp
+) {
+    if (metrics.metadataDescriptionPx > 0f) {
+        SkeletonBar(metrics.metadataDescriptionPx.asDp(), BLOCK_INK, 1f, color)
+        Spacer(Modifier.height(blockSpacing))
+    }
+    if (metrics.tagsPx > 0f) {
+        // A chip is a filled surface, so it covers nearly the whole line it sits on.
+        SkeletonBar(metrics.tagsPx.asDp(), CHIP_INK, TAGS_WIDTH, color)
+        Spacer(Modifier.height(blockSpacing))
+    }
+    if (metrics.metadataLinePx > 0f) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(metrics.metadataLinePx.asDp()),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SkeletonMark(DATE_WIDTH, color)
+            Spacer(Modifier.weight(1f))
+            SkeletonMark(LINK_WIDTH, color)
+            Spacer(Modifier.width(6.dp))
+            SkeletonMark(TIME_WIDTH, color)
+        }
+    }
+}
+
+/** One of the small marks in the trailing row — a date, a link, a reading time. */
+@Composable
+private fun RowScope.SkeletonMark(widthFraction: Float, color: Color) {
+    Box(
+        Modifier
+            .fillMaxWidth(widthFraction)
+            .height(MARK_HEIGHT)
+            .clip(RoundedCornerShape(4.dp))
+            .background(color)
+    )
 }
 
 /**
@@ -200,14 +252,22 @@ private fun SkeletonBar(boxHeight: Dp, inkFraction: Float, widthFraction: Float,
     }
 }
 
-/** A title runs the width and its second line trails off; a url and a metadata band are short. */
+/** A title runs the width and its second line trails off; a url is short. */
 private val TITLE_WIDTHS = listOf(1f, 0.62f)
 private const val URL_WIDTH = 0.45f
-private const val METADATA_WIDTH = 0.55f
+
+/** Two or three chips' worth of the row, which is what a bookmark usually carries. */
+private const val TAGS_WIDTH = 0.45f
+
+/** The trailing row: a date at the leading edge, a link and a reading time at the other. */
+private const val DATE_WIDTH = 0.18f
+private const val LINK_WIDTH = 0.14f
+private const val TIME_WIDTH = 0.1f
+private val MARK_HEIGHT = 8.dp
 
 /** How much of its box a line of text covers, and how much of one a solid block does. */
 private const val LINE_INK = 0.56f
 private const val BLOCK_INK = 0.84f
 
-/** A band of small separate things, stood in for by a rule rather than filled. */
-private const val RULE_INK = 0.22f
+/** A chip is a filled surface, so it covers nearly the whole line it sits on. */
+private const val CHIP_INK = 0.8f
