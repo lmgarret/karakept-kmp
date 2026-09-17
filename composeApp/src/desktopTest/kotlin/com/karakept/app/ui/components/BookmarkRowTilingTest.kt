@@ -24,6 +24,7 @@ import com.karakept.app.data.model.UrlPosition
 import com.karakept.app.ui.utils.BookmarkRowMetrics
 import kotlin.math.abs
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -110,28 +111,62 @@ class BookmarkRowTilingTest {
     }
 
     /**
-     * A skeleton stands in for a row that has not arrived, so it has to be the size of the row it
-     * stands in for. A skeleton shorter or taller than the real row moves everything below it the
-     * moment the row lands — which on a list being scrolled is the reader's place jumping.
+     * A skeleton stands in for a row that has not arrived, so it has to be the size of the **list
+     * item** it stands in for — the row and the margin its wrapper puts around it. A skeleton
+     * shorter or taller than that moves everything below it the moment the row lands, which on a
+     * list being scrolled is the reader's place jumping.
      *
-     * It is built from the same [BookmarkRowMetrics] the tiling uses, so this is really asking
-     * whether that declaration reaches the skeleton intact. Describing the row a second time by
-     * hand is what the old placeholder did, and it had drifted: no description lines, no url, no
-     * metadata band.
+     * The margin is the part that is easy to lose. A real row is wrapped by the swipe or
+     * quick-action layer, which is what spaces cards apart; a skeleton is rendered straight into
+     * the list item and has to ask for the same margin itself. Without it a column of card
+     * skeletons is wider than the cards it stands for and has no gaps between them.
+     *
+     * The rest is built from the same [BookmarkRowMetrics] the tiling uses, so this is also
+     * asking whether that declaration reaches the skeleton intact. Describing the row a second
+     * time by hand is what the old placeholder did, and it had drifted: no description lines, no
+     * url, no metadata band.
      */
     @Test
-    fun `a skeleton is the size of the row it stands in for`() {
+    fun `a skeleton is the size of the list item it stands in for`() {
         BookmarkLayout.ALL_BUILTIN
             .filter { LayoutType.fromString(it.layoutType) != LayoutType.CARD }
             .forEach { layout ->
                 val (_, rowHeight) = measureRow(layout)
+                // What the list really gives the row: the row, plus the wrapper's margin.
+                val itemHeight = rowHeight + wrapperPaddingFor(layout)
                 val skeletonHeight = measureSkeleton(layout)
-                val error = abs(skeletonHeight - rowHeight) / rowHeight
+                val error = abs(skeletonHeight - itemHeight) / itemHeight
                 assertTrue(
                     error <= MAX_ESTIMATE_ERROR,
-                    "${layout.name}: skeleton ${skeletonHeight}px against a row ${rowHeight}px"
+                    "${layout.name}: skeleton ${skeletonHeight}px against an item ${itemHeight}px"
                 )
             }
+    }
+
+    /**
+     * And the margin is really there, rather than the heights agreeing by luck.
+     *
+     * A card layout and the same layout flat differ by exactly the wrapper's margin, which is the
+     * number that went missing.
+     */
+    @Test
+    fun `a card skeleton carries the margin a flat one does not`() {
+        val flat = BookmarkLayout.ALL_BUILTIN.first {
+            ItemContainerStyle.fromString(it.itemContainerStyle) == ItemContainerStyle.FLAT
+        }
+        val card = flat.copy(itemContainerStyle = ItemContainerStyle.CARD.name)
+
+        val margin = wrapperPaddingFor(card)
+        assertTrue(margin > 0f, "a card row is spaced apart by its wrapper")
+        assertEquals(
+            0f,
+            wrapperPaddingFor(flat),
+            "a flat row is full-bleed and takes no margin"
+        )
+        assertTrue(
+            measureSkeleton(card) - measureSkeleton(flat) >= margin - 1f,
+            "the card skeleton is not carrying the ${margin}px its wrapper would have added"
+        )
     }
 
     /** What the skeleton really measures, in pixels, for one layout. */
@@ -224,6 +259,15 @@ class BookmarkRowTilingTest {
         }
         }
         return tiled
+    }
+
+    /** [BookmarkRowMetrics.wrapperPaddingPx] for [layout] — read inside a composition. */
+    private fun wrapperPaddingFor(layout: BookmarkLayout): Float {
+        var padding = 0f
+        runComposeUiTest {
+            setContent { MaterialTheme { padding = metricsFor(layout).wrapperPaddingPx } }
+        }
+        return padding
     }
 
     @Composable

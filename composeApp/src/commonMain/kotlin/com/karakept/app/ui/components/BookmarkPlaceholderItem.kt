@@ -91,7 +91,7 @@ private fun EinkPlaceholder(url: String, itemContainerStyle: ItemContainerStyle,
         isActive = false,
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (isFlat) Modifier else Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            .bookmarkRowMargin(isFlat)
     ) {
         Row(
             modifier = Modifier
@@ -137,7 +137,7 @@ private fun ListPlaceholder(
         isActive = false,
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (isFlat) Modifier else Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            .bookmarkRowMargin(isFlat)
     ) {
         Column(
             modifier = Modifier

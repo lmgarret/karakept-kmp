@@ -97,7 +97,7 @@ fun SwipeableBookmarkItem(
             .fillMaxWidth()
             .then(
                 // Match bookmark layout padding; flat rows are full-bleed instead.
-                if (flat) Modifier else Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                Modifier.bookmarkRowMargin(flat)
             )
     ) {
         // Background layer showing action icons

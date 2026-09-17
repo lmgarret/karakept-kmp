@@ -35,6 +35,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.TransformOrigin
@@ -126,6 +128,24 @@ fun ScrollCursorIndicator(
     val label = scrollCursorLabel(pointedBookmark, sortOption)
 
     val density = LocalDensity.current
+
+    // The width of the widest label this sort can produce, held for the whole drag.
+    //
+    // The label is re-resolved for every row the thumb passes, and the labels are not the same
+    // length: a relative date runs from "6d" to "12mo". Sized to the text, the bubble grew and
+    // shrank on every one of them — several times a second down a four-thousand-row list, which
+    // reads as flickering rather than as a value changing. Reserving the widest leaves the
+    // bubble one size for the whole gesture. A minimum rather than a fixed width, so a label
+    // wider than anything anticipated — a title starting with a full-width character — grows the
+    // bubble instead of being clipped by it.
+    val labelStyle = MaterialTheme.typography.bodyLarge
+    val textMeasurer = rememberTextMeasurer()
+    val labelWidthDp = remember(sortOption, labelStyle, density) {
+        val widest = scrollCursorLabelWidths(sortOption).maxOf { candidate ->
+            textMeasurer.measure(candidate, labelStyle, maxLines = 1, softWrap = false).size.width
+        }
+        with(density) { widest.toDp() }
+    }
 
     // Thumb is half the original size
     val thumbHeightDp = 24.dp
@@ -279,14 +299,17 @@ fun ScrollCursorIndicator(
             ) {
                 Text(
                     text = label,
-                    modifier = Modifier.padding(
-                        start = tooltipHPadDp,
-                        top = tooltipVPadDp,
-                        // Extra right padding reserves space for the arrow within the shape
-                        end = tooltipHPadDp + arrowWidthDp,
-                        bottom = tooltipVPadDp
-                    ),
-                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .padding(
+                            start = tooltipHPadDp,
+                            top = tooltipVPadDp,
+                            // Extra right padding reserves space for the arrow within the shape
+                            end = tooltipHPadDp + arrowWidthDp,
+                            bottom = tooltipVPadDp
+                        )
+                        .widthIn(min = labelWidthDp),
+                    textAlign = TextAlign.Center,
+                    style = labelStyle,
                     color = MaterialTheme.colorScheme.onPrimary,
                     maxLines = 1,
                     softWrap = false,
@@ -297,7 +320,24 @@ fun ScrollCursorIndicator(
     }
 }
 
-private fun scrollCursorLabel(bookmark: BookmarkEntity?, sortOption: SortOption): String {
+/**
+ * The longest labels [scrollCursorLabel] can return for [sortOption].
+ *
+ * Measured rather than guessed at in dp, because how wide "12mo" is depends on the type. They are
+ * stated here rather than derived because the formats are a closed set — a relative date never
+ * gets longer than its largest unit, and a title label is always one letter.
+ */
+internal fun scrollCursorLabelWidths(sortOption: SortOption): List<String> = when (sortOption) {
+    // "12mo" is the longest a relative date reaches: every shorter unit caps below 60.
+    SortOption.NEWEST, SortOption.OLDEST -> listOf("12mo", "now", "59m")
+    // One uppercase letter, and W is the widest of them in every type this app ships.
+    SortOption.TITLE_AZ, SortOption.TITLE_ZA -> listOf("W")
+    // Unbounded in principle; a bookmark that takes a thousand minutes to read is the cap that
+    // matters, and reserving it costs a couple of characters on the ordinary case.
+    SortOption.READING_TIME_SHORT, SortOption.READING_TIME_LONG -> listOf("999mn")
+}
+
+internal fun scrollCursorLabel(bookmark: BookmarkEntity?, sortOption: SortOption): String {
     bookmark ?: return ""
     return when (sortOption) {
         SortOption.NEWEST, SortOption.OLDEST ->

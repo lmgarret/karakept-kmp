@@ -98,10 +98,11 @@ internal fun BookmarkRowSkeleton(
         isSelected = false,
         isActive = false,
         fixedHeight = fixedRowHeight,
-        // No outer margin: a card row takes its margin from the list's own wrapper, exactly as
-        // the real row does, so adding one here makes every skeleton taller than what it stands
-        // for — and a skeleton of the wrong height moves the rows below it as they land.
-        modifier = modifier.fillMaxWidth()
+        // The margin the row's wrapper would have given it. A skeleton is rendered straight into
+        // the list item — there is no swipe or quick-action wrapper around a row that has not
+        // arrived — so without this it is 32dp wider and 16dp taller than the row it stands for,
+        // and a screenful of them runs together with no gaps.
+        modifier = modifier.bookmarkRowMargin(isFlat).fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
