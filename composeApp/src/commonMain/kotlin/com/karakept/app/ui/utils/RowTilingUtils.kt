@@ -147,6 +147,17 @@ data class BookmarkRowMetrics(
     val descriptionLines: Int,
     /** Tags, the date/badge row and anything else in the metadata band, spacing included. */
     val metadataPx: Float,
+    /**
+     * The three rows [metadataPx] adds up, each without the spacing above it.
+     *
+     * The band's total is what tiling needs; what it is *made of* is what a placeholder needs.
+     * A tag chip is a filled block and the trailing row is a date at one end with a link and a
+     * reading time at the other — drawn as one bar the height of all three, they read as a thin
+     * rule with a large gap around it rather than as the row they stand for.
+     */
+    val metadataDescriptionPx: Float = 0f,
+    val tagsPx: Float = 0f,
+    val metadataLinePx: Float = 0f,
     /** Metadata BESIDE sits inside the text column; ABOVE and BELOW span the whole row. */
     val metadataInTextColumn: Boolean,
     /** The title spans the row above the thumbnail instead of sitting beside it. */

@@ -31,6 +31,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * The reader hands a tapped tag back to the bookmark list through [TagFilterRequests].
@@ -126,7 +127,8 @@ class TagFilterRequestTest {
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
         highlightRepository = highlightRepository,
-        tagFilterRequests = tagFilterRequests
+        tagFilterRequests = tagFilterRequests,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     @Test

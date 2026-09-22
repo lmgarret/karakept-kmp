@@ -21,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -31,6 +32,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * A cold start used to render an empty LazyColumn, which looks exactly like a list that has
@@ -101,12 +103,23 @@ class MainScreenModelInitialLoadingStateTest {
             com.karakept.app.data.model.SyncProgress.Idle
         )
         coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), after = any(), limit = any(),
-                sort = any(), listId = any()
-            )
-        } returns emptyList()
+        stubView(emptyList())
+    }
+
+    /**
+     * Makes [rows] the view the database reports — its size, then its pages.
+     *
+     * The size is what settles whether the list has resolved: until it arrives, an empty window
+     * is a view nobody has counted rather than a view with nothing in it.
+     */
+    private fun stubView(rows: List<BookmarkEntity>) {
+        every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns flowOf(rows.size)
+        coEvery { bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
+            val offset = thirdArg<Int>()
+            val limit = arg<Int>(3)
+            if (offset >= rows.size) emptyList()
+            else rows.subList(offset, minOf(offset + limit, rows.size))
+        }
     }
 
     @AfterTest
@@ -138,11 +151,12 @@ class MainScreenModelInitialLoadingStateTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     @Test
-    fun `is loading before the first page resolves`() = runTest(testDispatcher) {
+    fun `is loading before the view has been counted`() = runTest(testDispatcher) {
         val model = createMainScreenModel()
 
         assertTrue(model.isLoadingInitialPage.value, "should report loading before init completes")
@@ -152,27 +166,26 @@ class MainScreenModelInitialLoadingStateTest {
     fun `stops loading once an empty result resolves so the empty state can show`() =
         runTest(testDispatcher) {
             val model = createMainScreenModel()
+            val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
 
             assertFalse(
                 model.isLoadingInitialPage.value,
                 "an empty library must resolve so the empty state can show, not stay loading forever"
             )
+            job.cancel()
         }
 
     @Test
     fun `stops loading once bookmarks are available`() = runTest(testDispatcher) {
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), after = any(), limit = any(),
-                sort = any(), listId = any()
-            )
-        } returns listOf(makeBookmark(1), makeBookmark(2))
+        stubView(listOf(makeBookmark(1), makeBookmark(2)))
 
         val model = createMainScreenModel()
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
         assertFalse(model.isLoadingInitialPage.value)
+        job.cancel()
     }
 
     @Test

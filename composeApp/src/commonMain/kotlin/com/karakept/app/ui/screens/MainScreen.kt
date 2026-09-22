@@ -76,6 +76,7 @@ object MainScreen : NavKey {
         val serverRepository = koinInject<com.karakept.app.data.repository.ServerRepository>()
         val lists by screenModel.lists.collectAsState()
         val bookmarks by screenModel.bookmarks.collectAsState()
+        val bookmarkWindow by screenModel.bookmarkWindow.collectAsState()
         val servers by serverRepository.servers.collectAsState(initial = emptyList())
         val layoutType by settingsScreenModel.layoutType.collectAsState()
         val isSyncing by screenModel.isSyncing.collectAsState()
@@ -159,6 +160,9 @@ object MainScreen : NavKey {
         val listCounts by screenModel.listCounts.collectAsState()
         val listSyncStatuses by screenModel.listSyncStatuses.collectAsState()
         val quickFilterCounts by screenModel.quickFilterCounts.collectAsState()
+        // The whole filtered view, not the loaded window: the scroll cursor maps its thumb over
+        // this and names the row under it from here.
+        val totalBookmarkCount by screenModel.filteredBookmarkCount.collectAsState()
         val highlightsCount by screenModel.highlightsCount.collectAsState()
         val currentListId by screenModel.currentListContext.collectAsState()
         val currentListScrollAction by screenModel.currentListScrollAction.collectAsState()
@@ -249,12 +253,13 @@ object MainScreen : NavKey {
         // the user (e.g. a bookmark removed by smart-list reconciliation after a quick
         // action), so the list doesn't jump.
         com.karakept.app.ui.screens.main.PreserveListScrollAnchor(
-            listState = listState, bookmarks = bookmarks, bookmarkListVersion = bookmarkListVersion
+            listState = listState, window = bookmarkWindow,
+            bookmarkListVersion = bookmarkListVersion
         )
 
         // Scroll-triggered action
         MainScreenScrollAction(
-            listState = listState, bookmarks = bookmarks,
+            listState = listState, window = bookmarkWindow,
             currentListId = currentListId,
             currentListScrollAction = currentListScrollAction, currentListScrollActionConfig = currentListScrollActionConfig,
             screenModel = screenModel
@@ -269,17 +274,9 @@ object MainScreen : NavKey {
             }
         }
 
-        val allBookmarks by screenModel.allBookmarks.collectAsState()
-        val allAvailableTags = remember(allBookmarks) {
-            allBookmarks.flatMap { it.tags.split(",").filter { tag -> tag.isNotBlank() } }.distinct().sortedBy { it.lowercase() }
-        }
-        val topTagsWithCounts = remember(allBookmarks, currentFilter) {
-            val countMap = allBookmarks.flatMap { it.tags.split(",").filter { tag -> tag.isNotBlank() } }.groupingBy { it }.eachCount()
-            val topTagNames = countMap.entries.sortedByDescending { it.value }.take(10).map { it.key }
-            val topTagsFormatted = topTagNames.map { tag -> "$tag (${countMap[tag]})" }
-            val missingActiveTags = currentFilter.tags.filter { it !in topTagNames }.map { tag -> countMap[tag]?.let { "$tag ($it)" } ?: tag }
-            topTagsFormatted + missingActiveTags
-        }
+        // Counted by the database from grouped rows, not by walking the library on every change.
+        val allAvailableTags by screenModel.allAvailableTags.collectAsState()
+        val topTagsWithCounts by screenModel.topTagsWithCounts.collectAsState()
 
         // Swipe action handler shared between modes
         val handleSwipeAction: (com.karakept.app.data.local.entity.BookmarkEntity, SwipeAction, com.karakept.app.data.model.CustomSwipeActionConfig?) -> Unit = { bookmark, action, config ->
@@ -316,7 +313,6 @@ object MainScreen : NavKey {
                 SwipeAction.ADD_TO_LIST -> {
                     val listId = config?.listId; val listName = config?.listName ?: "list"
                     if (listId != null) {
-                        val position = screenModel.accumulatedBookmarkPosition(bookmark)
                         val bookmarkListIds = bookmark.listIds.split(",").map { it.trim() }.filter { it.isNotBlank() }
                         if (bookmarkListIds.contains(listId)) {
                             screenModel.removeBookmarkFromList(bookmark, listId)
@@ -326,7 +322,7 @@ object MainScreen : NavKey {
                         } else {
                             screenModel.moveBookmarkToList(bookmark, listId)
                             scope.undoableAction(snackbarManager, "Added to '$listName'") {
-                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, listId, position)
+                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, listId)
                             }
                         }
                     }
@@ -336,31 +332,15 @@ object MainScreen : NavKey {
         }
 
         // Common scaffold content builder used by both layout modes
-        // Derive the best total count for the scroll cursor denominator.
-        // quickFilterCounts / listCounts are computed from the full (unfiltered) DB so they
-        // represent the true total, not just the currently loaded page.
-        val totalBookmarkCount = when {
-            currentFilter.lists.size == 1 ->
-                listCounts[currentFilter.lists.first()] ?: quickFilterCounts.all
-            currentFilter.lists.size > 1 ->
-                currentFilter.lists.sumOf { listCounts[it] ?: 0 }
-            currentFilter.status == com.karakept.app.data.model.FilterStatus.FAVORITES ->
-                quickFilterCounts.favorites
-            currentFilter.status == com.karakept.app.data.model.FilterStatus.ARCHIVED ->
-                quickFilterCounts.archived
-            currentFilter.status == com.karakept.app.data.model.FilterStatus.ALL_INCLUDING_ARCHIVED ->
-                quickFilterCounts.all + quickFilterCounts.archived
-            else -> quickFilterCounts.all
-        }
-
         val scaffoldContent: @Composable (isExpanded: Boolean, activeBookmarkId: Long?, onBookmarkClick: (com.karakept.app.data.local.entity.BookmarkEntity) -> Unit, onMenuClick: () -> Unit) -> Unit =
             { isExpanded, activeBmId, onBookmarkClick, onMenuClick ->
                 MainScreenScaffoldContent(
-                    isExpandedLayout = isExpanded, bookmarks = bookmarks, isSyncing = isSyncing, syncProgress = syncProgress,
+                    isExpandedLayout = isExpanded, bookmarks = bookmarks, window = bookmarkWindow, isSyncing = isSyncing, syncProgress = syncProgress,
                     isLoadingMore = isLoadingMore, isLoadingInitialPage = isLoadingInitialPage,
                     hasMoreItems = hasMoreItems,
                     showScrollCursor = showScrollCursor, sortOption = currentFilter.sort,
                     totalBookmarkCount = totalBookmarkCount,
+                    bookmarkAtIndex = { screenModel.bookmarkAtIndex(it) },
                     displayConfig = displayConfig,
                     swipeLeftAction = swipeLeftAction, swipeRightAction = swipeRightAction,
                     customSwipeActionConfigs = customSwipeActionConfigs, swipeLeftConfigId = swipeLeftConfigId, swipeRightConfigId = swipeRightConfigId,
@@ -395,7 +375,6 @@ object MainScreen : NavKey {
                     navigateTo = { screen -> navigator.push(screen) },
                     newBookmarksAbove = newBookmarksAbove,
                     onClearNewBookmarksAbove = { screenModel.clearNewBookmarksAbove() },
-                    onTopBookmarkVisible = { screenModel.markTopVisibleSeen(it) }
                 )
             }
 
@@ -431,7 +410,7 @@ object MainScreen : NavKey {
                     listSyncStatuses = listSyncStatuses,
                     scaffoldContent = { isExpanded ->
                         scaffoldContent(isExpanded, selectedBookmarkId, { bookmark ->
-                            val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
+                            val idx = bookmarkWindow.indexOfRemoteId(bookmark.remoteId)
                             if (idx >= 0) screenModel.trackLastClickedIndex(idx)
                             selectedBookmarkId = bookmark.localId; scrollToHighlightId = null; activeHighlightId = null
                         }, { isDrawerVisible = !isDrawerVisible })
@@ -487,7 +466,7 @@ object MainScreen : NavKey {
                         )
                     } else {
                         scaffoldContent(false, null, { bookmark ->
-                            val idx = bookmarks.indexOfFirst { it.remoteId == bookmark.remoteId }
+                            val idx = bookmarkWindow.indexOfRemoteId(bookmark.remoteId)
                             if (idx >= 0) screenModel.trackLastClickedIndex(idx)
                             navigator.push(
                                 BookmarkViewerScreen(

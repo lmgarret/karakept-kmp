@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -39,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -83,6 +84,7 @@ import com.karakept.app.ui.components.BookmarkCardLayout
 import com.karakept.app.ui.components.BookmarkContextMenu
 import com.karakept.app.ui.components.BookmarkListLayout
 import com.karakept.app.ui.components.BookmarkPlaceholderItem
+import com.karakept.app.ui.components.BookmarkRowSkeleton
 import com.karakept.app.ui.components.QuickActionBookmarkItem
 import com.karakept.app.ui.components.ScrollCursorIndicator
 import com.karakept.app.ui.components.SwipeableBookmarkItem
@@ -106,15 +108,21 @@ import org.koin.compose.koinInject
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun BookmarkListContent(
-    bookmarks: List<BookmarkEntity>,
+    /**
+     * The view as the list addresses it: one slot per row the view holds, whether or not that
+     * row has been read. An index is therefore a position in the view, not in whatever has been
+     * loaded, which is what lets a jump land without waiting for a read.
+     */
+    window: BookmarkWindow,
     isSyncing: Boolean,
     syncProgress: com.karakept.app.data.model.SyncProgress?,
     isLoadingMore: Boolean,
     isLoadingInitialPage: Boolean = false,
-    hasMoreItems: Boolean,
     showScrollCursor: Boolean = false,
     sortOption: SortOption = SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
+    /** Names the row at an absolute index, for the scroll cursor's tooltip. */
+    bookmarkAtIndex: suspend (Int) -> BookmarkEntity? = { null },
     layoutType: LayoutType,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -157,7 +165,8 @@ internal fun BookmarkListContent(
     onBookmarkLongClick: (BookmarkEntity) -> Unit,
     onSwipeAction: (BookmarkEntity, SwipeAction, CustomSwipeActionConfig?) -> Unit,
     onRefresh: () -> Unit,
-    onLoadMore: () -> Unit,
+    /** Reports the slots on screen, so the pages holding them are the ones read. */
+    onVisibleSlotsChanged: (IntRange) -> Unit = {},
     serverUrl: String? = null,
     onCtrlClick: ((BookmarkEntity) -> Unit)? = null,
     onShiftClick: ((Int) -> Unit)? = null,
@@ -167,8 +176,6 @@ internal fun BookmarkListContent(
     onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null,
     newBookmarksAbove: Int = 0,
     onClearNewBookmarksAbove: () -> Unit = {},
-    /** The topmost bookmark on screen, which retires the "N new" count up to that row. */
-    onTopBookmarkVisible: (String) -> Unit = {},
     /**
      * False when a reader pane is open beside the list (wide layout) — the reader owns the
      * hardware page buttons in that case, and both panes would otherwise scroll at once.
@@ -185,27 +192,18 @@ internal fun BookmarkListContent(
      */
     onBookmarksVisible: (List<String>) -> Unit = {}
 ) {
-    // Detect when scrolled near end. The effect outlives the values it guards on, so they are
-    // read through rememberUpdatedState — capturing them would freeze the guards at their
-    // first-composition values and keep firing load-more while a reload is in flight.
-    val currentHasMoreItems = rememberUpdatedState(hasMoreItems)
-    val currentIsLoadingMore = rememberUpdatedState(isLoadingMore)
-    val currentOnLoadMore = rememberUpdatedState(onLoadMore)
+    // Which slots are on screen, so the pages holding them can be read. Reported by index
+    // rather than by key: a placeholder has no row to name, and it is exactly the slots with no
+    // row that this has to ask for. Bucketing and de-duplication happen in the model, so an
+    // ordinary scroll reports often and reads nothing.
+    val currentOnVisibleSlots = rememberUpdatedState(onVisibleSlotsChanged)
     LaunchedEffect(listState) {
-        snapshotFlow { listState.layoutInfo }
-            .collect { layoutInfo ->
-                val totalItems = layoutInfo.totalItemsCount
-                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
-
-                if (lastVisibleItem != null && totalItems > 0) {
-                    val threshold = totalItems - 10  // Load when 10 items from end
-                    if (lastVisibleItem.index >= threshold &&
-                        currentHasMoreItems.value && !currentIsLoadingMore.value
-                    ) {
-                        currentOnLoadMore.value()
-                    }
-                }
-            }
+        snapshotFlow {
+            val visible = listState.layoutInfo.visibleItemsInfo
+            if (visible.isEmpty()) 0..0 else visible.first().index..visible.last().index
+        }
+            .distinctUntilChanged()
+            .collect { currentOnVisibleSlots.value(it) }
     }
 
     // Report what is on screen once scrolling settles. Debounced rather than per-frame: the
@@ -230,8 +228,11 @@ internal fun BookmarkListContent(
     // wiring that reads it sits further down, where the page has been measured.
     val pageTurnBindings by koinInject<PageTurnDispatcher>().bindings.collectAsState()
     val pagedRendering = einkMode.enabled && pageTurnBindings.snapToContent
-    val animationGate = remember { ItemAnimationGate(bookmarks) }
-    val animateItems = animationGate.update(bookmarks) && !einkMode.animationsDisabled
+    // The gate compares the rows themselves — it is asking whether this is the same list
+    // shifted or a different list entirely, which only the rows can answer.
+    val loadedRows = remember(window) { window.loadedRows() }
+    val animationGate = remember { ItemAnimationGate(window) }
+    val animateItems = animationGate.update(window) && !einkMode.animationsDisabled
 
     val scope = rememberCoroutineScope()
     val showScrollToTop by remember {
@@ -248,18 +249,8 @@ internal fun BookmarkListContent(
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
     val showNewBookmarksPill = newBookmarksAbove > 0 && scrolledAwayFromTop
-    val currentOnTopBookmarkVisible = rememberUpdatedState(onTopBookmarkVisible)
-    LaunchedEffect(listState) {
-        // Reported by key rather than index: a sync prepending rows re-indexes everything
-        // below them, and the row at the top of the viewport is the same row either way.
-        // The trailing loading/end rows are unkeyed, so anything that is not a remoteId is
-        // not a bookmark.
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.firstOrNull()?.key as? String }
-            .collect { topRemoteId -> topRemoteId?.let { currentOnTopBookmarkVisible.value(it) } }
-    }
-
     val hapticFeedback = LocalHapticFeedback.current
-    val updatedBookmarks = rememberUpdatedState(bookmarks)
+    val updatedWindow = rememberUpdatedState(window)
     val updatedSelectedIds = rememberUpdatedState(selectedBookmarkIds)
 
     // Desktop context menu state
@@ -322,7 +313,7 @@ internal fun BookmarkListContent(
                             lastDragIndex = dragStartIndex
                             isDragSelecting.value = true
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            val bm = updatedBookmarks.value.getOrNull(initialItem.index)
+                            val bm = updatedWindow.value.bookmarkAt(initialItem.index)
                             if (bm != null && bm.remoteId !in updatedSelectedIds.value) {
                                 onBookmarkSelectionToggle(bm)
                             }
@@ -342,12 +333,12 @@ internal fun BookmarkListContent(
                                         val oldRangeEnd = maxOf(dragStartIndex, lastDragIndex)
                                         val newRangeStart = minOf(dragStartIndex, currentIndex)
                                         val newRangeEnd = maxOf(dragStartIndex, currentIndex)
-                                        val bookmarkList = updatedBookmarks.value
+                                        val dragWindow = updatedWindow.value
                                         val selectedIds = updatedSelectedIds.value
                                         // Select items entering the range
                                         for (i in newRangeStart..newRangeEnd) {
                                             if (i < oldRangeStart || i > oldRangeEnd) {
-                                                val bm = bookmarkList.getOrNull(i)
+                                                val bm = dragWindow.bookmarkAt(i)
                                                 if (bm != null && bm.remoteId !in selectedIds) {
                                                     onBookmarkSelectionToggle(bm)
                                                 }
@@ -356,7 +347,7 @@ internal fun BookmarkListContent(
                                         // Deselect items leaving the range
                                         for (i in oldRangeStart..oldRangeEnd) {
                                             if (i < newRangeStart || i > newRangeEnd) {
-                                                val bm = bookmarkList.getOrNull(i)
+                                                val bm = dragWindow.bookmarkAt(i)
                                                 if (bm != null && bm.remoteId in selectedIds) {
                                                     onBookmarkSelectionToggle(bm)
                                                 }
@@ -409,11 +400,7 @@ internal fun BookmarkListContent(
         // The page is the list's own height, read off the constraints rather than off `layoutInfo`:
         // the tile is settled before the first row is laid out, so the list is never drawn once at
         // its natural height and then again at the tile.
-        val tiledRows = rememberTiledRows(
-            enabled = pagedRendering,
-            viewportPx = with(density) { maxHeight.roundToPx() },
-            layoutType = layoutType,
-            metrics = rememberBookmarkRowMetrics(
+        val rowMetrics = rememberBookmarkRowMetrics(
                 itemContainerStyle = itemContainerStyle,
                 showThumbnail = showThumbnail,
                 thumbnailSize = thumbnailSize,
@@ -426,10 +413,27 @@ internal fun BookmarkListContent(
                 showTags = showTags,
                 showDate = showDate,
                 showReadingTime = showReadingTimeBadge,
-                metadataPosition = metadataPosition,
-                showRowDivider = showRowDivider
-            )
+            metadataPosition = metadataPosition,
+            showRowDivider = showRowDivider
         )
+        val tiledRows = rememberTiledRows(
+            enabled = pagedRendering,
+            viewportPx = with(density) { maxHeight.roundToPx() },
+            layoutType = layoutType,
+            metrics = rowMetrics
+        )
+        // A slot whose page has not arrived is drawn at the height its row will be, declared by
+        // the same metrics the tiling uses. A placeholder of the wrong height moves everything
+        // below it when the row lands, which on a list being scrolled is the position jumping
+        // under the reader.
+        val placeholderHeight = tiledRows?.itemHeight
+            ?: with(density) { rowMetrics.naturalHeightPx.toDp() }
+        // Enough rows to fill the viewport, so an uncounted view looks like a list rather than
+        // like a handful of bars at the top of an empty page.
+        val placeholderScreenful = remember(placeholderHeight, maxHeight) {
+            if (placeholderHeight <= 0.dp) 0
+            else ((maxHeight / placeholderHeight).toInt() + 1).coerceIn(1, 20)
+        }
         // Room for the last turn to put the final rows at the top of the page. Without it that turn
         // clamps against the end of the content and the page it lands on is one the previous page
         // had already shown almost all of.
@@ -446,7 +450,7 @@ internal fun BookmarkListContent(
             { direction, pageDeltaPx ->
                 // The offset is a distance into the *first visible item*, which is only a row while
                 // the list is showing bookmarks rather than its loading or end-of-list footer.
-                if (listState.firstVisibleItemIndex < bookmarks.size) {
+                if (listState.firstVisibleItemIndex < window.total) {
                     tiledTurnAdjustment(
                         direction = direction,
                         pageDeltaPx = pageDeltaPx,
@@ -467,11 +471,24 @@ internal fun BookmarkListContent(
             state = listState,
             contentPadding = PaddingValues(bottom = with(density) { trailingPadPx.toDp() })
         ) {
-            itemsIndexed(
-                bookmarks,
-                key = { _, bookmark -> bookmark.remoteId },
-                contentType = { _, _ -> "bookmark" }
-            ) { itemIndex, bookmark ->
+            items(
+                count = window.total,
+                key = { index -> window.keyAt(index) },
+                contentType = { index ->
+                    if (window.bookmarkAt(index) != null) "bookmark" else "placeholder"
+                }
+            ) { itemIndex ->
+                val bookmark = window.bookmarkAt(itemIndex)
+                if (bookmark == null) {
+                    BookmarkRowSkeleton(
+                        metrics = rowMetrics,
+                        itemContainerStyle = itemContainerStyle,
+                        thumbnailSide = thumbnailSide,
+                        showRowDivider = showRowDivider,
+                        fixedRowHeight = tiledRows?.rowHeight
+                    )
+                    return@items
+                }
                 Box(
                     modifier = Modifier
                         // Uniform height is what lets an exact number of rows fill the page. The row
@@ -753,9 +770,43 @@ internal fun BookmarkListContent(
                 }
             }
 
-            // An explicit empty state, but only once the first page has actually resolved —
-            // otherwise every cold start flashes "nothing here" before the list arrives.
-            if (bookmarks.isEmpty() && !isLoadingInitialPage) {
+            // Before the view has been counted there are no slots to render, so the list would
+            // be blank. A screenful of the same skeletons says "rows are coming" in the shape
+            // they will come in — and is what stops a list switch flashing the empty state,
+            // since an uncounted view is not an empty one.
+            //
+            // On e-ink a placeholder row draws nothing, so a screenful of them says nothing —
+            // a blank page, which is the one thing an uncounted view must not look like. One
+            // indicator for the screen instead, which is what the rest of the app does there.
+            if (!window.resolved) {
+                if (einkMode.enabled) {
+                    item(contentType = "placeholder") {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            BusyIndicator()
+                        }
+                    }
+                } else {
+                    items(
+                        count = placeholderScreenful,
+                        contentType = { "placeholder" }
+                    ) {
+                        BookmarkRowSkeleton(
+                            metrics = rowMetrics,
+                            itemContainerStyle = itemContainerStyle,
+                            thumbnailSide = thumbnailSide,
+                            showRowDivider = showRowDivider,
+                            fixedRowHeight = tiledRows?.rowHeight
+                        )
+                    }
+                }
+            }
+
+            // An explicit empty state, and only once the view has actually been counted —
+            // otherwise every switch flashes "nothing here" before the list arrives.
+            if (window.isEmpty) {
                 item(contentType = "empty") {
                     EmptyBookmarkList()
                 }
@@ -776,7 +827,7 @@ internal fun BookmarkListContent(
             }
 
             // End of list indicator
-            if (!hasMoreItems && bookmarks.isNotEmpty()) {
+            if (!window.isEmpty) {
                 item(contentType = "end") {
                     Box(
                         modifier = Modifier
@@ -890,9 +941,10 @@ internal fun BookmarkListContent(
         if (showScrollCursor) {
             ScrollCursorIndicator(
                 listState = listState,
-                bookmarks = bookmarks,
                 sortOption = sortOption,
                 totalBookmarkCount = totalBookmarkCount,
+                loadedAt = window::bookmarkAt,
+                bookmarkAtIndex = bookmarkAtIndex,
                 // padding(top) keeps the scrollbar clear of the sync progress bar
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(top = 6.dp)
             )
@@ -919,26 +971,38 @@ internal fun BookmarkListContent(
  * Plain fields rather than snapshot state: updating them must not invalidate the composition
  * that is reading them.
  */
-internal class ItemAnimationGate(initial: List<BookmarkEntity>) {
+internal class ItemAnimationGate(initial: BookmarkWindow) {
     private var previous = initial
+    private var previousRows = initial.loadedRows()
     private var enabled = true
 
-    fun update(bookmarks: List<BookmarkEntity>): Boolean {
-        if (bookmarks === previous) return enabled
-        val previousIds = previous.mapTo(HashSet(previous.size)) { it.remoteId }
-        val survivors = bookmarks.count { it.remoteId in previousIds }
+    fun update(window: BookmarkWindow): Boolean {
+        if (window === previous) return enabled
+        val previousIds = previousRows.mapTo(HashSet(previousRows.size)) { it.remoteId }
+        val rows = window.loadedRows()
+        val survivors = rows.count { it.remoteId in previousIds }
         // Half of the shorter list surviving still reads as "the same list, changed".
-        val sameList = previous.isEmpty() || bookmarks.isEmpty() ||
-            survivors * 2 >= minOf(previous.size, bookmarks.size)
-        enabled = sameList && !isPrepend(bookmarks)
-        previous = bookmarks
+        val sameList = previousRows.isEmpty() || rows.isEmpty() ||
+            survivors * 2 >= minOf(previousRows.size, rows.size)
+        enabled = sameList && !isPrepend(window)
+        previous = window
+        previousRows = rows
         return enabled
     }
 
-    /** True when rows were inserted above the row that used to be first. */
-    private fun isPrepend(bookmarks: List<BookmarkEntity>): Boolean {
-        val previousFirstId = previous.firstOrNull()?.remoteId ?: return false
-        return bookmarks.indexOfFirst { it.remoteId == previousFirstId } > 0
+    /**
+     * True when rows were inserted above the row that used to be first.
+     *
+     * Asked of slots rather than of the loaded rows. Those are the window compacted, and they
+     * slide as the user scrolls — so the row that was at their head lands further down them on
+     * every scroll back up, which read as a prepend and switched the animations off. A slot is a
+     * position in the view: it only moves when something really was inserted above it.
+     */
+    private fun isPrepend(window: BookmarkWindow): Boolean {
+        val previousFirstId = previousRows.firstOrNull()?.remoteId ?: return false
+        val was = previous.indexOfRemoteId(previousFirstId)
+        val now = window.indexOfRemoteId(previousFirstId)
+        return was >= 0 && now > was
     }
 }
 

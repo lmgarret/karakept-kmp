@@ -18,6 +18,7 @@ import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
 import com.karakept.app.data.model.BookmarkLayout
@@ -51,7 +52,6 @@ import com.karakept.app.ui.screens.batchUnarchive
 import com.karakept.app.ui.screens.batchFavourite
 import com.karakept.app.ui.screens.batchUnfavourite
 import com.karakept.app.ui.screens.toggleBookmarkSelection
-import com.karakept.app.ui.screens.loadNextPage
 import com.karakept.app.ui.screens.AiBatchProgress
 import com.karakept.app.ui.screens.cancelAiBatchAction
 import com.karakept.app.ui.screens.runAiAction
@@ -64,7 +64,6 @@ import com.karakept.app.ui.screens.toggleBookmarkRead
 import com.karakept.app.ui.screens.deleteBookmark
 import com.karakept.app.ui.screens.moveBookmarkToList
 import com.karakept.app.ui.screens.updateBookmarkTags
-import com.karakept.app.ui.screens.accumulatedBookmarkPosition
 import com.karakept.app.ui.screens.restoreAndRemoveBookmarkFromList
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.ui.input.PageTurnDispatcher
@@ -115,6 +114,8 @@ data class MainScreenDisplayConfig(
 fun MainScreenScaffoldContent(
     isExpandedLayout: Boolean,
     bookmarks: List<BookmarkEntity>,
+    /** The same rows the list renders, addressed by absolute index. */
+    window: BookmarkWindow,
     isSyncing: Boolean,
     syncProgress: SyncProgress,
     isLoadingMore: Boolean,
@@ -123,6 +124,8 @@ fun MainScreenScaffoldContent(
     showScrollCursor: Boolean = false,
     sortOption: com.karakept.app.data.model.SortOption = com.karakept.app.data.model.SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
+    /** Names the row at an absolute index, for the scroll cursor's tooltip. */
+    bookmarkAtIndex: suspend (Int) -> BookmarkEntity? = { null },
     displayConfig: MainScreenDisplayConfig,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -269,15 +272,19 @@ fun MainScreenScaffoldContent(
                 }
         ) {
             BookmarkListContent(
-                bookmarks = bookmarks,
+                window = window,
                 isSyncing = isSyncing,
                 syncProgress = syncProgress,
                 isLoadingMore = if (isSearchActive) false else isLoadingMore,
                 isLoadingInitialPage = if (isSearchActive) false else isLoadingInitialPage,
-                hasMoreItems = if (isSearchActive) true else hasMoreItems,
                 showScrollCursor = showScrollCursor,
                 sortOption = sortOption,
-                totalBookmarkCount = totalBookmarkCount,
+                // The search pipeline holds its whole result set, so the list is its own total
+                // and its own index; the paginated one holds a window, and takes both from the
+                // filtered view.
+                totalBookmarkCount =
+                    if (searchQuery.isNotBlank()) bookmarks.size else totalBookmarkCount,
+                bookmarkAtIndex = bookmarkAtIndex,
                 layoutType = displayConfig.layoutType,
                 swipeLeftAction = swipeLeftAction,
                 swipeRightAction = swipeRightAction,
@@ -330,7 +337,7 @@ fun MainScreenScaffoldContent(
                 serverUrl = serverUrl,
                 onSwipeAction = onSwipeAction,
                 onRefresh = { if (!offlineMode) screenModel.syncBookmarks() },
-                onLoadMore = { screenModel.loadNextPage() },
+                onVisibleSlotsChanged = { screenModel.reportVisibleSlots(it) },
                 onBookmarksVisible = { ids -> screenModel.onBookmarksVisible(ids) },
                 onCtrlClick = if (isDesktop) { bookmark ->
                     if (!isSelectionMode) {
@@ -365,11 +372,10 @@ fun MainScreenScaffoldContent(
                         }
                         is BookmarkAction.Select -> screenModel.enterSelectionMode(bookmark)
                         is BookmarkAction.MoveToList -> {
-                            val pos = screenModel.accumulatedBookmarkPosition(bookmark)
                             screenModel.moveBookmarkToList(bookmark, action.listId)
                             val listName = contextMenuLists.firstOrNull { it.id == action.listId }?.name ?: "list"
                             scope.undoableAction(snackbarManager, "Moved to '$listName'") {
-                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, action.listId, pos)
+                                screenModel.restoreAndRemoveBookmarkFromList(bookmark, action.listId)
                             }
                         }
                         is BookmarkAction.UpdateTags -> {
@@ -385,7 +391,6 @@ fun MainScreenScaffoldContent(
                 } else null,
                 newBookmarksAbove = newBookmarksAbove,
                 onClearNewBookmarksAbove = onClearNewBookmarksAbove,
-                onTopBookmarkVisible = onTopBookmarkVisible
             )
         }
     }

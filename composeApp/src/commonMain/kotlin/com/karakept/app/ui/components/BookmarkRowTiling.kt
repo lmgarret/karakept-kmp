@@ -168,16 +168,23 @@ private fun bookmarkRowMetrics(
         else -> descriptionMaxLines.coerceIn(1, BookmarkLayout.DESCRIPTION_LINES_MAX)
     }
 
-    val metadataPx = listOf(
-        // The description sits inside the metadata band in this position, capped at two lines.
+    // The band is three stacked rows, not one block. Kept apart because a placeholder has to
+    // draw them apart: a tag chip is a filled block and the date/link/time row is a few small
+    // marks, and one bar spanning the lot reads as a rule adrift in a large gap.
+    // The description sits inside the band in this position, capped at two lines.
+    val metadataDescriptionPx =
         if (showDescription && descriptionPosition == DescriptionPosition.ABOVE_METADATA) {
-            2 * bodyLinePx + blockSpacingPx
-        } else 0f,
-        if (showTags) chipPx + blockSpacingPx else 0f,
-        max(
-            if (showDate) bodyLinePx else 0f,
-            if (showReadingTime) chipPx else 0f
-        )
+            2 * bodyLinePx
+        } else 0f
+    val tagsPx = if (showTags) chipPx else 0f
+    val metadataLinePx = max(
+        if (showDate) bodyLinePx else 0f,
+        if (showReadingTime) chipPx else 0f
+    )
+    val metadataPx = listOf(
+        if (metadataDescriptionPx > 0f) metadataDescriptionPx + blockSpacingPx else 0f,
+        if (tagsPx > 0f) tagsPx + blockSpacingPx else 0f,
+        metadataLinePx
     ).sum()
 
     BookmarkRowMetrics(
@@ -191,6 +198,9 @@ private fun bookmarkRowMetrics(
         descriptionLinePx = bodyLinePx,
         descriptionLines = descriptionLines,
         metadataPx = metadataPx,
+        metadataDescriptionPx = metadataDescriptionPx,
+        tagsPx = tagsPx,
+        metadataLinePx = metadataLinePx,
         metadataInTextColumn = metadataPosition == MetadataPosition.BESIDE,
         titleAboveThumbnail = showThumbnail && titlePosition == TitlePosition.ABOVE_THUMBNAIL,
         blockSpacingPx = blockSpacingPx,

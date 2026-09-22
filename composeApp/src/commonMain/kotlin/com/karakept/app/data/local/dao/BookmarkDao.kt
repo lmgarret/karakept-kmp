@@ -10,6 +10,10 @@ import androidx.room3.RoomRawQuery
 import androidx.room3.RoomWarnings
 import androidx.room3.Update
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.OFFLINE_PREDICATE
+import com.karakept.app.data.local.projection.ListMembershipGroup
+import com.karakept.app.data.local.projection.QuickFilterCountRow
+import com.karakept.app.data.local.projection.TagGroup
 import kotlinx.coroutines.flow.Flow
 
 // List queries project a fixed column set instead of `SELECT *` so the article body never
@@ -61,7 +65,10 @@ interface BookmarkDao {
     @Query("DELETE FROM bookmarks WHERE serverId = :serverId")
     suspend fun deleteAllBookmarksForServer(serverId: String)
 
-    @Query("UPDATE bookmarks SET content = :content, readingTimeMinutes = :readingTime WHERE localId = :localId")
+    @Query(
+        "UPDATE bookmarks SET content = :content, readingTimeMinutes = :readingTime, " +
+            "hasContent = (:content IS NOT NULL AND :content <> '') WHERE localId = :localId"
+    )
     suspend fun updateContent(localId: Long, content: String, readingTime: Int)
 
     @Query("""
@@ -223,6 +230,90 @@ interface BookmarkDao {
     @RawQuery
     suspend fun getBookmarksPaged(query: RoomRawQuery): List<BookmarkEntity>
 
+    // The size of a view, from the same predicate that selects its rows — see
+    // BookmarkRepository.buildViewPredicate. A count and the rows it counts cannot disagree
+    // when one WHERE defines both.
+    @RawQuery
+    suspend fun countBookmarks(query: RoomRawQuery): Int
+
+    // The same count, re-emitted whenever the table changes — what a view's total is watched
+    // through. Observing a count rather than the rows is the point: the total used to be the
+    // size of a 4000-row list rebuilt in memory on every write.
+    @RawQuery(observedEntities = [BookmarkEntity::class])
+    fun countBookmarksFlow(query: RoomRawQuery): Flow<Int>
+
+    // Identities only, for selecting a whole view without reading its rows — see
+    // BookmarkRepository.getViewRemoteIds.
+    @RawQuery
+    suspend fun selectRemoteIds(query: RoomRawQuery): List<String>
+
+    /**
+     * List membership and read state, grouped rather than row by row.
+     *
+     * The drawer's per-list counts need to know, for each row, which lists it is in and whether
+     * it has been read — and nothing else. Most of a library shares very few distinct
+     * combinations of the two, so grouping collapses thousands of rows into a handful of
+     * buckets, and the counting walks the buckets. Reading every row to count them is what this
+     * replaces; it cost 25-57ms on the main thread and ran on every database write.
+     */
+    @Query("""
+        SELECT listIds AS listIds, isRead AS isRead, COUNT(*) AS rowCount
+        FROM bookmarks
+        WHERE serverId = :serverId AND listIds != ''
+        GROUP BY listIds, isRead
+    """)
+    fun listMembershipGroups(serverId: String): Flow<List<ListMembershipGroup>>
+
+    /** Tag sets and how many rows carry each, for the tag picker and its counts. */
+    @Query("""
+        SELECT tags AS tags, COUNT(*) AS rowCount
+        FROM bookmarks
+        WHERE serverId = :serverId AND tags != ''
+        GROUP BY tags
+    """)
+    fun tagGroups(serverId: String): Flow<List<TagGroup>>
+
+    /** The four counts behind the drawer's quick filters, in one pass over the table. */
+    @Query("""
+        SELECT
+            SUM(CASE WHEN isArchived = 0 THEN 1 ELSE 0 END) AS all_,
+            SUM(CASE WHEN isStarred = 1 AND isArchived = 0 THEN 1 ELSE 0 END) AS favorites,
+            SUM(CASE WHEN isArchived = 1 THEN 1 ELSE 0 END) AS archived
+        FROM bookmarks
+        WHERE serverId = :serverId
+    """)
+    fun quickFilterCounts(serverId: String): Flow<QuickFilterCountRow>
+
+    /** Unread rows of one list, for "mark all as read". */
+    @Query("""
+        SELECT localId, remoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
+               '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId
+          AND isRead = 0
+          AND instr(',' || listIds || ',', ',' || :listId || ',') > 0
+    """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
+    suspend fun getUnreadInList(serverId: String, listId: String): List<BookmarkEntity>
+
+    @Query("""
+        SELECT localId, remoteId, serverId, title, url,
+               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
+               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
+               modifiedAt, progressSyncedAt,
+               '' as content
+        FROM bookmarks
+        WHERE serverId = :serverId AND remoteId IN (:remoteIds)
+    """)
+    @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
+    suspend fun getBookmarksByRemoteIds(
+        serverId: String,
+        remoteIds: List<String>
+    ): List<BookmarkEntity>
+
     // Count queries for pagination
     @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId")
     suspend fun getTotalBookmarkCount(serverId: String): Int
@@ -251,23 +342,21 @@ interface BookmarkDao {
     @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND isArchived = 0")
     suspend fun getNotArchivedCount(serverId: String): Int
 
-    @Query("""
-        SELECT localId, remoteId, serverId, title, url,
-               description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
-               isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
-               modifiedAt, progressSyncedAt,
-               '' as content
-        FROM bookmarks
-        WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0
-        ORDER BY createdAt DESC
-    """)
+    @Query(
+        "SELECT localId, remoteId, serverId, title, url, description, imageUrl, " +
+            "bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived, " +
+            "isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, " +
+            "readingScrollOffset, modifiedAt, progressSyncedAt, '' as content " +
+            "FROM bookmarks WHERE serverId = :serverId AND " + OFFLINE_PREDICATE +
+            " ORDER BY createdAt DESC"
+    )
     @SuppressWarnings(RoomWarnings.QUERY_MISMATCH)
     suspend fun getAllOfflineForServer(serverId: String): List<BookmarkEntity>
 
-    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0")
+    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND " + OFFLINE_PREDICATE)
     fun getOfflineCountFlow(serverId: String): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND content IS NOT NULL AND length(content) > 0")
+    @Query("SELECT COUNT(*) FROM bookmarks WHERE serverId = :serverId AND " + OFFLINE_PREDICATE)
     suspend fun getOfflineCount(serverId: String): Int
 
     // Query for sync that includes content length and reading time to determine if content exists
@@ -276,7 +365,7 @@ interface BookmarkDao {
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
                modifiedAt, progressSyncedAt,
-               CASE WHEN length(content) > 0 THEN 'HAS_CONTENT' ELSE '' END as content
+               CASE WHEN hasContent = 1 THEN 'HAS_CONTENT' ELSE '' END as content
         FROM bookmarks
         WHERE serverId = :serverId
     """)

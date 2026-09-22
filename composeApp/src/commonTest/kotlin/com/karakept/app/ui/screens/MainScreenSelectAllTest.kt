@@ -1,24 +1,14 @@
 package com.karakept.app.ui.screens
 
-import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.model.DefaultListType
-import com.karakept.app.data.model.Server
-import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.HighlightRepository
-import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.domain.action.BookmarkActionController
+import com.karakept.app.data.model.FilterConfig
+import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.ui.screens.MainScreenModelHarness.Companion.bookmark
 import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
+import io.mockk.coVerify
+import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -28,69 +18,26 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
- * Tests for FILT-01: selectAll() behavior on MainScreenModel.
+ * "Select all" means the whole view, not the part of it that has been read.
+ *
+ * It used to get there by loading the rest of the view into the list first — the only way to have
+ * a row's id was to have the row — which made selecting a large view materialise every row of it.
+ * The ids come from the database now, so the selection covers rows the list has never shown and
+ * costs one query.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenSelectAllTest {
 
     private val testDispatcher = StandardTestDispatcher()
-
-    private lateinit var serverRepository: ServerRepository
-    private lateinit var bookmarkRepository: BookmarkRepository
-    private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var listRepository: ListRepository
-    private lateinit var bookmarkActionController: BookmarkActionController
-    private lateinit var snackbarManager: ActionSnackbarManager
-    private lateinit var highlightRepository: HighlightRepository
-
-    private val fakeServer = Server(
-        id = "server-1",
-        url = "https://example.com",
-        apiKey = "test-key",
-        label = "Test"
-    )
+    private lateinit var harness: MainScreenModelHarness
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-
-        serverRepository = mockk(relaxed = true)
-        bookmarkRepository = mockk(relaxed = true)
-        bookmarkActionsRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        listRepository = mockk(relaxed = true)
-        bookmarkActionController = mockk(relaxed = true)
-        snackbarManager = mockk(relaxed = true)
-        highlightRepository = mockk(relaxed = true)
-
-        every { serverRepository.servers } returns flowOf(emptyList())
-        every { settingsRepository.allListSettings } returns flowOf(emptyMap())
-        every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
-        every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
-        every { settingsRepository.customSwipeActionConfigs } returns flowOf(emptyList())
-        every { settingsRepository.swipeLeftConfigId } returns flowOf(null)
-        every { settingsRepository.swipeRightConfigId } returns flowOf(null)
-        every { settingsRepository.dimReadBookmarks } returns flowOf(true)
-        every { settingsRepository.defaultLayoutId } returns flowOf(null)
-        every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(true)
-        every { settingsRepository.activeServerId } returns flowOf("server-1")
-        every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
-        every { settingsRepository.defaultListId } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns MutableStateFlow(emptyList())
-        every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<String>()
-        every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
-        every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
-        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
-        every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        harness = MainScreenModelHarness(testDispatcher)
     }
 
     @AfterTest
@@ -98,109 +45,88 @@ class MainScreenSelectAllTest {
         Dispatchers.resetMain()
     }
 
-    private fun createMainScreenModel() = MainScreenModel(
-        serverRepository = serverRepository,
-        bookmarkRepository = bookmarkRepository,
-        bookmarkActionsRepository = bookmarkActionsRepository,
-        settingsRepository = settingsRepository,
-        listRepository = listRepository,
-        bookmarkActionController = bookmarkActionController,
-        snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
-    )
-
-    private fun createBookmarkEntity(
-        remoteId: Long,
-        isArchived: Boolean = false,
-        isStarred: Boolean = false
-    ) = BookmarkEntity(
-        localId = remoteId,
-        remoteId = "remote-$remoteId",
-        serverId = "server-1",
-        url = "https://example.com/$remoteId",
-        title = "Bookmark $remoteId",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = 0L,
-        isArchived = isArchived,
-        isStarred = isStarred
-    )
-
     @Test
-    fun `selectAll selects accumulated bookmarks when all pages loaded`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+    fun `selectAll covers rows the list has never read`() = runTest(testDispatcher) {
+        val view = (1L..500L).map(::bookmark)
+        harness.publish(view)
+        coEvery { harness.bookmarkRepository.getViewRemoteIds(any(), any()) } returns
+            view.map { it.remoteId }
+
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
-        val bookmarks = (1L..20L).map { createBookmarkEntity(it) }
-        model._hasMoreItems.value = false
-        model._accumulatedBookmarks.value = bookmarks
+        assertTrue(
+            model.bookmarkWindow.value.loadedCount < 500,
+            "the fixture must leave most of the view unread"
+        )
 
         model.selectAll()
         advanceUntilIdle()
 
-        assertEquals(20, model._selectedBookmarkIds.value.size)
+        assertEquals(500, model.selectedBookmarkIds.value.size)
+        job.cancel()
     }
 
     @Test
-    fun `selectAll fetches all items when hasMoreItems is true`() = runTest(testDispatcher) {
-        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
-        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
+    fun `selectAll asks for the view on screen`() = runTest(testDispatcher) {
+        harness.publish((1L..20L).map(::bookmark))
+        coEvery { harness.bookmarkRepository.getViewRemoteIds(any(), any()) } returns emptyList()
 
-        val model = createMainScreenModel()
+        val model = harness.createModel()
+        advanceUntilIdle()
+        val archived = FilterConfig(status = FilterStatus.ARCHIVED)
+        model.applyFilter(archived)
         advanceUntilIdle()
 
-        model._selectedServer.value = fakeServer
-        advanceUntilIdle()
-
-        model._hasMoreItems.value = true
-        model._accumulatedBookmarks.value = allBookmarks.take(20)
-
+        val asked = slot<FilterConfig>()
         model.selectAll()
         advanceUntilIdle()
 
-        assertEquals(50, model._selectedBookmarkIds.value.size)
+        coVerify { harness.bookmarkRepository.getViewRemoteIds(any(), capture(asked)) }
+        assertEquals(
+            archived,
+            asked.captured,
+            "selecting everything must mean everything in the view being shown"
+        )
     }
 
     @Test
-    fun `selectAll sets hasMoreItems to false after fetching all`() = runTest(testDispatcher) {
-        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
-        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
+    fun `selectAll marks the selection as covering the whole view`() = runTest(testDispatcher) {
+        // Batch AI actions are withheld from a select-all, so the mark has to be set.
+        harness.publish((1L..20L).map(::bookmark))
+        coEvery { harness.bookmarkRepository.getViewRemoteIds(any(), any()) } returns
+            (1L..20L).map { "remote-$it" }
 
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
-
-        model._selectedServer.value = fakeServer
-        advanceUntilIdle()
-
-        model._hasMoreItems.value = true
-        model._accumulatedBookmarks.value = allBookmarks.take(20)
 
         model.selectAll()
         advanceUntilIdle()
 
-        assertFalse(model._hasMoreItems.value)
+        assertTrue(model.selectedViaSelectAll.value)
+        assertEquals(20, model.selectedBookmarkIds.value.size)
     }
 
     @Test
-    fun `selectAll updates accumulated bookmarks with all fetched items`() = runTest(testDispatcher) {
-        val allBookmarks = (1L..50L).map { createBookmarkEntity(it) }
-        coEvery { bookmarkRepository.getAllBookmarks(any(), any(), any()) } returns allBookmarks
+    fun `selectAll reads the ids rather than the rows`() = runTest(testDispatcher) {
+        harness.publish((1L..500L).map(::bookmark))
+        coEvery { harness.bookmarkRepository.getViewRemoteIds(any(), any()) } returns
+            (1L..500L).map { "remote-$it" }
 
-        val model = createMainScreenModel()
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
-
-        model._selectedServer.value = fakeServer
-        advanceUntilIdle()
-
-        model._hasMoreItems.value = true
-        model._accumulatedBookmarks.value = allBookmarks.take(20)
+        harness.clearReads()
 
         model.selectAll()
         advanceUntilIdle()
 
-        assertEquals(50, model._accumulatedBookmarks.value.size)
+        assertEquals(
+            emptyList(),
+            harness.offsetsRead(),
+            "no page was read to produce the selection"
+        )
+        job.cancel()
     }
 }

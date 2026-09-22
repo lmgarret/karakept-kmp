@@ -27,6 +27,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -38,6 +39,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Tests for the deferred smart-list refresh mechanism (LIST-02 fix).
@@ -119,7 +121,8 @@ class SmartListDeferredRefreshTest {
             listRepository = listRepository,
             bookmarkActionController = bookmarkActionController,
             snackbarManager = snackbarManager,
-            highlightRepository = highlightRepository
+            highlightRepository = highlightRepository,
+            appDispatchers = TestAppDispatchers(testDispatcher)
         )
     }
 
@@ -168,7 +171,6 @@ class SmartListDeferredRefreshTest {
         } returns false
 
         val bookmark = bookmarkEntity(localId = 1L, listIds = "manualC")
-        model._accumulatedBookmarks.value = listOf(bookmark)
 
         model.removeBookmarkFromList(bookmark, "manualC")
         advanceUntilIdle()
@@ -190,7 +192,6 @@ class SmartListDeferredRefreshTest {
         } returns true
 
         val bookmark = bookmarkEntity(localId = 2L, listIds = "smartA,manualC")
-        model._accumulatedBookmarks.value = listOf(bookmark)
 
         model.removeBookmarkFromList(bookmark, "manualC")
         advanceUntilIdle()
@@ -210,7 +211,6 @@ class SmartListDeferredRefreshTest {
         } returns false
 
         val bookmark = bookmarkEntity(localId = 3L, listIds = "")
-        model._accumulatedBookmarks.value = listOf(bookmark)
 
         model.moveBookmarkToList(bookmark, "manualC")
         advanceUntilIdle()
@@ -292,14 +292,20 @@ class SmartListDeferredRefreshTest {
             bookmarkRepository.syncBookmarksForList(any(), eq("smartA"), any())
         } throws RuntimeException("Network error")
 
+        // The list reads the pages of a view it has a size for, while something is watching it.
+        every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns flowOf(5)
+        coEvery { bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } returns
+            listOf(bookmarkEntity(localId = 1L, listIds = "smartA"))
+        val job = launch { model.bookmarkWindow.collect {} }
         model.applyFilter(FilterConfig(lists = listOf("smartA")))
         advanceUntilIdle()
 
         assertFalse("smartA" in model._smartListsNeedingRefresh.value,
             "Flag should be cleared even on failure")
         coVerify(atLeast = 1) {
-            bookmarkRepository.getBookmarksPaged(any(), any(), any(), any(), any(), any())
+            bookmarkRepository.getBookmarkPage(any(), any(), any(), any())
         }
+        job.cancel()
     }
 
     // ---- End-to-end flows ----
@@ -311,7 +317,6 @@ class SmartListDeferredRefreshTest {
 
         listsFlow.value = listOf(smartList("smartA"), manualList("manualB"))
         val bookmark = bookmarkEntity(localId = 5L, listIds = "manualB")
-        model._accumulatedBookmarks.value = listOf(bookmark)
         model._currentListContext.value = "manualB"
 
         coEvery {
@@ -336,7 +341,6 @@ class SmartListDeferredRefreshTest {
 
         listsFlow.value = listOf(smartList("smartA"), manualList("manualB"))
         val bookmark = bookmarkEntity(localId = 6L, listIds = "smartA,manualB")
-        model._accumulatedBookmarks.value = listOf(bookmark)
 
         coEvery {
             bookmarkRepository.reconcileBookmarkSmartListMembership(any(), eq(6L), any())
@@ -366,7 +370,6 @@ class SmartListDeferredRefreshTest {
 
         val bk1 = bookmarkEntity(localId = 10L, listIds = "manualC")
         val bk2 = bookmarkEntity(localId = 11L, listIds = "manualC")
-        model._accumulatedBookmarks.value = listOf(bk1, bk2)
 
         model.removeBookmarkFromList(bk1, "manualC")
         advanceUntilIdle()

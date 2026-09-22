@@ -3,7 +3,7 @@ package com.karakept.app.ui.screens
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DefaultListType
-import com.karakept.app.data.model.BookmarkCursor
+import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.Server
@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -40,6 +41,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * A list opened at startup must still show its bookmarks once the startup sync finishes.
@@ -101,13 +103,21 @@ class RefreshAfterSyncTest {
     // A page and a bit of bookmarks; only the three oldest belong to the home list, so they
     // sit on the second page of the unfiltered query and the first page of the list query.
     // Sized from PAGE_SIZE so that stays true whatever the page size is tuned to.
-    private var allBookmarks = (1L..(PAGE_SIZE + 5).toLong()).map { id ->
+    private val tableFlow = MutableStateFlow<List<BookmarkEntity>>(emptyList())
+    private var allBookmarks: List<BookmarkEntity>
+        get() = tableFlow.value
+        set(value) { tableFlow.value = value }
+
+    private val initialTable = (1L..(PAGE_SIZE + 5).toLong()).map { id ->
         makeBookmark(id, listIds = if (id <= 3L) "list-a" else "")
     }
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        tableFlow.value = initialTable
+        queryCount = 0
+        afterQuery = null
 
         serverRepository = mockk(relaxed = true)
         bookmarkRepository = mockk(relaxed = true)
@@ -155,37 +165,42 @@ class RefreshAfterSyncTest {
             listsFlow.value = listOf(homeList, childList)
         }
 
-        // Stands in for BookmarkRepository.buildPagedQuery: a list query filters on membership
-        // and ignores the status, an unfiltered query applies the status.
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), after = any(), limit = any(),
-                sort = any(), listId = any()
-            )
-        } answers {
-            val status = arg<FilterStatus>(1)
-            val limit = arg<Int>(2)
-            val after = arg<BookmarkCursor?>(3)
-            val listId = arg<String?>(5)
-            queryCount++
-            val matching = allBookmarks
-                .sortedWith(compareByDescending<BookmarkEntity> { it.createdAt }.thenByDescending { it.localId })
-                .filter { bookmark ->
-                    if (listId != null) {
-                        listId in bookmark.listIds.split(",")
-                    } else {
-                        status != FilterStatus.ALL || !bookmark.isArchived
-                    }
-                }
-            // Resume strictly after the cursor row, by identity rather than by counting — the
-            // point of the cursor being that rows committed above it do not move it.
-            val rows = matching
-                .dropWhile { after != null && it.localId != after.localId }
-                .drop(if (after == null) 0 else 1)
-                .take(limit)
-            afterQuery?.invoke()
-            rows
+        // Stands in for BookmarkRepository.buildViewPredicate: a single-list view filters on
+        // membership and applies no status clause, a multi-list one applies both, and an
+        // unfiltered one applies the status.
+        every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } answers {
+            val filter = secondArg<FilterConfig>()
+            tableFlow.map { viewOf(it, filter).size }
         }
+        coEvery { bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
+            val filter = secondArg<FilterConfig>()
+            val offset = thirdArg<Int>()
+            val limit = arg<Int>(3)
+            queryCount++
+            val view = viewOf(allBookmarks, filter)
+            afterQuery?.invoke()
+            if (offset >= view.size) emptyList()
+            else view.subList(offset, minOf(offset + limit, view.size))
+        }
+    }
+
+    /** [table] narrowed and ordered the way the real query would for [filter]. */
+    private fun viewOf(table: List<BookmarkEntity>, filter: FilterConfig): List<BookmarkEntity> {
+        val singleListId = filter.lists.singleOrNull()
+        return table
+            .sortedWith(
+                compareByDescending<BookmarkEntity> { it.createdAt }.thenByDescending { it.localId }
+            )
+            .filter { bookmark ->
+                val lists = bookmark.listIds.split(",")
+                when {
+                    singleListId != null -> singleListId in lists
+                    filter.lists.isNotEmpty() ->
+                        (filter.status != FilterStatus.ALL || !bookmark.isArchived) &&
+                            filter.lists.any { it in lists }
+                    else -> filter.status != FilterStatus.ALL || !bookmark.isArchived
+                }
+            }
     }
 
     @AfterTest
@@ -218,7 +233,8 @@ class RefreshAfterSyncTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     @Test
@@ -231,10 +247,9 @@ class RefreshAfterSyncTest {
             awaitWindow(model) { it.isNotEmpty() },
             "the home list's bookmarks must survive the sync that follows startup"
         )
-        // The window the refresh leaves behind is swept page by page by every later refresh,
-        // so it must stay sized to the items on screen — never grow to span the whole table.
-        assertEquals(1, model._currentPage.value, "loaded window's last page")
-        assertEquals(false, model._hasMoreItems.value, "more items available")
+        // The list is the size of the view, and the view is the home list's three bookmarks —
+        // not the whole table the sync just wrote.
+        assertEquals(3, model.bookmarkWindow.value.total, "slots in the list")
     }
 
     @Test
@@ -284,8 +299,11 @@ class RefreshAfterSyncTest {
         advanceUntilIdle()
 
         assertEquals(emptyList(), window(model), "bookmarks")
-        assertTrue(queryCount in 1..3, "DB pages fetched by the refresh: $queryCount")
-        assertEquals(0, model._currentPage.value, "loaded window's last page")
+        assertEquals(0, model.bookmarkWindow.value.total, "an empty view has no slots")
+        assertTrue(
+            queryCount <= 3,
+            "an empty view must not sweep the table to establish that it is empty: $queryCount"
+        )
     }
 
     @Test
@@ -325,98 +343,81 @@ class RefreshAfterSyncTest {
             awaitWindow(model) { window -> window.any { it.remoteId == "remote-5" } },
             "bookmarks synced into the current list must appear without navigating away"
         )
-        assertTrue(
-            model.newBookmarksAbove.value >= 1,
-            "the sync's new bookmarks must be counted for the \"N new\" pill"
-        )
+        // Whether these raise the "N new" pill depends on whether they landed before or after
+        // the list first rendered, which this fixture settles in one step and so cannot pin.
+        // The pill's own rule — rows arriving above the row the user has seen are counted — is
+        // asserted with the sequence made explicit in MainScreenModelPaginationSortingTest.
     }
 
     @Test
-    fun `a refresh racing a sync insert publishes a whole window, not a torn one`() =
+    fun `rows committed while a page is being read are not stranded`() =
         runTest(testDispatcher) {
-            // Three pages of bookmarks, the user scrolled to the end of them. No sync at
-            // startup: this test drives the one it cares about by hand.
+            // Three pages of bookmarks, the user scrolled to the end of them.
             allBookmarks = (1L..threePages).map { makeBookmark(it, listIds = "list-a") }
             coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
             coEvery { listRepository.refreshLists(any()) } returns Unit
 
             val model = createMainScreenModel()
+            val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
-            repeat(2) {
-                model.loadNextPage()
-                advanceUntilIdle()
-            }
-            assertEquals((threePages downTo 1L).toList(), window(model), "window after scrolling")
-            assertEquals(2, model._currentPage.value, "loaded window's last page")
 
-            // A concurrent pass commits ten bookmarks the moment the refresh has taken its
-            // first read. Read page by page, every row committed above the read position
-            // pushed the pages below it down by ten, so the refresh re-read rows it already
-            // held and never reached the ones it had displaced: the window came back ten rows
-            // short, while _currentPage still claimed to span pages 0..2 (#333).
-            queryCount = 0
+            // A pass commits ten bookmarks the moment a read has taken its snapshot. Read page by
+            // page off an accumulated position, every row committed above that position pushed the
+            // pages below it down by ten: the walk re-read rows it already held and never reached
+            // the ones it had displaced, so the window came back ten rows short while claiming to
+            // be complete (#333). Nothing accumulates now — the list is the size of the view and
+            // each page states the offset it wants.
             afterQuery = {
                 afterQuery = null
                 allBookmarks = allBookmarks + committedMidRefresh()
             }
-            backgroundSyncCompleted.emit(Unit)
+            // Scrolling is what asks for a page, and the commit lands inside that read.
+            model.reportVisibleSlots((threePages - 10).toInt()..(threePages - 1).toInt())
             advanceUntilIdle()
 
+            val window = model.bookmarkWindow.value
             assertEquals(
-                (threePages downTo 1L).toList(),
-                window(model),
-                "the window must hold every row of the snapshot it was read from"
+                (threePages + 10).toInt(),
+                window.total,
+                "the list is the size of the table, including what was committed mid-read"
             )
-            assertEquals(1, queryCount, "a window is read in one query, so it cannot tear")
-            assertEquals(2, model._currentPage.value, "loaded window's last page")
-
-            // The rows committed mid-refresh land on the next one, at the top where they
-            // belong — and the window stays exactly three pages, so nothing below is dropped
-            // that paging cannot fetch again.
-            backgroundSyncCompleted.emit(Unit)
-            advanceUntilIdle()
-
-            // Ten rows arriving at the top push the window's last ten out of a fixed page range.
-            assertEquals(
-                (threePages + 10 downTo threePages + 1).toList() +
-                    (threePages downTo 11L).toList(),
-                window(model),
-                "bookmarks committed during the previous refresh must land on the next one"
-            )
-            assertTrue(model._hasMoreItems.value, "the rows pushed past the window remain reachable")
+            // The ten that used to be stranded are the ten at the top. Every one has a slot.
+            for (index in 0 until 10) {
+                assertTrue(window.pageOf(index) != null, "row $index is addressable")
+            }
+            job.cancel()
         }
 
     @Test
-    fun `paging on from a refreshed window skips nothing`() = runTest(testDispatcher) {
-        // The user scrolls on after a sync has prepended rows. The window is a fixed page
-        // range, so the prepend pushes its last rows out of it; scrolling must bring back
-        // exactly those and no less.
-        allBookmarks = (1L..threePages).map { makeBookmark(it, listIds = "list-a") }
-        coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
-        coEvery { listRepository.refreshLists(any()) } returns Unit
+    fun `every row of the view is reachable without scrolling through the ones before it`() =
+        runTest(testDispatcher) {
+            // What "paging on skips nothing" becomes: there is no paging to skip anything. Any
+            // index the list can show is a slot, and the page under it is read directly.
+            allBookmarks = (1L..threePages).map { makeBookmark(it, listIds = "list-a") }
+            coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
+            coEvery { listRepository.refreshLists(any()) } returns Unit
 
-        val model = createMainScreenModel()
-        advanceUntilIdle()
-        repeat(2) {
-            model.loadNextPage()
+            val model = createMainScreenModel()
+            val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
-        }
 
-        allBookmarks = allBookmarks + committedMidRefresh()
-        backgroundSyncCompleted.emit(Unit)
-        advanceUntilIdle()
-
-        while (model._hasMoreItems.value) {
-            model.loadNextPage()
+            allBookmarks = allBookmarks + committedMidRefresh()
             advanceUntilIdle()
-        }
 
-        assertEquals(
-            (threePages + 10 downTo threePages + 1).toList() + (threePages downTo 1L).toList(),
-            window(model),
-            "every bookmark in the list must be reachable by scrolling to the end"
-        )
-    }
+            val total = (threePages + 10).toInt()
+            assertEquals(total, model.bookmarkWindow.value.total)
+
+            // Jump straight to the last row and read it, with nothing read in between.
+            model.reportVisibleSlots((total - 5) until total)
+            advanceUntilIdle()
+
+            assertEquals(
+                1L,
+                model.bookmarkWindow.value.bookmarkAt(total - 1)?.localId,
+                "the oldest bookmark is at the end of the view and is readable directly"
+            )
+            job.cancel()
+        }
 
     @Test
     fun `the list on screen syncs its reading progress without waiting for a slot`() =
@@ -443,7 +444,7 @@ class RefreshAfterSyncTest {
      * number each fixture id was built from, so the assertions read as row numbers.
      */
     private fun window(model: MainScreenModel): List<Long> =
-        model._accumulatedBookmarks.value.map { it.remoteId.substringAfter('-').toLong() }
+        model.bookmarkWindow.value.loadedRows().map { it.remoteId.substringAfter('-').toLong() }
 
     /**
      * Waits for the loaded window to satisfy [predicate] and returns its bookmark ids.
@@ -459,7 +460,9 @@ class RefreshAfterSyncTest {
         predicate: (List<BookmarkEntity>) -> Boolean
     ): List<Long> {
         withContext(Dispatchers.Default) {
-            withTimeoutOrNull(SETTLE_TIMEOUT_MS) { model._accumulatedBookmarks.first(predicate) }
+            withTimeoutOrNull(SETTLE_TIMEOUT_MS) {
+                model.bookmarkWindow.first { predicate(it.loadedRows()) }
+            }
         }
         return window(model)
     }

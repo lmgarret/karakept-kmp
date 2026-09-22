@@ -143,16 +143,42 @@ with `includeChildListBookmarks` (`ListHierarchyUtils.expandFilterLists`). The e
 depends on the drawer's lists, which load asynchronously, so it can change after a view is on
 screen. Consequences worth knowing before touching this code:
 
-- `LoadedView` records the **effective** filter, and `currentView()` compares it, so a change
-  to the expansion invalidates in-flight loads exactly like switching lists does.
-- Every load and refresh — `resetPaginationAndLoad`, `refreshLoadedPagesInPlace`,
-  `loadNextPage` — must be passed the effective filter (`effectiveFilterNow()`, or the value
-  captured for the window). Passing `currentFilter` names a different view, and the call is
-  rejected by the guards instead of doing anything.
-- A single observer over `(selectedServer, effectiveFilter)` is the only reload path, and the
-  initial load is its first emission, so startup cannot drift from later changes.
-- `loadBookmarksPage` therefore does no settings lookups: a page depends only on the filter it
-  is given and the page index. That is what lets a window be re-read safely later.
+- The window is a flow of `(selectedServer, effectiveFilter)`, so a change to either — including
+  the expansion resolving after the view is on screen — cancels the reads belonging to the
+  previous view rather than racing them. There is no window to write into out of turn.
+- A page therefore depends only on the filter it is read with and its offset. No settings
+  lookups, nothing captured.
+
+**The bookmark list is virtualized.** `MainScreenModel.bookmarkWindow` is sized by a `COUNT(*)`
+over the view and holds only the pages under the viewport; everything else is a
+`BookmarkSlot.Placeholder`. Consequences worth knowing:
+
+- An index means a position in the view from the first frame, so a jump — the fast-scroll
+  cursor above all — is `scrollToItem` and the page under it is fetched afterwards. It used to
+  be a walk: the list was indexed by the rows read so far, so reaching an arbitrary row meant
+  reading everything in between (#273).
+- **The whole view is one `WHERE`** (`BookmarkRepository.buildViewPredicate`), including the
+  clauses that were once applied in Kotlin after the read — tags, a multi-list selection, the
+  read filter, the content filter. That is what makes an offset mean a view index; split across
+  the two, a read had to over-fetch and estimate what the Kotlin side would discard.
+  `buildCountQuery`, `buildPageQuery`, `buildViewIdsQuery` and `buildSearchQuery` all build on
+  it, so a count and the rows it counts cannot disagree.
+- **Room's invalidation is the refresh.** The count flow re-emits on any write to the table and
+  the pages on screen are read again, so a row edited elsewhere, a page a sync has committed,
+  and an action's own optimistic write all reach the screen the same way. There are no
+  refresh-in-place calls and no list patching; an action writes its row and the list follows.
+- **Nothing accumulates**, so the position drift behind #333 is not expressible: each read
+  states the offset it wants, and the list's size comes from the table rather than from how far
+  a walk got.
+- Membership in a comma-separated column (`listIds`, `tags`) is matched with
+  `instr(',' || col || ',', ',' || ? || ',')`, never `LIKE` — a tag is free text and may hold
+  `%` or `_`.
+
+**Counting does not read the rows.** The drawer's per-list counts come from rows the database
+groups on `(listIds, isRead)`, the tag counts from rows grouped on `tags`, and the quick filters
+from one pass in SQL. `ListCountUtils` and `TagCountUtils` walk those buckets. The main screen
+used to hold the whole table resident (`allBookmarks`) plus a filtered, sorted copy of the
+current view, rebuilt on every write, to answer these.
 
 **AppDispatchers:**
 - Purpose: The dispatcher set used by the data layer, injected instead of referenced statically
@@ -187,7 +213,7 @@ screen. Consequences worth knowing before touching this code:
   - Display list of bookmarks with filters, search, sorting
   - Manage list hierarchy (navigation drawer)
   - Coordinate bookmark sync, delete, edit, and tag operations
-  - Track pagination state (page size 20)
+  - Report which slots are on screen, so the pages holding them are the ones read
   - Show sync progress and pending bookmark indicators
   - Route to BookmarkViewerScreen for detail view
 

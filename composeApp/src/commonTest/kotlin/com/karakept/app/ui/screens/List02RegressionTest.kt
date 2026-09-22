@@ -29,6 +29,7 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Regression tests for LIST-02: Smart lists do not update after quick actions that
@@ -110,7 +111,8 @@ class List02RegressionTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     private fun createBookmarkEntity(

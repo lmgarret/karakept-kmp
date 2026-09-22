@@ -33,6 +33,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Regression tests for #315: the drawer's list count must only fold in a nested list's
@@ -100,6 +101,7 @@ class MainScreenModelListCountsTest {
         every { listRepository.lists } returns MutableStateFlow(listOf(parentList, childList))
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(allBookmarks)
+        bookmarkRepositoryCountsOf(bookmarkRepository, allBookmarks)
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
         every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
@@ -147,7 +149,8 @@ class MainScreenModelListCountsTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
     @Test

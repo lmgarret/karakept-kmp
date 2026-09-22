@@ -66,7 +66,7 @@ fun QuickActionBookmarkItem(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .then(if (flat) Modifier else Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                .bookmarkRowMargin(flat)
         ) {
             content()
         }
@@ -80,7 +80,7 @@ fun QuickActionBookmarkItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (flat) Modifier else Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            .bookmarkRowMargin(flat)
             .hoverable(itemInteractionSource)
     ) {
         content()

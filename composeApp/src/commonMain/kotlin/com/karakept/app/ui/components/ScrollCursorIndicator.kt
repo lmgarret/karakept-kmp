@@ -24,15 +24,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.TransformOrigin
@@ -43,11 +48,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.SortOption
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
+import com.karakept.app.ui.utils.scrollCursorFraction
+import com.karakept.app.ui.utils.scrollCursorIndex
 import kotlin.time.Clock
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 /**
  * Fast-scroll thumb on the right edge of the bookmark list.
@@ -56,44 +60,125 @@ import kotlin.math.roundToInt
  * tooltip grows from the thumb showing the current position label (date, letter, or
  * reading time) depending on the active sort option.
  *
- * [totalBookmarkCount] should be the full DB count for the current filter so that
- * the thumb position is accurate even when only a partial page has been loaded.
+ * [totalBookmarkCount] is the count of rows the active filter matches in the database, and the
+ * thumb maps linearly over it — over the whole list, not over the pages loaded so far, which
+ * grow as the list is scrolled and would walk the thumb back up the track on every load (#273).
+ *
+ * [bookmarkAtIndex] names the row the thumb points at. The thumb can be over rows the list has
+ * not read, and naming one out of what *is* read means naming the nearest row it happens to have
+ * — a label that trails the thumb, on exactly the gesture whose purpose is to answer "where am
+ * I". One row at a position is a query, so the label asks for it.
+ *
+ * A drag lands at once. The list holds a slot for every row the view has, so the row the thumb
+ * names is one it can already scroll to and the page under it arrives afterwards. This used to be
+ * a walk: the list was indexed by the rows read so far, so a drag past them had to ask for the
+ * rows in between and hold the thumb where it was dropped until they came back.
  */
 @Composable
 fun ScrollCursorIndicator(
     listState: LazyListState,
-    bookmarks: List<BookmarkEntity>,
     sortOption: SortOption,
     totalBookmarkCount: Int = 0,
+    /**
+     * The row at an absolute slot, if the list has already read it. Answers without a query for
+     * a thumb over rows that are on screen, which is where it starts and where it ends up.
+     */
+    loadedAt: (Int) -> BookmarkEntity? = { null },
+    /** The row at an absolute slot, read from the database for slots the list does not hold. */
+    bookmarkAtIndex: suspend (Int) -> BookmarkEntity? = { null },
     modifier: Modifier = Modifier
 ) {
-    if (bookmarks.size < 2) return
+    if (totalBookmarkCount < 2) return
+    val total = totalBookmarkCount
 
-    val coroutineScope = rememberCoroutineScope()
-    var scrollJob by remember { mutableStateOf<Job?>(null) }
+    val scope = rememberCoroutineScope()
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableStateOf(0f) }
     var trackHeightPx by remember { mutableStateOf(0f) }
     var tooltipHeightPx by remember { mutableStateOf(0f) }
 
-    val effectiveTotal = if (totalBookmarkCount > bookmarks.size) totalBookmarkCount else bookmarks.size
-    val effectiveTotalState = rememberUpdatedState(effectiveTotal)
-    val bookmarksState = rememberUpdatedState(bookmarks)
+    val totalState = rememberUpdatedState(total)
 
     val listScrollFraction by remember {
         derivedStateOf {
-            val total = effectiveTotalState.value
-            if (total <= 1) 0f
-            else listState.firstVisibleItemIndex.toFloat() / (total - 1).toFloat()
+            scrollCursorFraction(listState.firstVisibleItemIndex, totalState.value)
         }
     }
 
     val displayFraction = if (isDragging) dragFraction else listScrollFraction
-    val pointedIndex = (displayFraction * (effectiveTotal - 1))
-        .roundToInt().coerceIn(0, bookmarks.size - 1)
-    val label = scrollCursorLabel(bookmarks.getOrNull(pointedIndex), sortOption)
+
+    // Snapshot state rather than a plain value, so the read below can watch it move.
+    val pointedIndex by remember {
+        derivedStateOf {
+            scrollCursorIndex(
+                if (isDragging) dragFraction else listScrollFraction,
+                totalState.value
+            )
+        }
+    }
+
+    // The slot the thumb points at, answered by the list when it holds that row and by the
+    // database when it does not.
+    //
+    // Both are asked by *slot*. The loaded rows used to be asked by slot too, but they are a
+    // compacted list — the rows that happen to be read, not one entry per slot — so indexing
+    // them by a position in the view named some other row, and the index was then clamped to the
+    // last one read. Dragging anywhere past what was loaded labelled the thumb with the same
+    // wrong bookmark until the page under it arrived.
+    val alreadyLoaded = loadedAt(pointedIndex)
+    val loadedAtState = rememberUpdatedState(loadedAt)
+    val currentBookmarkAtIndex = rememberUpdatedState(bookmarkAtIndex)
+    var readBookmark by remember { mutableStateOf<BookmarkEntity?>(null) }
+
+    // Reads sampled at a fixed rate for as long as the drag lasts, and never cancelled.
+    //
+    // Restarting the read whenever the thumb moved meant it never finished: a drag changes the
+    // slot most frames, a read takes tens of milliseconds, and the one cancels the other. Nothing
+    // resolved until the thumb stopped, which is why the label only ever caught up at the end of
+    // a gesture. Asking for wherever the thumb *is* each time the previous answer lands gives a
+    // label that keeps up with it instead — a few rows behind while it moves, exact when it stops.
+    LaunchedEffect(isDragging) {
+        if (!isDragging) return@LaunchedEffect
+        var lastAsked = -1
+        while (true) {
+            val slot = pointedIndex
+            if (slot != lastAsked && loadedAtState.value(slot) == null) {
+                lastAsked = slot
+                currentBookmarkAtIndex.value(slot)?.let { readBookmark = it }
+            }
+            delay(LABEL_SAMPLE_MS)
+        }
+    }
+    // Whatever the list is already holding is both the freshest answer and a free one, so it is
+    // worth keeping for the stretches where the thumb is over rows that have not been read.
+    LaunchedEffect(alreadyLoaded) { alreadyLoaded?.let { readBookmark = it } }
+
+    // The last answer stands while the next is on its way. The thumb outruns the database on a
+    // list this long, and a label one row out of date is the point of the bubble; no label is not.
+    val resolvedLabel = scrollCursorLabel(alreadyLoaded ?: readBookmark, sortOption)
+    var lastLabel by remember { mutableStateOf("") }
+    LaunchedEffect(resolvedLabel) { if (resolvedLabel.isNotEmpty()) lastLabel = resolvedLabel }
+    val label = resolvedLabel.ifEmpty { lastLabel }
 
     val density = LocalDensity.current
+
+    // The width of the widest label this sort can produce, held for the whole drag.
+    //
+    // The label is re-resolved for every row the thumb passes, and the labels are not the same
+    // length: a relative date runs from "6d" to "12mo". Sized to the text, the bubble grew and
+    // shrank on every one of them — several times a second down a four-thousand-row list, which
+    // reads as flickering rather than as a value changing. Reserving the widest leaves the
+    // bubble one size for the whole gesture. A minimum rather than a fixed width, so a label
+    // wider than anything anticipated — a title starting with a full-width character — grows the
+    // bubble instead of being clipped by it.
+    val labelStyle = MaterialTheme.typography.bodyLarge
+    val textMeasurer = rememberTextMeasurer()
+    val labelWidthDp = remember(sortOption, labelStyle, density) {
+        val widest = scrollCursorLabelWidths(sortOption).maxOf { candidate ->
+            textMeasurer.measure(candidate, labelStyle, maxLines = 1, softWrap = false).size.width
+        }
+        with(density) { widest.toDp() }
+    }
 
     // Thumb is half the original size
     val thumbHeightDp = 24.dp
@@ -175,13 +260,8 @@ fun ScrollCursorIndicator(
                     down.consume()
                     isDragging = true
                     dragFraction = (down.position.y / size.height).coerceIn(0f, 1f)
-                    scrollJob?.cancel()
-                    scrollJob = coroutineScope.launch {
-                        val t = effectiveTotalState.value
-                        val bs = bookmarksState.value.size
-                        listState.scrollToItem(
-                            (dragFraction * (t - 1)).roundToInt().coerceIn(0, bs - 1)
-                        )
+                    scope.launch {
+                        listState.scrollToItem(scrollCursorIndex(dragFraction, totalState.value))
                     }
 
                     // drag() tracks the pointer globally until lifted, regardless of whether
@@ -189,17 +269,15 @@ fun ScrollCursorIndicator(
                     drag(down.id) { change ->
                         change.consume()
                         dragFraction = (change.position.y / size.height).coerceIn(0f, 1f)
-                        scrollJob?.cancel()
-                        scrollJob = coroutineScope.launch {
-                            val t = effectiveTotalState.value
-                            val bs = bookmarksState.value.size
+                        // The slot exists whether or not its row has been read, so the list
+                        // follows the finger and the page under it arrives afterwards.
+                        scope.launch {
                             listState.scrollToItem(
-                                (dragFraction * (t - 1)).roundToInt().coerceIn(0, bs - 1)
+                                scrollCursorIndex(dragFraction, totalState.value)
                             )
                         }
                     }
 
-                    scrollJob?.cancel()
                     isDragging = false
                 }
             }
@@ -254,14 +332,17 @@ fun ScrollCursorIndicator(
             ) {
                 Text(
                     text = label,
-                    modifier = Modifier.padding(
-                        start = tooltipHPadDp,
-                        top = tooltipVPadDp,
-                        // Extra right padding reserves space for the arrow within the shape
-                        end = tooltipHPadDp + arrowWidthDp,
-                        bottom = tooltipVPadDp
-                    ),
-                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .padding(
+                            start = tooltipHPadDp,
+                            top = tooltipVPadDp,
+                            // Extra right padding reserves space for the arrow within the shape
+                            end = tooltipHPadDp + arrowWidthDp,
+                            bottom = tooltipVPadDp
+                        )
+                        .widthIn(min = labelWidthDp),
+                    textAlign = TextAlign.Center,
+                    style = labelStyle,
                     color = MaterialTheme.colorScheme.onPrimary,
                     maxLines = 1,
                     softWrap = false,
@@ -272,7 +353,24 @@ fun ScrollCursorIndicator(
     }
 }
 
-private fun scrollCursorLabel(bookmark: BookmarkEntity?, sortOption: SortOption): String {
+/**
+ * The longest labels [scrollCursorLabel] can return for [sortOption].
+ *
+ * Measured rather than guessed at in dp, because how wide "12mo" is depends on the type. They are
+ * stated here rather than derived because the formats are a closed set — a relative date never
+ * gets longer than its largest unit, and a title label is always one letter.
+ */
+internal fun scrollCursorLabelWidths(sortOption: SortOption): List<String> = when (sortOption) {
+    // "12mo" is the longest a relative date reaches: every shorter unit caps below 60.
+    SortOption.NEWEST, SortOption.OLDEST -> listOf("12mo", "now", "59m")
+    // One uppercase letter, and W is the widest of them in every type this app ships.
+    SortOption.TITLE_AZ, SortOption.TITLE_ZA -> listOf("W")
+    // Unbounded in principle; a bookmark that takes a thousand minutes to read is the cap that
+    // matters, and reserving it costs a couple of characters on the ordinary case.
+    SortOption.READING_TIME_SHORT, SortOption.READING_TIME_LONG -> listOf("999mn")
+}
+
+internal fun scrollCursorLabel(bookmark: BookmarkEntity?, sortOption: SortOption): String {
     bookmark ?: return ""
     return when (sortOption) {
         SortOption.NEWEST, SortOption.OLDEST ->
@@ -303,3 +401,12 @@ private fun formatScrollCursorDate(epochMillis: Long): String {
         ""
     }
 }
+
+/**
+ * How long to wait between one label read landing and asking for the next.
+ *
+ * A drag crosses a slot per frame and a read takes tens of milliseconds, so the thumb will always
+ * outrun the database. What matters is that the label keeps moving: one read in flight at a time,
+ * for wherever the thumb has reached by the time the last one answered.
+ */
+private const val LABEL_SAMPLE_MS = 50L

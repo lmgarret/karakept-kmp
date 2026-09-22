@@ -1,34 +1,12 @@
 package com.karakept.app.ui.screens
 
-import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.model.BookmarkCursor
-import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
-import com.karakept.app.data.model.ListSettings
-import com.karakept.app.data.model.Server
-import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.HighlightRepository
-import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.domain.action.BookmarkActionController
-import com.karakept.app.domain.action.UndoCompletedEvent
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
+import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.ui.screens.MainScreenModelHarness.Companion.bookmark
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -40,85 +18,38 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Regression tests for the rendering glitches seen when switching between lists quickly:
- * items from the previous list interleaved with the new one, and the previous list staying
- * on screen under the new list's title.
+ * Two lists must never be rendered as one.
  *
- * The common cause is that `_currentFilter` flips synchronously when the user taps a list
- * while the reload it triggers runs on an observer coroutine — so for a short window the
- * pagination state on screen belongs to a different view than the one being requested.
+ * The user taps a list and the requested view flips at once, while the read it triggers runs on a
+ * coroutine. Under the old walk that was a race worth guarding by hand: a page fetched for the
+ * list being left could land on top of the list being entered, and a page appended with the
+ * previous list's offset would interleave two lists in one LazyColumn. Every write into the window
+ * had to check the view it belonged to first.
+ *
+ * The window is now a flow of the server and the filter, so a view switch cancels the reads
+ * belonging to the previous one rather than racing them — there is no window to write into out of
+ * turn. These tests assert what that buys: after a switch, every page read is for the new view,
+ * and the rows on screen are the new view's.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenModelListSwitchTest {
 
     private val testDispatcher = StandardTestDispatcher()
+    private lateinit var harness: MainScreenModelHarness
 
-    private lateinit var serverRepository: ServerRepository
-    private lateinit var bookmarkRepository: BookmarkRepository
-    private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var listRepository: ListRepository
-    private lateinit var bookmarkActionController: BookmarkActionController
-    private lateinit var snackbarManager: ActionSnackbarManager
-    private lateinit var highlightRepository: HighlightRepository
-
-    private val fakeServer = Server(
-        id = "server-1",
-        url = "https://example.com",
-        apiKey = "test-key",
-        label = "Test"
+    private val feeds = FilterConfig(
+        status = FilterStatus.ALL_INCLUDING_ARCHIVED,
+        lists = listOf("feeds")
     )
-
-    private val listAFilter = FilterConfig(lists = listOf("list-a"))
-    private val listBFilter = FilterConfig(lists = listOf("list-b"))
+    private val readLater = FilterConfig(
+        status = FilterStatus.ALL_INCLUDING_ARCHIVED,
+        lists = listOf("read-later")
+    )
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-
-        serverRepository = mockk(relaxed = true)
-        bookmarkRepository = mockk(relaxed = true)
-        bookmarkActionsRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        listRepository = mockk(relaxed = true)
-        bookmarkActionController = mockk(relaxed = true)
-        snackbarManager = mockk(relaxed = true)
-        highlightRepository = mockk(relaxed = true)
-
-        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
-        every { settingsRepository.allListSettings } returns flowOf(emptyMap())
-        every { settingsRepository.getListSettings(any()) } returns flowOf(ListSettings())
-        every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
-        every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
-        every { settingsRepository.customSwipeActionConfigs } returns flowOf(emptyList())
-        every { settingsRepository.swipeLeftConfigId } returns flowOf(null)
-        every { settingsRepository.swipeRightConfigId } returns flowOf(null)
-        every { settingsRepository.dimReadBookmarks } returns flowOf(true)
-        every { settingsRepository.defaultLayoutId } returns flowOf(null)
-        every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(true)
-        every { settingsRepository.activeServerId } returns flowOf("server-1")
-        every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
-        every { settingsRepository.defaultListId } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns MutableStateFlow(emptyList())
-        every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
-        every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
-        every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
-        every { bookmarkRepository.syncReports } returns MutableSharedFlow()
-        every { bookmarkRepository.backgroundSyncCompleted } returns MutableSharedFlow()
-        every { bookmarkRepository.syncProgress } returns MutableStateFlow(
-            com.karakept.app.data.model.SyncProgress.Idle
-        )
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), after = any(), limit = any(),
-                sort = any(), listId = any()
-            )
-        } returns emptyList()
+        harness = MainScreenModelHarness(testDispatcher)
     }
 
     @AfterTest
@@ -126,163 +57,92 @@ class MainScreenModelListSwitchTest {
         Dispatchers.resetMain()
     }
 
-    private fun makeBookmark(id: Long) = BookmarkEntity(
-        localId = id,
-        remoteId = "remote-$id",
-        serverId = "server-1",
-        url = "https://example.com/$id",
-        title = "Bookmark $id",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = id,
-        isArchived = false,
-        isStarred = false
-    )
+    @Test
+    fun `after a switch every page is read for the new view`() = runTest(testDispatcher) {
+        harness.publish((1L..100L).map { bookmark(it, listIds = "feeds") })
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+        model.applyFilter(feeds)
+        advanceUntilIdle()
+        harness.publish((200L..300L).map { bookmark(it, listIds = "read-later") })
+        advanceUntilIdle()
+        harness.clearReads()
 
-    private fun createMainScreenModel() = MainScreenModel(
-        serverRepository = serverRepository,
-        bookmarkRepository = bookmarkRepository,
-        bookmarkActionsRepository = bookmarkActionsRepository,
-        settingsRepository = settingsRepository,
-        listRepository = listRepository,
-        bookmarkActionController = bookmarkActionController,
-        snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
-    )
+        model.applyFilter(readLater)
+        advanceUntilIdle()
 
-    /** Stub a full first page so the model has a loaded window to append to. */
-    private fun stubFullFirstPage(): List<BookmarkEntity> {
-        val page0 = (1L..PAGE_SIZE.toLong()).map { makeBookmark(it) }
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(), after = null, limit = any(),
-                sort = any(), listId = any()
-            )
-        } returns page0
-        return page0
+        assertTrue(harness.readFilters.isNotEmpty(), "the new view was read")
+        assertTrue(
+            harness.readFilters.all { it == readLater },
+            "a page read with the previous list's filter would put its rows in this list's slots"
+        )
+        job.cancel()
     }
 
     @Test
-    fun `loadNextPage does not append a page into a window loaded for another list`() =
-        runTest(testDispatcher) {
-            val page0 = stubFullFirstPage()
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(),
-                    after = BookmarkCursor.of(page0.last()), limit = any(),
-                    sort = any(), listId = any()
-                )
-            } returns listOf(makeBookmark(99))
-
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-            assertEquals(page0.size, model._accumulatedBookmarks.value.size)
-
-            // The user taps another list: _currentFilter flips now, the reload it triggers
-            // has not run yet, so the loaded window still belongs to the previous view.
-            model._currentFilter.value = listBFilter
-
-            model.loadNextPage()
-
-            // No fetch is even started — otherwise its page would be appended below the
-            // previous list's items and both lists would render in the same LazyColumn.
-            assertEquals(false, model.isLoadingMore.value)
-            coVerify(exactly = 0) {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(),
-                    after = BookmarkCursor.of(page0.last()), limit = any(),
-                    sort = any(), listId = any()
-                )
-            }
-        }
-
-    @Test
-    fun `loadNextPage still appends while the view is unchanged`() = runTest(testDispatcher) {
-        val page0 = stubFullFirstPage()
-        coEvery {
-            bookmarkRepository.getBookmarksPaged(
-                server = any(), status = any(),
-                after = BookmarkCursor.of(page0.last()), limit = any(),
-                sort = any(), listId = any()
-            )
-        } returns listOf(makeBookmark(99))
-
-        val model = createMainScreenModel()
+    fun `the list holds the new view's rows, never a mix of both`() = runTest(testDispatcher) {
+        harness.publish((1L..40L).map { bookmark(it, listIds = "feeds") })
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+        model.applyFilter(feeds)
         advanceUntilIdle()
 
-        model.loadNextPage()
+        harness.publish((200L..230L).map { bookmark(it, listIds = "read-later") })
+        model.applyFilter(readLater)
         advanceUntilIdle()
 
-        assertEquals(page0.size + 1, model._accumulatedBookmarks.value.size)
-        assertTrue(model._accumulatedBookmarks.value.any { it.remoteId == "remote-99" })
+        val rows = model.bookmarkWindow.value.loadedRows()
+        assertTrue(rows.isNotEmpty())
+        assertTrue(
+            rows.all { it.listIds == "read-later" },
+            "the outgoing list's rows must not survive into the incoming one"
+        )
+        assertEquals(31, model.bookmarkWindow.value.total)
+        job.cancel()
     }
 
     @Test
-    fun `an in-place refresh does not discard a reset that is already loading`() =
-        runTest(testDispatcher) {
-            val page0 = (1L..PAGE_SIZE.toLong()).map { makeBookmark(it) }
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), after = null, limit = any(),
-                    sort = any(), listId = any()
-                )
-            } coAnswers {
-                delay(100)
-                page0
-            }
+    fun `switching away mid-read discards what that read was for`() = runTest(testDispatcher) {
+        // The race the old guards existed for: the view flips while a read is in flight.
+        harness.publish((1L..100L).map { bookmark(it, listIds = "feeds") })
+        val model = harness.createModel()
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
 
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-            val versionBefore = model.bookmarkListVersion.value
+        model.applyFilter(feeds)
+        // No advanceUntilIdle: the read for `feeds` has not finished.
+        harness.publish((200L..210L).map { bookmark(it, listIds = "read-later") })
+        model.applyFilter(readLater)
+        advanceUntilIdle()
 
-            // A list switch starts a reset...
-            launch { model.resetPaginationAndLoad(fakeServer, FilterConfig()) }
-            // ...and a background sync completing mid-flight refreshes the same view.
-            launch { model.refreshLoadedPagesInPlace(fakeServer, FilterConfig()) }
-            advanceUntilIdle()
-
-            // The reset must win: bumping the version is what tells the UI to drop the
-            // previous list's scroll anchor and jump back to the top.
-            assertEquals(versionBefore + 1, model.bookmarkListVersion.value)
-            assertEquals(page0.size, model._accumulatedBookmarks.value.size)
-        }
+        val window = model.bookmarkWindow.value
+        assertEquals(11, window.total, "the list settled on the view the user actually asked for")
+        assertTrue(window.loadedRows().all { it.listIds == "read-later" })
+        job.cancel()
+    }
 
     @Test
-    fun `a reset for a list the user already left does not publish its page`() =
+    fun `switching back to a list reads it again rather than showing what it held before`() =
         runTest(testDispatcher) {
-            val listAPage = listOf(makeBookmark(1), makeBookmark(2))
-            val listBPage = listOf(makeBookmark(50))
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), after = null, limit = any(),
-                    sort = any(), listId = "list-a"
-                )
-            } coAnswers {
-                delay(100)
-                listAPage
-            }
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), after = null, limit = any(),
-                    sort = any(), listId = "list-b"
-                )
-            } returns listBPage
-
-            val model = createMainScreenModel()
+            harness.publish((1L..20L).map { bookmark(it, listIds = "feeds") })
+            val model = harness.createModel()
+            val job = launch { model.bookmarkWindow.collect {} }
+            advanceUntilIdle()
+            model.applyFilter(feeds)
             advanceUntilIdle()
 
-            model._currentFilter.value = listAFilter
-            launch { model.resetPaginationAndLoad(fakeServer, listAFilter) }
-            advanceTimeBy(50)
-
-            // The user switches to list B before list A's page comes back.
-            model._currentFilter.value = listBFilter
+            harness.publish((200L..205L).map { bookmark(it, listIds = "read-later") })
+            model.applyFilter(readLater)
             advanceUntilIdle()
 
-            assertEquals(listBFilter, model._loadedView.value?.filter)
-            assertEquals(listBPage.map { it.remoteId }, model._accumulatedBookmarks.value.map { it.remoteId })
+            // Feeds has changed while the user was away.
+            harness.publish((1L..50L).map { bookmark(it, listIds = "feeds") })
+            model.applyFilter(feeds)
+            advanceUntilIdle()
+
+            assertEquals(50, model.bookmarkWindow.value.total, "read again, not remembered")
+            job.cancel()
         }
 }

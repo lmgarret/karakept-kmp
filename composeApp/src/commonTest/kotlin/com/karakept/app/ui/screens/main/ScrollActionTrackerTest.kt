@@ -52,13 +52,16 @@ class ScrollActionTrackerTest {
          * still describes the outgoing list: there the index and the key both come from the
          * *old* list, so a new list with an old index would name a row layoutInfo never saw.
          */
-        firstKey: String? = bookmarks.getOrNull(firstIndex)?.remoteId
+        firstKey: String? = bookmarks.getOrNull(firstIndex)?.remoteId,
+        /** Which pages the window has read — null loads the whole view, as a short one does. */
+        loadedPages: Set<Int>? = null,
+        generation: Int = 0
     ) = ScrollActionSnapshot(
         firstIndex = firstIndex,
         firstKey = firstKey,
         firstOffset = firstOffset,
         lastVisibleIndex = minOf(firstIndex + visibleCount - 1, bookmarks.lastIndex),
-        bookmarks = bookmarks,
+        window = viewWindow(bookmarks, loadedPages = loadedPages, generation = generation),
         isScrolling = isScrolling,
         actedOnIds = actedOnIds,
         pageTurns = pageTurns
@@ -374,5 +377,57 @@ class ScrollActionTrackerTest {
         val fired = tracker.onSnapshot(snapshot(short, visibleCount = 3, pageTurns = 0))
 
         assertTrue(fired.isEmpty())
+    }
+
+    // --- a long view, of which only a few pages are in hand ----------------------------
+
+    private val longView = (1L..400L).map { bookmark(it) }
+
+    @Test
+    fun scrollingPastTheRowsInHand_isNotReachingTheBottomOfTheList() {
+        // The bug this exists for: the bottom rule compared the last visible *slot* against how
+        // many rows happened to be loaded. Past the first few pages that is true for good, so
+        // every scroll swept the whole window — marking a hundred bookmarks read that the user
+        // had never seen, and pushing 100% for each of them to the server.
+        val loaded = setOf(2, 3, 4)
+        val tracker = ScrollActionTracker()
+        tracker.onSnapshot(snapshot(longView, firstIndex = 200, loadedPages = loaded))
+
+        val fired = tracker.onSnapshot(
+            snapshot(longView, firstIndex = 203, isScrolling = true, loadedPages = loaded)
+        )
+
+        assertEquals(listOf(201L, 202L, 203L), ids(fired), "only the rows that left the top")
+    }
+
+    @Test
+    fun theRealBottomOfALongViewStillFires() {
+        val loaded = setOf(6, 7)
+        val tracker = ScrollActionTracker()
+        tracker.onSnapshot(snapshot(longView, firstIndex = 390, loadedPages = loaded))
+
+        val fired = tracker.onSnapshot(
+            snapshot(
+                longView, firstIndex = 393, visibleCount = 10,
+                isScrolling = true, loadedPages = loaded
+            )
+        )
+
+        // Rows 391-393 left the top, and the last screenful never will — so it sweeps to 400.
+        assertEquals((391L..400L).toList(), ids(fired))
+    }
+
+    @Test
+    fun aPageBeingDroppedIsNotADatasetChange() {
+        // A sync invalidates every page on every write. None of it re-indexes a row, so it must
+        // not re-baseline the tracker — doing so swallowed the scroll the user was making.
+        val tracker = ScrollActionTracker()
+        tracker.onSnapshot(snapshot(longView, firstIndex = 200, loadedPages = setOf(3, 4, 5)))
+
+        val fired = tracker.onSnapshot(
+            snapshot(longView, firstIndex = 203, isScrolling = true, loadedPages = setOf(4))
+        )
+
+        assertEquals(listOf(201L, 202L, 203L), ids(fired))
     }
 }

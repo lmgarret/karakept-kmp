@@ -3,7 +3,7 @@ package com.karakept.app.data.local
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
-import com.karakept.app.data.local.migrations.ALL_MIGRATIONS
+import com.karakept.app.data.local.migrations.withAppSchema
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
@@ -38,7 +38,7 @@ class Room2UpgradeTest {
         writeRoom2Database()
 
         val db = Room.databaseBuilder<AppDatabase>(name = dbPath)
-            .addMigrations(*ALL_MIGRATIONS)
+            .withAppSchema()
             .fallbackToDestructiveMigration(true)
             .setDriver(BundledSQLiteDriver())
             .setQueryCoroutineContext(Dispatchers.IO)

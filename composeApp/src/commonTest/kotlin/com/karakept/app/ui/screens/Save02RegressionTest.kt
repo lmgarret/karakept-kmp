@@ -33,6 +33,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Regression tests for SAVE-02: MainScreenModel must correctly initialise and
@@ -92,6 +93,7 @@ class Save02RegressionTest {
         every { listRepository.lists } returns MutableStateFlow(emptyList())
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
+        bookmarkRepositoryCountsOf(bookmarkRepository, emptyList())
         every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
         every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
@@ -131,40 +133,41 @@ class Save02RegressionTest {
         listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository
+        highlightRepository = highlightRepository,
+        appDispatchers = TestAppDispatchers(testDispatcher)
     )
 
-    @Test
-    fun `_accumulatedBookmarks is non-empty after init when server available and bookmarks exist`() =
-        runTest(testDispatcher) {
-            val fakeBookmarks = (1L..5L).map { createBookmarkEntity(it) }
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), after = any(), limit = any(),
-                    sort = any(), listId = any()
-                )
-            } returns fakeBookmarks
-
-            val model = createMainScreenModel()
-            advanceUntilIdle()
-
-            assertTrue(
-                model._accumulatedBookmarks.value.isNotEmpty(),
-                "Expected _accumulatedBookmarks to be non-empty after init, " +
-                    "but was ${model._accumulatedBookmarks.value.size}"
-            )
+    /** Makes [rows] the view the repository answers for — its size, and its pages. */
+    private fun stubView(rows: List<BookmarkEntity>) {
+        every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns flowOf(rows.size)
+        coEvery { bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
+            val offset = thirdArg<Int>()
+            val limit = arg<Int>(3)
+            if (offset >= rows.size) emptyList()
+            else rows.subList(offset, minOf(offset + limit, rows.size))
         }
+    }
+
+    @Test
+    fun `the list holds rows after init when the server has some`() = runTest(testDispatcher) {
+        val fakeBookmarks = (1L..5L).map { createBookmarkEntity(it) }
+        stubView(fakeBookmarks)
+
+        val model = createMainScreenModel()
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+
+        val window = model.bookmarkWindow.value
+        assertEquals(5, window.total, "the list is sized by the view")
+        assertTrue(window.loadedCount > 0, "and its first page has been read")
+        job.cancel()
+    }
 
     @Test
     fun `bookmarks StateFlow is non-empty after init when server available and bookmarks exist`() =
         runTest(testDispatcher) {
             val fakeBookmarks = (1L..3L).map { createBookmarkEntity(it) }
-            coEvery {
-                bookmarkRepository.getBookmarksPaged(
-                    server = any(), status = any(), after = any(), limit = any(),
-                    sort = any(), listId = any()
-                )
-            } returns fakeBookmarks
+            stubView(fakeBookmarks)
 
             val model = createMainScreenModel()
             val job = launch { model.bookmarks.collect {} }
@@ -189,6 +192,7 @@ class Save02RegressionTest {
         } returns fakeBookmarks
 
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(fakeBookmarks)
+        bookmarkRepositoryCountsOf(bookmarkRepository, fakeBookmarks)
 
         val model = createMainScreenModel()
         val job = launch { model.quickFilterCounts.collect {} }

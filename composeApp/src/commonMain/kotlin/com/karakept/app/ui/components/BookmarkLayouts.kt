@@ -659,6 +659,20 @@ fun BookmarkListLayout(
  * where an outlined card costs a whole rectangle, which is what makes the difference on e-ink.
  * Selected and active rows keep a tonal wash so they remain distinguishable without a container.
  */
+/**
+ * The gap a card row sits in.
+ *
+ * Applied by whatever wraps the row — the swipe wrapper, the quick-action wrapper — rather than
+ * by the row itself, so everything that stands in a row's place has to apply it too. A skeleton
+ * without it is 32dp wider and 16dp taller than the row it is holding a place for, and a column
+ * of them has no gaps at all. [BookmarkRowMetrics.wrapperPaddingPx] counts its vertical half, so
+ * the number lives here and the height that follows from it is declared there.
+ *
+ * Flat rows are full-bleed by definition and take none of it.
+ */
+fun Modifier.bookmarkRowMargin(isFlat: Boolean): Modifier =
+    if (isFlat) this else padding(horizontal = 16.dp, vertical = 8.dp)
+
 @Composable
 internal fun BookmarkRowContainer(
     isFlat: Boolean,

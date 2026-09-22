@@ -306,6 +306,27 @@ full-bleed and its divider reaches both edges.
 > change what non-e-ink users see. The same goes for an indeterminate bar or spinner: keep it off
 > e-ink, swap to `InlineLoadingDots` on it.
 
+**`BookmarkRowSkeleton`** (`ui/components/BookmarkRowSkeleton.kt`) — the one placeholder that is
+*per row* rather than per screen, and the one that draws **nothing at all** on e-ink.
+
+- Off e-ink it is a shimmering sketch of the row: blocks taken from `BookmarkRowMetrics`, so it is
+  the size of the list item it stands in for. It applies `bookmarkRowMargin` itself, because it is
+  rendered straight into the list item with none of the wrappers a real row goes through.
+- On e-ink (gated on `LocalEinkMode.current.enabled`, not `animationsDisabled` — what makes it
+  wrong there is the ink, not the motion) it keeps the row's space and draws nothing in it. Neither
+  of the usual answers works when there is one placeholder per unloaded row: a screenful of dots is
+  a screenful of animations, and a screenful of bars is a screenful of ink laid down only to be
+  erased when the rows land, which is what ghosts.
+
+> **Rule:** the space is not optional. A placeholder of a different height moves every row below it
+> the moment the real one lands, and a paged screen only tiles exactly while every row is the same
+> height — `BookmarkRowTilingTest` pins the blank placeholder against the drawn one for that reason.
+
+> **Rule:** a screenful of placeholders is not a substitute for a busy state on e-ink, because
+> there a screenful of them is a blank page — indistinguishable from an empty list, which is the
+> one thing an uncounted view must not look like. Where the list renders placeholders for a view it
+> has not counted yet, e-ink gets a single `BusyIndicator` instead.
+
 ### Pull to refresh
 
 **`RefreshableBox`** (`ui/components/EinkAware.kt`) — use instead of `PullToRefreshBox` anywhere a
@@ -756,8 +777,9 @@ Settings category classes: `StoredThemeSettings`, `StoredDisplaySettings`, `Stor
 2. Create DAO in `data/local/dao/[Name]Dao.kt`.
 3. Add entity to `AppDatabase.kt` entities list and bump the schema version.
 4. Write migration `data/local/migrations/Migration[N]To[N+1].kt`.
-5. Add the migration to `ALL_MIGRATIONS` (`data/local/migrations/AppMigrations.kt`) — both platform
-   builders read that one array, so a migration left out of it is a silent destructive wipe.
+5. Add the migration to `ALL_MIGRATIONS` (`data/local/migrations/AppMigrations.kt`). Every builder
+   applies it through `withAppSchema()` — both platforms and the tests that open a real file — so
+   a migration left out of that one array is a silent destructive wipe.
 
 ---
 
