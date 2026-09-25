@@ -22,6 +22,9 @@ concurrency:
   group: cache-warm-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   warm:
     name: Warm Gradle cache (Linux)
