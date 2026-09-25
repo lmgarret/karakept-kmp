@@ -43,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,6 +67,8 @@ import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
+import com.karakept.app.ui.components.OidcSignInPane
+import com.karakept.app.ui.components.SsoSignInOption
 import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.components.rememberJsonFilePicker
 
@@ -87,6 +90,7 @@ class OnboardingScreen : NavKey {
         var restoreMessage by remember { mutableStateOf<String?>(null) }
         var backgroundSyncEnabled by remember { mutableStateOf(false) }
         var backgroundSyncFrequency by remember { mutableStateOf(60) }
+        var ssoServerUrl by remember { mutableStateOf<String?>(null) }
 
         val onFinish = {
             screenModel.completeOnboarding(backgroundSyncEnabled, backgroundSyncFrequency) {
@@ -94,93 +98,108 @@ class OnboardingScreen : NavKey {
             }
         }
 
-        Scaffold { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                // Step indicator
-                StepIndicator(
-                    currentStep = currentStep,
-                    totalSteps = TOTAL_STEPS,
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold { padding ->
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp)
-                )
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
+                    // Step indicator
+                    StepIndicator(
+                        currentStep = currentStep,
+                        totalSteps = TOTAL_STEPS,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 16.dp)
+                    )
 
-                AnimatedContent(
-                    targetState = currentStep,
-                    transitionSpec = {
-                        if (targetState > initialState) {
-                            (slideInHorizontally { it } + fadeIn()) togetherWith
-                                (slideOutHorizontally { -it } + fadeOut())
-                        } else {
-                            (slideInHorizontally { -it } + fadeIn()) togetherWith
-                                (slideOutHorizontally { it } + fadeOut())
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { step ->
-                    when (step) {
-                        STEP_WELCOME -> WelcomeStep(
-                            screenModel = screenModel,
-                            onRestoreSuccess = { message, serversRestored ->
-                                if (serversRestored) {
-                                    // Servers were restored from backup — no need to show the
-                                    // server connection step, complete onboarding immediately.
-                                    onFinish()
-                                } else {
-                                    restoreMessage = message
-                                    currentStep = STEP_SERVER
-                                }
+                    AnimatedContent(
+                        targetState = currentStep,
+                        transitionSpec = {
+                            if (targetState > initialState) {
+                                (slideInHorizontally { it } + fadeIn()) togetherWith
+                                    (slideOutHorizontally { -it } + fadeOut())
+                            } else {
+                                (slideInHorizontally { -it } + fadeIn()) togetherWith
+                                    (slideOutHorizontally { it } + fadeOut())
                             }
-                        )
-                        STEP_PERMISSIONS -> PermissionsStep(
-                            permissionGranted = permissionGranted,
-                            onPermissionResult = { granted -> permissionGranted = granted }
-                        )
-                        STEP_BACKGROUND_SYNC -> BackgroundSyncStep(
-                            enabled = backgroundSyncEnabled,
-                            onEnabledChange = { backgroundSyncEnabled = it },
-                            frequencyMinutes = backgroundSyncFrequency,
-                            onFrequencyChange = { backgroundSyncFrequency = it }
-                        )
-                        STEP_SERVER -> ServerConnectionStep(
-                            screenModel = screenModel,
-                            restoreMessage = restoreMessage,
-                            onConnected = { onFinish() }
-                        )
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { step ->
+                        when (step) {
+                            STEP_WELCOME -> WelcomeStep(
+                                screenModel = screenModel,
+                                onRestoreSuccess = { message, serversRestored ->
+                                    if (serversRestored) {
+                                        // Servers were restored from backup — no need to show the
+                                        // server connection step, complete onboarding immediately.
+                                        onFinish()
+                                    } else {
+                                        restoreMessage = message
+                                        currentStep = STEP_SERVER
+                                    }
+                                }
+                            )
+                            STEP_PERMISSIONS -> PermissionsStep(
+                                permissionGranted = permissionGranted,
+                                onPermissionResult = { granted -> permissionGranted = granted }
+                            )
+                            STEP_BACKGROUND_SYNC -> BackgroundSyncStep(
+                                enabled = backgroundSyncEnabled,
+                                onEnabledChange = { backgroundSyncEnabled = it },
+                                frequencyMinutes = backgroundSyncFrequency,
+                                onFrequencyChange = { backgroundSyncFrequency = it }
+                            )
+                            STEP_SERVER -> ServerConnectionStep(
+                                screenModel = screenModel,
+                                restoreMessage = restoreMessage,
+                                onConnected = { onFinish() },
+                                onSignInWithSso = { ssoServerUrl = it }
+                            )
+                        }
                     }
-                }
 
-                // Navigation buttons
-                OnboardingNavigationBar(
-                    currentStep = currentStep,
-                    totalSteps = TOTAL_STEPS,
-                    canProceed = when (currentStep) {
-                        STEP_PERMISSIONS -> !platformNeedsNotificationPermission() || permissionGranted
-                        else -> true
-                    },
-                    onNext = {
-                        if (currentStep < TOTAL_STEPS - 1) {
-                            currentStep++
-                        }
-                    },
-                    onBack = {
-                        if (currentStep > 0) currentStep--
-                    },
-                    onSkip = {
-                        if (currentStep < TOTAL_STEPS - 1) {
-                            currentStep++
-                        }
-                    },
-                    showSkip = currentStep == STEP_PERMISSIONS || currentStep == STEP_BACKGROUND_SYNC,
-                    showNext = currentStep < STEP_SERVER,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp)
-                )
+                    // Navigation buttons
+                    OnboardingNavigationBar(
+                        currentStep = currentStep,
+                        totalSteps = TOTAL_STEPS,
+                        canProceed = when (currentStep) {
+                            STEP_PERMISSIONS -> !platformNeedsNotificationPermission() || permissionGranted
+                            else -> true
+                        },
+                        onNext = {
+                            if (currentStep < TOTAL_STEPS - 1) {
+                                currentStep++
+                            }
+                        },
+                        onBack = {
+                            if (currentStep > 0) currentStep--
+                        },
+                        onSkip = {
+                            if (currentStep < TOTAL_STEPS - 1) {
+                                currentStep++
+                            }
+                        },
+                        showSkip = currentStep == STEP_PERMISSIONS || currentStep == STEP_BACKGROUND_SYNC,
+                        showNext = currentStep < STEP_SERVER,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 16.dp)
+                    )
+                }
+            }
+            // Over the wizard rather than instead of it, so cancelling returns to the URL as typed.
+            ssoServerUrl?.let { serverUrl ->
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    OidcSignInPane(
+                        serverUrl = serverUrl,
+                        onApiKey = { apiKey ->
+                            screenModel.addServer(serverUrl, apiKey) { onFinish() }
+                        },
+                        onCancel = { ssoServerUrl = null }
+                    )
+                }
             }
         }
     }
@@ -562,7 +581,8 @@ private fun PermissionsStep(
 private fun ServerConnectionStep(
     screenModel: OnboardingScreenModel,
     restoreMessage: String?,
-    onConnected: () -> Unit
+    onConnected: () -> Unit,
+    onSignInWithSso: (String) -> Unit
 ) {
     var url by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
@@ -720,6 +740,11 @@ private fun ServerConnectionStep(
                 }
             }
         }
+
+        SsoSignInOption(
+            enabled = !isTesting && !isConnecting && url.isNotBlank(),
+            onClick = { onSignInWithSso(url.trim()) }
+        )
     }
 }
 

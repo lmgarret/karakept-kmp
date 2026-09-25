@@ -471,6 +471,17 @@ Hover is mouse-only by construction — events from any other `PointerType` are 
 here fires from touch, and the tooltip is placed clear of the pointer hotspot
 (`tooltipPosition`), which would otherwise take the hover from the text and flicker.
 
+### SSO / OIDC sign-in
+
+**`OidcSignInPane`** (`ui/components/OidcSignInPane.kt`) runs the server's own `/signin` page in an
+embedded WebView and hands back an API key, minted from the resulting web session through tRPC
+`apiKeys.create`. **`SsoSignInOption`** is the button that opens it; onboarding and `LoginScreen`
+both show the pane *over* their form, so cancelling returns to the URL as typed. See
+`docs/oidc-sign-in.md`.
+
+> **Rule:** status goes above the WebView, never over it — on desktop the WebView is a native
+> panel that Compose cannot draw on top of.
+
 ### Empty states
 
 - A list with nothing in it needs an **explicit empty state**, never a blank area — the two

@@ -24,6 +24,7 @@ import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.OnboardingScreenModel
+import com.karakept.app.ui.screens.OidcSignInScreenModel
 import com.karakept.app.ui.screens.MainScreenModel
 import com.karakept.app.ui.screens.BookmarkViewerScreenModel
 import com.karakept.app.ui.screens.ReaderAppearanceScreenModel
@@ -119,6 +120,7 @@ val appModule = module {
 
     viewModel { LoginScreenModel(get(), get(), get()) }
     viewModel { OnboardingScreenModel(get(), get(), get(), get()) }
+    viewModel { OidcSignInScreenModel(get()) }
     // viewModel (not single) so each Nav3 back-stack entry gets a fresh instance scoped
     // to that entry's ViewModelStore (provided by rememberViewModelStoreNavEntryDecorator).
     // A Koin single would share one instance across hosts/entries, but the store clears the

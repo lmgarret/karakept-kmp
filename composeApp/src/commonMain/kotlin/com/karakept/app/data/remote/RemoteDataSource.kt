@@ -5,6 +5,7 @@ import com.karakept.api.model.*
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.Server
 import com.karakept.app.utils.AppLogger
+import com.karakept.app.utils.OidcSignInUtils
 import com.karakept.app.utils.TrpcPayloadUtils
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -18,6 +19,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.async
@@ -26,6 +28,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -210,6 +213,56 @@ class RemoteDataSource(
         } catch (e: Exception) {
             false
         }
+    }
+
+    /**
+     * Mint an API key for whoever owns a web session — how SSO/OIDC sign-in ends up with a key,
+     * since Karakeep's REST API has no token exchange of its own. [cookieHeader] is the web
+     * session's cookies as a `Cookie` header, read out of the WebView the user signed in with.
+     *
+     * tRPC mutation: apiKeys.create
+     * POST /api/trpc/apiKeys.create?batch=1
+     *
+     * @throws ApiException with [ApiException.statusCode] 401 when the session is not signed in.
+     */
+    suspend fun createApiKeyFromSession(
+        serverUrl: String,
+        cookieHeader: String,
+        keyName: String = OidcSignInUtils.API_KEY_NAME
+    ): String = guardedCall {
+        val url = "${OidcSignInUtils.webBaseUrl(serverUrl)}/api/trpc/apiKeys.create?batch=1"
+        val response: HttpResponse = try {
+            client.post(url) {
+                header(HttpHeaders.Cookie, cookieHeader)
+                contentType(ContentType.Application.Json)
+                setBody(TrpcPayloadUtils.createApiKey(keyName))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException("Error creating API key: ${e.message}", e)
+        }
+
+        if (!response.status.isSuccess()) {
+            val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+            throw ApiException(
+                "Error creating API key: HTTP ${response.status.value}: $errorBody",
+                statusCode = response.status.value
+            )
+        }
+
+        val key = try {
+            trpcJson.parseToJsonElement(response.bodyAsText()).jsonArray
+                .firstOrNull()
+                ?.jsonObject?.get("result")
+                ?.jsonObject?.get("data")
+                ?.jsonObject?.get("json")
+                ?.jsonObject?.get("key")
+                ?.jsonPrimitive?.contentOrNull
+        } catch (e: Exception) {
+            throw ApiException("Error parsing API key response: ${e.message}", e)
+        }
+        key?.takeIf { it.isNotBlank() } ?: throw ApiException("Server returned no API key")
     }
 
     /**

@@ -109,4 +109,12 @@ class TrpcPayloadUtilsTest {
             TrpcPayloadUtils.adminRetagBookmark("a\"b")
         )
     }
+
+    @Test
+    fun createApiKeyCarriesOnlyTheName() {
+        assertEquals(
+            """{"0":{"json":{"name":"Karakept"}}}""",
+            TrpcPayloadUtils.createApiKey("Karakept")
+        )
+    }
 }

@@ -76,6 +76,11 @@ object TrpcPayloadUtils {
         bookmarkIds.map { id -> buildJsonObject { put("bookmarkId", id) } }
     )
 
+    /** tRPC mutation `apiKeys.create`. */
+    fun createApiKey(name: String): String = envelope(
+        buildJsonObject { put("name", name) }
+    )
+
     /** Multi-entry envelope. Indices are the batch's ordering, so insertion order matters. */
     fun envelope(inputs: List<JsonObject>): String = JsonObject(
         inputs.mapIndexed { index, input ->
