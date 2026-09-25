@@ -15,6 +15,8 @@ jobs:
       contains(github.event.comment.body, '/build-apk') &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
+    # issue_comment runs on the default branch, which the release environment admits.
+    environment: release
     permissions:
       contents: read
       pull-requests: write
