@@ -291,14 +291,16 @@ abstract class BaseDockerIntegrationTest {
         }
 
         private fun resolveHostWorkspacePath(): String {
+            // Outside a devcontainer the checkout the compose file was found in is already the host path.
+            val localWorkspacePath = DOCKER_COMPOSE_FILE.parentFile.parentFile.parentFile.canonicalPath
             return try {
                 val hostname = java.net.InetAddress.getLocalHost().hostName
                 val process = ProcessBuilder("docker", "inspect", hostname).start()
                 val output = process.inputStream.bufferedReader().readText()
                 val regex = "\"Source\":\\s*\"([^\"]+)\",\\s*\"Target\":\\s*\"/workspaces/karakept-kmp\"".toRegex()
-                regex.find(output)?.groupValues?.get(1) ?: "/home/lm/git/karakept-kmp"
+                regex.find(output)?.groupValues?.get(1) ?: localWorkspacePath
             } catch (e: Exception) {
-                "/home/lm/git/karakept-kmp"
+                localWorkspacePath
             }
         }
 
