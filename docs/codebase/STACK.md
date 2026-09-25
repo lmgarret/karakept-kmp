@@ -5,7 +5,7 @@
 ## Languages
 
 **Primary:**
-- Kotlin 2.4.10 - Core application logic, multiplatform targets (Android, JVM Desktop)
+- Kotlin 2.4.20 - Core application logic, multiplatform targets (Android, JVM Desktop)
 - JavaScript/TypeScript - Upstream monorepo (Node.js services and tooling)
 
 **Secondary:**
@@ -43,7 +43,7 @@
   - App wiring lives in `ui/navigation/` (`AppNavigator`, `LocalNavigator`, `appEntryProvider`, `navKeySerializersModule`, Shared Axis Z specs)
 
 **Networking:**
-- Ktor Client 3.5.1 - HTTP client with multiplatform support
+- Ktor Client 3.6.0 - HTTP client with multiplatform support
   - ktor-client-core: Core HTTP client
   - ktor-client-okhttp: OkHttp engine for JVM (Android + Desktop)
   - ktor-client-content-negotiation: Content type negotiation
