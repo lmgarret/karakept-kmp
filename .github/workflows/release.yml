@@ -15,17 +15,19 @@ jobs:
   resolve-version:
     name: Resolve release version
     runs-on: ubuntu-latest
+    # Holds ANTHROPIC_API_KEY; the environment only admits main and v* tags.
+    environment: release
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       name: ${{ steps.version.outputs.name }}
       body: ${{ steps.body.outputs.body }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
           fetch-depth: 0
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         with:
           python-version: '3.11'
@@ -44,7 +46,7 @@ jobs:
       - name: Generate AI changelog
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         id: changelog
-        uses: lmgarret/llm-release-action@v1
+        uses: lmgarret/llm-release-action@5410cbe86a62eb5acc66d3812aa55b978d0e9638 # v1.0.0
         with:
           model: anthropic/claude-sonnet-5
           model_analysis: anthropic/claude-haiku-4-5
@@ -115,16 +117,16 @@ jobs:
     name: Run Android unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@v6.3.0
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
@@ -143,17 +145,19 @@ jobs:
     name: Build Android APK
     needs: [resolve-version, android-tests]
     runs-on: ubuntu-latest
+    # Holds the signing keystore; the environment only admits main and v* tags.
+    environment: release
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@v6.3.0
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
@@ -186,7 +190,7 @@ jobs:
           mv "$APK" "androidApp/build/outputs/apk/release/Karakept-${{ needs.resolve-version.outputs.name }}.apk"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: apk-release
           path: androidApp/build/outputs/apk/release/Karakept-*.apk
@@ -196,11 +200,11 @@ jobs:
     needs: [resolve-version, android-tests]
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -208,7 +212,7 @@ jobs:
       # Releases run on tags (non-default ref), where setup-gradle defaults to a
       # read-only cache. Allow writes so back-to-back releases reuse this runner's
       # compiled outputs. No extra job/run is added — only a cache-save step.
-      - uses: gradle/actions/setup-gradle@v6.3.0
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-read-only: false
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
@@ -235,7 +239,7 @@ jobs:
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dmg-release
           path: composeApp/build/compose/binaries/main/dmg/Karakept-*.dmg
@@ -249,18 +253,18 @@ jobs:
     if: false
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
 
       # See build-macos: allow cache writes on tag-triggered releases so
       # consecutive releases reuse compiled outputs. No extra run is added.
-      - uses: gradle/actions/setup-gradle@v6.3.0
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-read-only: false
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
@@ -282,13 +286,13 @@ jobs:
           "-PversionName=${{ needs.resolve-version.outputs.name }}"
 
       - name: Upload Windows MSI artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: msi-release
           path: composeApp/build/compose/binaries/main/msi/*.msi
 
       - name: Upload Windows EXE artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: exe-release
           path: composeApp/build/compose/binaries/main/exe/*.exe
@@ -299,16 +303,16 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
 
-      - uses: actions/setup-java@v6
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@v6.3.0
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
@@ -326,7 +330,7 @@ jobs:
           -PversionName=${{ needs.resolve-version.outputs.name }}
 
       - name: Upload Linux distributable
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linux-dist-for-flatpak
           path: |
@@ -341,17 +345,17 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
       options: --privileged
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: true
 
       - name: Download Linux distributable
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: linux-dist-for-flatpak
           path: composeApp/build
 
-      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
         with:
           bundle: Karakept.flatpak
           manifest-path: flatpak/com.karakept.app.yml
@@ -361,7 +365,7 @@ jobs:
       - name: Rename Flatpak
         run: mv Karakept.flatpak "Karakept-${{ needs.resolve-version.outputs.name }}.flatpak"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flatpak-release
           path: Karakept-*.flatpak
@@ -373,13 +377,26 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+
+      # Lets users check a download came from this workflow:
+      # gh attestation verify <file> -R lmgarret/karakept-kmp
+      - name: Attest build provenance
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            apk-release/*.apk
+            dmg-release/*.dmg
+            flatpak-release/*.flatpak
 
       - name: Create versioned release
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ needs.resolve-version.outputs.tag }}
           name: ${{ needs.resolve-version.outputs.tag }}
@@ -392,7 +409,7 @@ jobs:
 
       - name: Update nightly pre-release
         if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: nightly
           name: "Nightly (#${{ github.run_number }})"
