@@ -7,7 +7,13 @@ on:
 jobs:
   build-apk:
     name: Build dev APK
-    if: github.event.issue.pull_request != null && contains(github.event.comment.body, '/build-apk')
+    # The job checks out the PR head and runs it with the signing secrets, so only
+    # people with write access may trigger it — otherwise any commenter could run
+    # a fork's code against those secrets.
+    if: >-
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '/build-apk') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     permissions:
       contents: read
