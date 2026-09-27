@@ -17,6 +17,7 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setLayoutType
 import com.karakept.app.data.repository.setOfflineRetentionDays
 import com.karakept.app.data.repository.setOfflineRetentionEnabled
+import com.karakept.app.data.repository.setOfflineStorageCapMb
 import com.karakept.app.data.repository.setViewerMode
 import com.karakept.app.data.repository.setActiveServerId
 import com.karakept.app.data.repository.setHideArticleThumbnails
@@ -526,6 +527,18 @@ class SettingsScreenModel(
     fun setOfflineRetentionDays(days: Int) {
         viewModelScope.launch {
             settingsRepository.setOfflineRetentionDays(days)
+        }
+    }
+
+    val offlineStorageCapMb: StateFlow<Int> = settingsRepository.offlineStorageCapMb.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    fun setOfflineStorageCapMb(megabytes: Int) {
+        viewModelScope.launch {
+            settingsRepository.setOfflineStorageCapMb(megabytes)
         }
     }
 

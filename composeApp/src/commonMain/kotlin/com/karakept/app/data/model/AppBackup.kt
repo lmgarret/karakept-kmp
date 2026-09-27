@@ -108,6 +108,7 @@ data class BackupSettings(
     val contentSyncWithChildren: Set<String> = emptySet(),
     val offlineRetentionEnabled: Boolean = false,
     val offlineRetentionDays: Int = OfflineRetention.DEFAULT_DAYS,
+    val offlineStorageCapMb: Int = 0,
 
     // Notifications
     val notificationsEnabled: Boolean = true,

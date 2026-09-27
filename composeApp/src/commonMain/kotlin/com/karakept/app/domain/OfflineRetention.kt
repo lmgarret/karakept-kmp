@@ -4,12 +4,12 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import kotlin.math.abs
 
 /**
- * When a read or archived bookmark stops being worth keeping offline.
+ * When a bookmark stops being worth keeping offline.
  *
  * A retention period is a number of days, null meaning retention is off. [isRetired] mirrors
  * [com.karakept.app.data.local.entity.RETIRED_PREDICATE]: cleanup evicts through the SQL, while
  * sync and the reader ask this for a row they already hold, so that content cleanup dropped is
- * not downloaded straight back.
+ * not downloaded straight back. [skipsContentSync] adds the storage cap's own evictions to that.
  */
 object OfflineRetention {
     const val DAY_MILLIS = 24L * 60 * 60 * 1000
@@ -27,6 +27,15 @@ object OfflineRetention {
     /** The slider stop closest to [days]; the lower one on a tie. */
     fun nearestStopIndex(days: Int): Int =
         SLIDER_STOPS.indices.minBy { abs(SLIDER_STOPS[it] - days) }
+
+    /** The storage budgets offered in settings, in megabytes; 0 is no limit. */
+    val STORAGE_CAP_MB_OPTIONS = listOf(0, 250, 500, 1000, 2000)
+
+    const val MEGABYTE = 1024L * 1024
+
+    /** Whether sync should leave this bookmark's offline copy alone rather than download it. */
+    fun skipsContentSync(bookmark: BookmarkEntity, retentionDays: Int?, now: Long): Boolean =
+        bookmark.offlineEvictedAt != null || isRetired(bookmark, retentionDays, now)
 
     fun cutoff(retentionDays: Int, now: Long): Long = now - retentionDays * DAY_MILLIS
 

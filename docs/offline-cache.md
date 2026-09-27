@@ -17,16 +17,22 @@ or a single list's.
    days from 1 to 999. It keeps its value while switched off; `activeOfflineRetentionDays` is null
    then. Past the chosen number of days, the body is set to NULL and the bookmark's
    `assets.localPath`s are cleared. The row, reading progress and highlights stay.
-3. **Orphan sweep.** Asset rows whose bookmark no longer exists are deleted. Then every cache file
+3. **Storage cap** (*Offline storage limit*, off by default). Usage is every stored body plus
+   every cache file a copy still references, counted once. Past the budget, whole copies (body
+   and downloaded assets) are evicted — read or archived bookmarks first, then unread ones, and
+   within each the one opened longest ago (`bookmarks.lastOpenedAt`, set by the reader; the save
+   date for one never opened). A shared image only counts as freed once its last referrer goes.
+   Evicted rows get `offlineEvictedAt`.
+4. **Orphan sweep.** Asset rows whose bookmark no longer exists are deleted. Then every cache file
    whose name carries one of our prefixes and is referenced neither by a stored body (`file://…`)
    nor by an asset row is deleted. Files younger than an hour are skipped: a download lands on
    disk before the row that points at it is committed. Unprefixed files are never touched — on
    macOS and Windows Coil's disk cache shares the directory.
 
-Steps 1 and 2 are a few indexed updates and run after every sync. The sweep reads every stored
-body, so after a sync it runs only when step 2 evicted something (that is what leaves files to
-free) or once every six hours otherwise, for what deleted bookmarks left behind. A sync fans out
-into one pass per list; `cleanUpAfterSync` skips a pass while another is running.
+Steps 1 and 2 are a few indexed updates and run after every sync. Steps 3 and 4 read every
+stored body, so after a sync they run once every six hours — and the sweep also whenever an
+eviction left files to free. A new storage limit therefore takes effect within six hours. A sync
+fans out into one pass per list; `cleanUpAfterSync` skips a pass while another is running.
 
 ## Not downloading it back
 
@@ -34,6 +40,10 @@ into one pass per list; `cleanUpAfterSync` skips a pass while another is running
 retired bookmark, and the reader shows a fetched body transiently instead of persisting it. It
 tests the current read/archived flags as well as the stamp, so a bookmark marked unread downloads
 again on the next sync without waiting for cleanup to clear its stamp.
+
+Sync also skips anything with `offlineEvictedAt` set (`OfflineRetention.skipsContentSync`). The
+reader stores such a bookmark again when it is opened, and any write of the body clears the
+marker — so the cap evicts what nobody reads, and reading something brings it back.
 
 ## Storage card
 

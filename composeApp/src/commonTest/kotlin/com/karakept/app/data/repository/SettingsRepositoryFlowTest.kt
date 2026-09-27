@@ -469,6 +469,7 @@ class SettingsRepositoryFlowTest {
             contentSyncStrategy = SyncStrategy.ALL.name,
             offlineRetentionEnabled = true,
             offlineRetentionDays = 14,
+            offlineStorageCapMb = 500,
             notificationsEnabled = false
         )
         repo.restoreSettings(custom)
@@ -483,6 +484,7 @@ class SettingsRepositoryFlowTest {
         assertEquals(SyncStrategy.ALL.name, restored.contentSyncStrategy)
         assertEquals(true, restored.offlineRetentionEnabled)
         assertEquals(14, restored.offlineRetentionDays)
+        assertEquals(500, restored.offlineStorageCapMb)
         assertEquals(false, restored.notificationsEnabled)
     }
 

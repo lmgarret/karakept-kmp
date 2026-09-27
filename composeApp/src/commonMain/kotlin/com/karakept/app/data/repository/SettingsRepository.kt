@@ -465,6 +465,9 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
         syncSettingsFlow.map { if (it.offlineRetentionEnabled) it.offlineRetentionDays else null }
             .distinctUntilChanged()
 
+    val offlineStorageCapMb: Flow<Int> =
+        syncSettingsFlow.map { it.offlineStorageCapMb }.distinctUntilChanged()
+
     // ── Derived flows (app) ───────────────────────────────────────────────────
 
     val notificationsEnabled: Flow<Boolean> =
