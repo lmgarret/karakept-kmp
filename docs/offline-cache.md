@@ -34,3 +34,17 @@ into one pass per list; `cleanUpAfterSync` skips a pass while another is running
 retired bookmark, and the reader shows a fetched body transiently instead of persisting it. It
 tests the current read/archived flags as well as the stamp, so a bookmark marked unread downloads
 again on the next sync without waiting for cleanup to clear its stamp.
+
+## Storage card
+
+The *Offline storage* card on *Settings → Sync & Data → Offline Storage*
+(`OfflineStorageScreenModel`) shows what offline copies
+take — stored bodies (`LENGTH(CAST(content AS BLOB))`, bytes rather than characters) plus the
+managed cache files — and how many bookmarks are available offline. Measured when the card opens
+and after each action, never in the background: it reads every body.
+
+- **Clean up now** runs the same pass as after a sync, sweep included, without waiting for the
+  six-hour interval.
+- **Clear offline cache** drops every body and asset path and deletes every managed file, with no
+  grace period. Bookmarks, progress and highlights stay. The confirmation says what the current
+  content strategy will download again on the next sync.

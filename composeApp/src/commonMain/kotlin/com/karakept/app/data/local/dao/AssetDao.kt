@@ -41,6 +41,9 @@ interface AssetDao {
     )
     suspend fun clearLocalPathsOfRetired(cutoff: Long): Int
 
+    @Query("UPDATE assets SET localPath = NULL WHERE localPath IS NOT NULL")
+    suspend fun clearAllLocalPaths(): Int
+
     // Rows left behind by bookmarks deleted locally or on the server.
     @Query(
         "DELETE FROM assets WHERE NOT EXISTS (" +

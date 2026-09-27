@@ -33,3 +33,9 @@ data class BookmarkContentRow(
     val localId: Long,
     val content: String?
 )
+
+/** How many bookmarks hold a stored body, and how many bytes those bodies take. */
+data class StoredContentStats(
+    val bookmarkCount: Int,
+    val bodyBytes: Long
+)

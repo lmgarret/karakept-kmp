@@ -222,6 +222,21 @@ class OfflineCacheCleanupTest {
     }
 
     @Test
+    fun `usage counts stored bodies and only the files cleanup manages`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("a", content = "héllo"))
+        db.bookmarkDao().insertBookmark(bookmark("b", content = "abc"))
+        db.bookmarkDao().insertBookmark(bookmark("none", content = null))
+        val files = FakeFiles(listOf(file("img_a", size = 100), file("asset_b.pdf", size = 50), file("0123abcd.1", size = 999)))
+
+        val usage = cleaner(retentionDays = null, files = files).storageUsage()
+
+        assertEquals(2, usage.bookmarkCount)
+        assertEquals(9L, usage.bodyBytes, "bytes, not characters: é is two")
+        assertEquals(150L, usage.fileBytes)
+        db.close()
+    }
+
+    @Test
     fun `with nothing evicted the sweep waits for its interval`() = runBlocking {
         val files = FakeFiles(emptyList())
         val cleaner = cleaner(retentionDays = null, files = files)
@@ -234,6 +249,25 @@ class OfflineCacheCleanupTest {
         now += OfflineCacheRepository.SWEEP_INTERVAL_MILLIS
         cleaner.cleanUpAfterSync()
         assertTrue(files.present.isEmpty())
+        db.close()
+    }
+
+    @Test
+    fun `clearing everything drops every copy and every managed file, however recent`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("a", content = "<img src='file://$cacheDir/img_a'>"))
+        db.bookmarkDao().insertBookmark(bookmark("b", content = "<p>b</p>"))
+        db.assetDao().insertAssets(listOf(asset("x", "b", "$cacheDir/archive_x")))
+        val files = FakeFiles(listOf(file("img_a", modifiedAt = now), file("archive_x"), file("journal")))
+
+        val result = cleaner(retentionDays = null, files = files).clearAll()
+
+        assertEquals(2, result.evictedBookmarks)
+        assertEquals(2, result.deletedFiles)
+        assertNull(row("a").content)
+        assertNull(row("b").content)
+        assertNull(db.assetDao().getAssetsForBookmark("b", serverId).single().localPath)
+        assertEquals(listOf("journal"), files.present.map { it.name })
+        assertEquals("b", row("b").title, "the bookmark itself stays")
         db.close()
     }
 
