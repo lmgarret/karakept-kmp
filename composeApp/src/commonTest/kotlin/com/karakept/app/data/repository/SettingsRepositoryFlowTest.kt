@@ -466,6 +466,7 @@ class SettingsRepositoryFlowTest {
             htmlFontSize = 24,
             swipeLeftAction = SwipeAction.ARCHIVE.name,
             contentSyncStrategy = SyncStrategy.ALL.name,
+            offlineRetentionDays = 14,
             notificationsEnabled = false
         )
         repo.restoreSettings(custom)
@@ -478,7 +479,17 @@ class SettingsRepositoryFlowTest {
         assertEquals(24, restored.htmlFontSize)
         assertEquals(SwipeAction.ARCHIVE.name, restored.swipeLeftAction)
         assertEquals(SyncStrategy.ALL.name, restored.contentSyncStrategy)
+        assertEquals(14, restored.offlineRetentionDays)
         assertEquals(false, restored.notificationsEnabled)
+    }
+
+    @Test
+    fun offlineRetentionDays_defaultsToOffAndPersists() = runTest {
+        assertEquals(0, repo.offlineRetentionDays.first())
+        repo.setOfflineRetentionDays(30)
+        assertEquals(30, repo.offlineRetentionDays.first())
+        repo.setOfflineRetentionDays(-3)
+        assertEquals(0, repo.offlineRetentionDays.first())
     }
 
     @Test

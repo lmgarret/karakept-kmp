@@ -152,6 +152,12 @@ actual object FileUtils {
         }
     }
 
+    actual fun listFiles(directoryPath: String): List<LocalFileInfo> =
+        File(directoryPath).listFiles()
+            ?.filter { it.isFile }
+            ?.map { LocalFileInfo(it.absolutePath, it.name, it.length(), it.lastModified()) }
+            ?: emptyList()
+
     actual fun deleteFile(path: String) {
         try { File(path).delete() } catch (_: Exception) {}
     }

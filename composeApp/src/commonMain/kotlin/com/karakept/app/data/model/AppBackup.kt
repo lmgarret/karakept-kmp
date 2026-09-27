@@ -105,6 +105,7 @@ data class BackupSettings(
     val contentSyncStrategy: String = SyncStrategy.PER_BOOKMARK.name,
     val contentSyncTargetLists: Set<String> = emptySet(),
     val contentSyncWithChildren: Set<String> = emptySet(),
+    val offlineRetentionDays: Int = 0,
 
     // Notifications
     val notificationsEnabled: Boolean = true,

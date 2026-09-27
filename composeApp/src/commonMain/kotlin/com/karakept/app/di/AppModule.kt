@@ -21,6 +21,7 @@ import com.karakept.api.client.*
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.secure.SecureCredentialStore
 import com.karakept.app.data.repository.HighlightRepository
+import com.karakept.app.data.repository.OfflineCacheRepository
 import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.OnboardingScreenModel
@@ -91,10 +92,11 @@ val appModule = module {
 
     // HighlightRepository
     single { HighlightRepository(get(), get(), get()) }
+    single { OfflineCacheRepository(get(), get(), get(), get()) }
 
     // BookmarkRepository depends on BookmarkActionsRepository and HighlightRepository
     single {
-        BookmarkRepository(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()).also {
+        BookmarkRepository(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()).also {
             // Wire up circular dependencies
             val actionsRepo = get<BookmarkActionsRepository>()
             actionsRepo.setBookmarkRepository(it)

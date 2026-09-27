@@ -15,10 +15,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -42,6 +47,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.SyncStrategy
+import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.ui.screens.SettingsScreenModel
 import kotlinx.coroutines.delay
 
@@ -71,6 +77,7 @@ fun SyncDataSettingsContent(
 ) {
     val offlineMode by screenModel.offlineMode.collectAsState()
     val syncStrategy by screenModel.contentSyncStrategy.collectAsState()
+    val offlineRetentionDays by screenModel.offlineRetentionDays.collectAsState()
 
     val defaultCardColor = CardDefaults.cardColors().containerColor
     var highlightAlpha by remember { mutableStateOf(0f) }
@@ -181,6 +188,13 @@ fun SyncDataSettingsContent(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OfflineRetentionCard(
+                selectedDays = offlineRetentionDays,
+                onSelect = screenModel::setOfflineRetentionDays
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -298,6 +312,73 @@ fun SyncDataSettingsContent(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OfflineRetentionCard(
+    selectedDays: Int,
+    onSelect: (Int) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = AppIcons.Default.DeleteSweep,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Remove read offline copies",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Frees the stored article and images of bookmarks read or archived this long ago. The bookmark itself stays.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = it }
+            ) {
+                OutlinedTextField(
+                    value = offlineRetentionLabel(selectedDays),
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    OfflineRetention.DAY_OPTIONS.forEach { days ->
+                        DropdownMenuItem(
+                            text = { Text(offlineRetentionLabel(days)) },
+                            onClick = {
+                                onSelect(days)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal fun offlineRetentionLabel(days: Int): String = when (days) {
+    0 -> "Never"
+    1 -> "After 1 day"
+    else -> "After $days days"
 }
 
 @Composable

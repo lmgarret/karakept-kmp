@@ -15,6 +15,7 @@ import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.setLayoutType
+import com.karakept.app.data.repository.setOfflineRetentionDays
 import com.karakept.app.data.repository.setViewerMode
 import com.karakept.app.data.repository.setActiveServerId
 import com.karakept.app.data.repository.setHideArticleThumbnails
@@ -500,6 +501,18 @@ class SettingsScreenModel(
     fun setContentSyncStrategy(strategy: com.karakept.app.data.model.SyncStrategy) {
         viewModelScope.launch {
             settingsRepository.setContentSyncStrategy(strategy)
+        }
+    }
+
+    val offlineRetentionDays: StateFlow<Int> = settingsRepository.offlineRetentionDays.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    fun setOfflineRetentionDays(days: Int) {
+        viewModelScope.launch {
+            settingsRepository.setOfflineRetentionDays(days)
         }
     }
 

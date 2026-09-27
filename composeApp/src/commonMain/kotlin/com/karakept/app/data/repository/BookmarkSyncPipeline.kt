@@ -11,6 +11,7 @@ import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.ReadingTimeCalculator
 import com.karakept.app.utils.ImageCacheManager
@@ -135,6 +136,8 @@ internal class BookmarkSyncPipeline(
     private var existingByRemoteId: MutableMap<String, BookmarkEntity> = mutableMapOf()
     private var ignoredIds: Set<String> = emptySet()
     private var syncStrategy: SyncStrategy = SyncStrategy.NEVER
+    private var retentionDays: Int = 0
+    private var startedAt: Long = 0
 
     /** Non-fatal problems accumulated during the last execute() call (Group H). */
     private val _warnings = mutableListOf<com.karakept.app.data.model.SyncWarning>()
@@ -157,6 +160,8 @@ internal class BookmarkSyncPipeline(
         ignoredIds = processedIds +
             bookmarkActionsRepository.getPendingActionBookmarkIds(config.server.id).toSet()
         syncStrategy = settingsRepository.contentSyncStrategy.first()
+        retentionDays = settingsRepository.offlineRetentionDays.firstOrNull() ?: 0
+        startedAt = System.currentTimeMillis()
 
         // Phases 2 + 4 + 4.6, fused and streamed: each page is committed as it arrives so
         // the list on screen converges after one round trip instead of after the whole
@@ -370,7 +375,16 @@ internal class BookmarkSyncPipeline(
             else -> ""
         }
 
-        val newContent = when (syncStrategy) {
+        // Content cleanup dropped stays dropped: re-sending it here would undo the eviction.
+        val isRetired = OfflineRetention.isRetired(
+            isRead = existing?.isRead ?: false,
+            isArchived = dto.archived ?: false,
+            readOrArchivedAt = existing?.readOrArchivedAt,
+            retentionDays = retentionDays,
+            now = startedAt
+        )
+
+        val newContent = if (isRetired) null else when (syncStrategy) {
             com.karakept.app.data.model.SyncStrategy.NEVER,
             com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> null
             com.karakept.app.data.model.SyncStrategy.PER_LIST -> {
@@ -426,7 +440,8 @@ internal class BookmarkSyncPipeline(
             crawledAt = com.karakept.app.utils.parseIsoToEpochMillis(dto.content?.crawledAt)
                 ?: existing?.crawledAt,
             summary = dto.summary ?: existing?.summary,
-            summarizationStatus = dto.summarizationStatus?.value ?: existing?.summarizationStatus
+            summarizationStatus = dto.summarizationStatus?.value ?: existing?.summarizationStatus,
+            readOrArchivedAt = existing?.readOrArchivedAt
         )
     }
 
@@ -619,8 +634,9 @@ internal class BookmarkSyncPipeline(
 
     // Phase 5: Content Sync
     private suspend fun syncContent(entitiesParam: List<BookmarkEntity>) {
-        // Note: entities may have updated localIds after insertion
-        val entities = entitiesParam
+        // Note: entities may have updated localIds after insertion. Retired bookmarks are left
+        // out entirely — their content was dropped on purpose and must not come straight back.
+        val entities = entitiesParam.filterNot { OfflineRetention.isRetired(it, retentionDays, startedAt) }
         val syncStrategy = settingsRepository.contentSyncStrategy.first()
 
         val bookmarksToSync = when (syncStrategy) {

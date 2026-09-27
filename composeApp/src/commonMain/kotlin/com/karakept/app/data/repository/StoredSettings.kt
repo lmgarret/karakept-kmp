@@ -114,7 +114,9 @@ internal data class StoredSwipeSettings(
 internal data class StoredSyncSettings(
     val contentSyncStrategy: String = SyncStrategy.PER_BOOKMARK.name,
     val contentSyncTargetLists: Set<String> = emptySet(),
-    val contentSyncWithChildren: Set<String> = emptySet()
+    val contentSyncWithChildren: Set<String> = emptySet(),
+    /** Days a read or archived bookmark keeps its offline copy; 0 keeps it forever. */
+    val offlineRetentionDays: Int = 0
 )
 
 /** App-level settings: notifications, offline mode, onboarding state, auto-export schedule, export directory, and backup PIN. */

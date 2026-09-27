@@ -135,6 +135,7 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         contentSyncStrategy = sync.contentSyncStrategy,
         contentSyncTargetLists = sync.contentSyncTargetLists,
         contentSyncWithChildren = sync.contentSyncWithChildren,
+        offlineRetentionDays = sync.offlineRetentionDays,
         notificationsEnabled = app.notificationsEnabled,
         offlineMode = app.offlineMode,
         onboardingCompleted = app.onboardingCompleted,
@@ -220,7 +221,8 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
             StoredSyncSettings(
                 contentSyncStrategy = s.contentSyncStrategy,
                 contentSyncTargetLists = s.contentSyncTargetLists,
-                contentSyncWithChildren = s.contentSyncWithChildren
+                contentSyncWithChildren = s.contentSyncWithChildren,
+                offlineRetentionDays = s.offlineRetentionDays
             )
         )
         prefs[APP_SETTINGS_KEY] = settingsJson.encodeToString(
@@ -464,6 +466,9 @@ suspend fun SettingsRepository.setContentSyncConfig(config: ListSyncConfig) = up
         contentSyncWithChildren = config.withChildrenMode
     )
 }
+
+suspend fun SettingsRepository.setOfflineRetentionDays(days: Int) =
+    updateSyncSettings { copy(offlineRetentionDays = days.coerceAtLeast(0)) }
 
 suspend fun SettingsRepository.setNotificationsEnabled(enabled: Boolean) =
     updateAppSettings { copy(notificationsEnabled = enabled) }

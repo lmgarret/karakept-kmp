@@ -15,6 +15,7 @@ import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.domain.OfflineRetention
 import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.repository.BookmarkActionsRepository
@@ -38,6 +39,7 @@ import com.karakept.app.data.repository.setScrollToTopEnabled
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -519,36 +521,38 @@ class BookmarkViewerScreenModel(
 
                                 // Trigger on-demand fetch
                                 try {
+                                    // Every strategy fetches here: under ALL a missing body
+                                    // is one offline cleanup dropped, or a download that failed.
                                     val strategy = settingsRepository.contentSyncStrategy.first()
-                                    if (strategy == com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK ||
-                                        strategy == com.karakept.app.data.model.SyncStrategy.NEVER ||
-                                        strategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
+                                    val content = bookmarkRepository.fetchBookmarkContent(bookmark.remoteId, bookmark.serverId)
+                                    if (!content.isNullOrBlank()) {
+                                        var shouldPersist = false
 
-                                        val content = bookmarkRepository.fetchBookmarkContent(bookmark.remoteId, bookmark.serverId)
-                                        if (!content.isNullOrBlank()) {
-                                            var shouldPersist = false
+                                        if (strategy == com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK) {
+                                            shouldPersist = true
+                                        } else if (strategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
+                                            // Check if in target list
+                                            val targetLists = settingsRepository.contentSyncTargetLists.first()
+                                            val bookmarkListIds = bookmark.listIds.split(",").filter { it.isNotBlank() }
+                                            shouldPersist = bookmarkListIds.any { targetLists.contains(it) }
+                                        }
+                                        // Past its retention: shown, not stored again.
+                                        val retentionDays = settingsRepository.offlineRetentionDays.firstOrNull() ?: 0
+                                        if (OfflineRetention.isRetired(bookmark, retentionDays, System.currentTimeMillis())) {
+                                            shouldPersist = false
+                                        }
 
-                                            if (strategy == com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK) {
-                                                shouldPersist = true
-                                            } else if (strategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
-                                                // Check if in target list
-                                                val targetLists = settingsRepository.contentSyncTargetLists.first()
-                                                val bookmarkListIds = bookmark.listIds.split(",").filter { it.isNotBlank() }
-                                                shouldPersist = bookmarkListIds.any { targetLists.contains(it) }
-                                            }
-
-                                            if (shouldPersist) {
-                                                // Persist it
-                                                val readingTime = com.karakept.app.utils.ReadingTimeCalculator.calculateReadingTime(content)
-                                                bookmarkDao.updateContent(bookmark.localId, content, readingTime)
-                                                // The flow will emit the updated bookmark automatically
-                                            } else {
-                                                // Transient (NEVER or PER_LIST outside target list):
-                                                // cache content so future DB observations don't re-fetch
-                                                transientContent = content
-                                                val transientBookmark = bookmark.copy(content = content)
-                                                _loadingState.value = BookmarkLoadingState.FullyLoaded(transientBookmark)
-                                            }
+                                        if (shouldPersist) {
+                                            // Persist it
+                                            val readingTime = com.karakept.app.utils.ReadingTimeCalculator.calculateReadingTime(content)
+                                            bookmarkDao.updateContent(bookmark.localId, content, readingTime)
+                                            // The flow will emit the updated bookmark automatically
+                                        } else {
+                                            // Transient (NEVER, ALL, PER_LIST outside target list, or retired):
+                                            // cache content so future DB observations don't re-fetch
+                                            transientContent = content
+                                            val transientBookmark = bookmark.copy(content = content)
+                                            _loadingState.value = BookmarkLoadingState.FullyLoaded(transientBookmark)
                                         }
                                     }
                                 } catch (e: Exception) {

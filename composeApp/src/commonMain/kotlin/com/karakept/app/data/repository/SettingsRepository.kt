@@ -453,6 +453,9 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
         ListSyncConfig(s.contentSyncTargetLists, s.contentSyncWithChildren)
     }.distinctUntilChanged()
 
+    val offlineRetentionDays: Flow<Int> =
+        syncSettingsFlow.map { it.offlineRetentionDays }.distinctUntilChanged()
+
     // ── Derived flows (app) ───────────────────────────────────────────────────
 
     val notificationsEnabled: Flow<Boolean> =

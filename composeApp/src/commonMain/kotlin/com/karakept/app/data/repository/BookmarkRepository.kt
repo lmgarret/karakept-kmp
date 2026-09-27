@@ -54,7 +54,8 @@ class BookmarkRepository(
     private val highlightRepository: com.karakept.app.data.repository.HighlightRepository,
     private val imageCacheManager: ImageCacheManager,
     private val listDao: ListDao,
-    private val appDispatchers: AppDispatchers
+    private val appDispatchers: AppDispatchers,
+    private val offlineCacheRepository: OfflineCacheRepository? = null
 ) {
     // Outlives any one caller: a bookmark created by the user must finish fetching its full
     // content even if the screen that created it goes away. Bound to the repository (a Koin
@@ -502,6 +503,21 @@ class BookmarkRepository(
         } catch (e: Exception) {
             AppLogger.e("BookmarkRepository", "syncSingleBookmark failed for $bookmarkId: ${e.message}", e)
             throw e
+        }
+    }
+
+    // After a full sync rather than on a timer of its own: that is when read state and deletions
+    // have just caught up with the server. Off the caller's path — nothing on screen waits on it.
+    private fun cleanUpOfflineCache() {
+        val cleaner = offlineCacheRepository ?: return
+        repositoryScope.launch {
+            try {
+                cleaner.cleanUpIfDue()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLogger.e("BookmarkRepo", "Offline cache cleanup failed: ${e.message}", e)
+            }
         }
     }
 
@@ -1120,6 +1136,7 @@ class BookmarkRepository(
             )
             val result = pipeline.execute()
             _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks
+            if (config is SyncConfiguration.Full) cleanUpOfflineCache()
             if (pipeline.warnings.isNotEmpty()) {
                 _syncReports.tryEmit(
                     com.karakept.app.data.model.SyncReport(key, result, pipeline.warnings)

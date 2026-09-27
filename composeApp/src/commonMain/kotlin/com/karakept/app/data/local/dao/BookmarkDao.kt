@@ -11,6 +11,8 @@ import androidx.room3.RoomWarnings
 import androidx.room3.Update
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.OFFLINE_PREDICATE
+import com.karakept.app.data.local.entity.RETIRED_PREDICATE
+import com.karakept.app.data.local.projection.BookmarkContentRow
 import com.karakept.app.data.local.projection.ListMembershipGroup
 import com.karakept.app.data.local.projection.QuickFilterCountRow
 import com.karakept.app.data.local.projection.TagGroup
@@ -225,6 +227,31 @@ interface BookmarkDao {
         scrollOffset: Int
     ): Int
 
+    // ── Offline cache cleanup (OfflineCacheRepository) ──
+
+    @Query(
+        "UPDATE bookmarks SET readOrArchivedAt = :now " +
+            "WHERE (isRead = 1 OR isArchived = 1) AND readOrArchivedAt IS NULL"
+    )
+    suspend fun stampReadOrArchived(now: Long): Int
+
+    @Query(
+        "UPDATE bookmarks SET readOrArchivedAt = NULL " +
+            "WHERE isRead = 0 AND isArchived = 0 AND readOrArchivedAt IS NOT NULL"
+    )
+    suspend fun clearReadOrArchived(): Int
+
+    // Drops the body only: the row, its reading progress and its highlights stay.
+    @Query("UPDATE bookmarks SET content = NULL, hasContent = 0 WHERE hasContent = 1 AND " + RETIRED_PREDICATE)
+    suspend fun evictRetiredContent(cutoff: Long): Int
+
+    // Keyset-paged so a library of stored articles is never held in memory at once.
+    @Query(
+        "SELECT localId, content FROM bookmarks WHERE hasContent = 1 AND localId > :afterLocalId " +
+            "ORDER BY localId LIMIT :limit"
+    )
+    suspend fun getStoredContentPage(afterLocalId: Long, limit: Int): List<BookmarkContentRow>
+
     // Paginated query — ORDER BY is injected dynamically via RoomRawQuery so the
     // sort option from FilterConfig is applied at the DB level rather than in memory.
     @RawQuery
@@ -364,7 +391,7 @@ interface BookmarkDao {
         SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
-               modifiedAt, progressSyncedAt,
+               modifiedAt, progressSyncedAt, readOrArchivedAt,
                CASE WHEN hasContent = 1 THEN 'HAS_CONTENT' ELSE '' END as content
         FROM bookmarks
         WHERE serverId = :serverId
