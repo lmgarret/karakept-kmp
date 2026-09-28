@@ -18,6 +18,7 @@ import com.karakept.app.ui.screens.ShareBookmarkScreen
 import com.karakept.app.ui.screens.ShareMultipleBookmarksScreen
 import com.karakept.app.ui.screens.settings.AppearanceSettingsScreen
 import com.karakept.app.ui.screens.settings.BackgroundSyncSettingsScreen
+import com.karakept.app.ui.screens.settings.OfflineStorageSettingsScreen
 import com.karakept.app.ui.screens.settings.BackupRestoreScreen
 import com.karakept.app.ui.screens.settings.BookmarkListSettingsScreen
 import com.karakept.app.ui.screens.settings.BookmarkViewSettingsScreen
@@ -64,6 +65,7 @@ val navKeySerializersModule: SerializersModule = SerializersModule {
         subclass(BookmarkListSettingsScreen::class)
         subclass(NotificationSettingsScreen::class)
         subclass(BackgroundSyncSettingsScreen::class)
+        subclass(OfflineStorageSettingsScreen::class)
         subclass(SyncDataSettingsScreen::class)
         subclass(BackupRestoreScreen::class)
         subclass(CustomSwipeActionsScreen::class)
@@ -103,6 +105,7 @@ fun appEntryProvider(): (NavKey) -> NavEntry<NavKey> = entryProvider {
     entry<BookmarkListSettingsScreen> { it.Content() }
     entry<NotificationSettingsScreen> { it.Content() }
     entry<BackgroundSyncSettingsScreen> { it.Content() }
+    entry<OfflineStorageSettingsScreen> { it.Content() }
     entry<SyncDataSettingsScreen> { it.Content() }
     entry<BackupRestoreScreen> { it.Content() }
     entry<CustomSwipeActionsScreen> { it.Content() }

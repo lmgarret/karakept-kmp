@@ -1,5 +1,6 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.AutoExportInterval
 import com.karakept.app.data.model.LayoutType
@@ -115,8 +116,9 @@ internal data class StoredSyncSettings(
     val contentSyncStrategy: String = SyncStrategy.PER_BOOKMARK.name,
     val contentSyncTargetLists: Set<String> = emptySet(),
     val contentSyncWithChildren: Set<String> = emptySet(),
-    /** Days a read or archived bookmark keeps its offline copy; 0 keeps it forever. */
-    val offlineRetentionDays: Int = 0
+    /** Whether read or archived bookmarks lose their offline copy after [offlineRetentionDays]. */
+    val offlineRetentionEnabled: Boolean = false,
+    val offlineRetentionDays: Int = OfflineRetention.DEFAULT_DAYS
 )
 
 /** App-level settings: notifications, offline mode, onboarding state, auto-export schedule, export directory, and backup PIN. */

@@ -12,8 +12,9 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 object OfflineRetention {
     const val DAY_MILLIS = 24L * 60 * 60 * 1000
 
-    /** The choices offered in settings; 0 keeps offline copies forever. */
-    val DAY_OPTIONS = listOf(0, 1, 7, 14, 30, 90)
+    const val MIN_DAYS = 1
+    const val MAX_DAYS = 90
+    const val DEFAULT_DAYS = 30
 
     fun cutoff(retentionDays: Int, now: Long): Long = now - retentionDays * DAY_MILLIS
 

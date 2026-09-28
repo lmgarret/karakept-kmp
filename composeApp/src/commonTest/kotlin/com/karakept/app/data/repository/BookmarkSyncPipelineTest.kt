@@ -689,7 +689,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
         // Cleanup dropped these bodies on purpose. Sync must not bring them straight back —
         // except for the one archived too recently to have been dropped.
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
-        coEvery { settingsRepository.offlineRetentionDays } returns flowOf(7)
+        coEvery { settingsRepository.activeOfflineRetentionDays } returns flowOf(7)
         val now = System.currentTimeMillis()
         val retired = makeBookmarkEntity(localId = 1L, remoteId = "bk-old")
             .copy(isArchived = true, readOrArchivedAt = now - 30 * OfflineRetention.DAY_MILLIS)
@@ -718,7 +718,7 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     fun contentSync_downloadsAgainOnceARetiredBookmarkIsUnarchived() = runTest(testDispatcher) {
         // The stamp is only cleared by the next cleanup; the flags the server just sent win.
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
-        coEvery { settingsRepository.offlineRetentionDays } returns flowOf(7)
+        coEvery { settingsRepository.activeOfflineRetentionDays } returns flowOf(7)
         val stale = makeBookmarkEntity(localId = 1L, remoteId = "bk-1")
             .copy(isArchived = true, readOrArchivedAt = 1L)
         coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(stale)

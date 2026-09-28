@@ -1,5 +1,6 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.domain.OfflineRetention
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.datastore.preferences.core.Preferences
@@ -135,6 +136,7 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         contentSyncStrategy = sync.contentSyncStrategy,
         contentSyncTargetLists = sync.contentSyncTargetLists,
         contentSyncWithChildren = sync.contentSyncWithChildren,
+        offlineRetentionEnabled = sync.offlineRetentionEnabled,
         offlineRetentionDays = sync.offlineRetentionDays,
         notificationsEnabled = app.notificationsEnabled,
         offlineMode = app.offlineMode,
@@ -222,6 +224,7 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                 contentSyncStrategy = s.contentSyncStrategy,
                 contentSyncTargetLists = s.contentSyncTargetLists,
                 contentSyncWithChildren = s.contentSyncWithChildren,
+                offlineRetentionEnabled = s.offlineRetentionEnabled,
                 offlineRetentionDays = s.offlineRetentionDays
             )
         )
@@ -467,8 +470,12 @@ suspend fun SettingsRepository.setContentSyncConfig(config: ListSyncConfig) = up
     )
 }
 
-suspend fun SettingsRepository.setOfflineRetentionDays(days: Int) =
-    updateSyncSettings { copy(offlineRetentionDays = days.coerceAtLeast(0)) }
+suspend fun SettingsRepository.setOfflineRetentionEnabled(enabled: Boolean) =
+    updateSyncSettings { copy(offlineRetentionEnabled = enabled) }
+
+suspend fun SettingsRepository.setOfflineRetentionDays(days: Int) = updateSyncSettings {
+    copy(offlineRetentionDays = days.coerceIn(OfflineRetention.MIN_DAYS, OfflineRetention.MAX_DAYS))
+}
 
 suspend fun SettingsRepository.setNotificationsEnabled(enabled: Boolean) =
     updateAppSettings { copy(notificationsEnabled = enabled) }

@@ -537,7 +537,7 @@ class BookmarkViewerScreenModel(
                                             shouldPersist = bookmarkListIds.any { targetLists.contains(it) }
                                         }
                                         // Past its retention: shown, not stored again.
-                                        val retentionDays = settingsRepository.offlineRetentionDays.firstOrNull() ?: 0
+                                        val retentionDays = settingsRepository.activeOfflineRetentionDays.firstOrNull() ?: 0
                                         if (OfflineRetention.isRetired(bookmark, retentionDays, System.currentTimeMillis())) {
                                             shouldPersist = false
                                         }

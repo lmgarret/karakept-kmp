@@ -15,16 +15,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -46,8 +40,6 @@ import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
-import com.karakept.app.data.model.SyncStrategy
-import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.ui.screens.SettingsScreenModel
 import kotlinx.coroutines.delay
 
@@ -76,8 +68,6 @@ fun SyncDataSettingsContent(
     showBackButton: Boolean = true
 ) {
     val offlineMode by screenModel.offlineMode.collectAsState()
-    val syncStrategy by screenModel.contentSyncStrategy.collectAsState()
-    val offlineRetentionDays by screenModel.offlineRetentionDays.collectAsState()
 
     val defaultCardColor = CardDefaults.cardColors().containerColor
     var highlightAlpha by remember { mutableStateOf(0f) }
@@ -98,9 +88,6 @@ fun SyncDataSettingsContent(
     }
     val highlightColor = MaterialTheme.colorScheme.primaryContainer
     val cardColor = lerp(defaultCardColor, highlightColor, animatedAlpha)
-
-    val strategies = SyncStrategy.values()
-        .filter { it != SyncStrategy.PER_LIST }
 
     Scaffold(
         topBar = {
@@ -161,43 +148,9 @@ fun SyncDataSettingsContent(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Content Sync Mode
-            Text(
-                text = "Content Sync Mode",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                strategies.forEach { strategy ->
-                    SyncStrategyOptionCard(
-                        strategy = strategy,
-                        isSelected = strategy == syncStrategy,
-                        onClick = { screenModel.setContentSyncStrategy(strategy) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "You can also toggle offline sync per list. Long-press any list in the sidebar and open its settings.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-            )
+            OfflineStorageLinkCard(onClick = { onNavigate(OfflineStorageSettingsScreen()) })
 
             Spacer(modifier = Modifier.height(12.dp))
-
-            OfflineRetentionCard(
-                selectedDays = offlineRetentionDays,
-                onSelect = screenModel::setOfflineRetentionDays
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
 
             // Server Connection link
             Card(
@@ -314,79 +267,8 @@ fun SyncDataSettingsContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OfflineRetentionCard(
-    selectedDays: Int,
-    onSelect: (Int) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = AppIcons.Default.DeleteSweep,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Remove read offline copies",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "Frees the stored article and images of bookmarks read or archived this long ago. The bookmark itself stays.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = it }
-            ) {
-                OutlinedTextField(
-                    value = offlineRetentionLabel(selectedDays),
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth()
-                )
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
-                    OfflineRetention.DAY_OPTIONS.forEach { days ->
-                        DropdownMenuItem(
-                            text = { Text(offlineRetentionLabel(days)) },
-                            onClick = {
-                                onSelect(days)
-                                expanded = false
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-internal fun offlineRetentionLabel(days: Int): String = when (days) {
-    0 -> "Never"
-    1 -> "After 1 day"
-    else -> "After $days days"
-}
-
-@Composable
-private fun SyncStrategyOptionCard(
-    strategy: SyncStrategy,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
+private fun OfflineStorageLinkCard(onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -398,35 +280,27 @@ private fun SyncStrategyOptionCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            RadioButton(
-                selected = isSelected,
-                onClick = onClick
+            Icon(
+                imageVector = AppIcons.Default.OfflinePin,
+                contentDescription = null,
+                modifier = Modifier.padding(end = 16.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
-
-            Spacer(modifier = Modifier.padding(start = 12.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = when (strategy) {
-                        SyncStrategy.NEVER -> "Never (Online Only)"
-                        SyncStrategy.PER_BOOKMARK -> "Per Bookmark (When Viewed)"
-                        SyncStrategy.PER_LIST -> "Per List (Specific Lists)"
-                        SyncStrategy.ALL -> "All Bookmarks"
-                    },
+                    text = "Offline Storage",
                     style = MaterialTheme.typography.titleMedium
                 )
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = when (strategy) {
-                        SyncStrategy.NEVER -> "Content is fetched only when you open a bookmark. Nothing is stored locally."
-                        SyncStrategy.PER_BOOKMARK -> "Content is fetched and stored locally when you open a bookmark."
-                        SyncStrategy.PER_LIST -> "Content for selected lists is automatically synced and stored."
-                        SyncStrategy.ALL -> "Content for all bookmarks is stored locally. WARNING: this may cause slower sync times and increased storage usage."
-                    },
+                    text = "What is stored for offline reading, and when it is cleaned up",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            Icon(
+                imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = "Open"
+            )
         }
     }
 }

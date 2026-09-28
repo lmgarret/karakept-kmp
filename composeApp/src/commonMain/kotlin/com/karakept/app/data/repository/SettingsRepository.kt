@@ -453,8 +453,17 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
         ListSyncConfig(s.contentSyncTargetLists, s.contentSyncWithChildren)
     }.distinctUntilChanged()
 
+    val offlineRetentionEnabled: Flow<Boolean> =
+        syncSettingsFlow.map { it.offlineRetentionEnabled }.distinctUntilChanged()
+
+    /** The period chosen on the slider, kept while the switch is off so turning it back on restores it. */
     val offlineRetentionDays: Flow<Int> =
         syncSettingsFlow.map { it.offlineRetentionDays }.distinctUntilChanged()
+
+    /** The period cleanup and sync act on: 0 while retention is switched off. */
+    val activeOfflineRetentionDays: Flow<Int> =
+        syncSettingsFlow.map { if (it.offlineRetentionEnabled) it.offlineRetentionDays else 0 }
+            .distinctUntilChanged()
 
     // ── Derived flows (app) ───────────────────────────────────────────────────
 

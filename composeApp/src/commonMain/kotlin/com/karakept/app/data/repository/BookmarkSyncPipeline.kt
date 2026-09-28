@@ -160,7 +160,7 @@ internal class BookmarkSyncPipeline(
         ignoredIds = processedIds +
             bookmarkActionsRepository.getPendingActionBookmarkIds(config.server.id).toSet()
         syncStrategy = settingsRepository.contentSyncStrategy.first()
-        retentionDays = settingsRepository.offlineRetentionDays.firstOrNull() ?: 0
+        retentionDays = settingsRepository.activeOfflineRetentionDays.firstOrNull() ?: 0
         startedAt = System.currentTimeMillis()
 
         // Phases 2 + 4 + 4.6, fused and streamed: each page is committed as it arrives so
