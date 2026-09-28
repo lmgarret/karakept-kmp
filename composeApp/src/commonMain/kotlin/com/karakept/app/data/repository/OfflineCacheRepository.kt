@@ -52,37 +52,55 @@ class OfflineCacheRepository(
     private val clock: () -> Long = { System.currentTimeMillis() }
 ) {
     private val mutex = Mutex()
-    private var lastRunAt: Long? = null
+    private var lastSweepAt: Long? = null
 
-    /** [cleanUp], at most once per [MIN_INTERVAL_MILLIS] — reading every stored body is not free. */
-    suspend fun cleanUpIfDue(): OfflineCacheCleanupResult? {
-        val last = lastRunAt
-        if (last != null && clock() - last < MIN_INTERVAL_MILLIS) return null
-        return cleanUp()
+    /**
+     * The pass run after every sync, list syncs included. Stamping and retention are a few
+     * indexed updates, so they run every time; the sweep reads every stored body, so it runs only
+     * when this pass evicted something — which is what leaves files to free — or once per
+     * [SWEEP_INTERVAL_MILLIS] otherwise, for what deleted bookmarks left behind.
+     *
+     * Returns null when another pass is already running: a sync fans out into one pass per list,
+     * and one cleanup at a time covers them all.
+     */
+    suspend fun cleanUpAfterSync(): OfflineCacheCleanupResult? = withContext(appDispatchers.io) {
+        if (!mutex.tryLock()) return@withContext null
+        try {
+            runPass(forceSweep = false)
+        } finally {
+            mutex.unlock()
+        }
     }
 
     suspend fun cleanUp(): OfflineCacheCleanupResult = withContext(appDispatchers.io) {
-        mutex.withLock {
-            val now = clock()
-            lastRunAt = now
+        mutex.withLock { runPass(forceSweep = true) }
+    }
 
-            bookmarkDao.clearReadOrArchived()
-            bookmarkDao.stampReadOrArchived(now)
+    private suspend fun runPass(forceSweep: Boolean): OfflineCacheCleanupResult {
+        val now = clock()
 
-            val retentionDays = settingsRepository.activeOfflineRetentionDays.first()
-            val evicted = if (retentionDays != null) {
-                val cutoff = OfflineRetention.cutoff(retentionDays, now)
-                assetDao.clearLocalPathsOfRetired(cutoff)
-                bookmarkDao.evictRetiredContent(cutoff)
-            } else 0
+        bookmarkDao.clearReadOrArchived()
+        bookmarkDao.stampReadOrArchived(now)
 
+        val retentionDays = settingsRepository.activeOfflineRetentionDays.first()
+        val evicted = if (retentionDays != null) {
+            val cutoff = OfflineRetention.cutoff(retentionDays, now)
+            assetDao.clearLocalPathsOfRetired(cutoff)
+            bookmarkDao.evictRetiredContent(cutoff)
+        } else 0
+
+        val lastSweep = lastSweepAt
+        val sweepDue = forceSweep || evicted > 0 ||
+            lastSweep == null || now - lastSweep >= SWEEP_INTERVAL_MILLIS
+        val (deleted, freed) = if (sweepDue) {
+            lastSweepAt = now
             assetDao.deleteOrphaned()
-            val (deleted, freed) = sweepUnreferencedFiles(now)
+            sweepUnreferencedFiles(now)
+        } else 0 to 0L
 
-            OfflineCacheCleanupResult(evicted, deleted, freed).also {
-                if (it.evictedBookmarks > 0 || it.deletedFiles > 0) {
-                    AppLogger.d(TAG, "Evicted ${it.evictedBookmarks} bookmark(s), deleted ${it.deletedFiles} file(s), freed ${it.freedBytes} bytes")
-                }
+        return OfflineCacheCleanupResult(evicted, deleted, freed).also {
+            if (it.evictedBookmarks > 0 || it.deletedFiles > 0) {
+                AppLogger.d(TAG, "Evicted ${it.evictedBookmarks} bookmark(s), deleted ${it.deletedFiles} file(s), freed ${it.freedBytes} bytes")
             }
         }
     }
@@ -128,7 +146,7 @@ class OfflineCacheRepository(
     companion object {
         private const val TAG = "OfflineCacheRepository"
         private const val CONTENT_PAGE_SIZE = 50
-        const val MIN_INTERVAL_MILLIS = 6L * 60 * 60 * 1000
+        const val SWEEP_INTERVAL_MILLIS = 6L * 60 * 60 * 1000
         const val SWEEP_GRACE_MILLIS = 60L * 60 * 1000
 
         // Every name the app writes into the image cache directory: ImageCacheManager's

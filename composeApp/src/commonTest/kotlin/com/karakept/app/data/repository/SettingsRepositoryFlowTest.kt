@@ -498,10 +498,6 @@ class SettingsRepositoryFlowTest {
         repo.setOfflineRetentionEnabled(true)
         assertEquals(14, repo.activeOfflineRetentionDays.first())
 
-        repo.setOfflineRetentionDays(0)
-        assertEquals(0, repo.activeOfflineRetentionDays.first(), "0 is \"once read\", not off")
-
-        repo.setOfflineRetentionDays(14)
         repo.setOfflineRetentionEnabled(false)
         assertEquals(null, repo.activeOfflineRetentionDays.first())
         assertEquals(14, repo.offlineRetentionDays.first(), "switching off keeps the chosen period")
@@ -509,7 +505,7 @@ class SettingsRepositoryFlowTest {
 
     @Test
     fun offlineRetentionDays_isClampedToWhatTheFieldAccepts() = runTest {
-        repo.setOfflineRetentionDays(-3)
+        repo.setOfflineRetentionDays(0)
         assertEquals(OfflineRetention.MIN_DAYS, repo.offlineRetentionDays.first())
         repo.setOfflineRetentionDays(5000)
         assertEquals(OfflineRetention.MAX_DAYS, repo.offlineRetentionDays.first())

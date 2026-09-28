@@ -31,11 +31,6 @@ class OfflineRetentionTest {
     }
 
     @Test
-    fun aPeriodOfZeroRetiresAsSoonAsItIsStamped() {
-        assertTrue(retired(since = now, days = 0))
-    }
-
-    @Test
     fun retentionOffNeverRetires() {
         assertFalse(retired(days = null))
     }
@@ -53,7 +48,7 @@ class OfflineRetentionTest {
 
     @Test
     fun sliderStopsRunDailyThenWeeklyThenMonthly() {
-        assertEquals(listOf(0, 1, 2, 3, 4, 5, 6, 7, 14, 21, 30, 60, 90), OfflineRetention.SLIDER_STOPS)
+        assertEquals(listOf(1, 2, 3, 4, 5, 6, 7, 14, 21, 30, 60, 90), OfflineRetention.SLIDER_STOPS)
     }
 
     @Test

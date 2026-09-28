@@ -195,7 +195,7 @@ private fun RetentionPeriodPicker(
     var sliderIndex by remember(days) { mutableFloatStateOf(OfflineRetention.nearestStopIndex(days).toFloat()) }
     var fieldText by remember(days) { mutableStateOf(days.toString()) }
     val stopDays = OfflineRetention.SLIDER_STOPS[sliderIndex.roundToInt()]
-    val shownDays = fieldText.toIntOrNull() ?: stopDays
+    val shownDays = fieldText.toIntOrNull()?.takeIf { it >= OfflineRetention.MIN_DAYS } ?: stopDays
 
     Text(
         text = offlineRetentionLabel(shownDays),
@@ -219,7 +219,7 @@ private fun RetentionPeriodPicker(
             onValueChange = { input ->
                 val digits = input.filter(Char::isDigit).take(OfflineRetention.MAX_DAYS.toString().length)
                 fieldText = digits
-                digits.toIntOrNull()?.let { typed ->
+                digits.toIntOrNull()?.takeIf { it >= OfflineRetention.MIN_DAYS }?.let { typed ->
                     sliderIndex = OfflineRetention.nearestStopIndex(typed).toFloat()
                     onDaysChange(typed)
                 }
@@ -233,7 +233,6 @@ private fun RetentionPeriodPicker(
 }
 
 internal fun offlineRetentionLabel(days: Int): String = when {
-    days == 0 -> "As soon as it is read"
     days % 30 == 0 -> plural(days / 30, "month").let { "After $it" }
     days % 7 == 0 -> plural(days / 7, "week").let { "After $it" }
     else -> "After ${plural(days, "day")}"

@@ -506,13 +506,13 @@ class BookmarkRepository(
         }
     }
 
-    // After a full sync rather than on a timer of its own: that is when read state and deletions
+    // After every sync rather than on a timer of its own: that is when read state and deletions
     // have just caught up with the server. Off the caller's path — nothing on screen waits on it.
     private fun cleanUpOfflineCache() {
         val cleaner = offlineCacheRepository ?: return
         repositoryScope.launch {
             try {
-                cleaner.cleanUpIfDue()
+                cleaner.cleanUpAfterSync()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1136,7 +1136,7 @@ class BookmarkRepository(
             )
             val result = pipeline.execute()
             _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks
-            if (config is SyncConfiguration.Full) cleanUpOfflineCache()
+            cleanUpOfflineCache()
             if (pipeline.warnings.isNotEmpty()) {
                 _syncReports.tryEmit(
                     com.karakept.app.data.model.SyncReport(key, result, pipeline.warnings)

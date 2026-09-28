@@ -127,19 +127,6 @@ class OfflineCacheCleanupTest {
     }
 
     @Test
-    fun `a period of zero drops the body in the same pass that first sees it read`() = runBlocking {
-        db.bookmarkDao().insertBookmark(bookmark("just-read", isRead = true))
-        db.bookmarkDao().insertBookmark(bookmark("unread"))
-
-        val result = cleaner(retentionDays = 0).cleanUp()
-
-        assertEquals(1, result.evictedBookmarks)
-        assertNull(row("just-read").content)
-        assertEquals("<p>body</p>", row("unread").content)
-        db.close()
-    }
-
-    @Test
     fun `retention off keeps every body`() = runBlocking {
         db.bookmarkDao().insertBookmark(bookmark("old", isRead = true, readOrArchivedAt = 1L))
 
@@ -216,13 +203,50 @@ class OfflineCacheCleanupTest {
     }
 
     @Test
-    fun `cleanUpIfDue runs at most once per interval`() = runBlocking {
-        val cleaner = cleaner(retentionDays = null)
-        assertNotNull(cleaner.cleanUpIfDue())
-        now += OfflineCacheRepository.MIN_INTERVAL_MILLIS - 1
-        assertNull(cleaner.cleanUpIfDue())
-        now += 1
-        assertNotNull(cleaner.cleanUpIfDue())
+    fun `retention runs after every sync, and frees what it evicted straight away`() = runBlocking {
+        val files = FakeFiles(emptyList())
+        val cleaner = cleaner(retentionDays = 7, files = files)
+        cleaner.cleanUpAfterSync()
+
+        // A list sync moments later brings in a bookmark read long ago.
+        db.bookmarkDao().insertBookmark(
+            bookmark("old", isRead = true, readOrArchivedAt = 1L, content = "<img src='file://$cacheDir/img_old'>")
+        )
+        files.present += file("img_old")
+        val result = cleaner.cleanUpAfterSync()
+
+        assertEquals(1, result?.evictedBookmarks)
+        assertNull(row("old").content)
+        assertTrue(files.present.isEmpty(), "an eviction sweeps in the same pass")
+        db.close()
+    }
+
+    @Test
+    fun `with nothing evicted the sweep waits for its interval`() = runBlocking {
+        val files = FakeFiles(emptyList())
+        val cleaner = cleaner(retentionDays = null, files = files)
+        cleaner.cleanUpAfterSync()
+        files.present += file("img_orphan")
+
+        cleaner.cleanUpAfterSync()
+        assertEquals(listOf("img_orphan"), files.present.map { it.name })
+
+        now += OfflineCacheRepository.SWEEP_INTERVAL_MILLIS
+        cleaner.cleanUpAfterSync()
+        assertTrue(files.present.isEmpty())
+        db.close()
+    }
+
+    @Test
+    fun `an explicit clean up always sweeps`() = runBlocking {
+        val files = FakeFiles(emptyList())
+        val cleaner = cleaner(retentionDays = null, files = files)
+        cleaner.cleanUpAfterSync()
+        files.present += file("img_orphan")
+
+        cleaner.cleanUp()
+
+        assertTrue(files.present.isEmpty())
         db.close()
     }
 

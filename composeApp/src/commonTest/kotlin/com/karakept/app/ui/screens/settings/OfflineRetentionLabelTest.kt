@@ -7,7 +7,6 @@ class OfflineRetentionLabelTest {
 
     @Test
     fun namesThePeriodInItsLargestWholeUnit() {
-        assertEquals("As soon as it is read", offlineRetentionLabel(0))
         assertEquals("After 1 day", offlineRetentionLabel(1))
         assertEquals("After 5 days", offlineRetentionLabel(5))
         assertEquals("After 1 week", offlineRetentionLabel(7))
