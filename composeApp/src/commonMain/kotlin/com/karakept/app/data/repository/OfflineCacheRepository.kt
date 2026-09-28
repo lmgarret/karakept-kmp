@@ -70,7 +70,7 @@ class OfflineCacheRepository(
             bookmarkDao.stampReadOrArchived(now)
 
             val retentionDays = settingsRepository.activeOfflineRetentionDays.first()
-            val evicted = if (retentionDays > 0) {
+            val evicted = if (retentionDays != null) {
                 val cutoff = OfflineRetention.cutoff(retentionDays, now)
                 assetDao.clearLocalPathsOfRetired(cutoff)
                 bookmarkDao.evictRetiredContent(cutoff)

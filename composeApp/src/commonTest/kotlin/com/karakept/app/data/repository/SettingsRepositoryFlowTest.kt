@@ -490,24 +490,28 @@ class SettingsRepositoryFlowTest {
     fun offlineRetention_isOffByDefaultAndOnlyActiveWhenSwitchedOn() = runTest {
         assertEquals(false, repo.offlineRetentionEnabled.first())
         assertEquals(OfflineRetention.DEFAULT_DAYS, repo.offlineRetentionDays.first())
-        assertEquals(0, repo.activeOfflineRetentionDays.first())
+        assertEquals(null, repo.activeOfflineRetentionDays.first())
 
         repo.setOfflineRetentionDays(14)
-        assertEquals(0, repo.activeOfflineRetentionDays.first(), "the slider alone changes nothing")
+        assertEquals(null, repo.activeOfflineRetentionDays.first(), "the slider alone changes nothing")
 
         repo.setOfflineRetentionEnabled(true)
         assertEquals(14, repo.activeOfflineRetentionDays.first())
 
+        repo.setOfflineRetentionDays(0)
+        assertEquals(0, repo.activeOfflineRetentionDays.first(), "0 is \"once read\", not off")
+
+        repo.setOfflineRetentionDays(14)
         repo.setOfflineRetentionEnabled(false)
-        assertEquals(0, repo.activeOfflineRetentionDays.first())
+        assertEquals(null, repo.activeOfflineRetentionDays.first())
         assertEquals(14, repo.offlineRetentionDays.first(), "switching off keeps the chosen period")
     }
 
     @Test
-    fun offlineRetentionDays_isClampedToTheSliderRange() = runTest {
-        repo.setOfflineRetentionDays(0)
+    fun offlineRetentionDays_isClampedToWhatTheFieldAccepts() = runTest {
+        repo.setOfflineRetentionDays(-3)
         assertEquals(OfflineRetention.MIN_DAYS, repo.offlineRetentionDays.first())
-        repo.setOfflineRetentionDays(1000)
+        repo.setOfflineRetentionDays(5000)
         assertEquals(OfflineRetention.MAX_DAYS, repo.offlineRetentionDays.first())
     }
 

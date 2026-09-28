@@ -70,8 +70,8 @@ const val OFFLINE_PREDICATE = "hasContent = 1"
 
 /**
  * A bookmark whose offline copy has outlived the retention window: read or archived, and first
- * seen that way before `:cutoff`. [com.karakept.app.domain.OfflineRetention.isRetired] is the
+ * seen that way at or before `:cutoff`. [com.karakept.app.domain.OfflineRetention.isRetired] is the
  * same test in Kotlin, for rows already in memory; the two must agree.
  */
 const val RETIRED_PREDICATE =
-    "(isRead = 1 OR isArchived = 1) AND readOrArchivedAt IS NOT NULL AND readOrArchivedAt < :cutoff"
+    "(isRead = 1 OR isArchived = 1) AND readOrArchivedAt IS NOT NULL AND readOrArchivedAt <= :cutoff"

@@ -58,7 +58,7 @@ class OfflineCacheCleanupTest {
     private fun file(name: String, modifiedAt: Long = 0L, size: Long = 10) =
         LocalFileInfo("/cache/image_cache/$name", name, size, modifiedAt)
 
-    private fun cleaner(retentionDays: Int, files: CacheFileStore = FakeFiles(emptyList())): OfflineCacheRepository {
+    private fun cleaner(retentionDays: Int?, files: CacheFileStore = FakeFiles(emptyList())): OfflineCacheRepository {
         val settings = mockk<SettingsRepository>(relaxed = true)
         every { settings.activeOfflineRetentionDays } returns flowOf(retentionDays)
         return OfflineCacheRepository(
@@ -98,7 +98,7 @@ class OfflineCacheCleanupTest {
         db.bookmarkDao().insertBookmark(bookmark("unread-again", readOrArchivedAt = 5L))
         db.bookmarkDao().insertBookmark(bookmark("already", isRead = true, readOrArchivedAt = 5L))
 
-        cleaner(retentionDays = 0).cleanUp()
+        cleaner(retentionDays = null).cleanUp()
 
         assertEquals(now, row("read").readOrArchivedAt)
         assertEquals(now, row("archived").readOrArchivedAt)
@@ -127,10 +127,23 @@ class OfflineCacheCleanupTest {
     }
 
     @Test
+    fun `a period of zero drops the body in the same pass that first sees it read`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("just-read", isRead = true))
+        db.bookmarkDao().insertBookmark(bookmark("unread"))
+
+        val result = cleaner(retentionDays = 0).cleanUp()
+
+        assertEquals(1, result.evictedBookmarks)
+        assertNull(row("just-read").content)
+        assertEquals("<p>body</p>", row("unread").content)
+        db.close()
+    }
+
+    @Test
     fun `retention off keeps every body`() = runBlocking {
         db.bookmarkDao().insertBookmark(bookmark("old", isRead = true, readOrArchivedAt = 1L))
 
-        val result = cleaner(retentionDays = 0).cleanUp()
+        val result = cleaner(retentionDays = null).cleanUp()
 
         assertEquals(0, result.evictedBookmarks)
         assertEquals("<p>body</p>", row("old").content)
@@ -176,7 +189,7 @@ class OfflineCacheCleanupTest {
             )
         )
 
-        val result = cleaner(retentionDays = 0, files = files).cleanUp()
+        val result = cleaner(retentionDays = null, files = files).cleanUp()
 
         assertEquals(2, result.deletedFiles)
         assertEquals(1500, result.freedBytes)
@@ -204,7 +217,7 @@ class OfflineCacheCleanupTest {
 
     @Test
     fun `cleanUpIfDue runs at most once per interval`() = runBlocking {
-        val cleaner = cleaner(retentionDays = 0)
+        val cleaner = cleaner(retentionDays = null)
         assertNotNull(cleaner.cleanUpIfDue())
         now += OfflineCacheRepository.MIN_INTERVAL_MILLIS - 1
         assertNull(cleaner.cleanUpIfDue())

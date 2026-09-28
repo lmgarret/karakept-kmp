@@ -136,7 +136,7 @@ internal class BookmarkSyncPipeline(
     private var existingByRemoteId: MutableMap<String, BookmarkEntity> = mutableMapOf()
     private var ignoredIds: Set<String> = emptySet()
     private var syncStrategy: SyncStrategy = SyncStrategy.NEVER
-    private var retentionDays: Int = 0
+    private var retentionDays: Int? = null
     private var startedAt: Long = 0
 
     /** Non-fatal problems accumulated during the last execute() call (Group H). */
@@ -160,7 +160,7 @@ internal class BookmarkSyncPipeline(
         ignoredIds = processedIds +
             bookmarkActionsRepository.getPendingActionBookmarkIds(config.server.id).toSet()
         syncStrategy = settingsRepository.contentSyncStrategy.first()
-        retentionDays = settingsRepository.activeOfflineRetentionDays.firstOrNull() ?: 0
+        retentionDays = settingsRepository.activeOfflineRetentionDays.firstOrNull()
         startedAt = System.currentTimeMillis()
 
         // Phases 2 + 4 + 4.6, fused and streamed: each page is committed as it arrives so

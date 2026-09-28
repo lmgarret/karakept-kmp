@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -16,6 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -26,10 +29,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import com.karakept.app.data.model.SyncStrategy
@@ -143,11 +148,6 @@ private fun OfflineRetentionCard(
     onEnabledChange: (Boolean) -> Unit,
     onDaysChange: (Int) -> Unit
 ) {
-    // Follows the finger locally and saves once on release: writing the setting on every drag
-    // frame would round-trip DataStore dozens of times per gesture.
-    var dragged by remember(days) { mutableFloatStateOf(days.toFloat()) }
-    val shownDays = dragged.roundToInt()
-
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -163,7 +163,7 @@ private fun OfflineRetentionCard(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "Frees the stored article and images of bookmarks read or archived a while ago. The bookmark itself stays.",
+                        text = "Frees the stored article and images of bookmarks once they have been read or archived for a while. The bookmark itself stays.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -175,24 +175,71 @@ private fun OfflineRetentionCard(
             }
             if (enabled) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = offlineRetentionLabel(shownDays),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Slider(
-                    value = dragged,
-                    onValueChange = { dragged = it },
-                    onValueChangeFinished = { onDaysChange(dragged.roundToInt()) },
-                    valueRange = OfflineRetention.MIN_DAYS.toFloat()..OfflineRetention.MAX_DAYS.toFloat(),
-                    steps = OfflineRetention.MAX_DAYS - OfflineRetention.MIN_DAYS - 1
-                )
+                RetentionPeriodPicker(days = days, onDaysChange = onDaysChange)
             }
         }
     }
 }
 
-internal fun offlineRetentionLabel(days: Int): String =
-    if (days == 1) "After 1 day" else "After $days days"
+/**
+ * A slider over [OfflineRetention.SLIDER_STOPS] and a field taking any number of days. A typed
+ * value between two stops parks the slider on the nearest one; the label always names the value.
+ */
+@Composable
+private fun RetentionPeriodPicker(
+    days: Int,
+    onDaysChange: (Int) -> Unit
+) {
+    // Both follow input locally. The slider saves once on release — writing the setting on every
+    // drag frame would round-trip DataStore dozens of times per gesture.
+    var sliderIndex by remember(days) { mutableFloatStateOf(OfflineRetention.nearestStopIndex(days).toFloat()) }
+    var fieldText by remember(days) { mutableStateOf(days.toString()) }
+    val stopDays = OfflineRetention.SLIDER_STOPS[sliderIndex.roundToInt()]
+    val shownDays = fieldText.toIntOrNull() ?: stopDays
+
+    Text(
+        text = offlineRetentionLabel(shownDays),
+        style = MaterialTheme.typography.bodyMedium
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Slider(
+            value = sliderIndex,
+            onValueChange = {
+                sliderIndex = it
+                fieldText = OfflineRetention.SLIDER_STOPS[it.roundToInt()].toString()
+            },
+            onValueChangeFinished = { onDaysChange(OfflineRetention.SLIDER_STOPS[sliderIndex.roundToInt()]) },
+            valueRange = 0f..OfflineRetention.SLIDER_STOPS.lastIndex.toFloat(),
+            steps = OfflineRetention.SLIDER_STOPS.size - 2,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        OutlinedTextField(
+            value = fieldText,
+            onValueChange = { input ->
+                val digits = input.filter(Char::isDigit).take(OfflineRetention.MAX_DAYS.toString().length)
+                fieldText = digits
+                digits.toIntOrNull()?.let { typed ->
+                    sliderIndex = OfflineRetention.nearestStopIndex(typed).toFloat()
+                    onDaysChange(typed)
+                }
+            },
+            label = { Text("Days") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.width(96.dp)
+        )
+    }
+}
+
+internal fun offlineRetentionLabel(days: Int): String = when {
+    days == 0 -> "As soon as it is read"
+    days % 30 == 0 -> plural(days / 30, "month").let { "After $it" }
+    days % 7 == 0 -> plural(days / 7, "week").let { "After $it" }
+    else -> "After ${plural(days, "day")}"
+}
+
+private fun plural(count: Int, unit: String) = if (count == 1) "1 $unit" else "$count ${unit}s"
 
 @Composable
 private fun SyncStrategyOptionCard(
