@@ -460,7 +460,7 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     val offlineRetentionDays: Flow<Int> =
         syncSettingsFlow.map { it.offlineRetentionDays }.distinctUntilChanged()
 
-    /** The period cleanup and sync act on: null while retention is switched off, 0 for "once read". */
+    /** The period cleanup and sync act on: null while retention is switched off. */
     val activeOfflineRetentionDays: Flow<Int?> =
         syncSettingsFlow.map { if (it.offlineRetentionEnabled) it.offlineRetentionDays else null }
             .distinctUntilChanged()
