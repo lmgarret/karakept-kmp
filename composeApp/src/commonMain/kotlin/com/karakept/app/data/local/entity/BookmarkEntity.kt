@@ -50,7 +50,11 @@ data class BookmarkEntity(
     // AI summary generated server-side. Distinct from [description], which the crawler reads from
     // the page's meta tags — Karakeep's inference worker writes this field and never touches that one.
     val summary: String? = null,
-    val summarizationStatus: String? = null // "success" | "failure" | "pending"
+    val summarizationStatus: String? = null, // "success" | "failure" | "pending"
+    // When this bookmark was first seen read or archived (epoch millis), null while it is
+    // neither. Stamped by OfflineCacheRepository rather than by every path that flips the two
+    // flags, so it is accurate to the cleanup cadence, not to the millisecond.
+    val readOrArchivedAt: Long? = null
 )
 
 /**
@@ -63,3 +67,11 @@ data class BookmarkEntity(
  * column with an index over it is 0.1ms.
  */
 const val OFFLINE_PREDICATE = "hasContent = 1"
+
+/**
+ * A bookmark whose offline copy has outlived the retention window: read or archived, and first
+ * seen that way at or before `:cutoff`. [com.karakept.app.domain.OfflineRetention.isRetired] is the
+ * same test in Kotlin, for rows already in memory; the two must agree.
+ */
+const val RETIRED_PREDICATE =
+    "(isRead = 1 OR isArchived = 1) AND readOrArchivedAt IS NOT NULL AND readOrArchivedAt <= :cutoff"

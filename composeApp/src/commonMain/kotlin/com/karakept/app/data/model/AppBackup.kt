@@ -1,5 +1,6 @@
 package com.karakept.app.data.model
 
+import com.karakept.app.domain.OfflineRetention
 import kotlinx.serialization.Serializable
 
 /**
@@ -105,6 +106,8 @@ data class BackupSettings(
     val contentSyncStrategy: String = SyncStrategy.PER_BOOKMARK.name,
     val contentSyncTargetLists: Set<String> = emptySet(),
     val contentSyncWithChildren: Set<String> = emptySet(),
+    val offlineRetentionEnabled: Boolean = false,
+    val offlineRetentionDays: Int = OfflineRetention.DEFAULT_DAYS,
 
     // Notifications
     val notificationsEnabled: Boolean = true,

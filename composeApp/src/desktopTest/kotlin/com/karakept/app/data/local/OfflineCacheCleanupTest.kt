@@ -1,0 +1,275 @@
+package com.karakept.app.data.local
+
+import androidx.room3.Room
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
+import com.karakept.app.data.local.entity.AssetEntity
+import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.migrations.MIGRATION_14_15
+import com.karakept.app.data.local.migrations.withAppSchema
+import com.karakept.app.data.repository.CacheFileStore
+import com.karakept.app.data.repository.OfflineCacheRepository
+import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.domain.OfflineRetention.DAY_MILLIS
+import com.karakept.app.utils.DefaultAppDispatchers
+import com.karakept.app.utils.LocalFileInfo
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/**
+ * Offline cache cleanup against a real database: the retention SQL, the orphan queries and the
+ * file sweep all depend on what the rows actually hold, which a mocked DAO cannot say.
+ */
+class OfflineCacheCleanupTest {
+
+    private val dbPath = "/tmp/karakept-offline-cleanup-${System.nanoTime()}.db"
+    private val serverId = "s1"
+    private val cacheDir = "/cache/image_cache"
+    private var now = 100 * DAY_MILLIS
+
+    @AfterTest
+    fun cleanup() {
+        java.io.File(dbPath).delete()
+    }
+
+    private val db = Room.databaseBuilder<AppDatabase>(name = dbPath)
+        .withAppSchema()
+        .setDriver(BundledSQLiteDriver())
+        .setQueryCoroutineContext(Dispatchers.IO)
+        .build()
+
+    private class FakeFiles(files: List<LocalFileInfo>) : CacheFileStore {
+        val present = files.toMutableList()
+        override fun list() = present.toList()
+        override fun delete(path: String) {
+            present.removeAll { it.path == path }
+        }
+    }
+
+    private fun file(name: String, modifiedAt: Long = 0L, size: Long = 10) =
+        LocalFileInfo("/cache/image_cache/$name", name, size, modifiedAt)
+
+    private fun cleaner(retentionDays: Int?, files: CacheFileStore = FakeFiles(emptyList())): OfflineCacheRepository {
+        val settings = mockk<SettingsRepository>(relaxed = true)
+        every { settings.activeOfflineRetentionDays } returns flowOf(retentionDays)
+        return OfflineCacheRepository(
+            bookmarkDao = db.bookmarkDao(),
+            assetDao = db.assetDao(),
+            settingsRepository = settings,
+            appDispatchers = DefaultAppDispatchers(),
+            files = files,
+            clock = { now }
+        )
+    }
+
+    private fun bookmark(
+        id: String,
+        content: String? = "<p>body</p>",
+        isRead: Boolean = false,
+        isArchived: Boolean = false,
+        readOrArchivedAt: Long? = null
+    ) = BookmarkEntity(
+        remoteId = id, serverId = serverId, url = "u", title = id, content = content,
+        imageUrl = null, bannerImageAssetId = null, screenshotAssetId = null, description = null,
+        createdAt = 1, isArchived = isArchived, isStarred = false, isRead = isRead,
+        readOrArchivedAt = readOrArchivedAt
+    )
+
+    private fun asset(id: String, bookmarkId: String, localPath: String?) = AssetEntity(
+        id = id, bookmarkRemoteId = bookmarkId, serverId = serverId, assetType = "bannerImage",
+        fileName = null, contentType = null, localPath = localPath
+    )
+
+    private suspend fun row(id: String) = db.bookmarkDao().getBookmarkByRemoteId(id, serverId)!!
+
+    @Test
+    fun `stamps bookmarks when they become read or archived and clears the stamp when they go back`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("read", isRead = true))
+        db.bookmarkDao().insertBookmark(bookmark("archived", isArchived = true))
+        db.bookmarkDao().insertBookmark(bookmark("unread-again", readOrArchivedAt = 5L))
+        db.bookmarkDao().insertBookmark(bookmark("already", isRead = true, readOrArchivedAt = 5L))
+
+        cleaner(retentionDays = null).cleanUp()
+
+        assertEquals(now, row("read").readOrArchivedAt)
+        assertEquals(now, row("archived").readOrArchivedAt)
+        assertNull(row("unread-again").readOrArchivedAt)
+        assertEquals(5L, row("already").readOrArchivedAt, "the first time it was seen read is kept")
+        db.close()
+    }
+
+    @Test
+    fun `drops the body of bookmarks read longer ago than the retention period`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("old", isRead = true, readOrArchivedAt = now - 8 * DAY_MILLIS))
+        db.bookmarkDao().insertBookmark(bookmark("recent", isArchived = true, readOrArchivedAt = now - 6 * DAY_MILLIS))
+        db.bookmarkDao().insertBookmark(bookmark("unread"))
+
+        val result = cleaner(retentionDays = 7).cleanUp()
+
+        assertEquals(1, result.evictedBookmarks)
+        with(row("old")) {
+            assertNull(content)
+            assertEquals(false, hasContent)
+            assertEquals(true, isRead, "only the offline copy goes, the bookmark stays")
+        }
+        assertEquals("<p>body</p>", row("recent").content)
+        assertEquals("<p>body</p>", row("unread").content)
+        db.close()
+    }
+
+    @Test
+    fun `retention off keeps every body`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("old", isRead = true, readOrArchivedAt = 1L))
+
+        val result = cleaner(retentionDays = null).cleanUp()
+
+        assertEquals(0, result.evictedBookmarks)
+        assertEquals("<p>body</p>", row("old").content)
+        db.close()
+    }
+
+    @Test
+    fun `forgets the local files of retired bookmarks and the assets of deleted ones`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("old", isRead = true, readOrArchivedAt = 1L))
+        db.bookmarkDao().insertBookmark(bookmark("kept"))
+        db.assetDao().insertAssets(
+            listOf(
+                asset("a-old", "old", "$cacheDir/hero_banner_a-old"),
+                asset("a-kept", "kept", "$cacheDir/hero_banner_a-kept"),
+                asset("a-gone", "deleted-bookmark", "$cacheDir/hero_banner_a-gone")
+            )
+        )
+
+        cleaner(retentionDays = 7).cleanUp()
+
+        assertNull(db.assetDao().getAssetsForBookmark("old", serverId).single().localPath)
+        assertNotNull(db.assetDao().getAssetsForBookmark("kept", serverId).single().localPath)
+        assertTrue(db.assetDao().getAssetsForBookmark("deleted-bookmark", serverId).isEmpty())
+        db.close()
+    }
+
+    @Test
+    fun `sweeps only our own unreferenced files once they are past the grace period`() = runBlocking {
+        db.bookmarkDao().insertBookmark(
+            bookmark("b", content = """<img src="file://$cacheDir/img_abc.png"><img src="file://C:\Users\Jane Doe\cache\img_def">""")
+        )
+        db.assetDao().insertAssets(listOf(asset("a", "b", "$cacheDir/archive_a")))
+        val files = FakeFiles(
+            listOf(
+                file("img_abc.png"),
+                file("img_def"),
+                file("archive_a"),
+                file("img_orphan.jpg", size = 1000),
+                file("hero_screenshot_gone", size = 500),
+                file("img_just_written", modifiedAt = now - 60_000),
+                file("0123abcd.1"),
+                file("journal")
+            )
+        )
+
+        val result = cleaner(retentionDays = null, files = files).cleanUp()
+
+        assertEquals(2, result.deletedFiles)
+        assertEquals(1500, result.freedBytes)
+        assertEquals(
+            listOf("img_abc.png", "img_def", "archive_a", "img_just_written", "0123abcd.1", "journal"),
+            files.present.map { it.name }
+        )
+        db.close()
+    }
+
+    @Test
+    fun `a body dropped by retention releases the images only it referenced`() = runBlocking {
+        db.bookmarkDao().insertBookmark(
+            bookmark("old", isRead = true, readOrArchivedAt = 1L,
+                content = """<img src="file://$cacheDir/img_shared"><img src="file://$cacheDir/img_own">""")
+        )
+        db.bookmarkDao().insertBookmark(bookmark("kept", content = """<img src="file://$cacheDir/img_shared">"""))
+        val files = FakeFiles(listOf(file("img_shared"), file("img_own")))
+
+        cleaner(retentionDays = 7, files = files).cleanUp()
+
+        assertEquals(listOf("img_shared"), files.present.map { it.name })
+        db.close()
+    }
+
+    @Test
+    fun `retention runs after every sync, and frees what it evicted straight away`() = runBlocking {
+        val files = FakeFiles(emptyList())
+        val cleaner = cleaner(retentionDays = 7, files = files)
+        cleaner.cleanUpAfterSync()
+
+        // A list sync moments later brings in a bookmark read long ago.
+        db.bookmarkDao().insertBookmark(
+            bookmark("old", isRead = true, readOrArchivedAt = 1L, content = "<img src='file://$cacheDir/img_old'>")
+        )
+        files.present += file("img_old")
+        val result = cleaner.cleanUpAfterSync()
+
+        assertEquals(1, result?.evictedBookmarks)
+        assertNull(row("old").content)
+        assertTrue(files.present.isEmpty(), "an eviction sweeps in the same pass")
+        db.close()
+    }
+
+    @Test
+    fun `with nothing evicted the sweep waits for its interval`() = runBlocking {
+        val files = FakeFiles(emptyList())
+        val cleaner = cleaner(retentionDays = null, files = files)
+        cleaner.cleanUpAfterSync()
+        files.present += file("img_orphan")
+
+        cleaner.cleanUpAfterSync()
+        assertEquals(listOf("img_orphan"), files.present.map { it.name })
+
+        now += OfflineCacheRepository.SWEEP_INTERVAL_MILLIS
+        cleaner.cleanUpAfterSync()
+        assertTrue(files.present.isEmpty())
+        db.close()
+    }
+
+    @Test
+    fun `an explicit clean up always sweeps`() = runBlocking {
+        val files = FakeFiles(emptyList())
+        val cleaner = cleaner(retentionDays = null, files = files)
+        cleaner.cleanUpAfterSync()
+        files.present += file("img_orphan")
+
+        cleaner.cleanUp()
+
+        assertTrue(files.present.isEmpty())
+        db.close()
+    }
+
+    @Test
+    fun `the migration adds the column empty`() = runBlocking {
+        db.close()
+        java.io.File(dbPath).delete()
+        val c = BundledSQLiteDriver().open(dbPath)
+        try {
+            c.execSQL(
+                "CREATE TABLE bookmarks (localId INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "remoteId TEXT NOT NULL, isRead INTEGER NOT NULL)"
+            )
+            c.execSQL("INSERT INTO bookmarks (remoteId, isRead) VALUES ('a', 1)")
+
+            MIGRATION_14_15.migrate(c)
+
+            val stmt = c.prepare("SELECT readOrArchivedAt FROM bookmarks")
+            assertTrue(stmt.step())
+            assertTrue(stmt.isNull(0))
+            stmt.close()
+        } finally {
+            c.close()
+        }
+    }
+}

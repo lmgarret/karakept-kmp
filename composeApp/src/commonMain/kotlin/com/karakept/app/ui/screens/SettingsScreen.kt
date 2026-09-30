@@ -47,6 +47,8 @@ import com.karakept.app.ui.screens.settings.AppearanceSettingsContent
 import com.karakept.app.ui.screens.settings.AppearanceSettingsScreen
 import com.karakept.app.ui.screens.settings.BackgroundSyncSettingsContent
 import com.karakept.app.ui.screens.settings.BackgroundSyncSettingsScreen
+import com.karakept.app.ui.screens.settings.OfflineStorageSettingsContent
+import com.karakept.app.ui.screens.settings.OfflineStorageSettingsScreen
 import com.karakept.app.ui.screens.settings.BackupRestoreContent
 import com.karakept.app.ui.screens.settings.BackupRestoreScreen
 import com.karakept.app.ui.screens.settings.BookmarkListSettingsContent
@@ -221,6 +223,10 @@ class SettingsScreen : NavKey {
                                     onNavigate = { navigator.push(it) }
                                 )
                                 is BackgroundSyncSettingsScreen -> BackgroundSyncSettingsContent(
+                                    screenModel = screenModel,
+                                    onBack = { selectedSubScreen = null }
+                                )
+                                is OfflineStorageSettingsScreen -> OfflineStorageSettingsContent(
                                     screenModel = screenModel,
                                     onBack = { selectedSubScreen = null }
                                 )

@@ -1,5 +1,6 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.domain.OfflineRetention
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.datastore.preferences.core.Preferences
@@ -135,6 +136,8 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         contentSyncStrategy = sync.contentSyncStrategy,
         contentSyncTargetLists = sync.contentSyncTargetLists,
         contentSyncWithChildren = sync.contentSyncWithChildren,
+        offlineRetentionEnabled = sync.offlineRetentionEnabled,
+        offlineRetentionDays = sync.offlineRetentionDays,
         notificationsEnabled = app.notificationsEnabled,
         offlineMode = app.offlineMode,
         onboardingCompleted = app.onboardingCompleted,
@@ -220,7 +223,9 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
             StoredSyncSettings(
                 contentSyncStrategy = s.contentSyncStrategy,
                 contentSyncTargetLists = s.contentSyncTargetLists,
-                contentSyncWithChildren = s.contentSyncWithChildren
+                contentSyncWithChildren = s.contentSyncWithChildren,
+                offlineRetentionEnabled = s.offlineRetentionEnabled,
+                offlineRetentionDays = s.offlineRetentionDays
             )
         )
         prefs[APP_SETTINGS_KEY] = settingsJson.encodeToString(
@@ -463,6 +468,13 @@ suspend fun SettingsRepository.setContentSyncConfig(config: ListSyncConfig) = up
         contentSyncTargetLists = config.selectedLists,
         contentSyncWithChildren = config.withChildrenMode
     )
+}
+
+suspend fun SettingsRepository.setOfflineRetentionEnabled(enabled: Boolean) =
+    updateSyncSettings { copy(offlineRetentionEnabled = enabled) }
+
+suspend fun SettingsRepository.setOfflineRetentionDays(days: Int) = updateSyncSettings {
+    copy(offlineRetentionDays = days.coerceIn(OfflineRetention.MIN_DAYS, OfflineRetention.MAX_DAYS))
 }
 
 suspend fun SettingsRepository.setNotificationsEnabled(enabled: Boolean) =

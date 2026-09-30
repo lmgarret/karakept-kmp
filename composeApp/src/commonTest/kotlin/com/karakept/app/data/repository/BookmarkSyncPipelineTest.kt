@@ -1,5 +1,6 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.domain.OfflineRetention
 import com.karakept.api.model.Bookmark
 import com.karakept.api.model.BookmarkContent
 import com.karakept.api.model.BookmarkTagsInner
@@ -680,6 +681,55 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
 
         // Only dto1 (no content, readingTime=0) should trigger content fetch
         // dto2 has htmlContent so readingTime > 0 after mapping
+        coVerify(exactly = 1) { fetchRemoteContent(testServer, "bk-1") }
+    }
+
+    @Test
+    fun contentSync_doesNotRedownloadContentPastItsRetention() = runTest(testDispatcher) {
+        // Cleanup dropped these bodies on purpose. Sync must not bring them straight back —
+        // except for the one archived too recently to have been dropped.
+        coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
+        coEvery { settingsRepository.activeOfflineRetentionDays } returns flowOf(7)
+        val now = System.currentTimeMillis()
+        val retired = makeBookmarkEntity(localId = 1L, remoteId = "bk-old")
+            .copy(isArchived = true, readOrArchivedAt = now - 30 * OfflineRetention.DAY_MILLIS)
+        val recent = makeBookmarkEntity(localId = 2L, remoteId = "bk-new")
+            .copy(isArchived = true, readOrArchivedAt = now - OfflineRetention.DAY_MILLIS)
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(retired, recent)
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(
+            bookmarks = listOf(
+                makeBookmarkDto(id = "bk-old", archived = true),
+                makeBookmarkDto(id = "bk-new", archived = true)
+            ),
+            nextCursor = null
+        )
+        coEvery { fetchRemoteContent(any(), any()) } returns "<p>Fetched content</p>"
+        coEvery { imageCacheManager.cacheImagesInHtml(any(), any()) } answers { firstArg() }
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        coVerify(exactly = 0) { fetchRemoteContent(testServer, "bk-old") }
+        coVerify(exactly = 1) { fetchRemoteContent(testServer, "bk-new") }
+    }
+
+    @Test
+    fun contentSync_downloadsAgainOnceARetiredBookmarkIsUnarchived() = runTest(testDispatcher) {
+        // The stamp is only cleared by the next cleanup; the flags the server just sent win.
+        coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
+        coEvery { settingsRepository.activeOfflineRetentionDays } returns flowOf(7)
+        val stale = makeBookmarkEntity(localId = 1L, remoteId = "bk-1")
+            .copy(isArchived = true, readOrArchivedAt = 1L)
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(stale)
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1", archived = false)), nextCursor = null)
+        coEvery { fetchRemoteContent(any(), any()) } returns "<p>Fetched content</p>"
+        coEvery { imageCacheManager.cacheImagesInHtml(any(), any()) } answers { firstArg() }
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
         coVerify(exactly = 1) { fetchRemoteContent(testServer, "bk-1") }
     }
 

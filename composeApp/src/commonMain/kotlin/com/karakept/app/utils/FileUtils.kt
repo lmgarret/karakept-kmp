@@ -29,6 +29,9 @@ expect object FileUtils {
     /** Reads the UTF-8 text content of the file at [path], or null if not readable. */
     fun readFileAsText(path: String): String?
 
+    /** The plain files directly inside [directoryPath]; empty when it does not exist. */
+    fun listFiles(directoryPath: String): List<LocalFileInfo>
+
     /** Deletes the file at [path]. Silently ignores missing files. */
     fun deleteFile(path: String)
 
@@ -47,4 +50,11 @@ data class StorageInfo(
     val usedBytes: Long,
     val freeBytes: Long,
     val totalBytes: Long
+)
+
+data class LocalFileInfo(
+    val path: String,
+    val name: String,
+    val sizeBytes: Long,
+    val lastModifiedMillis: Long
 )

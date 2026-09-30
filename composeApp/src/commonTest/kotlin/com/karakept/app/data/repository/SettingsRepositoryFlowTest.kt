@@ -1,5 +1,6 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.domain.OfflineRetention
 import androidx.compose.ui.graphics.Color
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import com.karakept.app.data.model.AccentColor
@@ -466,6 +467,8 @@ class SettingsRepositoryFlowTest {
             htmlFontSize = 24,
             swipeLeftAction = SwipeAction.ARCHIVE.name,
             contentSyncStrategy = SyncStrategy.ALL.name,
+            offlineRetentionEnabled = true,
+            offlineRetentionDays = 14,
             notificationsEnabled = false
         )
         repo.restoreSettings(custom)
@@ -478,7 +481,34 @@ class SettingsRepositoryFlowTest {
         assertEquals(24, restored.htmlFontSize)
         assertEquals(SwipeAction.ARCHIVE.name, restored.swipeLeftAction)
         assertEquals(SyncStrategy.ALL.name, restored.contentSyncStrategy)
+        assertEquals(true, restored.offlineRetentionEnabled)
+        assertEquals(14, restored.offlineRetentionDays)
         assertEquals(false, restored.notificationsEnabled)
+    }
+
+    @Test
+    fun offlineRetention_isOffByDefaultAndOnlyActiveWhenSwitchedOn() = runTest {
+        assertEquals(false, repo.offlineRetentionEnabled.first())
+        assertEquals(OfflineRetention.DEFAULT_DAYS, repo.offlineRetentionDays.first())
+        assertEquals(null, repo.activeOfflineRetentionDays.first())
+
+        repo.setOfflineRetentionDays(14)
+        assertEquals(null, repo.activeOfflineRetentionDays.first(), "the slider alone changes nothing")
+
+        repo.setOfflineRetentionEnabled(true)
+        assertEquals(14, repo.activeOfflineRetentionDays.first())
+
+        repo.setOfflineRetentionEnabled(false)
+        assertEquals(null, repo.activeOfflineRetentionDays.first())
+        assertEquals(14, repo.offlineRetentionDays.first(), "switching off keeps the chosen period")
+    }
+
+    @Test
+    fun offlineRetentionDays_isClampedToWhatTheFieldAccepts() = runTest {
+        repo.setOfflineRetentionDays(0)
+        assertEquals(OfflineRetention.MIN_DAYS, repo.offlineRetentionDays.first())
+        repo.setOfflineRetentionDays(5000)
+        assertEquals(OfflineRetention.MAX_DAYS, repo.offlineRetentionDays.first())
     }
 
     @Test

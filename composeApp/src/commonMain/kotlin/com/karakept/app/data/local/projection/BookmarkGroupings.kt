@@ -27,3 +27,9 @@ data class QuickFilterCountRow(
     val favorites: Int,
     val archived: Int
 )
+
+/** A stored article body, read page by page when looking for the files it references. */
+data class BookmarkContentRow(
+    val localId: Long,
+    val content: String?
+)
