@@ -13,6 +13,7 @@ import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.OFFLINE_PREDICATE
 import com.karakept.app.data.local.entity.RETIRED_PREDICATE
 import com.karakept.app.data.local.projection.BookmarkContentRow
+import com.karakept.app.data.local.projection.StoredContentStats
 import com.karakept.app.data.local.projection.ListMembershipGroup
 import com.karakept.app.data.local.projection.QuickFilterCountRow
 import com.karakept.app.data.local.projection.TagGroup
@@ -244,6 +245,17 @@ interface BookmarkDao {
     // Drops the body only: the row, its reading progress and its highlights stay.
     @Query("UPDATE bookmarks SET content = NULL, hasContent = 0 WHERE hasContent = 1 AND " + RETIRED_PREDICATE)
     suspend fun evictRetiredContent(cutoff: Long): Int
+
+    // CAST AS BLOB so LENGTH counts bytes without decoding the UTF-8. Still reads every body —
+    // for the settings screen, on demand, not for anything that renders a list.
+    @Query(
+        "SELECT COUNT(*) AS bookmarkCount, COALESCE(SUM(LENGTH(CAST(content AS BLOB))), 0) AS bodyBytes " +
+            "FROM bookmarks WHERE hasContent = 1"
+    )
+    suspend fun getStoredContentStats(): StoredContentStats
+
+    @Query("UPDATE bookmarks SET content = NULL, hasContent = 0 WHERE hasContent = 1")
+    suspend fun clearAllContent(): Int
 
     // Keyset-paged so a library of stored articles is never held in memory at once.
     @Query(

@@ -23,6 +23,15 @@ object ImageCacheFileStore : CacheFileStore {
     override fun delete(path: String) = FileUtils.deleteFile(path)
 }
 
+/** What offline copies take: stored bodies plus every file cleanup manages. */
+data class OfflineStorageUsage(
+    val bookmarkCount: Int,
+    val bodyBytes: Long,
+    val fileBytes: Long
+) {
+    val totalBytes: Long get() = bodyBytes + fileBytes
+}
+
 data class OfflineCacheCleanupResult(
     val evictedBookmarks: Int = 0,
     val deletedFiles: Int = 0,
@@ -105,13 +114,40 @@ class OfflineCacheRepository(
         }
     }
 
-    private suspend fun sweepUnreferencedFiles(now: Long): Pair<Int, Long> {
+    suspend fun storageUsage(): OfflineStorageUsage = withContext(appDispatchers.io) {
+        val stats = bookmarkDao.getStoredContentStats()
+        OfflineStorageUsage(
+            bookmarkCount = stats.bookmarkCount,
+            bodyBytes = stats.bodyBytes,
+            fileBytes = files.list().filter(::isManaged).sumOf { it.sizeBytes }
+        )
+    }
+
+    /**
+     * Drops every offline copy — bodies and downloaded assets — and deletes the files. Bookmarks,
+     * reading progress and highlights stay. The next sync downloads again whatever the content
+     * strategy covers.
+     */
+    suspend fun clearAll(): OfflineCacheCleanupResult = withContext(appDispatchers.io) {
+        mutex.withLock {
+            val cleared = bookmarkDao.clearAllContent()
+            assetDao.clearAllLocalPaths()
+            // No grace period: the user asked for everything gone. A download racing this can
+            // leave a body pointing at a deleted image, which the reader shows as missing.
+            val (deleted, freed) = sweepUnreferencedFiles(clock(), graceMillis = 0)
+            OfflineCacheCleanupResult(cleared, deleted, freed)
+        }
+    }
+
+    private suspend fun sweepUnreferencedFiles(
+        now: Long,
+        graceMillis: Long = SWEEP_GRACE_MILLIS
+    ): Pair<Int, Long> {
         // Listed before the references are read: a file written after this listing is not in
         // it, and one written before it but referenced only later is protected by the grace
         // period — a download lands on disk before the row that points at it is committed.
         val candidates = files.list().filter { file ->
-            CACHE_FILE_PREFIXES.any(file.name::startsWith) &&
-                now - file.lastModifiedMillis > SWEEP_GRACE_MILLIS
+            isManaged(file) && now - file.lastModifiedMillis >= graceMillis
         }
         if (candidates.isEmpty()) return 0 to 0L
 
@@ -126,6 +162,8 @@ class OfflineCacheRepository(
         }
         return deleted to freed
     }
+
+    private fun isManaged(file: LocalFileInfo) = CACHE_FILE_PREFIXES.any(file.name::startsWith)
 
     private suspend fun referencedFileNames(): Set<String> {
         val names = mutableSetOf<String>()

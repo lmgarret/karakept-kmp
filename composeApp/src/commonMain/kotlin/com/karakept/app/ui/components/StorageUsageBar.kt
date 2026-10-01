@@ -15,8 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import com.karakept.app.utils.StorageInfo
-import kotlin.math.pow
-import kotlin.math.roundToInt
+import com.karakept.app.utils.formatFileSize
 
 @Composable
 fun StorageUsageBar(
@@ -82,11 +81,4 @@ fun StorageUsageBar(
             }
         }
     }
-}
-
-private fun formatFileSize(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val exp = (kotlin.math.ln(bytes.toDouble()) / kotlin.math.ln(1024.0)).toInt()
-    val pre = "KMGTPE"[exp - 1]
-    return "%.1f %sB".format(bytes / 1024.0.pow(exp.toDouble()), pre)
 }

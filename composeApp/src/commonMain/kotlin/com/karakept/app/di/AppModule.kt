@@ -137,5 +137,6 @@ val appModule = module {
     viewModel { com.karakept.app.ui.screens.settings.EinkSettingsScreenModel(get(), get()) }
     viewModel { com.karakept.app.ui.screens.settings.BackupRestoreScreenModel(get(), get()) }
     viewModel { com.karakept.app.ui.screens.settings.LayoutsScreenModel(get()) }
+    viewModel { com.karakept.app.ui.screens.settings.OfflineStorageScreenModel(get()) }
     viewModel { com.karakept.app.ui.screens.settings.LayoutEditorScreenModel(get()) }
 }
