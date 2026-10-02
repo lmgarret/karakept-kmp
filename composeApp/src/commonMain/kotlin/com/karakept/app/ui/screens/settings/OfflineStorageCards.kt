@@ -1,5 +1,11 @@
 package com.karakept.app.ui.screens.settings
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -23,35 +30,41 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.repository.OfflineCleanupEstimate
 import com.karakept.app.data.repository.OfflineStorageUsage
 import com.karakept.app.domain.OfflineRetention
+import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.utils.formatFileSize
 
 /** One coloured part of the storage bar, and its legend row. */
 private data class StorageSegment(val label: String, val bytes: Long, val color: Color)
 
+// A null usage still names every part, so the skeleton's legend is the one the card will show.
 @Composable
-private fun storageSegments(usage: OfflineStorageUsage): List<StorageSegment> {
+private fun storageSegments(usage: OfflineStorageUsage?): List<StorageSegment> {
     val primary = MaterialTheme.colorScheme.primary
     return listOf(
-        StorageSegment("Articles", usage.articleBytes, primary),
-        StorageSegment("Images", usage.imageBytes, primary.copy(alpha = 0.66f)),
-        StorageSegment("Archives & PDFs", usage.fileBytes, primary.copy(alpha = 0.36f)),
-        StorageSegment("Thumbnail cache", usage.thumbnailCacheBytes, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-        StorageSegment("App & other data", usage.otherAppBytes, MaterialTheme.colorScheme.outline)
+        StorageSegment("Articles", usage?.articleBytes ?: 0L, primary),
+        StorageSegment("Images", usage?.imageBytes ?: 0L, primary.copy(alpha = 0.66f)),
+        StorageSegment("Archives & PDFs", usage?.fileBytes ?: 0L, primary.copy(alpha = 0.36f)),
+        StorageSegment("Thumbnail cache", usage?.thumbnailCacheBytes ?: 0L, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+        StorageSegment("App & other data", usage?.otherAppBytes ?: 0L, MaterialTheme.colorScheme.outline)
     )
 }
 
@@ -73,11 +86,7 @@ internal fun StorageOverviewCard(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (usage == null) {
-                Text(
-                    text = "Measuring…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                StorageOverviewSkeleton()
                 return@Column
             }
             Row(verticalAlignment = Alignment.Bottom) {
@@ -135,6 +144,94 @@ internal fun StorageOverviewCard(
     }
 }
 
+/**
+ * The overview while the first measurement runs, laid out as the loaded card is so nothing moves
+ * when the numbers land. Only the numbers are placeholders: the legend's labels and colours do not
+ * depend on the measurement.
+ */
+@Composable
+private fun StorageOverviewSkeleton() {
+    if (LocalEinkMode.current.animationsDisabled) {
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            LoadingDotsIndicator(label = "Measuring…")
+        }
+        return
+    }
+
+    val transition = rememberInfiniteTransition(label = "storage_skeleton")
+    val alpha by transition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "storage_skeleton_alpha"
+    )
+    val placeholder = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha * 0.2f)
+    val typography = MaterialTheme.typography
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.semantics { contentDescription = "Measuring storage" }
+    ) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Column(modifier = Modifier.weight(1f)) {
+                SkeletonText(typography.headlineMedium, width = 112.dp, color = placeholder)
+                Text(
+                    text = "used by Karakept",
+                    style = typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                SkeletonText(typography.bodySmall, width = 64.dp, color = placeholder)
+                Text(
+                    text = "on this device",
+                    style = typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        StorageBar(segments = emptyList(), scaleBytes = 0L)
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            storageSegments(null).forEach { segment ->
+                StorageLegendRow(segment) {
+                    SkeletonText(typography.bodyMedium, width = 48.dp, color = placeholder)
+                }
+            }
+        }
+
+        SkeletonText(typography.bodySmall, width = 160.dp, color = placeholder)
+        Button(onClick = {}, enabled = false) {
+            Text("Clear offline copies")
+        }
+    }
+}
+
+/** A bar standing in for one line of [style] text: the line's height, with its leading left clear. */
+@Composable
+private fun SkeletonText(style: TextStyle, width: Dp, color: Color) {
+    val lineHeight = with(LocalDensity.current) { style.lineHeight.toDp() }
+    Box(
+        modifier = Modifier.width(width).height(lineHeight),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(lineHeight * 0.6f)
+                .clip(RoundedCornerShape(4.dp))
+                .background(color)
+        )
+    }
+}
+
 @Composable
 private fun StorageBar(segments: List<StorageSegment>, scaleBytes: Long) {
     val track = MaterialTheme.colorScheme.surfaceVariant
@@ -172,7 +269,16 @@ private fun StorageBar(segments: List<StorageSegment>, scaleBytes: Long) {
 }
 
 @Composable
-private fun StorageLegendRow(segment: StorageSegment) {
+private fun StorageLegendRow(
+    segment: StorageSegment,
+    value: @Composable () -> Unit = {
+        Text(
+            text = formatFileSize(segment.bytes),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
@@ -186,11 +292,7 @@ private fun StorageLegendRow(segment: StorageSegment) {
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f)
         )
-        Text(
-            text = formatFileSize(segment.bytes),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        value()
     }
 }
 
