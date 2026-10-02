@@ -27,7 +27,7 @@
 ## Frameworks
 
 **Core UI:**
-- Jetbrains Compose Multiplatform 1.12.0 - Cross-platform UI framework
+- Jetbrains Compose Multiplatform 1.12.1 - Cross-platform UI framework
 - Material Design 3 (androidx.compose.material3) - Material components and theme system
 - Compose Material 1.x (androidx.compose.material) - Base Material components
 - Material icons - vendored, not a dependency. `material-icons-extended` is frozen at 1.7.3
@@ -127,7 +127,7 @@
 ## Build & Code Generation
 
 **Build System:**
-- Gradle 9.6.1 (wrapper) with AGP 9.4.0 (Android Gradle Plugin); requires JDK 17+ to run the build
+- Gradle 9.8.0 (wrapper) with AGP 9.4.0 (Android Gradle Plugin); requires JDK 17+ to run the build
 
 **Code Generation:**
 - KSP 2.3.9 (Kotlin Symbol Processing) - Annotation processor
@@ -138,7 +138,7 @@
 
 **Kotlin Compiler Plugin:**
 - compose-compiler (bundled with kotlin-plugin-compose) - Compose IR compiler
-- org.jetbrains.compose.hot-reload (bundled with CMP 1.12.0) - Compose Hot Reload for desktop dev workflow; adds `hotRunDesktop` Gradle task (requires JBR 21, auto-provisioned via foojay toolchain resolver)
+- org.jetbrains.compose.hot-reload (bundled with CMP 1.12.1) - Compose Hot Reload for desktop dev workflow; adds `hotRunDesktop` Gradle task (requires JBR 21, auto-provisioned via foojay toolchain resolver)
 
 ## Key Dependencies
 
