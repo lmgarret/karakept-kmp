@@ -950,8 +950,8 @@ class BookmarkViewerScreenModel(
     private fun cacheFileNameFor(asset: com.karakept.app.data.local.entity.AssetEntity): String =
         when (asset.assetType) {
             "fullPageArchive", "precrawledArchive" -> "archive_${asset.id}"
-            "bannerImage" -> "hero_banner_${asset.id}"
-            "screenshot" -> "hero_screenshot_${asset.id}"
+            "bannerImage" -> com.karakept.app.utils.OfflineHeroImages.bannerFileName(asset.id)
+            "screenshot" -> com.karakept.app.utils.OfflineHeroImages.screenshotFileName(asset.id)
             "pdf" -> "asset_${asset.id}.pdf"
             else -> "asset_${asset.id}"
         }

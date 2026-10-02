@@ -100,9 +100,8 @@ import com.karakept.app.ui.utils.tiledTurnAdjustment
 import com.karakept.app.ui.utils.trailingPagePaddingFor
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
 import com.karakept.app.utils.FileUtils
-import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.utils.AssetUrlUtils
-import com.karakept.app.utils.fileExists
+import com.karakept.app.utils.OfflineHeroImages
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -663,28 +662,22 @@ internal fun BookmarkListContent(
 
                     wrapper {
                         // Construct banner and screenshot URLs if available
+                        // The offline copy's file when there is one, so the row works offline and
+                        // the image loader does not keep a second copy of it.
                         val bannerImageUrl = if (serverUrl != null && bookmark.bannerImageAssetId != null) {
-                            val remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bookmark.bannerImageAssetId)
-                            // Try to resolve local path for offline support
-                            val fileName = ImageCacheManager.generateCacheFileName(remoteUrl)
-                            val localPath = FileUtils.getImageCacheDirectory() + "/" + fileName
-                            if (fileExists(localPath)) {
-                                "file://$localPath"
-                            } else {
-                                remoteUrl
-                            }
+                            OfflineHeroImages.resolve(
+                                remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bookmark.bannerImageAssetId),
+                                directory = FileUtils.getImageCacheDirectory(),
+                                fileName = OfflineHeroImages.bannerFileName(bookmark.bannerImageAssetId)
+                            )
                         } else null
 
                         val screenshotUrl = if (serverUrl != null && bookmark.screenshotAssetId != null) {
-                            val remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bookmark.screenshotAssetId)
-                            // Try to resolve local path for offline support
-                            val fileName = ImageCacheManager.generateCacheFileName(remoteUrl)
-                            val localPath = FileUtils.getImageCacheDirectory() + "/" + fileName
-                            if (fileExists(localPath)) {
-                                "file://$localPath"
-                            } else {
-                                remoteUrl
-                            }
+                            OfflineHeroImages.resolve(
+                                remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bookmark.screenshotAssetId),
+                                directory = FileUtils.getImageCacheDirectory(),
+                                fileName = OfflineHeroImages.screenshotFileName(bookmark.screenshotAssetId)
+                            )
                         } else null
 
                         val isActiveBookmark = bookmark.localId == activeBookmarkId
