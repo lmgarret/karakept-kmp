@@ -18,11 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -82,6 +79,7 @@ fun OfflineStorageSettingsContent(
     val syncStrategy by screenModel.contentSyncStrategy.collectAsState()
     val retentionEnabled by screenModel.offlineRetentionEnabled.collectAsState()
     val retentionDays by screenModel.offlineRetentionDays.collectAsState()
+    val storageCapEnabled by screenModel.offlineStorageCapEnabled.collectAsState()
     val storageCapMb by screenModel.offlineStorageCapMb.collectAsState()
 
     val strategies = SyncStrategy.entries.filter { it != SyncStrategy.PER_LIST }
@@ -154,8 +152,10 @@ fun OfflineStorageSettingsContent(
             Spacer(modifier = Modifier.height(12.dp))
 
             OfflineStorageCapCard(
-                selectedMb = storageCapMb,
-                onSelect = screenModel::setOfflineStorageCapMb
+                enabled = storageCapEnabled,
+                megabytes = storageCapMb,
+                onEnabledChange = screenModel::setOfflineStorageCapEnabled,
+                onMegabytesChange = screenModel::setOfflineStorageCapMb
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -347,13 +347,13 @@ private fun RetentionPeriodPicker(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OfflineStorageCapCard(
-    selectedMb: Int,
-    onSelect: (Int) -> Unit
+    enabled: Boolean,
+    megabytes: Int,
+    onEnabledChange: (Boolean) -> Unit,
+    onMegabytesChange: (Int) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -365,7 +365,7 @@ private fun OfflineStorageCapCard(
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Offline storage limit",
+                        text = "Limit offline storage",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
@@ -374,44 +374,126 @@ private fun OfflineStorageCapCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = it }
-            ) {
-                OutlinedTextField(
-                    value = offlineStorageCapLabel(selectedMb),
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth()
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onEnabledChange
                 )
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
-                    OfflineRetention.STORAGE_CAP_MB_OPTIONS.forEach { megabytes ->
-                        DropdownMenuItem(
-                            text = { Text(offlineStorageCapLabel(megabytes)) },
-                            onClick = {
-                                onSelect(megabytes)
-                                expanded = false
-                            }
-                        )
-                    }
-                }
+            }
+            if (enabled) {
+                Spacer(modifier = Modifier.height(12.dp))
+                StorageCapPicker(megabytes = megabytes, onMegabytesChange = onMegabytesChange)
             }
         }
     }
 }
 
-internal fun offlineStorageCapLabel(megabytes: Int): String = when {
-    megabytes == 0 -> "No limit"
-    megabytes % 1000 == 0 -> "${megabytes / 1000} GB"
-    else -> "$megabytes MB"
+/**
+ * A slider over [OfflineRetention.CAP_SLIDER_STOPS_MB] and a field taking any size in MB or GB,
+ * the unit toggled by the button beside it. Mirrors [RetentionPeriodPicker].
+ */
+@Composable
+private fun StorageCapPicker(
+    megabytes: Int,
+    onMegabytesChange: (Int) -> Unit
+) {
+    val stops = OfflineRetention.CAP_SLIDER_STOPS_MB
+    var sliderIndex by remember { mutableFloatStateOf(OfflineRetention.nearestCapStopIndex(megabytes).toFloat()) }
+    var unit by remember { mutableStateOf(capUnitFor(megabytes)) }
+    var fieldText by remember { mutableStateOf(capFieldText(megabytes, unit)) }
+    // A value this picker wrote itself must not rewrite the field: typing 15000 MB passes
+    // through 1500, which would otherwise flip the field to "1.5 GB" mid-number.
+    var lastWritten by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(megabytes) {
+        if (megabytes != lastWritten) {
+            sliderIndex = OfflineRetention.nearestCapStopIndex(megabytes).toFloat()
+            unit = capUnitFor(megabytes)
+            fieldText = capFieldText(megabytes, unit)
+        }
+    }
+    val shownMegabytes = parseCapInput(fieldText, unit) ?: stops[sliderIndex.roundToInt()]
+
+    fun commitTyped(text: String, inUnit: CapUnit) {
+        parseCapInput(text, inUnit)?.let { typed ->
+            sliderIndex = OfflineRetention.nearestCapStopIndex(typed).toFloat()
+            lastWritten = typed
+            onMegabytesChange(typed)
+        }
+    }
+
+    Text(
+        text = "Keep offline copies under ${offlineStorageCapLabel(shownMegabytes)}",
+        style = MaterialTheme.typography.bodyMedium
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Slider(
+            value = sliderIndex,
+            onValueChange = {
+                sliderIndex = it
+                val stop = stops[it.roundToInt()]
+                unit = capUnitFor(stop)
+                fieldText = capFieldText(stop, unit)
+            },
+            onValueChangeFinished = {
+                val stop = stops[sliderIndex.roundToInt()]
+                lastWritten = stop
+                onMegabytesChange(stop)
+            },
+            valueRange = 0f..stops.lastIndex.toFloat(),
+            steps = stops.size - 2,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        OutlinedTextField(
+            value = fieldText,
+            onValueChange = { input ->
+                fieldText = input.filter { it.isDigit() || it == '.' || it == ',' }.take(7)
+                commitTyped(fieldText, unit)
+            },
+            label = { Text("Size") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.width(88.dp)
+        )
+        TextButton(
+            onClick = {
+                unit = if (unit == CapUnit.MB) CapUnit.GB else CapUnit.MB
+                commitTyped(fieldText, unit)
+            }
+        ) {
+            Text(unit.name)
+        }
+    }
+}
+
+internal enum class CapUnit { MB, GB }
+
+internal fun capUnitFor(megabytes: Int): CapUnit = if (megabytes >= 1000) CapUnit.GB else CapUnit.MB
+
+internal fun capFieldText(megabytes: Int, unit: CapUnit): String = when (unit) {
+    CapUnit.MB -> megabytes.toString()
+    CapUnit.GB -> trimDecimals(megabytes / 1000.0)
+}
+
+/** A typed size in megabytes, or null while the field holds nothing usable. */
+internal fun parseCapInput(text: String, unit: CapUnit): Int? {
+    val value = text.replace(',', '.').toDoubleOrNull() ?: return null
+    val megabytes = when (unit) {
+        CapUnit.MB -> value
+        CapUnit.GB -> value * 1000
+    }.roundToInt()
+    return megabytes.takeIf { it in OfflineRetention.MIN_CAP_MB..OfflineRetention.MAX_CAP_MB }
+}
+
+internal fun offlineStorageCapLabel(megabytes: Int): String =
+    if (megabytes >= 1000) "${trimDecimals(megabytes / 1000.0)} GB" else "$megabytes MB"
+
+private fun trimDecimals(value: Double): String {
+    val hundredths = (value * 100).roundToInt()
+    return when {
+        hundredths % 100 == 0 -> (hundredths / 100).toString()
+        hundredths % 10 == 0 -> "${hundredths / 100}.${(hundredths % 100) / 10}"
+        else -> "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
+    }
 }
 
 internal fun offlineRetentionLabel(days: Int): String = when {

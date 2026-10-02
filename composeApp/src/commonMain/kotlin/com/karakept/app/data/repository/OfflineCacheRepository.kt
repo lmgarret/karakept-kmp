@@ -107,8 +107,8 @@ class OfflineCacheRepository(
         val lastSweep = lastSweepAt
         val heavyDue = forceSweep || lastSweep == null || now - lastSweep >= SWEEP_INTERVAL_MILLIS
 
-        val capMb = settingsRepository.offlineStorageCapMb.first()
-        val capped = if (heavyDue && capMb > 0) {
+        val capMb = settingsRepository.activeOfflineStorageCapMb.first()
+        val capped = if (heavyDue && capMb != null) {
             enforceStorageCap(capMb * OfflineRetention.MEGABYTE, now)
         } else 0
 

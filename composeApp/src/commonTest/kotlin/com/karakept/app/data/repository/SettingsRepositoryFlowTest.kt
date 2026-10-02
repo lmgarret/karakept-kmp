@@ -469,6 +469,7 @@ class SettingsRepositoryFlowTest {
             contentSyncStrategy = SyncStrategy.ALL.name,
             offlineRetentionEnabled = true,
             offlineRetentionDays = 14,
+            offlineStorageCapEnabled = true,
             offlineStorageCapMb = 500,
             notificationsEnabled = false
         )
@@ -484,6 +485,7 @@ class SettingsRepositoryFlowTest {
         assertEquals(SyncStrategy.ALL.name, restored.contentSyncStrategy)
         assertEquals(true, restored.offlineRetentionEnabled)
         assertEquals(14, restored.offlineRetentionDays)
+        assertEquals(true, restored.offlineStorageCapEnabled)
         assertEquals(500, restored.offlineStorageCapMb)
         assertEquals(false, restored.notificationsEnabled)
     }
@@ -503,6 +505,29 @@ class SettingsRepositoryFlowTest {
         repo.setOfflineRetentionEnabled(false)
         assertEquals(null, repo.activeOfflineRetentionDays.first())
         assertEquals(14, repo.offlineRetentionDays.first(), "switching off keeps the chosen period")
+    }
+
+    @Test
+    fun offlineStorageCap_isOffByDefaultAndOnlyActiveWhenSwitchedOn() = runTest {
+        assertEquals(false, repo.offlineStorageCapEnabled.first())
+        assertEquals(OfflineRetention.DEFAULT_CAP_MB, repo.offlineStorageCapMb.first())
+        assertEquals(null, repo.activeOfflineStorageCapMb.first())
+
+        repo.setOfflineStorageCapMb(2500)
+        repo.setOfflineStorageCapEnabled(true)
+        assertEquals(2500, repo.activeOfflineStorageCapMb.first())
+
+        repo.setOfflineStorageCapEnabled(false)
+        assertEquals(null, repo.activeOfflineStorageCapMb.first())
+        assertEquals(2500, repo.offlineStorageCapMb.first(), "switching off keeps the chosen size")
+    }
+
+    @Test
+    fun offlineStorageCapMb_isClampedToWhatTheFieldAccepts() = runTest {
+        repo.setOfflineStorageCapMb(1)
+        assertEquals(OfflineRetention.MIN_CAP_MB, repo.offlineStorageCapMb.first())
+        repo.setOfflineStorageCapMb(Int.MAX_VALUE)
+        assertEquals(OfflineRetention.MAX_CAP_MB, repo.offlineStorageCapMb.first())
     }
 
     @Test

@@ -138,6 +138,7 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         contentSyncWithChildren = sync.contentSyncWithChildren,
         offlineRetentionEnabled = sync.offlineRetentionEnabled,
         offlineRetentionDays = sync.offlineRetentionDays,
+        offlineStorageCapEnabled = sync.offlineStorageCapEnabled,
         offlineStorageCapMb = sync.offlineStorageCapMb,
         notificationsEnabled = app.notificationsEnabled,
         offlineMode = app.offlineMode,
@@ -227,6 +228,7 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                 contentSyncWithChildren = s.contentSyncWithChildren,
                 offlineRetentionEnabled = s.offlineRetentionEnabled,
                 offlineRetentionDays = s.offlineRetentionDays,
+                offlineStorageCapEnabled = s.offlineStorageCapEnabled,
                 offlineStorageCapMb = s.offlineStorageCapMb
             )
         )
@@ -479,8 +481,12 @@ suspend fun SettingsRepository.setOfflineRetentionDays(days: Int) = updateSyncSe
     copy(offlineRetentionDays = days.coerceIn(OfflineRetention.MIN_DAYS, OfflineRetention.MAX_DAYS))
 }
 
-suspend fun SettingsRepository.setOfflineStorageCapMb(megabytes: Int) =
-    updateSyncSettings { copy(offlineStorageCapMb = megabytes.coerceAtLeast(0)) }
+suspend fun SettingsRepository.setOfflineStorageCapEnabled(enabled: Boolean) =
+    updateSyncSettings { copy(offlineStorageCapEnabled = enabled) }
+
+suspend fun SettingsRepository.setOfflineStorageCapMb(megabytes: Int) = updateSyncSettings {
+    copy(offlineStorageCapMb = megabytes.coerceIn(OfflineRetention.MIN_CAP_MB, OfflineRetention.MAX_CAP_MB))
+}
 
 suspend fun SettingsRepository.setNotificationsEnabled(enabled: Boolean) =
     updateAppSettings { copy(notificationsEnabled = enabled) }

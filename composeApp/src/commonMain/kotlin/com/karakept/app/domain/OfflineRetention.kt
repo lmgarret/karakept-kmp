@@ -25,11 +25,22 @@ object OfflineRetention {
     val SLIDER_STOPS = listOf(1, 2, 3, 4, 5, 6, 7, 14, 21, 30, 60, 90)
 
     /** The slider stop closest to [days]; the lower one on a tie. */
-    fun nearestStopIndex(days: Int): Int =
-        SLIDER_STOPS.indices.minBy { abs(SLIDER_STOPS[it] - days) }
+    fun nearestStopIndex(days: Int): Int = nearestIndex(SLIDER_STOPS, days)
 
-    /** The storage budgets offered in settings, in megabytes; 0 is no limit. */
-    val STORAGE_CAP_MB_OPTIONS = listOf(0, 250, 500, 1000, 2000)
+    const val MIN_CAP_MB = 10
+    const val MAX_CAP_MB = 100_000
+    const val DEFAULT_CAP_MB = 1000
+
+    /**
+     * Where the storage limit slider can land, in megabytes: fine steps under a gigabyte, coarser
+     * ones up to 10 GB. Any other size is typed into the field beside it.
+     */
+    val CAP_SLIDER_STOPS_MB = listOf(100, 250, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10_000)
+
+    fun nearestCapStopIndex(megabytes: Int): Int = nearestIndex(CAP_SLIDER_STOPS_MB, megabytes)
+
+    private fun nearestIndex(stops: List<Int>, value: Int): Int =
+        stops.indices.minBy { abs(stops[it] - value) }
 
     const val MEGABYTE = 1024L * 1024
 

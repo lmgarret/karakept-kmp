@@ -62,11 +62,11 @@ class OfflineCacheCleanupTest {
     private fun cleaner(
         retentionDays: Int?,
         files: CacheFileStore = FakeFiles(emptyList()),
-        capMb: Int = 0
+        capMb: Int? = null
     ): OfflineCacheRepository {
         val settings = mockk<SettingsRepository>(relaxed = true)
         every { settings.activeOfflineRetentionDays } returns flowOf(retentionDays)
-        every { settings.offlineStorageCapMb } returns flowOf(capMb)
+        every { settings.activeOfflineStorageCapMb } returns flowOf(capMb)
         return OfflineCacheRepository(
             bookmarkDao = db.bookmarkDao(),
             assetDao = db.assetDao(),

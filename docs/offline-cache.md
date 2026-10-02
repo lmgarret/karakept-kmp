@@ -17,7 +17,9 @@ or a single list's.
    days from 1 to 999. It keeps its value while switched off; `activeOfflineRetentionDays` is null
    then. Past the chosen number of days, the body is set to NULL and the bookmark's
    `assets.localPath`s are cleared. The row, reading progress and highlights stay.
-3. **Storage cap** (*Offline storage limit*, off by default). Usage is every stored body plus
+3. **Storage cap** (*Limit offline storage*, a switch, off by default, with a slider over
+   `OfflineRetention.CAP_SLIDER_STOPS_MB` from 100 MB to 10 GB and a field taking any size from
+   10 MB to 100 GB, in MB or GB; `activeOfflineStorageCapMb` is null while off). Usage is every stored body plus
    every cache file a copy still references, counted once. Past the budget, whole copies (body
    and downloaded assets) are evicted — read or archived bookmarks first, then unread ones, and
    within each the one opened longest ago (`bookmarks.lastOpenedAt`, set by the reader; the save
