@@ -102,7 +102,8 @@ val appModule = module {
             settingsRepository = get(),
             appDispatchers = get(),
             reclaimableDatabaseBytes = { database.reclaimableBytes() },
-            compactDatabase = { database.compact() }
+            compactDatabase = { database.compact() },
+            thumbnailCache = com.karakept.app.utils.CoilThumbnailCache
         )
     }
 

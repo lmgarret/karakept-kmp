@@ -50,6 +50,7 @@ private fun storageSegments(usage: OfflineStorageUsage): List<StorageSegment> {
         StorageSegment("Articles", usage.articleBytes, primary),
         StorageSegment("Images", usage.imageBytes, primary.copy(alpha = 0.66f)),
         StorageSegment("Archives & PDFs", usage.fileBytes, primary.copy(alpha = 0.36f)),
+        StorageSegment("Thumbnail cache", usage.thumbnailCacheBytes, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
         StorageSegment("App & other data", usage.otherAppBytes, MaterialTheme.colorScheme.outline)
     )
 }
@@ -287,6 +288,7 @@ internal fun CleanupNowCard(
                     }
                     EstimateRow("Files no bookmark uses", estimate.unusedFileBytes)
                     EstimateRow("Database space to compact", estimate.reclaimableDatabaseBytes)
+                    EstimateRow("Thumbnail cache, downloaded again as needed", estimate.thumbnailCacheBytes)
                 }
             }
             Text(

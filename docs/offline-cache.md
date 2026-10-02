@@ -51,8 +51,9 @@ marker — so the cap evicts what nobody reads, and reading something brings it 
 
 The top of *Settings → Sync & Data → Offline Storage* shows what Karakept takes on the device
 (`OfflineCacheRepository.storageUsage`), split into articles (`LENGTH(CAST(content AS BLOB))`,
-bytes rather than characters), images (`img_`, `hero_*`), archives & PDFs (`archive_`, `asset_`)
-and the rest of the app (grey). The bar is scaled to the app, or to the storage limit when one is
+bytes rather than characters), images (`img_`, `hero_*`), archives & PDFs (`archive_`, `asset_`),
+the image loader's thumbnail cache (`ThumbnailCache`, Coil's disk cache: up to 2% of the volume,
+capped at 250 MB) and the rest of the app (grey). The bar is scaled to the app, or to the storage limit when one is
 set — never to the device, where the app is a dot against tens of gigabytes; the device's free
 space is a line of text. Measured when the page opens and after each action, never in the
 background. The old *Storage Usage* card on the main Settings page is gone.
@@ -72,7 +73,8 @@ shared images freed only by their last referrer — so it is the cleanup it desc
 re-estimated, debounced, whenever the retention period or the limit changes.
 
 **Clean up now** runs the full pass, sweep included, without waiting for the six-hour interval,
-then compacts the database.
+then compacts the database and empties the thumbnail cache — rows download their thumbnails again
+as they are shown. The background pass never touches the thumbnail cache.
 
 ## Database compaction
 

@@ -14,7 +14,9 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.OfflineRetention.DAY_MILLIS
 import com.karakept.app.utils.DefaultAppDispatchers
 import com.karakept.app.utils.LocalFileInfo
+import com.karakept.app.utils.NoThumbnailCache
 import com.karakept.app.utils.StorageInfo
+import com.karakept.app.utils.ThumbnailCache
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +68,8 @@ class OfflineCacheCleanupTest {
         capMb: Int? = null,
         device: StorageInfo = StorageInfo(usedBytes = 0, freeBytes = 0, totalBytes = 0),
         reclaimable: (suspend () -> Long)? = null,
-        compact: (suspend () -> Unit)? = null
+        compact: (suspend () -> Unit)? = null,
+        thumbnails: ThumbnailCache = NoThumbnailCache
     ): OfflineCacheRepository {
         val settings = mockk<SettingsRepository>(relaxed = true)
         every { settings.activeOfflineRetentionDays } returns flowOf(retentionDays)
@@ -80,7 +83,8 @@ class OfflineCacheCleanupTest {
             clock = { now },
             deviceStorage = { device },
             reclaimableDatabaseBytes = reclaimable ?: { db.reclaimableBytes() },
-            compactDatabase = compact ?: { db.compact() }
+            compactDatabase = compact ?: { db.compact() },
+            thumbnailCache = thumbnails
         )
     }
 
@@ -348,6 +352,36 @@ class OfflineCacheCleanupTest {
         assertEquals(1000L, usage.appBytes)
         assertEquals(841L, usage.otherAppBytes)
         assertEquals(50_000L, usage.freeBytes)
+        db.close()
+    }
+
+    private class FakeThumbnails(var bytes: Long) : ThumbnailCache {
+        override fun sizeBytes() = bytes
+        override fun clear() { bytes = 0 }
+    }
+
+    @Test
+    fun `the thumbnail cache is its own part of the app, emptied by an explicit clean up`() = runBlocking {
+        val thumbnails = FakeThumbnails(300)
+        val device = StorageInfo(usedBytes = 1000, freeBytes = 0, totalBytes = 0)
+        val cleaner = cleaner(retentionDays = null, device = device, thumbnails = thumbnails, reclaimable = { 0L }, compact = {})
+
+        val usage = cleaner.storageUsage()
+        assertEquals(300L, usage.thumbnailCacheBytes)
+        assertEquals(700L, usage.otherAppBytes)
+        assertEquals(300L, cleaner.estimateCleanup().thumbnailCacheBytes)
+
+        val result = cleaner.cleanUp()
+        assertEquals(300L, result.freedBytes)
+        assertEquals(0L, thumbnails.bytes)
+        db.close()
+    }
+
+    @Test
+    fun `a background pass leaves the thumbnail cache alone`() = runBlocking {
+        val thumbnails = FakeThumbnails(300)
+        cleaner(retentionDays = null, thumbnails = thumbnails).cleanUpAfterSync()
+        assertEquals(300L, thumbnails.bytes)
         db.close()
     }
 

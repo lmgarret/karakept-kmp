@@ -7,7 +7,9 @@ import com.karakept.app.utils.AppDispatchers
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.FileUtils
 import com.karakept.app.utils.LocalFileInfo
+import com.karakept.app.utils.NoThumbnailCache
 import com.karakept.app.utils.StorageInfo
+import com.karakept.app.utils.ThumbnailCache
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -25,9 +27,10 @@ object ImageCacheFileStore : CacheFileStore {
 }
 
 /**
- * What the app takes on the device, and how much of that is offline copies: article bodies,
- * images (content and hero) and downloaded files (archives, PDFs). [appBytes] is never less than
- * the offline part, so [otherAppBytes] cannot go negative when the two are measured a moment apart.
+ * What the app takes on the device: offline copies — article bodies, images (content and hero)
+ * and downloaded files (archives, PDFs) — the image loader's thumbnail cache, and the rest.
+ * [appBytes] is never less than the parts it is split into, so [otherAppBytes] cannot go negative
+ * when they are measured a moment apart.
  */
 data class OfflineStorageUsage(
     val bookmarkCount: Int,
@@ -35,10 +38,11 @@ data class OfflineStorageUsage(
     val imageBytes: Long,
     val fileBytes: Long,
     val appBytes: Long,
-    val freeBytes: Long
+    val freeBytes: Long,
+    val thumbnailCacheBytes: Long = 0
 ) {
     val offlineBytes: Long get() = articleBytes + imageBytes + fileBytes
-    val otherAppBytes: Long get() = appBytes - offlineBytes
+    val otherAppBytes: Long get() = appBytes - offlineBytes - thumbnailCacheBytes
 }
 
 /** What a [OfflineCacheRepository.cleanUp] run now would free, part by part. */
@@ -48,9 +52,11 @@ data class OfflineCleanupEstimate(
     val overLimitCopies: Int = 0,
     val overLimitBytes: Long = 0,
     val unusedFileBytes: Long = 0,
-    val reclaimableDatabaseBytes: Long = 0
+    val reclaimableDatabaseBytes: Long = 0,
+    val thumbnailCacheBytes: Long = 0
 ) {
-    val totalBytes: Long get() = retiredBytes + overLimitBytes + unusedFileBytes + reclaimableDatabaseBytes
+    val totalBytes: Long
+        get() = retiredBytes + overLimitBytes + unusedFileBytes + reclaimableDatabaseBytes + thumbnailCacheBytes
 }
 
 data class OfflineCacheCleanupResult(
@@ -87,7 +93,8 @@ class OfflineCacheRepository(
     // Emptied bodies only reach the device once the database is compacted (see
     // AppDatabase.compact). Lambdas so tests need no real database.
     private val reclaimableDatabaseBytes: suspend () -> Long = { 0L },
-    private val compactDatabase: suspend () -> Unit = {}
+    private val compactDatabase: suspend () -> Unit = {},
+    private val thumbnailCache: ThumbnailCache = NoThumbnailCache
 ) {
     private val mutex = Mutex()
     private var lastSweepAt: Long? = null
@@ -110,11 +117,16 @@ class OfflineCacheRepository(
         }
     }
 
-    /** The pass "Clean up now" runs: everything at once, then the database compacted. */
+    /**
+     * The pass "Clean up now" runs: everything at once, then the database compacted and the
+     * thumbnail cache emptied — rows download their thumbnails again as they are shown.
+     */
     suspend fun cleanUp(): OfflineCacheCleanupResult = withContext(appDispatchers.io) {
         mutex.withLock {
             val result = runPass(forceSweep = true)
-            result.copy(freedBytes = result.freedBytes + compact())
+            val thumbnails = thumbnailCache.sizeBytes()
+            thumbnailCache.clear()
+            result.copy(freedBytes = result.freedBytes + compact() + thumbnails)
         }
     }
 
@@ -166,14 +178,16 @@ class OfflineCacheRepository(
         val managed = files.list().filter(::isManaged)
         val imageBytes = managed.filter(::isImage).sumOf { it.sizeBytes }
         val fileBytes = managed.filterNot(::isImage).sumOf { it.sizeBytes }
+        val thumbnails = thumbnailCache.sizeBytes()
         val device = deviceStorage()
         OfflineStorageUsage(
             bookmarkCount = stats.bookmarkCount,
             articleBytes = stats.bodyBytes,
             imageBytes = imageBytes,
             fileBytes = fileBytes,
-            appBytes = maxOf(device.usedBytes, stats.bodyBytes + imageBytes + fileBytes),
-            freeBytes = device.freeBytes
+            appBytes = maxOf(device.usedBytes, stats.bodyBytes + imageBytes + fileBytes + thumbnails),
+            freeBytes = device.freeBytes,
+            thumbnailCacheBytes = thumbnails
         )
     }
 
@@ -206,7 +220,8 @@ class OfflineCacheRepository(
             overLimitCopies = overLimit.size,
             overLimitBytes = usageBeforeCap - simulation.usage,
             unusedFileBytes = snapshot.unusedFiles(now, SWEEP_GRACE_MILLIS).sumOf { it.sizeBytes },
-            reclaimableDatabaseBytes = reclaimableDatabaseBytes()
+            reclaimableDatabaseBytes = reclaimableDatabaseBytes(),
+            thumbnailCacheBytes = thumbnailCache.sizeBytes()
         )
     }
 

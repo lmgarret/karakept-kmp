@@ -16,3 +16,5 @@ actual fun getCacheDir(context: coil3.PlatformContext): okio.Path? {
     }
     return cacheDir.absolutePath.toPath()
 }
+
+actual fun imageLoaderContext(): coil3.PlatformContext = coil3.PlatformContext.INSTANCE
