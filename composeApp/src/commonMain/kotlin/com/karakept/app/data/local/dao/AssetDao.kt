@@ -6,6 +6,7 @@ import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.RETIRED_PREDICATE
+import com.karakept.app.data.local.projection.AssetPathRow
 
 @Dao
 interface AssetDao {
@@ -32,6 +33,12 @@ interface AssetDao {
 
     @Query("SELECT localPath FROM assets WHERE localPath IS NOT NULL")
     suspend fun getAllLocalPaths(): List<String>
+
+    @Query("SELECT bookmarkRemoteId, serverId, localPath FROM assets WHERE localPath IS NOT NULL")
+    suspend fun getLocalPathOwners(): List<AssetPathRow>
+
+    @Query("UPDATE assets SET localPath = NULL WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId")
+    suspend fun clearLocalPathsForBookmark(bookmarkRemoteId: String, serverId: String)
 
     // The rows stay, so the viewer still lists the asset as available on the server.
     @Query(

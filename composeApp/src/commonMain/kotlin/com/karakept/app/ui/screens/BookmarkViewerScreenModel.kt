@@ -439,6 +439,10 @@ class BookmarkViewerScreenModel(
                 bookmarkDao.observeBookmarkById(id).collect { bookmark ->
                     if (bookmark != null) {
                         if (!hasLoadedOnce) {
+                            // Recency is what the offline storage cap evicts by.
+                            viewModelScope.launch {
+                                bookmarkDao.markOpened(bookmark.localId, System.currentTimeMillis())
+                            }
                             // Find out which AI actions this server accepts, so the details panel
                             // and overflow menu can hide the ones it would reject. The reader can
                             // be entered directly from a notification, so it cannot rely on the
@@ -536,6 +540,9 @@ class BookmarkViewerScreenModel(
                                             val bookmarkListIds = bookmark.listIds.split(",").filter { it.isNotBlank() }
                                             shouldPersist = bookmarkListIds.any { targetLists.contains(it) }
                                         }
+                                        // The storage cap dropped a copy it once held; opening it
+                                        // is what brings it back.
+                                        if (bookmark.offlineEvictedAt != null) shouldPersist = true
                                         // Past its retention: shown, not stored again.
                                         val retentionDays = settingsRepository.activeOfflineRetentionDays.firstOrNull()
                                         if (OfflineRetention.isRetired(bookmark, retentionDays, System.currentTimeMillis())) {

@@ -6,6 +6,7 @@ import androidx.sqlite.execSQL
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.migrations.MIGRATION_14_15
+import com.karakept.app.data.local.migrations.MIGRATION_15_16
 import com.karakept.app.data.local.migrations.withAppSchema
 import com.karakept.app.data.repository.CacheFileStore
 import com.karakept.app.data.repository.OfflineCacheRepository
@@ -58,9 +59,14 @@ class OfflineCacheCleanupTest {
     private fun file(name: String, modifiedAt: Long = 0L, size: Long = 10) =
         LocalFileInfo("/cache/image_cache/$name", name, size, modifiedAt)
 
-    private fun cleaner(retentionDays: Int?, files: CacheFileStore = FakeFiles(emptyList())): OfflineCacheRepository {
+    private fun cleaner(
+        retentionDays: Int?,
+        files: CacheFileStore = FakeFiles(emptyList()),
+        capMb: Int? = null
+    ): OfflineCacheRepository {
         val settings = mockk<SettingsRepository>(relaxed = true)
         every { settings.activeOfflineRetentionDays } returns flowOf(retentionDays)
+        every { settings.activeOfflineStorageCapMb } returns flowOf(capMb)
         return OfflineCacheRepository(
             bookmarkDao = db.bookmarkDao(),
             assetDao = db.assetDao(),
@@ -76,12 +82,13 @@ class OfflineCacheCleanupTest {
         content: String? = "<p>body</p>",
         isRead: Boolean = false,
         isArchived: Boolean = false,
-        readOrArchivedAt: Long? = null
+        readOrArchivedAt: Long? = null,
+        lastOpenedAt: Long? = null
     ) = BookmarkEntity(
         remoteId = id, serverId = serverId, url = "u", title = id, content = content,
         imageUrl = null, bannerImageAssetId = null, screenshotAssetId = null, description = null,
         createdAt = 1, isArchived = isArchived, isStarred = false, isRead = isRead,
-        readOrArchivedAt = readOrArchivedAt
+        readOrArchivedAt = readOrArchivedAt, lastOpenedAt = lastOpenedAt
     )
 
     private fun asset(id: String, bookmarkId: String, localPath: String?) = AssetEntity(
@@ -202,6 +209,102 @@ class OfflineCacheCleanupTest {
         db.close()
     }
 
+    private fun img(name: String) = "<img src='file://$cacheDir/$name'>"
+
+    @Test
+    fun `under the storage cap nothing is evicted`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("a", isRead = true, content = img("img_a")))
+        val files = FakeFiles(listOf(file("img_a", size = 500_000)))
+
+        val result = cleaner(retentionDays = null, files = files, capMb = 1).cleanUp()
+
+        assertEquals(0, result.evictedBookmarks)
+        assertEquals(img("img_a"), row("a").content)
+        db.close()
+    }
+
+    @Test
+    fun `over the storage cap evicts read copies least recently opened first, then unread ones`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("read-old", isRead = true, lastOpenedAt = 10, content = img("img_a")))
+        db.bookmarkDao().insertBookmark(bookmark("read-recent", isArchived = true, lastOpenedAt = 50, content = img("img_c")))
+        db.bookmarkDao().insertBookmark(bookmark("unread-old", lastOpenedAt = 5, content = img("img_b")))
+        val files = FakeFiles(
+            listOf(file("img_a", size = 600_000), file("img_b", size = 600_000), file("img_c", size = 600_000))
+        )
+
+        val result = cleaner(retentionDays = null, files = files, capMb = 1).cleanUp()
+
+        assertEquals(2, result.evictedBookmarks)
+        with(row("read-old")) {
+            assertNull(content)
+            assertEquals(now, offlineEvictedAt)
+        }
+        assertNull(row("read-recent").content)
+        assertEquals(img("img_b"), row("unread-old").content, "unread copies go last")
+        assertNull(row("unread-old").offlineEvictedAt)
+        assertEquals(listOf("img_b"), files.present.map { it.name })
+        db.close()
+    }
+
+    @Test
+    fun `a shared image is counted once and only freed by its last referrer`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("first", isRead = true, lastOpenedAt = 1, content = img("img_shared")))
+        db.bookmarkDao().insertBookmark(bookmark("second", isRead = true, lastOpenedAt = 2, content = img("img_shared")))
+        db.bookmarkDao().insertBookmark(bookmark("unread", lastOpenedAt = 0, content = "<p>small</p>"))
+        val files = FakeFiles(listOf(file("img_shared", size = 1_500_000)))
+
+        val result = cleaner(retentionDays = null, files = files, capMb = 1).cleanUp()
+
+        assertEquals(2, result.evictedBookmarks)
+        assertEquals("<p>small</p>", row("unread").content)
+        assertTrue(files.present.isEmpty())
+        db.close()
+    }
+
+    @Test
+    fun `a downloaded asset alone counts as an offline copy`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("pdf", isRead = true, content = null))
+        db.assetDao().insertAssets(listOf(asset("a", "pdf", "$cacheDir/asset_a.pdf")))
+        val files = FakeFiles(listOf(file("asset_a.pdf", size = 2_000_000)))
+
+        val result = cleaner(retentionDays = null, files = files, capMb = 1).cleanUp()
+
+        assertEquals(1, result.evictedBookmarks)
+        assertNull(db.assetDao().getAssetsForBookmark("pdf", serverId).single().localPath)
+        assertTrue(files.present.isEmpty())
+        db.close()
+    }
+
+    @Test
+    fun `after a sync the storage cap waits for the sweep interval`() = runBlocking {
+        val files = FakeFiles(emptyList())
+        val cleaner = cleaner(retentionDays = null, files = files, capMb = 1)
+        cleaner.cleanUpAfterSync()
+        db.bookmarkDao().insertBookmark(bookmark("big", isRead = true, content = img("img_big")))
+        files.present += file("img_big", size = 2_000_000)
+
+        assertEquals(0, cleaner.cleanUpAfterSync()?.evictedBookmarks)
+        assertEquals(img("img_big"), row("big").content)
+
+        now += OfflineCacheRepository.SWEEP_INTERVAL_MILLIS
+        assertEquals(1, cleaner.cleanUpAfterSync()?.evictedBookmarks)
+        assertTrue(files.present.isEmpty())
+        db.close()
+    }
+
+    @Test
+    fun `storing the body again lifts the eviction`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("a", isRead = true, content = img("img_a")))
+        cleaner(retentionDays = null, files = FakeFiles(listOf(file("img_a", size = 2_000_000))), capMb = 1).cleanUp()
+        val evicted = row("a")
+        assertNotNull(evicted.offlineEvictedAt)
+
+        db.bookmarkDao().updateContent(evicted.localId, "<p>again</p>", 1)
+
+        assertNull(row("a").offlineEvictedAt)
+        db.close()
+    }
+
     @Test
     fun `retention runs after every sync, and frees what it evicted straight away`() = runBlocking {
         val files = FakeFiles(emptyList())
@@ -282,6 +385,27 @@ class OfflineCacheCleanupTest {
 
         assertTrue(files.present.isEmpty())
         db.close()
+    }
+
+    @Test
+    fun `the storage cap migration adds its columns empty`() = runBlocking {
+        db.close()
+        java.io.File(dbPath).delete()
+        val c = BundledSQLiteDriver().open(dbPath)
+        try {
+            c.execSQL("CREATE TABLE bookmarks (localId INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)")
+            c.execSQL("INSERT INTO bookmarks DEFAULT VALUES")
+
+            MIGRATION_15_16.migrate(c)
+
+            val stmt = c.prepare("SELECT lastOpenedAt, offlineEvictedAt FROM bookmarks")
+            assertTrue(stmt.step())
+            assertTrue(stmt.isNull(0))
+            assertTrue(stmt.isNull(1))
+            stmt.close()
+        } finally {
+            c.close()
+        }
     }
 
     @Test
