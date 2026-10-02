@@ -1,5 +1,6 @@
 package com.karakept.app.ui.screens
 
+import com.karakept.app.domain.action.TagFilterRequests
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.Server
@@ -134,7 +135,8 @@ class Save02RegressionTest {
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
         highlightRepository = highlightRepository,
-        appDispatchers = TestAppDispatchers(testDispatcher)
+        appDispatchers = TestAppDispatchers(testDispatcher),
+        tagFilterRequests = TagFilterRequests()
     )
 
     /** Makes [rows] the view the repository answers for — its size, and its pages. */

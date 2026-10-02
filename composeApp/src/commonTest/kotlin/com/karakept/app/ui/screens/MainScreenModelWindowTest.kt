@@ -1,5 +1,6 @@
 package com.karakept.app.ui.screens
 
+import com.karakept.app.domain.action.TagFilterRequests
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.BookmarkSlot
 import com.karakept.app.data.model.DefaultListType
@@ -143,7 +144,8 @@ class MainScreenModelWindowTest {
         bookmarkActionController = bookmarkActionController,
         snackbarManager = snackbarManager,
         highlightRepository = highlightRepository,
-        appDispatchers = TestAppDispatchers(testDispatcher)
+        appDispatchers = TestAppDispatchers(testDispatcher),
+        tagFilterRequests = TagFilterRequests()
     )
 
     private fun row(index: Int) = BookmarkEntity(
