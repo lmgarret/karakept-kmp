@@ -68,6 +68,8 @@ import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.ui.components.einkModalBorder
 import com.karakept.app.ui.components.rememberJsonFilePicker
+import com.karakept.app.ui.components.ServerVersionWarning
+import com.karakept.app.domain.ServerVersionCheck
 
 private const val STEP_WELCOME = 0
 private const val STEP_PERMISSIONS = 1
@@ -568,6 +570,7 @@ private fun ServerConnectionStep(
     var apiKey by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
     var connectionStatus by remember { mutableStateOf<Boolean?>(null) }
+    var serverVersion by remember { mutableStateOf<ServerVersionCheck?>(null) }
     var isTesting by remember { mutableStateOf(false) }
     var isConnecting by remember { mutableStateOf(false) }
 
@@ -669,6 +672,7 @@ private fun ServerConnectionStep(
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center
             )
+            ServerVersionWarning(serverVersion, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
             Spacer(modifier = Modifier.height(12.dp))
         }
 
@@ -680,9 +684,11 @@ private fun ServerConnectionStep(
                 onClick = {
                     isTesting = true
                     connectionStatus = null
-                    screenModel.testConnection(url, apiKey) { success ->
+                    serverVersion = null
+                    screenModel.testConnection(url, apiKey) { success, version ->
                         isTesting = false
                         connectionStatus = success
+                        serverVersion = version
                     }
                 },
                 modifier = Modifier.weight(1f),

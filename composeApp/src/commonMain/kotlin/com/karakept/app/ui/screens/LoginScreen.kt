@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import com.karakept.app.ui.icons.AppIcons
+import com.karakept.app.domain.ServerVersionCheck
+import com.karakept.app.ui.components.ServerVersionWarning
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
@@ -69,6 +71,7 @@ class LoginScreen(val serverUrl: String? = null) : NavKey {
             ) {
                 var isPasswordVisible by remember { mutableStateOf(false) }
                 var connectionStatus by remember { mutableStateOf<Boolean?>(null) }
+                var serverVersion by remember { mutableStateOf<ServerVersionCheck?>(null) }
                 var isTesting by remember { mutableStateOf(false) }
 
                 OutlinedTextField(
@@ -105,9 +108,11 @@ class LoginScreen(val serverUrl: String? = null) : NavKey {
                         onClick = {
                             isTesting = true
                             connectionStatus = null
-                            screenModel.testConnection(url, apiKey) { success ->
+                            serverVersion = null
+                            screenModel.testConnection(url, apiKey) { success, version ->
                                 isTesting = false
                                 connectionStatus = success
+                                serverVersion = version
                             }
                         },
                         modifier = Modifier.weight(1f),
@@ -142,6 +147,7 @@ class LoginScreen(val serverUrl: String? = null) : NavKey {
                         color = if (connectionStatus == true) androidx.compose.ui.graphics.Color.Green else androidx.compose.ui.graphics.Color.Red,
                         style = MaterialTheme.typography.bodyMedium
                     )
+                    ServerVersionWarning(serverVersion, modifier = Modifier.fillMaxWidth())
                 }
             }
         }

@@ -58,6 +58,9 @@ import com.karakept.app.domain.action.AiAction
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.TagFilterRequests
+import com.karakept.app.data.repository.ServerVersionRepository
+import com.karakept.app.domain.ServerCompatibility
+import com.karakept.app.domain.ServerVersionUtils
 import com.karakept.app.domain.DefaultFilterResolver
 import com.karakept.app.domain.ListCountUtils
 import com.karakept.app.domain.TagCountUtils
@@ -89,7 +92,9 @@ class MainScreenModel(
     private val appDispatchers: com.karakept.app.utils.AppDispatchers,
     // No default: the reader posts to the Koin single, so a model built with its own instance
     // never hears a tapped tag — which is what the DI binding silently did while this had one.
-    private val tagFilterRequests: TagFilterRequests
+    private val tagFilterRequests: TagFilterRequests,
+    // Nullable so a test can construct the model without the startup version check it never uses.
+    private val serverVersionRepository: ServerVersionRepository? = null
 ) : ViewModel() {
 
     private val defaultFilterResolver = DefaultFilterResolver(settingsRepository)
@@ -884,6 +889,25 @@ class MainScreenModel(
         viewModelScope.launch {
             _selectedServer.filterNotNull().distinctUntilChanged { a, b -> a.id == b.id }
                 .collect { server -> bookmarkActionsRepository.refreshAiCapabilities(server) }
+        }
+
+        // Warn once per process when the selected server is older than the features in this
+        // build need. Non-blocking: everything keeps working that the server does support.
+        if (serverVersionRepository != null) {
+            viewModelScope.launch {
+                _selectedServer.filterNotNull().distinctUntilChanged { a, b -> a.id == b.id }
+                    .collect { server ->
+                        val check = serverVersionRepository.refresh(server) ?: return@collect
+                        if (check.compatibility == ServerCompatibility.OUTDATED &&
+                            serverVersionRepository.claimOutdatedWarning(server.id)
+                        ) {
+                            snackbarManager.showSnackbar(
+                                ServerVersionUtils.outdatedWarning(check),
+                                androidx.compose.material3.SnackbarDuration.Long
+                            )
+                        }
+                    }
+            }
         }
 
         // The "N new" pill reports on a sync, so a sync is the only thing that raises it.

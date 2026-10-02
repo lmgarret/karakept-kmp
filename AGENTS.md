@@ -848,3 +848,18 @@ The `api-client/` module is **generated** from the Karakeep OpenAPI spec at
 - **Do not hand-edit** files under `api-client/src/` — they will be overwritten on regeneration.
 - Generated models live at `com.karakept.api.*`.
 - `RemoteDataSource.kt` is the only place that consumes the generated API clients.
+
+---
+
+## Server Version
+
+`ServerVersionUtils.MIN_RECOMMENDED_VERSION` (`domain/ServerVersionUtils.kt`) is the oldest
+Karakeep release every feature of the app works against. The app reads the server's version from
+`GET /api/version` and warns — never blocks — when it is older: under the connection test on the
+login and onboarding screens, once per launch on the bookmark list, and in Settings → Server
+Connection, which also shows both versions. See `docs/server-version.md`.
+
+> **Rule:** a change that starts relying on a server feature (a new route, a new field, a new
+> tRPC procedure) bumps `MIN_RECOMMENDED_VERSION` to the first release that ships it, in the same
+> change, and adds a line to the list in its KDoc. Bumping the `karakeep-upstream` submodule is
+> the usual moment to check.
