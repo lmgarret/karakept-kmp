@@ -1200,7 +1200,7 @@ class BookmarkRepository(
                     val bytes = remoteDataSource.downloadAsset(server, bannerImageAssetId)
                     val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
                     val localPath = com.karakept.app.utils.FileUtils.saveFile(
-                        cacheDir, "hero_banner_${bannerImageAssetId}", bytes
+                        cacheDir, com.karakept.app.utils.OfflineHeroImages.bannerFileName(bannerImageAssetId), bytes
                     )
                     assetDao.insertAssets(
                         listOf(AssetEntity(
@@ -1208,7 +1208,7 @@ class BookmarkRepository(
                             bookmarkRemoteId = bookmarkRemoteId,
                             serverId = serverId,
                             assetType = "bannerImage",
-                            fileName = "hero_banner_${bannerImageAssetId}",
+                            fileName = com.karakept.app.utils.OfflineHeroImages.bannerFileName(bannerImageAssetId),
                             contentType = null,
                             localPath = localPath
                         ))
@@ -1230,7 +1230,7 @@ class BookmarkRepository(
                     val bytes = remoteDataSource.downloadAsset(server, screenshotAssetId)
                     val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
                     val localPath = com.karakept.app.utils.FileUtils.saveFile(
-                        cacheDir, "hero_screenshot_${screenshotAssetId}", bytes
+                        cacheDir, com.karakept.app.utils.OfflineHeroImages.screenshotFileName(screenshotAssetId), bytes
                     )
                     assetDao.insertAssets(
                         listOf(AssetEntity(
@@ -1238,7 +1238,7 @@ class BookmarkRepository(
                             bookmarkRemoteId = bookmarkRemoteId,
                             serverId = serverId,
                             assetType = "screenshot",
-                            fileName = "hero_screenshot_${screenshotAssetId}",
+                            fileName = com.karakept.app.utils.OfflineHeroImages.screenshotFileName(screenshotAssetId),
                             contentType = null,
                             localPath = localPath
                         ))
