@@ -88,17 +88,12 @@ class SettingsScreen : NavKey {
     fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val screenModel = koinViewModel<SettingsScreenModel>()
-        var storageInfo by remember { mutableStateOf<com.karakept.app.utils.StorageInfo?>(null) }
         var selectedSection by remember { mutableStateOf(SettingsSection.APPEARANCE) }
         var selectedSubScreen by remember { mutableStateOf<NavKey?>(null) }
 
         // Clear sub-screen when section changes
         LaunchedEffect(selectedSection) {
             selectedSubScreen = null
-        }
-
-        LaunchedEffect(Unit) {
-            storageInfo = com.karakept.app.utils.FileUtils.getStorageInfo()
         }
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -148,13 +143,6 @@ class SettingsScreen : NavKey {
                                             Spacer(modifier = Modifier.height(8.dp))
                                         }
                                     }
-                                }
-
-                                storageInfo?.let {
-                                    com.karakept.app.ui.components.StorageUsageBar(
-                                        storageInfo = it,
-                                        modifier = Modifier.padding(12.dp)
-                                    )
                                 }
                             }
                         }
@@ -325,13 +313,6 @@ class SettingsScreen : NavKey {
                                 description = "App version and open source licenses",
                                 icon = AppIcons.Default.Info,
                                 onClick = { navigator.push(AboutScreen()) }
-                            )
-                        }
-
-                        storageInfo?.let {
-                            com.karakept.app.ui.components.StorageUsageBar(
-                                storageInfo = it,
-                                modifier = Modifier.padding(16.dp)
                             )
                         }
                     }

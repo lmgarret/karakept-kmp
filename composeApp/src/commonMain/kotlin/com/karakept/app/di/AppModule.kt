@@ -2,6 +2,8 @@ package com.karakept.app.di
 
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.karakept.app.data.local.AppDatabase
+import com.karakept.app.data.local.compact
+import com.karakept.app.data.local.reclaimableBytes
 import com.karakept.app.data.local.createDataStore
 import com.karakept.app.data.local.getDatabaseBuilder
 import com.karakept.app.data.remote.createHttpClient
@@ -92,7 +94,17 @@ val appModule = module {
 
     // HighlightRepository
     single { HighlightRepository(get(), get(), get()) }
-    single { OfflineCacheRepository(get(), get(), get(), get()) }
+    single {
+        val database = get<AppDatabase>()
+        OfflineCacheRepository(
+            bookmarkDao = get(),
+            assetDao = get(),
+            settingsRepository = get(),
+            appDispatchers = get(),
+            reclaimableDatabaseBytes = { database.reclaimableBytes() },
+            compactDatabase = { database.compact() }
+        )
+    }
 
     // BookmarkRepository depends on BookmarkActionsRepository and HighlightRepository
     single {
@@ -137,6 +149,6 @@ val appModule = module {
     viewModel { com.karakept.app.ui.screens.settings.EinkSettingsScreenModel(get(), get()) }
     viewModel { com.karakept.app.ui.screens.settings.BackupRestoreScreenModel(get(), get()) }
     viewModel { com.karakept.app.ui.screens.settings.LayoutsScreenModel(get()) }
-    viewModel { com.karakept.app.ui.screens.settings.OfflineStorageScreenModel(get()) }
+    viewModel { com.karakept.app.ui.screens.settings.OfflineStorageScreenModel(get(), get()) }
     viewModel { com.karakept.app.ui.screens.settings.LayoutEditorScreenModel(get()) }
 }

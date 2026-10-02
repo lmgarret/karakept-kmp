@@ -2,12 +2,12 @@ package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
-import com.karakept.app.data.local.projection.OfflineHolderRow
 import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.utils.AppDispatchers
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.FileUtils
 import com.karakept.app.utils.LocalFileInfo
+import com.karakept.app.utils.StorageInfo
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -24,13 +24,33 @@ object ImageCacheFileStore : CacheFileStore {
     override fun delete(path: String) = FileUtils.deleteFile(path)
 }
 
-/** What offline copies take: stored bodies plus every file cleanup manages. */
+/**
+ * What the app takes on the device, and how much of that is offline copies: article bodies,
+ * images (content and hero) and downloaded files (archives, PDFs). [appBytes] is never less than
+ * the offline part, so [otherAppBytes] cannot go negative when the two are measured a moment apart.
+ */
 data class OfflineStorageUsage(
     val bookmarkCount: Int,
-    val bodyBytes: Long,
-    val fileBytes: Long
+    val articleBytes: Long,
+    val imageBytes: Long,
+    val fileBytes: Long,
+    val appBytes: Long,
+    val freeBytes: Long
 ) {
-    val totalBytes: Long get() = bodyBytes + fileBytes
+    val offlineBytes: Long get() = articleBytes + imageBytes + fileBytes
+    val otherAppBytes: Long get() = appBytes - offlineBytes
+}
+
+/** What a [OfflineCacheRepository.cleanUp] run now would free, part by part. */
+data class OfflineCleanupEstimate(
+    val retiredCopies: Int = 0,
+    val retiredBytes: Long = 0,
+    val overLimitCopies: Int = 0,
+    val overLimitBytes: Long = 0,
+    val unusedFileBytes: Long = 0,
+    val reclaimableDatabaseBytes: Long = 0
+) {
+    val totalBytes: Long get() = retiredBytes + overLimitBytes + unusedFileBytes + reclaimableDatabaseBytes
 }
 
 data class OfflineCacheCleanupResult(
@@ -62,7 +82,12 @@ class OfflineCacheRepository(
     private val settingsRepository: SettingsRepository,
     private val appDispatchers: AppDispatchers,
     private val files: CacheFileStore = ImageCacheFileStore,
-    private val clock: () -> Long = { System.currentTimeMillis() }
+    private val clock: () -> Long = { System.currentTimeMillis() },
+    private val deviceStorage: () -> StorageInfo = { FileUtils.getStorageInfo() },
+    // Emptied bodies only reach the device once the database is compacted (see
+    // AppDatabase.compact). Lambdas so tests need no real database.
+    private val reclaimableDatabaseBytes: suspend () -> Long = { 0L },
+    private val compactDatabase: suspend () -> Unit = {}
 ) {
     private val mutex = Mutex()
     private var lastSweepAt: Long? = null
@@ -85,8 +110,19 @@ class OfflineCacheRepository(
         }
     }
 
+    /** The pass "Clean up now" runs: everything at once, then the database compacted. */
     suspend fun cleanUp(): OfflineCacheCleanupResult = withContext(appDispatchers.io) {
-        mutex.withLock { runPass(forceSweep = true) }
+        mutex.withLock {
+            val result = runPass(forceSweep = true)
+            result.copy(freedBytes = result.freedBytes + compact())
+        }
+    }
+
+    /** Compacts the database; returns the free pages that handed back, which it can count. */
+    private suspend fun compact(): Long {
+        val reclaimable = reclaimableDatabaseBytes()
+        compactDatabase()
+        return reclaimable
     }
 
     private suspend fun runPass(forceSweep: Boolean): OfflineCacheCleanupResult {
@@ -127,10 +163,50 @@ class OfflineCacheRepository(
 
     suspend fun storageUsage(): OfflineStorageUsage = withContext(appDispatchers.io) {
         val stats = bookmarkDao.getStoredContentStats()
+        val managed = files.list().filter(::isManaged)
+        val imageBytes = managed.filter(::isImage).sumOf { it.sizeBytes }
+        val fileBytes = managed.filterNot(::isImage).sumOf { it.sizeBytes }
+        val device = deviceStorage()
         OfflineStorageUsage(
             bookmarkCount = stats.bookmarkCount,
-            bodyBytes = stats.bodyBytes,
-            fileBytes = files.list().filter(::isManaged).sumOf { it.sizeBytes }
+            articleBytes = stats.bodyBytes,
+            imageBytes = imageBytes,
+            fileBytes = fileBytes,
+            appBytes = maxOf(device.usedBytes, stats.bodyBytes + imageBytes + fileBytes),
+            freeBytes = device.freeBytes
+        )
+    }
+
+    /**
+     * What [cleanUp] would free right now, without changing anything: copies past the retention
+     * period, then whatever the storage limit would still evict, files nothing uses, and database
+     * space a compaction would hand back. Reads every stored body, like the cleanup it previews.
+     *
+     * A bookmark read since the last pass has no stamp yet, so it is not counted: the pass that
+     * stamps it starts its retention period rather than ending it.
+     */
+    suspend fun estimateCleanup(): OfflineCleanupEstimate = withContext(appDispatchers.io) {
+        val now = clock()
+        val snapshot = loadSnapshot()
+        val simulation = snapshot.simulation()
+
+        val retentionDays = settingsRepository.activeOfflineRetentionDays.first()
+        val retired = snapshot.holders.filter {
+            OfflineRetention.isRetired(it.isRead, it.isArchived, it.readOrArchivedAt, retentionDays, now)
+        }
+        val retiredBytes = retired.sumOf { simulation.evict(it) ?: 0L }
+
+        val capMb = settingsRepository.activeOfflineStorageCapMb.first()
+        val usageBeforeCap = simulation.usage
+        val overLimit = capMb?.let { snapshot.selectForCap(simulation, it * OfflineRetention.MEGABYTE) }.orEmpty()
+
+        OfflineCleanupEstimate(
+            retiredCopies = retired.size,
+            retiredBytes = retiredBytes,
+            overLimitCopies = overLimit.size,
+            overLimitBytes = usageBeforeCap - simulation.usage,
+            unusedFileBytes = snapshot.unusedFiles(now, SWEEP_GRACE_MILLIS).sumOf { it.sizeBytes },
+            reclaimableDatabaseBytes = reclaimableDatabaseBytes()
         )
     }
 
@@ -146,7 +222,7 @@ class OfflineCacheRepository(
             // No grace period: the user asked for everything gone. A download racing this can
             // leave a body pointing at a deleted image, which the reader shows as missing.
             val (deleted, freed) = sweepUnreferencedFiles(clock(), graceMillis = 0)
-            OfflineCacheCleanupResult(cleared, deleted, freed)
+            OfflineCacheCleanupResult(cleared, deleted, freed + compact())
         }
     }
 
@@ -176,6 +252,8 @@ class OfflineCacheRepository(
 
     private fun isManaged(file: LocalFileInfo) = CACHE_FILE_PREFIXES.any(file.name::startsWith)
 
+    private fun isImage(file: LocalFileInfo) = IMAGE_FILE_PREFIXES.any(file.name::startsWith)
+
     private suspend fun referencedFileNames(): Set<String> {
         val names = mutableSetOf<String>()
         assetDao.getAllLocalPaths().mapTo(names, ::fileNameOf)
@@ -183,49 +261,31 @@ class OfflineCacheRepository(
         return names
     }
 
-    /**
-     * Evicts offline copies until what they take is back under [capBytes]. Returns how many.
-     *
-     * Usage is counted the way deleting frees it: every stored body, plus every cache file some
-     * copy still references, once. A content image shared by two bookmarks is freed by the second
-     * eviction, not the first, so each file carries a count of its referrers.
-     */
+    /** Evicts offline copies until what they take is back under [capBytes]. Returns how many. */
     private suspend fun enforceStorageCap(capBytes: Long, now: Long): Int {
-        val sizes = files.list().associate { it.name to it.sizeBytes }
+        val snapshot = loadSnapshot()
+        val evicted = snapshot.selectForCap(snapshot.simulation(), capBytes)
+        evicted.map { it.localId }.chunked(SQL_CHUNK).forEach { bookmarkDao.evictForStorageCap(it, now) }
+        evicted.forEach { assetDao.clearLocalPathsForBookmark(it.remoteId, it.serverId) }
+        return evicted.size
+    }
+
+    private suspend fun loadSnapshot(): OfflineSnapshot {
+        val managed = files.list().filter(::isManaged)
         val holders = bookmarkDao.getOfflineHolders()
         val holderByRemote = holders.associateBy { it.remoteId to it.serverId }
 
         val bodyBytes = mutableMapOf<Long, Long>()
         val refsOf = mutableMapOf<Long, MutableSet<String>>()
         forEachStoredContent { localId, content ->
-            bodyBytes[localId] = content.length.toLong()
+            bodyBytes[localId] = utf8Length(content)
             refsOf.getOrPut(localId) { mutableSetOf() } += referencesIn(content)
         }
         for (asset in assetDao.getLocalPathOwners()) {
             val holder = holderByRemote[asset.bookmarkRemoteId to asset.serverId] ?: continue
             refsOf.getOrPut(holder.localId) { mutableSetOf() } += fileNameOf(asset.localPath)
         }
-
-        val referrers = mutableMapOf<String, Int>()
-        refsOf.values.forEach { names -> names.forEach { referrers[it] = (referrers[it] ?: 0) + 1 } }
-        var usage = bodyBytes.values.sum() + referrers.keys.sumOf { sizes[it] ?: 0L }
-        if (usage <= capBytes) return 0
-
-        val evicted = mutableListOf<OfflineHolderRow>()
-        for (holder in holders.sortedWith(STORAGE_CAP_ORDER)) {
-            if (usage <= capBytes) break
-            usage -= bodyBytes[holder.localId] ?: 0L
-            for (name in refsOf[holder.localId].orEmpty()) {
-                val left = referrers.getValue(name) - 1
-                referrers[name] = left
-                if (left == 0) usage -= sizes[name] ?: 0L
-            }
-            evicted += holder
-        }
-
-        evicted.map { it.localId }.chunked(SQL_CHUNK).forEach { bookmarkDao.evictForStorageCap(it, now) }
-        evicted.forEach { assetDao.clearLocalPathsForBookmark(it.remoteId, it.serverId) }
-        return evicted.size
+        return OfflineSnapshot(holders, bodyBytes, refsOf, managed)
     }
 
     // Keyset-paged so a library of stored articles is never held in memory at once.
@@ -251,18 +311,14 @@ class OfflineCacheRepository(
         const val SWEEP_INTERVAL_MILLIS = 6L * 60 * 60 * 1000
         const val SWEEP_GRACE_MILLIS = 60L * 60 * 1000
 
-        // Read or archived before unread; within each, the copy opened longest ago first. One
-        // never opened counts from when it was saved.
-        private val STORAGE_CAP_ORDER = compareBy<OfflineHolderRow>(
-            { if (it.isRead || it.isArchived) 0 else 1 },
-            { it.lastOpenedAt ?: it.createdAt }
-        )
-
         // Every name the app writes into the image cache directory: ImageCacheManager's
         // `img_<hash>`, and the hero/archive/asset names BookmarkRepository and the viewer
         // give downloaded assets. Anything else in there is not ours to delete — on macOS and
         // Windows Coil's disk cache shares the directory.
         val CACHE_FILE_PREFIXES = listOf("img_", "hero_banner_", "hero_screenshot_", "archive_", "asset_")
+
+        // The managed files that are pictures; the rest are downloaded archives and assets.
+        private val IMAGE_FILE_PREFIXES = listOf("img_", "hero_banner_", "hero_screenshot_")
 
         // The file name at the end of a `file://` reference. Matched by name rather than by
         // path so a directory with a space in it (Windows user folders) cannot cut it short.

@@ -48,7 +48,8 @@ data class OfflineHolderRow(
     val isRead: Boolean,
     val isArchived: Boolean,
     val lastOpenedAt: Long?,
-    val createdAt: Long
+    val createdAt: Long,
+    val readOrArchivedAt: Long? = null
 )
 
 /** A downloaded asset file and the bookmark it belongs to. */
