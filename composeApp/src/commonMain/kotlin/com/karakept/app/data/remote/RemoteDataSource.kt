@@ -213,6 +213,36 @@ class RemoteDataSource(
     }
 
     /**
+     * The version string [url]'s server reports from `GET /api/version`, which needs no
+     * authentication. Null when the route does not exist — the server predates it. Any other
+     * failure throws, so a caller can leave the version unknown rather than call it outdated.
+     */
+    suspend fun fetchServerVersion(url: String): String? = guardedCall {
+        val base = getTrpcBaseUrl(Server(id = "", url = url, apiKey = "", label = ""))
+        val response: HttpResponse = try {
+            client.get("$base/api/version")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException("Error fetching server version: ${e.message}", e)
+        }
+        when {
+            response.status.value == 404 -> null
+            !response.status.isSuccess() ->
+                throw ApiException("Error fetching server version: ${response.status}", statusCode = response.status.value)
+            else -> try {
+                trpcJson.parseToJsonElement(response.bodyAsText())
+                    .jsonObject["version"]?.jsonPrimitive?.content
+                    ?: throw ApiException("Server version response has no version field")
+            } catch (e: ApiException) {
+                throw e
+            } catch (e: Exception) {
+                throw ApiException("Unreadable server version response: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
      * Downloads an asset's bytes.
      *
      * [onProgress] is invoked with a 0f..1f fraction as bytes arrive, or with null when the

@@ -18,6 +18,7 @@ import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.ListRepository
+import com.karakept.app.data.repository.ServerVersionRepository
 import com.karakept.api.infrastructure.ApiClient
 import com.karakept.api.client.*
 import com.karakept.app.data.repository.BackupRepository
@@ -88,6 +89,7 @@ val appModule = module {
     single { ServerRepository(get(), get()) }
     single { SettingsRepository(get()) }
     single { ListRepository(get(), get(), get(), get()) }  // RemoteDataSource, ListDao, SettingsRepository, AppDispatchers
+    single { ServerVersionRepository(get(), get()) }
 
     // BookmarkActionsRepository depends on BookmarkDao, PendingActionDao, RemoteDataSource, ServerRepository, SettingsRepository, AppDispatchers
     single { BookmarkActionsRepository(get(), get(), get(), get(), get(), get()) }
@@ -132,16 +134,16 @@ val appModule = module {
     // screens that scroll share one instance.
     single { com.karakept.app.ui.input.PageTurnDispatcher(get(), get()) }
 
-    viewModel { LoginScreenModel(get(), get(), get()) }
-    viewModel { OnboardingScreenModel(get(), get(), get(), get()) }
+    viewModel { LoginScreenModel(get(), get(), get(), get()) }
+    viewModel { OnboardingScreenModel(get(), get(), get(), get(), get()) }
     // viewModel (not single) so each Nav3 back-stack entry gets a fresh instance scoped
     // to that entry's ViewModelStore (provided by rememberViewModelStoreNavEntryDecorator).
     // A Koin single would share one instance across hosts/entries, but the store clears the
     // ViewModel (cancelling viewModelScope) when its entry leaves the back stack — a reused
     // singleton would then have dead coroutines and never load bookmarks (SAVE-02).
-    viewModel { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), serverVersionRepository = get()) }
     viewModel { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    viewModel { SettingsScreenModel(get(), get(), get(), get()) }
+    viewModel { SettingsScreenModel(get(), get(), get(), get(), get()) }
     viewModel { HighlightsScreenModel(get(), get(), get(), get()) }
     viewModel { com.karakept.app.ui.screens.SaveErrorScreenModel(get()) }
     viewModel { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }

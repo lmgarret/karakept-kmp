@@ -20,12 +20,16 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.domain.ServerVersionCheck
+import com.karakept.app.domain.ServerVersionUtils
+import com.karakept.app.ui.components.ServerVersionWarning
 import com.karakept.app.ui.icons.AppIcons
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
@@ -57,6 +61,8 @@ fun ServerSettingsContent(
     showBackButton: Boolean = true
 ) {
     val servers by screenModel.servers.collectAsState()
+    val serverVersions by screenModel.serverVersions.collectAsState()
+    val isCheckingVersion by screenModel.isCheckingServerVersion.collectAsState()
 
     Scaffold(
         topBar = {
@@ -88,6 +94,8 @@ fun ServerSettingsContent(
 
             val server = servers.firstOrNull()
             if (server != null) {
+                LaunchedEffect(server.id, server.url) { screenModel.refreshServerVersion(server) }
+                val versionCheck = serverVersions[server.id]
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier
@@ -111,9 +119,21 @@ fun ServerSettingsContent(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Text(
+                                text = "Server version: ${serverVersionLabel(versionCheck, isCheckingVersion)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            Text(
+                                text = "Minimum recommended: ${ServerVersionUtils.MIN_RECOMMENDED_VERSION}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
+                ServerVersionWarning(versionCheck, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -130,4 +150,11 @@ fun ServerSettingsContent(
             }
         }
     }
+}
+
+internal fun serverVersionLabel(check: ServerVersionCheck?, isChecking: Boolean): String = when {
+    check == null && isChecking -> "checking…"
+    check == null -> "unknown"
+    check.version == null -> "not reported"
+    else -> check.version
 }
