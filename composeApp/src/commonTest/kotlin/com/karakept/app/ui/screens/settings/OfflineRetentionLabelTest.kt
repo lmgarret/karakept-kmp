@@ -15,4 +15,11 @@ class OfflineRetentionLabelTest {
         assertEquals("After 3 months", offlineRetentionLabel(90))
         assertEquals("After 45 days", offlineRetentionLabel(45))
     }
+
+    @Test
+    fun namesThePeriodAloneForSentences() {
+        assertEquals("1 month", offlineRetentionPeriod(30))
+        assertEquals("2 weeks", offlineRetentionPeriod(14))
+        assertEquals("5 days", offlineRetentionPeriod(5))
+    }
 }

@@ -118,7 +118,10 @@ internal data class StoredSyncSettings(
     val contentSyncWithChildren: Set<String> = emptySet(),
     /** Whether read or archived bookmarks lose their offline copy after [offlineRetentionDays]. */
     val offlineRetentionEnabled: Boolean = false,
-    val offlineRetentionDays: Int = OfflineRetention.DEFAULT_DAYS
+    val offlineRetentionDays: Int = OfflineRetention.DEFAULT_DAYS,
+    /** Whether offline copies are held under [offlineStorageCapMb]. */
+    val offlineStorageCapEnabled: Boolean = false,
+    val offlineStorageCapMb: Int = OfflineRetention.DEFAULT_CAP_MB
 )
 
 /** App-level settings: notifications, offline mode, onboarding state, auto-export schedule, export directory, and backup PIN. */
