@@ -264,7 +264,7 @@ interface BookmarkDao {
 
     // Every bookmark holding an offline copy: a stored body, or a downloaded asset.
     @Query(
-        "SELECT localId, remoteId, serverId, isRead, isArchived, lastOpenedAt, createdAt " +
+        "SELECT localId, remoteId, serverId, isRead, isArchived, lastOpenedAt, createdAt, readOrArchivedAt " +
             "FROM bookmarks b WHERE hasContent = 1 OR EXISTS (" +
             "SELECT 1 FROM assets a WHERE a.bookmarkRemoteId = b.remoteId " +
             "AND a.serverId = b.serverId AND a.localPath IS NOT NULL)"

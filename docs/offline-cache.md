@@ -49,14 +49,41 @@ marker — so the cap evicts what nobody reads, and reading something brings it 
 
 ## Storage card
 
-The *Offline storage* card on *Settings → Sync & Data → Offline Storage*
-(`OfflineStorageScreenModel`) shows what offline copies
-take — stored bodies (`LENGTH(CAST(content AS BLOB))`, bytes rather than characters) plus the
-managed cache files — and how many bookmarks are available offline. Measured when the card opens
-and after each action, never in the background: it reads every body.
+The top of *Settings → Sync & Data → Offline Storage* shows what Karakept takes on the device
+(`OfflineCacheRepository.storageUsage`), split into articles (`LENGTH(CAST(content AS BLOB))`,
+bytes rather than characters), images (`img_`, `hero_*`), archives & PDFs (`archive_`, `asset_`),
+the image loader's thumbnail cache (`ThumbnailCache`, Coil's disk cache: up to 2% of the volume,
+capped at 250 MB) and the rest of the app (grey). The bar is scaled to the app, or to the storage limit when one is
+set — never to the device, where the app is a dot against tens of gigabytes; the device's free
+space is a line of text. Measured when the page opens and after each action, never in the
+background. The old *Storage Usage* card on the main Settings page is gone.
 
-- **Clean up now** runs the same pass as after a sync, sweep included, without waiting for the
-  six-hour interval.
-- **Clear offline cache** drops every body and asset path and deletes every managed file, with no
-  grace period. Bookmarks, progress and highlights stay. The confirmation says what the current
-  content strategy will download again on the next sync.
+**Clear offline copies** drops every body and asset path, deletes every managed file with no
+grace period, and compacts the database. Bookmarks, progress and highlights stay; the
+confirmation lists what goes, with sizes, and what the current content strategy will download
+again on the next sync.
+
+## Clean up now
+
+The last card of the Cleanup section previews the pass before it runs
+(`OfflineCacheRepository.estimateCleanup`): copies past the retention period, what the storage
+limit would still evict, files no bookmark uses, and database space a compaction would hand back.
+The preview simulates the pass on the same `OfflineSnapshot` the storage limit decides from —
+shared images freed only by their last referrer — so it is the cleanup it describes. It is
+re-estimated, debounced, whenever the retention period or the limit changes.
+
+**Clean up now** runs the full pass, sweep included, without waiting for the six-hour interval,
+then compacts the database and empties the thumbnail cache — rows download their thumbnails again
+as they are shown. The background pass never touches the thumbnail cache.
+
+## Database compaction
+
+The bundled SQLite driver creates the database with `auto_vacuum = FULL`, so an emptied body's
+pages are returned on commit. What keeps the space is the write-ahead log: it holds the change
+until a checkpoint and keeps its high-water mark afterwards, so clearing a few hundred articles
+leaves megabytes there. `AppDatabase.compact()` therefore always runs
+`PRAGMA wal_checkpoint(TRUNCATE)`, and runs `VACUUM` first only when `reclaimableBytes()`
+(`freelist_count × page_size`) is non-zero — a database created without `auto_vacuum` keeps its
+free pages until then. It runs after *Clean up now* and *Clear*, never from the background pass:
+a `VACUUM` rewrites the whole file. The estimate's "database space to compact" line is those free
+pages, so it reads nothing on an `auto_vacuum` database.

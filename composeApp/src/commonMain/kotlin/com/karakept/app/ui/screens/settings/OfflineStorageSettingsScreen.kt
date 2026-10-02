@@ -3,8 +3,6 @@ package com.karakept.app.ui.screens.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,14 +13,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -45,9 +40,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import com.karakept.app.data.model.SyncStrategy
-import com.karakept.app.data.repository.OfflineStorageUsage
 import com.karakept.app.domain.OfflineRetention
-import com.karakept.app.utils.formatFileSize
 import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
@@ -82,6 +75,15 @@ fun OfflineStorageSettingsContent(
     val storageCapEnabled by screenModel.offlineStorageCapEnabled.collectAsState()
     val storageCapMb by screenModel.offlineStorageCapMb.collectAsState()
 
+    val storageModel = koinViewModel<OfflineStorageScreenModel>()
+    val usage by storageModel.usage.collectAsState()
+    val estimate by storageModel.estimate.collectAsState()
+    val isWorking by storageModel.isWorking.collectAsState()
+    val lastResult by storageModel.lastResult.collectAsState()
+    var confirmClear by remember { mutableStateOf(false) }
+    val activeRetentionDays = retentionDays.takeIf { retentionEnabled }
+    val activeCapMb = storageCapMb.takeIf { storageCapEnabled }
+
     val strategies = SyncStrategy.entries.filter { it != SyncStrategy.PER_LIST }
 
     Scaffold(
@@ -106,6 +108,15 @@ fun OfflineStorageSettingsContent(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Top
         ) {
+            StorageOverviewCard(
+                usage = usage,
+                storageCapMb = activeCapMb,
+                isWorking = isWorking,
+                onClear = { confirmClear = true }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             Text(
                 text = "Content Sync Mode",
                 style = MaterialTheme.typography.titleLarge,
@@ -160,100 +171,29 @@ fun OfflineStorageSettingsContent(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            OfflineStorageCard(syncStrategy = syncStrategy)
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun OfflineStorageCard(syncStrategy: SyncStrategy) {
-    val model = koinViewModel<OfflineStorageScreenModel>()
-    val usage by model.usage.collectAsState()
-    val isWorking by model.isWorking.collectAsState()
-    val lastResult by model.lastResult.collectAsState()
-    var confirmClear by remember { mutableStateOf(false) }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = AppIcons.Default.OfflinePin,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Offline storage",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = usage?.let(::offlineStorageSummary) ?: "Measuring…",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = model::cleanUpNow, enabled = !isWorking) {
-                    Text("Clean up now")
-                }
-                OutlinedButton(
-                    onClick = { confirmClear = true },
-                    enabled = !isWorking,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Clear offline cache")
-                }
-            }
-            val status = if (isWorking) "Working…" else lastResult
-            if (status != null) {
-                Text(
-                    text = status,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
+            CleanupNowCard(
+                estimate = estimate,
+                retentionDays = activeRetentionDays,
+                storageCapMb = activeCapMb,
+                isWorking = isWorking,
+                lastResult = lastResult,
+                onCleanUp = storageModel::cleanUpNow
+            )
         }
     }
 
-    if (confirmClear) {
-        AlertDialog(
-            onDismissRequest = { confirmClear = false },
-            title = { Text("Clear offline cache?") },
-            text = { Text(clearOfflineCacheWarning(syncStrategy)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmClear = false
-                        model.clearAll()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) { Text("Clear") }
+    val shownUsage = usage
+    if (confirmClear && shownUsage != null) {
+        ClearOfflineCopiesDialog(
+            usage = shownUsage,
+            syncStrategy = syncStrategy,
+            onConfirm = {
+                confirmClear = false
+                storageModel.clearAll()
             },
-            dismissButton = {
-                TextButton(onClick = { confirmClear = false }) { Text("Cancel") }
-            }
+            onDismiss = { confirmClear = false }
         )
     }
-}
-
-internal fun offlineStorageSummary(usage: OfflineStorageUsage): String {
-    val bookmarks = if (usage.bookmarkCount == 1) "1 bookmark" else "${usage.bookmarkCount} bookmarks"
-    return "${formatFileSize(usage.totalBytes)} · $bookmarks available offline"
-}
-
-internal fun clearOfflineCacheWarning(strategy: SyncStrategy): String {
-    val base = "Removes every stored article, image and downloaded file. Bookmarks, reading progress and highlights stay."
-    val next = when (strategy) {
-        SyncStrategy.ALL -> " Your content sync mode stores every bookmark, so the next sync downloads them all again."
-        SyncStrategy.PER_LIST -> " The next sync downloads the lists you sync for offline reading again."
-        SyncStrategy.PER_BOOKMARK, SyncStrategy.NEVER -> " Lists set to sync offline are downloaded again on the next sync."
-    }
-    return base + next
 }
 
 @Composable
@@ -496,10 +436,13 @@ private fun trimDecimals(value: Double): String {
     }
 }
 
-internal fun offlineRetentionLabel(days: Int): String = when {
-    days % 30 == 0 -> plural(days / 30, "month").let { "After $it" }
-    days % 7 == 0 -> plural(days / 7, "week").let { "After $it" }
-    else -> "After ${plural(days, "day")}"
+internal fun offlineRetentionLabel(days: Int): String = "After ${offlineRetentionPeriod(days)}"
+
+/** The period in its largest whole unit: "1 month", "3 weeks", "45 days". */
+internal fun offlineRetentionPeriod(days: Int): String = when {
+    days % 30 == 0 -> plural(days / 30, "month")
+    days % 7 == 0 -> plural(days / 7, "week")
+    else -> plural(days, "day")
 }
 
 private fun plural(count: Int, unit: String) = if (count == 1) "1 $unit" else "$count ${unit}s"

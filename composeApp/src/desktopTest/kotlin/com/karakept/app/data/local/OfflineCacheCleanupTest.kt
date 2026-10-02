@@ -14,6 +14,9 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.OfflineRetention.DAY_MILLIS
 import com.karakept.app.utils.DefaultAppDispatchers
 import com.karakept.app.utils.LocalFileInfo
+import com.karakept.app.utils.NoThumbnailCache
+import com.karakept.app.utils.StorageInfo
+import com.karakept.app.utils.ThumbnailCache
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -62,7 +65,11 @@ class OfflineCacheCleanupTest {
     private fun cleaner(
         retentionDays: Int?,
         files: CacheFileStore = FakeFiles(emptyList()),
-        capMb: Int? = null
+        capMb: Int? = null,
+        device: StorageInfo = StorageInfo(usedBytes = 0, freeBytes = 0, totalBytes = 0),
+        reclaimable: (suspend () -> Long)? = null,
+        compact: (suspend () -> Unit)? = null,
+        thumbnails: ThumbnailCache = NoThumbnailCache
     ): OfflineCacheRepository {
         val settings = mockk<SettingsRepository>(relaxed = true)
         every { settings.activeOfflineRetentionDays } returns flowOf(retentionDays)
@@ -73,7 +80,11 @@ class OfflineCacheCleanupTest {
             settingsRepository = settings,
             appDispatchers = DefaultAppDispatchers(),
             files = files,
-            clock = { now }
+            clock = { now },
+            deviceStorage = { device },
+            reclaimableDatabaseBytes = reclaimable ?: { db.reclaimableBytes() },
+            compactDatabase = compact ?: { db.compact() },
+            thumbnailCache = thumbnails
         )
     }
 
@@ -331,13 +342,147 @@ class OfflineCacheCleanupTest {
         db.bookmarkDao().insertBookmark(bookmark("none", content = null))
         val files = FakeFiles(listOf(file("img_a", size = 100), file("asset_b.pdf", size = 50), file("0123abcd.1", size = 999)))
 
-        val usage = cleaner(retentionDays = null, files = files).storageUsage()
+        val device = StorageInfo(usedBytes = 1000, freeBytes = 50_000, totalBytes = 100_000)
+        val usage = cleaner(retentionDays = null, files = files, device = device).storageUsage()
 
         assertEquals(2, usage.bookmarkCount)
-        assertEquals(9L, usage.bodyBytes, "bytes, not characters: é is two")
-        assertEquals(150L, usage.fileBytes)
+        assertEquals(9L, usage.articleBytes, "bytes, not characters: é is two")
+        assertEquals(100L, usage.imageBytes)
+        assertEquals(50L, usage.fileBytes)
+        assertEquals(1000L, usage.appBytes)
+        assertEquals(841L, usage.otherAppBytes)
+        assertEquals(50_000L, usage.freeBytes)
         db.close()
     }
+
+    private class FakeThumbnails(var bytes: Long) : ThumbnailCache {
+        override fun sizeBytes() = bytes
+        override fun clear() { bytes = 0 }
+    }
+
+    @Test
+    fun `the thumbnail cache is its own part of the app, emptied by an explicit clean up`() = runBlocking {
+        val thumbnails = FakeThumbnails(300)
+        val device = StorageInfo(usedBytes = 1000, freeBytes = 0, totalBytes = 0)
+        val cleaner = cleaner(retentionDays = null, device = device, thumbnails = thumbnails, reclaimable = { 0L }, compact = {})
+
+        val usage = cleaner.storageUsage()
+        assertEquals(300L, usage.thumbnailCacheBytes)
+        assertEquals(700L, usage.otherAppBytes)
+        assertEquals(300L, cleaner.estimateCleanup().thumbnailCacheBytes)
+
+        val result = cleaner.cleanUp()
+        assertEquals(300L, result.freedBytes)
+        assertEquals(0L, thumbnails.bytes)
+        db.close()
+    }
+
+    @Test
+    fun `a background pass leaves the thumbnail cache alone`() = runBlocking {
+        val thumbnails = FakeThumbnails(300)
+        cleaner(retentionDays = null, thumbnails = thumbnails).cleanUpAfterSync()
+        assertEquals(300L, thumbnails.bytes)
+        db.close()
+    }
+
+    @Test
+    fun `the app never measures smaller than its offline copies`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("a", content = "abc"))
+        val files = FakeFiles(listOf(file("img_a", size = 100)))
+
+        val usage = cleaner(retentionDays = null, files = files).storageUsage()
+
+        assertEquals(103L, usage.appBytes)
+        assertEquals(0L, usage.otherAppBytes)
+        db.close()
+    }
+
+    @Test
+    fun `the estimate previews retention, the limit and unused files without changing anything`() = runBlocking {
+        db.bookmarkDao().insertBookmark(
+            bookmark("old-1", isRead = true, readOrArchivedAt = 1L, content = img("img_own") + img("img_shared"))
+        )
+        db.bookmarkDao().insertBookmark(bookmark("old-2", isArchived = true, readOrArchivedAt = 1L, content = "abcd"))
+        db.bookmarkDao().insertBookmark(bookmark("unread-big", lastOpenedAt = 1, content = img("img_big")))
+        db.bookmarkDao().insertBookmark(bookmark("unread-new", lastOpenedAt = 99, content = img("img_shared")))
+        val files = FakeFiles(
+            listOf(
+                file("img_own", size = 1000),
+                file("img_shared", size = 5000),
+                file("img_big", size = 2_000_000),
+                file("img_orphan", size = 700),
+                file("img_fresh_orphan", size = 300, modifiedAt = now)
+            )
+        )
+        val cleaner = cleaner(retentionDays = 7, files = files, capMb = 1, reclaimable = { 4096L }, compact = {})
+
+        val estimate = cleaner.estimateCleanup()
+
+        assertEquals(2, estimate.retiredCopies)
+        // The shared image stays: "unread-new" still uses it.
+        assertEquals(img("img_own").length + img("img_shared").length + 4L + 1000, estimate.retiredBytes)
+        assertEquals(1, estimate.overLimitCopies, "the least recently opened unread copy goes")
+        assertEquals(img("img_big").length + 2_000_000L, estimate.overLimitBytes)
+        assertEquals(700L, estimate.unusedFileBytes, "a file inside its grace period is not counted")
+        assertEquals(4096L, estimate.reclaimableDatabaseBytes)
+        assertEquals("abcd", row("old-2").content, "an estimate changes nothing")
+        assertEquals(5, files.present.size)
+        db.close()
+    }
+
+    @Test
+    fun `an explicit clean up compacts the database and counts what that freed`() = runBlocking {
+        var compacted = 0
+        val cleaner = cleaner(retentionDays = null, reclaimable = { 8192L }, compact = { compacted++ })
+
+        val result = cleaner.cleanUp()
+
+        assertEquals(1, compacted)
+        assertEquals(8192L, result.freedBytes)
+        db.close()
+    }
+
+    @Test
+    fun `clearing and compacting hands the space back to the device`() = runBlocking {
+        val body = "<p>" + "x".repeat(20_000) + "</p>"
+        repeat(200) { db.bookmarkDao().insertBookmark(bookmark("b$it", content = body)) }
+        val before = onDisk()
+
+        db.bookmarkDao().clearAllContent()
+        db.compact()
+
+        assertEquals(0L, db.reclaimableBytes())
+        assertTrue(onDisk() < before / 4, "database and log together: ${onDisk()} of $before")
+        db.close()
+    }
+
+    @Test
+    fun `a database created without auto-vacuum is vacuumed`() = runBlocking {
+        db.close()
+        java.io.File(dbPath).delete()
+        BundledSQLiteDriver().open(dbPath).let { c ->
+            // The setting is only written to the file with its first table.
+            c.execSQL("PRAGMA auto_vacuum = NONE")
+            c.execSQL("CREATE TABLE created_before_room (x INTEGER)")
+            c.close()
+        }
+        val legacy = Room.databaseBuilder<AppDatabase>(name = dbPath)
+            .withAppSchema()
+            .setDriver(BundledSQLiteDriver())
+            .setQueryCoroutineContext(Dispatchers.IO)
+            .build()
+        val body = "<p>" + "x".repeat(20_000) + "</p>"
+        repeat(100) { legacy.bookmarkDao().insertBookmark(bookmark("b$it", content = body)) }
+        legacy.bookmarkDao().clearAllContent()
+        assertTrue(legacy.reclaimableBytes() > 1_000_000, "emptied bodies stay inside the file")
+
+        legacy.compact()
+
+        assertEquals(0L, legacy.reclaimableBytes())
+        legacy.close()
+    }
+
+    private fun onDisk() = java.io.File(dbPath).length() + java.io.File("$dbPath-wal").length()
 
     @Test
     fun `with nothing evicted the sweep waits for its interval`() = runBlocking {

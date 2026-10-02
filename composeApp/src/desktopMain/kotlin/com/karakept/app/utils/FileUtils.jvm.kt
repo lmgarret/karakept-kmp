@@ -50,10 +50,21 @@ actual object FileUtils {
     actual fun getStorageInfo(): StorageInfo {
         val appDir = appDataDir()
         return StorageInfo(
-            usedBytes = getFolderSize(appDir),
+            usedBytes = appRoots().sumOf(::getFolderSize),
             freeBytes = appDir.freeSpace,
             totalBytes = appDir.totalSpace
         )
+    }
+
+    // On Linux the data, the image cache and Coil's disk cache are three separate trees; on
+    // macOS and Windows they nest under one. Each tree is counted once.
+    private fun appRoots(): List<File> {
+        val roots = listOf(appDataDir(), appCacheDir(), File(System.getProperty("user.home"), ".karakept/image_cache"))
+            .map { it.canonicalFile }
+            .distinct()
+        return roots.filter { root ->
+            roots.none { other -> other != root && root.path.startsWith(other.path + File.separator) }
+        }
     }
 
     actual fun getBackupDirectory(): String =
