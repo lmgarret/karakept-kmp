@@ -54,7 +54,12 @@ data class BookmarkEntity(
     // When this bookmark was first seen read or archived (epoch millis), null while it is
     // neither. Stamped by OfflineCacheRepository rather than by every path that flips the two
     // flags, so it is accurate to the cleanup cadence, not to the millisecond.
-    val readOrArchivedAt: Long? = null
+    val readOrArchivedAt: Long? = null,
+    // When the reader last opened this bookmark (epoch millis); orders storage-cap evictions.
+    val lastOpenedAt: Long? = null,
+    // Set when the storage cap dropped the offline copy, so sync does not download it straight
+    // back. Cleared by any write of the body — opening it in the reader stores it again.
+    val offlineEvictedAt: Long? = null
 )
 
 /**

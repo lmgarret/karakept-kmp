@@ -465,6 +465,18 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
         syncSettingsFlow.map { if (it.offlineRetentionEnabled) it.offlineRetentionDays else null }
             .distinctUntilChanged()
 
+    val offlineStorageCapEnabled: Flow<Boolean> =
+        syncSettingsFlow.map { it.offlineStorageCapEnabled }.distinctUntilChanged()
+
+    /** The size chosen on the slider, kept while the switch is off. */
+    val offlineStorageCapMb: Flow<Int> =
+        syncSettingsFlow.map { it.offlineStorageCapMb }.distinctUntilChanged()
+
+    /** The limit cleanup enforces: null while the switch is off. */
+    val activeOfflineStorageCapMb: Flow<Int?> =
+        syncSettingsFlow.map { if (it.offlineStorageCapEnabled) it.offlineStorageCapMb else null }
+            .distinctUntilChanged()
+
     // ── Derived flows (app) ───────────────────────────────────────────────────
 
     val notificationsEnabled: Flow<Boolean> =

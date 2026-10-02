@@ -39,3 +39,22 @@ data class StoredContentStats(
     val bookmarkCount: Int,
     val bodyBytes: Long
 )
+
+/** A bookmark holding an offline copy, with what the storage cap orders evictions by. */
+data class OfflineHolderRow(
+    val localId: Long,
+    val remoteId: String,
+    val serverId: String,
+    val isRead: Boolean,
+    val isArchived: Boolean,
+    val lastOpenedAt: Long?,
+    val createdAt: Long,
+    val readOrArchivedAt: Long? = null
+)
+
+/** A downloaded asset file and the bookmark it belongs to. */
+data class AssetPathRow(
+    val bookmarkRemoteId: String,
+    val serverId: String,
+    val localPath: String
+)

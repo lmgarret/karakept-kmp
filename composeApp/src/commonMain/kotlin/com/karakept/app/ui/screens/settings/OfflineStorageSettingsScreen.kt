@@ -3,8 +3,6 @@ package com.karakept.app.ui.screens.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,14 +13,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -32,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -44,9 +40,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import com.karakept.app.data.model.SyncStrategy
-import com.karakept.app.data.repository.OfflineStorageUsage
 import com.karakept.app.domain.OfflineRetention
-import com.karakept.app.utils.formatFileSize
 import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
@@ -78,6 +72,17 @@ fun OfflineStorageSettingsContent(
     val syncStrategy by screenModel.contentSyncStrategy.collectAsState()
     val retentionEnabled by screenModel.offlineRetentionEnabled.collectAsState()
     val retentionDays by screenModel.offlineRetentionDays.collectAsState()
+    val storageCapEnabled by screenModel.offlineStorageCapEnabled.collectAsState()
+    val storageCapMb by screenModel.offlineStorageCapMb.collectAsState()
+
+    val storageModel = koinViewModel<OfflineStorageScreenModel>()
+    val usage by storageModel.usage.collectAsState()
+    val estimate by storageModel.estimate.collectAsState()
+    val isWorking by storageModel.isWorking.collectAsState()
+    val lastResult by storageModel.lastResult.collectAsState()
+    var confirmClear by remember { mutableStateOf(false) }
+    val activeRetentionDays = retentionDays.takeIf { retentionEnabled }
+    val activeCapMb = storageCapMb.takeIf { storageCapEnabled }
 
     val strategies = SyncStrategy.entries.filter { it != SyncStrategy.PER_LIST }
 
@@ -103,6 +108,15 @@ fun OfflineStorageSettingsContent(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Top
         ) {
+            StorageOverviewCard(
+                usage = usage,
+                storageCapMb = activeCapMb,
+                isWorking = isWorking,
+                onClear = { confirmClear = true }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             Text(
                 text = "Content Sync Mode",
                 style = MaterialTheme.typography.titleLarge,
@@ -148,100 +162,38 @@ fun OfflineStorageSettingsContent(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            OfflineStorageCard(syncStrategy = syncStrategy)
-        }
-    }
-}
+            OfflineStorageCapCard(
+                enabled = storageCapEnabled,
+                megabytes = storageCapMb,
+                onEnabledChange = screenModel::setOfflineStorageCapEnabled,
+                onMegabytesChange = screenModel::setOfflineStorageCapMb
+            )
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun OfflineStorageCard(syncStrategy: SyncStrategy) {
-    val model = koinViewModel<OfflineStorageScreenModel>()
-    val usage by model.usage.collectAsState()
-    val isWorking by model.isWorking.collectAsState()
-    val lastResult by model.lastResult.collectAsState()
-    var confirmClear by remember { mutableStateOf(false) }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = AppIcons.Default.OfflinePin,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Offline storage",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = usage?.let(::offlineStorageSummary) ?: "Measuring…",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
             Spacer(modifier = Modifier.height(12.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = model::cleanUpNow, enabled = !isWorking) {
-                    Text("Clean up now")
-                }
-                OutlinedButton(
-                    onClick = { confirmClear = true },
-                    enabled = !isWorking,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Clear offline cache")
-                }
-            }
-            val status = if (isWorking) "Working…" else lastResult
-            if (status != null) {
-                Text(
-                    text = status,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
+
+            CleanupNowCard(
+                estimate = estimate,
+                retentionDays = activeRetentionDays,
+                storageCapMb = activeCapMb,
+                isWorking = isWorking,
+                lastResult = lastResult,
+                onCleanUp = storageModel::cleanUpNow
+            )
         }
     }
 
-    if (confirmClear) {
-        AlertDialog(
-            onDismissRequest = { confirmClear = false },
-            title = { Text("Clear offline cache?") },
-            text = { Text(clearOfflineCacheWarning(syncStrategy)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmClear = false
-                        model.clearAll()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) { Text("Clear") }
+    val shownUsage = usage
+    if (confirmClear && shownUsage != null) {
+        ClearOfflineCopiesDialog(
+            usage = shownUsage,
+            syncStrategy = syncStrategy,
+            onConfirm = {
+                confirmClear = false
+                storageModel.clearAll()
             },
-            dismissButton = {
-                TextButton(onClick = { confirmClear = false }) { Text("Cancel") }
-            }
+            onDismiss = { confirmClear = false }
         )
     }
-}
-
-internal fun offlineStorageSummary(usage: OfflineStorageUsage): String {
-    val bookmarks = if (usage.bookmarkCount == 1) "1 bookmark" else "${usage.bookmarkCount} bookmarks"
-    return "${formatFileSize(usage.totalBytes)} · $bookmarks available offline"
-}
-
-internal fun clearOfflineCacheWarning(strategy: SyncStrategy): String {
-    val base = "Removes every stored article, image and downloaded file. Bookmarks, reading progress and highlights stay."
-    val next = when (strategy) {
-        SyncStrategy.ALL -> " Your content sync mode stores every bookmark, so the next sync downloads them all again."
-        SyncStrategy.PER_LIST -> " The next sync downloads the lists you sync for offline reading again."
-        SyncStrategy.PER_BOOKMARK, SyncStrategy.NEVER -> " Lists set to sync offline are downloaded again on the next sync."
-    }
-    return base + next
 }
 
 @Composable
@@ -335,10 +287,162 @@ private fun RetentionPeriodPicker(
     }
 }
 
-internal fun offlineRetentionLabel(days: Int): String = when {
-    days % 30 == 0 -> plural(days / 30, "month").let { "After $it" }
-    days % 7 == 0 -> plural(days / 7, "week").let { "After $it" }
-    else -> "After ${plural(days, "day")}"
+@Composable
+private fun OfflineStorageCapCard(
+    enabled: Boolean,
+    megabytes: Int,
+    onEnabledChange: (Boolean) -> Unit,
+    onMegabytesChange: (Int) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = AppIcons.Default.OfflinePin,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Limit offline storage",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Past this, the least recently opened offline copies are removed — read and archived ones first. Opening one stores it again.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onEnabledChange
+                )
+            }
+            if (enabled) {
+                Spacer(modifier = Modifier.height(12.dp))
+                StorageCapPicker(megabytes = megabytes, onMegabytesChange = onMegabytesChange)
+            }
+        }
+    }
+}
+
+/**
+ * A slider over [OfflineRetention.CAP_SLIDER_STOPS_MB] and a field taking any size in MB or GB,
+ * the unit toggled by the button beside it. Mirrors [RetentionPeriodPicker].
+ */
+@Composable
+private fun StorageCapPicker(
+    megabytes: Int,
+    onMegabytesChange: (Int) -> Unit
+) {
+    val stops = OfflineRetention.CAP_SLIDER_STOPS_MB
+    var sliderIndex by remember { mutableFloatStateOf(OfflineRetention.nearestCapStopIndex(megabytes).toFloat()) }
+    var unit by remember { mutableStateOf(capUnitFor(megabytes)) }
+    var fieldText by remember { mutableStateOf(capFieldText(megabytes, unit)) }
+    // A value this picker wrote itself must not rewrite the field: typing 15000 MB passes
+    // through 1500, which would otherwise flip the field to "1.5 GB" mid-number.
+    var lastWritten by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(megabytes) {
+        if (megabytes != lastWritten) {
+            sliderIndex = OfflineRetention.nearestCapStopIndex(megabytes).toFloat()
+            unit = capUnitFor(megabytes)
+            fieldText = capFieldText(megabytes, unit)
+        }
+    }
+    val shownMegabytes = parseCapInput(fieldText, unit) ?: stops[sliderIndex.roundToInt()]
+
+    fun commitTyped(text: String, inUnit: CapUnit) {
+        parseCapInput(text, inUnit)?.let { typed ->
+            sliderIndex = OfflineRetention.nearestCapStopIndex(typed).toFloat()
+            lastWritten = typed
+            onMegabytesChange(typed)
+        }
+    }
+
+    Text(
+        text = "Keep offline copies under ${offlineStorageCapLabel(shownMegabytes)}",
+        style = MaterialTheme.typography.bodyMedium
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Slider(
+            value = sliderIndex,
+            onValueChange = {
+                sliderIndex = it
+                val stop = stops[it.roundToInt()]
+                unit = capUnitFor(stop)
+                fieldText = capFieldText(stop, unit)
+            },
+            onValueChangeFinished = {
+                val stop = stops[sliderIndex.roundToInt()]
+                lastWritten = stop
+                onMegabytesChange(stop)
+            },
+            valueRange = 0f..stops.lastIndex.toFloat(),
+            steps = stops.size - 2,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        OutlinedTextField(
+            value = fieldText,
+            onValueChange = { input ->
+                fieldText = input.filter { it.isDigit() || it == '.' || it == ',' }.take(7)
+                commitTyped(fieldText, unit)
+            },
+            label = { Text("Size") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.width(88.dp)
+        )
+        TextButton(
+            onClick = {
+                unit = if (unit == CapUnit.MB) CapUnit.GB else CapUnit.MB
+                commitTyped(fieldText, unit)
+            }
+        ) {
+            Text(unit.name)
+        }
+    }
+}
+
+internal enum class CapUnit { MB, GB }
+
+internal fun capUnitFor(megabytes: Int): CapUnit = if (megabytes >= 1000) CapUnit.GB else CapUnit.MB
+
+internal fun capFieldText(megabytes: Int, unit: CapUnit): String = when (unit) {
+    CapUnit.MB -> megabytes.toString()
+    CapUnit.GB -> trimDecimals(megabytes / 1000.0)
+}
+
+/** A typed size in megabytes, or null while the field holds nothing usable. */
+internal fun parseCapInput(text: String, unit: CapUnit): Int? {
+    val value = text.replace(',', '.').toDoubleOrNull() ?: return null
+    val megabytes = when (unit) {
+        CapUnit.MB -> value
+        CapUnit.GB -> value * 1000
+    }.roundToInt()
+    return megabytes.takeIf { it in OfflineRetention.MIN_CAP_MB..OfflineRetention.MAX_CAP_MB }
+}
+
+internal fun offlineStorageCapLabel(megabytes: Int): String =
+    if (megabytes >= 1000) "${trimDecimals(megabytes / 1000.0)} GB" else "$megabytes MB"
+
+private fun trimDecimals(value: Double): String {
+    val hundredths = (value * 100).roundToInt()
+    return when {
+        hundredths % 100 == 0 -> (hundredths / 100).toString()
+        hundredths % 10 == 0 -> "${hundredths / 100}.${(hundredths % 100) / 10}"
+        else -> "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
+    }
+}
+
+internal fun offlineRetentionLabel(days: Int): String = "After ${offlineRetentionPeriod(days)}"
+
+/** The period in its largest whole unit: "1 month", "3 weeks", "45 days". */
+internal fun offlineRetentionPeriod(days: Int): String = when {
+    days % 30 == 0 -> plural(days / 30, "month")
+    days % 7 == 0 -> plural(days / 7, "week")
+    else -> plural(days, "day")
 }
 
 private fun plural(count: Int, unit: String) = if (count == 1) "1 $unit" else "$count ${unit}s"

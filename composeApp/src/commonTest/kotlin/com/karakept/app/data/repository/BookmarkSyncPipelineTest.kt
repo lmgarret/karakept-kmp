@@ -715,6 +715,20 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
     }
 
     @Test
+    fun contentSync_leavesCopiesTheStorageCapEvictedEvicted() = runTest(testDispatcher) {
+        coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)
+        val evicted = makeBookmarkEntity(localId = 1L, remoteId = "bk-1").copy(offlineEvictedAt = 1L)
+        coEvery { bookmarkDao.getBookmarksForServerWithContentInfo("server1") } returns listOf(evicted)
+        coEvery {
+            remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
+        } returns PaginatedBookmarks(bookmarks = listOf(makeBookmarkDto(id = "bk-1")), nextCursor = null)
+
+        createPipeline(SyncConfiguration.Full(testServer)).execute()
+
+        coVerify(exactly = 0) { fetchRemoteContent(any(), any()) }
+    }
+
+    @Test
     fun contentSync_downloadsAgainOnceARetiredBookmarkIsUnarchived() = runTest(testDispatcher) {
         // The stamp is only cleared by the next cleanup; the flags the server just sent win.
         coEvery { settingsRepository.contentSyncStrategy } returns flowOf(SyncStrategy.ALL)

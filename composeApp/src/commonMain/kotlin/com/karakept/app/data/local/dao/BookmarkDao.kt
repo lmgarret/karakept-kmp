@@ -14,6 +14,7 @@ import com.karakept.app.data.local.entity.OFFLINE_PREDICATE
 import com.karakept.app.data.local.entity.RETIRED_PREDICATE
 import com.karakept.app.data.local.projection.BookmarkContentRow
 import com.karakept.app.data.local.projection.StoredContentStats
+import com.karakept.app.data.local.projection.OfflineHolderRow
 import com.karakept.app.data.local.projection.ListMembershipGroup
 import com.karakept.app.data.local.projection.QuickFilterCountRow
 import com.karakept.app.data.local.projection.TagGroup
@@ -70,7 +71,8 @@ interface BookmarkDao {
 
     @Query(
         "UPDATE bookmarks SET content = :content, readingTimeMinutes = :readingTime, " +
-            "hasContent = (:content IS NOT NULL AND :content <> '') WHERE localId = :localId"
+            "hasContent = (:content IS NOT NULL AND :content <> ''), offlineEvictedAt = NULL " +
+            "WHERE localId = :localId"
     )
     suspend fun updateContent(localId: Long, content: String, readingTime: Int)
 
@@ -257,6 +259,24 @@ interface BookmarkDao {
     @Query("UPDATE bookmarks SET content = NULL, hasContent = 0 WHERE hasContent = 1")
     suspend fun clearAllContent(): Int
 
+    @Query("UPDATE bookmarks SET lastOpenedAt = :now WHERE localId = :localId")
+    suspend fun markOpened(localId: Long, now: Long)
+
+    // Every bookmark holding an offline copy: a stored body, or a downloaded asset.
+    @Query(
+        "SELECT localId, remoteId, serverId, isRead, isArchived, lastOpenedAt, createdAt, readOrArchivedAt " +
+            "FROM bookmarks b WHERE hasContent = 1 OR EXISTS (" +
+            "SELECT 1 FROM assets a WHERE a.bookmarkRemoteId = b.remoteId " +
+            "AND a.serverId = b.serverId AND a.localPath IS NOT NULL)"
+    )
+    suspend fun getOfflineHolders(): List<OfflineHolderRow>
+
+    @Query(
+        "UPDATE bookmarks SET content = NULL, hasContent = 0, offlineEvictedAt = :now " +
+            "WHERE localId IN (:localIds)"
+    )
+    suspend fun evictForStorageCap(localIds: List<Long>, now: Long)
+
     // Keyset-paged so a library of stored articles is never held in memory at once.
     @Query(
         "SELECT localId, content FROM bookmarks WHERE hasContent = 1 AND localId > :afterLocalId " +
@@ -403,7 +423,7 @@ interface BookmarkDao {
         SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,
                isRead, createdAt, readingTimeMinutes, readingProgress, readingScrollIndex, readingScrollOffset,
-               modifiedAt, progressSyncedAt, readOrArchivedAt,
+               modifiedAt, progressSyncedAt, readOrArchivedAt, lastOpenedAt, offlineEvictedAt,
                CASE WHEN hasContent = 1 THEN 'HAS_CONTENT' ELSE '' END as content
         FROM bookmarks
         WHERE serverId = :serverId

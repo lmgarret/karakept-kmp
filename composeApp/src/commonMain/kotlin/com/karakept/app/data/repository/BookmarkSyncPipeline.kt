@@ -376,7 +376,7 @@ internal class BookmarkSyncPipeline(
         }
 
         // Content cleanup dropped stays dropped: re-sending it here would undo the eviction.
-        val isRetired = OfflineRetention.isRetired(
+        val skipsContent = existing?.offlineEvictedAt != null || OfflineRetention.isRetired(
             isRead = existing?.isRead ?: false,
             isArchived = dto.archived ?: false,
             readOrArchivedAt = existing?.readOrArchivedAt,
@@ -384,7 +384,7 @@ internal class BookmarkSyncPipeline(
             now = startedAt
         )
 
-        val newContent = if (isRetired) null else when (syncStrategy) {
+        val newContent = if (skipsContent) null else when (syncStrategy) {
             com.karakept.app.data.model.SyncStrategy.NEVER,
             com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> null
             com.karakept.app.data.model.SyncStrategy.PER_LIST -> {
@@ -441,7 +441,9 @@ internal class BookmarkSyncPipeline(
                 ?: existing?.crawledAt,
             summary = dto.summary ?: existing?.summary,
             summarizationStatus = dto.summarizationStatus?.value ?: existing?.summarizationStatus,
-            readOrArchivedAt = existing?.readOrArchivedAt
+            readOrArchivedAt = existing?.readOrArchivedAt,
+            lastOpenedAt = existing?.lastOpenedAt,
+            offlineEvictedAt = existing?.offlineEvictedAt
         )
     }
 
@@ -634,9 +636,10 @@ internal class BookmarkSyncPipeline(
 
     // Phase 5: Content Sync
     private suspend fun syncContent(entitiesParam: List<BookmarkEntity>) {
-        // Note: entities may have updated localIds after insertion. Retired bookmarks are left
-        // out entirely — their content was dropped on purpose and must not come straight back.
-        val entities = entitiesParam.filterNot { OfflineRetention.isRetired(it, retentionDays, startedAt) }
+        // Note: entities may have updated localIds after insertion. Bookmarks cleanup evicted
+        // are left out entirely — their content was dropped on purpose and must not come
+        // straight back.
+        val entities = entitiesParam.filterNot { OfflineRetention.skipsContentSync(it, retentionDays, startedAt) }
         val syncStrategy = settingsRepository.contentSyncStrategy.first()
 
         val bookmarksToSync = when (syncStrategy) {

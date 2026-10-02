@@ -14,6 +14,8 @@ actual fun getCacheDir(context: coil3.PlatformContext): okio.Path? {
     return context.cacheDir.resolve("image_cache").absolutePath.toPath()
 }
 
+actual fun imageLoaderContext(): coil3.PlatformContext = AndroidContext.context
+
 // Read once, off a resource rather than a BuildConfig field: this module is a KMP library
 // now, so it has no build types to generate one from. :androidApp's devRelease source set
 // overrides the value.
