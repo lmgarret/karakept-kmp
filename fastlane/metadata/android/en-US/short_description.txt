@@ -1,0 +1,1 @@
+Offline-first client for Karakeep, the self-hosted bookmark manager

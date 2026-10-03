@@ -24,11 +24,11 @@
 <table align="center">
   <tr>
     <td align="center">
-      <img src="docs/screenshots/screenshot_android_bookmark_list.png" alt="Android — Bookmark list" width="200" />
+      <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1_bookmark_list.png" alt="Android — Bookmark list" width="200" />
       <br /><em>Android — Bookmark list</em>
     </td>
     <td align="center">
-      <img src="docs/screenshots/screenshot_android_bookmark_reader.png" alt="Android — Reader view" width="200" />
+      <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2_bookmark_reader.png" alt="Android — Reader view" width="200" />
       <br /><em>Android — Reader view</em>
     </td>
   </tr>
