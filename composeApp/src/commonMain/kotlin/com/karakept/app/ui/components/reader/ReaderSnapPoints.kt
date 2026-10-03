@@ -66,16 +66,22 @@ class ReaderSnapRegistry {
      * stored — within one block the lines are contiguous, so tops alone cannot tell a fold inside
      * the last line from one in the padding beneath it.
      */
-    fun lineTopAt(yInRoot: Float): Float? {
+    fun lineTopAt(yInRoot: Float): Float? = lineAt(yInRoot)?.top
+
+    /** The line [yInRoot] falls inside, top and bottom, with the same null as [lineTopAt]. */
+    fun lineAt(yInRoot: Float): LineSpan? {
         for (entry in blocks.values) {
             for (line in entry.lineTops.indices) {
                 val top = entry.topInRoot + entry.lineTops[line]
-                if (yInRoot >= top && yInRoot < entry.topInRoot + entry.lineBottoms[line]) return top
+                val bottom = entry.topInRoot + entry.lineBottoms[line]
+                if (yInRoot >= top && yInRoot < bottom) return LineSpan(top, bottom)
             }
         }
         return null
     }
 }
+
+class LineSpan(val top: Float, val bottom: Float)
 
 /**
  * Null when page snapping is off, which is also what makes the reporting free: text blocks skip the

@@ -30,7 +30,7 @@ import org.koin.compose.koinInject
  * own bars has to pass them, or every turn scrolls further than the user can read.
  *
  * [predictiveSnap] lands the turn on a content boundary instead of an arbitrary pixel, returning
- * the extra (negative) pixels to walk back — see `computeSnapAdjustment`. It is consulted only
+ * the extra pixels to add to the turn — see `computeTurnSnapAdjustment`. It is consulted only
  * while the user has snapping on, and because it answers *before* the scroll it folds into a
  * single `scrollBy`: no intermediate position is ever observable to the reader's scroll guard.
  *

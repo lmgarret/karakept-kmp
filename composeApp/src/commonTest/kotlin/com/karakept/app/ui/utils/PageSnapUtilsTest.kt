@@ -1,5 +1,6 @@
 package com.karakept.app.ui.utils
 
+import com.karakept.app.data.model.PageTurnDirection
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,6 +44,50 @@ class PageSnapUtilsTest {
     @Test
     fun `a negative residual is ignored rather than pushing the turn further`() {
         assertEquals(0f, computeSnapAdjustment(-40f, 1000f, READER_MAX_SNAP_FRACTION))
+    }
+
+    @Test
+    fun `a forward turn walks back to the top of the cut line`() {
+        assertEquals(
+            -10f,
+            computeTurnSnapAdjustment(
+                PageTurnDirection.NEXT, landingPx = 130f, lineTopPx = 120f, lineBottomPx = 150f,
+                pageDeltaPx = 1000f, maxSnapFraction = READER_MAX_SNAP_FRACTION
+            )
+        )
+    }
+
+    @Test
+    fun `a backward turn drops the cut line by moving to its bottom`() {
+        assertEquals(
+            20f,
+            computeTurnSnapAdjustment(
+                PageTurnDirection.PREVIOUS, landingPx = 130f, lineTopPx = 120f, lineBottomPx = 150f,
+                pageDeltaPx = 1000f, maxSnapFraction = READER_MAX_SNAP_FRACTION
+            )
+        )
+    }
+
+    @Test
+    fun `a backward turn landing on a line top stays put`() {
+        assertEquals(
+            0f,
+            computeTurnSnapAdjustment(
+                PageTurnDirection.PREVIOUS, landingPx = 120f, lineTopPx = 120f, lineBottomPx = 150f,
+                pageDeltaPx = 1000f, maxSnapFraction = READER_MAX_SNAP_FRACTION
+            )
+        )
+    }
+
+    @Test
+    fun `a backward turn into a line taller than the limit is left alone`() {
+        assertEquals(
+            0f,
+            computeTurnSnapAdjustment(
+                PageTurnDirection.PREVIOUS, landingPx = 130f, lineTopPx = 120f, lineBottomPx = 500f,
+                pageDeltaPx = 1000f, maxSnapFraction = READER_MAX_SNAP_FRACTION
+            )
+        )
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.karakept.app.ui.utils
 
+import com.karakept.app.data.model.PageTurnDirection
+
 /**
  * How far a reader turn may walk back to reach the top of a text line. A line is a few percent of
  * a page, so the only thing this quarter-page limit rejects is a fold that landed inside an image
@@ -16,8 +18,8 @@ const val READER_MAX_SNAP_FRACTION = 0.25f
  * back) or 0 when snapping would cost more than [maxSnapFraction] of the page — an element taller
  * than that would otherwise rewind most of the turn, or leave it standing still.
  *
- * Direction-agnostic: a forward and a backward turn both align the viewport top to the boundary at
- * or above it, so the caller passes the page magnitude rather than the signed delta.
+ * This is the forward rule; [computeTurnSnapAdjustment] picks the rule for a turn's direction.
+ * The caller passes the page magnitude rather than the signed delta.
  */
 fun computeSnapAdjustment(
     residualPx: Float,
@@ -27,6 +29,36 @@ fun computeSnapAdjustment(
     if (pageDeltaPx <= 0f || residualPx <= 0f) return 0f
     if (residualPx > pageDeltaPx * maxSnapFraction) return 0f
     return -residualPx
+}
+
+/**
+ * Snap for a turn whose fold lands at [landingPx], inside the line spanning [lineTopPx] to
+ * [lineBottomPx]. Positive scrolls further forward, negative walks back.
+ *
+ * A forward turn pulls the fold back to the top of that line, so the cut line opens the new page.
+ * A backward turn has to be the exact inverse of that, or paging back and forth drifts by a line
+ * each time: the page it lands on must end where the current one begins, which is a line top. So
+ * it drops the cut line instead — moving the fold *down* to the line's bottom — and leaves the
+ * page's lower edge on the current page's first line, which the band then covers. Snapping a
+ * backward turn up to the line top would show one line more at the top and push the last line of
+ * the previous page under the band.
+ */
+fun computeTurnSnapAdjustment(
+    direction: PageTurnDirection,
+    landingPx: Float,
+    lineTopPx: Float,
+    lineBottomPx: Float,
+    pageDeltaPx: Float,
+    maxSnapFraction: Float
+): Float = when (direction) {
+    PageTurnDirection.NEXT ->
+        computeSnapAdjustment(landingPx - lineTopPx, pageDeltaPx, maxSnapFraction)
+    PageTurnDirection.PREVIOUS -> {
+        // A fold already on the line's top is on a boundary; the line is not cut.
+        val residual = if (landingPx <= lineTopPx) 0f else lineBottomPx - landingPx
+        val adjustment = computeSnapAdjustment(residual, pageDeltaPx, maxSnapFraction)
+        if (adjustment == 0f) 0f else -adjustment
+    }
 }
 
 /**
