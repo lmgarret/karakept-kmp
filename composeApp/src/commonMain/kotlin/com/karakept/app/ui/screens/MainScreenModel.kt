@@ -90,9 +90,10 @@ class MainScreenModel(
     // and viewModelScope is the main dispatcher — so they need somewhere else to run. Injected
     // rather than taken statically so a test's dispatcher stays in control of them.
     private val appDispatchers: com.karakept.app.utils.AppDispatchers,
-    // Defaulted so a test can construct the model without wiring a request source it never uses.
-    private val tagFilterRequests: TagFilterRequests = TagFilterRequests(),
-    // Nullable for the same reason: most tests have no use for the startup version check.
+    // No default: the reader posts to the Koin single, so a model built with its own instance
+    // never hears a tapped tag — which is what the DI binding silently did while this had one.
+    private val tagFilterRequests: TagFilterRequests,
+    // Nullable so a test can construct the model without the startup version check it never uses.
     private val serverVersionRepository: ServerVersionRepository? = null
 ) : ViewModel() {
 

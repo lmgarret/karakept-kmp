@@ -1,5 +1,6 @@
 package com.karakept.app.ui.screens
 
+import com.karakept.app.domain.action.TagFilterRequests
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.ApiException
@@ -110,6 +111,7 @@ class MainScreenModelServerVersionTest {
             snackbarManager = snackbarManager,
             highlightRepository = highlightRepository,
             appDispatchers = TestAppDispatchers(testDispatcher),
+            tagFilterRequests = TagFilterRequests(),
             serverVersionRepository = serverVersionRepository
         )
     }
