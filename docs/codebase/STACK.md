@@ -208,7 +208,8 @@
     The v6 default `enhanced` provider relies on the proprietary `gradle-actions-caching`
     component governed by Gradle's commercial Terms of Use and is deliberately not used.
   - Uses LLM for changelog generation (mistral/mistral-large-latest)
-  - Signing configured via environment variables (KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)
+  - Signing configured via environment variables (KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD);
+    `release` stays unsigned without them so F-Droid can rebuild it reproducibly (`docs/fdroid.md`)
 
 ## Platform Requirements
 

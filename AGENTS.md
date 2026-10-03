@@ -833,6 +833,10 @@ CI runs on every PR targeting `main` (`.github/workflows/ci.yml`):
 Releases (`.github/workflows/release.yml`):
 - Builds signed Android APK/AAB and desktop packages.
 - Signing via `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` environment variables.
+- The Android version lives as literals in `androidApp/build.gradle.kts`, committed to `main` by the
+  workflow's `bump-version` job before the tag is cut — F-Droid rebuilds the APK from the tag and
+  must read the same version (see `docs/fdroid.md`). Never pass `-PversionCode`/`-PversionName`
+  to the Android build.
 - Changelog generated automatically.
 
 ---

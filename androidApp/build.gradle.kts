@@ -21,8 +21,17 @@ android {
         applicationId = "com.karakept.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
-        versionName = (project.findProperty("versionName") as String?) ?: "1.0"
+        // Literals on purpose: F-Droid reads both straight from this file at each release tag.
+        // The release workflow rewrites them (see .github/workflows/release.yml); the code is
+        // MAJOR * 1_000_000 + MINOR * 1_000 + PATCH.
+        versionCode = 2006000
+        versionName = "2.6.0"
+    }
+
+    // An encrypted dependency report only Google Play can read; F-Droid's scanner rejects it.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 
     packaging {
@@ -39,6 +48,9 @@ android {
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
+                // minSdk 24 verifies v2, and the v1 JAR signature adds entries to the APK that
+                // make comparing it against an unsigned rebuild harder.
+                enableV1Signing = false
             }
         }
     }
@@ -47,12 +59,18 @@ android {
         val ciSigning = signingConfigs.findByName("ciSigning")
         getByName("release") {
             isMinifyEnabled = false
-            signingConfig = ciSigning ?: signingConfigs.getByName("debug")
+            // Unsigned without a keystore: F-Droid builds that way, then copies the signature
+            // over from the published APK (reproducible builds).
+            signingConfig = ciSigning
+            // The VCS stamp would tie the APK to a .git checkout a source rebuild may lack.
+            vcsInfo.include = false
         }
         create("devRelease") {
             initWith(getByName("release"))
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
+            // PR builds from forks have no keystore and must still install.
+            signingConfig = ciSigning ?: signingConfigs.getByName("debug")
             // The "Karakept Dev" label and the dev launcher icons come from src/devRelease/res.
         }
     }

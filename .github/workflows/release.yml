@@ -116,6 +116,61 @@ jobs:
             echo "BODY_EOF"
           } >> "$GITHUB_OUTPUT"
 
+  # F-Droid builds from the release tag and reads the version from androidApp/build.gradle.kts,
+  # so the version has to be committed before the tag is cut. main is protected: the push uses
+  # RELEASE_PUSH_TOKEN, which must belong to an actor on the main ruleset's bypass list.
+  bump-version:
+    name: Commit release version
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.RELEASE_PUSH_TOKEN || github.token }}
+
+      - name: Write version into source
+        id: commit
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.name }}
+          FILE: androidApp/build.gradle.kts
+        run: |
+          if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Version '$VERSION' is not MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+          CODE=$(( 10#${BASH_REMATCH[1]} * 1000000 + 10#${BASH_REMATCH[2]} * 1000 + 10#${BASH_REMATCH[3]} ))
+          OLD_CODE=$(sed -nE 's/^\s*versionCode = ([0-9]+)$/\1/p' "$FILE")
+          if (( CODE < OLD_CODE )); then
+            echo "::error::versionCode ${CODE} (${VERSION}) is lower than the current ${OLD_CODE}"
+            exit 1
+          fi
+
+          sed -i -E \
+            -e "s/^(\s*versionCode = )[0-9]+$/\1${CODE}/" \
+            -e "s/^(\s*versionName = )\"[^\"]*\"$/\1\"${VERSION}\"/" \
+            "$FILE"
+          if ! grep -qE "^\s*versionCode = ${CODE}$" "$FILE" || ! grep -qE "^\s*versionName = \"${VERSION}\"$" "$FILE"; then
+            echo "::error::Could not write ${VERSION} (${CODE}) into ${FILE}"
+            exit 1
+          fi
+
+          if ! git diff --quiet; then
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              echo "::error::Tag ${GITHUB_REF_NAME} does not match the version in ${FILE}. Dispatch the workflow instead, or commit the version before tagging."
+              exit 1
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore(release): ${VERSION}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   android-tests:
     name: Run Android unit tests
     runs-on: ubuntu-latest
@@ -146,13 +201,14 @@ jobs:
 
   build-android:
     name: Build Android APK
-    needs: [resolve-version, android-tests]
+    needs: [resolve-version, bump-version, android-tests]
     runs-on: ubuntu-latest
     # Holds the signing keystore; the environment only admits main and v* tags.
     environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.bump-version.outputs.sha }}
           submodules: true
 
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -182,10 +238,8 @@ jobs:
           KEYSTORE_PATH: ${{ github.workspace }}/karakept-dev.keystore
           KEYSTORE_PASSWORD: ${{ secrets.DEV_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.DEV_KEY_ALIAS }}
-        run: >
-          ./gradlew :androidApp:assembleRelease
-          -PversionName=${{ needs.resolve-version.outputs.name }}
-          -PversionCode=${{ github.run_number }}
+        # The version comes from source, as it does for F-Droid's rebuild of the same tag.
+        run: ./gradlew :androidApp:assembleRelease
 
       - name: Rename APK
         run: |
@@ -200,11 +254,12 @@ jobs:
 
   build-macos:
     name: Build macOS DMG
-    needs: [resolve-version, android-tests]
+    needs: [resolve-version, bump-version, android-tests]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.bump-version.outputs.sha }}
           submodules: true
 
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -249,7 +304,7 @@ jobs:
 
   build-windows:
     name: Build Windows (MSI + EXE)
-    needs: [resolve-version, android-tests]
+    needs: [resolve-version, bump-version, android-tests]
     # Windows release builds are temporarily disabled. To re-enable: remove this
     # `if: false`, re-add `build-windows` to create-release's `needs`, and restore the
     # `msi-release/*.msi` + `exe-release/*.exe` lines in create-release's file lists.
@@ -258,6 +313,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.bump-version.outputs.sha }}
           submodules: true
 
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -302,12 +358,13 @@ jobs:
 
   build-linux-dist:
     name: Build Linux distributable
-    needs: [resolve-version, android-tests]
+    needs: [resolve-version, bump-version, android-tests]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.bump-version.outputs.sha }}
           submodules: true
 
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -342,7 +399,7 @@ jobs:
 
   build-linux-flatpak:
     name: Build Linux Flatpak
-    needs: [resolve-version, build-linux-dist]
+    needs: [resolve-version, bump-version, build-linux-dist]
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
@@ -350,6 +407,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.bump-version.outputs.sha }}
           submodules: true
 
       - name: Download Linux distributable
@@ -376,7 +434,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     # build-windows temporarily removed from needs (Windows release builds disabled)
-    needs: [resolve-version, build-android, build-macos, build-linux-flatpak]
+    needs: [resolve-version, bump-version, build-android, build-macos, build-linux-flatpak]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -402,6 +460,7 @@ jobs:
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ needs.resolve-version.outputs.tag }}
+          target_commitish: ${{ needs.bump-version.outputs.sha }}
           name: ${{ needs.resolve-version.outputs.tag }}
           files: |
             apk-release/*.apk
