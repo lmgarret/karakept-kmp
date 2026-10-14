@@ -1,5 +1,5 @@
 [versions]
-openapi-generator = "7.25.0"
+openapi-generator = "7.26.0"
 agp = "9.4.0"
 android-compileSdk = "37"
 android-minSdk = "24"
