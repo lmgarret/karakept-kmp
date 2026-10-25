@@ -37,6 +37,13 @@ class ReaderSnapRegistryTest {
     }
 
     @Test
+    fun `the line under an edge carries its bottom too`() {
+        val line = twoParagraphs().lineAt(135f)
+        assertEquals(120f, line?.top)
+        assertEquals(140f, line?.bottom)
+    }
+
+    @Test
     fun `blocks are searched as one document, not one at a time`() {
         assertEquals(320f, twoParagraphs().lineTopAt(330f))
     }

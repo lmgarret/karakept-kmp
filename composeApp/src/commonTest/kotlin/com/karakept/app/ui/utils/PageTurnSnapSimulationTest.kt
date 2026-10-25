@@ -91,11 +91,19 @@ class PageTurnSnapSimulationTest {
                 PageTurnDirection.NEXT -> foldRootY + magnitude
                 PageTurnDirection.PREVIOUS -> foldRootY - magnitude
             }
-            val adjustment = if (!paged) 0f else computeSnapAdjustment(
-                residualPx = residualAt(landing),
-                pageDeltaPx = magnitude,
-                maxSnapFraction = READER_MAX_SNAP_FRACTION
-            )
+            val adjustment = if (!paged) 0f else {
+                relayout()
+                registry.lineAt(landing)?.let { line ->
+                    computeTurnSnapAdjustment(
+                        direction = direction,
+                        landingPx = landing,
+                        lineTopPx = line.top,
+                        lineBottomPx = line.bottom,
+                        pageDeltaPx = magnitude,
+                        maxSnapFraction = READER_MAX_SNAP_FRACTION
+                    )
+                } ?: 0f
+            }
             scroll = (scroll + delta + adjustment).coerceIn(0f, maxScroll)
         }
 
@@ -184,6 +192,54 @@ class PageTurnSnapSimulationTest {
             if (reader.scroll > 0f) {
                 assertEquals(0f, reader.scroll % ReaderSimulation.LINE_HEIGHT, "began mid-line")
             }
+        }
+    }
+
+    /** Lines shown whole on the current page, by index. */
+    private fun ReaderSimulation.wholeLinesOnPage(lines: List<Float>): List<Int> {
+        val top = scroll
+        val bottom = visibleContentBottom()
+        return lines.indices.filter { lines[it] >= top && lines[it] + ReaderSimulation.LINE_HEIGHT <= bottom }
+    }
+
+    private fun ReaderSimulation.assertPagingBackRetracesForward(lines: List<Float>, turns: Int) {
+        val forward = mutableListOf(wholeLinesOnPage(lines))
+        repeat(turns) {
+            turn(PageTurnDirection.NEXT)
+            forward += wholeLinesOnPage(lines)
+        }
+        for (page in turns - 1 downTo 0) {
+            turn(PageTurnDirection.PREVIOUS)
+            assertEquals(forward[page], wholeLinesOnPage(lines), "paging back changed page $page")
+        }
+    }
+
+    @Test
+    fun `paging back shows the same pages as paging forward`() {
+        val lines = evenlySpacedLines(200)
+        ReaderSimulation(lines, readable = 700, foldRootY = foldRootY)
+            .assertPagingBackRetracesForward(lines, turns = 6)
+    }
+
+    @Test
+    fun `paging back retraces the forward pages across paragraph gaps`() {
+        // Paragraphs of five lines separated by 18px, so folds also land near and inside gaps.
+        val lines = List(200) { it * ReaderSimulation.LINE_HEIGHT + (it / 5) * 18f }
+        ReaderSimulation(lines, readable = 700, foldRootY = foldRootY)
+            .assertPagingBackRetracesForward(lines, turns = 8)
+    }
+
+    @Test
+    fun `turning back and forth lands on the same page every time`() {
+        val reader = ReaderSimulation(evenlySpacedLines(200), readable = 700, foldRootY = foldRootY)
+        repeat(3) { reader.turn(PageTurnDirection.NEXT) }
+        val here = reader.scroll
+        val bottom = reader.visibleContentBottom()
+        repeat(5) {
+            reader.turn(PageTurnDirection.PREVIOUS)
+            reader.turn(PageTurnDirection.NEXT)
+            assertEquals(here, reader.scroll, "round trip $it drifted")
+            assertEquals(bottom, reader.visibleContentBottom(), "round trip $it moved the last line")
         }
     }
 

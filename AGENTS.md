@@ -570,6 +570,9 @@ In the **reader**, a page also **ends on a content boundary**, not on an arbitra
 `snapToContent` (default on) walks the turn back onto the top of the line of text that would
 otherwise be sliced by the edge. Snapping supplies its own overlap, so `effectiveOverlapPercent`
 returns 0 while it is on and the "Page overlap" slider is disabled; the two would stack otherwise.
+A backward turn snaps the other way — *down* to the bottom of the cut line
+(`computeTurnSnapAdjustment`) — so it is the exact inverse of a forward turn and paging back shows
+the same pages, ending on the same last line, as paging forward did.
 The walk back is capped (`READER_MAX_SNAP_FRACTION` in `ui/utils/PageSnapUtils.kt`) so a fold
 landing inside an image or a table is left alone rather than rewinding most of the turn.
 

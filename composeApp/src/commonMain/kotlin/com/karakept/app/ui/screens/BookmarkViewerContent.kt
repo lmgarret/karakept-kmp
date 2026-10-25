@@ -88,7 +88,7 @@ import com.karakept.app.ui.input.handleDesktopPageKey
 import com.karakept.app.ui.utils.BODY_LINE_HEIGHT_RATIO
 import com.karakept.app.ui.utils.PagedPositionState
 import com.karakept.app.ui.utils.READER_MAX_SNAP_FRACTION
-import com.karakept.app.ui.utils.computeSnapAdjustment
+import com.karakept.app.ui.utils.computeTurnSnapAdjustment
 import com.karakept.app.ui.utils.pageWorthTurning
 import com.karakept.app.ui.utils.pagedBottomEdge
 import com.karakept.app.ui.utils.trailingPagePaddingFor
@@ -362,9 +362,12 @@ fun BookmarkViewerContent(
                 PageTurnDirection.NEXT -> foldInRoot + pageDelta
                 PageTurnDirection.PREVIOUS -> foldInRoot - pageDelta
             }
-            snapRegistry.lineTopAt(landingPoint)?.let { lineTop ->
-                computeSnapAdjustment(
-                    residualPx = landingPoint - lineTop,
+            snapRegistry.lineAt(landingPoint)?.let { line ->
+                computeTurnSnapAdjustment(
+                    direction = direction,
+                    landingPx = landingPoint,
+                    lineTopPx = line.top,
+                    lineBottomPx = line.bottom,
                     pageDeltaPx = pageDelta,
                     maxSnapFraction = READER_MAX_SNAP_FRACTION
                 )
