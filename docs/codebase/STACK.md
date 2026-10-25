@@ -131,6 +131,9 @@
 
 **Code Generation:**
 - KSP 2.3.9 (Kotlin Symbol Processing) - Annotation processor
+- `:composeApp:generateAppVersion` - Writes `AppVersion.kt` (`name`, `commit`, `dirty`) into
+  `build/generated/appVersion`, a `commonMain` source dir. Reads `-PversionName` / `-Pcommit`
+  first, then git; never fails when there is no repository.
 - OpenAPI Generator 7.25.0 - Generate API client from OpenAPI spec
   - Generates Kotlin multiplatform client to `com.karakept.api.*`
   - Located at: `api-client/` module

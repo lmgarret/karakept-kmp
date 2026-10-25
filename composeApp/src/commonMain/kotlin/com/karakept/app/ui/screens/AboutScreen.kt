@@ -38,7 +38,9 @@ import kotlinx.serialization.Serializable
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import coil3.compose.AsyncImage
+import com.karakept.app.utils.AppVersion
 import com.karakept.app.utils.FaviconUtils
+import com.karakept.app.utils.GitVersionInfo
 import isDevBuild
 
 data class FossLibrary(
@@ -100,7 +102,7 @@ fun AboutContent(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "v1.0",
+                            text = GitVersionInfo(AppVersion.commit, AppVersion.dirty).label(isDevBuild),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
