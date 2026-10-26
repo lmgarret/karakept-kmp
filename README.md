@@ -71,15 +71,27 @@
 
 ### Prerequisites
 
-- Java 17 or later (bundled in devcontainer)
+- Java 21 (`mise install` handles this — see below)
 - For Android: Android SDK
 - For Desktop: X11 or Wayland display
+
+**Toolchains come from [mise](https://mise.jdx.dev).** `mise.toml` pins the JDK, Gradle and Python
+versions CI uses, so one command reproduces them:
+
+```bash
+mise install          # java 21, gradle 9.8.1, python 3.13
+mise run setup        # the above, plus the karakeep-upstream submodule
+```
+
+`mise tasks` lists the project's tasks (`test:desktop`, `test:android`, `icons`). Without mise,
+install JDK 21 and Gradle 9.8.1 yourself — `./gradlew` still works standalone.
 
 > **Clone with submodules.** The `api-client` module is generated at build
 > time from the Karakeep OpenAPI spec, which lives in the `karakeep-upstream`
 > git submodule. Clone with `git clone --recurse-submodules <url>`, or if you
-> already cloned, run `git submodule update --init`. Without it the build fails
-> with a missing-spec error on `:api-client:openApiGenerate`.
+> already cloned, run `mise run setup` (or `git submodule update --init`).
+> Without it the build fails with a missing-spec error on
+> `:api-client:openApiGenerate` — the single most common first-build failure.
 
 ### Android
 

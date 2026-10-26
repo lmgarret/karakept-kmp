@@ -724,6 +724,17 @@ Every new feature or bug fix **must** include new or updated tests. Tests that b
 
 Save a `.kt` file → Terminal 2 compiles + notifies the agent → UI updates in-place in Terminal 1.
 
+## Toolchain
+
+`mise.toml` pins the JDK, Gradle and Python that CI uses. Run `mise run setup` once after cloning
+to install them and the `karakeep-upstream` submodule; `mise tasks` lists the rest. Without it, the
+build fails on `:api-client:openApiGenerate` with a missing-spec error.
+
+If a toolchain is missing or the wrong version, fix `mise.toml` rather than installing by hand —
+that keeps the version in the repo instead of in someone's memory.
+
+---
+
 ### Running Tests
 
 ```bash
