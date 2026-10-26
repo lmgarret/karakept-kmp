@@ -34,7 +34,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         id: prev_tag
         run: |
-          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          # --match skips the rolling `nightly` tag, which is usually nearer.
+          PREV=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2>/dev/null || echo "")
           echo "tag=${PREV}" >> "$GITHUB_OUTPUT"
 
       - name: Generate AI changelog
@@ -43,31 +44,50 @@ jobs:
         # On tag pushes the version comes from the tag, so an LLM outage only
         # drops the AI changelog. Manual runs need next_version, so they still fail.
         continue-on-error: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        uses: lmgarret/llm-release-action@89ad4c3af8aa41030849a703ab6b081d0d384186 # v1.2.0
+        uses: lmgarret/llm-release-action@d0581cd59ed14f3db5864b2ca6479a6623c308ab # v2.1.0
         with:
           model: anthropic/claude-sonnet-5-5
-          model_analysis: anthropic/claude-haiku-5-5
-          current_version: ${{ steps.prev_tag.outputs.tag }}
+          # Cheap model for project type, context and diff extraction.
+          fast_model: anthropic/claude-haiku-5-5
+          # The range comes from base_ref; the action reads current_version off the
+          # semver base tag, so next_version still works for manual runs.
+          base_ref: ${{ steps.prev_tag.outputs.tag }}
           # End-user app: internal database migrations are not breaking.
           project_type: app
+          # Short, so it fits the token budget without being summarized.
+          context_files: /docs/CONTEXT.md
           changelog_config: |
             default:
+              # `customer` sets user_facing_only, dropping CI and dependency churn.
+              preset: customer
               languages: [en]
               tone: professional
               sections: [breaking, features, improvements, fixes]
               benefit_focused: true
               include_infrastructure: false
+              user_facing_only: true
               summary_only: false
               emojis: true
-          context_files: README.md,CLAUDE.md
-          max_commits: 50
+              link_prs: true
+              # The preset generates metadata the release body never uses.
+              generate_title: false
+              generate_summary: false
+              generate_highlights: 0
+              # No header: the changelog already opens with its own heading.
+              footer: |
+                **Upgrading from {previous_version}?** Your settings, bookmarks and
+                local database are kept — install the new build over the old one.
+              instructions: |
+                Write for people who use the app, not for its developers.
+                Name the platform (Android, macOS, Linux) when a change only affects one.
+                Never mention CI, dependency bumps, tests or refactoring.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Generate commit log
         id: commitlog
         run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
           LOG=$(git log --oneline "${PREVIOUS_TAG}..HEAD" 2>/dev/null || git log --oneline)
           {
             echo "log<<COMMITLOG_EOF"
@@ -91,12 +111,13 @@ jobs:
         id: body
         env:
           COMMITS: ${{ steps.commitlog.outputs.log }}
-          CHANGELOG: ${{ steps.changelog.outputs.changelogs && fromJSON(steps.changelog.outputs.changelogs).default.en || '' }}
+          # Read the file the action wrote instead of passing LLM text through a shell.
+          CHANGELOG_FILE: ${{ steps.changelog.outputs.changelog_files && fromJSON(steps.changelog.outputs.changelog_files).default.en || '' }}
         run: |
           {
             echo "body<<BODY_EOF"
-            if [ -n "$CHANGELOG" ]; then
-              echo "$CHANGELOG"
+            if [ -n "$CHANGELOG_FILE" ] && [ -f "$CHANGELOG_FILE" ]; then
+              cat "$CHANGELOG_FILE"
               echo ""
               echo "---"
               echo ""

@@ -197,7 +197,8 @@ settle on the last one to push.
 - Triggers: Push to main branch with specific file paths, or manual dispatch
 - Jobs:
   1. `resolve-version` - Determine version from tags or input
-  2. Generate AI changelog using Mistral LLM
+  2. Generate AI changelog with `lmgarret/llm-release-action` (Claude Sonnet 5.5, Haiku 5.5
+     for the cheap internal calls), steered by `docs/CONTEXT.md`
   3. Build Android APK for multiple ABIs
   4. Build desktop packages (JVM Compose Desktop)
   5. Create GitHub Release with artifacts
@@ -207,6 +208,9 @@ settle on the last one to push.
   - `KEY_ALIAS` - Key alias
   - `KEY_PASSWORD` - Key password
 - Python 3.11 for language_data dependency (changelog generation)
+- Changelog context lives in `docs/CONTEXT.md`: what users notice, what counts as breaking for
+  an app (as opposed to a library), and what to leave out. Keep it short — it has to fit the
+  action's 800-token context budget without being summarized.
 
 **`pr-build.yml`:**
 - Triggers: Pull requests
