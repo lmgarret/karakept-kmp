@@ -1,0 +1,25 @@
+# Toolchain for this project, so `mise install` reproduces what CI uses.
+# Every version here matches .github/workflows/*.yml; keep them in step.
+[tools]
+java = "temurin-21"
+gradle = "9.8.1"
+python = "3.13"
+
+[tasks.setup]
+description = "One-time: install toolchains and the Karakeep OpenAPI submodule"
+run = """
+mise install
+git submodule update --init
+"""
+
+[tasks."test:desktop"]
+description = "Desktop suite (commonTest + desktopTest) — the PR CI entry point"
+run = "./gradlew :composeApp:desktopTest --rerun"
+
+[tasks."test:android"]
+description = "Android (Robolectric) suite — needs an Android SDK and ~6 GB RAM"
+run = "./gradlew :composeApp:testAndroidHostTest --rerun"
+
+[tasks.icons]
+description = "Regenerate AppIcons.kt from google/material-design-icons (needs network)"
+run = "python3 tools/generate_material_icons.py"
