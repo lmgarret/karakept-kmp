@@ -817,6 +817,8 @@ Keep documentation current as the code evolves:
 - **New reusable components** → document them in this file under "Reusable UI Components".
 - **Stack changes** → update `docs/codebase/STACK.md`.
 - **Architecture changes** → update `docs/codebase/ARCHITECTURE.md`.
+- **A change users would call breaking** → check it against `docs/CONTEXT.md`, which feeds the
+  release-notes prompt. It describes what users notice rather than the code.
 
 ---
 
