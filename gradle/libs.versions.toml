@@ -1,6 +1,6 @@
 [versions]
 openapi-generator = "7.26.0"
-agp = "9.4.0"
+agp = "9.4.1"
 android-compileSdk = "37"
 android-minSdk = "24"
 android-targetSdk = "35"
