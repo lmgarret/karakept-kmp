@@ -2,6 +2,8 @@ package com.karakept.app.data.repository
 
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
+import com.karakept.app.data.local.projection.OfflineHolderRow
+import com.karakept.app.domain.OfflineScope
 import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.utils.AppDispatchers
 import com.karakept.app.utils.AppLogger
@@ -49,6 +51,8 @@ data class OfflineStorageUsage(
 data class OfflineCleanupEstimate(
     val retiredCopies: Int = 0,
     val retiredBytes: Long = 0,
+    val outOfScopeCopies: Int = 0,
+    val outOfScopeBytes: Long = 0,
     val overLimitCopies: Int = 0,
     val overLimitBytes: Long = 0,
     val unusedFileBytes: Long = 0,
@@ -56,7 +60,7 @@ data class OfflineCleanupEstimate(
     val thumbnailCacheBytes: Long = 0
 ) {
     val totalBytes: Long
-        get() = retiredBytes + overLimitBytes + unusedFileBytes + reclaimableDatabaseBytes + thumbnailCacheBytes
+        get() = retiredBytes + outOfScopeBytes + overLimitBytes + unusedFileBytes + reclaimableDatabaseBytes + thumbnailCacheBytes
 }
 
 data class OfflineCacheCleanupResult(
@@ -69,15 +73,19 @@ data class OfflineCacheCleanupResult(
  * Garbage collection for offline copies: article bodies, the images they reference, hero images
  * and downloaded assets.
  *
- * Runs in four steps, each safe to interrupt:
+ * Runs in five steps, each safe to interrupt:
  * 1. Stamp [com.karakept.app.data.local.entity.BookmarkEntity.readOrArchivedAt] on rows that
  *    became read or archived since the last pass, and clear it on rows that went back.
  * 2. When a retention period is set, drop the body and local asset paths of bookmarks retired
  *    longer than that. The rows themselves stay.
- * 3. When a storage cap is set and exceeded, evict whole offline copies until usage is back
+ * 3. Drop the copies [OfflineScope] no longer covers — a list's "Sync offline" turned off, a
+ *    narrower content strategy, a bookmark gone from its list. Under Per Bookmark, what the user
+ *    opened stays in scope and is left to retention and the storage cap. Nothing marks these
+ *    evicted, so a bookmark that comes back into scope is downloaded again.
+ * 4. When a storage cap is set and exceeded, evict whole offline copies until usage is back
  *    under it — read or archived bookmarks first, then unread ones, least recently opened first
  *    within each. Evicted rows are marked so sync leaves them evicted.
- * 4. Sweep: delete every cache file nothing references any more. Content images are shared
+ * 5. Sweep: delete every cache file nothing references any more. Content images are shared
  *    between bookmarks by URL, so a file can only go once no stored body points at it — which
  *    is why eviction clears references and leaves deleting to this step. It also collects what
  *    deleted bookmarks and removed servers left behind.
@@ -94,7 +102,9 @@ class OfflineCacheRepository(
     // AppDatabase.compact). Lambdas so tests need no real database.
     private val reclaimableDatabaseBytes: suspend () -> Long = { 0L },
     private val compactDatabase: suspend () -> Unit = {},
-    private val thumbnailCache: ThumbnailCache = NoThumbnailCache
+    private val thumbnailCache: ThumbnailCache = NoThumbnailCache,
+    // Null leaves out-of-scope copies alone.
+    private val offlineScope: suspend () -> OfflineScope? = { null }
 ) {
     private val mutex = Mutex()
     private var lastSweepAt: Long? = null
@@ -150,6 +160,10 @@ class OfflineCacheRepository(
             bookmarkDao.evictRetiredContent(cutoff)
         } else 0
 
+        val scope = offlineScope()?.takeUnless { it.coversEverything }
+        val outOfScope = if (scope != null) bookmarkDao.getOfflineHolders().outOfScope(scope) else emptyList()
+        evictOutOfScope(outOfScope)
+
         // Both the cap and the sweep read every stored body, so outside an explicit clean-up they
         // wait for their interval — except that an eviction leaves files to free right away.
         val lastSweep = lastSweepAt
@@ -160,13 +174,13 @@ class OfflineCacheRepository(
             enforceStorageCap(capMb * OfflineRetention.MEGABYTE, now)
         } else 0
 
-        val (deleted, freed) = if (heavyDue || evicted > 0 || capped > 0) {
+        val (deleted, freed) = if (heavyDue || evicted > 0 || outOfScope.isNotEmpty() || capped > 0) {
             lastSweepAt = now
             assetDao.deleteOrphaned()
             sweepUnreferencedFiles(now)
         } else 0 to 0L
 
-        return OfflineCacheCleanupResult(evicted + capped, deleted, freed).also {
+        return OfflineCacheCleanupResult(evicted + outOfScope.size + capped, deleted, freed).also {
             if (it.evictedBookmarks > 0 || it.deletedFiles > 0) {
                 AppLogger.d(TAG, "Evicted ${it.evictedBookmarks} bookmark(s), deleted ${it.deletedFiles} file(s), freed ${it.freedBytes} bytes")
             }
@@ -210,6 +224,10 @@ class OfflineCacheRepository(
         }
         val retiredBytes = retired.sumOf { simulation.evict(it) ?: 0L }
 
+        // Counted once: a copy both retired and out of scope is the retention line's.
+        val outOfScope = snapshot.holders.outOfScope(offlineScope())
+        val outOfScopeFreed = outOfScope.mapNotNull { simulation.evict(it) }
+
         val capMb = settingsRepository.activeOfflineStorageCapMb.first()
         val usageBeforeCap = simulation.usage
         val overLimit = capMb?.let { snapshot.selectForCap(simulation, it * OfflineRetention.MEGABYTE) }.orEmpty()
@@ -217,6 +235,8 @@ class OfflineCacheRepository(
         OfflineCleanupEstimate(
             retiredCopies = retired.size,
             retiredBytes = retiredBytes,
+            outOfScopeCopies = outOfScopeFreed.size,
+            outOfScopeBytes = outOfScopeFreed.sum(),
             overLimitCopies = overLimit.size,
             overLimitBytes = usageBeforeCap - simulation.usage,
             unusedFileBytes = snapshot.unusedFiles(now, SWEEP_GRACE_MILLIS).sumOf { it.sizeBytes },
@@ -274,6 +294,14 @@ class OfflineCacheRepository(
         assetDao.getAllLocalPaths().mapTo(names, ::fileNameOf)
         forEachStoredContent { _, content -> names += referencesIn(content) }
         return names
+    }
+
+    private fun List<OfflineHolderRow>.outOfScope(scope: OfflineScope?): List<OfflineHolderRow> =
+        if (scope == null) emptyList() else filterNot { scope.covers(it.listIds, opened = it.lastOpenedAt != null) }
+
+    private suspend fun evictOutOfScope(holders: List<OfflineHolderRow>) {
+        holders.map { it.localId }.chunked(SQL_CHUNK).forEach { bookmarkDao.evictOutOfScope(it) }
+        holders.forEach { assetDao.clearLocalPathsForBookmark(it.remoteId, it.serverId) }
     }
 
     /** Evicts offline copies until what they take is back under [capBytes]. Returns how many. */

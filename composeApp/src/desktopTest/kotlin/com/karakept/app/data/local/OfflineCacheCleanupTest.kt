@@ -11,6 +11,8 @@ import com.karakept.app.data.local.migrations.withAppSchema
 import com.karakept.app.data.repository.CacheFileStore
 import com.karakept.app.data.repository.OfflineCacheRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.model.SyncStrategy
+import com.karakept.app.domain.OfflineScope
 import com.karakept.app.domain.OfflineRetention.DAY_MILLIS
 import com.karakept.app.utils.DefaultAppDispatchers
 import com.karakept.app.utils.LocalFileInfo
@@ -69,7 +71,8 @@ class OfflineCacheCleanupTest {
         device: StorageInfo = StorageInfo(usedBytes = 0, freeBytes = 0, totalBytes = 0),
         reclaimable: (suspend () -> Long)? = null,
         compact: (suspend () -> Unit)? = null,
-        thumbnails: ThumbnailCache = NoThumbnailCache
+        thumbnails: ThumbnailCache = NoThumbnailCache,
+        scope: OfflineScope? = null
     ): OfflineCacheRepository {
         val settings = mockk<SettingsRepository>(relaxed = true)
         every { settings.activeOfflineRetentionDays } returns flowOf(retentionDays)
@@ -84,7 +87,8 @@ class OfflineCacheCleanupTest {
             deviceStorage = { device },
             reclaimableDatabaseBytes = reclaimable ?: { db.reclaimableBytes() },
             compactDatabase = compact ?: { db.compact() },
-            thumbnailCache = thumbnails
+            thumbnailCache = thumbnails,
+            offlineScope = { scope }
         )
     }
 
@@ -94,12 +98,13 @@ class OfflineCacheCleanupTest {
         isRead: Boolean = false,
         isArchived: Boolean = false,
         readOrArchivedAt: Long? = null,
-        lastOpenedAt: Long? = null
+        lastOpenedAt: Long? = null,
+        listIds: String = ""
     ) = BookmarkEntity(
         remoteId = id, serverId = serverId, url = "u", title = id, content = content,
         imageUrl = null, bannerImageAssetId = null, screenshotAssetId = null, description = null,
         createdAt = 1, isArchived = isArchived, isStarred = false, isRead = isRead,
-        readOrArchivedAt = readOrArchivedAt, lastOpenedAt = lastOpenedAt
+        readOrArchivedAt = readOrArchivedAt, lastOpenedAt = lastOpenedAt, listIds = listIds
     )
 
     private fun asset(id: String, bookmarkId: String, localPath: String?) = AssetEntity(
@@ -221,6 +226,83 @@ class OfflineCacheCleanupTest {
     }
 
     private fun img(name: String) = "<img src='file://$cacheDir/$name'>"
+
+    private fun scope(strategy: SyncStrategy, strategyLists: Set<String> = emptySet(), offlineLists: Set<String> = emptySet()) =
+        OfflineScope(strategy, strategyLists, offlineLists)
+
+    @Test
+    fun `drops copies that fall out of the offline scope and frees what only they used`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("in-list", listIds = "offline", content = img("img_shared")))
+        db.bookmarkDao().insertBookmark(bookmark("left-list", listIds = "other", content = img("img_shared") + img("img_own")))
+        db.bookmarkDao().insertBookmark(bookmark("no-list", content = null))
+        db.assetDao().insertAssets(listOf(asset("hero", "left-list", "$cacheDir/hero_banner_x")))
+        val files = FakeFiles(listOf(file("img_shared"), file("img_own"), file("hero_banner_x")))
+
+        val result = cleaner(retentionDays = null, files = files, scope = scope(SyncStrategy.NEVER, offlineLists = setOf("offline")))
+            .cleanUp()
+
+        assertEquals(1, result.evictedBookmarks)
+        with(row("left-list")) {
+            assertNull(content)
+            assertEquals(false, hasContent)
+            assertNull(offlineEvictedAt, "not marked: coming back into scope downloads it again")
+        }
+        assertEquals(img("img_shared"), row("in-list").content)
+        assertEquals(listOf("img_shared"), files.present.map { it.name })
+        db.close()
+    }
+
+    @Test
+    fun `under per bookmark an opened copy stays in scope`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("opened", lastOpenedAt = 5))
+        db.bookmarkDao().insertBookmark(bookmark("synced-by-list", listIds = "gone"))
+
+        cleaner(retentionDays = null, scope = scope(SyncStrategy.PER_BOOKMARK)).cleanUp()
+
+        assertNotNull(row("opened").content)
+        assertNull(row("synced-by-list").content)
+        db.close()
+    }
+
+    @Test
+    fun `under all nothing is out of scope, and without a scope nothing is evicted for it`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("a", listIds = "x"))
+
+        assertEquals(0, cleaner(retentionDays = null, scope = scope(SyncStrategy.ALL)).cleanUp().evictedBookmarks)
+        assertEquals(0, cleaner(retentionDays = null, scope = null).cleanUp().evictedBookmarks)
+        assertNotNull(row("a").content)
+        db.close()
+    }
+
+    @Test
+    fun `out-of-scope copies are dropped after every sync, not only on the sweep interval`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("a", listIds = "x"))
+        val cleaner = cleaner(retentionDays = null, scope = scope(SyncStrategy.PER_LIST, strategyLists = setOf("y")))
+        cleaner.cleanUpAfterSync()
+        db.bookmarkDao().insertBookmark(bookmark("b", listIds = "x"))
+
+        val result = cleaner.cleanUpAfterSync()
+
+        assertEquals(1, result?.evictedBookmarks)
+        assertNull(row("b").content)
+        db.close()
+    }
+
+    @Test
+    fun `the estimate counts out-of-scope copies once, after retention`() = runBlocking {
+        db.bookmarkDao().insertBookmark(bookmark("retired", isRead = true, readOrArchivedAt = 1L, content = "abcd"))
+        db.bookmarkDao().insertBookmark(bookmark("out", content = "efghij"))
+        db.bookmarkDao().insertBookmark(bookmark("in", listIds = "l", content = "kl"))
+
+        val estimate = cleaner(retentionDays = 7, scope = scope(SyncStrategy.NEVER, offlineLists = setOf("l")), reclaimable = { 0L })
+            .estimateCleanup()
+
+        assertEquals(1, estimate.retiredCopies)
+        assertEquals(1, estimate.outOfScopeCopies)
+        assertEquals(6L, estimate.outOfScopeBytes)
+        assertEquals("efghij", row("out").content)
+        db.close()
+    }
 
     @Test
     fun `under the storage cap nothing is evicted`() = runBlocking {

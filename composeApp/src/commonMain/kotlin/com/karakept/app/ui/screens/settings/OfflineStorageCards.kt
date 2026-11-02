@@ -381,6 +381,12 @@ internal fun CleanupNowCard(
                             estimate.retiredBytes
                         )
                     }
+                    if (estimate.outOfScopeCopies > 0) {
+                        EstimateRow(
+                            "${copies(estimate.outOfScopeCopies)} no longer set to sync offline",
+                            estimate.outOfScopeBytes
+                        )
+                    }
                     if (storageCapMb != null) {
                         EstimateRow(
                             "Over the ${offlineStorageCapLabel(storageCapMb)} limit" +

@@ -264,7 +264,7 @@ interface BookmarkDao {
 
     // Every bookmark holding an offline copy: a stored body, or a downloaded asset.
     @Query(
-        "SELECT localId, remoteId, serverId, isRead, isArchived, lastOpenedAt, createdAt, readOrArchivedAt " +
+        "SELECT localId, remoteId, serverId, isRead, isArchived, lastOpenedAt, createdAt, readOrArchivedAt, listIds " +
             "FROM bookmarks b WHERE hasContent = 1 OR EXISTS (" +
             "SELECT 1 FROM assets a WHERE a.bookmarkRemoteId = b.remoteId " +
             "AND a.serverId = b.serverId AND a.localPath IS NOT NULL)"
@@ -276,6 +276,11 @@ interface BookmarkDao {
             "WHERE localId IN (:localIds)"
     )
     suspend fun evictForStorageCap(localIds: List<Long>, now: Long)
+
+    // Not marked evicted: sync no longer covers these, and should it cover them again it may
+    // download them again.
+    @Query("UPDATE bookmarks SET content = NULL, hasContent = 0 WHERE localId IN (:localIds)")
+    suspend fun evictOutOfScope(localIds: List<Long>)
 
     // Keyset-paged so a library of stored articles is never held in memory at once.
     @Query(
