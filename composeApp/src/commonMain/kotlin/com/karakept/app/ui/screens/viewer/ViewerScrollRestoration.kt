@@ -10,7 +10,6 @@ import androidx.compose.runtime.setValue
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.utils.blankBelowContent
 import com.karakept.app.utils.AppLogger
-import com.karakept.app.ui.screens.BookmarkLoadingState
 import kotlinx.coroutines.delay
 
 /**

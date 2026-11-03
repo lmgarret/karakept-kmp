@@ -39,8 +39,6 @@ import com.karakept.app.ui.components.WebModeBadge
 import com.fleeksoft.ksoup.nodes.Document
 import com.karakept.app.ui.components.reader.SearchMatch
 import com.karakept.app.ui.icons.AppIcons
-import com.karakept.app.ui.screens.BookmarkLoadingState
-
 @Composable
 internal fun ContentBodySection(
     content: String?,

@@ -9,8 +9,6 @@ import com.karakept.app.data.model.ReaderFontFamily
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.karakept.app.data.local.entity.AssetEntity
-import com.karakept.app.ui.screens.BookmarkLoadingState
-import com.karakept.app.ui.screens.BookmarkViewerScreenModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 

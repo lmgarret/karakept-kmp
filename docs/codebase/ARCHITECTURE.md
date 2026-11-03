@@ -217,7 +217,7 @@ current view, rebuilt on every write, to answer these.
   - Initialize the Nav3 `NavDisplay` host (back stack + entry decorators + Shared Axis Z / predictive-back transitions)
 
 **MainScreen / MainScreenModel:**
-- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreen.kt`
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreen.kt`
 - Triggers: After login/onboarding, when servers exist
 - Responsibilities:
   - Display list of bookmarks with filters, search, sorting
@@ -228,7 +228,7 @@ current view, rebuilt on every write, to answer these.
   - Route to BookmarkViewerScreen for detail view
 
 **BookmarkViewerScreen / BookmarkViewerScreenModel:**
-- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreen.kt`
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreen.kt`
 - Triggers: User taps bookmark from MainScreen or via deep link
 - Responsibilities:
   - Render full bookmark details with hero image, HTML content, highlights

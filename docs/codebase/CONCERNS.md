@@ -11,8 +11,8 @@
   - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt` (1 occurrence)
   - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/ListRepository.kt` (3 occurrences)
   - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/HighlightRepository.kt` (1 occurrence)
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreenModel.kt` (4 occurrences)
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreenModel.kt` (2 occurrences)
+  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreenModel.kt` (4 occurrences)
+  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreenModel.kt` (2 occurrences)
   - `composeApp/src/androidMain/kotlin/com/karakept/app/ui/components/HtmlRenderer.android.kt` (2 occurrences)
   - Platform-specific files also affected
 - Impact: Silent failures during sync, data operations, or rendering can leave the app in inconsistent state without user feedback or developer visibility
@@ -29,14 +29,14 @@
 **Non-null assertion operators (!!)**
 - Issue: 20 instances of `!!` used throughout the codebase
 - Files with problematic patterns:
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreen.kt` (4 occurrences at lines 711-712, 779, 990)
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreen.kt` (6 occurrences at lines 1122-1131)
+  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreen.kt` (4 occurrences at lines 711-712, 779, 990)
+  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreen.kt` (6 occurrences at lines 1122-1131)
   - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/settings/CustomSwipeActionsScreen.kt` (2 occurrences)
   - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/settings/LayoutsScreen.kt` (2 occurrences)
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/ReaderAppearanceScreen.kt` (1 occurrence)
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/ShareBookmarkScreen.kt` (1 occurrence)
+  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/settings/ReaderAppearanceScreen.kt` (1 occurrence)
+  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/share/ShareBookmarkScreen.kt` (1 occurrence)
   - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/ViewerDialogs.kt` (1 occurrence)
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/OnboardingScreen.kt` (1 occurrence)
+  - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/onboarding/OnboardingScreen.kt` (1 occurrence)
 - Impact: Runtime crashes if guard conditions fail (e.g., accessing `selectedBookmarkForActions!!` when null)
 - Fix approach: Use `?.let {}`, `if (x != null)` guards, or sealed state classes. Replace state patterns with exhaustive types. Test edge cases where state assumptions fail.
 
@@ -44,7 +44,7 @@
 
 **Complex multi-coroutine initialization in MainScreenModel:**
 - Issue: Sequential startup coroutine explicitly designed to eliminate race conditions (line 247), indicating prior race condition issues
-- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreenModel.kt` (lines 247-287)
+- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreenModel.kt` (lines 247-287)
 - Details: Bootstrap steps:
   1. Read persisted default filter (combine read)
   2. Wait for server
@@ -93,9 +93,9 @@
 ## Code Complexity & Maintainability
 
 **Very large files (over 1000 lines):**
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreen.kt` (1311 lines) - Main screen composable
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreenModel.kt` (1034 lines) - State management for main screen
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreen.kt` (1030 lines) - Viewer screen composable
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreen.kt` (1311 lines) - Main screen composable
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreenModel.kt` (1034 lines) - State management for main screen
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreen.kt` (1030 lines) - Viewer screen composable
 - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt` (999 lines) - Offline-first action queueing
 - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkRepository.kt` (964 lines) - Bookmark CRUD and sync
 - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/SettingsRepository.kt` (988 lines) - Settings persistence
@@ -120,7 +120,7 @@
 
 **Viewer screen Voyager key pattern:**
 - Issue: Each bookmark needs unique Voyager key to prevent screen model reuse
-- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreen.kt` (lines 76-79)
+- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreen.kt` (lines 76-79)
 - Details: Without unique key per bookmark ID, navigating between viewers without popping reuses stale ScreenModel, leaving screen blank
 - Impact: MITIGATED but indicates fragility of Voyager state management
 - Fix approach: Document this pattern clearly. Consider wrapper ViewModel that ensures screen model lifecycle matches navigation.
@@ -164,7 +164,7 @@
 
 **Large list rendering without virtualization optimization:**
 - Issue: Pagination is implemented (pageSize = 20, line 70 of MainScreenModel) but UI may render all accumulated bookmarks
-- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreenModel.kt`
+- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreenModel.kt`
 - Impact: Large bookmark collections (1000+) could cause UI jank during scroll or filter changes
 - Fix approach: Verify LazyColumn is used throughout. Add benchmarks for 1000+ bookmark rendering. Profile memory usage at scale.
 
@@ -200,7 +200,7 @@
 
 **Reading progress race between UI and sync:**
 - Issue: Comment at BookmarkViewerScreenModel line 314 mentions "prevents race where UI sees serverProgressChecked=true"
-- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreenModel.kt`
+- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreenModel.kt`
 - Impact: Reading progress could be lost if UI state and server state diverge during sync
 - Fix approach: Add unit test covering rapid UI changes followed by network sync. Verify `serverProgressChecked` flag prevents duplicate syncs.
 

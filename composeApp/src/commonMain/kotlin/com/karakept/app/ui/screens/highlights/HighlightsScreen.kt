@@ -1,0 +1,170 @@
+package com.karakept.app.ui.screens.highlights
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.icons.AppIcons
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import org.koin.compose.viewmodel.koinViewModel
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
+import com.karakept.app.ui.components.BusyIndicator
+import com.karakept.app.ui.components.HighlightCard
+import com.karakept.app.ui.components.RefreshableBox
+import com.karakept.app.ui.theme.LocalEinkMode
+import kotlinx.coroutines.launch
+import com.karakept.app.ui.screens.viewer.BookmarkViewerScreen
+
+@Serializable
+@SerialName("com.karakept.app.ui.screens.HighlightsScreen")
+class HighlightsScreen : NavKey {
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun Content() {
+        val navigator = LocalNavigator.currentOrThrow
+        val screenModel = koinViewModel<HighlightsScreenModel>()
+        val highlights by screenModel.highlights.collectAsState()
+        val isSyncing by screenModel.isSyncing.collectAsState()
+        val isLoadingMore by screenModel.isLoadingMore.collectAsState()
+        val hasMoreItems by screenModel.hasMoreItems.collectAsState()
+        val scope = rememberCoroutineScope()
+        val einkMode = LocalEinkMode.current
+
+        val listState = remember { LazyListState() }
+
+        // Sync highlights when screen opens
+        LaunchedEffect(Unit) {
+            screenModel.syncHighlights()
+        }
+
+        // Detect when scrolled near end
+        LaunchedEffect(listState) {
+            snapshotFlow { listState.layoutInfo }
+                .collect { layoutInfo ->
+                    val totalItems = layoutInfo.totalItemsCount
+                    val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
+                    if (lastVisibleItem != null && totalItems > 0) {
+                        val threshold = totalItems - 5
+                        if (lastVisibleItem.index >= threshold && hasMoreItems && !isLoadingMore) {
+                            screenModel.loadNextPage()
+                        }
+                    }
+                }
+        }
+
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("All Highlights") },
+                    navigationIcon = {
+                        IconButton(onClick = { navigator.pop() }) {
+                            Icon(AppIcons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
+                        // The pull gesture is off in e-ink mode; this replaces it.
+                        if (einkMode.enabled) {
+                            IconButton(
+                                onClick = { screenModel.syncHighlights() },
+                                enabled = !isSyncing
+                            ) {
+                                Icon(AppIcons.Default.Refresh, contentDescription = "Refresh")
+                            }
+                        }
+                    }
+                )
+            }
+        ) { paddingValues ->
+            RefreshableBox(
+                isRefreshing = isSyncing,
+                onRefresh = { screenModel.syncHighlights() },
+                modifier = Modifier.fillMaxSize().padding(paddingValues)
+            ) {
+                if (highlights.isEmpty() && !isSyncing) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No highlights yet", style = MaterialTheme.typography.bodyLarge)
+                    }
+                } else if (highlights.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        BusyIndicator()
+                    }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(highlights, key = { it.id }) { highlight ->
+                            HighlightCard(
+                                highlight = highlight,
+                                onClick = {
+                                    scope.launch {
+                                        val bookmarkLocalId = screenModel.getBookmarkLocalIdForHighlight(highlight)
+                                        if (bookmarkLocalId != null) {
+                                            navigator.push(BookmarkViewerScreen(bookmarkLocalId, highlight.id))
+                                        }
+                                    }
+                                },
+                                onDelete = { screenModel.deleteHighlight(highlight) }
+                            )
+                        }
+
+                        // Loading indicator at bottom
+                        if (isLoadingMore) {
+                            item(contentType = "loading") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    BusyIndicator()
+                                }
+                            }
+                        }
+
+                        // End of list indicator
+                        if (!hasMoreItems && highlights.isNotEmpty()) {
+                            item(contentType = "end") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No more highlights",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

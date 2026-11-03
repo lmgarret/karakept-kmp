@@ -40,7 +40,6 @@ import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
-import com.karakept.app.ui.screens.SettingsScreenModel
 import kotlinx.coroutines.delay
 
 @Serializable

@@ -43,12 +43,17 @@ karakept-kmp/
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/:**
 - Purpose: Screen-level composables and their ScreenModels (MVVM state holders)
-- Contains: MainScreen, BookmarkViewerScreen, LoginScreen, SettingsScreen, OnboardingScreen, HighlightsScreen, ReaderAppearanceScreen, ShareBookmarkScreen
+- Contains: only feature sub-packages, no files at the root (enforced by `LayerRulesTest`)
 - Key files:
-  - `MainScreenModel.kt` - Primary screen state: server selection, filters, pagination, sync
-  - `BookmarkViewerScreenModel.kt` - Detail view state: highlight management, reader appearance
-  - `SettingsScreenModel.kt` - Settings mutations, list management, backup/restore
-  - `settings/` subdirectory - Nested settings screens (ListManagementScreen, PerListSettingsScreen, LayoutEditorScreen, BackupRestoreScreen)
+  - `main/MainScreenModel.kt` - Primary screen state: server selection, filters, pagination, sync
+  - `viewer/BookmarkViewerScreenModel.kt` - Detail view state: highlight management, reader appearance
+  - `settings/SettingsScreenModel.kt` - Settings mutations, list management, backup/restore
+  - `main/` - MainScreen and its ScreenModel, dialogs, drawer, list content
+  - `viewer/` - BookmarkViewerScreen, its ScreenModel and panels
+  - `onboarding/` - LoginScreen, OnboardingScreen, notification permission prompt
+  - `settings/` - SettingsScreen, ReaderAppearanceScreen, AboutScreen, DevLogsScreen and the nested settings screens (ListManagementScreen, PerListSettingsScreen, LayoutEditorScreen, BackupRestoreScreen)
+  - `highlights/` - HighlightsScreen and its ScreenModel
+  - `share/` - ShareBookmarkScreen, ShareMultipleBookmarksScreen, SaveErrorScreen
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/:**
 - Purpose: Reusable, single-purpose composable building blocks
@@ -146,8 +151,8 @@ karakept-kmp/
 - `composeApp/src/commonMain/kotlin/com/karakept/app/data/remote/RemoteDataSource.kt` - Remote API abstraction
 
 **UI Composition:**
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreen.kt` - Primary app screen
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreen.kt` - Bookmark detail view
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreen.kt` - Primary app screen
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreen.kt` - Bookmark detail view
 - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/theme/Theme.kt` - Material3 theme
 
 **Utilities & Helpers:**
@@ -168,7 +173,7 @@ karakept-kmp/
 - Migrations: `Migration*To*.kt` (Migration1To2.kt, Migration7To8.kt)
 
 **Directories:**
-- Screen directories under `ui/screens/`: flat (LoginScreen.kt, MainScreen.kt) or nested (screens/settings/ListManagementScreen.kt)
+- Screen directories under `ui/screens/`: one sub-package per feature (screens/main/MainScreen.kt, screens/settings/ListManagementScreen.kt); no files at the `ui/screens/` root
 - Component directories: Single-word descriptors (components/reader/, components/ for general)
 - Data layer: Clear domain separation (local/, remote/, repository/, model/)
 
@@ -186,9 +191,9 @@ karakept-kmp/
 ## Where to Add New Code
 
 **New Screen (Feature):**
-- Screen composable: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/[FeatureName]Screen.kt`
-- ScreenModel: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/[FeatureName]ScreenModel.kt`
-- If nested (e.g., settings): Create subdirectory `screens/[category]/`
+- Screen composable: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/[feature]/[FeatureName]Screen.kt`
+- ScreenModel: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/[feature]/[FeatureName]ScreenModel.kt`
+- A new feature gets its own `screens/[feature]/` package; a sub-screen of an existing feature goes in that feature's package
 - Register in DI: Add factory binding to `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt`
 
 **New Reusable Component:**

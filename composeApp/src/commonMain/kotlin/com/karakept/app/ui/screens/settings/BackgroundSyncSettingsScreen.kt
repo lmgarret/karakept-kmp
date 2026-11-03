@@ -39,8 +39,6 @@ import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
-import com.karakept.app.ui.screens.SettingsScreenModel
-
 private val FREQUENCY_OPTIONS = listOf(
     15 to "Every 15 minutes",
     30 to "Every 30 minutes",

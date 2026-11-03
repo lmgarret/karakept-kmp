@@ -28,15 +28,15 @@ import com.karakept.app.data.repository.OfflineCacheRepository
 import com.karakept.app.data.repository.resolveOfflineScope
 import com.karakept.app.data.repository.toHierarchyNode
 import com.karakept.app.services.BackgroundSyncOrchestrator
-import com.karakept.app.ui.screens.LoginScreenModel
-import com.karakept.app.ui.screens.OnboardingScreenModel
-import com.karakept.app.ui.screens.MainScreenModel
-import com.karakept.app.ui.screens.BookmarkViewerScreenModel
-import com.karakept.app.ui.screens.ReaderAppearanceScreenModel
-import com.karakept.app.ui.screens.SettingsScreenModel
+import com.karakept.app.ui.screens.onboarding.LoginScreenModel
+import com.karakept.app.ui.screens.onboarding.OnboardingScreenModel
+import com.karakept.app.ui.screens.main.MainScreenModel
+import com.karakept.app.ui.screens.viewer.BookmarkViewerScreenModel
+import com.karakept.app.ui.screens.settings.ReaderAppearanceScreenModel
+import com.karakept.app.ui.screens.settings.SettingsScreenModel
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
-import com.karakept.app.ui.screens.HighlightsScreenModel
+import com.karakept.app.ui.screens.highlights.HighlightsScreenModel
 import kotlinx.coroutines.flow.first
 
 val appModule = module {
@@ -152,7 +152,7 @@ val appModule = module {
     viewModel { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { SettingsScreenModel(get(), get(), get(), get(), get()) }
     viewModel { HighlightsScreenModel(get(), get(), get(), get()) }
-    viewModel { com.karakept.app.ui.screens.SaveErrorScreenModel(get()) }
+    viewModel { com.karakept.app.ui.screens.share.SaveErrorScreenModel(get()) }
     viewModel { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }
     viewModel { params -> com.karakept.app.ui.screens.settings.PerListSettingsScreenModel(params.get(), get()) }
     viewModel { ReaderAppearanceScreenModel(get()) }

@@ -32,7 +32,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 **Key patterns:**
 - **ScreenModel** = an `androidx.lifecycle.ViewModel` subclass (named `*ScreenModel` by convention), scoped per Nav3 back-stack entry via `rememberViewModelStoreNavEntryDecorator`, injected with `koinViewModel`.
-- **Navigation 3**: the back stack is a developer-owned `NavBackStack` of `@Serializable` `NavKey`s, rendered by `NavDisplay`. Each screen *is* a `NavKey` with a `Content()` composable; routing goes through `AppNavigator`/`LocalNavigator` (`ui/navigation/`). Predictive back (Android 14+) is wired via `NavDisplay`'s `predictivePopTransitionSpec`.
+- **Navigation 3**: the back stack is a developer-owned `NavBackStack` of `@Serializable` `NavKey`s, rendered by `NavDisplay`. Each screen *is* a `NavKey` with a `Content()` composable; routing goes through `AppNavigator`/`LocalNavigator` (`ui/navigation/`). Predictive back (Android 14+) is wired via `NavDisplay`'s `predictivePopTransitionSpec`. A `NavKey` that is ever moved to another package keeps its old serial name with `@SerialName("<old fq name>")` (`NavKeySerialNamesTest` pins the ones that moved), since the name is what a saved back stack is restored by.
 - **Repository pattern**: each domain concept (`BookmarkRepository`, `ListRepository`, etc.) is the single source of truth.
 - **Offline-first**: mutations are queued in `PendingActionDao` and synced on reconnect.
 - **Layer rules** are enforced by `LayerRulesTest` (`composeApp/src/desktopTest/.../architecture/`); pre-existing offenders are listed in its `KNOWN_VIOLATIONS`, which only shrinks.
@@ -43,7 +43,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 | Layer | Path |
 |---|---|
-| UI screens & ScreenModels | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/` |
+| UI screens & ScreenModels | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/<feature>/` (`main`, `viewer`, `onboarding`, `settings`, `highlights`, `share`) |
 | Reusable UI components | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/` |
 | Theme (MD3 colors, typography) | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/theme/` |
 | Domain logic | `composeApp/src/commonMain/kotlin/com/karakept/app/domain/` |
@@ -150,7 +150,7 @@ knowing before touching any of it:
 
 | New thing | Where |
 |---|---|
-| New screen | `ui/screens/[Feature]Screen.kt` (a `@Serializable` `NavKey` with `Content()`) + `[Feature]ScreenModel.kt`; register `viewModel { }` in `AppModule.kt`, add an `entry<…>` in `appEntryProvider()` and a `subclass(…)` in `navKeySerializersModule` |
+| New screen | `ui/screens/[feature]/[Feature]Screen.kt` (a `@Serializable` `NavKey` with `Content()`) + `[Feature]ScreenModel.kt`; register `viewModel { }` in `AppModule.kt`, add an `entry<…>` in `appEntryProvider()` and a `subclass(…)` in `navKeySerializersModule` |
 | New reusable component | `ui/components/[Component].kt` |
 | New repository | `data/repository/[Domain]Repository.kt`, add `single()` to `AppModule.kt` |
 | New DB entity | `data/local/entity/`, new DAO, update `AppDatabase.kt`, add migration, register in builders |

@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
 import com.karakept.app.ui.icons.AppIcons
-import com.karakept.app.ui.screens.AiBatchProgress
 import com.karakept.app.ui.components.OfflineModeBadge
 import com.karakept.app.ui.components.einkOutlineBorder
 import com.karakept.app.ui.components.shouldShowRefreshButton

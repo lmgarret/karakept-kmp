@@ -14,8 +14,6 @@ import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.ui.input.PageTurnDispatcher
-import com.karakept.app.ui.screens.MainScreenModel
-import com.karakept.app.ui.screens.executeScrollAction
 import org.koin.compose.koinInject
 
 /**

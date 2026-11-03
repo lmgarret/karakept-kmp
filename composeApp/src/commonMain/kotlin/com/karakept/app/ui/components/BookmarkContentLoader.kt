@@ -20,7 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import com.karakept.app.ui.screens.BookmarkLoadingState
+import com.karakept.app.ui.screens.viewer.BookmarkLoadingState
 import com.karakept.app.ui.theme.LocalEinkMode
 
 /**

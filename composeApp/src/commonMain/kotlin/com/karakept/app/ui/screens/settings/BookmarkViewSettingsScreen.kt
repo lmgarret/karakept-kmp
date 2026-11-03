@@ -35,8 +35,6 @@ import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ViewerMode
-import com.karakept.app.ui.screens.ReaderAppearanceScreen
-import com.karakept.app.ui.screens.SettingsScreenModel
 import getPlatform
 
 @Serializable

@@ -43,8 +43,6 @@ import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.AccentColor
 import com.karakept.app.data.model.ThemeMode
-import com.karakept.app.ui.screens.SettingsScreenModel
-
 @Serializable
 class ThemeSettingsScreen : NavKey {
     @Composable

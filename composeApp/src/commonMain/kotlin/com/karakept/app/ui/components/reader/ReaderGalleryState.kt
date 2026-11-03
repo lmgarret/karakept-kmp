@@ -109,7 +109,7 @@ internal class GalleryViewerState {
     }
 }
 
-/** Provided by [com.karakept.app.ui.screens.BookmarkViewerContent], consumed by [com.karakept.app.ui.components.reader]'s image renderer to open the viewer. */
+/** Provided by [com.karakept.app.ui.screens.viewer.BookmarkViewerContent], consumed by [com.karakept.app.ui.components.reader]'s image renderer to open the viewer. */
 internal val LocalGalleryViewerState = staticCompositionLocalOf<GalleryViewerState?> { null }
 
 /**

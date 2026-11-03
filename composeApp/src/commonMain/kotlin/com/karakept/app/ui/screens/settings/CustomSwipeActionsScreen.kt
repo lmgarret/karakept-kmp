@@ -57,7 +57,6 @@ import com.karakept.app.ui.components.EinkAwareFab
 import com.karakept.app.ui.components.TagChip
 import com.karakept.app.ui.components.TagEditorDialog
 import com.karakept.app.ui.components.einkModalBorder
-import com.karakept.app.ui.screens.SettingsScreenModel
 import com.karakept.app.domain.ListHierarchyUtils
 import com.karakept.api.model.KarakeepList
 import androidx.compose.foundation.lazy.LazyColumn
