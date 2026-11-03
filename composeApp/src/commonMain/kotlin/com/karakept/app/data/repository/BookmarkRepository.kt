@@ -25,6 +25,7 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.domain.OfflineRetention
+import com.karakept.app.data.local.entity.isRetired
 import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppDispatchers

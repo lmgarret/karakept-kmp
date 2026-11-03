@@ -1,7 +1,5 @@
 package com.karakept.app.data.model
 
-import com.karakept.app.data.local.entity.BookmarkEntity
-
 /**
  * A row's position in a paged query's sort order, named by its sort keys rather than by
  * counting rows before it.
@@ -24,13 +22,6 @@ data class BookmarkCursor(
     val localId: Long
 ) {
     companion object {
-        fun of(bookmark: BookmarkEntity) = BookmarkCursor(
-            createdAt = bookmark.createdAt,
-            title = bookmark.title,
-            readingTimeMinutes = bookmark.readingTimeMinutes,
-            localId = bookmark.localId
-        )
-
         fun of(bookmark: Bookmark) = BookmarkCursor(
             createdAt = bookmark.createdAt,
             title = bookmark.title,

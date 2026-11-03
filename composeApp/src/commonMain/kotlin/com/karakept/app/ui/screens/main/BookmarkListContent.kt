@@ -664,19 +664,21 @@ internal fun BookmarkListContent(
                         // Construct banner and screenshot URLs if available
                         // The offline copy's file when there is one, so the row works offline and
                         // the image loader does not keep a second copy of it.
-                        val bannerImageUrl = if (serverUrl != null && bookmark.bannerImageAssetId != null) {
+                        val bannerAssetId = bookmark.bannerImageAssetId
+                        val bannerImageUrl = if (serverUrl != null && bannerAssetId != null) {
                             OfflineHeroImages.resolve(
-                                remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bookmark.bannerImageAssetId),
+                                remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bannerAssetId),
                                 directory = FileUtils.getImageCacheDirectory(),
-                                fileName = OfflineHeroImages.bannerFileName(bookmark.bannerImageAssetId)
+                                fileName = OfflineHeroImages.bannerFileName(bannerAssetId)
                             )
                         } else null
 
-                        val screenshotUrl = if (serverUrl != null && bookmark.screenshotAssetId != null) {
+                        val screenshotAssetId = bookmark.screenshotAssetId
+                        val screenshotUrl = if (serverUrl != null && screenshotAssetId != null) {
                             OfflineHeroImages.resolve(
-                                remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bookmark.screenshotAssetId),
+                                remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, screenshotAssetId),
                                 directory = FileUtils.getImageCacheDirectory(),
-                                fileName = OfflineHeroImages.screenshotFileName(bookmark.screenshotAssetId)
+                                fileName = OfflineHeroImages.screenshotFileName(screenshotAssetId)
                             )
                         } else null
 

@@ -51,7 +51,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 | Repositories | `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/` |
 | Local DB (Room entities, DAOs, migrations) | `composeApp/src/commonMain/kotlin/com/karakept/app/data/local/` |
 | Remote API (Ktor, RemoteDataSource) | `composeApp/src/commonMain/kotlin/com/karakept/app/data/remote/` |
-| Domain data models | `composeApp/src/commonMain/kotlin/com/karakept/app/data/model/` |
+| Domain data models | `core/model/src/commonMain/kotlin/com/karakept/app/data/model/` (module `:core:model`) |
 | DI module | `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` |
 | Shared utilities | `composeApp/src/commonMain/kotlin/com/karakept/app/utils/` |
 | Android-specific code | `composeApp/src/androidMain/` |
@@ -72,6 +72,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 | `:composeApp` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Everything — commonMain, desktopMain, **and all of androidMain** (MainActivity, the workers, the manifest, `res/`) |
 | `:androidApp` | `com.android.application` | Nothing but build config: `applicationId`, build types, signing, versioning. **No Kotlin sources.** |
 | `:api-client` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | The OpenAPI-generated client |
+| `:core:model` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | `data/model`, `OfflineRetention`, `PlatformKeyCodes` — no dependency on any other app code |
 
 AGP 9 refuses to apply `com.android.application` alongside the Kotlin Multiplatform plugin, and
 its replacement (`com.android.kotlin.multiplatform.library`) is library-only. So the KMP module
@@ -95,6 +96,14 @@ knowing before touching any of it:
   cannot share a namespace, and this is the one components resolve against); `:androidApp` is
   `com.karakept.app.android`; `applicationId` stays `com.karakept.app`.
 - **The Android suite runs once**, as `:composeApp:testAndroidHostTest` — a KMP library has a
+- **Split modules keep their packages.** `:core:model` (#440) still declares
+  `com.karakept.app.data.model`, so moving code between modules changes no import and no
+  `NavKey` serial name. Its Android namespace is `com.karakept.core.model` — namespaces must be
+  unique, packages need not be. It applies the Compose compiler plugin with no composables in
+  it, so its data classes keep their inferred stability; a module without the plugin exports
+  every class as unstable, and composables taking one stop skipping. Code in a split module is
+  reached across a module boundary, so `internal` no longer reaches it and the compiler stops
+  smart-casting its `val`s — bind to a local first.
   single variant, so the `androidComponents { beforeVariants … }` block that used to switch off
   the release/devRelease copies is gone with the build types.
 

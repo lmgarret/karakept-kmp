@@ -543,10 +543,12 @@ fun BookmarkViewerContent(
 
                 val servers by serverRepository.servers.collectAsState(initial = emptyList())
                 val server = servers.firstOrNull()
-                val bannerImageUrl = if (server != null && state.bookmark.bannerImageAssetId != null)
-                    com.karakept.app.utils.AssetUrlUtils.getAssetUrl(server.url, state.bookmark.bannerImageAssetId) else null
-                val screenshotUrl = if (server != null && state.bookmark.screenshotAssetId != null)
-                    com.karakept.app.utils.AssetUrlUtils.getAssetUrl(server.url, state.bookmark.screenshotAssetId) else null
+                val bannerAssetId = state.bookmark.bannerImageAssetId
+                val bannerImageUrl = if (server != null && bannerAssetId != null)
+                    com.karakept.app.utils.AssetUrlUtils.getAssetUrl(server.url, bannerAssetId) else null
+                val screenshotAssetId = state.bookmark.screenshotAssetId
+                val screenshotUrl = if (server != null && screenshotAssetId != null)
+                    com.karakept.app.utils.AssetUrlUtils.getAssetUrl(server.url, screenshotAssetId) else null
                 val bannerImageLocalPath by screenModel.bannerImageLocalPath.collectAsState()
                 val screenshotLocalPath by screenModel.screenshotLocalPath.collectAsState()
 
@@ -667,7 +669,7 @@ fun BookmarkViewerContent(
                             item(key = "summary_card") {
                                 Box(modifier = contentItemModifier) {
                                     SummaryCard(
-                                        summary = state.bookmark.summary,
+                                        summary = state.bookmark.summary.orEmpty(),
                                         htmlBackgroundColor = htmlBackgroundColor,
                                         htmlTextColor = htmlTextColor,
                                         htmlFontSize = htmlFontSize,

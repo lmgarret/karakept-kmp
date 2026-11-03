@@ -145,6 +145,7 @@ kotlin {
             dependencies {
                 // API Client (generated from OpenAPI spec)
                 implementation(project(":api-client"))
+                implementation(project(":core:model"))
                 
                 implementation(libs.compose.runtime)
                 implementation(libs.compose.foundation)

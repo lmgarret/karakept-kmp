@@ -1,6 +1,5 @@
 package com.karakept.app.domain
 
-import com.karakept.app.data.local.entity.BookmarkEntity
 import kotlin.math.abs
 
 /**
@@ -9,7 +8,8 @@ import kotlin.math.abs
  * A retention period is a number of days, null meaning retention is off. [isRetired] mirrors
  * [com.karakept.app.data.local.entity.RETIRED_PREDICATE]: cleanup evicts through the SQL, while
  * sync and the reader ask this for a row they already hold, so that content cleanup dropped is
- * not downloaded straight back. [skipsContentSync] adds the storage cap's own evictions to that.
+ * not downloaded straight back. The `BookmarkEntity` overloads live beside the entity
+ * (`BookmarkRetention.kt`), so this object stays free of the data layer.
  */
 object OfflineRetention {
     const val DAY_MILLIS = 24L * 60 * 60 * 1000
@@ -44,14 +44,7 @@ object OfflineRetention {
 
     const val MEGABYTE = 1024L * 1024
 
-    /** Whether sync should leave this bookmark's offline copy alone rather than download it. */
-    fun skipsContentSync(bookmark: BookmarkEntity, retentionDays: Int?, now: Long): Boolean =
-        bookmark.offlineEvictedAt != null || isRetired(bookmark, retentionDays, now)
-
     fun cutoff(retentionDays: Int, now: Long): Long = now - retentionDays * DAY_MILLIS
-
-    fun isRetired(bookmark: BookmarkEntity, retentionDays: Int?, now: Long): Boolean =
-        isRetired(bookmark.isRead, bookmark.isArchived, bookmark.readOrArchivedAt, retentionDays, now)
 
     fun isRetired(
         isRead: Boolean,

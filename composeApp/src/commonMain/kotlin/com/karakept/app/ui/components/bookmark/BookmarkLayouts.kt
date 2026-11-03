@@ -204,7 +204,7 @@ fun BookmarkCardLayout(
                         }
                         if (showDescription && !bookmark.description.isNullOrBlank()) {
                             Text(
-                                text = bookmark.description,
+                                text = bookmark.description.orEmpty(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 2,
@@ -386,7 +386,7 @@ fun BookmarkListLayout(
                 val metadataContent: @Composable () -> Unit = {
                     if (showDescription && !bookmark.description.isNullOrBlank() && descriptionPosition == DescriptionPosition.ABOVE_METADATA) {
                         Text(
-                            text = bookmark.description,
+                            text = bookmark.description.orEmpty(),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,
@@ -548,7 +548,7 @@ fun BookmarkListLayout(
                         }
                         if (showDescription && !bookmark.description.isNullOrBlank() && descriptionPosition == DescriptionPosition.BELOW_TITLE) {
                             Text(
-                                text = bookmark.description,
+                                text = bookmark.description.orEmpty(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = effectiveDescriptionLines,

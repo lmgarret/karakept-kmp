@@ -12,6 +12,7 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.domain.OfflineRetention
+import com.karakept.app.data.local.entity.skipsContentSync
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.ReadingTimeCalculator
 import kotlin.time.Instant

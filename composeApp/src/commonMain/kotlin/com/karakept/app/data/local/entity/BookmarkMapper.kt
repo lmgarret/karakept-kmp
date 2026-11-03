@@ -1,6 +1,7 @@
 package com.karakept.app.data.local.entity
 
 import com.karakept.app.data.model.Bookmark
+import com.karakept.app.data.model.BookmarkCursor
 
 // A field-by-field copy: strings, the article body included, are shared by reference.
 internal fun BookmarkEntity.toBookmark(): Bookmark = Bookmark(
@@ -31,3 +32,10 @@ internal fun BookmarkEntity.toBookmark(): Bookmark = Bookmark(
 )
 
 internal fun List<BookmarkEntity>.toBookmarks(): List<Bookmark> = map { it.toBookmark() }
+
+fun BookmarkCursor.Companion.of(bookmark: BookmarkEntity) = BookmarkCursor(
+    createdAt = bookmark.createdAt,
+    title = bookmark.title,
+    readingTimeMinutes = bookmark.readingTimeMinutes,
+    localId = bookmark.localId
+)

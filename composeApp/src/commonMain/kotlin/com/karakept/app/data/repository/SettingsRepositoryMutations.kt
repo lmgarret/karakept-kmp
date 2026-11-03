@@ -246,15 +246,17 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
         prefs[PER_LIST_SETTINGS_KEY] = settingsJson.encodeToString<Map<String, ListSettings>>(s.perListSettings)
         // Restore default list
         prefs[DEFAULT_LIST_TYPE_KEY] = s.defaultListType
-        if (s.defaultListId != null) {
-            prefs[DEFAULT_LIST_ID_KEY] = s.defaultListId
+        val defaultListId = s.defaultListId
+        if (defaultListId != null) {
+            prefs[DEFAULT_LIST_ID_KEY] = defaultListId
         } else {
             prefs.remove(DEFAULT_LIST_ID_KEY)
         }
         // Restore custom layouts
         prefs[LAYOUTS_KEY] = s.customLayoutsJson
-        if (s.defaultLayoutId != null) {
-            prefs[DEFAULT_LAYOUT_ID_KEY] = s.defaultLayoutId
+        val defaultLayoutId = s.defaultLayoutId
+        if (defaultLayoutId != null) {
+            prefs[DEFAULT_LAYOUT_ID_KEY] = defaultLayoutId
         } else {
             prefs.remove(DEFAULT_LAYOUT_ID_KEY)
         }

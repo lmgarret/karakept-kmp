@@ -37,3 +37,4 @@ dependencyResolutionManagement {
 include(":composeApp")
 include(":androidApp")
 include(":api-client")
+include(":core:model")

@@ -6,6 +6,10 @@
 
 ```
 karakept-kmp/
+├── core/model/src/commonMain/kotlin/com/karakept/app/
+│   ├── data/model/                         # Data models (Bookmark, Server, FilterConfig, etc.)
+│   ├── domain/OfflineRetention.kt          # Retention rules the backup model defaults from
+│   └── utils/PlatformKeyCodes.kt           # expect/actual key codes (EinkSettings defaults)
 ├── composeApp/                             # Compose Multiplatform module
 │   ├── src/
 │   │   ├── commonMain/kotlin/com/karakept/app/
@@ -21,8 +25,7 @@ karakept-kmp/
 │   │   │   │   ├── cache/                  # Image/asset disk caches
 │   │   │   │   ├── local/                  # Room database, DAOs, entities, migrations
 │   │   │   │   ├── remote/                 # Ktor client, RemoteDataSource, API clients
-│   │   │   │   ├── repository/             # Data repositories (abstraction layer)
-│   │   │   │   └── model/                  # Data models (Bookmark, Server, FilterConfig, etc.)
+│   │   │   │   └── repository/             # Data repositories (abstraction layer)
 │   │   │   ├── domain/                     # Business logic and domain abstractions
 │   │   │   │   ├── action/                 # BookmarkActionController, BookmarkActionEvent
 │   │   │   │   ├── BookmarkFilterUtils.kt  # Filtering logic
@@ -126,7 +129,7 @@ karakept-kmp/
 - Purpose: Shared, platform-agnostic utilities
 - Contains: DateUtils.kt, FileUtils.kt, AssetUrlUtils.kt, FaviconUtils.kt, ShareUtils.kt, HapticUtils.kt, ReadingTimeCalculator.kt, BackupCrypto.kt
 
-**composeApp/src/commonMain/kotlin/com/karakept/app/data/model/:**
+**core/model/src/commonMain/kotlin/com/karakept/app/data/model/** (`:core:model`):
 - Purpose: Domain data models and enums
 - Contains: Bookmark.kt, Server.kt, FilterConfig.kt, SyncStrategy.kt, ThemeMode.kt, AccentColor.kt, ViewerMode.kt, BookmarkLayout.kt, and more than 15 other value objects
 - Pattern: Serializable, immutable data classes

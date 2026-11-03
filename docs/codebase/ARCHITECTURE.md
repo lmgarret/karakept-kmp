@@ -57,6 +57,10 @@
 - `ui/screens/` holds only sub-packages, no files at its root (`screens-root`).
 - Every `expect` in `commonMain` has an `.android` and a `.jvm`/`.desktop` actual in the same package (`expect-actual`).
 
+The first Gradle module split (#440) moved `data/model` into `:core:model`, which depends on
+nothing but `:api-client`: the compiler, not `LayerRulesTest`, now keeps the models free of the
+data, domain and UI layers.
+
 Offenders that predate a rule sit in `LayerRulesTest.KNOWN_VIOLATIONS`; the rule fails on a new offender and on a stale entry, so a fix must delete its entry. `AppModuleGraphTest` resolves every ScreenModel and repository from `appModule` to catch wiring gaps.
 
 ## Data Flow
