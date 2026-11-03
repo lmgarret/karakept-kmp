@@ -1,6 +1,6 @@
 package com.karakept.app.ui.screens.viewer
 
-import com.karakept.app.data.local.entity.AssetEntity
+import com.karakept.app.data.model.BookmarkAsset
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.ViewerMode
@@ -56,8 +56,8 @@ internal class ViewerAssetsController(
     val archiveAvailable: StateFlow<Boolean> = _archiveAvailable.asStateFlow()
 
     // Full list of asset entities for this bookmark (server metadata + local cache status)
-    private val _assets = MutableStateFlow<List<AssetEntity>>(emptyList())
-    val assets: StateFlow<List<AssetEntity>> = _assets.asStateFlow()
+    private val _assets = MutableStateFlow<List<BookmarkAsset>>(emptyList())
+    val assets: StateFlow<List<BookmarkAsset>> = _assets.asStateFlow()
 
     // True while archive is being downloaded for source switching
     private val _isLoadingSource = MutableStateFlow(false)
@@ -193,7 +193,7 @@ internal class ViewerAssetsController(
         _screenshotLocalPath.value = assets.find { it.assetType == "screenshot" }?.localPath
     }
 
-    fun deleteAssetLocal(asset: AssetEntity) {
+    fun deleteAssetLocal(asset: BookmarkAsset) {
         scope.launch {
             try {
                 assetRepository.clearLocalCopy(asset)
@@ -210,7 +210,7 @@ internal class ViewerAssetsController(
      * Delete an asset on the server (not just the local copy). Irreversible — the UI gates
      * this behind a confirmation dialog.
      */
-    fun deleteAssetOnServer(asset: AssetEntity, bookmark: Bookmark) {
+    fun deleteAssetOnServer(asset: BookmarkAsset, bookmark: Bookmark) {
         scope.launch {
             try {
                 val server = serverRepository.servers.first().find { it.id == bookmark.serverId }
@@ -239,7 +239,7 @@ internal class ViewerAssetsController(
      * Downloading by id is also what lets any asset type work here, PDFs included.
      */
     fun downloadOrRefreshAsset(
-        asset: AssetEntity,
+        asset: BookmarkAsset,
         bookmark: Bookmark,
         // True when the download was started by tapping the row rather than by picking
         // "Download a copy" from the menu: finish the job the tap implied.
@@ -298,7 +298,7 @@ internal class ViewerAssetsController(
      * Hands a downloaded asset to whatever app the platform has registered for it — the app
      * has no PDF renderer of its own.
      */
-    fun openAssetExternally(asset: AssetEntity) {
+    fun openAssetExternally(asset: BookmarkAsset) {
         val localPath = asset.localPath
         if (localPath == null) {
             scope.launch { snackbarManager.showSnackbar("Download it first") }

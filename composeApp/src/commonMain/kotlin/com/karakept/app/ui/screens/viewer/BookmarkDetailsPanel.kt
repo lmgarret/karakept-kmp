@@ -62,7 +62,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.karakept.app.data.local.entity.AssetEntity
+import com.karakept.app.data.model.BookmarkAsset
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.DateDisplayMode
@@ -92,7 +92,7 @@ import kotlinx.datetime.toLocalDateTime
 internal fun BookmarkDetailsPanel(
     visible: Boolean,
     bookmark: Bookmark?,
-    assets: List<AssetEntity> = emptyList(),
+    assets: List<BookmarkAsset> = emptyList(),
     selectedSource: ContentSource = ContentSource.EXTRACTED,
     serverCrawlInFlight: ServerCrawlAction? = null,
     aiActionInFlight: AiAction? = null,
@@ -101,24 +101,24 @@ internal fun BookmarkDetailsPanel(
     // Asset id -> download fraction (null fraction = size unknown). Absent = not downloading.
     assetDownloads: Map<String, Float?> = emptyMap(),
     onSourceSelected: (ContentSource) -> Unit = {},
-    onDownloadAsset: (AssetEntity) -> Unit = {},
+    onDownloadAsset: (BookmarkAsset) -> Unit = {},
     // Tap on the row: download and then use it (select as source / open externally).
-    onDownloadAndUseAsset: (AssetEntity) -> Unit = {},
-    onRefreshAsset: (AssetEntity) -> Unit = {},
-    onOpenAssetExternally: (AssetEntity) -> Unit = {},
-    onDeleteAssetLocal: (AssetEntity) -> Unit = {},
-    onDeleteAssetOnServer: (AssetEntity) -> Unit = {},
+    onDownloadAndUseAsset: (BookmarkAsset) -> Unit = {},
+    onRefreshAsset: (BookmarkAsset) -> Unit = {},
+    onOpenAssetExternally: (BookmarkAsset) -> Unit = {},
+    onDeleteAssetLocal: (BookmarkAsset) -> Unit = {},
+    onDeleteAssetOnServer: (BookmarkAsset) -> Unit = {},
     onRequestServerCrawl: (ServerCrawlAction) -> Unit = {},
     onRunAiAction: (AiAction) -> Unit = {},
     onLinkCopied: () -> Unit = {},
     onOpenLink: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    fun progressFor(asset: AssetEntity): DownloadProgress? =
+    fun progressFor(asset: BookmarkAsset): DownloadProgress? =
         if (assetDownloads.containsKey(asset.id)) DownloadProgress(assetDownloads[asset.id]) else null
 
     // Confirmation gate for the irreversible server-side delete
-    var assetPendingServerDelete by remember { mutableStateOf<AssetEntity?>(null) }
+    var assetPendingServerDelete by remember { mutableStateOf<BookmarkAsset?>(null) }
     val einkMode = LocalEinkMode.current
 
     // Scrim
@@ -667,7 +667,7 @@ private fun ContentSourceRow(
     statusText: String,
     isActive: Boolean,
     canActivate: Boolean,
-    asset: AssetEntity? = null,
+    asset: BookmarkAsset? = null,
     // False for assets that can't be shown in-app and are only opened elsewhere (PDFs).
     canBeContentSource: Boolean = true,
     canOpenExternally: Boolean = false,

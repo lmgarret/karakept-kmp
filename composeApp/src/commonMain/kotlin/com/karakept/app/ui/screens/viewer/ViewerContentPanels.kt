@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
-import com.karakept.app.data.local.entity.AssetEntity
+import com.karakept.app.data.model.BookmarkAsset
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
@@ -44,7 +44,7 @@ fun ViewerContentPanels(
     selectedHighlightText: String?,
     onSelectedHighlightTextChanged: (String?) -> Unit,
     selectedHighlight: Highlight?,
-    assets: List<AssetEntity> = emptyList(),
+    assets: List<BookmarkAsset> = emptyList(),
     showSearch: Boolean = false,
     onShowSearchChanged: (Boolean) -> Unit = {},
     screenModel: BookmarkViewerScreenModel,

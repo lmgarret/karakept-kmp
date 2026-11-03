@@ -1,11 +1,9 @@
 package com.karakept.app.ui.screens.viewer
 
-import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.ApiException
 import com.karakept.app.data.remote.OfflineModeException
-import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.remote.UnsupportedServerActionException
 import com.karakept.app.data.repository.AssetRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
@@ -39,7 +37,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Tests for the reader's AI actions.
@@ -53,10 +50,9 @@ class BookmarkViewerAiActionsTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var assetDao: AssetDao
+    private lateinit var assetRepository: AssetRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var remoteDataSource: RemoteDataSource
     private lateinit var serverRepository: ServerRepository
     private lateinit var bookmarkRepository: BookmarkRepository
     private lateinit var listRepository: ListRepository
@@ -95,10 +91,9 @@ class BookmarkViewerAiActionsTest {
         // statics on their file class rather than as members of the mock.
         mockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositoryAiKt")
 
-        assetDao = mockk(relaxed = true)
+        assetRepository = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         bookmarkActionsRepository = mockk(relaxed = true)
-        remoteDataSource = mockk(relaxed = true)
         serverRepository = mockk(relaxed = true)
         bookmarkRepository = mockk(relaxed = true)
         listRepository = mockk(relaxed = true)
@@ -121,7 +116,7 @@ class BookmarkViewerAiActionsTest {
 
         every { serverRepository.servers } returns flowOf(listOf(testServer))
         every { bookmarkRepository.observeBookmark(any()) } returns flowOf(testBookmark)
-        coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
+        coEvery { assetRepository.assetsFor(any()) } returns emptyList()
         coEvery { bookmarkActionsRepository.summarizeBookmark(any()) } returns "A summary."
         coEvery { bookmarkActionsRepository.requestAiRetag(any()) } returns true
     }
@@ -133,7 +128,7 @@ class BookmarkViewerAiActionsTest {
     }
 
     private fun createScreenModel() = BookmarkViewerScreenModel(
-        assetRepository = AssetRepository(assetDao, remoteDataSource, TestAppDispatchers(testDispatcher)),
+        assetRepository = assetRepository,
         settingsRepository = settingsRepository,
         bookmarkActionsRepository = bookmarkActionsRepository,
         serverRepository = serverRepository,

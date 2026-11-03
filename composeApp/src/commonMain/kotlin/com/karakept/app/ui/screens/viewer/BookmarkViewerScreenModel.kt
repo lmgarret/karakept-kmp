@@ -152,7 +152,7 @@ class BookmarkViewerScreenModel(
     val sourceContentOverride: StateFlow<String?> = assetsController.sourceContentOverride
     val precrawledAssetPath: StateFlow<String?> = assetsController.precrawledAssetPath
     val archiveAvailable: StateFlow<Boolean> = assetsController.archiveAvailable
-    val assets: StateFlow<List<com.karakept.app.data.local.entity.AssetEntity>> = assetsController.assets
+    val assets: StateFlow<List<com.karakept.app.data.model.BookmarkAsset>> = assetsController.assets
     val isLoadingSource: StateFlow<Boolean> = assetsController.isLoadingSource
     val assetDownloads: StateFlow<Map<String, Float?>> = assetsController.assetDownloads
     val bannerImageLocalPath: StateFlow<String?> = assetsController.bannerImageLocalPath
@@ -606,7 +606,7 @@ class BookmarkViewerScreenModel(
 
     fun fetchAndCacheArchive(bookmark: Bookmark) = assetsController.fetchAndCacheArchive(bookmark)
 
-    fun deleteAssetLocal(asset: com.karakept.app.data.local.entity.AssetEntity) =
+    fun deleteAssetLocal(asset: com.karakept.app.data.model.BookmarkAsset) =
         assetsController.deleteAssetLocal(asset)
 
     /**
@@ -614,7 +614,7 @@ class BookmarkViewerScreenModel(
      * this behind a confirmation dialog.
      */
     fun deleteAssetOnServer(
-        asset: com.karakept.app.data.local.entity.AssetEntity,
+        asset: com.karakept.app.data.model.BookmarkAsset,
         bookmark: Bookmark
     ) = assetsController.deleteAssetOnServer(asset, bookmark)
 
@@ -744,7 +744,7 @@ class BookmarkViewerScreenModel(
 
     /** Downloads [asset] and stores the local path against that exact row. */
     fun downloadOrRefreshAsset(
-        asset: com.karakept.app.data.local.entity.AssetEntity,
+        asset: com.karakept.app.data.model.BookmarkAsset,
         bookmark: com.karakept.app.data.model.Bookmark,
         // True when the download was started by tapping the row rather than by picking
         // "Download a copy" from the menu: finish the job the tap implied.
@@ -755,7 +755,7 @@ class BookmarkViewerScreenModel(
      * Hands a downloaded asset to whatever app the platform has registered for it — the app
      * has no PDF renderer of its own.
      */
-    fun openAssetExternally(asset: com.karakept.app.data.local.entity.AssetEntity) =
+    fun openAssetExternally(asset: com.karakept.app.data.model.BookmarkAsset) =
         assetsController.openAssetExternally(asset)
 
     fun loadLists(server: Server) {

@@ -20,6 +20,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.launch
 
 /**
  * The data layer used to start background work on hardcoded real dispatchers (and, in two
@@ -145,6 +148,30 @@ class AppDispatchersInjectionTest : BaseRepositoryTest() {
                 match { it.bookmarkRemoteId == "remote-42" && it.actionType == PendingActionType.UPDATE_READING_PROGRESS }
             )
         }
+    }
+
+    /**
+     * The viewer calls this from onCleared, with viewModelScope already cancelled. The write is
+     * launched on the repository's own scope, so cancelling the caller does not take it down.
+     */
+    @Test
+    fun persistFinalReadingProgress_survivesTheCallersScopeBeingCancelled() = runTest(testDispatcher) {
+        val caller = kotlinx.coroutines.CoroutineScope(testDispatcher + kotlinx.coroutines.Job())
+        caller.launch {
+            actionsRepository.persistFinalReadingProgress(
+                bookmarkLocalId = 9L,
+                bookmarkRemoteId = "remote-44",
+                serverId = null,
+                progress = 0.6f,
+                scrollIndex = 6,
+                scrollOffset = 0
+            )
+        }
+        runCurrent()
+        caller.cancel()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { bookmarkDao.updateReadingProgress(9L, 0.6f, 6, 0) }
     }
 
     /** With no server id there is nothing to sync, but the local write must still land. */

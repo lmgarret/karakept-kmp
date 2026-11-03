@@ -4,6 +4,9 @@ import com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
 import com.karakept.app.data.cache.OfflineHeroImages
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.AssetEntity
+import com.karakept.app.data.local.entity.toAsset
+import com.karakept.app.data.local.entity.toEntity
+import com.karakept.app.data.model.BookmarkAsset
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
@@ -12,7 +15,7 @@ import com.karakept.app.utils.FileUtils
 import kotlinx.coroutines.withContext
 
 /** An asset row stamped with its new `localPath`, and the bytes that were written there. */
-class DownloadedAsset(val asset: AssetEntity, val bytes: ByteArray)
+class DownloadedAsset(val asset: BookmarkAsset, val bytes: ByteArray)
 
 /** Where downloaded asset files live. A seam so tests don't write to the real cache directory. */
 interface AssetFiles {
@@ -35,8 +38,8 @@ class AssetRepository(
     private val appDispatchers: AppDispatchers,
     private val files: AssetFiles = CacheAssetFiles
 ) {
-    suspend fun assetsFor(bookmark: Bookmark): List<AssetEntity> =
-        assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+    suspend fun assetsFor(bookmark: Bookmark): List<BookmarkAsset> =
+        assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId).map { it.toAsset() }
 
     /**
      * Downloads [asset] and stores the local path against that exact row.
@@ -44,7 +47,7 @@ class AssetRepository(
      */
     suspend fun download(
         server: Server,
-        asset: AssetEntity,
+        asset: BookmarkAsset,
         onProgress: (Float?) -> Unit
     ): DownloadedAsset = withContext(appDispatchers.io) {
         asset.localPath?.let { previous ->
@@ -54,17 +57,17 @@ class AssetRepository(
         val bytes = remoteDataSource.downloadAsset(server, asset.id, onProgress)
         val localPath = files.save(cacheFileNameFor(asset.id, asset.assetType), bytes)
         val downloaded = asset.copy(localPath = localPath)
-        assetDao.insertAssets(listOf(downloaded))
+        assetDao.insertAssets(listOf(downloaded.toEntity()))
         DownloadedAsset(downloaded, bytes)
     }
 
-    suspend fun clearLocalCopy(asset: AssetEntity) = withContext(appDispatchers.io) {
+    suspend fun clearLocalCopy(asset: BookmarkAsset) = withContext(appDispatchers.io) {
         asset.localPath?.let { deleteQuietly(it) }
         assetDao.clearLocalPath(asset.id)
     }
 
     /** Deletes [asset] on the server, then locally. A failed detach leaves the local row alone. */
-    suspend fun detachOnServer(server: Server, bookmark: Bookmark, asset: AssetEntity) =
+    suspend fun detachOnServer(server: Server, bookmark: Bookmark, asset: BookmarkAsset) =
         withContext(appDispatchers.io) {
             remoteDataSource.detachAsset(server, bookmark.remoteId, asset.id)
             asset.localPath?.let { deleteQuietly(it) }
@@ -97,7 +100,7 @@ class AssetRepository(
                 localPath = localPath
             )
             assetDao.insertAssets(listOf(entity))
-            DownloadedAsset(entity, bytes)
+            DownloadedAsset(entity.toAsset(), bytes)
         }
 
     private fun deleteQuietly(path: String) {

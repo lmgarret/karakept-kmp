@@ -1,11 +1,9 @@
 package com.karakept.app.ui.screens.viewer
 
-import com.karakept.app.data.local.dao.AssetDao
-import com.karakept.app.data.local.entity.AssetEntity
+import com.karakept.app.data.model.BookmarkAsset
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.ApiException
-import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.remote.UnsupportedServerActionException
 import com.karakept.app.data.repository.AssetRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
@@ -18,7 +16,6 @@ import com.karakept.app.data.repository.requestServerCrawl
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.ServerCrawlAction
-import com.karakept.app.utils.TestAppDispatchers
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -52,10 +49,9 @@ class BookmarkViewerServerActionsTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var assetDao: AssetDao
+    private lateinit var assetRepository: AssetRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var remoteDataSource: RemoteDataSource
     private lateinit var serverRepository: ServerRepository
     private lateinit var bookmarkRepository: BookmarkRepository
     private lateinit var listRepository: ListRepository
@@ -87,7 +83,7 @@ class BookmarkViewerServerActionsTest {
         isRead = false
     )
 
-    private val archiveAsset = AssetEntity(
+    private val archiveAsset = BookmarkAsset(
         id = "asset-1",
         bookmarkRemoteId = "remote-100",
         serverId = "server-1",
@@ -102,10 +98,9 @@ class BookmarkViewerServerActionsTest {
         Dispatchers.setMain(testDispatcher)
         mockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositoryAiKt")
 
-        assetDao = mockk(relaxed = true)
+        assetRepository = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         bookmarkActionsRepository = mockk(relaxed = true)
-        remoteDataSource = mockk(relaxed = true)
         serverRepository = mockk(relaxed = true)
         bookmarkRepository = mockk(relaxed = true)
         listRepository = mockk(relaxed = true)
@@ -128,7 +123,7 @@ class BookmarkViewerServerActionsTest {
 
         every { serverRepository.servers } returns flowOf(listOf(testServer))
         every { bookmarkRepository.observeBookmark(any()) } returns flowOf(testBookmark)
-        coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
+        coEvery { assetRepository.assetsFor(any()) } returns emptyList()
         coEvery { bookmarkActionsRepository.requestServerCrawl(any(), any(), any()) } returns Unit
     }
 
@@ -139,7 +134,7 @@ class BookmarkViewerServerActionsTest {
     }
 
     private fun createScreenModel() = BookmarkViewerScreenModel(
-        assetRepository = AssetRepository(assetDao, remoteDataSource, TestAppDispatchers(testDispatcher)),
+        assetRepository = assetRepository,
         settingsRepository = settingsRepository,
         bookmarkActionsRepository = bookmarkActionsRepository,
         serverRepository = serverRepository,
@@ -253,33 +248,32 @@ class BookmarkViewerServerActionsTest {
     // -----------------------------------------------------------------------
 
     @Test
-    fun `deleting an asset on the server detaches it and drops the local row`() =
+    fun `deleting an asset on the server detaches it`() =
         runTest(testDispatcher) {
             val screenModel = createScreenModel()
 
             screenModel.deleteAssetOnServer(archiveAsset, testBookmark)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { remoteDataSource.detachAsset(testServer, "remote-100", "asset-1") }
-            coVerify(exactly = 1) { assetDao.deleteAsset("asset-1") }
+            // Dropping the local row after the detach is AssetRepository's job (AssetRepositoryTest).
+            coVerify(exactly = 1) { assetRepository.detachOnServer(testServer, testBookmark, archiveAsset) }
         }
 
     @Test
-    fun `a failed server delete keeps the local asset row`() = runTest(testDispatcher) {
-        coEvery { remoteDataSource.detachAsset(any(), any(), any()) } throws ApiException("HTTP 500")
+    fun `a failed server delete is reported`() = runTest(testDispatcher) {
+        coEvery { assetRepository.detachOnServer(any(), any(), any()) } throws ApiException("HTTP 500")
         val screenModel = createScreenModel()
 
         screenModel.deleteAssetOnServer(archiveAsset, testBookmark)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { assetDao.deleteAsset(any()) }
         coVerify(exactly = 1) { snackbarManager.showSnackbar("Couldn't delete from server") }
     }
 
     @Test
     fun `deleting the displayed archive falls back to extracted content`() = runTest(testDispatcher) {
         // Asset list is empty after the delete, so nothing is left to display as the archive.
-        coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
+        coEvery { assetRepository.assetsFor(any()) } returns emptyList()
         val screenModel = createScreenModel()
         screenModel.setContentSource(
             com.karakept.app.data.model.ContentSource.FULL_PAGE_ARCHIVE,
@@ -303,7 +297,7 @@ class BookmarkViewerServerActionsTest {
     @Test
     fun `preserve archive keeps re-syncing until the asset shows up`() = runTest(testDispatcher) {
         // Server finishes the crawl on the third poll.
-        coEvery { assetDao.getAssetsForBookmark(any(), any()) } returnsMany listOf(
+        coEvery { assetRepository.assetsFor(any()) } returnsMany listOf(
             emptyList(),
             emptyList(),
             listOf(archiveAsset)
@@ -322,7 +316,7 @@ class BookmarkViewerServerActionsTest {
     @Test
     fun `preserve archive says so when the server is still working after the budget`() =
         runTest(testDispatcher) {
-            coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
+            coEvery { assetRepository.assetsFor(any()) } returns emptyList()
             val screenModel = createScreenModel()
 
             screenModel.requestServerCrawl(testBookmark, ServerCrawlAction.PRESERVE_ARCHIVE)
@@ -336,7 +330,7 @@ class BookmarkViewerServerActionsTest {
 
     @Test
     fun `refresh does not wait for an asset that will never appear`() = runTest(testDispatcher) {
-        coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
+        coEvery { assetRepository.assetsFor(any()) } returns emptyList()
         val screenModel = createScreenModel()
 
         screenModel.requestServerCrawl(testBookmark, ServerCrawlAction.REFRESH)
@@ -359,33 +353,33 @@ class BookmarkViewerServerActionsTest {
         // asset from the server and could stamp the local path onto a different archive row —
         // leaving the tapped row reading "On server" with no delete-local action.
         val other = archiveAsset.copy(id = "asset-2", assetType = "precrawledArchive")
-        coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns listOf(archiveAsset, other)
-        coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } throws ApiException("stop here")
+        coEvery { assetRepository.assetsFor(any()) } returns listOf(archiveAsset, other)
+        coEvery { assetRepository.download(any(), any(), any()) } throws ApiException("stop here")
         val screenModel = createScreenModel()
 
         screenModel.downloadOrRefreshAsset(other, testBookmark)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { remoteDataSource.downloadAsset(testServer, "asset-2", any()) }
-        coVerify(exactly = 0) { remoteDataSource.downloadAsset(any(), "asset-1", any()) }
+        coVerify(exactly = 1) { assetRepository.download(testServer, other, any()) }
+        coVerify(exactly = 0) { assetRepository.download(any(), archiveAsset, any()) }
     }
 
     @Test
     fun `a second download for the same asset is ignored while one is running`() =
         runTest(testDispatcher) {
-            coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } throws ApiException("boom")
+            coEvery { assetRepository.download(any(), any(), any()) } throws ApiException("boom")
             val screenModel = createScreenModel()
 
             screenModel.downloadOrRefreshAsset(archiveAsset, testBookmark)
             screenModel.downloadOrRefreshAsset(archiveAsset, testBookmark)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { remoteDataSource.downloadAsset(any(), "asset-1", any()) }
+            coVerify(exactly = 1) { assetRepository.download(any(), archiveAsset, any()) }
         }
 
     @Test
     fun `a failed download clears the progress entry`() = runTest(testDispatcher) {
-        coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } throws ApiException("boom")
+        coEvery { assetRepository.download(any(), any(), any()) } throws ApiException("boom")
         val screenModel = createScreenModel()
 
         screenModel.downloadOrRefreshAsset(archiveAsset, testBookmark)
@@ -408,7 +402,7 @@ class BookmarkViewerServerActionsTest {
 
     @Test
     fun `a menu download does not switch the content source`() = runTest(testDispatcher) {
-        coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } throws ApiException("boom")
+        coEvery { assetRepository.download(any(), any(), any()) } throws ApiException("boom")
         val screenModel = createScreenModel()
 
         screenModel.downloadOrRefreshAsset(archiveAsset, testBookmark, useWhenDone = false)

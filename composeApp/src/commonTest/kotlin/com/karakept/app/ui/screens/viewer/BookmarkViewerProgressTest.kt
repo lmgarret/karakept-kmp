@@ -1,8 +1,6 @@
 package com.karakept.app.ui.screens.viewer
 
-import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.model.Bookmark
-import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.AssetRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
@@ -13,7 +11,6 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.pullReadingProgressFromServer
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
-import com.karakept.app.utils.TestAppDispatchers
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -55,10 +52,9 @@ class BookmarkViewerProgressTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var assetDao: AssetDao
+    private lateinit var assetRepository: AssetRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var remoteDataSource: RemoteDataSource
     private lateinit var serverRepository: ServerRepository
     private lateinit var bookmarkRepository: BookmarkRepository
     private lateinit var listRepository: ListRepository
@@ -91,10 +87,9 @@ class BookmarkViewerProgressTest {
         Dispatchers.setMain(testDispatcher)
         mockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositorySyncKt")
 
-        assetDao = mockk(relaxed = true)
+        assetRepository = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         bookmarkActionsRepository = mockk(relaxed = true)
-        remoteDataSource = mockk(relaxed = true)
         serverRepository = mockk(relaxed = true)
         bookmarkRepository = mockk(relaxed = true)
         listRepository = mockk(relaxed = true)
@@ -129,7 +124,7 @@ class BookmarkViewerProgressTest {
 
         // Default stubs for BookmarkRepository
         every { bookmarkRepository.observeBookmark(any()) } returns flowOf(testBookmark)
-        coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
+        coEvery { assetRepository.assetsFor(any()) } returns emptyList()
     }
 
     @AfterTest
@@ -139,7 +134,7 @@ class BookmarkViewerProgressTest {
     }
 
     private fun createScreenModel() = BookmarkViewerScreenModel(
-        assetRepository = AssetRepository(assetDao, remoteDataSource, TestAppDispatchers(testDispatcher)),
+        assetRepository = assetRepository,
         settingsRepository = settingsRepository,
         bookmarkActionsRepository = bookmarkActionsRepository,
         serverRepository = serverRepository,

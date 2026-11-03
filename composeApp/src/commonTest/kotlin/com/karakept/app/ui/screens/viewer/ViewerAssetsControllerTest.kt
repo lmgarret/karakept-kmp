@@ -1,20 +1,15 @@
 package com.karakept.app.ui.screens.viewer
 
-import com.karakept.api.model.Bookmark as ApiBookmark
-import com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
-import com.karakept.app.data.local.dao.AssetDao
-import com.karakept.app.data.local.entity.AssetEntity
+import com.karakept.app.data.model.BookmarkAsset
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ViewerMode
-import com.karakept.app.data.remote.RemoteDataSource
-import com.karakept.app.data.repository.AssetFiles
 import com.karakept.app.data.repository.AssetRepository
+import com.karakept.app.data.repository.DownloadedAsset
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.utils.TestAppDispatchers
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -38,8 +33,7 @@ import kotlin.test.assertTrue
 class ViewerAssetsControllerTest {
 
     private val testDispatcher = StandardTestDispatcher()
-    private val assetDao = mockk<AssetDao>(relaxed = true)
-    private val remoteDataSource = mockk<RemoteDataSource>(relaxed = true)
+    private val assetRepository = mockk<AssetRepository>(relaxed = true)
     private val serverRepository = mockk<ServerRepository>(relaxed = true)
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val snackbarManager = mockk<ActionSnackbarManager>(relaxed = true)
@@ -68,7 +62,7 @@ class ViewerAssetsControllerTest {
         isRead = false
     )
 
-    private val asset = AssetEntity(
+    private val asset = BookmarkAsset(
         id = "asset-1",
         bookmarkRemoteId = "remote-100",
         serverId = "server-1",
@@ -78,11 +72,9 @@ class ViewerAssetsControllerTest {
         localPath = null
     )
 
-    private val files = mockk<AssetFiles>(relaxed = true)
-
     private fun createController(scope: CoroutineScope) = ViewerAssetsController(
         scope = scope,
-        assetRepository = AssetRepository(assetDao, remoteDataSource, TestAppDispatchers(testDispatcher), files),
+        assetRepository = assetRepository,
         serverRepository = serverRepository,
         settingsRepository = settingsRepository,
         snackbarManager = snackbarManager,
@@ -95,7 +87,7 @@ class ViewerAssetsControllerTest {
     fun downloadIsCancelledWithScope() = runTest(testDispatcher) {
         // Arrange
         every { serverRepository.servers } returns flowOf(listOf(server))
-        coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } coAnswers { awaitCancellation() }
+        coEvery { assetRepository.download(any(), any(), any()) } coAnswers { awaitCancellation() }
         val job = Job(coroutineContext[Job])
         val controller = createController(CoroutineScope(coroutineContext + job))
 
@@ -109,7 +101,6 @@ class ViewerAssetsControllerTest {
 
         // Assert
         assertFalse(controller.assetDownloads.value.containsKey("asset-1"))
-        coVerify(exactly = 0) { assetDao.insertAssets(any()) }
         coVerify(exactly = 0) { snackbarManager.showSnackbar(any()) }
     }
 
@@ -118,7 +109,7 @@ class ViewerAssetsControllerTest {
         // Arrange
         val archive = asset.copy(id = "a", assetType = "precrawledArchive", localPath = "/archive")
         val banner = asset.copy(id = "b", assetType = "bannerImage", localPath = "/banner")
-        coEvery { assetDao.getAssetsForBookmark("remote-100", "server-1") } returns listOf(archive, banner)
+        coEvery { assetRepository.assetsFor(bookmark) } returns listOf(archive, banner)
         val controller = createController(backgroundScope)
 
         // Act
@@ -137,16 +128,8 @@ class ViewerAssetsControllerTest {
         // Arrange
         val bytes = "<html>archived</html>".encodeToByteArray()
         every { serverRepository.servers } returns flowOf(listOf(server))
-        coEvery { remoteDataSource.fetchBookmark(server, "remote-100") } returns mockk<ApiBookmark>(relaxed = true) {
-            every { assets } returns listOf(
-                BookmarksBookmarkIdAssetsPost201Response(
-                    id = "archive-1",
-                    assetType = BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE
-                )
-            )
-        }
-        coEvery { remoteDataSource.downloadAsset(server, "archive-1", any()) } returns bytes
-        every { files.save(any(), any()) } returns "/cache/archive_archive-1"
+        val fetched = asset.copy(id = "archive-1", assetType = "precrawledArchive", localPath = "/cache/archive_archive-1")
+        coEvery { assetRepository.fetchArchive(server, bookmark) } returns DownloadedAsset(fetched, bytes)
         val controller = createController(backgroundScope)
 
         // Act
@@ -164,9 +147,9 @@ class ViewerAssetsControllerTest {
         // Arrange: the archive is cached and showing
         val archive = asset.copy(id = "a", assetType = "precrawledArchive", localPath = "/archive")
         every { serverRepository.servers } returns flowOf(listOf(server))
-        coEvery { remoteDataSource.downloadAsset(server, "a", any()) } returns "<html/>".encodeToByteArray()
-        every { files.save(any(), any()) } returns "/archive"
-        coEvery { assetDao.getAssetsForBookmark("remote-100", "server-1") } returns listOf(archive)
+        coEvery { assetRepository.download(server, archive, any()) } returns
+            DownloadedAsset(archive, "<html/>".encodeToByteArray())
+        coEvery { assetRepository.assetsFor(bookmark) } returns listOf(archive)
         val controller = createController(backgroundScope)
         controller.downloadOrRefreshAsset(archive, bookmark, useWhenDone = true)
         runCurrent()
@@ -174,8 +157,7 @@ class ViewerAssetsControllerTest {
         assertEquals("<html/>", controller.sourceContentOverride.value)
 
         // Act: its local copy goes away
-        coEvery { assetDao.getAssetsForBookmark("remote-100", "server-1") } returns
-            listOf(archive.copy(localPath = null))
+        coEvery { assetRepository.assetsFor(bookmark) } returns listOf(archive.copy(localPath = null))
         controller.deleteAssetLocal(archive)
         runCurrent()
 

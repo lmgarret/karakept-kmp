@@ -4,20 +4,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.karakept.app.data.local.dao.AssetDao
-import com.karakept.app.data.local.dao.BookmarkDao
-import com.karakept.app.data.local.dao.PendingActionDao
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.model.ViewerMode
-import com.karakept.app.data.remote.RemoteDataSource
-import com.karakept.app.data.repository.AssetRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.utils.TestAppDispatchers
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -34,28 +28,17 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 
-// The final flush runs from onCleared, after viewModelScope is cancelled: it only lands
-// because BookmarkActionsRepository owns the write on its own scope.
+// The final flush runs from onCleared, after viewModelScope is cancelled, so the screen hands
+// it to BookmarkActionsRepository rather than launching it. That the repository's write then
+// survives the cancelled caller is pinned in :core:data (AppDispatchersInjectionTest).
 @OptIn(ExperimentalCoroutinesApi::class)
 class ViewerFinalReadingFlushTest {
 
     private val testDispatcher = StandardTestDispatcher()
-    private val appDispatchers = TestAppDispatchers(testDispatcher)
 
-    private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)
-    private val assetDao = mockk<AssetDao>(relaxed = true)
-    private val remoteDataSource = mockk<RemoteDataSource>(relaxed = true)
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val bookmarkRepository = mockk<BookmarkRepository>(relaxed = true)
-
-    private val actionsRepository = BookmarkActionsRepository(
-        bookmarkDao = bookmarkDao,
-        pendingActionDao = mockk<PendingActionDao>(relaxed = true),
-        remoteDataSource = remoteDataSource,
-        serverRepository = mockk(relaxed = true),
-        settingsRepository = settingsRepository,
-        appDispatchers = appDispatchers
-    )
+    private val actionsRepository = mockk<BookmarkActionsRepository>(relaxed = true)
 
     @BeforeTest
     fun setUp() {
@@ -81,14 +64,14 @@ class ViewerFinalReadingFlushTest {
     }
 
     @Test
-    fun `final flush lands after the screen model's scope is cancelled`() = runTest(testDispatcher) {
+    fun `final flush is handed to the repository when the screen model is cleared`() = runTest(testDispatcher) {
         val store = ViewModelStore()
         val screenModel = ViewModelProvider.create(
             store,
             viewModelFactory {
                 initializer {
                     BookmarkViewerScreenModel(
-                        assetRepository = AssetRepository(assetDao, remoteDataSource, appDispatchers),
+                        assetRepository = mockk(relaxed = true),
                         settingsRepository = settingsRepository,
                         bookmarkActionsRepository = actionsRepository,
                         serverRepository = mockk(relaxed = true),
@@ -110,6 +93,8 @@ class ViewerFinalReadingFlushTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { bookmarkRepository.saveReadingProgress(any(), any(), any(), any()) }
-        coVerify(exactly = 1) { bookmarkDao.updateReadingProgress(1L, 0.6f, 6, 0) }
+        coVerify(exactly = 1) {
+            actionsRepository.persistFinalReadingProgress(1L, "remote-1", any(), 0.6f, 6, 0)
+        }
     }
 }

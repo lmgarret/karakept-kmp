@@ -5,6 +5,7 @@ import com.karakept.api.model.BookmarkContent
 import com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.AssetEntity
+import com.karakept.app.data.local.entity.toAsset
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.ApiException
@@ -66,7 +67,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
     @Test
     fun detachOnServerDetachesRemotelyThenDeletesTheRow() = runTest(testDispatcher) {
         // Act
-        repository.detachOnServer(server, bookmark, asset)
+        repository.detachOnServer(server, bookmark, asset.toAsset())
 
         // Assert
         coVerifyOrder {
@@ -81,7 +82,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
         coEvery { remoteDataSource.detachAsset(any(), any(), any()) } throws ApiException("HTTP 500")
 
         // Act
-        assertFailsWith<ApiException> { repository.detachOnServer(server, bookmark, asset) }
+        assertFailsWith<ApiException> { repository.detachOnServer(server, bookmark, asset.toAsset()) }
 
         // Assert
         coVerify(exactly = 0) { assetDao.deleteAsset(any()) }
@@ -90,7 +91,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
     @Test
     fun clearLocalCopyClearsTheLocalPath() = runTest(testDispatcher) {
         // Act
-        repository.clearLocalCopy(asset)
+        repository.clearLocalCopy(asset.toAsset())
 
         // Assert
         coVerify(exactly = 1) { assetDao.clearLocalPath("asset-1") }
@@ -105,7 +106,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
         val assets = repository.assetsFor(bookmark)
 
         // Assert
-        assertEquals(listOf(asset), assets)
+        assertEquals(listOf(asset.toAsset()), assets)
     }
 
     private fun remoteBookmark(assets: List<BookmarksBookmarkIdAssetsPost201Response>) = ApiBookmark(
@@ -171,7 +172,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
             files.save("archive_archive-1", bytes)
             assetDao.insertAssets(listOf(expected))
         }
-        assertEquals(expected, result?.asset)
+        assertEquals(expected.toAsset(), result?.asset)
         assertContentEquals(bytes, result?.bytes)
     }
 
@@ -184,7 +185,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
         every { files.save("archive_asset-1", bytes) } returns "/cache/archive_asset-1"
 
         // Act
-        val result = repository.download(server, cached) {}
+        val result = repository.download(server, cached.toAsset()) {}
 
         // Assert
         val expected = asset.copy(localPath = "/cache/archive_asset-1")
@@ -195,7 +196,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
             files.save("archive_asset-1", bytes)
             assetDao.insertAssets(listOf(expected))
         }
-        assertEquals(expected, result.asset)
+        assertEquals(expected.toAsset(), result.asset)
         assertContentEquals(bytes, result.bytes)
     }
 
@@ -205,7 +206,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
         coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } returns byteArrayOf(1)
 
         // Act
-        repository.download(server, asset) {}
+        repository.download(server, asset.toAsset()) {}
 
         // Assert
         verify(exactly = 0) { files.delete(any()) }
@@ -224,7 +225,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
         val reported = mutableListOf<Float?>()
 
         // Act
-        repository.download(server, asset) { reported += it }
+        repository.download(server, asset.toAsset()) { reported += it }
 
         // Assert
         assertEquals(listOf(0.5f, null), reported)
@@ -236,7 +237,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
         coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } throws ApiException("HTTP 500")
 
         // Act
-        assertFailsWith<ApiException> { repository.download(server, asset.copy(localPath = "/cache/old")) {} }
+        assertFailsWith<ApiException> { repository.download(server, asset.copy(localPath = "/cache/old").toAsset()) {} }
 
         // Assert
         verify(exactly = 0) { files.save(any(), any()) }
@@ -249,7 +250,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
         coEvery { remoteDataSource.downloadAsset(any(), any(), any()) } returns byteArrayOf(1)
 
         // Act
-        repository.download(server, asset.copy(id = "pdf-1", assetType = "pdf")) {}
+        repository.download(server, asset.copy(id = "pdf-1", assetType = "pdf").toAsset()) {}
 
         // Assert
         verify { files.save("asset_pdf-1.pdf", any()) }
