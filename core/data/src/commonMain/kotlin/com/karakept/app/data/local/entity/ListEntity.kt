@@ -10,7 +10,7 @@ import androidx.compose.runtime.Immutable
     tableName = "lists",
     indices = [Index(value = ["remoteId", "serverId"], unique = true)]
 )
-data class ListEntity(
+internal data class ListEntity(
     @PrimaryKey(autoGenerate = true) val localId: Long = 0,
     val remoteId: String,
     val serverId: String,

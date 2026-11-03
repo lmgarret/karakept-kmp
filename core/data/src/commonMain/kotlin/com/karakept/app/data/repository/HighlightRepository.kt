@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlin.time.Instant
 
-class HighlightRepository(
+class HighlightRepository internal constructor(
     private val highlightDao: HighlightDao,
     private val remoteDataSource: RemoteDataSource,
     private val bookmarkActionsRepository: BookmarkActionsRepository

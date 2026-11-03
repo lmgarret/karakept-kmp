@@ -90,7 +90,7 @@ data class OfflineCacheCleanupResult(
  *    is why eviction clears references and leaves deleting to this step. It also collects what
  *    deleted bookmarks and removed servers left behind.
  */
-class OfflineCacheRepository(
+class OfflineCacheRepository internal constructor(
     private val bookmarkDao: BookmarkDao,
     private val assetDao: AssetDao,
     private val settingsRepository: SettingsRepository,

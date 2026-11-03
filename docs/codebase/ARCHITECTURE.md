@@ -52,7 +52,6 @@
 ## Layer rules
 
 `LayerRulesTest` (`composeApp/src/desktopTest/.../architecture/`) pins the boundaries by scanning source text:
-- `ui/` never references `data.local.dao.*` or `RemoteDataSource` (`ui-data`).
 - `data/`, `domain/` and `utils/` never reference `com.karakept.app.ui.` (`lower-ui`).
 - `ui/screens/` holds only sub-packages, no files at its root (`screens-root`).
 - Every `expect` in `commonMain` has an `.android` and a `.jvm`/`.desktop` actual in the same package (`expect-actual`).
@@ -61,7 +60,9 @@ The first Gradle module split (#440) moved `data/model` into `:core:model`, whic
 nothing but `:api-client`: the compiler, not `LayerRulesTest`, now keeps the models free of the
 data, domain and UI layers. The second moved the data layer and `domain/` into `:core:data`
 (Room, KSP and `schemas/` with it), so nothing in `:core:data` can reach the UI either.
-Shared test fixtures live in `:core:testing`.
+Shared test fixtures live in `:core:testing`. The third made DAOs, entities and
+`RemoteDataSource` `internal` to `:core:data`, which is what `LayerRulesTest`'s `ui-data` rule
+used to check.
 
 Offenders that predate a rule sit in `LayerRulesTest.KNOWN_VIOLATIONS`; the rule fails on a new offender and on a stale entry, so a fix must delete its entry. `AppModuleGraphTest` resolves every ScreenModel and repository from `appModule` to catch wiring gaps.
 
@@ -352,7 +353,7 @@ current view, rebuilt on every write, to answer these.
   `ScrollRestorationState.approveCurrentPosition()`, or the scroll guard snaps it back.
 
 **Dependency Injection:**
-- Koin module configured in AppModule.kt (single instances for repositories, factories for ScreenModels)
+- Koin: `dataModule` (`:core:data`, repositories and everything below them) included by `appModule` (ScreenModels, app services)
 - Circular dependency between BookmarkActionsRepository and BookmarkRepository resolved manually in AppModule via setBookmarkRepository()
 
 ---

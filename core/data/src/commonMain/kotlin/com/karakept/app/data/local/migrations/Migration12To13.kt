@@ -29,7 +29,7 @@ import androidx.sqlite.execSQL
  * the next pass, except for the two highlight actions, which name a highlight and never look
  * at the bookmark id.
  */
-val MIGRATION_12_13 = object : Migration(12, 13) {
+internal val MIGRATION_12_13 = object : Migration(12, 13) {
     override suspend fun migrate(connection: SQLiteConnection) {
         // pending_actions and assets are rewritten first: both resolve their new id against
         // the still-hash-keyed bookmarks table.

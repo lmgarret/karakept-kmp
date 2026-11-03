@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 
-class ServerVersionRepository(
+class ServerVersionRepository internal constructor(
     private val remoteDataSource: RemoteDataSource,
     private val appDispatchers: AppDispatchers
 ) {

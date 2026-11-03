@@ -21,7 +21,7 @@ import com.karakept.app.utils.AppLogger
  * Repository for handling bookmark actions with offline-first approach.
  * Actions are queued locally and synced when online.
  */
-class BookmarkActionsRepository(
+class BookmarkActionsRepository internal constructor(
     internal val bookmarkDao: BookmarkDao,
     internal val pendingActionDao: PendingActionDao,
     internal val remoteDataSource: RemoteDataSource,
@@ -116,7 +116,7 @@ class BookmarkActionsRepository(
         bookmarkRepository = repository
     }
 
-    fun setHighlightDao(dao: com.karakept.app.data.local.dao.HighlightDao) {
+    internal fun setHighlightDao(dao: com.karakept.app.data.local.dao.HighlightDao) {
         highlightDao = dao
     }
 

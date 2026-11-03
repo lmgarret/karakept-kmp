@@ -9,7 +9,7 @@ import com.karakept.app.data.local.entity.RETIRED_PREDICATE
 import com.karakept.app.data.local.projection.AssetPathRow
 
 @Dao
-interface AssetDao {
+internal interface AssetDao {
     @Query("SELECT * FROM assets WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId")
     suspend fun getAssetsForBookmark(bookmarkRemoteId: String, serverId: String): List<AssetEntity>
 

@@ -7,7 +7,7 @@ import androidx.datastore.preferences.preferencesDataStore
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "karakept_settings")
 
-actual fun createDataStore(): DataStore<Preferences> {
+internal actual fun createDataStore(): DataStore<Preferences> {
     return ContextHolder.get().dataStore
 }
 

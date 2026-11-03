@@ -19,7 +19,7 @@ import androidx.sqlite.execSQL
  * declare, and `@Index` has no WHERE clause — an index Room did not declare fails the next
  * migration that runs.
  */
-val MIGRATION_13_14 = object : Migration(13, 14) {
+internal val MIGRATION_13_14 = object : Migration(13, 14) {
     override suspend fun migrate(connection: SQLiteConnection) {
         connection.execSQL(
             "ALTER TABLE bookmarks ADD COLUMN hasContent INTEGER NOT NULL DEFAULT 0"

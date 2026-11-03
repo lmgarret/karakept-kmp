@@ -29,7 +29,7 @@ data class UndoCompletedEvent(
  * Central controller for bookmark actions with undo support.
  * Coordinates action execution, snackbar display, and undo operations.
  */
-class BookmarkActionController(
+class BookmarkActionController internal constructor(
     private val bookmarkActionsRepository: BookmarkActionsRepository,
     private val bookmarkDao: BookmarkDao,
     private val pendingActionDao: PendingActionDao,

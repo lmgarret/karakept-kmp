@@ -19,7 +19,7 @@ import com.karakept.app.data.local.migrations.withAppSchema
 
 lateinit var applicationContext: Context
 
-fun getDatabaseBuilder(ctx: Context): RoomDatabase.Builder<AppDatabase> {
+internal fun getDatabaseBuilder(ctx: Context): RoomDatabase.Builder<AppDatabase> {
     val dbFile = ctx.getDatabasePath("karakept.db")
     return Room.databaseBuilder<AppDatabase>(
         context = ctx,
@@ -57,7 +57,7 @@ object AndroidContext {
     lateinit var context: Context
 }
 
-actual fun getDatabaseBuilder(): RoomDatabase.Builder<AppDatabase> {
+internal actual fun getDatabaseBuilder(): RoomDatabase.Builder<AppDatabase> {
     val ctx = AndroidContext.context
     val dbFile = ctx.getDatabasePath("karakept.db")
     return Room.databaseBuilder<AppDatabase>(

@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class ServerRepository(
+class ServerRepository internal constructor(
     private val serverDao: ServerDao,
     private val secureStore: SecureCredentialStore,
     private val remoteDataSource: RemoteDataSource

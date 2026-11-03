@@ -10,7 +10,7 @@ package com.karakept.app.data.local.dao
  * is what the server's answer is compared against — so a pass decides what to apply without
  * going back to the table row by row.
  */
-data class ProgressPullTarget(
+internal data class ProgressPullTarget(
     val localId: Long,
     val remoteId: String,
     val readingProgress: Float

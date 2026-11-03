@@ -52,7 +52,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 | Local DB (Room entities, DAOs, migrations) | `core/data/src/commonMain/kotlin/com/karakept/app/data/local/` |
 | Remote API (Ktor, RemoteDataSource) | `core/data/src/commonMain/kotlin/com/karakept/app/data/remote/` |
 | Domain data models | `core/model/src/commonMain/kotlin/com/karakept/app/data/model/` (module `:core:model`) |
-| DI module | `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` |
+| DI modules | `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` (ScreenModels, app services); `core/data/src/commonMain/kotlin/com/karakept/app/di/DataModule.kt` (repositories, DAOs, domain) |
 | Shared utilities | `composeApp/src/commonMain/kotlin/com/karakept/app/utils/`; the ones the data layer needs (`AppDispatchers`, `AppLogger`, `FileUtils`, …) in `core/data/src/commonMain/kotlin/com/karakept/app/utils/` |
 | Android-specific code | `composeApp/src/androidMain/` |
 | Android application shell | `androidApp/` (build types, signing, applicationId — no Kotlin) |
@@ -62,7 +62,8 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 - **`App.kt`**: root composable, initializes Koin, routes to initial screen based on app state.
 - **`MainActivity.kt`** (Android): sets up the Compose activity.
-- **`AppModule.kt`**: all Koin bindings — repositories as `single()`, ScreenModels as `viewModel()`.
+- **`AppModule.kt`**: the app's Koin bindings — ScreenModels as `viewModel()`, app services as `single()` — and `includes(dataModule)`.
+- **`DataModule.kt`** (`:core:data`): every data and domain binding, repositories as `single()`. It lives there because the DAOs and `RemoteDataSource` it builds from are `internal` to `:core:data`.
 - **`ui/navigation/`**: `AppNavigator`/`LocalNavigator` (back-stack wrapper + CompositionLocal), `appEntryProvider()` + `navKeySerializersModule` (NavKey↔content map and polymorphic registry), and the Shared Axis Z `NavDisplay` transition specs.
 
 ### Gradle Modules
@@ -108,6 +109,15 @@ knowing before touching any of it:
   every class as unstable, and composables taking one stop skipping. Code in a split module is
   reached across a module boundary, so `internal` no longer reaches it and the compiler stops
   smart-casting its `val`s — bind to a local first.
+- **DAOs, entities, migrations, `AppDatabase` and `RemoteDataSource` are `internal` to
+  `:core:data`.** Repositories are its API: a public repository taking a DAO has an `internal
+  constructor`, and is built only by `dataModule`. A test outside `:core:data` mocks the
+  repository rather than building one over DAO mocks; for a real graph it loads
+  `inMemoryDatabaseModule()` (JVM only) after `appModule`. What stays public in `data.remote`
+  is the error contract — `ApiException`, `OfflineModeException`,
+  `UnsupportedServerActionException`, `hasHttpStatus` — and in `data.local` the query
+  projections repositories return and the Android init hooks (`AndroidContext`,
+  `initializeDataStore`).
 - **`domain/` lives in `:core:data` for now**: `BookmarkActionController` reads DAOs directly,
   so a `:core:domain` above the data layer could not reach them once they are `internal`.
 - **Code the data layer calls has to sit in or below `:core:data`.** `CoilThumbnailCache` stays in
@@ -169,7 +179,7 @@ knowing before touching any of it:
 |---|---|
 | New screen | `ui/screens/[feature]/[Feature]Screen.kt` (a `@Serializable` `NavKey` with `Content()`) + `[Feature]ScreenModel.kt`; register `viewModel { }` in `AppModule.kt`, add an `entry<…>` in `appEntryProvider()` and a `subclass(…)` in `navKeySerializersModule` |
 | New reusable component | `ui/components/[feature]/[Component].kt` for bookmark/tags/highlight/reader components, `ui/components/[Component].kt` for generic ones |
-| New repository | `data/repository/[Domain]Repository.kt`, add `single()` to `AppModule.kt` |
+| New repository | `data/repository/[Domain]Repository.kt` in `:core:data` with an `internal constructor` if it takes a DAO, add `single()` to `DataModule.kt` |
 | New DB entity | `data/local/entity/`, new DAO, update `AppDatabase.kt`, add migration, register in builders |
 | New domain logic | `domain/[Logic]Utils.kt` or extend `BookmarkActionEvent` + `BookmarkActionController` |
 | New shared utility | `utils/[Util]Utils.kt` (commonMain) or `utils/[Util].android.kt` (androidMain) |

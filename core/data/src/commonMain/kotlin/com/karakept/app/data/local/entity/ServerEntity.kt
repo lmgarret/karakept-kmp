@@ -4,7 +4,7 @@ import androidx.room3.Entity
 import androidx.room3.PrimaryKey
 
 @Entity(tableName = "servers")
-data class ServerEntity(
+internal data class ServerEntity(
     @PrimaryKey val id: String,
     val url: String,
     val apiKey: String,

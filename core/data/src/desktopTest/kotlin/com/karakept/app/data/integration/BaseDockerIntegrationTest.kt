@@ -335,8 +335,8 @@ abstract class BaseDockerIntegrationTest {
     }
 
     // Per-test state
-    protected lateinit var db: AppDatabase
-    protected lateinit var remoteDataSource: RemoteDataSource
+    internal lateinit var db: AppDatabase
+    internal lateinit var remoteDataSource: RemoteDataSource
     protected lateinit var bookmarkRepository: BookmarkRepository
     protected lateinit var highlightRepository: HighlightRepository
     protected lateinit var bookmarkActionsRepository: BookmarkActionsRepository
@@ -442,7 +442,7 @@ abstract class BaseDockerIntegrationTest {
      * Insert a bookmark into the local database, simulating what a sync would do.
      * Returns the inserted entity for further use in tests.
      */
-    protected suspend fun insertLocalBookmark(
+    internal suspend fun insertLocalBookmark(
         remoteId: String,
         url: String = "https://example.com/$remoteId",
         title: String = "Test Bookmark",

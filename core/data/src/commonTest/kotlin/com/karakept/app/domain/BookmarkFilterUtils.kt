@@ -21,7 +21,7 @@ import com.karakept.app.utils.NoCaseCollationUtils
  * proves nothing. Keeping it *here* is what stops it drifting back into a second definition of
  * the view, which is how the two came to disagree about title order in the first place.
  */
-object BookmarkFilterUtils {
+internal object BookmarkFilterUtils {
 
     /**
      * Applies tag and list filters from [filter] to [bookmarks].

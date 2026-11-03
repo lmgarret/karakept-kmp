@@ -33,7 +33,7 @@ internal fun BookmarkEntity.toBookmark(): Bookmark = Bookmark(
 
 internal fun List<BookmarkEntity>.toBookmarks(): List<Bookmark> = map { it.toBookmark() }
 
-fun BookmarkCursor.Companion.of(bookmark: BookmarkEntity) = BookmarkCursor(
+internal fun BookmarkCursor.Companion.of(bookmark: BookmarkEntity) = BookmarkCursor(
     createdAt = bookmark.createdAt,
     title = bookmark.title,
     readingTimeMinutes = bookmark.readingTimeMinutes,

@@ -8,7 +8,7 @@ import androidx.room3.useWriterConnection
  * emptied rows. Zero on a database created with `auto_vacuum`, which returns them on commit; a
  * database created without it keeps them until a `VACUUM`.
  */
-suspend fun AppDatabase.reclaimableBytes(): Long = useReaderConnection { connection ->
+internal suspend fun AppDatabase.reclaimableBytes(): Long = useReaderConnection { connection ->
     val freePages = connection.usePrepared("PRAGMA freelist_count") { it.step(); it.getLong(0) }
     val pageSize = connection.usePrepared("PRAGMA page_size") { it.step(); it.getLong(0) }
     freePages * pageSize
@@ -20,7 +20,7 @@ suspend fun AppDatabase.reclaimableBytes(): Long = useReaderConnection { connect
  * megabytes there — so it is truncated either way. A `VACUUM` runs only when there are free pages
  * for it to drop: it rewrites the whole file.
  */
-suspend fun AppDatabase.compact() {
+internal suspend fun AppDatabase.compact() {
     val vacuum = reclaimableBytes() > 0
     useWriterConnection { connection ->
         if (vacuum) connection.usePrepared("VACUUM") { it.step() }

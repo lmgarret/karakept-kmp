@@ -6,7 +6,7 @@ import androidx.compose.runtime.Immutable
 
 @Immutable
 @Entity(tableName = "assets")
-data class AssetEntity(
+internal data class AssetEntity(
     @PrimaryKey val id: String, // Asset ID from remote
     val bookmarkRemoteId: String,
     val serverId: String,

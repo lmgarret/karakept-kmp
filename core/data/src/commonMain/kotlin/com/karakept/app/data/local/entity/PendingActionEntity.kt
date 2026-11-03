@@ -9,7 +9,7 @@ import androidx.room3.PrimaryKey
  * and synchronized when network connectivity is restored.
  */
 @Entity(tableName = "pending_actions")
-data class PendingActionEntity(
+internal data class PendingActionEntity(
     @PrimaryKey(autoGenerate = true) 
     val id: Long = 0,
     
@@ -47,7 +47,7 @@ data class PendingActionEntity(
 }
 
 /** Action types for bookmark operations */
-object PendingActionType {
+internal object PendingActionType {
     const val ARCHIVE = "archive"
     const val UNARCHIVE = "unarchive"
     const val FAVOURITE = "favourite"

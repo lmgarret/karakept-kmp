@@ -9,7 +9,7 @@ import com.karakept.app.data.local.AppDatabase
  * migration reachable on one platform but not the other is not a shape this can take — it used to
  * be, and the consequence was a silent destructive fallback for whoever was missing it.
  */
-val ALL_MIGRATIONS: Array<Migration> = arrayOf(
+internal val ALL_MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
     MIGRATION_3_4,
@@ -32,5 +32,5 @@ val ALL_MIGRATIONS: Array<Migration> = arrayOf(
  * Every builder goes through this — both platform builders and any test that opens a real
  * database — so there is one list of migrations rather than a copy per call site to keep in step.
  */
-fun RoomDatabase.Builder<AppDatabase>.withAppSchema(): RoomDatabase.Builder<AppDatabase> =
+internal fun RoomDatabase.Builder<AppDatabase>.withAppSchema(): RoomDatabase.Builder<AppDatabase> =
     addMigrations(*ALL_MIGRATIONS)

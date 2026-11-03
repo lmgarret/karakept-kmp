@@ -50,7 +50,7 @@ enum class ReadingProgressPullResult {
  * outstanding either, so the caller may advance its cursor past them. A batch that failed
  * reports [ReadingProgressPullResult.FAILED] for its members, which holds the cursor.
  */
-suspend fun BookmarkActionsRepository.pullReadingProgressForTargets(
+internal suspend fun BookmarkActionsRepository.pullReadingProgressForTargets(
     targets: List<ProgressPullTarget>,
     serverId: String
 ): Map<String, ReadingProgressPullResult> {

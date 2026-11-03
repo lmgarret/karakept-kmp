@@ -10,7 +10,7 @@ import com.karakept.app.data.local.entity.HighlightEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface HighlightDao {
+internal interface HighlightDao {
     @Query("SELECT * FROM highlights WHERE serverId = :serverId ORDER BY createdAt DESC")
     fun getHighlightsForServer(serverId: String): Flow<List<HighlightEntity>>
 

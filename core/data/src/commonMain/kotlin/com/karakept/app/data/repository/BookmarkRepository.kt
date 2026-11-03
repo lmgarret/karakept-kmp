@@ -49,7 +49,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-class BookmarkRepository(
+class BookmarkRepository internal constructor(
     private val bookmarkDao: BookmarkDao,
     private val assetDao: AssetDao,
     private val remoteDataSource: RemoteDataSource,

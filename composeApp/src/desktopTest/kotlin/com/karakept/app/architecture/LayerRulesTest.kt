@@ -62,28 +62,8 @@ class LayerRulesTest {
             }
         }.map(::relative)
 
-    @Test
-    fun uiDoesNotReachDataInternals() {
-        check(
-            "ui-data",
-            filesContaining(
-                listOf("ui"),
-                listOf(
-                    "com.karakept.app.data.local.dao.",
-                    "com.karakept.app.data.remote.RemoteDataSource",
-                ),
-            ),
-        )
-    }
-
-    // The UI renders the domain `Bookmark`; the Room row stays behind the repositories.
-    @Test
-    fun uiDoesNotUseTheBookmarkEntity() {
-        check(
-            "ui-bookmark-entity",
-            filesContaining(listOf("ui"), listOf("com.karakept.app.data.local.entity.BookmarkEntity")),
-        )
-    }
+    // ui-data (DAOs, RemoteDataSource) and ui-bookmark-entity were rules here until #440: both
+    // are internal to :core:data now, so the compiler refuses what they used to catch.
 
     @Test
     fun lowerLayersDoNotImportUi() {

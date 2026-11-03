@@ -15,7 +15,7 @@ import androidx.compose.runtime.Immutable
         Index(value = ["serverId", "hasContent", "createdAt", "localId"]),
     ]
 )
-data class BookmarkEntity(
+internal data class BookmarkEntity(
     @PrimaryKey(autoGenerate = true) val localId: Long = 0,
     // The server's own bookmark id, verbatim. It is both the local identity key (with
     // [serverId]) and what every API call is keyed on.
@@ -71,12 +71,12 @@ data class BookmarkEntity(
  * against 861 rows on a real library while the 4280-row archive counted in 15ms. Asking a boolean
  * column with an index over it is 0.1ms.
  */
-const val OFFLINE_PREDICATE = "hasContent = 1"
+internal const val OFFLINE_PREDICATE = "hasContent = 1"
 
 /**
  * A bookmark whose offline copy has outlived the retention window: read or archived, and first
  * seen that way at or before `:cutoff`. [com.karakept.app.domain.OfflineRetention.isRetired] is the
  * same test in Kotlin, for rows already in memory; the two must agree.
  */
-const val RETIRED_PREDICATE =
+internal const val RETIRED_PREDICATE =
     "(isRead = 1 OR isArchived = 1) AND readOrArchivedAt IS NOT NULL AND readOrArchivedAt <= :cutoff"

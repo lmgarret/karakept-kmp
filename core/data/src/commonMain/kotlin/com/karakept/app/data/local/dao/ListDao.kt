@@ -8,7 +8,7 @@ import com.karakept.app.data.local.entity.ListEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface ListDao {
+internal interface ListDao {
     @Query("SELECT * FROM lists WHERE serverId = :serverId ORDER BY name ASC")
     fun getListsForServer(serverId: String): Flow<List<ListEntity>>
 

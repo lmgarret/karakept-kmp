@@ -10,7 +10,7 @@ import androidx.compose.runtime.Immutable
     tableName = "highlights",
     indices = [Index(value = ["remoteId", "serverId"], unique = true), Index(value = ["bookmarkRemoteId"])]
 )
-data class HighlightEntity(
+internal data class HighlightEntity(
     @PrimaryKey(autoGenerate = true) val localId: Long = 0,
     val remoteId: String,
     val serverId: String,

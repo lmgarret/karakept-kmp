@@ -8,7 +8,7 @@ import com.karakept.app.domain.OfflineScope
 import kotlinx.coroutines.flow.first
 
 /** The [OfflineScope] the current settings describe, with [allLists] for list hierarchy. */
-suspend fun SettingsRepository.resolveOfflineScope(allLists: List<KarakeepList>): OfflineScope {
+internal suspend fun SettingsRepository.resolveOfflineScope(allLists: List<KarakeepList>): OfflineScope {
     val strategy = contentSyncStrategy.first()
     return OfflineScope.resolve(
         strategy = strategy,
@@ -19,4 +19,4 @@ suspend fun SettingsRepository.resolveOfflineScope(allLists: List<KarakeepList>)
     )
 }
 
-fun ListEntity.toHierarchyNode(): KarakeepList = KarakeepList(id = remoteId, name = name, parentId = parentId)
+internal fun ListEntity.toHierarchyNode(): KarakeepList = KarakeepList(id = remoteId, name = name, parentId = parentId)

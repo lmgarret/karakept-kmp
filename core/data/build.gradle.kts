@@ -48,6 +48,8 @@ kotlin {
                 api(libs.androidx.datastore.preferences)
 
                 api(libs.kotlinx.coroutines.core)
+                // dataModule is a Koin module; the app includes it.
+                api(libs.koin.core)
                 implementation(libs.kotlinx.datetime)
                 implementation(libs.ksoup)
             }

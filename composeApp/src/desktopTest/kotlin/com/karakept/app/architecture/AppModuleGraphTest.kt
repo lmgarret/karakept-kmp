@@ -2,7 +2,6 @@ package com.karakept.app.architecture
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import com.karakept.app.data.local.AppDatabase
 import com.karakept.app.data.repository.AssetRepository
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
@@ -14,9 +13,9 @@ import com.karakept.app.data.repository.OfflineCacheRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.ServerVersionRepository
 import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.secure.SecureCredentialStore
 import com.karakept.app.di.appModule
+import com.karakept.app.di.inMemoryDatabaseModule
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.services.NotificationProvider
@@ -58,9 +57,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 /**
- * Resolves every ScreenModel and repository single declared in [appModule] against stand-ins for
+ * Resolves every ScreenModel and app-level single declared in [appModule] against stand-ins for
  * the platform and IO singles, so a constructor that gains a parameter nothing provides fails here
- * rather than when the screen is first opened. Layering moves rewire this module.
+ * rather than when the screen is first opened. The data layer's own bindings are pinned by
+ * DataModuleGraphTest in :core:data; here they run over an in-memory database, since the app
+ * cannot name the database type to stub it.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppModuleGraphTest {
@@ -69,7 +70,6 @@ class AppModuleGraphTest {
     private var app: KoinApplication? = null
 
     private val testOverrides = module {
-        single<AppDatabase> { mockk(relaxed = true) }
         single<HttpClient> { mockk(relaxed = true) }
         single<DataStore<Preferences>> { FakeDataStore() }
         single<SecureCredentialStore> { mockk(relaxed = true) }
@@ -82,7 +82,7 @@ class AppModuleGraphTest {
         Dispatchers.setMain(testDispatcher)
         app = koinApplication {
             allowOverride(true)
-            modules(appModule, testOverrides)
+            modules(appModule, inMemoryDatabaseModule(), testOverrides)
         }
     }
 
@@ -135,7 +135,6 @@ class AppModuleGraphTest {
             BookmarkRepository::class,
             BackupRepository::class,
             AssetRepository::class,
-            RemoteDataSource::class,
             BookmarkActionController::class,
             BackgroundSyncOrchestrator::class,
             PageTurnDispatcher::class,

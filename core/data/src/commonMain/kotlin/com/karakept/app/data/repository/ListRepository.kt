@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-class ListRepository(
+class ListRepository internal constructor(
     private val remoteDataSource: RemoteDataSource,
     private val listDao: ListDao,
     private val settingsRepository: SettingsRepository,

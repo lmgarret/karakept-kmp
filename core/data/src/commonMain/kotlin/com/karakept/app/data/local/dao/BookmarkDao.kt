@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.Flow
 // what `RoomWarnings.QUERY_MISMATCH` is acknowledging on each of them; read those fields through
 // a full-row query (`getBookmarkById`, `getBookmarkByRemoteId`) instead.
 @Dao
-interface BookmarkDao {
+internal interface BookmarkDao {
     @Query("""
         SELECT localId, remoteId, serverId, title, url,
                description, imageUrl, bannerImageAssetId, screenshotAssetId, tags, listIds, isStarred, isArchived,

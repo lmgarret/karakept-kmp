@@ -9,7 +9,7 @@ import com.karakept.app.data.local.entity.ServerEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface ServerDao {
+internal interface ServerDao {
     @Query("SELECT * FROM servers")
     fun getAllServers(): Flow<List<ServerEntity>>
 

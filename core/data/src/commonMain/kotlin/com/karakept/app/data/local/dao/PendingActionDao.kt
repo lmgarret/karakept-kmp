@@ -10,7 +10,7 @@ import com.karakept.app.data.local.entity.PendingActionEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface PendingActionDao {
+internal interface PendingActionDao {
     /**
      * Get all pending actions for a specific server, ordered by creation time.
      */

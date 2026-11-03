@@ -17,16 +17,16 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 
-const val CONNECT_TIMEOUT_MS = 15_000L
+internal const val CONNECT_TIMEOUT_MS = 15_000L
 // Generous socket/request budgets: smart-list queries run a server-side search that can be slow
 // on large libraries, and a timeout here would surface as a failed sync. Only a genuinely wedged
 // request should trip these.
-const val SOCKET_TIMEOUT_MS = 60_000L
-const val REQUEST_TIMEOUT_MS = 120_000L
-const val ASSET_REQUEST_TIMEOUT_MS = 300_000L
-const val ASSET_SOCKET_TIMEOUT_MS = 120_000L
+internal const val SOCKET_TIMEOUT_MS = 60_000L
+internal const val REQUEST_TIMEOUT_MS = 120_000L
+internal const val ASSET_REQUEST_TIMEOUT_MS = 300_000L
+internal const val ASSET_SOCKET_TIMEOUT_MS = 120_000L
 
-fun createHttpClient(): HttpClient {
+internal fun createHttpClient(): HttpClient {
     return HttpClient { applyKarakeptClientDefaults() }
 }
 

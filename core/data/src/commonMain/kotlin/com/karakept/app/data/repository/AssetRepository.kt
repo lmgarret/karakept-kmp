@@ -32,7 +32,7 @@ object CacheAssetFiles : AssetFiles {
 }
 
 /** A bookmark's assets: the rows stored locally, the files they point at, and the server copies. */
-class AssetRepository(
+class AssetRepository internal constructor(
     private val assetDao: AssetDao,
     private val remoteDataSource: RemoteDataSource,
     private val appDispatchers: AppDispatchers,

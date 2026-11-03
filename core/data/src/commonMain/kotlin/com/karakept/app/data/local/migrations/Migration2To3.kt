@@ -4,7 +4,7 @@ import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 
-val MIGRATION_2_3 = object : Migration(2, 3) {
+internal val MIGRATION_2_3 = object : Migration(2, 3) {
     override suspend fun migrate(connection: SQLiteConnection) {
         // Add screenshotAssetId column for screenshot fallback
         connection.execSQL(

@@ -88,7 +88,7 @@ private suspend fun <T : Any> ApiHttpResponse<T>.checkedBody(): T {
     return body()
 }
 
-class RemoteDataSource(
+internal class RemoteDataSource(
     private val client: HttpClient,
     private val offlineModeProvider: (suspend () -> Boolean)? = null
 ) {
@@ -867,7 +867,7 @@ class RemoteDataSource(
 }
 
 /** What [RemoteDataSource.summarizeBookmark] got back from the server. */
-data class SummarizeResult(
+internal data class SummarizeResult(
     val summary: String?,
     val summarizationStatus: String?
 )

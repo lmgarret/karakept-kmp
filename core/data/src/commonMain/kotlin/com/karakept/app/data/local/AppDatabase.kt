@@ -30,7 +30,7 @@ import com.karakept.app.data.local.entity.ListEntity
     version = 16
 )
 @ConstructedBy(AppDatabaseConstructor::class)
-abstract class AppDatabase : RoomDatabase() {
+internal abstract class AppDatabase : RoomDatabase() {
     abstract fun serverDao(): ServerDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun assetDao(): AssetDao
@@ -40,4 +40,4 @@ abstract class AppDatabase : RoomDatabase() {
 }
 
 @Suppress("NO_ACTUAL_FOR_EXPECT")
-expect object AppDatabaseConstructor : RoomDatabaseConstructor<AppDatabase>
+internal expect object AppDatabaseConstructor : RoomDatabaseConstructor<AppDatabase>

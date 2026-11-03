@@ -127,7 +127,7 @@ karakept-kmp/
 **composeApp/src/commonMain/kotlin/com/karakept/app/di/:**
 - Purpose: Dependency injection container setup
 - Contains:
-  - `AppModule.kt` - Koin module defining all singletons (repositories, databases) and factories (ScreenModels)
+  - `AppModule.kt` - Koin module for ScreenModels and app services; includes `dataModule` (`core/data/.../di/DataModule.kt`), which binds the repositories, DAOs and database
   - Wires up circular dependency: BookmarkActionsRepository ↔ BookmarkRepository via setBookmarkRepository()
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/utils/:**
@@ -156,7 +156,7 @@ karakept-kmp/
 - `composeApp/src/commonMain/kotlin/App.kt` - Root composable, routing to initial screen based on app state
 
 **Configuration:**
-- `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` - All DI bindings
+- `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` - App DI bindings; data bindings in `core/data/src/commonMain/kotlin/com/karakept/app/di/DataModule.kt`
 - `core/data/src/commonMain/kotlin/com/karakept/app/data/local/AppDatabase.kt` - Room database schema version and entities
 
 **Core Logic:**
@@ -217,7 +217,7 @@ karakept-kmp/
 
 **New Repository/Data Service:**
 - Location: `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/[DomainName]Repository.kt`
-- Inject in DI: Add single() binding in AppModule.kt
+- Inject in DI: Add single() binding in `DataModule.kt` (`:core:data`)
 - Use existing DAOs and RemoteDataSource; create new DAOs only if new entity added
 
 **New Database Entity:**
