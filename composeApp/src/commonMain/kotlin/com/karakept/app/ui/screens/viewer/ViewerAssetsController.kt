@@ -1,6 +1,5 @@
 package com.karakept.app.ui.screens.viewer
 
-import com.karakept.app.data.cache.OfflineHeroImages
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.ContentSource
@@ -177,16 +176,6 @@ internal class ViewerAssetsController(
         }
     }
 
-    /** Cache filename for an asset. PDFs keep the extension so the OS picks a reader. */
-    private fun cacheFileNameFor(asset: AssetEntity): String =
-        when (asset.assetType) {
-            "fullPageArchive", "precrawledArchive" -> "archive_${asset.id}"
-            "bannerImage" -> OfflineHeroImages.bannerFileName(asset.id)
-            "screenshot" -> OfflineHeroImages.screenshotFileName(asset.id)
-            "pdf" -> "asset_${asset.id}.pdf"
-            else -> "asset_${asset.id}"
-        }
-
     /**
      * Downloads [asset] and stores the local path against that exact row.
      *
@@ -216,7 +205,7 @@ internal class ViewerAssetsController(
                     snackbarManager.showSnackbar("Server not found")
                     return@launch
                 }
-                val result = assetRepository.download(server, asset, cacheFileNameFor(asset)) { fraction ->
+                val result = assetRepository.download(server, asset) { fraction ->
                     _assetDownloads.update { it + (asset.id to fraction) }
                 }
                 val bytes = result.bytes

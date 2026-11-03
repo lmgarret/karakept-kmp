@@ -1,6 +1,7 @@
 package com.karakept.app.data.repository
 
 import com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
+import com.karakept.app.data.cache.OfflineHeroImages
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
@@ -13,23 +14,37 @@ import kotlinx.coroutines.withContext
 /** An asset row stamped with its new `localPath`, and the bytes that were written there. */
 class DownloadedAsset(val asset: AssetEntity, val bytes: ByteArray)
 
+/** Where downloaded asset files live. A seam so tests don't write to the real cache directory. */
+interface AssetFiles {
+    /** Writes [bytes] as [fileName] and returns the absolute path it landed at. */
+    fun save(fileName: String, bytes: ByteArray): String
+    fun delete(path: String)
+}
+
+object CacheAssetFiles : AssetFiles {
+    override fun save(fileName: String, bytes: ByteArray): String =
+        FileUtils.saveFile(FileUtils.getImageCacheDirectory(), fileName, bytes)
+
+    override fun delete(path: String) = FileUtils.deleteFile(path)
+}
+
 /** A bookmark's assets: the rows stored locally, the files they point at, and the server copies. */
 class AssetRepository(
     private val assetDao: AssetDao,
     private val remoteDataSource: RemoteDataSource,
-    private val appDispatchers: AppDispatchers
+    private val appDispatchers: AppDispatchers,
+    private val files: AssetFiles = CacheAssetFiles
 ) {
     suspend fun assetsFor(bookmark: BookmarkEntity): List<AssetEntity> =
         assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
 
     /**
-     * Downloads [asset] into [targetFileName] and stores the local path against that exact row.
+     * Downloads [asset] and stores the local path against that exact row.
      * A copy already on disk is dropped first, so a failure can't leave both around.
      */
     suspend fun download(
         server: Server,
         asset: AssetEntity,
-        targetFileName: String,
         onProgress: (Float?) -> Unit
     ): DownloadedAsset = withContext(appDispatchers.io) {
         asset.localPath?.let { previous ->
@@ -37,7 +52,7 @@ class AssetRepository(
             assetDao.clearLocalPath(asset.id)
         }
         val bytes = remoteDataSource.downloadAsset(server, asset.id, onProgress)
-        val localPath = FileUtils.saveFile(FileUtils.getImageCacheDirectory(), targetFileName, bytes)
+        val localPath = files.save(cacheFileNameFor(asset.id, asset.assetType), bytes)
         val downloaded = asset.copy(localPath = localPath)
         assetDao.insertAssets(listOf(downloaded))
         DownloadedAsset(downloaded, bytes)
@@ -67,14 +82,16 @@ class AssetRepository(
                 it.assetType == BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE ||
                     it.assetType == BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE
             } ?: return@withContext null
-            val bytes = remoteDataSource.downloadAsset(server, asset.id ?: "")
-            val fileName = "archive_${asset.id}"
-            val localPath = FileUtils.saveFile(FileUtils.getImageCacheDirectory(), fileName, bytes)
+            val assetId = asset.id ?: ""
+            val assetType = asset.assetType?.value ?: "fullPageArchive"
+            val bytes = remoteDataSource.downloadAsset(server, assetId)
+            val fileName = cacheFileNameFor(assetId, assetType)
+            val localPath = files.save(fileName, bytes)
             val entity = AssetEntity(
-                id = asset.id ?: "",
+                id = assetId,
                 bookmarkRemoteId = bookmark.remoteId,
                 serverId = bookmark.serverId,
-                assetType = asset.assetType?.value ?: "fullPageArchive",
+                assetType = assetType,
                 fileName = fileName,
                 contentType = null,
                 localPath = localPath
@@ -84,6 +101,18 @@ class AssetRepository(
         }
 
     private fun deleteQuietly(path: String) {
-        try { FileUtils.deleteFile(path) } catch (_: Exception) {}
+        try { files.delete(path) } catch (_: Exception) {}
+    }
+
+    companion object {
+        /** Cache filename for an asset. PDFs keep the extension so the OS picks a reader. */
+        fun cacheFileNameFor(assetId: String, assetType: String): String =
+            when (assetType) {
+                "fullPageArchive", "precrawledArchive" -> "archive_$assetId"
+                "bannerImage" -> OfflineHeroImages.bannerFileName(assetId)
+                "screenshot" -> OfflineHeroImages.screenshotFileName(assetId)
+                "pdf" -> "asset_$assetId.pdf"
+                else -> "asset_$assetId"
+            }
     }
 }
