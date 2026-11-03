@@ -44,6 +44,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.karakept.app.data.cache.OfflineHeroImages
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.BookmarkWindow
@@ -96,7 +97,6 @@ import com.karakept.app.ui.utils.tiledTurnAdjustment
 import com.karakept.app.ui.utils.trailingPagePaddingFor
 import com.karakept.app.utils.AssetUrlUtils
 import com.karakept.app.utils.FileUtils
-import com.karakept.app.utils.OfflineHeroImages
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce

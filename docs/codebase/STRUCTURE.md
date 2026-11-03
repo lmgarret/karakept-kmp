@@ -110,6 +110,10 @@ karakept-kmp/
   - `ListHierarchyUtils.kt` - List ordering (parents before children, alphabetical at each level), collapsible tree helpers
   - `DefaultFilterResolver.kt` - Resolve default filter based on settings
 
+**composeApp/src/commonMain/kotlin/com/karakept/app/data/cache/:**
+- Purpose: Offline caches owned by the data layer
+- Contains: HtmlCache, ImageCacheManager (plus the `fileExists` expect/actual), ThumbnailCache, OfflineHeroImages, HtmlArchiveProcessor
+
 **composeApp/src/commonMain/kotlin/com/karakept/app/di/:**
 - Purpose: Dependency injection container setup
 - Contains:
@@ -118,7 +122,7 @@ karakept-kmp/
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/utils/:**
 - Purpose: Shared, platform-agnostic utilities
-- Contains: DateUtils.kt, FileUtils.kt, ImageCacheManager.kt, AssetUrlUtils.kt, FaviconUtils.kt, ShareUtils.kt, HapticUtils.kt, ReadingTimeCalculator.kt, BackupCrypto.kt
+- Contains: DateUtils.kt, FileUtils.kt, AssetUrlUtils.kt, FaviconUtils.kt, ShareUtils.kt, HapticUtils.kt, ReadingTimeCalculator.kt, BackupCrypto.kt
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/data/model/:**
 - Purpose: Domain data models and enums

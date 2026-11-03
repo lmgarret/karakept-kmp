@@ -1,4 +1,4 @@
-package com.karakept.app.utils
+package com.karakept.app.data.cache
 
 /**
  * Where an offline copy keeps a bookmark's banner and screenshot, and how a row finds them.

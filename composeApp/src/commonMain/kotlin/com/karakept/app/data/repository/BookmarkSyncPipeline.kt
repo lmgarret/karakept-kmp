@@ -1,5 +1,6 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.data.cache.ImageCacheManager
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
@@ -13,12 +14,11 @@ import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.ReadingTimeCalculator
-import com.karakept.app.utils.ImageCacheManager
+import kotlin.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
-import kotlin.time.Instant
 
 // Sync configuration sealed class hierarchy
 internal sealed class SyncConfiguration {

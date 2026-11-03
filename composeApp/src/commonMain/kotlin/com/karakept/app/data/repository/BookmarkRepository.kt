@@ -1,48 +1,48 @@
 package com.karakept.app.data.repository
 
 import androidx.room3.RoomRawQuery
-import com.karakept.app.data.local.dao.BookmarkDao
+import com.karakept.app.data.cache.ImageCacheManager
 import com.karakept.app.data.local.dao.AssetDao
+import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
+import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.local.entity.OFFLINE_PREDICATE
 import com.karakept.app.data.local.projection.ListMembershipGroup
 import com.karakept.app.data.local.projection.QuickFilterCountRow
 import com.karakept.app.data.local.projection.TagGroup
-import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.ContentFilter
 import com.karakept.app.data.model.FilterConfig
-import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncStatus
+import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.SYNC_KEY_ARCHIVED
 import com.karakept.app.data.model.SYNC_KEY_FAVORITES
-import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SortOption
+import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.utils.AppDispatchers
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.ReadingTimeCalculator
-import com.karakept.app.utils.ImageCacheManager
-import com.karakept.app.utils.AppDispatchers
-import com.karakept.app.data.local.entity.AssetEntity
+import kotlin.time.Instant
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.time.Instant
+import kotlinx.coroutines.withContext
 
 class BookmarkRepository(
     private val bookmarkDao: BookmarkDao,
@@ -1200,7 +1200,7 @@ class BookmarkRepository(
                     val bytes = remoteDataSource.downloadAsset(server, bannerImageAssetId)
                     val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
                     val localPath = com.karakept.app.utils.FileUtils.saveFile(
-                        cacheDir, com.karakept.app.utils.OfflineHeroImages.bannerFileName(bannerImageAssetId), bytes
+                        cacheDir, com.karakept.app.data.cache.OfflineHeroImages.bannerFileName(bannerImageAssetId), bytes
                     )
                     assetDao.insertAssets(
                         listOf(AssetEntity(
@@ -1208,7 +1208,7 @@ class BookmarkRepository(
                             bookmarkRemoteId = bookmarkRemoteId,
                             serverId = serverId,
                             assetType = "bannerImage",
-                            fileName = com.karakept.app.utils.OfflineHeroImages.bannerFileName(bannerImageAssetId),
+                            fileName = com.karakept.app.data.cache.OfflineHeroImages.bannerFileName(bannerImageAssetId),
                             contentType = null,
                             localPath = localPath
                         ))
@@ -1230,7 +1230,7 @@ class BookmarkRepository(
                     val bytes = remoteDataSource.downloadAsset(server, screenshotAssetId)
                     val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
                     val localPath = com.karakept.app.utils.FileUtils.saveFile(
-                        cacheDir, com.karakept.app.utils.OfflineHeroImages.screenshotFileName(screenshotAssetId), bytes
+                        cacheDir, com.karakept.app.data.cache.OfflineHeroImages.screenshotFileName(screenshotAssetId), bytes
                     )
                     assetDao.insertAssets(
                         listOf(AssetEntity(
@@ -1238,7 +1238,7 @@ class BookmarkRepository(
                             bookmarkRemoteId = bookmarkRemoteId,
                             serverId = serverId,
                             assetType = "screenshot",
-                            fileName = com.karakept.app.utils.OfflineHeroImages.screenshotFileName(screenshotAssetId),
+                            fileName = com.karakept.app.data.cache.OfflineHeroImages.screenshotFileName(screenshotAssetId),
                             contentType = null,
                             localPath = localPath
                         ))

@@ -1,11 +1,11 @@
 package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.ui.graphics.Color
-import com.karakept.app.utils.AppLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.karakept.app.data.local.dao.BookmarkDao
+import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.local.dao.AssetDao
+import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.DateDisplayMode
@@ -14,56 +14,34 @@ import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ViewerMode
+import com.karakept.app.data.remote.OfflineModeException
 import com.karakept.app.data.remote.RemoteDataSource
-import com.karakept.app.domain.OfflineRetention
-import com.karakept.api.model.KarakeepList as KarakeepList
+import com.karakept.app.data.remote.UnsupportedServerActionException
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.requestAiRetag
-import com.karakept.app.data.repository.summarizeBookmark
+import com.karakept.app.data.repository.ReadingProgressPullResult
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.data.repository.ReadingProgressPullResult
 import com.karakept.app.data.repository.pullReadingProgressFromServer
-import com.karakept.app.data.repository.setViewerMode
-import com.karakept.app.data.repository.setHtmlTextColor
-import com.karakept.app.data.repository.setHtmlBackgroundColor
-import com.karakept.app.data.repository.setHtmlFontSize
-import com.karakept.app.data.repository.setHtmlFontFamily
+import com.karakept.app.data.repository.requestAiRetag
 import com.karakept.app.data.repository.resetReaderAppearance
+import com.karakept.app.data.repository.setHtmlBackgroundColor
+import com.karakept.app.data.repository.setHtmlFontFamily
+import com.karakept.app.data.repository.setHtmlFontSize
+import com.karakept.app.data.repository.setHtmlTextColor
 import com.karakept.app.data.repository.setReaderHorizontalMarginDp
-import com.karakept.app.data.repository.setShowReaderHeroImage
 import com.karakept.app.data.repository.setReaderLineHeightScale
 import com.karakept.app.data.repository.setReaderMaxWidthDp
 import com.karakept.app.data.repository.setScrollToTopEnabled
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.getAndUpdate
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.async
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.coroutines.delay
-import com.karakept.app.data.remote.OfflineModeException
-import com.karakept.app.data.remote.UnsupportedServerActionException
-import com.karakept.app.domain.action.AiAction
+import com.karakept.app.data.repository.setShowReaderHeroImage
+import com.karakept.app.data.repository.setViewerMode
+import com.karakept.app.data.repository.summarizeBookmark
+import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.domain.action.ActionSnackbarManager
+import com.karakept.app.domain.action.AiAction
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
 import com.karakept.app.domain.action.ServerCrawlAction
-import com.karakept.app.ui.utils.ParsedDocumentCache
-import getPlatform
 import com.karakept.app.ui.screens.main.deleteBookmark
 import com.karakept.app.ui.screens.main.moveBookmarkToList
 import com.karakept.app.ui.screens.main.runAiAction
@@ -71,6 +49,28 @@ import com.karakept.app.ui.screens.main.toggleBookmarkArchive
 import com.karakept.app.ui.screens.main.toggleBookmarkFavorite
 import com.karakept.app.ui.screens.main.toggleBookmarkRead
 import com.karakept.app.ui.screens.main.updateBookmarkTags
+import com.karakept.app.ui.utils.ParsedDocumentCache
+import com.karakept.app.utils.AppLogger
+import getPlatform
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 // Crawl jobs are queued server-side, so the result is polled rather than waited for once.
 // Five attempts four seconds apart covers the ~20s a typical page takes without pinning the
@@ -964,8 +964,8 @@ class BookmarkViewerScreenModel(
     private fun cacheFileNameFor(asset: com.karakept.app.data.local.entity.AssetEntity): String =
         when (asset.assetType) {
             "fullPageArchive", "precrawledArchive" -> "archive_${asset.id}"
-            "bannerImage" -> com.karakept.app.utils.OfflineHeroImages.bannerFileName(asset.id)
-            "screenshot" -> com.karakept.app.utils.OfflineHeroImages.screenshotFileName(asset.id)
+            "bannerImage" -> com.karakept.app.data.cache.OfflineHeroImages.bannerFileName(asset.id)
+            "screenshot" -> com.karakept.app.data.cache.OfflineHeroImages.screenshotFileName(asset.id)
             "pdf" -> "asset_${asset.id}.pdf"
             else -> "asset_${asset.id}"
         }

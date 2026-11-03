@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.fleeksoft.ksoup.nodes.Document
+import com.karakept.app.data.cache.HtmlArchiveProcessor
+import com.karakept.app.data.cache.HtmlCache
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.ViewerMode
@@ -35,8 +37,6 @@ import com.karakept.app.ui.components.SkeletonLoader
 import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.utils.AppLogger
-import com.karakept.app.utils.HtmlArchiveProcessor
-import com.karakept.app.utils.HtmlCache
 import com.karakept.app.utils.HtmlSanitizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

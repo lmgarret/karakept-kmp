@@ -1,12 +1,14 @@
-package com.karakept.app.utils
+package com.karakept.app.data.cache
 
+import com.fleeksoft.ksoup.Ksoup
+import com.karakept.app.utils.AppLogger
+import com.karakept.app.utils.FileUtils
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
-import com.fleeksoft.ksoup.Ksoup
 
 /**
  * Manages offline image caching for bookmark HTML content.

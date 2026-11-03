@@ -1,4 +1,4 @@
-package com.karakept.app.utils
+package com.karakept.app.data.cache
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

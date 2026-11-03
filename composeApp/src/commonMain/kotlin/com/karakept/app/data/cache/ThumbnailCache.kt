@@ -1,4 +1,4 @@
-package com.karakept.app.utils
+package com.karakept.app.data.cache
 
 import coil3.SingletonImageLoader
 import coil3.annotation.ExperimentalCoilApi

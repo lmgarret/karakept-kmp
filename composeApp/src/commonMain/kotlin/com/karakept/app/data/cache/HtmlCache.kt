@@ -1,4 +1,4 @@
-package com.karakept.app.utils
+package com.karakept.app.data.cache
 
 object HtmlCache {
     private val cache = mutableMapOf<String, String>()

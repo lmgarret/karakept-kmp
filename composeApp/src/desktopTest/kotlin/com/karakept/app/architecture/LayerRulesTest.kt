@@ -119,7 +119,7 @@ class LayerRulesTest {
             "expect-actual:commonMain/kotlin/com/karakept/app/data/local/AppDatabase.kt",
             "expect-actual:commonMain/kotlin/com/karakept/app/ui/theme/WindowThemeSync.kt",
             "expect-actual:commonMain/kotlin/com/karakept/app/utils/AppLogger.kt",
-            "expect-actual:commonMain/kotlin/com/karakept/app/utils/ImageCacheManager.kt",
+            "expect-actual:commonMain/kotlin/com/karakept/app/data/cache/ImageCacheManager.kt",
         )
     }
 }

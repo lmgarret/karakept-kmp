@@ -1,43 +1,43 @@
 package com.karakept.app.di
 
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import com.karakept.api.client.*
+import com.karakept.api.infrastructure.ApiClient
 import com.karakept.app.data.local.AppDatabase
 import com.karakept.app.data.local.compact
-import com.karakept.app.data.local.reclaimableBytes
 import com.karakept.app.data.local.createDataStore
 import com.karakept.app.data.local.getDatabaseBuilder
-import com.karakept.app.data.remote.createHttpClient
-import io.ktor.client.HttpClient
-import org.koin.dsl.module
-import org.koin.core.module.dsl.viewModel
+import com.karakept.app.data.local.reclaimableBytes
 import com.karakept.app.data.remote.RemoteDataSource
-import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.utils.AppDispatchers
-import com.karakept.app.utils.DefaultAppDispatchers
-import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.repository.ServerVersionRepository
-import com.karakept.api.infrastructure.ApiClient
-import com.karakept.api.client.*
+import com.karakept.app.data.remote.createHttpClient
 import com.karakept.app.data.repository.BackupRepository
-import com.karakept.app.data.secure.SecureCredentialStore
+import com.karakept.app.data.repository.BookmarkActionsRepository
+import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
+import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.OfflineCacheRepository
+import com.karakept.app.data.repository.ServerRepository
+import com.karakept.app.data.repository.ServerVersionRepository
+import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.resolveOfflineScope
 import com.karakept.app.data.repository.toHierarchyNode
-import com.karakept.app.services.BackgroundSyncOrchestrator
-import com.karakept.app.ui.screens.onboarding.LoginScreenModel
-import com.karakept.app.ui.screens.onboarding.OnboardingScreenModel
-import com.karakept.app.ui.screens.main.MainScreenModel
-import com.karakept.app.ui.screens.viewer.BookmarkViewerScreenModel
-import com.karakept.app.ui.screens.settings.ReaderAppearanceScreenModel
-import com.karakept.app.ui.screens.settings.SettingsScreenModel
+import com.karakept.app.data.secure.SecureCredentialStore
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
+import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.ui.screens.highlights.HighlightsScreenModel
+import com.karakept.app.ui.screens.main.MainScreenModel
+import com.karakept.app.ui.screens.onboarding.LoginScreenModel
+import com.karakept.app.ui.screens.onboarding.OnboardingScreenModel
+import com.karakept.app.ui.screens.settings.ReaderAppearanceScreenModel
+import com.karakept.app.ui.screens.settings.SettingsScreenModel
+import com.karakept.app.ui.screens.viewer.BookmarkViewerScreenModel
+import com.karakept.app.utils.AppDispatchers
+import com.karakept.app.utils.DefaultAppDispatchers
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.first
+import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.module
 
 val appModule = module {
     single<AppDispatchers> { DefaultAppDispatchers() }
@@ -83,7 +83,7 @@ val appModule = module {
     single { get<AppDatabase>().highlightDao() }
     single { get<AppDatabase>().listDao() }
 
-    single { com.karakept.app.utils.ImageCacheManager(get()) }
+    single { com.karakept.app.data.cache.ImageCacheManager(get()) }
 
     single { createDataStore() }
 
@@ -109,7 +109,7 @@ val appModule = module {
             appDispatchers = get(),
             reclaimableDatabaseBytes = { database.reclaimableBytes() },
             compactDatabase = { database.compact() },
-            thumbnailCache = com.karakept.app.utils.CoilThumbnailCache,
+            thumbnailCache = com.karakept.app.data.cache.CoilThumbnailCache,
             offlineScope = {
                 settings.resolveOfflineScope(listDao.getAllListsOnce().map { it.toHierarchyNode() })
             }

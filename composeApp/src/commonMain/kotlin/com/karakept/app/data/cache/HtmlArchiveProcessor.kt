@@ -1,6 +1,8 @@
-package com.karakept.app.utils
+package com.karakept.app.data.cache
 
 import com.fleeksoft.ksoup.Ksoup
+import com.karakept.app.utils.AppLogger
+import com.karakept.app.utils.HtmlSanitizer
 
 /**
  * Processes HTML for Archive mode rendering.
