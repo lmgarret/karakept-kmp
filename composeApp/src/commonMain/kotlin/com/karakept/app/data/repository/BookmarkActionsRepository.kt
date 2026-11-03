@@ -622,7 +622,7 @@ class BookmarkActionsRepository(
         scrollOffset: Int
     ) {
         repositoryScope.launch {
-            bookmarkDao.updateReadingProgress(bookmarkLocalId, progress, scrollIndex, scrollOffset)
+            bookmarkDao.writeReadingProgress(bookmarkLocalId, progress, scrollIndex, scrollOffset)
             notifyBookmarkChanged(bookmarkRemoteId)
             if (serverId != null) {
                 queueReadingProgressUpdate(

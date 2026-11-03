@@ -83,7 +83,7 @@ class BookmarkRepository(
 
     suspend fun saveReadingProgress(localId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
         withContext(appDispatchers.io) {
-            bookmarkDao.updateReadingProgress(localId, progress, scrollIndex, scrollOffset)
+            bookmarkDao.writeReadingProgress(localId, progress, scrollIndex, scrollOffset)
         }
     }
 
@@ -989,4 +989,15 @@ internal fun findListsWithNewBookmarks(
             listNameMap[listId]?.let { name -> Triple(listId, name, count) }
         } else null
     }
+}
+
+// Shared with BookmarkActionsRepository.persistFinalReadingProgress, which must write on its own
+// scope and reaches BookmarkRepository only through a late-bound circular reference.
+internal suspend fun BookmarkDao.writeReadingProgress(
+    localId: Long,
+    progress: Float,
+    scrollIndex: Int,
+    scrollOffset: Int
+) {
+    updateReadingProgress(localId, progress, scrollIndex, scrollOffset)
 }
