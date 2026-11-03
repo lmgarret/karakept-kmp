@@ -41,7 +41,7 @@ private fun isSelectionManagerClass(cls: Class<*>): Boolean {
  * framework internals this reflection is not subject to the non-SDK interface
  * restrictions.
  */
-internal fun findSelectionManager(
+fun findSelectionManager(
     root: Any,
     maxDepth: Int = 6,
     visited: MutableSet<Int> = mutableSetOf()
@@ -77,7 +77,7 @@ internal fun findSelectionManager(
  * Compose exposes no public accessor for the current selection's text, so the
  * internal one is reached by reflection.
  */
-internal fun readSelectedText(selectionManager: Any): String? {
+fun readSelectedText(selectionManager: Any): String? {
     return try {
         val method = selectionManager.javaClass.methods
             .find { it.name.startsWith("getSelectedText") }
@@ -100,7 +100,7 @@ internal fun readSelectedText(selectionManager: Any): String? {
  * `SelectionManager` to perform its action. Reading one back out of those
  * closures is the only way to learn what the user selected.
  */
-internal class SelectionManagerHolder {
+class SelectionManagerHolder {
     var current: Any? = null
         private set
 

@@ -89,7 +89,7 @@ import kotlinx.datetime.toLocalDateTime
  * content source selection, and asset management.
  */
 @Composable
-internal fun BookmarkDetailsPanel(
+fun BookmarkDetailsPanel(
     visible: Boolean,
     bookmark: Bookmark?,
     assets: List<BookmarkAsset> = emptyList(),

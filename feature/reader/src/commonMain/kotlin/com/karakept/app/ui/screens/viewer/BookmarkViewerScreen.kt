@@ -10,7 +10,6 @@ import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.domain.action.TagFilterRequests
 import org.koin.compose.koinInject
-import com.karakept.app.ui.screens.main.MainScreenModel
 
 @Serializable
 @SerialName("com.karakept.app.ui.screens.BookmarkViewerScreen")

@@ -146,6 +146,7 @@ kotlin {
                 implementation(project(":core:model"))
                 implementation(project(":core:data"))
                 implementation(project(":core:ui"))
+                implementation(project(":feature:reader"))
                 
                 implementation(libs.compose.runtime)
                 implementation(libs.compose.foundation)

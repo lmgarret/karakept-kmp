@@ -148,7 +148,7 @@ internal fun rememberReadingProgress(
  * @return the current visibility paired with a function that toggles it.
  */
 @Composable
-internal fun rememberFabVisibilityState(
+fun rememberFabVisibilityState(
     scrollState: LazyListState,
     fabExpanded: Boolean,
     einkTapOnly: Boolean = false
@@ -211,7 +211,7 @@ internal fun rememberStickyTitleVisibility(
  * must only ever appear because [fabVisible] says so (i.e. the user tapped), matching the FAB.
  */
 @Composable
-internal fun rememberScrollToTopVisibility(
+fun rememberScrollToTopVisibility(
     scrollState: LazyListState,
     fabVisible: Boolean,
     einkTapOnly: Boolean = false

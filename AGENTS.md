@@ -44,7 +44,8 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 | Layer | Path |
 |---|---|
-| UI screens & ScreenModels | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/<feature>/` (`main`, `viewer`, `onboarding`, `settings`, `highlights`, `share`) |
+| UI screens & ScreenModels | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/<feature>/` (`main`, `onboarding`, `settings`, `highlights`, `share`); the viewer in `feature/reader/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/` |
+| Reader (HTML renderer, highlights in text, gallery, page snapping) | `feature/reader/src/commonMain/kotlin/com/karakept/app/ui/components/reader/` (module `:feature:reader`) |
 | Reusable UI components | `core/ui/src/commonMain/kotlin/com/karakept/app/ui/components/` (module `:core:ui`; `FilePicker` stays in `composeApp`) |
 | Theme (MD3 colors, typography), icons, `ui/utils`, `ui/input` | `core/ui/src/commonMain/kotlin/com/karakept/app/ui/` |
 | Domain logic | `core/data/src/commonMain/kotlin/com/karakept/app/domain/` |
@@ -70,12 +71,13 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 | Module | Plugin | Holds |
 |---|---|---|
-| `:composeApp` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Everything — commonMain, desktopMain, **and all of androidMain** (MainActivity, the workers, the manifest, `res/`) |
+| `:composeApp` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | The app shell: navigation, every screen but the viewer, Koin's `appModule`, services — **and all of the app's androidMain** (MainActivity, the workers, the manifest, `res/`) |
 | `:androidApp` | `com.android.application` | Nothing but build config: `applicationId`, build types, signing, versioning. **No Kotlin sources.** |
 | `:api-client` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | The OpenAPI-generated client |
 | `:core:model` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | `data/model`, `OfflineRetention`, `PlatformKeyCodes` — no dependency on any other app code |
 | `:core:data` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Room (+ KSP, `schemas/`), Ktor, repositories, `data/cache`, `data/secure`, `domain/`, and the utils those need |
 | `:core:ui` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Theme, `AppIcons`, `EinkAware` and every reusable component (bookmark, tags, highlight), `ui/utils`, `ui/input`, `AppNavigator`, the reader fonts (its own Compose resources), `getPlatform()` |
+| `:feature:reader` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | `ui/components/reader` and `ui/screens/viewer` (the bookmark viewer, its ScreenModel and `NavKey`) |
 | `:core:testing` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Test fixtures shared by several suites (`BaseRepositoryTest`, `TestAppDispatchers`, `FakeDataStore`) — test dependencies only |
 
 AGP 9 refuses to apply `com.android.application` alongside the Kotlin Multiplatform plugin, and
@@ -742,7 +744,7 @@ Every new feature or bug fix **must** include new or updated tests. Tests that b
 |---|---|
 | Common unit tests | `<module>/src/commonTest/kotlin/com/karakept/app/` — data and domain tests in `core/data`, model tests in `core/model`, the rest in `composeApp` |
 | Desktop integration tests | `core/data/src/desktopTest/kotlin/com/karakept/app/data/integration/` |
-| Android unit tests | `composeApp/src/androidHostTest/kotlin/com/karakept/app/` |
+| Android unit tests | `composeApp/src/androidHostTest/kotlin/com/karakept/app/` — every module's: only `:composeApp` has the Robolectric setup, so what they reach in another module has to be public |
 
 ### Running the Desktop App
 
