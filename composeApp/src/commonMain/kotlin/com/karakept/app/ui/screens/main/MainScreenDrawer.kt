@@ -60,7 +60,6 @@ import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.SyncKey
 import com.karakept.app.domain.ListHierarchyUtils
-import com.karakept.app.ui.screens.QuickFilterCounts
 import com.karakept.app.ui.utils.modalDrawerWidth
 import com.karakept.api.model.KarakeepList
 

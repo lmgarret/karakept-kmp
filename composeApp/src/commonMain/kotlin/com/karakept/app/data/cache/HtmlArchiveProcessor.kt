@@ -1,0 +1,86 @@
+package com.karakept.app.data.cache
+
+import com.fleeksoft.ksoup.Ksoup
+import com.karakept.app.utils.AppLogger
+import com.karakept.app.utils.HtmlSanitizer
+
+/**
+ * Processes HTML for Archive mode rendering.
+ *
+ * Archive mode preserves original stylesheets but removes all JavaScript
+ * and event handlers for security.
+ *
+ * Security measures:
+ * - Remove all <script> tags
+ * - Remove all inline event handlers (onclick, onload, etc.)
+ * - Validate URLs in href/src attributes
+ * - Keep <style> and <link rel="stylesheet"> for visual fidelity
+ */
+object HtmlArchiveProcessor {
+    fun processForArchive(html: String?): String {
+        if (html.isNullOrBlank()) return ""
+
+        return try {
+            val doc = Ksoup.parse(html)
+
+            // Optimize: Disable pretty printing
+            doc.outputSettings().prettyPrint(false)
+
+            // Remove ALL script tags
+            doc.select("script").remove()
+
+            // Remove dangerous embedding elements that can load external content/JS
+            doc.select("iframe, object, embed, applet").remove()
+
+            // Remove forms to prevent phishing attacks
+            doc.select("form").remove()
+
+            // Remove inline event handlers (defense in depth)
+            // Optimize: Select only elements with these attributes instead of iterating all elements
+            val eventHandlers = listOf(
+                "onclick", "onload", "onerror", "onmouseover", "onmouseout",
+                "onfocus", "onblur", "onchange", "onsubmit", "onkeydown",
+                "onkeyup", "onkeypress", "ondblclick", "onmousedown", "onmouseup",
+                "onmousemove", "onmouseleave", "onmouseenter", "oncontextmenu",
+                "oninput", "onscroll", "onwheel", "oncopy", "oncut", "onpaste"
+            )
+            
+            // Build a selector for all event handlers: [onclick], [onload], ...
+            val selector = eventHandlers.joinToString(", ") { "[$it]" }
+            doc.select(selector).forEach { element ->
+                eventHandlers.forEach { handler ->
+                    element.removeAttr(handler)
+                }
+            }
+
+            // Validate href URLs
+            doc.select("[href]").forEach { element ->
+                val href = element.attr("href")
+                if (!HtmlSanitizer.isValidUrl(href) && !href.startsWith("#")) {
+                    element.removeAttr("href")
+                }
+            }
+
+            // Validate src URLs
+            doc.select("[src]").forEach { element ->
+                val src = element.attr("src")
+                if (!HtmlSanitizer.isValidUrl(src)) {
+                    element.removeAttr("src")
+                }
+            }
+
+            // Wrap body content in karakept-content for highlighting offsets
+            val children = doc.body().childNodes().toList()
+            doc.body().empty()
+            doc.body().appendElement("div").attr("id", "karakept-content").appendChildren(children)
+            
+            // Keep <style> and <link rel="stylesheet"> for original styling
+            // They are preserved by not removing them
+
+            doc.html()
+        } catch (e: Exception) {
+            AppLogger.e("HtmlArchiveProcessor", "Error processing HTML: ${e.message}", e)
+            "" // Fail safe
+        }
+    }
+}

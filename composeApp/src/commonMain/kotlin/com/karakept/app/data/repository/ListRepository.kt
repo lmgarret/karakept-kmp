@@ -25,6 +25,9 @@ class ListRepository(
 ) {
     private val repositoryScope = CoroutineScope(SupervisorJob() + appDispatchers.default)
 
+    suspend fun fetchLists(server: Server): List<KarakeepList> =
+        withContext(appDispatchers.io) { remoteDataSource.fetchLists(server) }
+
     // Prevent concurrent refreshLists calls from each issuing a redundant network request.
     private val refreshMutex = kotlinx.coroutines.sync.Mutex()
 

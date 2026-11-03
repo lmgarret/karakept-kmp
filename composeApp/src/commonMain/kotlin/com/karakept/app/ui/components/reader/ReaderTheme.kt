@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.sp
  *
  * Four saturated fills all land within a couple of greys of one another on e-ink, so the fill only
  * says *that* a run is highlighted; which colour it is comes from the pattern rule
- * [com.karakept.app.ui.components.drawHighlightRule] draws underneath.
+ * [com.karakept.app.ui.components.highlight.drawHighlightRule] draws underneath.
  */
 @Immutable
 data class MonochromeHighlight(val fill: Color, val content: Color)

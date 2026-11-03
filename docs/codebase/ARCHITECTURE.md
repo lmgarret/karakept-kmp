@@ -33,7 +33,7 @@
 **Data Layer (Repositories):**
 - Purpose: Abstract data sources (local DB and remote API), provide unified interfaces for data access
 - Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/`
-- Contains: BookmarkRepository, ListRepository, ServerRepository, SettingsRepository, HighlightRepository, BookmarkActionsRepository, BackupRepository
+- Contains: BookmarkRepository, ListRepository, ServerRepository, SettingsRepository, HighlightRepository, BookmarkActionsRepository, BackupRepository, AssetRepository (a bookmark's asset rows, cached files and server copies)
 - Depends on: Local data source (DAOs, SQLDelight DB), Remote data source (Ktor client with generated API)
 - Used by: ScreenModels and domain layer (BookmarkActionController)
 
@@ -48,6 +48,16 @@
 - Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/remote/`
 - Contains: RemoteDataSource (wraps generated API clients), KtorClient (HTTP setup), API client instances (BookmarksApi, ListsApi, TagsApi, HighlightsApi, UsersApi)
 - Uses: Ktor HttpClient with authentication interceptor, generated API clients
+
+## Layer rules
+
+`LayerRulesTest` (`composeApp/src/desktopTest/.../architecture/`) pins the boundaries by scanning source text:
+- `ui/` never references `data.local.dao.*` or `RemoteDataSource` (`ui-data`).
+- `data/`, `domain/` and `utils/` never reference `com.karakept.app.ui.` (`lower-ui`).
+- `ui/screens/` holds only sub-packages, no files at its root (`screens-root`).
+- Every `expect` in `commonMain` has an `.android` and a `.jvm`/`.desktop` actual in the same package (`expect-actual`).
+
+Offenders that predate a rule sit in `LayerRulesTest.KNOWN_VIOLATIONS`; the rule fails on a new offender and on a stale entry, so a fix must delete its entry. `AppModuleGraphTest` resolves every ScreenModel and repository from `appModule` to catch wiring gaps.
 
 ## Data Flow
 
@@ -157,7 +167,7 @@ over the view and holds only the pages under the viewport; everything else is a
   cursor above all — is `scrollToItem` and the page under it is fetched afterwards. It used to
   be a walk: the list was indexed by the rows read so far, so reaching an arbitrary row meant
   reading everything in between (#273).
-- **The whole view is one `WHERE`** (`BookmarkRepository.buildViewPredicate`), including the
+- **The whole view is one `WHERE`** (`BookmarkViewQueries.buildViewPredicate`), including the
   clauses that were once applied in Kotlin after the read — tags, a multi-list selection, the
   read filter, the content filter. That is what makes an offset mean a view index; split across
   the two, a read had to over-fetch and estimate what the Kotlin side would discard.
@@ -186,7 +196,7 @@ current view, rebuilt on every write, to answer these.
 - Bound as a Koin `single<AppDispatchers> { DefaultAppDispatchers() }`; tests bind
   `TestAppDispatchers(testDispatcher)` so every coroutine the code starts stays on the test
   scheduler and is drained by `advanceUntilIdle()`
-- Injected into `BookmarkRepository`, `BookmarkActionsRepository`, `ListRepository` and
+- Injected into `BookmarkRepository`, `BookmarkActionsRepository`, `ListRepository`, `AssetRepository` and
   `BookmarkActionController`
 
 **ScreenModel (`androidx.lifecycle.ViewModel` subclass):**
@@ -207,7 +217,7 @@ current view, rebuilt on every write, to answer these.
   - Initialize the Nav3 `NavDisplay` host (back stack + entry decorators + Shared Axis Z / predictive-back transitions)
 
 **MainScreen / MainScreenModel:**
-- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreen.kt`
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreen.kt`
 - Triggers: After login/onboarding, when servers exist
 - Responsibilities:
   - Display list of bookmarks with filters, search, sorting
@@ -218,7 +228,7 @@ current view, rebuilt on every write, to answer these.
   - Route to BookmarkViewerScreen for detail view
 
 **BookmarkViewerScreen / BookmarkViewerScreenModel:**
-- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreen.kt`
+- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreen.kt`
 - Triggers: User taps bookmark from MainScreen or via deep link
 - Responsibilities:
   - Render full bookmark details with hero image, HTML content, highlights
@@ -274,7 +284,7 @@ current view, rebuilt on every write, to answer these.
   `GlobalScope`
 - The only remaining direct `Dispatchers` references are platform entry points
   (`main.kt`, `KarakeptApp.kt`, the desktop `FilePicker`) and CPU-bound HTML parsing in
-  `ui/components/HtmlContent.kt`
+  `ui/components/reader/HtmlContent.kt`
 
 **E-ink display mode:**
 - E-ink is its own top-level settings section (`SettingsSection.EINK`), not a link under
@@ -325,7 +335,7 @@ current view, rebuilt on every write, to answer these.
   because the platform key callback cannot suspend to read them.
 - Codes are learned from the device, except the volume rocker — `PageTurnKeyBindings.useVolumeKeys`
   binds it directly, since e-ink readers overwhelmingly wire their facade buttons to it. The two
-  codes come from `expect object PlatformKeyCodes`.
+  codes come from `expect object PlatformKeyCodes` (`utils/PlatformKeyCodes.kt`).
 - The same window rule constrains the *learning* UI: key capture is rendered inline in the E-ink
   settings screen, never in a Compose `Dialog`, because a dialog is its own platform window and
   `MainActivity.dispatchKeyEvent` never sees the keys pressed while it has focus.

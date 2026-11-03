@@ -24,7 +24,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import com.karakept.app.ui.icons.AppIcons
-import com.karakept.app.ui.screens.markAllBookmarksInListAsRead
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,12 +49,10 @@ import com.karakept.app.data.repository.setDrawerWidthDp
 import com.karakept.app.data.repository.setListColumnFraction
 import com.karakept.app.ui.components.DraggableDivider
 import com.karakept.app.ui.components.FilterSidePanel
-import com.karakept.app.ui.screens.BookmarkViewerContent
-import com.karakept.app.ui.screens.BookmarkViewerScreenModel
-import com.karakept.app.ui.screens.HighlightsScreenModel
-import com.karakept.app.ui.screens.MainScreenModel
-import com.karakept.app.ui.screens.QuickFilterCounts
-import com.karakept.app.ui.screens.SettingsScreen
+import com.karakept.app.ui.screens.viewer.BookmarkViewerContent
+import com.karakept.app.ui.screens.viewer.BookmarkViewerScreenModel
+import com.karakept.app.ui.screens.highlights.HighlightsScreenModel
+import com.karakept.app.ui.screens.settings.SettingsScreen
 import com.karakept.app.ui.screens.settings.PerListSettingsContent
 import com.karakept.app.ui.screens.settings.PerListSettingsScreenModel
 import com.karakept.app.ui.theme.LocalEinkMode

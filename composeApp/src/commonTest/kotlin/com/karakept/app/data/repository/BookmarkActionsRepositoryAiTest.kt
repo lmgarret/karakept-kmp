@@ -8,6 +8,7 @@ import com.karakept.app.data.remote.ApiException
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.remote.SummarizeResult
 import com.karakept.app.data.remote.UnsupportedServerActionException
+import com.karakept.app.domain.action.ServerCrawlAction
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -54,6 +55,17 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
 
     private fun withConfiguredServer() {
         every { serverRepository.servers } returns flowOf(listOf(testServer))
+    }
+
+    @Test
+    fun requestServerCrawl_mapsTheActionOntoTheRecrawlFlags() = runTest(testDispatcher) {
+        repository.requestServerCrawl(testServer, "remote-42", ServerCrawlAction.REFRESH)
+        repository.requestServerCrawl(testServer, "remote-42", ServerCrawlAction.PRESERVE_ARCHIVE)
+        repository.requestServerCrawl(testServer, "remote-42", ServerCrawlAction.PRESERVE_PDF)
+
+        coVerify { remoteDataSource.recrawlBookmark(testServer, "remote-42", false, false) }
+        coVerify { remoteDataSource.recrawlBookmark(testServer, "remote-42", true, false) }
+        coVerify { remoteDataSource.recrawlBookmark(testServer, "remote-42", false, true) }
     }
 
     // ── summarize ──────────────────────────────────────────────

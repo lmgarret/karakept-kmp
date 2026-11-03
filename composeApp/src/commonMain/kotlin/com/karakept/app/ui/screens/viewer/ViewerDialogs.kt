@@ -12,11 +12,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.HorizontalDivider
-import com.karakept.app.data.model.ContentSource
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -33,13 +32,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.karakept.app.data.model.ContentSource
+import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.ViewerMode
-import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
-import com.karakept.app.ui.components.HighlightDetailsBottomPanel
 import com.karakept.app.ui.components.einkModalBorder
-import com.karakept.app.data.model.Highlight
+import com.karakept.app.ui.components.highlight.HighlightDetailsBottomPanel
+import com.karakept.app.ui.components.reader.ReaderAppearanceBottomPanel
 import com.karakept.app.ui.icons.AppIcons
 import getPlatform
 

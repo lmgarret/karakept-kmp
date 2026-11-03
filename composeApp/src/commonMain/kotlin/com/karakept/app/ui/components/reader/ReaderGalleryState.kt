@@ -28,7 +28,7 @@ internal data class GalleryImage(
 
 /**
  * The reader's hero banner as a gallery entry, or null when it has no image to show.
- * Mirrors [com.karakept.app.ui.components.HeroImageBanner]'s own source priority so the
+ * Mirrors [com.karakept.app.ui.components.reader.HeroImageBanner]'s own source priority so the
  * full-screen view opens on exactly the picture the banner is displaying.
  */
 internal fun heroGalleryImage(
@@ -109,7 +109,7 @@ internal class GalleryViewerState {
     }
 }
 
-/** Provided by [com.karakept.app.ui.screens.BookmarkViewerContent], consumed by [com.karakept.app.ui.components.reader]'s image renderer to open the viewer. */
+/** Provided by [com.karakept.app.ui.screens.viewer.BookmarkViewerContent], consumed by [com.karakept.app.ui.components.reader]'s image renderer to open the viewer. */
 internal val LocalGalleryViewerState = staticCompositionLocalOf<GalleryViewerState?> { null }
 
 /**

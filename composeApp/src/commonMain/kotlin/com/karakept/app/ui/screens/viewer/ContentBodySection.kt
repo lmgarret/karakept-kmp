@@ -29,18 +29,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.fleeksoft.ksoup.nodes.Document
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.ViewerMode
-import com.karakept.app.ui.components.BookmarkContentLoader
-import com.karakept.app.ui.components.HtmlContent
-import com.karakept.app.ui.components.WebModeBadge
-import com.fleeksoft.ksoup.nodes.Document
+import com.karakept.app.ui.components.reader.BookmarkContentLoader
+import com.karakept.app.ui.components.reader.HtmlContent
 import com.karakept.app.ui.components.reader.SearchMatch
+import com.karakept.app.ui.components.reader.WebModeBadge
 import com.karakept.app.ui.icons.AppIcons
-import com.karakept.app.ui.screens.BookmarkLoadingState
-
 @Composable
 internal fun ContentBodySection(
     content: String?,
@@ -65,7 +63,7 @@ internal fun ContentBodySection(
     onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
     onDeleteHighlight: (String) -> Unit = {},
     onHighlightClick: (String) -> Unit = {},
-    onHighlightPosition: (String, com.karakept.app.ui.components.HighlightPosition) -> Unit = { _, _ -> },
+    onHighlightPosition: (String, com.karakept.app.ui.components.highlight.HighlightPosition) -> Unit = { _, _ -> },
     onContentReady: (() -> Unit)? = null,
     scrollToHighlightId: String? = null,
     selectedHighlightId: String? = null,

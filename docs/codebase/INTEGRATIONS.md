@@ -289,12 +289,12 @@ settle on the last one to push.
 **Image Loading:**
 - Library: Coil 3.0.0 with Ktor network engine
 - Caching: Automatic disk + memory caching via Coil
-- Manager: `ImageCacheManager` in `com/karakept/app/utils/`
+- Manager: `ImageCacheManager` in `com/karakept/app/data/cache/`
 - Network: Uses Ktor HttpClient for downloads
 
 **Asset Storage:**
 - Downloaded assets stored in `AssetEntity` (SQLite)
-- Accessible via `AssetDao`
+- Accessible via `AssetRepository`
 - Used for: Thumbnails, preview images
 
 ## Desktop Tray & Notifications

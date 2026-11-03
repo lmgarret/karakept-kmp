@@ -295,7 +295,7 @@ interface BookmarkDao {
     suspend fun getBookmarksPaged(query: RoomRawQuery): List<BookmarkEntity>
 
     // The size of a view, from the same predicate that selects its rows — see
-    // BookmarkRepository.buildViewPredicate. A count and the rows it counts cannot disagree
+    // BookmarkViewQueries.buildViewPredicate. A count and the rows it counts cannot disagree
     // when one WHERE defines both.
     @RawQuery
     suspend fun countBookmarks(query: RoomRawQuery): Int

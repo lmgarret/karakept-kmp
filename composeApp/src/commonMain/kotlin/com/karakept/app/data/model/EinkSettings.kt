@@ -1,6 +1,6 @@
 package com.karakept.app.data.model
 
-import com.karakept.app.ui.input.PlatformKeyCodes
+import com.karakept.app.utils.PlatformKeyCodes
 
 /**
  * Which way a hardware page-turn button moves the content.

@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.karakept.app.ui.components.BusyIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,8 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.model.Highlight
-import com.karakept.app.ui.components.HighlightCard
+import com.karakept.app.ui.components.BusyIndicator
 import com.karakept.app.ui.components.RefreshableBox
+import com.karakept.app.ui.components.highlight.HighlightCard
 import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.LocalEinkMode
 

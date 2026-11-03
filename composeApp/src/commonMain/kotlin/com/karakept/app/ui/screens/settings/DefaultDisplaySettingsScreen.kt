@@ -37,8 +37,6 @@ import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LayoutType
-import com.karakept.app.ui.screens.SettingsScreenModel
-
 @Serializable
 class DefaultDisplaySettingsScreen : NavKey {
     @OptIn(ExperimentalMaterial3Api::class)

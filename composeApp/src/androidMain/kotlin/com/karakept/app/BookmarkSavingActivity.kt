@@ -28,8 +28,8 @@ import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.appEntryProvider
 import com.karakept.app.ui.navigation.sharedAxisZBackward
 import com.karakept.app.ui.navigation.sharedAxisZForward
-import com.karakept.app.ui.screens.ShareBookmarkScreen
-import com.karakept.app.ui.screens.ShareMultipleBookmarksScreen
+import com.karakept.app.ui.screens.share.ShareBookmarkScreen
+import com.karakept.app.ui.screens.share.ShareMultipleBookmarksScreen
 import com.karakept.app.ui.theme.AppTheme
 import org.koin.compose.koinInject
 

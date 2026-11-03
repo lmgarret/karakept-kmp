@@ -8,28 +8,28 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.relocation.BringIntoViewModifierNode
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fleeksoft.ksoup.Ksoup
@@ -39,9 +39,9 @@ import com.fleeksoft.ksoup.nodes.TextNode
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
+import com.karakept.app.ui.components.highlight.HighlightPosition
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.theme.rememberFontFamily
-import com.karakept.app.ui.components.HighlightPosition
 
 /**
  * Native Compose Multiplatform HTML renderer for READER mode.

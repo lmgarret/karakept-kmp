@@ -3,6 +3,7 @@ package com.karakept.app.data.repository
 import com.karakept.app.data.local.dao.ServerDao
 import com.karakept.app.data.local.entity.ServerEntity
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.secure.SecureCredentialStore
 import com.karakept.app.utils.AppLogger
 import kotlinx.coroutines.flow.Flow
@@ -12,7 +13,8 @@ import kotlinx.coroutines.sync.withLock
 
 class ServerRepository(
     private val serverDao: ServerDao,
-    private val secureStore: SecureCredentialStore
+    private val secureStore: SecureCredentialStore,
+    private val remoteDataSource: RemoteDataSource
 ) {
     private var migrated = false
     private val migrationMutex = Mutex()
@@ -51,6 +53,9 @@ class ServerRepository(
         } catch (_: Exception) {}
         serverDao.deleteAllServers()
     }
+
+    suspend fun testConnection(url: String, apiKey: String): Boolean =
+        remoteDataSource.testConnection(url, apiKey)
 
     suspend fun triggerMigration() {
         ensureMigrated()

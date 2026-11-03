@@ -32,9 +32,10 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 **Key patterns:**
 - **ScreenModel** = an `androidx.lifecycle.ViewModel` subclass (named `*ScreenModel` by convention), scoped per Nav3 back-stack entry via `rememberViewModelStoreNavEntryDecorator`, injected with `koinViewModel`.
-- **Navigation 3**: the back stack is a developer-owned `NavBackStack` of `@Serializable` `NavKey`s, rendered by `NavDisplay`. Each screen *is* a `NavKey` with a `Content()` composable; routing goes through `AppNavigator`/`LocalNavigator` (`ui/navigation/`). Predictive back (Android 14+) is wired via `NavDisplay`'s `predictivePopTransitionSpec`.
+- **Navigation 3**: the back stack is a developer-owned `NavBackStack` of `@Serializable` `NavKey`s, rendered by `NavDisplay`. Each screen *is* a `NavKey` with a `Content()` composable; routing goes through `AppNavigator`/`LocalNavigator` (`ui/navigation/`). Predictive back (Android 14+) is wired via `NavDisplay`'s `predictivePopTransitionSpec`. A `NavKey` that is ever moved to another package keeps its old serial name with `@SerialName("<old fq name>")` (`NavKeySerialNamesTest` pins the ones that moved), since the name is what a saved back stack is restored by.
 - **Repository pattern**: each domain concept (`BookmarkRepository`, `ListRepository`, etc.) is the single source of truth.
 - **Offline-first**: mutations are queued in `PendingActionDao` and synced on reconnect.
+- **Layer rules** are enforced by `LayerRulesTest` (`composeApp/src/desktopTest/.../architecture/`); pre-existing offenders are listed in its `KNOWN_VIOLATIONS`, which only shrinks.
 - **BookmarkActionController**: centralizes all bookmark mutations with 5-second undo support.
 - **StateFlow / SharedFlow**: ScreenModels expose `StateFlow` for UI state and `SharedFlow` for one-shot events.
 
@@ -42,7 +43,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 | Layer | Path |
 |---|---|
-| UI screens & ScreenModels | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/` |
+| UI screens & ScreenModels | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/<feature>/` (`main`, `viewer`, `onboarding`, `settings`, `highlights`, `share`) |
 | Reusable UI components | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/` |
 | Theme (MD3 colors, typography) | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/theme/` |
 | Domain logic | `composeApp/src/commonMain/kotlin/com/karakept/app/domain/` |
@@ -149,8 +150,8 @@ knowing before touching any of it:
 
 | New thing | Where |
 |---|---|
-| New screen | `ui/screens/[Feature]Screen.kt` (a `@Serializable` `NavKey` with `Content()`) + `[Feature]ScreenModel.kt`; register `viewModel { }` in `AppModule.kt`, add an `entry<…>` in `appEntryProvider()` and a `subclass(…)` in `navKeySerializersModule` |
-| New reusable component | `ui/components/[Component].kt` |
+| New screen | `ui/screens/[feature]/[Feature]Screen.kt` (a `@Serializable` `NavKey` with `Content()`) + `[Feature]ScreenModel.kt`; register `viewModel { }` in `AppModule.kt`, add an `entry<…>` in `appEntryProvider()` and a `subclass(…)` in `navKeySerializersModule` |
+| New reusable component | `ui/components/[feature]/[Component].kt` for bookmark/tags/highlight/reader components, `ui/components/[Component].kt` for generic ones |
 | New repository | `data/repository/[Domain]Repository.kt`, add `single()` to `AppModule.kt` |
 | New DB entity | `data/local/entity/`, new DAO, update `AppDatabase.kt`, add migration, register in builders |
 | New domain logic | `domain/[Logic]Utils.kt` or extend `BookmarkActionEvent` + `BookmarkActionController` |
@@ -188,12 +189,12 @@ The generator needs network access and is run by hand, never from the build.
 
 ### Tag display
 
-**`TagChip`** (`ui/components/TagChip.kt`)
+**`TagChip`** (`ui/components/tags/TagChip.kt`)
 - Single tag chip: `secondaryContainer` surface, `shapes.small`, 2dp elevation.
 - Supports optional `onRemove` (shows ✕ button) and `onClick`.
 - **Use everywhere a single tag chip is displayed.**
 
-**`BookmarkTagsDisplay`** (`ui/components/BookmarkTagsDisplay.kt`)
+**`BookmarkTagsDisplay`** (`ui/components/tags/BookmarkTagsDisplay.kt`)
 - Renders a comma-separated tag string as a `FlowRow` of `TagChip` chips.
 - Accepts `style` (`COMPACT` / `READER`), optional `onTagClick`, `scrollable`, and `modifier`.
 - `maxLines` caps how many rows of chips the flow may wrap onto. A caller holding its row to a
@@ -252,7 +253,7 @@ full-bleed and its divider reaches both edges.
 
 ### Tag editing and filtering
 
-**`TagEditorDialog`** (`ui/components/TagEditorDialog.kt`)
+**`TagEditorDialog`** (`ui/components/tags/TagEditorDialog.kt`)
 - `canCreateNew = true` (default): bookmark tag editing — allows free-text tags.
 - `canCreateNew = false`: filter-by-tag mode — only existing tags selectable.
 - Always pass `availableTags` from the screen's state for suggestions.
@@ -306,7 +307,7 @@ full-bleed and its divider reaches both edges.
 > change what non-e-ink users see. The same goes for an indeterminate bar or spinner: keep it off
 > e-ink, swap to `InlineLoadingDots` on it.
 
-**`BookmarkRowSkeleton`** (`ui/components/BookmarkRowSkeleton.kt`) — the one placeholder that is
+**`BookmarkRowSkeleton`** (`ui/components/bookmark/BookmarkRowSkeleton.kt`) — the one placeholder that is
 *per row* rather than per screen, and the one that draws **nothing at all** on e-ink.
 
 - Off e-ink it is a shimmering sketch of the row: blocks taken from `BookmarkRowMetrics`, so it is
@@ -441,7 +442,7 @@ On a monochrome panel the four fills all land within a couple of greys of each o
 `highContrast` the fill stops carrying the colour and the **pattern** does:
 solid (yellow) / double (blue) / dashed (green) / dotted (red).
 
-- **`drawHighlightRule(...)`** (`ui/components/HighlightPatterns.kt`) — a `DrawScope` extension
+- **`drawHighlightRule(...)`** (`ui/components/highlight/HighlightPatterns.kt`) — a `DrawScope` extension
   drawing the pattern as a horizontal rule, growing *upward* from a `bottom` edge so it stays
   inside the band whatever the line height. `AnnotatedClickableText` calls it once per line box of
   every highlighted run, via `drawWithContent` **after** `drawContent()` — a highlight's fill is a
@@ -552,7 +553,7 @@ the other. Consequences worth knowing before touching any of it:
 page turns. Key codes are *learned from the device* in the E-ink settings screen, not hardcoded —
 except the volume rocker, which nearly every e-ink reader wires its facade buttons to and which
 `PageTurnKeyBindings.useVolumeKeys` offers as a one-switch preset (`invertVolumeKeys` swaps the
-two for the other grip). The codes come from `expect object PlatformKeyCodes`, since Android and
+two for the other grip). The codes come from `expect object PlatformKeyCodes` (`utils/PlatformKeyCodes.kt`, so the data layer can read it), since Android and
 desktop number keys differently.
 
 A scrollable screen opts in with `PageTurnScrollEffect(listState)`; pass `enabled = false` when
@@ -672,7 +673,7 @@ finishes inside one `scroll {}` block.
 
 ### Menus and bottom sheets
 
-- **`ModalBottomSheet`** + `DropdownMenuItem` → contextual bookmark action menus (see `BookmarkActionsMenu.kt`).
+- **`ModalBottomSheet`** + `DropdownMenuItem` → contextual bookmark action menus (see `bookmark/BookmarkActionsMenu.kt`).
 - **`ModalBottomSheet`** + MD3 `ListItem` → list pickers (see `ListPickerDialog.kt`).
 - **`AlertDialog`** → confirmation and simple edit dialogs.
 - **`DropdownMenu`** anchored to `IconButton` → overflow menus on list items.

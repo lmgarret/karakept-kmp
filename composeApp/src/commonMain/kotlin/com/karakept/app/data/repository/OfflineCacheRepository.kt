@@ -1,5 +1,7 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.data.cache.NoThumbnailCache
+import com.karakept.app.data.cache.ThumbnailCache
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.projection.OfflineHolderRow
@@ -9,9 +11,7 @@ import com.karakept.app.utils.AppDispatchers
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.FileUtils
 import com.karakept.app.utils.LocalFileInfo
-import com.karakept.app.utils.NoThumbnailCache
 import com.karakept.app.utils.StorageInfo
-import com.karakept.app.utils.ThumbnailCache
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

@@ -2,6 +2,7 @@ package com.karakept.app.data.integration
 
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import com.karakept.app.data.cache.ImageCacheManager
 import com.karakept.app.data.local.AppDatabase
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SyncStrategy
@@ -12,24 +13,23 @@ import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.utils.ImageCacheManager
+import com.karakept.app.utils.DefaultAppDispatchers
 import io.ktor.client.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.serialization.kotlinx.json.*
+import io.mockk.every
+import io.mockk.mockk
+import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.serialization.json.Json
-import io.mockk.every
-import io.mockk.mockk
 import org.junit.After
 import org.junit.AfterClass
 import org.junit.Before
 import org.junit.BeforeClass
-import java.io.File
-import java.util.concurrent.TimeUnit
-import com.karakept.app.utils.DefaultAppDispatchers
 
 /**
  * Base class for integration tests that require a running Karakeep backend.

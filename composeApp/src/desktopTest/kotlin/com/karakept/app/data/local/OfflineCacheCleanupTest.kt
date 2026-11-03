@@ -3,6 +3,8 @@ package com.karakept.app.data.local
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
+import com.karakept.app.data.cache.NoThumbnailCache
+import com.karakept.app.data.cache.ThumbnailCache
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.migrations.MIGRATION_14_15
@@ -16,20 +18,18 @@ import com.karakept.app.domain.OfflineScope
 import com.karakept.app.domain.OfflineRetention.DAY_MILLIS
 import com.karakept.app.utils.DefaultAppDispatchers
 import com.karakept.app.utils.LocalFileInfo
-import com.karakept.app.utils.NoThumbnailCache
 import com.karakept.app.utils.StorageInfo
-import com.karakept.app.utils.ThumbnailCache
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 
 /**
  * Offline cache cleanup against a real database: the retention SQL, the orphan queries and the

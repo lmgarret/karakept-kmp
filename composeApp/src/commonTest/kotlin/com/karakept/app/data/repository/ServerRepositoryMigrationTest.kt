@@ -25,7 +25,7 @@ class ServerRepositoryMigrationTest {
     private val serverDao: ServerDao = mockk(relaxed = true)
     private val secureStore: SecureCredentialStore = mockk(relaxed = true)
 
-    private fun createRepo() = ServerRepository(serverDao, secureStore)
+    private fun createRepo() = ServerRepository(serverDao, secureStore, mockk(relaxed = true))
 
     private val serverWithKey = ServerEntity(
         id = "s1",

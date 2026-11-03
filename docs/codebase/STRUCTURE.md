@@ -18,6 +18,7 @@ karakept-kmp/
 │   │   │   │   ├── transitions/            # Navigation transitions
 │   │   │   │   └── utils/                  # UI-specific utilities
 │   │   │   ├── data/
+│   │   │   │   ├── cache/                  # Image/asset disk caches
 │   │   │   │   ├── local/                  # Room database, DAOs, entities, migrations
 │   │   │   │   ├── remote/                 # Ktor client, RemoteDataSource, API clients
 │   │   │   │   ├── repository/             # Data repositories (abstraction layer)
@@ -27,7 +28,7 @@ karakept-kmp/
 │   │   │   │   ├── BookmarkFilterUtils.kt  # Filtering logic
 │   │   │   │   └── ListHierarchyUtils.kt   # List hierarchy sorting and filtering
 │   │   │   ├── di/                         # Koin dependency injection module
-│   │   │   ├── utils/                      # Shared utilities (Date, File, Image, etc.)
+│   │   │   ├── utils/                      # Shared utilities (Date, File, etc.)
 │   │   │   ├── api/                        # Generated API model types
 │   │   │   └── composeResources/           # Images, fonts, drawable assets
 │   │   └── androidMain/kotlin/com/karakept/app/
@@ -43,21 +44,26 @@ karakept-kmp/
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/:**
 - Purpose: Screen-level composables and their ScreenModels (MVVM state holders)
-- Contains: MainScreen, BookmarkViewerScreen, LoginScreen, SettingsScreen, OnboardingScreen, HighlightsScreen, ReaderAppearanceScreen, ShareBookmarkScreen
+- Contains: only feature sub-packages, no files at the root (enforced by `LayerRulesTest`)
 - Key files:
-  - `MainScreenModel.kt` - Primary screen state: server selection, filters, pagination, sync
-  - `BookmarkViewerScreenModel.kt` - Detail view state: highlight management, reader appearance
-  - `SettingsScreenModel.kt` - Settings mutations, list management, backup/restore
-  - `settings/` subdirectory - Nested settings screens (ListManagementScreen, PerListSettingsScreen, LayoutEditorScreen, BackupRestoreScreen)
+  - `main/MainScreenModel.kt` - Primary screen state: server selection, filters, pagination, sync
+  - `viewer/BookmarkViewerScreenModel.kt` - Detail view state: highlight management, reader appearance
+  - `settings/SettingsScreenModel.kt` - Settings mutations, list management, backup/restore
+  - `main/` - MainScreen and its ScreenModel, dialogs, drawer, list content
+  - `viewer/` - BookmarkViewerScreen, its ScreenModel and panels
+  - `onboarding/` - LoginScreen, OnboardingScreen, notification permission prompt
+  - `settings/` - SettingsScreen, ReaderAppearanceScreen, AboutScreen, DevLogsScreen and the nested settings screens (ListManagementScreen, PerListSettingsScreen, LayoutEditorScreen, BackupRestoreScreen)
+  - `highlights/` - HighlightsScreen and its ScreenModel
+  - `share/` - ShareBookmarkScreen, ShareMultipleBookmarksScreen, SaveErrorScreen
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/:**
 - Purpose: Reusable, single-purpose composable building blocks
-- Contains: Tag-related (TagChip, BookmarkTagsDisplay, TagEditorDialog), Actions (BookmarkActionsMenu), Lists (ListPickerDialog), Filters (FilterBottomPanel), Readers (reader/ subdirectory with HighlightTextToolbar, HtmlRenderer)
+- Contains: generic components at the root (BaseBottomPanel, EinkAware, ListPickerDialog, FilterBottomPanel) and feature subpackages: `tags/` (TagChip, BookmarkTagsDisplay, TagEditorDialog), `bookmark/` (BookmarkActionsMenu, BookmarkLayouts, row items and badges), `highlight/` (HighlightCard and friends), `reader/` (HtmlRenderer, HtmlContent, HighlightTextToolbar, ViewerModeToggle)
 - Key files:
-  - `TagChip.kt` - Single tag display (canonical design: secondaryContainer, shapes.small, 2dp elevation)
-  - `BookmarkTagsDisplay.kt` - Renders comma-separated tag string as FlowRow
+  - `tags/TagChip.kt` - Single tag display (canonical design: secondaryContainer, shapes.small, 2dp elevation)
+  - `tags/BookmarkTagsDisplay.kt` - Renders comma-separated tag string as FlowRow
   - `FilterBottomPanel.kt` - Filter UI with tag, list, and status controls
-  - `BookmarkLayouts.kt` - Layout variants for bookmark items (compact, expanded, reader)
+  - `bookmark/BookmarkLayouts.kt` - Layout variants for bookmark items (compact, expanded, reader)
   - `BaseBottomPanel.kt` - Base for modal bottom sheets (matches ModalBottomSheet styling)
   - `reader/` - HTML content rendering, highlight toolbar, scrollable containers
 
@@ -87,6 +93,7 @@ karakept-kmp/
 - Purpose: Data abstraction layer, single source of truth for each domain concept
 - Contains:
   - `BookmarkRepository.kt` - Bookmark queries, sync strategies (full/filtered/per-list)
+  - `AssetRepository.kt` - Asset (archive, attachment) fetch, cache and detach
   - `ListRepository.kt` - List CRUD and sync
   - `ServerRepository.kt` - Server management and multi-server support
   - `SettingsRepository.kt` - User preferences (theme, offline mode, reader appearance, etc.)
@@ -105,6 +112,10 @@ karakept-kmp/
   - `ListHierarchyUtils.kt` - List ordering (parents before children, alphabetical at each level), collapsible tree helpers
   - `DefaultFilterResolver.kt` - Resolve default filter based on settings
 
+**composeApp/src/commonMain/kotlin/com/karakept/app/data/cache/:**
+- Purpose: Offline caches owned by the data layer
+- Contains: HtmlCache, ImageCacheManager (plus the `fileExists` expect/actual), ThumbnailCache, OfflineHeroImages, HtmlArchiveProcessor
+
 **composeApp/src/commonMain/kotlin/com/karakept/app/di/:**
 - Purpose: Dependency injection container setup
 - Contains:
@@ -113,7 +124,7 @@ karakept-kmp/
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/utils/:**
 - Purpose: Shared, platform-agnostic utilities
-- Contains: DateUtils.kt, FileUtils.kt, ImageCacheManager.kt, AssetUrlUtils.kt, FaviconUtils.kt, ShareUtils.kt, HapticUtils.kt, ReadingTimeCalculator.kt, BackupCrypto.kt
+- Contains: DateUtils.kt, FileUtils.kt, AssetUrlUtils.kt, FaviconUtils.kt, ShareUtils.kt, HapticUtils.kt, ReadingTimeCalculator.kt, BackupCrypto.kt
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/data/model/:**
 - Purpose: Domain data models and enums
@@ -146,15 +157,15 @@ karakept-kmp/
 - `composeApp/src/commonMain/kotlin/com/karakept/app/data/remote/RemoteDataSource.kt` - Remote API abstraction
 
 **UI Composition:**
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/MainScreen.kt` - Primary app screen
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/BookmarkViewerScreen.kt` - Bookmark detail view
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreen.kt` - Primary app screen
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreen.kt` - Bookmark detail view
 - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/theme/Theme.kt` - Material3 theme
 
 **Utilities & Helpers:**
 - `composeApp/src/commonMain/kotlin/com/karakept/app/domain/ListHierarchyUtils.kt` - List sorting and filtering
 - `composeApp/src/commonMain/kotlin/com/karakept/app/domain/BookmarkFilterUtils.kt` - Bookmark predicate filters
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/TagChip.kt` - Reusable tag display
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/BookmarkTagsDisplay.kt` - Tag string rendering
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/tags/TagChip.kt` - Reusable tag display
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/tags/BookmarkTagsDisplay.kt` - Tag string rendering
 
 ## Naming Conventions
 
@@ -168,7 +179,7 @@ karakept-kmp/
 - Migrations: `Migration*To*.kt` (Migration1To2.kt, Migration7To8.kt)
 
 **Directories:**
-- Screen directories under `ui/screens/`: flat (LoginScreen.kt, MainScreen.kt) or nested (screens/settings/ListManagementScreen.kt)
+- Screen directories under `ui/screens/`: one sub-package per feature (screens/main/MainScreen.kt, screens/settings/ListManagementScreen.kt); no files at the `ui/screens/` root
 - Component directories: Single-word descriptors (components/reader/, components/ for general)
 - Data layer: Clear domain separation (local/, remote/, repository/, model/)
 
@@ -186,14 +197,14 @@ karakept-kmp/
 ## Where to Add New Code
 
 **New Screen (Feature):**
-- Screen composable: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/[FeatureName]Screen.kt`
-- ScreenModel: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/[FeatureName]ScreenModel.kt`
-- If nested (e.g., settings): Create subdirectory `screens/[category]/`
+- Screen composable: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/[feature]/[FeatureName]Screen.kt`
+- ScreenModel: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/[feature]/[FeatureName]ScreenModel.kt`
+- A new feature gets its own `screens/[feature]/` package; a sub-screen of an existing feature goes in that feature's package
 - Register in DI: Add factory binding to `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt`
 
 **New Reusable Component:**
 - Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/[ComponentName].kt`
-- For category-specific components: Create subdirectory (e.g., `components/reader/`, `components/filters/`)
+- For category-specific components: Place it in the matching subpackage (`components/tags/`, `components/bookmark/`, `components/highlight/`, `components/reader/`); only generic components live at the root
 - Follow existing patterns: Use Material3 composables (ListItem, NavigationDrawerItem, FilterChip), prefer composition over custom Surfaces
 
 **New Repository/Data Service:**

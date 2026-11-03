@@ -170,14 +170,14 @@ fun App(
                 if (backStack.isNotEmpty()) return@LaunchedEffect
 
                 val startKeys: List<NavKey> = if (sharedUrl != null) {
-                    listOf(com.karakept.app.ui.screens.ShareBookmarkScreen(sharedUrl))
+                    listOf(com.karakept.app.ui.screens.share.ShareBookmarkScreen(sharedUrl))
                 } else if (serverRepository.hasServers()) {
                     buildList {
-                        add(com.karakept.app.ui.screens.MainScreen)
+                        add(com.karakept.app.ui.screens.main.MainScreen)
                         if (saveErrorUrl != null) {
                             AppLogger.d("App", "Save error for $saveErrorUrl. Adding SaveErrorScreen.")
                             add(
-                                com.karakept.app.ui.screens.SaveErrorScreen(
+                                com.karakept.app.ui.screens.share.SaveErrorScreen(
                                     url = saveErrorUrl,
                                     message = saveErrorMessage ?: "Unknown error"
                                 )
@@ -188,7 +188,7 @@ fun App(
                                 val bookmarkIdLong = openBookmarkId.toLong()
                                 AppLogger.d("App", "Parsing bookmark ID $bookmarkIdLong. Adding BookmarkViewerScreen.")
                                 // BookmarkViewerScreen only needs bookmarkId (Long). It resolves the server internally.
-                                add(com.karakept.app.ui.screens.BookmarkViewerScreen(bookmarkIdLong))
+                                add(com.karakept.app.ui.screens.viewer.BookmarkViewerScreen(bookmarkIdLong))
                             } catch (e: Exception) {
                                 AppLogger.w("App", "Error parsing openBookmarkId: ${e.message}")
                             }
@@ -200,10 +200,10 @@ fun App(
                     val onboardingCompleted = settingsRepository.onboardingCompleted.first()
                     if (!onboardingCompleted) {
                         AppLogger.d("App", "First launch, showing OnboardingScreen")
-                        listOf(com.karakept.app.ui.screens.OnboardingScreen())
+                        listOf(com.karakept.app.ui.screens.onboarding.OnboardingScreen())
                     } else {
                         AppLogger.d("App", "No servers, showing LoginScreen")
-                        listOf(com.karakept.app.ui.screens.LoginScreen())
+                        listOf(com.karakept.app.ui.screens.onboarding.LoginScreen())
                     }
                 }
                 backStack.addAll(startKeys)

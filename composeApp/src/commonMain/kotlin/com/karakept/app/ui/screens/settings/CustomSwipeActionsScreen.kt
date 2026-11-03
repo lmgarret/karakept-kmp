@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,15 +25,19 @@ import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -46,28 +51,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
-import com.karakept.app.ui.icons.AppIcons
-import kotlinx.serialization.Serializable
-import org.koin.compose.viewmodel.koinViewModel
-import com.karakept.app.ui.navigation.LocalNavigator
-import com.karakept.app.ui.navigation.currentOrThrow
+import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.CustomSwipeActionType
-import com.karakept.app.ui.components.EinkAwareFab
-import com.karakept.app.ui.components.TagChip
-import com.karakept.app.ui.components.TagEditorDialog
-import com.karakept.app.ui.components.einkModalBorder
-import com.karakept.app.ui.screens.SettingsScreenModel
 import com.karakept.app.domain.ListHierarchyUtils
-import com.karakept.api.model.KarakeepList
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
+import com.karakept.app.ui.components.EinkAwareFab
+import com.karakept.app.ui.components.einkModalBorder
+import com.karakept.app.ui.components.tags.TagChip
+import com.karakept.app.ui.components.tags.TagEditorDialog
+import com.karakept.app.ui.icons.AppIcons
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
+import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 private val PRESET_COLORS = listOf(
     "#009688" to "Teal",

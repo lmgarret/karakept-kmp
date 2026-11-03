@@ -1,6 +1,5 @@
 package com.karakept.app.utils
 
-import com.karakept.app.utils.AppLogger
 import java.awt.Desktop
 import java.io.File
 

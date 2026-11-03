@@ -28,7 +28,7 @@ class A11yCrashGuardTest {
     @Test
     fun unrelatedStack_isNotClassifiedAsA11yCrash() {
         val crash = throwableWithStack(
-            "com.karakept.app.ui.screens.MainScreenModel",
+            "com.karakept.app.ui.screens.main.MainScreenModel",
             "kotlinx.coroutines.DispatchedTask"
         )
         assertFalse(isComposeAccessibilityCrash(crash))
