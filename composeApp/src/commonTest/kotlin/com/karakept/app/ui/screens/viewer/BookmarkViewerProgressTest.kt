@@ -3,6 +3,7 @@ package com.karakept.app.ui.screens.viewer
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.data.repository.AssetRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
@@ -12,6 +13,7 @@ import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.pullReadingProgressFromServer
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
+import com.karakept.app.utils.TestAppDispatchers
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -137,10 +139,9 @@ class BookmarkViewerProgressTest {
     }
 
     private fun createScreenModel() = BookmarkViewerScreenModel(
-        assetDao = assetDao,
+        assetRepository = AssetRepository(assetDao, remoteDataSource, TestAppDispatchers(testDispatcher)),
         settingsRepository = settingsRepository,
         bookmarkActionsRepository = bookmarkActionsRepository,
-        remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
         bookmarkRepository = bookmarkRepository,
         listRepository = listRepository,

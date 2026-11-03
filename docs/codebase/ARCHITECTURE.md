@@ -33,7 +33,7 @@
 **Data Layer (Repositories):**
 - Purpose: Abstract data sources (local DB and remote API), provide unified interfaces for data access
 - Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/`
-- Contains: BookmarkRepository, ListRepository, ServerRepository, SettingsRepository, HighlightRepository, BookmarkActionsRepository, BackupRepository
+- Contains: BookmarkRepository, ListRepository, ServerRepository, SettingsRepository, HighlightRepository, BookmarkActionsRepository, BackupRepository, AssetRepository (a bookmark's asset rows, cached files and server copies)
 - Depends on: Local data source (DAOs, SQLDelight DB), Remote data source (Ktor client with generated API)
 - Used by: ScreenModels and domain layer (BookmarkActionController)
 
@@ -196,7 +196,7 @@ current view, rebuilt on every write, to answer these.
 - Bound as a Koin `single<AppDispatchers> { DefaultAppDispatchers() }`; tests bind
   `TestAppDispatchers(testDispatcher)` so every coroutine the code starts stays on the test
   scheduler and is drained by `advanceUntilIdle()`
-- Injected into `BookmarkRepository`, `BookmarkActionsRepository`, `ListRepository` and
+- Injected into `BookmarkRepository`, `BookmarkActionsRepository`, `ListRepository`, `AssetRepository` and
   `BookmarkActionController`
 
 **ScreenModel (`androidx.lifecycle.ViewModel` subclass):**

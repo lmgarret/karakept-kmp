@@ -10,6 +10,7 @@ import com.karakept.app.data.local.getDatabaseBuilder
 import com.karakept.app.data.local.reclaimableBytes
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.remote.createHttpClient
+import com.karakept.app.data.repository.AssetRepository
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
@@ -92,6 +93,7 @@ val appModule = module {
     single { SettingsRepository(get()) }
     single { ListRepository(get(), get(), get(), get()) }  // RemoteDataSource, ListDao, SettingsRepository, AppDispatchers
     single { ServerVersionRepository(get(), get()) }
+    single { AssetRepository(get(), get(), get()) }  // AssetDao, RemoteDataSource, AppDispatchers
 
     // BookmarkActionsRepository depends on BookmarkDao, PendingActionDao, RemoteDataSource, ServerRepository, SettingsRepository, AppDispatchers
     single { BookmarkActionsRepository(get(), get(), get(), get(), get(), get()) }
@@ -149,7 +151,7 @@ val appModule = module {
     // ViewModel (cancelling viewModelScope) when its entry leaves the back stack — a reused
     // singleton would then have dead coroutines and never load bookmarks (SAVE-02).
     viewModel { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), serverVersionRepository = get()) }
-    viewModel { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { SettingsScreenModel(get(), get(), get(), get()) }
     viewModel { HighlightsScreenModel(get(), get(), get(), get()) }
     viewModel { com.karakept.app.ui.screens.share.SaveErrorScreenModel(get()) }

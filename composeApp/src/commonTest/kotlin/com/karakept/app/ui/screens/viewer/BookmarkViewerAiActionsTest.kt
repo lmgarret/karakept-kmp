@@ -7,6 +7,7 @@ import com.karakept.app.data.remote.ApiException
 import com.karakept.app.data.remote.OfflineModeException
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.remote.UnsupportedServerActionException
+import com.karakept.app.data.repository.AssetRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
@@ -39,6 +40,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import com.karakept.app.ui.screens.main.runAiAction
+import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Tests for the reader's AI actions.
@@ -132,10 +134,9 @@ class BookmarkViewerAiActionsTest {
     }
 
     private fun createScreenModel() = BookmarkViewerScreenModel(
-        assetDao = assetDao,
+        assetRepository = AssetRepository(assetDao, remoteDataSource, TestAppDispatchers(testDispatcher)),
         settingsRepository = settingsRepository,
         bookmarkActionsRepository = bookmarkActionsRepository,
-        remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
         bookmarkRepository = bookmarkRepository,
         listRepository = listRepository,

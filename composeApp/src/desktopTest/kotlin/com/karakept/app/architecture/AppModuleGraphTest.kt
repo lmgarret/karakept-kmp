@@ -3,6 +3,7 @@ package com.karakept.app.architecture
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.karakept.app.data.local.AppDatabase
+import com.karakept.app.data.repository.AssetRepository
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
@@ -133,6 +134,7 @@ class AppModuleGraphTest {
             OfflineCacheRepository::class,
             BookmarkRepository::class,
             BackupRepository::class,
+            AssetRepository::class,
             RemoteDataSource::class,
             BookmarkActionController::class,
             BackgroundSyncOrchestrator::class,
