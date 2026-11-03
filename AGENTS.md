@@ -86,8 +86,8 @@ stays a library and `:androidApp` supplies the parts a library cannot have. Cons
 knowing before touching any of it:
 
 - **Android code belongs in `composeApp/src/androidMain`, not `:androidApp`.** `:androidApp`
-  having no sources is what keeps the 200-odd `internal` declarations in `commonMain` reachable
-  from `MainActivity` and friends, and what keeps `AppIconManager`'s `ALIAS_PACKAGE` (derived
+  having no sources is what keeps the `internal` declarations in `:composeApp`'s `commonMain`
+  reachable from `MainActivity` and friends, and what keeps `AppIconManager`'s `ALIAS_PACKAGE` (derived
   from `MainActivity::class.java.name`) pointing at `com.karakept.app`.
 - **A KMP library has no build types and no `BuildConfig`.** `isDevBuild` reads the
   `karakept_is_dev` bool resource, declared `false` in `composeApp/src/androidMain/res` and
