@@ -1344,7 +1344,6 @@ class BookmarkSyncPipelineTest : BaseRepositoryTest() {
             remoteDataSource.fetchBookmarks(any(), any(), any(), any(), any(), any())
         } returns PaginatedBookmarks(bookmarks = listOf(dto), nextCursor = null)
 
-        // Filtered sync does not fetch lists (shouldFetchLists = false)
         val pipeline = createPipeline(SyncConfiguration.Filtered(testServer, archived = true))
         pipeline.execute()
 

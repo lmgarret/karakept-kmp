@@ -25,6 +25,8 @@ import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.secure.SecureCredentialStore
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.OfflineCacheRepository
+import com.karakept.app.data.repository.resolveOfflineScope
+import com.karakept.app.data.repository.toHierarchyNode
 import com.karakept.app.services.BackgroundSyncOrchestrator
 import com.karakept.app.ui.screens.LoginScreenModel
 import com.karakept.app.ui.screens.OnboardingScreenModel
@@ -98,14 +100,19 @@ val appModule = module {
     single { HighlightRepository(get(), get(), get()) }
     single {
         val database = get<AppDatabase>()
+        val settings = get<SettingsRepository>()
+        val listDao = get<com.karakept.app.data.local.dao.ListDao>()
         OfflineCacheRepository(
             bookmarkDao = get(),
             assetDao = get(),
-            settingsRepository = get(),
+            settingsRepository = settings,
             appDispatchers = get(),
             reclaimableDatabaseBytes = { database.reclaimableBytes() },
             compactDatabase = { database.compact() },
-            thumbnailCache = com.karakept.app.utils.CoilThumbnailCache
+            thumbnailCache = com.karakept.app.utils.CoilThumbnailCache,
+            offlineScope = {
+                settings.resolveOfflineScope(listDao.getAllListsOnce().map { it.toHierarchyNode() })
+            }
         )
     }
 

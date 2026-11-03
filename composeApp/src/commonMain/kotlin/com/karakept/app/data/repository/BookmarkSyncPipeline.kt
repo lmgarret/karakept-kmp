@@ -6,7 +6,6 @@ import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.dao.ProgressPullTarget
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SyncStrategy
@@ -24,14 +23,12 @@ import kotlin.time.Instant
 // Sync configuration sealed class hierarchy
 internal sealed class SyncConfiguration {
     abstract val server: Server
-    abstract val shouldFetchLists: Boolean
     abstract val shouldDeleteRemoved: Boolean
     abstract val apiFilters: ApiFilters
 
     data class Full(
         override val server: Server
     ) : SyncConfiguration() {
-        override val shouldFetchLists = true
         override val shouldDeleteRemoved = true
         override val apiFilters = ApiFilters()
     }
@@ -41,7 +38,6 @@ internal sealed class SyncConfiguration {
         val archived: Boolean? = null,
         val favourited: Boolean? = null
     ) : SyncConfiguration() {
-        override val shouldFetchLists = false // Keep lightweight
         override val shouldDeleteRemoved = false // Only upsert
         override val apiFilters = ApiFilters(archived, favourited)
     }
@@ -50,7 +46,6 @@ internal sealed class SyncConfiguration {
         override val server: Server,
         val listId: String
     ) : SyncConfiguration() {
-        override val shouldFetchLists = true // For validation
         override val shouldDeleteRemoved = false // Only upsert
         override val apiFilters = ApiFilters()
     }
@@ -640,68 +635,15 @@ internal class BookmarkSyncPipeline(
         // are left out entirely — their content was dropped on purpose and must not come
         // straight back.
         val entities = entitiesParam.filterNot { OfflineRetention.skipsContentSync(it, retentionDays, startedAt) }
-        val syncStrategy = settingsRepository.contentSyncStrategy.first()
+        // The stored lists, not a fresh fetch: offline cleanup resolves against the same ones, so
+        // the two cannot disagree about a child list and download and evict it in turn.
+        val allLists = listDao.getListsForServerOnce(config.server.id).map { it.toHierarchyNode() }
+        val scope = settingsRepository.resolveOfflineScope(allLists)
 
-        val bookmarksToSync = when (syncStrategy) {
-            com.karakept.app.data.model.SyncStrategy.NEVER,
-            com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK -> emptyList()
-            com.karakept.app.data.model.SyncStrategy.PER_LIST -> {
-                val syncConfig = settingsRepository.contentSyncConfig.first()
-                val targetLists = if (config.shouldFetchLists) {
-                    // Full/List sync: get effective sync lists with hierarchy
-                    val lists = remoteDataSource.fetchLists(config.server)
-                    syncConfig.getEffectiveSyncLists(lists).toSet()
-                } else {
-                    // Filtered sync: use configured lists directly
-                    syncConfig.selectedLists.toSet()
-                }
-
-                entities.filter { entity ->
-                    // Use listIds from entity (either fresh from API or preserved from DB)
-                    val entityListIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()
-                    // Check if bookmark needs content: is in target list AND doesn't have content yet
-                    // We use readingTimeMinutes as indicator (0 = no content)
-                    entityListIds.intersect(targetLists).isNotEmpty() && entity.readingTimeMinutes == 0
-                }
-            }
-            SyncStrategy.ALL -> entities.filter { entity ->
-                // Only sync content if bookmark doesn't have it yet (readingTimeMinutes == 0)
-                entity.readingTimeMinutes == 0
-            }
-        }
-
+        // readingTimeMinutes == 0 is how a mapped entity says it has no stored body yet.
+        val bookmarksToSync = entities.filter { it.readingTimeMinutes == 0 && scope.covers(it.listIds, opened = false) }
         if (bookmarksToSync.isNotEmpty()) {
             fetchContentForBookmarks(bookmarksToSync)
-        }
-
-        // Per-list offline sync: fetch content for bookmarks in lists with syncOffline = true
-        val allListSettings = settingsRepository.allListSettings.first()
-        val offlineListIds = allListSettings
-            .filter { (_, settings) -> settings.syncOffline }
-            .keys
-            .toMutableSet()
-
-        // Expand with descendant list IDs for lists with includeChildListBookmarks = true
-        val listsWithChildren = allListSettings
-            .filter { (listId, settings) -> settings.syncOffline && settings.includeChildListBookmarks && listId in offlineListIds }
-            .keys
-        if (listsWithChildren.isNotEmpty()) {
-            val allLists = listDao.getListsForServerOnce(config.server.id)
-            for (parentId in listsWithChildren) {
-                addDescendantListIds(parentId, allLists, offlineListIds)
-            }
-        }
-
-        if (offlineListIds.isNotEmpty()) {
-            val alreadySyncedIds = bookmarksToSync.map { it.remoteId }.toSet()
-            val offlineBookmarks = entities.filter { entity ->
-                if (alreadySyncedIds.contains(entity.remoteId)) return@filter false
-                val entityListIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()
-                entityListIds.intersect(offlineListIds).isNotEmpty() && entity.readingTimeMinutes == 0
-            }
-            if (offlineBookmarks.isNotEmpty()) {
-                fetchContentForBookmarks(offlineBookmarks)
-            }
         }
     }
 
@@ -822,18 +764,6 @@ internal class BookmarkSyncPipeline(
             "Reconciled list $listId: server=${serverRemoteIds.size}, " +
                 "local=${localBookmarksInList.size}, removed=${removals.size}"
         )
-    }
-
-    /**
-     * Recursively adds all descendant list IDs to the target set.
-     * Same pattern as ListSyncConfig.addAllDescendants().
-     */
-    private fun addDescendantListIds(parentId: String, allLists: List<ListEntity>, target: MutableSet<String>) {
-        val children = allLists.filter { it.parentId == parentId }
-        for (child in children) {
-            target.add(child.remoteId)
-            addDescendantListIds(child.remoteId, allLists, target)
-        }
     }
 }
 

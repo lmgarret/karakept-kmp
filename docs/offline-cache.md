@@ -17,7 +17,15 @@ or a single list's.
    days from 1 to 999. It keeps its value while switched off; `activeOfflineRetentionDays` is null
    then. Past the chosen number of days, the body is set to NULL and the bookmark's
    `assets.localPath`s are cleared. The row, reading progress and highlights stay.
-3. **Storage cap** (*Limit offline storage*, a switch, off by default, with a slider over
+3. **Out of scope.** `OfflineScope` (`domain/OfflineScope.kt`) says which bookmarks keep an
+   offline copy: everything under *All*, the strategy's lists (and their children in "with
+   children" mode) under *Per list*, what the user opened (`lastOpenedAt`) under *Per bookmark*,
+   and any list with its own *Sync offline* toggle on (and its children when
+   `includeChildListBookmarks`). A copy it no longer covers — a toggle turned off, a narrower
+   strategy, a list dropped from the selection, a bookmark gone from its list (smart-list eviction
+   included) — loses its body and asset paths. Nothing marks it evicted, so a bookmark that comes
+   back into scope downloads again on the next sync.
+4. **Storage cap** (*Limit offline storage*, a switch, off by default, with a slider over
    `OfflineRetention.CAP_SLIDER_STOPS_MB` from 100 MB to 10 GB and a field taking any size from
    10 MB to 100 GB, in MB or GB; `activeOfflineStorageCapMb` is null while off). Usage is every stored body plus
    every cache file a copy still references, counted once. Past the budget, whole copies (body
@@ -25,16 +33,26 @@ or a single list's.
    within each the one opened longest ago (`bookmarks.lastOpenedAt`, set by the reader; the save
    date for one never opened). A shared image only counts as freed once its last referrer goes.
    Evicted rows get `offlineEvictedAt`.
-4. **Orphan sweep.** Asset rows whose bookmark no longer exists are deleted. Then every cache file
+5. **Orphan sweep.** Asset rows whose bookmark no longer exists are deleted. Then every cache file
    whose name carries one of our prefixes and is referenced neither by a stored body (`file://…`)
    nor by an asset row is deleted. Files younger than an hour are skipped: a download lands on
    disk before the row that points at it is committed. Unprefixed files are never touched — on
    macOS and Windows Coil's disk cache shares the directory.
 
-Steps 1 and 2 are a few indexed updates and run after every sync. Steps 3 and 4 read every
-stored body, so after a sync they run once every six hours — and the sweep also whenever an
-eviction left files to free. A new storage limit therefore takes effect within six hours. A sync
+Steps 1 to 3 run after every sync: the first two are a few indexed updates, the third reads only
+the rows holding a copy, and is skipped under *All*. A settings change therefore takes effect on
+the next sync rather than at once, so turning a toggle off and straight back on loses nothing.
+Steps 4 and 5 read every stored body, so after a sync they run once every six hours — and the
+sweep also whenever an eviction left files to free. A new storage limit therefore takes effect within six hours. A sync
 fans out into one pass per list; `cleanUpAfterSync` skips a pass while another is running.
+
+## Sync and cleanup agree on scope
+
+`BookmarkSyncPipeline.syncContent` downloads what `OfflineScope` covers, and the cleanup pass
+evicts what it does not — both resolve it through `SettingsRepository.resolveOfflineScope` against
+the **stored** lists, so they cannot disagree about a child list and download and evict the same
+bookmark in turn. The one asymmetry is deliberate: sync never downloads for an open (the reader
+stores those copies), so it asks with `opened = false`.
 
 ## Not downloading it back
 
@@ -66,7 +84,7 @@ again on the next sync.
 ## Clean up now
 
 The last card of the Cleanup section previews the pass before it runs
-(`OfflineCacheRepository.estimateCleanup`): copies past the retention period, what the storage
+(`OfflineCacheRepository.estimateCleanup`): copies past the retention period, copies out of the offline scope, what the storage
 limit would still evict, files no bookmark uses, and database space a compaction would hand back.
 The preview simulates the pass on the same `OfflineSnapshot` the storage limit decides from —
 shared images freed only by their last referrer — so it is the cleanup it describes. It is
