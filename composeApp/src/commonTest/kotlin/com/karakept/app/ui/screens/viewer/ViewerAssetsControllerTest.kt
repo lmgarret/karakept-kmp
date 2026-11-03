@@ -1,5 +1,7 @@
 package com.karakept.app.ui.screens.viewer
 
+import com.karakept.api.model.Bookmark
+import com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
@@ -7,6 +9,7 @@ import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.data.repository.AssetFiles
 import com.karakept.app.data.repository.AssetRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -75,15 +78,16 @@ class ViewerAssetsControllerTest {
         localPath = null
     )
 
+    private val files = mockk<AssetFiles>(relaxed = true)
+
     private fun createController(scope: CoroutineScope) = ViewerAssetsController(
         scope = scope,
-        assetRepository = AssetRepository(assetDao, remoteDataSource, TestAppDispatchers(testDispatcher)),
+        assetRepository = AssetRepository(assetDao, remoteDataSource, TestAppDispatchers(testDispatcher), files),
         serverRepository = serverRepository,
         settingsRepository = settingsRepository,
         snackbarManager = snackbarManager,
         viewerMode = MutableStateFlow(ViewerMode.READER),
-        selectedSource = MutableStateFlow(ContentSource.EXTRACTED),
-        sourceContentOverride = MutableStateFlow(null),
+        isOffline = { false },
         currentBookmark = { bookmark }
     )
 
@@ -126,5 +130,57 @@ class ViewerAssetsControllerTest {
         assertTrue(controller.archiveAvailable.value)
         assertEquals("/banner", controller.bannerImageLocalPath.value)
         assertEquals(null, controller.screenshotLocalPath.value)
+    }
+
+    @Test
+    fun fetchedArchiveSwitchesTheSourceToTheArchive() = runTest(testDispatcher) {
+        // Arrange
+        val bytes = "<html>archived</html>".encodeToByteArray()
+        every { serverRepository.servers } returns flowOf(listOf(server))
+        coEvery { remoteDataSource.fetchBookmark(server, "remote-100") } returns mockk<Bookmark>(relaxed = true) {
+            every { assets } returns listOf(
+                BookmarksBookmarkIdAssetsPost201Response(
+                    id = "archive-1",
+                    assetType = BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE
+                )
+            )
+        }
+        coEvery { remoteDataSource.downloadAsset(server, "archive-1", any()) } returns bytes
+        every { files.save(any(), any()) } returns "/cache/archive_archive-1"
+        val controller = createController(backgroundScope)
+
+        // Act
+        controller.setContentSource(ContentSource.FULL_PAGE_ARCHIVE, bookmark)
+        runCurrent()
+
+        // Assert
+        assertEquals(ContentSource.FULL_PAGE_ARCHIVE, controller.selectedSource.value)
+        assertEquals("<html>archived</html>", controller.sourceContentOverride.value)
+        assertEquals("/cache/archive_archive-1", controller.precrawledAssetPath.value)
+    }
+
+    @Test
+    fun deletedArchiveFallsBackToExtracted() = runTest(testDispatcher) {
+        // Arrange: the archive is cached and showing
+        val archive = asset.copy(id = "a", assetType = "precrawledArchive", localPath = "/archive")
+        every { serverRepository.servers } returns flowOf(listOf(server))
+        coEvery { remoteDataSource.downloadAsset(server, "a", any()) } returns "<html/>".encodeToByteArray()
+        every { files.save(any(), any()) } returns "/archive"
+        coEvery { assetDao.getAssetsForBookmark("remote-100", "server-1") } returns listOf(archive)
+        val controller = createController(backgroundScope)
+        controller.downloadOrRefreshAsset(archive, bookmark, useWhenDone = true)
+        runCurrent()
+        assertEquals(ContentSource.FULL_PAGE_ARCHIVE, controller.selectedSource.value)
+        assertEquals("<html/>", controller.sourceContentOverride.value)
+
+        // Act: its local copy goes away
+        coEvery { assetDao.getAssetsForBookmark("remote-100", "server-1") } returns
+            listOf(archive.copy(localPath = null))
+        controller.deleteAssetLocal(archive)
+        runCurrent()
+
+        // Assert
+        assertEquals(ContentSource.EXTRACTED, controller.selectedSource.value)
+        assertEquals(null, controller.sourceContentOverride.value)
     }
 }

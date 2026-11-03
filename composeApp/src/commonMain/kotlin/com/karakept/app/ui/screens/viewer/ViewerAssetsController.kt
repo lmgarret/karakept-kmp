@@ -25,8 +25,9 @@ import kotlinx.coroutines.launch
  * The bookmark viewer's assets: the rows the details panel lists, the cached copies the reader
  * shows, and the downloads and deletions behind them. Work runs on the owning screen's [scope].
  *
- * The content source the reader shows stays with the screen; this writes [selectedSource] and
- * [sourceContentOverride] when an archive arrives or disappears.
+ * Also the single owner of the content source the reader shows ([selectedSource] and
+ * [sourceContentOverride]): an archive arriving or disappearing switches it here, and the screen
+ * asks for a switch through [setContentSource] rather than writing the flows itself.
  */
 internal class ViewerAssetsController(
     private val scope: CoroutineScope,
@@ -35,10 +36,17 @@ internal class ViewerAssetsController(
     private val settingsRepository: SettingsRepository,
     private val snackbarManager: ActionSnackbarManager,
     private val viewerMode: StateFlow<ViewerMode>,
-    private val selectedSource: MutableStateFlow<ContentSource>,
-    private val sourceContentOverride: MutableStateFlow<String?>,
+    private val isOffline: () -> Boolean,
     private val currentBookmark: () -> BookmarkEntity?
 ) {
+    // Session-only content source selection (not persisted to settings)
+    private val _selectedSource = MutableStateFlow(ContentSource.EXTRACTED)
+    val selectedSource: StateFlow<ContentSource> = _selectedSource.asStateFlow()
+
+    // HTML string override for FULL_PAGE_ARCHIVE + READER mode (session-only)
+    private val _sourceContentOverride = MutableStateFlow<String?>(null)
+    val sourceContentOverride: StateFlow<String?> = _sourceContentOverride.asStateFlow()
+
     private val _precrawledAssetPath = MutableStateFlow<String?>(null)
     val precrawledAssetPath: StateFlow<String?> = _precrawledAssetPath.asStateFlow()
 
@@ -66,6 +74,52 @@ internal class ViewerAssetsController(
     private val _screenshotLocalPath = MutableStateFlow<String?>(null)
     val screenshotLocalPath: StateFlow<String?> = _screenshotLocalPath.asStateFlow()
 
+    init {
+        // When viewer mode switches to READER while FULL_PAGE_ARCHIVE is selected,
+        // ensure the archive string is loaded for the native renderer.
+        scope.launch {
+            viewerMode.collect { mode ->
+                if (_selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE
+                    && mode == ViewerMode.READER
+                    && _sourceContentOverride.value == null
+                ) {
+                    val localPath = _precrawledAssetPath.value
+                    if (localPath != null) loadArchiveContentString(localPath)
+                }
+            }
+        }
+    }
+
+    fun setContentSource(source: ContentSource, bookmark: BookmarkEntity?) {
+        scope.launch {
+            _selectedSource.value = source
+            if (source == ContentSource.FULL_PAGE_ARCHIVE) {
+                val localPath = _precrawledAssetPath.value
+                if (localPath != null) {
+                    // Archive is cached — load as string if READER mode needs it
+                    if (viewerMode.value == ViewerMode.READER && _sourceContentOverride.value == null) {
+                        loadArchiveContentString(localPath)
+                    }
+                } else if (!isOffline() && bookmark != null) {
+                    fetchAndCacheArchive(bookmark)
+                } else {
+                    snackbarManager.showSnackbar("Full page archive not available offline")
+                    _selectedSource.value = ContentSource.EXTRACTED
+                }
+            } else {
+                _sourceContentOverride.value = null
+            }
+        }
+    }
+
+    private suspend fun loadArchiveContentString(localPath: String) {
+        try {
+            _sourceContentOverride.value = FileUtils.readFileAsText(localPath)
+        } catch (e: Exception) {
+            AppLogger.e("ViewerModel", "Failed to read archive as string: ${e.message}", e)
+        }
+    }
+
     fun fetchAndCacheArchive(bookmark: BookmarkEntity) {
         scope.launch {
             _isLoadingSource.value = true
@@ -73,27 +127,27 @@ internal class ViewerAssetsController(
                 val servers = serverRepository.servers.first()
                 val server = servers.find { it.id == bookmark.serverId } ?: run {
                     snackbarManager.showSnackbar("Server not found")
-                    selectedSource.value = ContentSource.EXTRACTED
+                    _selectedSource.value = ContentSource.EXTRACTED
                     return@launch
                 }
                 val archive = assetRepository.fetchArchive(server, bookmark)
                 if (archive == null) {
                     snackbarManager.showSnackbar("No full page archive available for this bookmark")
-                    selectedSource.value = ContentSource.EXTRACTED
+                    _selectedSource.value = ContentSource.EXTRACTED
                     return@launch
                 }
                 _precrawledAssetPath.value = archive.asset.localPath
                 _archiveAvailable.value = true
                 if (viewerMode.value == ViewerMode.READER) {
-                    sourceContentOverride.value = archive.bytes.decodeToString()
+                    _sourceContentOverride.value = archive.bytes.decodeToString()
                 }
-                selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
+                _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
                 // Refresh the exposed asset list so the details panel reflects the new localPath
                 _assets.value = assetRepository.assetsFor(bookmark)
             } catch (e: Exception) {
                 AppLogger.e("ViewerModel", "Failed to fetch archive: ${e.message}", e)
                 snackbarManager.showSnackbar("Couldn't load full page archive")
-                selectedSource.value = ContentSource.EXTRACTED
+                _selectedSource.value = ContentSource.EXTRACTED
             } finally {
                 _isLoadingSource.value = false
             }
@@ -127,12 +181,12 @@ internal class ViewerAssetsController(
             // "Extracted" source selection reliably shows extracted HTML (or no content).
             val preferArchive = settingsRepository.preferFullPageHtml.first()
             if (archive?.localPath != null && preferArchive && selectedSource.value == ContentSource.EXTRACTED) {
-                selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
+                _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
             }
         } else if (selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE && archive?.localPath == null) {
             // The archive we were displaying is gone (deleted locally or on the server).
-            selectedSource.value = ContentSource.EXTRACTED
-            sourceContentOverride.value = null
+            _selectedSource.value = ContentSource.EXTRACTED
+            _sourceContentOverride.value = null
         }
 
         _bannerImageLocalPath.value = assets.find { it.assetType == "bannerImage" }?.localPath
@@ -216,15 +270,15 @@ internal class ViewerAssetsController(
                     // Tapping the row meant "I want to use this", so finish the thought once
                     // the bytes are here rather than making the user tap again.
                     useWhenDone && isArchive -> {
-                        sourceContentOverride.value = bytes.decodeToString()
-                        selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
+                        _sourceContentOverride.value = bytes.decodeToString()
+                        _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
                     }
                     useWhenDone && asset.assetType == "pdf" -> openAssetExternally(result.asset)
                     // Not a tap, but the reader is already showing this archive — swap in the
                     // fresh bytes so a re-download is reflected immediately.
                     isArchive && selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE &&
                         viewerMode.value == ViewerMode.READER -> {
-                        sourceContentOverride.value = bytes.decodeToString()
+                        _sourceContentOverride.value = bytes.decodeToString()
                     }
                 }
             } catch (e: CancellationException) {
