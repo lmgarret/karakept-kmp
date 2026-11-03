@@ -8,6 +8,11 @@ import com.karakept.app.data.repository.setPageTurnKeyCode
 import com.karakept.app.data.repository.setPageTurnKeysEnabled
 import com.karakept.app.data.repository.setPageTurnUseVolumeKeys
 import com.karakept.app.utils.AppDispatchers
+import com.karakept.app.utils.PlatformKeyCodes
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -16,10 +21,6 @@ import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 private const val KEY_VOLUME_UP = 24
 private const val KEY_VOLUME_DOWN = 25

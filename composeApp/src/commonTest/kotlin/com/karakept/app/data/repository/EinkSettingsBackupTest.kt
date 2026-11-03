@@ -3,15 +3,15 @@ package com.karakept.app.data.repository
 import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.RowActionMode
-import com.karakept.app.ui.input.PlatformKeyCodes
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
+import com.karakept.app.utils.PlatformKeyCodes
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 
 /**
  * The e-ink and reader-typography settings must survive a backup/restore cycle — otherwise

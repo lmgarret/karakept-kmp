@@ -1,8 +1,8 @@
-package com.karakept.app.ui.input
+package com.karakept.app.utils
 
 /**
  * Raw key codes for the volume rocker, in whatever numbering the platform hands to
- * [PageTurnDispatcher.onKeyDown].
+ * `PageTurnDispatcher.onKeyDown`.
  *
  * E-ink readers wire their facade page-turn buttons to the volume rocker, so binding these two
  * codes is the one mapping that works on most devices without learning anything. They cannot be

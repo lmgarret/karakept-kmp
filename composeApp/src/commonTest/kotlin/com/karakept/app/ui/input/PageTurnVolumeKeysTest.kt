@@ -2,6 +2,7 @@ package com.karakept.app.ui.input
 
 import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.data.model.PageTurnKeyBindings
+import com.karakept.app.utils.PlatformKeyCodes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

@@ -553,7 +553,7 @@ the other. Consequences worth knowing before touching any of it:
 page turns. Key codes are *learned from the device* in the E-ink settings screen, not hardcoded —
 except the volume rocker, which nearly every e-ink reader wires its facade buttons to and which
 `PageTurnKeyBindings.useVolumeKeys` offers as a one-switch preset (`invertVolumeKeys` swaps the
-two for the other grip). The codes come from `expect object PlatformKeyCodes`, since Android and
+two for the other grip). The codes come from `expect object PlatformKeyCodes` (`utils/PlatformKeyCodes.kt`, so the data layer can read it), since Android and
 desktop number keys differently.
 
 A scrollable screen opts in with `PageTurnScrollEffect(listState)`; pass `enabled = false` when

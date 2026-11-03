@@ -115,7 +115,6 @@ class LayerRulesTest {
             "ui-data:commonMain/kotlin/com/karakept/app/ui/screens/settings/SettingsScreenModel.kt",
             "ui-data:commonMain/kotlin/com/karakept/app/ui/screens/highlights/HighlightsScreenModel.kt",
             "ui-data:commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreenModel.kt",
-            "lower-ui:commonMain/kotlin/com/karakept/app/data/model/EinkSettings.kt",
             "expect-actual:commonMain/kotlin/com/karakept/app/data/local/AppDatabase.kt",
             "expect-actual:commonMain/kotlin/com/karakept/app/ui/theme/WindowThemeSync.kt",
             "expect-actual:commonMain/kotlin/com/karakept/app/utils/AppLogger.kt",

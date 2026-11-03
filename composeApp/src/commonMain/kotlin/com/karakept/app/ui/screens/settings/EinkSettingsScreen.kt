@@ -35,12 +35,12 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.data.model.PageTurnKeyBindings
-import com.karakept.app.ui.icons.AppIcons
-import com.karakept.app.ui.input.PlatformKeyCodes
 import com.karakept.app.data.model.RowActionMode
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.utils.AppIconManager
+import com.karakept.app.utils.PlatformKeyCodes
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
 

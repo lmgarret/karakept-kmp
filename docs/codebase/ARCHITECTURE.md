@@ -335,7 +335,7 @@ current view, rebuilt on every write, to answer these.
   because the platform key callback cannot suspend to read them.
 - Codes are learned from the device, except the volume rocker — `PageTurnKeyBindings.useVolumeKeys`
   binds it directly, since e-ink readers overwhelmingly wire their facade buttons to it. The two
-  codes come from `expect object PlatformKeyCodes`.
+  codes come from `expect object PlatformKeyCodes` (`utils/PlatformKeyCodes.kt`).
 - The same window rule constrains the *learning* UI: key capture is rendered inline in the E-ink
   settings screen, never in a Compose `Dialog`, because a dialog is its own platform window and
   `MainActivity.dispatchKeyEvent` never sees the keys pressed while it has focus.

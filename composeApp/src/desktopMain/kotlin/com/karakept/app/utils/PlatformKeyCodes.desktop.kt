@@ -1,4 +1,4 @@
-package com.karakept.app.ui.input
+package com.karakept.app.utils
 
 /**
  * Desktop never routes the machine's volume keys to an application window, so these are sentinels
