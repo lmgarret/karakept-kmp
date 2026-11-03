@@ -284,7 +284,7 @@ current view, rebuilt on every write, to answer these.
   `GlobalScope`
 - The only remaining direct `Dispatchers` references are platform entry points
   (`main.kt`, `KarakeptApp.kt`, the desktop `FilePicker`) and CPU-bound HTML parsing in
-  `ui/components/HtmlContent.kt`
+  `ui/components/reader/HtmlContent.kt`
 
 **E-ink display mode:**
 - E-ink is its own top-level settings section (`SettingsSection.EINK`), not a link under

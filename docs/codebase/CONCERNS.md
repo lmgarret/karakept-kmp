@@ -13,7 +13,7 @@
   - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/HighlightRepository.kt` (1 occurrence)
   - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreenModel.kt` (4 occurrences)
   - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreenModel.kt` (2 occurrences)
-  - `composeApp/src/androidMain/kotlin/com/karakept/app/ui/components/HtmlRenderer.android.kt` (2 occurrences)
+  - `composeApp/src/androidMain/kotlin/com/karakept/app/ui/components/reader/HtmlRenderer.android.kt` (2 occurrences)
   - Platform-specific files also affected
 - Impact: Silent failures during sync, data operations, or rendering can leave the app in inconsistent state without user feedback or developer visibility
 - Fix approach: Replace `.printStackTrace()` with structured logging (Timber, or Kotlin logger). Propagate errors to UI layer via error flows. Add monitoring hooks for critical operations.
@@ -99,7 +99,7 @@
 - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt` (999 lines) - Offline-first action queueing
 - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkRepository.kt` (964 lines) - Bookmark CRUD and sync
 - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/SettingsRepository.kt` (988 lines) - Settings persistence
-- `composeApp/src/androidMain/kotlin/com/karakept/app/ui/components/HtmlRenderer.android.kt` (990 lines) - Android WebView renderer
+- `composeApp/src/androidMain/kotlin/com/karakept/app/ui/components/reader/HtmlRenderer.android.kt` (990 lines) - Android WebView renderer
 
 **Issues:**
 - Difficult to test in isolation
@@ -144,7 +144,7 @@
 
 **WebView security (Android-specific but multi-platform concern):**
 - Issue: Android HtmlRenderer uses WebView with JavaScript disabled, file access disabled, but rendering untrusted HTML from Karakeep API
-- Files: `composeApp/src/androidMain/kotlin/com/karakept/app/ui/components/HtmlRenderer.android.kt`
+- Files: `composeApp/src/androidMain/kotlin/com/karakept/app/ui/components/reader/HtmlRenderer.android.kt`
 - Current mitigations:
   - JavaScript disabled (enforced)
   - File access disabled

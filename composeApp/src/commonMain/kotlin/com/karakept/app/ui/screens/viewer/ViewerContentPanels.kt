@@ -1,14 +1,14 @@
 package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
-import com.karakept.app.data.repository.AiCapabilities
+import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import com.karakept.app.data.local.entity.AssetEntity
+import com.karakept.app.data.repository.AiCapabilities
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -128,7 +128,7 @@ fun ViewerContentPanels(
     // Tag Editor Dialog
     if (showTagEditor && loadingState is BookmarkLoadingState.FullyLoaded) {
         val fullyLoadedState = loadingState
-        com.karakept.app.ui.components.TagEditorDialog(
+        com.karakept.app.ui.components.tags.TagEditorDialog(
             currentTags = fullyLoadedState.bookmark.tags.split(",").filter { it.isNotBlank() },
             onTagsUpdated = { newTags ->
                 screenModel.updateBookmarkTags(fullyLoadedState.bookmark, newTags)

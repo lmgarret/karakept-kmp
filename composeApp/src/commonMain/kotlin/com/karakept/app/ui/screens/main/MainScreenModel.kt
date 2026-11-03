@@ -1,32 +1,44 @@
 package com.karakept.app.ui.screens.main
 
 import androidx.lifecycle.ViewModel
-import com.karakept.app.utils.AppLogger
 import androidx.lifecycle.viewModelScope
+import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.model.RowActionMode
-import com.karakept.app.data.model.DefaultListType
-import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.BookmarkCursor
+import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.BookmarkWindow
+import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncStatus
+import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.SYNC_KEY_ARCHIVED
 import com.karakept.app.data.model.SYNC_KEY_FAVORITES
-import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.model.SyncKey
+import com.karakept.app.data.remote.hasHttpStatus
+import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.remote.hasHttpStatus
-import com.karakept.app.data.repository.AiCapabilities
+import com.karakept.app.data.repository.ServerVersionRepository
 import com.karakept.app.data.repository.discardFailedActions
 import com.karakept.app.data.repository.retryFailedActions
-import com.karakept.app.data.repository.setDefaultListType
 import com.karakept.app.data.repository.setDefaultListId
-import com.karakept.api.model.KarakeepList as KarakeepList
+import com.karakept.app.data.repository.setDefaultListType
+import com.karakept.app.domain.DefaultFilterResolver
+import com.karakept.app.domain.ListCountUtils
+import com.karakept.app.domain.ListHierarchyUtils
+import com.karakept.app.domain.ServerCompatibility
+import com.karakept.app.domain.ServerVersionUtils
+import com.karakept.app.domain.TagCountUtils
+import com.karakept.app.domain.action.ActionSnackbarManager
+import com.karakept.app.domain.action.AiAction
+import com.karakept.app.domain.action.BookmarkActionController
+import com.karakept.app.domain.action.TagFilterRequests
+import com.karakept.app.ui.components.scrollToTop
+import com.karakept.app.utils.AppLogger
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
@@ -35,17 +47,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -54,17 +66,6 @@ import kotlinx.coroutines.flow.withIndex
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import com.karakept.app.domain.action.AiAction
-import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.domain.action.BookmarkActionController
-import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.repository.ServerVersionRepository
-import com.karakept.app.domain.ServerCompatibility
-import com.karakept.app.domain.ServerVersionUtils
-import com.karakept.app.domain.DefaultFilterResolver
-import com.karakept.app.domain.ListCountUtils
-import com.karakept.app.domain.TagCountUtils
-import com.karakept.app.domain.ListHierarchyUtils
 
 data class QuickFilterCounts(
     val all: Int = 0,

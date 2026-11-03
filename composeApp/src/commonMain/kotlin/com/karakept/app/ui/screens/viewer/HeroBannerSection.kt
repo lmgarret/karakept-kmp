@@ -3,7 +3,7 @@ package com.karakept.app.ui.screens.viewer
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import com.karakept.app.data.model.DateDisplayMode
-import com.karakept.app.ui.components.HeroImageBanner
+import com.karakept.app.ui.components.reader.HeroImageBanner
 
 @Composable
 internal fun HeroBannerSection(

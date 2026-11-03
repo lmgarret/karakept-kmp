@@ -18,19 +18,17 @@ import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.model.BookmarkWindow
-import com.karakept.app.data.repository.AiCapabilities
-import com.karakept.app.domain.action.AiAction
 import com.karakept.app.data.model.BookmarkLayout
+import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.ItemContainerStyle
 import com.karakept.app.data.model.LayoutType
-import com.karakept.app.data.model.ReadIndicatorStyle
-import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.QuickActionPosition
+import com.karakept.app.data.model.ReadIndicatorStyle
+import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.model.SyncProgress
 import com.karakept.app.data.model.ThumbnailSide
@@ -38,17 +36,19 @@ import com.karakept.app.data.model.TitlePosition
 import com.karakept.app.data.model.UrlDisplayMode
 import com.karakept.app.data.model.UrlIconMode
 import com.karakept.app.data.model.UrlPosition
-import com.karakept.app.ui.components.BookmarkAction
+import com.karakept.app.data.repository.AiCapabilities
+import com.karakept.app.domain.action.ActionSnackbarManager
+import com.karakept.app.domain.action.AiAction
+import com.karakept.app.domain.action.undoableAction
 import com.karakept.app.ui.components.EinkAwareFab
 import com.karakept.app.ui.components.EinkAwareSnackbarHost
+import com.karakept.app.ui.components.bookmark.BookmarkAction
 import com.karakept.app.ui.icons.AppIcons
-import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.input.handleDesktopPageKey
-import org.koin.compose.koinInject
-import com.karakept.app.domain.action.undoableAction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 
 /**
  * Bundles all effective display settings derived from active layout overrides.

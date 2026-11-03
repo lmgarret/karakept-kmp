@@ -57,12 +57,12 @@ karakept-kmp/
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/:**
 - Purpose: Reusable, single-purpose composable building blocks
-- Contains: Tag-related (TagChip, BookmarkTagsDisplay, TagEditorDialog), Actions (BookmarkActionsMenu), Lists (ListPickerDialog), Filters (FilterBottomPanel), Readers (reader/ subdirectory with HighlightTextToolbar, HtmlRenderer)
+- Contains: generic components at the root (BaseBottomPanel, EinkAware, ListPickerDialog, FilterBottomPanel) and feature subpackages: `tags/` (TagChip, BookmarkTagsDisplay, TagEditorDialog), `bookmark/` (BookmarkActionsMenu, BookmarkLayouts, row items and badges), `highlight/` (HighlightCard and friends), `reader/` (HtmlRenderer, HtmlContent, HighlightTextToolbar, ViewerModeToggle)
 - Key files:
-  - `TagChip.kt` - Single tag display (canonical design: secondaryContainer, shapes.small, 2dp elevation)
-  - `BookmarkTagsDisplay.kt` - Renders comma-separated tag string as FlowRow
+  - `tags/TagChip.kt` - Single tag display (canonical design: secondaryContainer, shapes.small, 2dp elevation)
+  - `tags/BookmarkTagsDisplay.kt` - Renders comma-separated tag string as FlowRow
   - `FilterBottomPanel.kt` - Filter UI with tag, list, and status controls
-  - `BookmarkLayouts.kt` - Layout variants for bookmark items (compact, expanded, reader)
+  - `bookmark/BookmarkLayouts.kt` - Layout variants for bookmark items (compact, expanded, reader)
   - `BaseBottomPanel.kt` - Base for modal bottom sheets (matches ModalBottomSheet styling)
   - `reader/` - HTML content rendering, highlight toolbar, scrollable containers
 
@@ -158,8 +158,8 @@ karakept-kmp/
 **Utilities & Helpers:**
 - `composeApp/src/commonMain/kotlin/com/karakept/app/domain/ListHierarchyUtils.kt` - List sorting and filtering
 - `composeApp/src/commonMain/kotlin/com/karakept/app/domain/BookmarkFilterUtils.kt` - Bookmark predicate filters
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/TagChip.kt` - Reusable tag display
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/BookmarkTagsDisplay.kt` - Tag string rendering
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/tags/TagChip.kt` - Reusable tag display
+- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/tags/BookmarkTagsDisplay.kt` - Tag string rendering
 
 ## Naming Conventions
 
@@ -198,7 +198,7 @@ karakept-kmp/
 
 **New Reusable Component:**
 - Location: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/[ComponentName].kt`
-- For category-specific components: Create subdirectory (e.g., `components/reader/`, `components/filters/`)
+- For category-specific components: Place it in the matching subpackage (`components/tags/`, `components/bookmark/`, `components/highlight/`, `components/reader/`); only generic components live at the root
 - Follow existing patterns: Use Material3 composables (ListItem, NavigationDrawerItem, FilterChip), prefer composition over custom Surfaces
 
 **New Repository/Data Service:**

@@ -21,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,18 +29,17 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.ui.components.reader.ReaderAppearanceBottomPanel
 import com.karakept.app.ui.icons.AppIcons
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import org.koin.compose.viewmodel.koinViewModel
 import com.karakept.app.ui.navigation.LocalNavigator
 import com.karakept.app.ui.navigation.currentOrThrow
-import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.ui.theme.rememberFontFamily
-import com.karakept.app.ui.components.ReaderAppearanceBottomPanel
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
 
 @Serializable
 @SerialName("com.karakept.app.ui.screens.ReaderAppearanceScreen")

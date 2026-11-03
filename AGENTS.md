@@ -189,12 +189,12 @@ The generator needs network access and is run by hand, never from the build.
 
 ### Tag display
 
-**`TagChip`** (`ui/components/TagChip.kt`)
+**`TagChip`** (`ui/components/tags/TagChip.kt`)
 - Single tag chip: `secondaryContainer` surface, `shapes.small`, 2dp elevation.
 - Supports optional `onRemove` (shows ✕ button) and `onClick`.
 - **Use everywhere a single tag chip is displayed.**
 
-**`BookmarkTagsDisplay`** (`ui/components/BookmarkTagsDisplay.kt`)
+**`BookmarkTagsDisplay`** (`ui/components/tags/BookmarkTagsDisplay.kt`)
 - Renders a comma-separated tag string as a `FlowRow` of `TagChip` chips.
 - Accepts `style` (`COMPACT` / `READER`), optional `onTagClick`, `scrollable`, and `modifier`.
 - `maxLines` caps how many rows of chips the flow may wrap onto. A caller holding its row to a
@@ -253,7 +253,7 @@ full-bleed and its divider reaches both edges.
 
 ### Tag editing and filtering
 
-**`TagEditorDialog`** (`ui/components/TagEditorDialog.kt`)
+**`TagEditorDialog`** (`ui/components/tags/TagEditorDialog.kt`)
 - `canCreateNew = true` (default): bookmark tag editing — allows free-text tags.
 - `canCreateNew = false`: filter-by-tag mode — only existing tags selectable.
 - Always pass `availableTags` from the screen's state for suggestions.
@@ -307,7 +307,7 @@ full-bleed and its divider reaches both edges.
 > change what non-e-ink users see. The same goes for an indeterminate bar or spinner: keep it off
 > e-ink, swap to `InlineLoadingDots` on it.
 
-**`BookmarkRowSkeleton`** (`ui/components/BookmarkRowSkeleton.kt`) — the one placeholder that is
+**`BookmarkRowSkeleton`** (`ui/components/bookmark/BookmarkRowSkeleton.kt`) — the one placeholder that is
 *per row* rather than per screen, and the one that draws **nothing at all** on e-ink.
 
 - Off e-ink it is a shimmering sketch of the row: blocks taken from `BookmarkRowMetrics`, so it is
@@ -442,7 +442,7 @@ On a monochrome panel the four fills all land within a couple of greys of each o
 `highContrast` the fill stops carrying the colour and the **pattern** does:
 solid (yellow) / double (blue) / dashed (green) / dotted (red).
 
-- **`drawHighlightRule(...)`** (`ui/components/HighlightPatterns.kt`) — a `DrawScope` extension
+- **`drawHighlightRule(...)`** (`ui/components/highlight/HighlightPatterns.kt`) — a `DrawScope` extension
   drawing the pattern as a horizontal rule, growing *upward* from a `bottom` edge so it stays
   inside the band whatever the line height. `AnnotatedClickableText` calls it once per line box of
   every highlighted run, via `drawWithContent` **after** `drawContent()` — a highlight's fill is a
@@ -673,7 +673,7 @@ finishes inside one `scroll {}` block.
 
 ### Menus and bottom sheets
 
-- **`ModalBottomSheet`** + `DropdownMenuItem` → contextual bookmark action menus (see `BookmarkActionsMenu.kt`).
+- **`ModalBottomSheet`** + `DropdownMenuItem` → contextual bookmark action menus (see `bookmark/BookmarkActionsMenu.kt`).
 - **`ModalBottomSheet`** + MD3 `ListItem` → list pickers (see `ListPickerDialog.kt`).
 - **`AlertDialog`** → confirmation and simple edit dialogs.
 - **`DropdownMenu`** anchored to `IconButton` → overflow menus on list items.

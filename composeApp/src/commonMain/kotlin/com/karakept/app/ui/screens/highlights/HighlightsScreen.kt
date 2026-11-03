@@ -21,18 +21,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
+import com.karakept.app.ui.components.BusyIndicator
+import com.karakept.app.ui.components.RefreshableBox
+import com.karakept.app.ui.components.highlight.HighlightCard
 import com.karakept.app.ui.icons.AppIcons
+import com.karakept.app.ui.navigation.LocalNavigator
+import com.karakept.app.ui.navigation.currentOrThrow
+import com.karakept.app.ui.screens.viewer.BookmarkViewerScreen
+import com.karakept.app.ui.theme.LocalEinkMode
+import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.koin.compose.viewmodel.koinViewModel
-import com.karakept.app.ui.navigation.LocalNavigator
-import com.karakept.app.ui.navigation.currentOrThrow
-import com.karakept.app.ui.components.BusyIndicator
-import com.karakept.app.ui.components.HighlightCard
-import com.karakept.app.ui.components.RefreshableBox
-import com.karakept.app.ui.theme.LocalEinkMode
-import kotlinx.coroutines.launch
-import com.karakept.app.ui.screens.viewer.BookmarkViewerScreen
 
 @Serializable
 @SerialName("com.karakept.app.ui.screens.HighlightsScreen")

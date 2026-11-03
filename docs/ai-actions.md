@@ -60,8 +60,8 @@ reconfigured server is most likely to give a different answer.
 |---|---|
 | Reader — overflow menu | `ui/screens/viewer/ViewerTopBar.kt` |
 | Reader — details panel | `ui/screens/viewer/BookmarkDetailsPanel.kt`, in the AI group beside the server actions |
-| Long press (touch) | `ui/components/BookmarkActionsMenu.kt` |
-| Right click (desktop) | `ui/components/BookmarkContextMenu.kt` |
+| Long press (touch) | `ui/components/bookmark/BookmarkActionsMenu.kt` |
+| Right click (desktop) | `ui/components/bookmark/BookmarkContextMenu.kt` |
 | Multi-select | `ui/screens/main/MainScreenTopBar.kt`, run by `MainScreenModelBatch.batchAiAction` |
 
 Each entry is hidden unless the matching capability is present. Offering an action the server will

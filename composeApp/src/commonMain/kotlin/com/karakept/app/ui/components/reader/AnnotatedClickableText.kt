@@ -7,12 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
@@ -29,12 +29,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.withTimeoutOrNull
-import com.karakept.app.ui.components.HighlightPosition
-import com.karakept.app.ui.components.drawHighlightRule
+import com.karakept.app.ui.components.highlight.HighlightPosition
+import com.karakept.app.ui.components.highlight.drawHighlightRule
 import com.karakept.app.ui.theme.HighlightPalette
 import com.karakept.app.ui.theme.HighlightPattern
 import com.karakept.app.ui.theme.LocalEinkMode
+import kotlinx.coroutines.withTimeoutOrNull
 
 
 /**

@@ -1,16 +1,15 @@
 package com.karakept.app.ui.screens.viewer
 
 import androidx.compose.animation.AnimatedVisibility
-import com.karakept.app.ui.icons.AppIcons
-import com.karakept.app.utils.AppLogger
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,35 +20,40 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.material3.Text
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -57,34 +61,44 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.ui.components.BookmarkContentLoader
+import com.karakept.app.domain.action.ActionSnackbarManager
+import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.EinkAwareSmallFab
 import com.karakept.app.ui.components.EinkAwareSnackbarHost
 import com.karakept.app.ui.components.FloatingBusyCard
 import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.components.RefreshableBox
-import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
+import com.karakept.app.ui.components.reader.BookmarkContentLoader
+import com.karakept.app.ui.components.reader.GalleryViewerState
+import com.karakept.app.ui.components.reader.ImageGalleryOverlay
+import com.karakept.app.ui.components.reader.LocalGalleryViewerState
+import com.karakept.app.ui.components.reader.LocalReaderSnapRegistry
+import com.karakept.app.ui.components.reader.ReaderSnapRegistry
+import com.karakept.app.ui.components.reader.SearchMatch
+import com.karakept.app.ui.components.reader.heroGalleryImage
+import com.karakept.app.ui.components.rememberCustomTabOpener
 import com.karakept.app.ui.components.scrollToTop
+import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.input.PageTurnScrollEffect
 import com.karakept.app.ui.input.handleDesktopPageKey
+import com.karakept.app.ui.screens.main.runAiAction
+import com.karakept.app.ui.screens.main.toggleBookmarkArchive
+import com.karakept.app.ui.screens.main.toggleBookmarkFavorite
+import com.karakept.app.ui.screens.main.toggleBookmarkRead
+import com.karakept.app.ui.screens.viewer.*
+import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.utils.BODY_LINE_HEIGHT_RATIO
 import com.karakept.app.ui.utils.PagedPositionState
 import com.karakept.app.ui.utils.READER_MAX_SNAP_FRACTION
@@ -92,27 +106,13 @@ import com.karakept.app.ui.utils.computeTurnSnapAdjustment
 import com.karakept.app.ui.utils.pageWorthTurning
 import com.karakept.app.ui.utils.pagedBottomEdge
 import com.karakept.app.ui.utils.trailingPagePaddingFor
-import com.karakept.app.ui.theme.LocalEinkMode
-import com.karakept.app.ui.components.reader.GalleryViewerState
-import com.karakept.app.ui.components.reader.ImageGalleryOverlay
-import com.karakept.app.ui.components.reader.LocalGalleryViewerState
-import com.karakept.app.ui.components.reader.heroGalleryImage
-import com.karakept.app.ui.components.reader.LocalReaderSnapRegistry
-import com.karakept.app.ui.components.reader.ReaderSnapRegistry
-import com.karakept.app.ui.components.reader.SearchMatch
-import com.karakept.app.ui.components.rememberCustomTabOpener
-import com.karakept.app.ui.screens.viewer.*
+import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.ShareUtils
 import getPlatform
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.ui.screens.main.runAiAction
-import com.karakept.app.ui.screens.main.toggleBookmarkArchive
-import com.karakept.app.ui.screens.main.toggleBookmarkFavorite
-import com.karakept.app.ui.screens.main.toggleBookmarkRead
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -173,8 +173,8 @@ fun BookmarkViewerContent(
     var showTagEditor by remember { mutableStateOf(false) }
     var showListPicker by remember { mutableStateOf(false) }
     var selectedHighlightId by remember { mutableStateOf<String?>(null) }
-    var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.HighlightPosition?>(null) }
-    val highlightMask = remember { com.karakept.app.ui.components.HighlightMaskAccumulator() }
+    var highlightPosition by remember { mutableStateOf<com.karakept.app.ui.components.highlight.HighlightPosition?>(null) }
+    val highlightMask = remember { com.karakept.app.ui.components.highlight.HighlightMaskAccumulator() }
     var selectedHighlightText by remember { mutableStateOf<String?>(null) }
 
     // Search state
