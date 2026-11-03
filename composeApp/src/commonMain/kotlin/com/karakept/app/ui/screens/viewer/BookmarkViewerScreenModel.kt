@@ -139,14 +139,6 @@ class BookmarkViewerScreenModel(
     val linkOpenMode: StateFlow<LinkOpenMode> = settingsRepository.linkOpenMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LinkOpenMode.CUSTOM_TAB)
 
-    // Session-only content source selection (not persisted to settings)
-    private val _selectedSource = MutableStateFlow(ContentSource.EXTRACTED)
-    val selectedSource: StateFlow<ContentSource> = _selectedSource.asStateFlow()
-
-    // HTML string override for FULL_PAGE_ARCHIVE + READER mode (session-only)
-    private val _sourceContentOverride = MutableStateFlow<String?>(null)
-    val sourceContentOverride: StateFlow<String?> = _sourceContentOverride.asStateFlow()
-
     private val assetsController = ViewerAssetsController(
         scope = viewModelScope,
         assetRepository = assetRepository,
@@ -154,11 +146,12 @@ class BookmarkViewerScreenModel(
         settingsRepository = settingsRepository,
         snackbarManager = snackbarManager,
         viewerMode = viewerMode,
-        selectedSource = _selectedSource,
-        sourceContentOverride = _sourceContentOverride,
+        isOffline = { offlineMode.value },
         currentBookmark = { (_loadingState.value as? BookmarkLoadingState.FullyLoaded)?.bookmark }
     )
 
+    val selectedSource: StateFlow<ContentSource> = assetsController.selectedSource
+    val sourceContentOverride: StateFlow<String?> = assetsController.sourceContentOverride
     val precrawledAssetPath: StateFlow<String?> = assetsController.precrawledAssetPath
     val archiveAvailable: StateFlow<Boolean> = assetsController.archiveAvailable
     val assets: StateFlow<List<com.karakept.app.data.local.entity.AssetEntity>> = assetsController.assets
@@ -224,20 +217,6 @@ class BookmarkViewerScreenModel(
     )
 
     init {
-        // When viewer mode switches to READER while FULL_PAGE_ARCHIVE is selected,
-        // ensure the archive string is loaded for the native renderer.
-        viewModelScope.launch {
-            viewerMode.collect { mode ->
-                if (_selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE
-                    && mode == ViewerMode.READER
-                    && _sourceContentOverride.value == null
-                ) {
-                    val localPath = precrawledAssetPath.value
-                    if (localPath != null) loadArchiveContentString(localPath)
-                }
-            }
-        }
-
         @OptIn(FlowPreview::class)
         viewModelScope.launch {
             readingStateUpdates
@@ -640,35 +619,8 @@ class BookmarkViewerScreenModel(
         viewModelScope.launch { settingsRepository.setScrollToTopEnabled(enabled) }
     }
 
-    fun setContentSource(source: ContentSource, bookmark: BookmarkEntity?) {
-        viewModelScope.launch {
-            _selectedSource.value = source
-            if (source == ContentSource.FULL_PAGE_ARCHIVE) {
-                val localPath = precrawledAssetPath.value
-                if (localPath != null) {
-                    // Archive is cached — load as string if READER mode needs it
-                    if (viewerMode.value == ViewerMode.READER && _sourceContentOverride.value == null) {
-                        loadArchiveContentString(localPath)
-                    }
-                } else if (!offlineMode.value && bookmark != null) {
-                    fetchAndCacheArchive(bookmark)
-                } else {
-                    snackbarManager.showSnackbar("Full page archive not available offline")
-                    _selectedSource.value = ContentSource.EXTRACTED
-                }
-            } else {
-                _sourceContentOverride.value = null
-            }
-        }
-    }
-
-    private suspend fun loadArchiveContentString(localPath: String) {
-        try {
-            _sourceContentOverride.value = com.karakept.app.utils.FileUtils.readFileAsText(localPath)
-        } catch (e: Exception) {
-            AppLogger.e("ViewerModel", "Failed to read archive as string: ${e.message}", e)
-        }
-    }
+    fun setContentSource(source: ContentSource, bookmark: BookmarkEntity?) =
+        assetsController.setContentSource(source, bookmark)
 
     fun fetchAndCacheArchive(bookmark: BookmarkEntity) = assetsController.fetchAndCacheArchive(bookmark)
 
