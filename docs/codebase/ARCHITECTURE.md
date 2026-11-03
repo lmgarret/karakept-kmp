@@ -49,6 +49,16 @@
 - Contains: RemoteDataSource (wraps generated API clients), KtorClient (HTTP setup), API client instances (BookmarksApi, ListsApi, TagsApi, HighlightsApi, UsersApi)
 - Uses: Ktor HttpClient with authentication interceptor, generated API clients
 
+## Layer rules
+
+`LayerRulesTest` (`composeApp/src/desktopTest/.../architecture/`) pins the boundaries by scanning source text:
+- `ui/` never references `data.local.dao.*` or `RemoteDataSource` (`ui-data`).
+- `data/`, `domain/` and `utils/` never reference `com.karakept.app.ui.` (`lower-ui`).
+- `ui/screens/` holds only sub-packages, no files at its root (`screens-root`).
+- Every `expect` in `commonMain` has an `.android` and a `.jvm`/`.desktop` actual in the same package (`expect-actual`).
+
+Offenders that predate a rule sit in `LayerRulesTest.KNOWN_VIOLATIONS`; the rule fails on a new offender and on a stale entry, so a fix must delete its entry. `AppModuleGraphTest` resolves every ScreenModel and repository from `appModule` to catch wiring gaps.
+
 ## Data Flow
 
 **Bookmark Sync Flow:**

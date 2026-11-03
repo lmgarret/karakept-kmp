@@ -35,6 +35,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 - **Navigation 3**: the back stack is a developer-owned `NavBackStack` of `@Serializable` `NavKey`s, rendered by `NavDisplay`. Each screen *is* a `NavKey` with a `Content()` composable; routing goes through `AppNavigator`/`LocalNavigator` (`ui/navigation/`). Predictive back (Android 14+) is wired via `NavDisplay`'s `predictivePopTransitionSpec`.
 - **Repository pattern**: each domain concept (`BookmarkRepository`, `ListRepository`, etc.) is the single source of truth.
 - **Offline-first**: mutations are queued in `PendingActionDao` and synced on reconnect.
+- **Layer rules** are enforced by `LayerRulesTest` (`composeApp/src/desktopTest/.../architecture/`); pre-existing offenders are listed in its `KNOWN_VIOLATIONS`, which only shrinks.
 - **BookmarkActionController**: centralizes all bookmark mutations with 5-second undo support.
 - **StateFlow / SharedFlow**: ScreenModels expose `StateFlow` for UI state and `SharedFlow` for one-shot events.
 
