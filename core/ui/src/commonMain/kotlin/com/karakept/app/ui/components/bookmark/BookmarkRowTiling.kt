@@ -82,7 +82,7 @@ fun rememberTiledRows(
  * [BookmarkRowMetrics] for why this is declared rather than measured.
  */
 @Composable
-internal fun rememberBookmarkRowMetrics(
+fun rememberBookmarkRowMetrics(
     itemContainerStyle: ItemContainerStyle,
     showThumbnail: Boolean,
     thumbnailSize: Int,

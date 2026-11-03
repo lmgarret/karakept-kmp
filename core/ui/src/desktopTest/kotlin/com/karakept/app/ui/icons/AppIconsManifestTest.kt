@@ -36,7 +36,7 @@ class AppIconsManifestTest {
     private fun generatedEntries(): Set<String> {
         val source = File(
             repoRoot,
-            "composeApp/src/commonMain/kotlin/com/karakept/app/ui/icons/AppIcons.kt",
+            "core/ui/src/commonMain/kotlin/com/karakept/app/ui/icons/AppIcons.kt",
         ).readLines()
         val scope = ArrayDeque<String>()
         val declared = mutableSetOf<String>()
@@ -76,7 +76,12 @@ class AppIconsManifestTest {
 
     @Test
     fun everyIconReferencedByTheAppIsInTheManifest() {
-        val referenced = File(repoRoot, "composeApp/src").walkTopDown()
+        // Every module that draws icons; packages do not follow modules, so scan them all.
+        val referenced = listOf("composeApp", "core/ui", "feature/reader")
+            .map { File(repoRoot, "$it/src") }
+            .filter { it.isDirectory }
+            .asSequence()
+            .flatMap { it.walkTopDown() }
             .filter { it.isFile && it.extension == "kt" }
             .flatMap { file ->
                 Regex("\\bAppIcons\\.(?:AutoMirrored\\.)?(?:Filled|Outlined|Default)\\.[A-Za-z0-9_]+")

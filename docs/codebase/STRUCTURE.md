@@ -23,6 +23,8 @@ karakept-kmp/
 │       │   └── ListHierarchyUtils.kt       # List hierarchy sorting and filtering
 │       └── utils/                          # AppDispatchers, AppLogger, FileUtils, …
 ├── core/testing/                           # Shared test fixtures (test dependencies only)
+├── core/ui/                                # module :core:ui — theme, icons, components, ui/utils, ui/input,
+│                                           # AppNavigator, reader fonts (composeResources/font)
 ├── composeApp/                             # Compose Multiplatform module
 │   ├── src/
 │   │   ├── commonMain/kotlin/com/karakept/app/

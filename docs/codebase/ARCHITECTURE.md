@@ -63,6 +63,8 @@ data, domain and UI layers. The second moved the data layer and `domain/` into `
 Shared test fixtures live in `:core:testing`. The third made DAOs, entities and
 `RemoteDataSource` `internal` to `:core:data`, which is what `LayerRulesTest`'s `ui-data` rule
 used to check.
+`:core:ui` (#440) then took the theme, icons and reusable components, so a component can no
+longer reach a screen.
 
 Offenders that predate a rule sit in `LayerRulesTest.KNOWN_VIOLATIONS`; the rule fails on a new offender and on a stale entry, so a fix must delete its entry. `AppModuleGraphTest` resolves every ScreenModel and repository from `appModule` to catch wiring gaps.
 

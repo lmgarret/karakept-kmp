@@ -17,7 +17,9 @@ class LayerRulesTest {
         .first { File(it, "tools/material-icons.txt").isFile }
 
     // Every module holding app code. Packages do not follow modules, so each rule runs over all.
-    private val srcRoots = listOf("composeApp", "core/model", "core/data").map { File(repoRoot, "$it/src") }
+    private val srcRoots = listOf("composeApp", "core/model", "core/data", "core/ui", "feature/reader")
+        .map { File(repoRoot, "$it/src") }
+        .filter { it.isDirectory }
 
     private val sourceSets = listOf("commonMain", "androidMain", "desktopMain")
 
@@ -106,7 +108,7 @@ class LayerRulesTest {
         // (Database.*, AppLoggerPlatform.kt, ...) or whose file name lacks the .android/.jvm suffix.
         val KNOWN_VIOLATIONS: Set<String> = setOf(
             "expect-actual:core/data/src/commonMain/kotlin/com/karakept/app/data/local/AppDatabase.kt",
-            "expect-actual:composeApp/src/commonMain/kotlin/com/karakept/app/ui/theme/WindowThemeSync.kt",
+            "expect-actual:core/ui/src/commonMain/kotlin/com/karakept/app/ui/theme/WindowThemeSync.kt",
             "expect-actual:core/data/src/commonMain/kotlin/com/karakept/app/utils/AppLogger.kt",
             "expect-actual:core/data/src/commonMain/kotlin/com/karakept/app/data/cache/ImageCacheManager.kt",
         )

@@ -65,7 +65,7 @@ import com.karakept.app.ui.utils.BookmarkRowMetrics
  * keeps a page a whole number of rows.
  */
 @Composable
-internal fun BookmarkRowSkeleton(
+fun BookmarkRowSkeleton(
     metrics: BookmarkRowMetrics,
     itemContainerStyle: ItemContainerStyle,
     thumbnailSide: ThumbnailSide,

@@ -17,13 +17,16 @@ import kotlin.test.assertTrue
 class ComposeResourceIdTest {
 
     private val repoRoot: File = generateSequence(File(".").absoluteFile) { it.parentFile }
-        .first { File(it, "composeApp/src/commonMain/composeResources").isDirectory }
+        .first { File(it, "tools/material-icons.txt").isFile }
 
-    private val composeResources = File(repoRoot, "composeApp/src/commonMain/composeResources")
+    // Each module generates its own Res, so IDs only need to be unique within one module's set.
+    private val resourceSets = listOf("composeApp", "core/ui", "feature/reader")
+        .map { File(repoRoot, "$it/src/commonMain/composeResources") }
+        .filter { it.isDirectory }
 
     @Test
     fun noTwoResourcesInADirectoryShareAnId() {
-        val collisions = composeResources.walkTopDown()
+        val collisions = resourceSets.asSequence().flatMap { it.walkTopDown() }
             .filter { it.isDirectory }
             .mapNotNull { directory ->
                 val duplicates = directory.listFiles()

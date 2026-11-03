@@ -45,8 +45,8 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 | Layer | Path |
 |---|---|
 | UI screens & ScreenModels | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/<feature>/` (`main`, `viewer`, `onboarding`, `settings`, `highlights`, `share`) |
-| Reusable UI components | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/` |
-| Theme (MD3 colors, typography) | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/theme/` |
+| Reusable UI components | `core/ui/src/commonMain/kotlin/com/karakept/app/ui/components/` (module `:core:ui`; `FilePicker` stays in `composeApp`) |
+| Theme (MD3 colors, typography), icons, `ui/utils`, `ui/input` | `core/ui/src/commonMain/kotlin/com/karakept/app/ui/` |
 | Domain logic | `core/data/src/commonMain/kotlin/com/karakept/app/domain/` |
 | Repositories | `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/` |
 | Local DB (Room entities, DAOs, migrations) | `core/data/src/commonMain/kotlin/com/karakept/app/data/local/` |
@@ -75,6 +75,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 | `:api-client` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | The OpenAPI-generated client |
 | `:core:model` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | `data/model`, `OfflineRetention`, `PlatformKeyCodes` — no dependency on any other app code |
 | `:core:data` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Room (+ KSP, `schemas/`), Ktor, repositories, `data/cache`, `data/secure`, `domain/`, and the utils those need |
+| `:core:ui` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Theme, `AppIcons`, `EinkAware` and every reusable component (bookmark, tags, highlight), `ui/utils`, `ui/input`, `AppNavigator`, the reader fonts (its own Compose resources), `getPlatform()` |
 | `:core:testing` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Test fixtures shared by several suites (`BaseRepositoryTest`, `TestAppDispatchers`, `FakeDataStore`) — test dependencies only |
 
 AGP 9 refuses to apply `com.android.application` alongside the Kotlin Multiplatform plugin, and
@@ -120,6 +121,12 @@ knowing before touching any of it:
   `initializeDataStore`).
 - **`domain/` lives in `:core:data` for now**: `BookmarkActionController` reads DAOs directly,
   so a `:core:domain` above the data layer could not reach them once they are `internal`.
+- **`:core:ui` owns the reader fonts as Compose resources** (`Res` in
+  `com.karakept.core.ui.resources`), so it enables `androidResources` like `:composeApp`. The
+  app icon and preview drawables stay in `:composeApp`, whose `Res` is a different class.
+- **`getPlatform()` lives in `:core:ui` as `PlatformInfo.kt`**; `isDevBuild` and the image-loader
+  hooks stay in the app's `Platform.kt`. A file split across modules within one package needs a
+  new name: two `PlatformKt` facades in the same package would collide on the classpath.
 - **Code the data layer calls has to sit in or below `:core:data`.** `CoilThumbnailCache` stays in
   `:composeApp` (same package, `data/cache`) because it needs the image loader the app sets up;
   `:core:data` holds only the `ThumbnailCache` interface.

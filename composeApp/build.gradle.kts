@@ -145,6 +145,7 @@ kotlin {
                 implementation(project(":api-client"))
                 implementation(project(":core:model"))
                 implementation(project(":core:data"))
+                implementation(project(":core:ui"))
                 
                 implementation(libs.compose.runtime)
                 implementation(libs.compose.foundation)
