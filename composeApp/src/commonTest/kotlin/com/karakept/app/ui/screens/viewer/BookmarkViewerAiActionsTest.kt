@@ -1,7 +1,6 @@
 package com.karakept.app.ui.screens.viewer
 
 import com.karakept.app.data.local.dao.AssetDao
-import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.ApiException
@@ -11,6 +10,7 @@ import com.karakept.app.data.remote.UnsupportedServerActionException
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
+import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.requestAiRetag
@@ -52,13 +52,13 @@ class BookmarkViewerAiActionsTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var bookmarkDao: BookmarkDao
     private lateinit var assetDao: AssetDao
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
     private lateinit var remoteDataSource: RemoteDataSource
     private lateinit var serverRepository: ServerRepository
     private lateinit var bookmarkRepository: BookmarkRepository
+    private lateinit var listRepository: ListRepository
     private lateinit var bookmarkActionController: BookmarkActionController
     private lateinit var highlightRepository: HighlightRepository
     private lateinit var snackbarManager: ActionSnackbarManager
@@ -94,13 +94,13 @@ class BookmarkViewerAiActionsTest {
         // statics on their file class rather than as members of the mock.
         mockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositoryAiKt")
 
-        bookmarkDao = mockk(relaxed = true)
         assetDao = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         bookmarkActionsRepository = mockk(relaxed = true)
         remoteDataSource = mockk(relaxed = true)
         serverRepository = mockk(relaxed = true)
         bookmarkRepository = mockk(relaxed = true)
+        listRepository = mockk(relaxed = true)
         bookmarkActionController = mockk(relaxed = true)
         highlightRepository = mockk(relaxed = true)
         snackbarManager = mockk(relaxed = true)
@@ -119,7 +119,7 @@ class BookmarkViewerAiActionsTest {
         every { settingsRepository.preferFullPageHtml } returns flowOf(false)
 
         every { serverRepository.servers } returns flowOf(listOf(testServer))
-        every { bookmarkDao.observeBookmarkById(any()) } returns flowOf(testBookmark)
+        every { bookmarkRepository.observeBookmark(any()) } returns flowOf(testBookmark)
         coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
         coEvery { bookmarkActionsRepository.summarizeBookmark(any()) } returns "A summary."
         coEvery { bookmarkActionsRepository.requestAiRetag(any()) } returns true
@@ -132,13 +132,13 @@ class BookmarkViewerAiActionsTest {
     }
 
     private fun createScreenModel() = BookmarkViewerScreenModel(
-        bookmarkDao = bookmarkDao,
         assetDao = assetDao,
         settingsRepository = settingsRepository,
         bookmarkActionsRepository = bookmarkActionsRepository,
         remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
         bookmarkRepository = bookmarkRepository,
+        listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         highlightRepository = highlightRepository,
         snackbarManager = snackbarManager

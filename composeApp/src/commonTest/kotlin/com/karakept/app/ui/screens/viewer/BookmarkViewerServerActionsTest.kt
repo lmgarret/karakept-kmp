@@ -1,7 +1,6 @@
 package com.karakept.app.ui.screens.viewer
 
 import com.karakept.app.data.local.dao.AssetDao
-import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.Server
@@ -11,8 +10,10 @@ import com.karakept.app.data.remote.UnsupportedServerActionException
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
+import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.requestServerCrawl
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.ServerCrawlAction
@@ -20,6 +21,8 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -47,13 +50,13 @@ class BookmarkViewerServerActionsTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var bookmarkDao: BookmarkDao
     private lateinit var assetDao: AssetDao
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
     private lateinit var remoteDataSource: RemoteDataSource
     private lateinit var serverRepository: ServerRepository
     private lateinit var bookmarkRepository: BookmarkRepository
+    private lateinit var listRepository: ListRepository
     private lateinit var bookmarkActionController: BookmarkActionController
     private lateinit var highlightRepository: HighlightRepository
     private lateinit var snackbarManager: ActionSnackbarManager
@@ -95,14 +98,15 @@ class BookmarkViewerServerActionsTest {
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        mockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositoryAiKt")
 
-        bookmarkDao = mockk(relaxed = true)
         assetDao = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         bookmarkActionsRepository = mockk(relaxed = true)
         remoteDataSource = mockk(relaxed = true)
         serverRepository = mockk(relaxed = true)
         bookmarkRepository = mockk(relaxed = true)
+        listRepository = mockk(relaxed = true)
         bookmarkActionController = mockk(relaxed = true)
         highlightRepository = mockk(relaxed = true)
         snackbarManager = mockk(relaxed = true)
@@ -121,23 +125,25 @@ class BookmarkViewerServerActionsTest {
         every { settingsRepository.preferFullPageHtml } returns flowOf(false)
 
         every { serverRepository.servers } returns flowOf(listOf(testServer))
-        every { bookmarkDao.observeBookmarkById(any()) } returns flowOf(testBookmark)
+        every { bookmarkRepository.observeBookmark(any()) } returns flowOf(testBookmark)
         coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
+        coEvery { bookmarkActionsRepository.requestServerCrawl(any(), any(), any()) } returns Unit
     }
 
     @AfterTest
     fun tearDown() {
+        unmockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositoryAiKt")
         Dispatchers.resetMain()
     }
 
     private fun createScreenModel() = BookmarkViewerScreenModel(
-        bookmarkDao = bookmarkDao,
         assetDao = assetDao,
         settingsRepository = settingsRepository,
         bookmarkActionsRepository = bookmarkActionsRepository,
         remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
         bookmarkRepository = bookmarkRepository,
+        listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         highlightRepository = highlightRepository,
         snackbarManager = snackbarManager
@@ -155,12 +161,7 @@ class BookmarkViewerServerActionsTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
-            remoteDataSource.recrawlBookmark(
-                server = testServer,
-                bookmarkId = "remote-100",
-                archiveFullPage = false,
-                storePdf = false
-            )
+            bookmarkActionsRepository.requestServerCrawl(testServer, "remote-100", ServerCrawlAction.REFRESH)
         }
     }
 
@@ -172,12 +173,7 @@ class BookmarkViewerServerActionsTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
-            remoteDataSource.recrawlBookmark(
-                server = testServer,
-                bookmarkId = "remote-100",
-                archiveFullPage = true,
-                storePdf = false
-            )
+            bookmarkActionsRepository.requestServerCrawl(testServer, "remote-100", ServerCrawlAction.PRESERVE_ARCHIVE)
         }
     }
 
@@ -189,12 +185,7 @@ class BookmarkViewerServerActionsTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) {
-            remoteDataSource.recrawlBookmark(
-                server = testServer,
-                bookmarkId = "remote-100",
-                archiveFullPage = false,
-                storePdf = true
-            )
+            bookmarkActionsRepository.requestServerCrawl(testServer, "remote-100", ServerCrawlAction.PRESERVE_PDF)
         }
     }
 
@@ -214,7 +205,7 @@ class BookmarkViewerServerActionsTest {
     fun `a failed request clears the in-flight marker and does not re-sync`() =
         runTest(testDispatcher) {
             coEvery {
-                remoteDataSource.recrawlBookmark(any(), any(), any(), any())
+                bookmarkActionsRepository.requestServerCrawl(any(), any(), any())
             } throws ApiException("HTTP 500: boom")
             val screenModel = createScreenModel()
 
@@ -229,7 +220,7 @@ class BookmarkViewerServerActionsTest {
     fun `an unsupported server surfaces the reason instead of a retry prompt`() =
         runTest(testDispatcher) {
             coEvery {
-                remoteDataSource.recrawlBookmark(any(), any(), any(), any())
+                bookmarkActionsRepository.requestServerCrawl(any(), any(), any())
             } throws UnsupportedServerActionException("This Karakeep server doesn't support re-crawling from the app")
             val screenModel = createScreenModel()
 
@@ -252,7 +243,7 @@ class BookmarkViewerServerActionsTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) {
-            remoteDataSource.recrawlBookmark(any(), any(), archiveFullPage = true, storePdf = false)
+            bookmarkActionsRepository.requestServerCrawl(any(), any(), ServerCrawlAction.PRESERVE_ARCHIVE)
         }
     }
 

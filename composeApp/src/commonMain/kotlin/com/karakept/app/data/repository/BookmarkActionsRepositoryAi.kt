@@ -3,6 +3,7 @@ package com.karakept.app.data.repository
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.UnsupportedServerActionException
+import com.karakept.app.domain.action.ServerCrawlAction
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -24,6 +25,20 @@ data class AiCapabilities(
     /** Re-running AI tagging is an admin-only tRPC route. */
     val isAdmin: Boolean = false
 )
+
+/** Ask the server to re-crawl a bookmark; the crawl itself runs there as a background job. */
+suspend fun BookmarkActionsRepository.requestServerCrawl(
+    server: Server,
+    remoteId: String,
+    action: ServerCrawlAction
+) = withContext(appDispatchers.io) {
+    remoteDataSource.recrawlBookmark(
+        server = server,
+        bookmarkId = remoteId,
+        archiveFullPage = action.archiveFullPage,
+        storePdf = action.storePdf
+    )
+}
 
 /** How long to keep re-syncing after a retag request before giving up on seeing new tags. */
 private const val RETAG_POLL_ATTEMPTS = 10

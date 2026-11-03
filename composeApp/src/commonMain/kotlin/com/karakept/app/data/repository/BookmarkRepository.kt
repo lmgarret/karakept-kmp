@@ -82,6 +82,22 @@ class BookmarkRepository(
         return bookmarkDao.getBookmarkByRemoteId(remoteId, serverId)
     }
 
+    fun observeBookmark(localId: Long): Flow<BookmarkEntity?> = bookmarkDao.observeBookmarkById(localId)
+
+    suspend fun saveReadingProgress(localId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
+        withContext(appDispatchers.io) {
+            bookmarkDao.updateReadingProgress(localId, progress, scrollIndex, scrollOffset)
+        }
+    }
+
+    suspend fun markOpened(localId: Long, now: Long) {
+        withContext(appDispatchers.io) { bookmarkDao.markOpened(localId, now) }
+    }
+
+    suspend fun saveContent(localId: Long, content: String, readingTimeMinutes: Int) {
+        withContext(appDispatchers.io) { bookmarkDao.updateContent(localId, content, readingTimeMinutes) }
+    }
+
     // Per-key sync status, keyed by SyncKey (null = All, sentinel = Favorites/Archived, listId = list).
     // Idle entries are removed from the map to keep it small.
     private val _perKeyProgress = MutableStateFlow<Map<SyncKey, ListSyncStatus>>(emptyMap())

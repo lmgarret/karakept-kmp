@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.local.dao.AssetDao
-import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.DateDisplayMode
@@ -19,11 +18,13 @@ import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.remote.UnsupportedServerActionException
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.data.repository.BookmarkActionsRepository
+import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.ReadingProgressPullResult
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.pullReadingProgressFromServer
 import com.karakept.app.data.repository.requestAiRetag
+import com.karakept.app.data.repository.requestServerCrawl
 import com.karakept.app.data.repository.resetReaderAppearance
 import com.karakept.app.data.repository.setHtmlBackgroundColor
 import com.karakept.app.data.repository.setHtmlFontFamily
@@ -79,13 +80,13 @@ private const val CRAWL_POLL_INTERVAL_MS = 4_000L
 private const val CRAWL_POLL_ATTEMPTS = 5
 
 class BookmarkViewerScreenModel(
-    private val bookmarkDao: BookmarkDao,
     private val assetDao: AssetDao,
     private val settingsRepository: SettingsRepository,
     private val bookmarkActionsRepository: BookmarkActionsRepository,
     private val remoteDataSource: RemoteDataSource,
     private val serverRepository: ServerRepository,
     private val bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository,
+    private val listRepository: ListRepository,
     private val bookmarkActionController: BookmarkActionController,
     private val highlightRepository: com.karakept.app.data.repository.HighlightRepository,
     private val snackbarManager: ActionSnackbarManager
@@ -209,8 +210,8 @@ class BookmarkViewerScreenModel(
         if (id == null) return@flatMapLatest flowOf(emptyList())
         
         // We need the string remoteId to fetch highlights
-        // We can get it from the bookmarkDao reactively
-        bookmarkDao.observeBookmarkById(id).flatMapLatest { bookmark ->
+        // We can get it from the bookmarkRepository reactively
+        bookmarkRepository.observeBookmark(id).flatMapLatest { bookmark ->
             if (bookmark == null) flowOf(emptyList())
             else highlightRepository.getHighlightsForBookmark(bookmark.remoteId, bookmark.serverId)
         }
@@ -261,7 +262,7 @@ class BookmarkViewerScreenModel(
                 .debounce(500)
                 .collect { state ->
                     // Debounce fired — save to DB
-                    bookmarkDao.updateReadingProgress(
+                    bookmarkRepository.saveReadingProgress(
                         state.localId, state.progress, state.scrollIndex, state.scrollOffset
                     )
                     bookmarkActionsRepository.notifyBookmarkChanged(state.remoteId)
@@ -443,12 +444,12 @@ class BookmarkViewerScreenModel(
                 // reset the WebView — making scrolling hectic.
                 var transientContent: String? = null
                 // Observe bookmark changes from DB reactively
-                bookmarkDao.observeBookmarkById(id).collect { bookmark ->
+                bookmarkRepository.observeBookmark(id).collect { bookmark ->
                     if (bookmark != null) {
                         if (!hasLoadedOnce) {
                             // Recency is what the offline storage cap evicts by.
                             viewModelScope.launch {
-                                bookmarkDao.markOpened(bookmark.localId, System.currentTimeMillis())
+                                bookmarkRepository.markOpened(bookmark.localId, System.currentTimeMillis())
                             }
                             // Find out which AI actions this server accepts, so the details panel
                             // and overflow menu can hide the ones it would reject. The reader can
@@ -559,7 +560,7 @@ class BookmarkViewerScreenModel(
                                         if (shouldPersist) {
                                             // Persist it
                                             val readingTime = com.karakept.app.utils.ReadingTimeCalculator.calculateReadingTime(content)
-                                            bookmarkDao.updateContent(bookmark.localId, content, readingTime)
+                                            bookmarkRepository.saveContent(bookmark.localId, content, readingTime)
                                             // The flow will emit the updated bookmark automatically
                                         } else {
                                             // Transient (NEVER, ALL, PER_LIST outside target list, or retired):
@@ -846,12 +847,7 @@ class BookmarkViewerScreenModel(
                     snackbarManager.showSnackbar("Server not found")
                     return@launch
                 }
-                remoteDataSource.recrawlBookmark(
-                    server = server,
-                    bookmarkId = bookmark.remoteId,
-                    archiveFullPage = action.archiveFullPage,
-                    storePdf = action.storePdf
-                )
+                bookmarkActionsRepository.requestServerCrawl(server, bookmark.remoteId, action)
                 snackbarManager.showSnackbar(
                     when (action) {
                         ServerCrawlAction.REFRESH -> "Refresh requested"
@@ -1075,7 +1071,7 @@ class BookmarkViewerScreenModel(
     fun loadLists(server: Server) {
         viewModelScope.launch {
             try {
-                val fetchedLists = remoteDataSource.fetchLists(server)
+                val fetchedLists = listRepository.fetchLists(server)
                 _lists.value = fetchedLists
             } catch (e: Exception) {
                 AppLogger.e("ViewerModel", "Failed to load highlights: ${e.message}", e)

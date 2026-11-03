@@ -1,12 +1,12 @@
 package com.karakept.app.ui.screens.viewer
 
 import com.karakept.app.data.local.dao.AssetDao
-import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
+import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.pullReadingProgressFromServer
@@ -53,13 +53,13 @@ class BookmarkViewerProgressTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
-    private lateinit var bookmarkDao: BookmarkDao
     private lateinit var assetDao: AssetDao
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
     private lateinit var remoteDataSource: RemoteDataSource
     private lateinit var serverRepository: ServerRepository
     private lateinit var bookmarkRepository: BookmarkRepository
+    private lateinit var listRepository: ListRepository
     private lateinit var bookmarkActionController: BookmarkActionController
     private lateinit var highlightRepository: HighlightRepository
     private lateinit var snackbarManager: ActionSnackbarManager
@@ -89,13 +89,13 @@ class BookmarkViewerProgressTest {
         Dispatchers.setMain(testDispatcher)
         mockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositorySyncKt")
 
-        bookmarkDao = mockk(relaxed = true)
         assetDao = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         bookmarkActionsRepository = mockk(relaxed = true)
         remoteDataSource = mockk(relaxed = true)
         serverRepository = mockk(relaxed = true)
         bookmarkRepository = mockk(relaxed = true)
+        listRepository = mockk(relaxed = true)
         bookmarkActionController = mockk(relaxed = true)
         highlightRepository = mockk(relaxed = true)
         snackbarManager = mockk(relaxed = true)
@@ -125,8 +125,8 @@ class BookmarkViewerProgressTest {
         // Default stubs for ServerRepository
         every { serverRepository.servers } returns flowOf(emptyList())
 
-        // Default stubs for BookmarkDao
-        every { bookmarkDao.observeBookmarkById(any()) } returns flowOf(testBookmark)
+        // Default stubs for BookmarkRepository
+        every { bookmarkRepository.observeBookmark(any()) } returns flowOf(testBookmark)
         coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
     }
 
@@ -137,13 +137,13 @@ class BookmarkViewerProgressTest {
     }
 
     private fun createScreenModel() = BookmarkViewerScreenModel(
-        bookmarkDao = bookmarkDao,
         assetDao = assetDao,
         settingsRepository = settingsRepository,
         bookmarkActionsRepository = bookmarkActionsRepository,
         remoteDataSource = remoteDataSource,
         serverRepository = serverRepository,
         bookmarkRepository = bookmarkRepository,
+        listRepository = listRepository,
         bookmarkActionController = bookmarkActionController,
         highlightRepository = highlightRepository,
         snackbarManager = snackbarManager
@@ -197,7 +197,7 @@ class BookmarkViewerProgressTest {
 
         // Should only have written to DB once (the last value, due to DROP_OLDEST + debounce)
         coVerify(atMost = 1) {
-            bookmarkDao.updateReadingProgress(1L, any(), any(), any())
+            bookmarkRepository.saveReadingProgress(1L, any(), any(), any())
         }
     }
 
@@ -214,7 +214,7 @@ class BookmarkViewerProgressTest {
 
         // The debounced write should use the latest value (0.8f at index 8)
         coVerify {
-            bookmarkDao.updateReadingProgress(1L, 0.8f, 8, 0)
+            bookmarkRepository.saveReadingProgress(1L, 0.8f, 8, 0)
         }
     }
 
@@ -304,7 +304,7 @@ class BookmarkViewerProgressTest {
         // the emission arrives made the reader latch "nothing to restore" on the stale 0%,
         // so the article opened at the top and only a second open landed in the right place.
         val emissions = MutableStateFlow(testBookmark)
-        every { bookmarkDao.observeBookmarkById(any()) } returns emissions
+        every { bookmarkRepository.observeBookmark(any()) } returns emissions
         coEvery {
             bookmarkActionsRepository.pullReadingProgressFromServer(any(), any())
         } coAnswers {
