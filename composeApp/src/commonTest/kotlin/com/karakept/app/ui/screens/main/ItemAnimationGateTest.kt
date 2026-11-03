@@ -1,6 +1,6 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  */
 class ItemAnimationGateTest {
 
-    private fun bookmark(remoteId: Long) = BookmarkEntity(
+    private fun bookmark(remoteId: Long) = Bookmark(
         localId = remoteId,
         remoteId = "orig-$remoteId",
         serverId = "server-1",

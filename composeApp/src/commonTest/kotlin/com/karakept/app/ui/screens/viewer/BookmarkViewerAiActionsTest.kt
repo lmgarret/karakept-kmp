@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.viewer
 
 import com.karakept.app.data.local.dao.AssetDao
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.ApiException
 import com.karakept.app.data.remote.OfflineModeException
@@ -71,7 +71,7 @@ class BookmarkViewerAiActionsTest {
         label = "Test"
     )
 
-    private val testBookmark = BookmarkEntity(
+    private val testBookmark = Bookmark(
         localId = 1L,
         remoteId = "remote-100",
         serverId = "server-1",

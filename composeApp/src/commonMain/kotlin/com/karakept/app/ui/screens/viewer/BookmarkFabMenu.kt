@@ -31,7 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.EinkAwareFab
 import com.karakept.app.ui.components.borderStroke
@@ -42,7 +42,7 @@ import com.karakept.app.ui.theme.LocalEinkMode
 internal fun BookmarkFabMenu(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
-    bookmark: BookmarkEntity,
+    bookmark: Bookmark,
     onFavoriteClick: () -> Unit,
     onArchiveClick: () -> Unit,
     onReadClick: () -> Unit,

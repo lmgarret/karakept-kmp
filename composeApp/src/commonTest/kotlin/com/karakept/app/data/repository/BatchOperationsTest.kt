@@ -3,6 +3,8 @@ package com.karakept.app.data.repository
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.toBookmark
+import com.karakept.app.data.local.entity.toBookmarks
 import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.entity.PendingActionType
 import com.karakept.app.data.remote.RemoteDataSource
@@ -52,7 +54,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchArchive(listOf(b1, b2))
+        repository.batchArchive(listOf(b1, b2).toBookmarks())
 
         val slots = mutableListOf<BookmarkEntity>()
         coVerify(exactly = 2) { bookmarkDao.insertBookmark(capture(slots)) }
@@ -67,7 +69,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchArchive(listOf(b1, b2))
+        repository.batchArchive(listOf(b1, b2).toBookmarks())
 
         val slots = mutableListOf<PendingActionEntity>()
         coVerify(exactly = 2) { pendingActionDao.insertAction(capture(slots)) }
@@ -86,7 +88,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchUnarchive(listOf(b1, b2))
+        repository.batchUnarchive(listOf(b1, b2).toBookmarks())
 
         val slots = mutableListOf<BookmarkEntity>()
         coVerify(exactly = 2) { bookmarkDao.insertBookmark(capture(slots)) }
@@ -101,7 +103,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchUnarchive(listOf(b1, b2))
+        repository.batchUnarchive(listOf(b1, b2).toBookmarks())
 
         val slots = mutableListOf<PendingActionEntity>()
         coVerify(exactly = 2) { pendingActionDao.insertAction(capture(slots)) }
@@ -119,7 +121,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
 
-        repository.batchMarkRead(listOf(b1, b2))
+        repository.batchMarkRead(listOf(b1, b2).toBookmarks())
 
         val slots = mutableListOf<BookmarkEntity>()
         coVerify(exactly = 2) { bookmarkDao.insertBookmark(capture(slots)) }
@@ -131,7 +133,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         val b1 = makeBookmark(remoteId = "remote-1", isRead = false)
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
 
-        repository.batchMarkRead(listOf(b1))
+        repository.batchMarkRead(listOf(b1).toBookmarks())
 
         val slot = slot<PendingActionEntity>()
         coVerify(exactly = 1) { pendingActionDao.insertAction(capture(slot)) }
@@ -149,7 +151,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
 
-        repository.batchMarkUnread(listOf(b1, b2))
+        repository.batchMarkUnread(listOf(b1, b2).toBookmarks())
 
         val slots = mutableListOf<BookmarkEntity>()
         coVerify(exactly = 2) { bookmarkDao.insertBookmark(capture(slots)) }
@@ -161,7 +163,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         val b1 = makeBookmark(remoteId = "remote-1", isRead = true, readingProgress = 0.8f)
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
 
-        repository.batchMarkUnread(listOf(b1), resetProgress = true)
+        repository.batchMarkUnread(listOf(b1).toBookmarks(), resetProgress = true)
 
         val savedSlot = slot<BookmarkEntity>()
         coVerify { bookmarkDao.insertBookmark(capture(savedSlot)) }
@@ -181,7 +183,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchSetFavourite(listOf(b1, b2), makeFavourite = true)
+        repository.batchSetFavourite(listOf(b1, b2).toBookmarks(), makeFavourite = true)
 
         val slots = mutableListOf<BookmarkEntity>()
         coVerify(exactly = 2) { bookmarkDao.insertBookmark(capture(slots)) }
@@ -194,7 +196,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchSetFavourite(listOf(b1), makeFavourite = true)
+        repository.batchSetFavourite(listOf(b1).toBookmarks(), makeFavourite = true)
 
         val actionSlot = slot<PendingActionEntity>()
         coVerify { pendingActionDao.insertAction(capture(actionSlot)) }
@@ -207,7 +209,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchSetFavourite(listOf(b1), makeFavourite = false)
+        repository.batchSetFavourite(listOf(b1).toBookmarks(), makeFavourite = false)
 
         val actionSlot = slot<PendingActionEntity>()
         coVerify { pendingActionDao.insertAction(capture(actionSlot)) }
@@ -226,7 +228,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchDelete(listOf(b1, b2))
+        repository.batchDelete(listOf(b1, b2).toBookmarks())
 
         coVerify(exactly = 2) { bookmarkDao.deleteBookmark(any()) }
     }
@@ -239,7 +241,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchDelete(listOf(b1, b2))
+        repository.batchDelete(listOf(b1, b2).toBookmarks())
 
         val slots = mutableListOf<PendingActionEntity>()
         coVerify(exactly = 2) { pendingActionDao.insertAction(capture(slots)) }
@@ -258,7 +260,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchMoveToList(listOf(b1, b2), "list-99")
+        repository.batchMoveToList(listOf(b1, b2).toBookmarks(), "list-99")
 
         val slots = mutableListOf<BookmarkEntity>()
         coVerify(exactly = 2) { bookmarkDao.insertBookmark(capture(slots)) }
@@ -275,7 +277,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-2", "server1") } returns b2
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchMoveToList(listOf(b1, b2), "list-99")
+        repository.batchMoveToList(listOf(b1, b2).toBookmarks(), "list-99")
 
         val slots = mutableListOf<PendingActionEntity>()
         coVerify(exactly = 2) { pendingActionDao.insertAction(capture(slots)) }
@@ -289,7 +291,7 @@ class BatchOperationsTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns b1
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
-        repository.batchMoveToList(listOf(b1), "list-99")
+        repository.batchMoveToList(listOf(b1).toBookmarks(), "list-99")
 
         // insertBookmark should NOT be called since the listId already exists
         coVerify(exactly = 0) { bookmarkDao.insertBookmark(any()) }

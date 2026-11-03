@@ -2,7 +2,7 @@ package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
 import com.karakept.api.model.KarakeepList
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.ListSettings
@@ -137,7 +137,7 @@ class SmartListDeferredRefreshTest {
     private fun bookmarkEntity(
         localId: Long = 1L,
         listIds: String = ""
-    ) = BookmarkEntity(
+    ) = Bookmark(
         localId = localId,
         remoteId = "orig-$localId",
         serverId = testServer.id,

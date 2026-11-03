@@ -1,6 +1,6 @@
 package com.karakept.app.ui.screens.share
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.repository.BookmarkRepository
 import io.mockk.coEvery
 import io.mockk.every
@@ -39,7 +39,7 @@ class SaveErrorScreenModelTest {
 
     @Test
     fun retry_success_emitsSuccessStateWithBookmarkId() = runTest(testDispatcher) {
-        val bookmark = mockk<BookmarkEntity>()
+        val bookmark = mockk<Bookmark>()
         every { bookmark.localId } returns 42L
         coEvery { bookmarkRepository.createBookmark(url) } returns Result.success(bookmark)
 
@@ -66,7 +66,7 @@ class SaveErrorScreenModelTest {
 
     @Test
     fun retry_setsRetryingStateBeforeCompletion() = runTest(testDispatcher) {
-        val bookmark = mockk<BookmarkEntity>()
+        val bookmark = mockk<Bookmark>()
         every { bookmark.localId } returns 1L
         coEvery { bookmarkRepository.createBookmark(url) } returns Result.success(bookmark)
 
@@ -81,7 +81,7 @@ class SaveErrorScreenModelTest {
     @Test
     fun retry_tracksStatePerUrlIndependently() = runTest(testDispatcher) {
         val otherUrl = "https://example.com/other"
-        val bookmark = mockk<BookmarkEntity>()
+        val bookmark = mockk<Bookmark>()
         every { bookmark.localId } returns 7L
         coEvery { bookmarkRepository.createBookmark(url) } returns Result.success(bookmark)
         coEvery { bookmarkRepository.createBookmark(otherUrl) } returns

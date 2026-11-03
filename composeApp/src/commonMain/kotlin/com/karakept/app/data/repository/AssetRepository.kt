@@ -4,7 +4,7 @@ import com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
 import com.karakept.app.data.cache.OfflineHeroImages
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.AssetEntity
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppDispatchers
@@ -35,7 +35,7 @@ class AssetRepository(
     private val appDispatchers: AppDispatchers,
     private val files: AssetFiles = CacheAssetFiles
 ) {
-    suspend fun assetsFor(bookmark: BookmarkEntity): List<AssetEntity> =
+    suspend fun assetsFor(bookmark: Bookmark): List<AssetEntity> =
         assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
 
     /**
@@ -64,7 +64,7 @@ class AssetRepository(
     }
 
     /** Deletes [asset] on the server, then locally. A failed detach leaves the local row alone. */
-    suspend fun detachOnServer(server: Server, bookmark: BookmarkEntity, asset: AssetEntity) =
+    suspend fun detachOnServer(server: Server, bookmark: Bookmark, asset: AssetEntity) =
         withContext(appDispatchers.io) {
             remoteDataSource.detachAsset(server, bookmark.remoteId, asset.id)
             asset.localPath?.let { deleteQuietly(it) }
@@ -75,7 +75,7 @@ class AssetRepository(
      * Resolves the bookmark's archive from the server, downloads it and caches it locally.
      * Null when the server holds no archive for it.
      */
-    suspend fun fetchArchive(server: Server, bookmark: BookmarkEntity): DownloadedAsset? =
+    suspend fun fetchArchive(server: Server, bookmark: Bookmark): DownloadedAsset? =
         withContext(appDispatchers.io) {
             val fullBookmark = remoteDataSource.fetchBookmark(server, bookmark.remoteId)
             val asset = fullBookmark.assets?.find {

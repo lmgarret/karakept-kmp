@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
@@ -147,7 +147,7 @@ class FilteredBookmarkCountTest {
         isRead: Boolean = false,
         tags: String = "",
         listIds: String = ""
-    ) = BookmarkEntity(
+    ) = Bookmark(
         localId = remoteId,
         remoteId = "remote-$remoteId",
         serverId = "server-1",

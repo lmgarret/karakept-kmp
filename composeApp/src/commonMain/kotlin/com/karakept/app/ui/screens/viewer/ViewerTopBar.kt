@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.LinearProgressIndicator
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
 import androidx.compose.material3.DropdownMenu
@@ -68,7 +68,7 @@ internal fun ViewerTopBar(
     onSearchClick: () -> Unit = {},
     // Desktop: FAB actions moved to top bar
     isDesktop: Boolean = false,
-    bookmark: BookmarkEntity? = null,
+    bookmark: Bookmark? = null,
     onFavoriteClick: () -> Unit = {},
     onArchiveClick: () -> Unit = {},
     onReadClick: () -> Unit = {},

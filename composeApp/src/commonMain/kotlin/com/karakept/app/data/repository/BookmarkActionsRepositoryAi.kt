@@ -1,6 +1,6 @@
 package com.karakept.app.data.repository
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.UnsupportedServerActionException
 import com.karakept.app.domain.action.ServerCrawlAction
@@ -50,7 +50,7 @@ private const val RETAG_POLL_INTERVAL_MS = 2000L
  * The call is synchronous server-side — it returns the finished summary rather than enqueuing a
  * job — so the summary is written and announced before this returns.
  */
-suspend fun BookmarkActionsRepository.summarizeBookmark(bookmark: BookmarkEntity): String? =
+suspend fun BookmarkActionsRepository.summarizeBookmark(bookmark: Bookmark): String? =
     withContext(appDispatchers.io) {
         val server = requireServer(bookmark.serverId)
         val result = try {
@@ -74,7 +74,7 @@ suspend fun BookmarkActionsRepository.summarizeBookmark(bookmark: BookmarkEntity
  * the tags arrive on the next sync regardless.
  */
 suspend fun BookmarkActionsRepository.requestAiRetag(
-    bookmark: BookmarkEntity,
+    bookmark: Bookmark,
     awaitResult: Boolean = true
 ): Boolean =
     withContext(appDispatchers.io) {

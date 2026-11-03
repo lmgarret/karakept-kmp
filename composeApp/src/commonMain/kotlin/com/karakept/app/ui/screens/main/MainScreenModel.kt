@@ -3,7 +3,7 @@ package com.karakept.app.ui.screens.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.karakept.api.model.KarakeepList as KarakeepList
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.BookmarkWindow
@@ -253,7 +253,7 @@ class MainScreenModel(
             layout?.dimReadBookmarks ?: global
         }.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    internal val _pendingBookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
+    internal val _pendingBookmarks = MutableStateFlow<List<Bookmark>>(emptyList())
     val pendingBookmarkRemoteIds: StateFlow<Set<String>> = _pendingBookmarks
         .map { list -> list.map { it.remoteId }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
@@ -400,7 +400,7 @@ class MainScreenModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), QuickFilterCounts())
 
     /** Names the row at [index] in the view on screen, for the fast-scroll cursor's tooltip. */
-    suspend fun bookmarkAtIndex(index: Int): BookmarkEntity? = pager.bookmarkAtIndex(index)
+    suspend fun bookmarkAtIndex(index: Int): Bookmark? = pager.bookmarkAtIndex(index)
 
     /**
      * How many bookmarks the current view holds — the list's total, and the denominator the
@@ -510,7 +510,7 @@ class MainScreenModel(
      * A view of [bookmarkWindow], so there is one answer to what the list is showing. It used to
      * be the other way round.
      */
-    val bookmarks: StateFlow<List<BookmarkEntity>> = bookmarkWindow
+    val bookmarks: StateFlow<List<Bookmark>> = bookmarkWindow
         .map { it.loadedRows() }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 

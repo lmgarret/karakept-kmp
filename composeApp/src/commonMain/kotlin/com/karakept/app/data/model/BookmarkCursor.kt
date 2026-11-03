@@ -30,5 +30,12 @@ data class BookmarkCursor(
             readingTimeMinutes = bookmark.readingTimeMinutes,
             localId = bookmark.localId
         )
+
+        fun of(bookmark: Bookmark) = BookmarkCursor(
+            createdAt = bookmark.createdAt,
+            title = bookmark.title,
+            readingTimeMinutes = bookmark.readingTimeMinutes,
+            localId = bookmark.localId
+        )
     }
 }

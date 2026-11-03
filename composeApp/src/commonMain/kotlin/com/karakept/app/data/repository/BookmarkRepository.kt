@@ -8,6 +8,9 @@ import com.karakept.app.data.local.dao.ListDao
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.ListEntity
+import com.karakept.app.data.local.entity.toBookmark
+import com.karakept.app.data.local.entity.toBookmarks
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.local.projection.ListMembershipGroup
 import com.karakept.app.data.local.projection.QuickFilterCountRow
 import com.karakept.app.data.local.projection.TagGroup
@@ -20,6 +23,8 @@ import com.karakept.app.data.model.SYNC_KEY_ARCHIVED
 import com.karakept.app.data.model.SYNC_KEY_FAVORITES
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SortOption
+import com.karakept.app.data.model.SyncStrategy
+import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppDispatchers
@@ -35,6 +40,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -67,19 +74,20 @@ class BookmarkRepository(
      * for the callers that genuinely want the whole table at once, and deliberately not held in a
      * StateFlow: residency is what made it expensive, not the query.
      */
-    fun getBookmarks(server: Server): Flow<List<BookmarkEntity>> {
-        return bookmarkDao.getBookmarksForServer(server.id)
+    fun getBookmarks(server: Server): Flow<List<Bookmark>> {
+        return bookmarkDao.getBookmarksForServer(server.id).map { it.toBookmarks() }
     }
 
     fun getOfflineBookmarkCount(serverId: String): Flow<Int> {
         return bookmarkDao.getOfflineCountFlow(serverId)
     }
 
-    suspend fun getBookmarkByRemoteId(remoteId: String, serverId: String): BookmarkEntity? {
-        return bookmarkDao.getBookmarkByRemoteId(remoteId, serverId)
+    suspend fun getBookmarkByRemoteId(remoteId: String, serverId: String): Bookmark? {
+        return bookmarkDao.getBookmarkByRemoteId(remoteId, serverId)?.toBookmark()
     }
 
-    fun observeBookmark(localId: Long): Flow<BookmarkEntity?> = bookmarkDao.observeBookmarkById(localId)
+    fun observeBookmark(localId: Long): Flow<Bookmark?> =
+        bookmarkDao.observeBookmarkById(localId).map { it?.toBookmark() }
 
     suspend fun saveReadingProgress(localId: Long, progress: Float, scrollIndex: Int, scrollOffset: Int) {
         withContext(appDispatchers.io) {
@@ -93,6 +101,29 @@ class BookmarkRepository(
 
     suspend fun saveContent(localId: Long, content: String, readingTimeMinutes: Int) {
         withContext(appDispatchers.io) { bookmarkDao.updateContent(localId, content, readingTimeMinutes) }
+    }
+
+    /**
+     * Whether a body fetched on demand for the reader should be stored as the offline copy, or
+     * only shown. Decided here because it rests on offline-cache bookkeeping the row carries and
+     * [Bookmark] does not.
+     */
+    suspend fun shouldPersistFetchedContent(localId: Long, now: Long): Boolean {
+        val row = withContext(appDispatchers.io) { bookmarkDao.getBookmarkById(localId) } ?: return false
+        var persist = when (settingsRepository.contentSyncStrategy.first()) {
+            SyncStrategy.PER_BOOKMARK -> true
+            SyncStrategy.PER_LIST -> {
+                val targetLists = settingsRepository.contentSyncTargetLists.first()
+                row.listIds.split(",").filter { it.isNotBlank() }.any { targetLists.contains(it) }
+            }
+            else -> false
+        }
+        // The storage cap dropped a copy it once held; opening it is what brings it back.
+        if (row.offlineEvictedAt != null) persist = true
+        // Past its retention: shown, not stored again.
+        val retentionDays = settingsRepository.activeOfflineRetentionDays.firstOrNull()
+        if (OfflineRetention.isRetired(row, retentionDays, now)) persist = false
+        return persist
     }
 
     private val syncKeys = SyncKeyTracker()
@@ -269,7 +300,7 @@ class BookmarkRepository(
         forceProgressPull = isCurrentView
     )
 
-    suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<BookmarkEntity> {
+    suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<Bookmark> {
         onStatusChange?.invoke("Waiting for server response...")
         val serversList = serverRepository.servers.first()
         val server = serversList.firstOrNull() ?: return Result.failure(Exception("No server configured"))
@@ -340,7 +371,7 @@ class BookmarkRepository(
                 }
             }
 
-            Result.success(inserted)
+            Result.success(inserted.toBookmark())
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -509,7 +540,7 @@ class BookmarkRepository(
         after: BookmarkCursor? = null,
         sort: SortOption = SortOption.NEWEST,
         listId: String? = null
-    ): List<BookmarkEntity> = viewQueries.getBookmarksPaged(server, status, limit, after, sort, listId)
+    ): List<Bookmark> = viewQueries.getBookmarksPaged(server, status, limit, after, sort, listId).toBookmarks()
 
     suspend fun countBookmarksForView(server: Server, filter: FilterConfig): Int =
         viewQueries.countBookmarksForView(server, filter)
@@ -521,18 +552,18 @@ class BookmarkRepository(
 
     fun quickFilterCounts(serverId: String): Flow<QuickFilterCountRow> = viewQueries.quickFilterCounts(serverId)
 
-    suspend fun getUnreadInList(serverId: String, listId: String): List<BookmarkEntity> =
-        viewQueries.getUnreadInList(serverId, listId)
+    suspend fun getUnreadInList(serverId: String, listId: String): List<Bookmark> =
+        viewQueries.getUnreadInList(serverId, listId).toBookmarks()
 
-    suspend fun getBookmarkAt(server: Server, filter: FilterConfig, index: Int): BookmarkEntity? =
-        viewQueries.getBookmarkAt(server, filter, index)
+    suspend fun getBookmarkAt(server: Server, filter: FilterConfig, index: Int): Bookmark? =
+        viewQueries.getBookmarkAt(server, filter, index)?.toBookmark()
 
     suspend fun searchBookmarks(
         server: Server,
         filter: FilterConfig,
         query: String,
         limit: Int = SEARCH_RESULT_LIMIT
-    ): List<BookmarkEntity> = viewQueries.searchBookmarks(server, filter, query, limit)
+    ): List<Bookmark> = viewQueries.searchBookmarks(server, filter, query, limit).toBookmarks()
 
     suspend fun countBookmarksBefore(
         server: Server,
@@ -547,14 +578,14 @@ class BookmarkRepository(
     suspend fun getViewRemoteIds(server: Server, filter: FilterConfig): List<String> =
         viewQueries.getViewRemoteIds(server, filter)
 
-    suspend fun getBookmarksByRemoteIds(serverId: String, remoteIds: List<String>): List<BookmarkEntity> =
-        viewQueries.getBookmarksByRemoteIds(serverId, remoteIds)
+    suspend fun getBookmarksByRemoteIds(serverId: String, remoteIds: List<String>): List<Bookmark> =
+        viewQueries.getBookmarksByRemoteIds(serverId, remoteIds).toBookmarks()
 
-    suspend fun getBookmarkPage(server: Server, filter: FilterConfig, offset: Int, limit: Int): List<BookmarkEntity> =
-        viewQueries.getBookmarkPage(server, filter, offset, limit)
+    suspend fun getBookmarkPage(server: Server, filter: FilterConfig, offset: Int, limit: Int): List<Bookmark> =
+        viewQueries.getBookmarkPage(server, filter, offset, limit).toBookmarks()
 
-    suspend fun getAllBookmarks(server: Server, status: FilterStatus, listId: String? = null): List<BookmarkEntity> =
-        viewQueries.getAllBookmarks(server, status, listId)
+    suspend fun getAllBookmarks(server: Server, status: FilterStatus, listId: String? = null): List<Bookmark> =
+        viewQueries.getAllBookmarks(server, status, listId).toBookmarks()
 
     suspend fun getBookmarkCount(server: Server, status: FilterStatus, listId: String? = null): Int =
         viewQueries.getBookmarkCount(server, status, listId)

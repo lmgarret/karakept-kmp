@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SwipeAction
@@ -110,7 +110,7 @@ class Save02RegressionTest {
         Dispatchers.resetMain()
     }
 
-    private fun createBookmarkEntity(remoteId: Long) = BookmarkEntity(
+    private fun createBookmarkEntity(remoteId: Long) = Bookmark(
         localId = remoteId,
         remoteId = "remote-$remoteId",
         serverId = "server-1",
@@ -140,7 +140,7 @@ class Save02RegressionTest {
     )
 
     /** Makes [rows] the view the repository answers for — its size, and its pages. */
-    private fun stubView(rows: List<BookmarkEntity>) {
+    private fun stubView(rows: List<Bookmark>) {
         every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns flowOf(rows.size)
         coEvery { bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
             val offset = thirdArg<Int>()

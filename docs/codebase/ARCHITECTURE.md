@@ -67,7 +67,8 @@ Offenders that predate a rule sit in `LayerRulesTest.KNOWN_VIOLATIONS`; the rule
 2. BookmarkRepository.executeSyncPipeline(SyncConfiguration) called
 3. RemoteDataSource guards against offline mode and fetches from API
 4. Bookmarks mapped from API model → BookmarkEntity and persisted to Room DB
-5. Flow<List<BookmarkEntity>> emitted back to UI
+5. BookmarkRepository maps rows to the domain `Bookmark` (`data/model/Bookmark.kt`) and emits that to the UI —
+   the UI never sees `BookmarkEntity`, which carries data-layer bookkeeping (`LayerRulesTest` pins this)
 6. ScreenModel collects and updates UI state
 
 **Sync is streamed, and split into two stages.** Cursor pagination is serial, so a large

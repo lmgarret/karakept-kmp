@@ -73,6 +73,15 @@ class LayerRulesTest {
         )
     }
 
+    // The UI renders the domain `Bookmark`; the Room row stays behind the repositories.
+    @Test
+    fun uiDoesNotUseTheBookmarkEntity() {
+        check(
+            "ui-bookmark-entity",
+            filesContaining(listOf("ui"), listOf("com.karakept.app.data.local.entity.BookmarkEntity")),
+        )
+    }
+
     @Test
     fun lowerLayersDoNotImportUi() {
         check(

@@ -1,6 +1,6 @@
 package com.karakept.app.ui.utils
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkSlot
 import com.karakept.app.data.model.BookmarkWindow
 import kotlin.test.Test
@@ -85,7 +85,7 @@ class ScrollCursorUtilsTest {
         pages = mapOf(0 to (1..50).map(::row))
     )
 
-    private fun row(id: Int) = BookmarkEntity(
+    private fun row(id: Int) = Bookmark(
         localId = id.toLong(),
         remoteId = "remote-$id",
         serverId = "server-1",

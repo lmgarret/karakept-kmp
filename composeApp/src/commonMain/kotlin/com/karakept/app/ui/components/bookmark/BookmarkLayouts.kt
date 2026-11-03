@@ -47,7 +47,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DescriptionPosition
@@ -72,7 +72,7 @@ import com.karakept.app.utils.formatBookmarkDate
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BookmarkCardLayout(
-    bookmark: BookmarkEntity,
+    bookmark: Bookmark,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     showReadingTime: Boolean = true,
@@ -271,7 +271,7 @@ fun BookmarkCardLayout(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BookmarkListLayout(
-    bookmark: BookmarkEntity,
+    bookmark: Bookmark,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     showReadingTime: Boolean = true,

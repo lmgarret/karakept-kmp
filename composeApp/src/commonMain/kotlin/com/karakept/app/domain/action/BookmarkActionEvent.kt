@@ -1,60 +1,61 @@
 package com.karakept.app.domain.action
 
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 
 /**
  * Sealed hierarchy representing all possible bookmark actions.
  * Each action contains the data needed to execute and potentially undo the operation.
  */
 sealed class BookmarkActionEvent {
-    abstract val bookmark: BookmarkEntity
+    abstract val bookmark: Bookmark
     abstract val requiresUndo: Boolean
 
     data class Archive(
-        override val bookmark: BookmarkEntity,
+        override val bookmark: Bookmark,
         override val requiresUndo: Boolean = true
     ) : BookmarkActionEvent()
 
     data class Unarchive(
-        override val bookmark: BookmarkEntity,
+        override val bookmark: Bookmark,
         override val requiresUndo: Boolean = true
     ) : BookmarkActionEvent()
 
     data class MarkRead(
-        override val bookmark: BookmarkEntity,
+        override val bookmark: Bookmark,
         override val requiresUndo: Boolean = true
     ) : BookmarkActionEvent()
 
     data class MarkUnread(
-        override val bookmark: BookmarkEntity,
+        override val bookmark: Bookmark,
         override val requiresUndo: Boolean = true
     ) : BookmarkActionEvent()
 
     data class ToggleFavorite(
-        override val bookmark: BookmarkEntity,
+        override val bookmark: Bookmark,
         override val requiresUndo: Boolean = true
     ) : BookmarkActionEvent()
 
     data class Delete(
-        override val bookmark: BookmarkEntity,
+        override val bookmark: Bookmark,
         override val requiresUndo: Boolean = true
     ) : BookmarkActionEvent()
 
     // Non-undoable actions
     data class UpdateTags(
-        override val bookmark: BookmarkEntity,
+        override val bookmark: Bookmark,
         val newTags: List<String>,
         override val requiresUndo: Boolean = false
     ) : BookmarkActionEvent()
 
     data class MoveToList(
-        override val bookmark: BookmarkEntity,
+        override val bookmark: Bookmark,
         val listId: String,
         override val requiresUndo: Boolean = false
     ) : BookmarkActionEvent()
 
     data class RemoveFromList(
-        override val bookmark: BookmarkEntity,
+        override val bookmark: Bookmark,
         val listId: String,
         override val requiresUndo: Boolean = false
     ) : BookmarkActionEvent()
@@ -73,9 +74,10 @@ sealed class BookmarkActionResult {
 }
 
 /**
- * Snapshot of bookmark state for undo operations
+ * Snapshot of bookmark state for undo operations. Holds the Room row itself, since undoing
+ * writes it back whole.
  */
-data class UndoableActionState(
+internal data class UndoableActionState(
     val originalBookmark: BookmarkEntity,
     val action: BookmarkActionEvent,
     val timestamp: Long,

@@ -3,6 +3,8 @@ package com.karakept.app.data.repository
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.toBookmark
+import com.karakept.app.data.local.entity.toBookmarks
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.ApiException
 import com.karakept.app.data.remote.RemoteDataSource
@@ -77,7 +79,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
         coEvery { remoteDataSource.summarizeBookmark(testServer, "remote-42") } returns
             SummarizeResult(summary = "A short summary.", summarizationStatus = "success")
 
-        val returned = repository.summarizeBookmark(bookmark)
+        val returned = repository.summarizeBookmark(bookmark.toBookmark())
 
         assertEquals("A short summary.", returned)
         coVerify { bookmarkDao.updateSummary(bookmark.localId, "A short summary.", "success") }
@@ -94,7 +96,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
         val job = launch { repository.bookmarkChangedEvents.collect { emitted = it } }
         advanceUntilIdle() // SharedFlow has replay 0 — subscribe before the emit
 
-        repository.summarizeBookmark(bookmark)
+        repository.summarizeBookmark(bookmark.toBookmark())
         advanceUntilIdle()
 
         assertEquals(bookmark.remoteId, emitted)
@@ -109,7 +111,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
             UnsupportedServerActionException("This Karakeep server has no AI model configured")
 
         assertTrue(repository.aiCapabilitiesFor("server1").canSummarize)
-        assertFailsWith<UnsupportedServerActionException> { repository.summarizeBookmark(bookmark) }
+        assertFailsWith<UnsupportedServerActionException> { repository.summarizeBookmark(bookmark.toBookmark()) }
 
         assertFalse(repository.aiCapabilitiesFor("server1").canSummarize)
     }
@@ -120,7 +122,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
         val bookmark = makeBookmark()
         coEvery { remoteDataSource.summarizeBookmark(any(), any()) } throws ApiException("HTTP 500")
 
-        assertFailsWith<ApiException> { repository.summarizeBookmark(bookmark) }
+        assertFailsWith<ApiException> { repository.summarizeBookmark(bookmark.toBookmark()) }
 
         // A blip is not a verdict about the server.
         assertTrue(repository.aiCapabilitiesFor("server1").canSummarize)
@@ -130,7 +132,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
     fun summarize_failsWhenTheServerIsNoLongerConfigured() = runTest(testDispatcher) {
         every { serverRepository.servers } returns flowOf(emptyList())
 
-        assertFailsWith<Exception> { repository.summarizeBookmark(makeBookmark()) }
+        assertFailsWith<Exception> { repository.summarizeBookmark(makeBookmark().toBookmark()) }
         coVerify(exactly = 0) { remoteDataSource.summarizeBookmark(any(), any()) }
     }
 
@@ -146,7 +148,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
             bookmark, bookmark, bookmark.copy(tags = "old,ai-generated")
         )
 
-        val landed = repository.requestAiRetag(bookmark)
+        val landed = repository.requestAiRetag(bookmark.toBookmark())
 
         assertTrue(landed)
         coVerify { remoteDataSource.requestAiRetag(testServer, "remote-42") }
@@ -161,7 +163,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
         coEvery { bookmarkDao.getBookmarkByRemoteId(any(), any()) } returns bookmark
 
         // "Still working on it" is not a failure — the caller says so rather than throwing.
-        assertFalse(repository.requestAiRetag(bookmark))
+        assertFalse(repository.requestAiRetag(bookmark.toBookmark()))
     }
 
     @Test
@@ -171,7 +173,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
         coEvery { remoteDataSource.requestAiRetag(any(), any()) } throws
             UnsupportedServerActionException("needs an admin account")
 
-        assertFailsWith<UnsupportedServerActionException> { repository.requestAiRetag(makeBookmark()) }
+        assertFailsWith<UnsupportedServerActionException> { repository.requestAiRetag(makeBookmark().toBookmark()) }
         coVerify(exactly = 0) { bookmarkRepository.syncSingleBookmark(any(), any()) }
     }
 

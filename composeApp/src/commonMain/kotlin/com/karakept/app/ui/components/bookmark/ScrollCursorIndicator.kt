@@ -44,7 +44,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.utils.scrollCursorFraction
 import com.karakept.app.ui.utils.scrollCursorIndex
@@ -83,9 +83,9 @@ fun ScrollCursorIndicator(
      * The row at an absolute slot, if the list has already read it. Answers without a query for
      * a thumb over rows that are on screen, which is where it starts and where it ends up.
      */
-    loadedAt: (Int) -> BookmarkEntity? = { null },
+    loadedAt: (Int) -> Bookmark? = { null },
     /** The row at an absolute slot, read from the database for slots the list does not hold. */
-    bookmarkAtIndex: suspend (Int) -> BookmarkEntity? = { null },
+    bookmarkAtIndex: suspend (Int) -> Bookmark? = { null },
     modifier: Modifier = Modifier
 ) {
     if (totalBookmarkCount < 2) return
@@ -128,7 +128,7 @@ fun ScrollCursorIndicator(
     val alreadyLoaded = loadedAt(pointedIndex)
     val loadedAtState = rememberUpdatedState(loadedAt)
     val currentBookmarkAtIndex = rememberUpdatedState(bookmarkAtIndex)
-    var readBookmark by remember { mutableStateOf<BookmarkEntity?>(null) }
+    var readBookmark by remember { mutableStateOf<Bookmark?>(null) }
 
     // Reads sampled at a fixed rate for as long as the drag lasts, and never cancelled.
     //
@@ -370,7 +370,7 @@ internal fun scrollCursorLabelWidths(sortOption: SortOption): List<String> = whe
     SortOption.READING_TIME_SHORT, SortOption.READING_TIME_LONG -> listOf("999mn")
 }
 
-internal fun scrollCursorLabel(bookmark: BookmarkEntity?, sortOption: SortOption): String {
+internal fun scrollCursorLabel(bookmark: Bookmark?, sortOption: SortOption): String {
     bookmark ?: return ""
     return when (sortOption) {
         SortOption.NEWEST, SortOption.OLDEST ->

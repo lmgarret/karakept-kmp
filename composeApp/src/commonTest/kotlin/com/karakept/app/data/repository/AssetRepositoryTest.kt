@@ -1,11 +1,11 @@
 package com.karakept.app.data.repository
 
-import com.karakept.api.model.Bookmark
+import com.karakept.api.model.Bookmark as ApiBookmark
 import com.karakept.api.model.BookmarkContent
 import com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.AssetEntity
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.ApiException
 import com.karakept.app.data.remote.RemoteDataSource
@@ -36,7 +36,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
         label = "Test"
     )
 
-    private val bookmark = BookmarkEntity(
+    private val bookmark = Bookmark(
         localId = 1L,
         remoteId = "remote-100",
         serverId = "server-1",
@@ -108,7 +108,7 @@ class AssetRepositoryTest : BaseRepositoryTest() {
         assertEquals(listOf(asset), assets)
     }
 
-    private fun remoteBookmark(assets: List<BookmarksBookmarkIdAssetsPost201Response>) = Bookmark(
+    private fun remoteBookmark(assets: List<BookmarksBookmarkIdAssetsPost201Response>) = ApiBookmark(
         id = "remote-100",
         title = "Test Article",
         archived = false,

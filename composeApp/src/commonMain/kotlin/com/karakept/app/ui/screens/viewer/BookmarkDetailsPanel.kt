@@ -63,7 +63,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.local.entity.AssetEntity
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.repository.AiCapabilities
@@ -91,7 +91,7 @@ import kotlinx.datetime.toLocalDateTime
 @Composable
 internal fun BookmarkDetailsPanel(
     visible: Boolean,
-    bookmark: BookmarkEntity?,
+    bookmark: Bookmark?,
     assets: List<AssetEntity> = emptyList(),
     selectedSource: ContentSource = ContentSource.EXTRACTED,
     serverCrawlInFlight: ServerCrawlAction? = null,

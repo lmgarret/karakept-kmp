@@ -2,7 +2,7 @@ package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
 import com.karakept.api.model.KarakeepList
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.Server
@@ -124,7 +124,7 @@ class MainScreenModelListCountsTest {
         Dispatchers.resetMain()
     }
 
-    private fun makeBookmark(id: Long, listIds: String, isRead: Boolean) = BookmarkEntity(
+    private fun makeBookmark(id: Long, listIds: String, isRead: Boolean) = Bookmark(
         localId = id,
         remoteId = "remote-$id",
         serverId = "server-1",

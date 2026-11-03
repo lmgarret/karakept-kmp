@@ -4,7 +4,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.karakept.api.model.KarakeepList as KarakeepList
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.LinkOpenMode
@@ -36,7 +36,6 @@ import com.karakept.app.data.repository.setScrollToTopEnabled
 import com.karakept.app.data.repository.setShowReaderHeroImage
 import com.karakept.app.data.repository.setViewerMode
 import com.karakept.app.data.repository.summarizeBookmark
-import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.AiAction
 import com.karakept.app.domain.action.BookmarkActionController
@@ -56,7 +55,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -496,27 +494,11 @@ class BookmarkViewerScreenModel(
                                 try {
                                     // Every strategy fetches here: under ALL a missing body
                                     // is one offline cleanup dropped, or a download that failed.
-                                    val strategy = settingsRepository.contentSyncStrategy.first()
                                     val content = bookmarkRepository.fetchBookmarkContent(bookmark.remoteId, bookmark.serverId)
                                     if (!content.isNullOrBlank()) {
-                                        var shouldPersist = false
-
-                                        if (strategy == com.karakept.app.data.model.SyncStrategy.PER_BOOKMARK) {
-                                            shouldPersist = true
-                                        } else if (strategy == com.karakept.app.data.model.SyncStrategy.PER_LIST) {
-                                            // Check if in target list
-                                            val targetLists = settingsRepository.contentSyncTargetLists.first()
-                                            val bookmarkListIds = bookmark.listIds.split(",").filter { it.isNotBlank() }
-                                            shouldPersist = bookmarkListIds.any { targetLists.contains(it) }
-                                        }
-                                        // The storage cap dropped a copy it once held; opening it
-                                        // is what brings it back.
-                                        if (bookmark.offlineEvictedAt != null) shouldPersist = true
-                                        // Past its retention: shown, not stored again.
-                                        val retentionDays = settingsRepository.activeOfflineRetentionDays.firstOrNull()
-                                        if (OfflineRetention.isRetired(bookmark, retentionDays, System.currentTimeMillis())) {
-                                            shouldPersist = false
-                                        }
+                                        val shouldPersist = bookmarkRepository.shouldPersistFetchedContent(
+                                            bookmark.localId, System.currentTimeMillis()
+                                        )
 
                                         if (shouldPersist) {
                                             // Persist it
@@ -619,10 +601,10 @@ class BookmarkViewerScreenModel(
         viewModelScope.launch { settingsRepository.setScrollToTopEnabled(enabled) }
     }
 
-    fun setContentSource(source: ContentSource, bookmark: BookmarkEntity?) =
+    fun setContentSource(source: ContentSource, bookmark: Bookmark?) =
         assetsController.setContentSource(source, bookmark)
 
-    fun fetchAndCacheArchive(bookmark: BookmarkEntity) = assetsController.fetchAndCacheArchive(bookmark)
+    fun fetchAndCacheArchive(bookmark: Bookmark) = assetsController.fetchAndCacheArchive(bookmark)
 
     fun deleteAssetLocal(asset: com.karakept.app.data.local.entity.AssetEntity) =
         assetsController.deleteAssetLocal(asset)
@@ -633,14 +615,14 @@ class BookmarkViewerScreenModel(
      */
     fun deleteAssetOnServer(
         asset: com.karakept.app.data.local.entity.AssetEntity,
-        bookmark: BookmarkEntity
+        bookmark: Bookmark
     ) = assetsController.deleteAssetOnServer(asset, bookmark)
 
     /**
      * Ask the server to re-crawl this bookmark. The server runs the crawl as a background job,
      * so we re-sync the bookmark after a short delay to pick up whatever it produced.
      */
-    fun requestServerCrawl(bookmark: BookmarkEntity, action: ServerCrawlAction) {
+    fun requestServerCrawl(bookmark: Bookmark, action: ServerCrawlAction) {
         // Claim the slot before launching — two taps in the same frame would both see null
         // if the check happened inside the coroutine.
         if (!_serverCrawlInFlight.compareAndSet(null, action)) return
@@ -684,7 +666,7 @@ class BookmarkViewerScreenModel(
      * settles. [AiAction.RETAG] only enqueues a job, so the repository polls for the new tags and
      * reports back whether they landed inside the budget.
      */
-    fun runAiAction(bookmark: BookmarkEntity, action: AiAction) {
+    fun runAiAction(bookmark: Bookmark, action: AiAction) {
         // Claim the slot before launching, for the same reason requestServerCrawl does.
         if (!_aiActionInFlight.compareAndSet(null, action)) return
         viewModelScope.launch {
@@ -731,7 +713,7 @@ class BookmarkViewerScreenModel(
      * size finished well after we had already re-synced, and the new asset only appeared when
      * the user ran the action a second time.
      */
-    private suspend fun awaitCrawlResult(bookmark: BookmarkEntity, action: ServerCrawlAction) {
+    private suspend fun awaitCrawlResult(bookmark: Bookmark, action: ServerCrawlAction) {
         // The asset type the job is expected to produce. REFRESH rewrites metadata rather than
         // adding an asset, so there is nothing to wait for beyond the first sync.
         val expectedAssetType = when (action) {
@@ -763,7 +745,7 @@ class BookmarkViewerScreenModel(
     /** Downloads [asset] and stores the local path against that exact row. */
     fun downloadOrRefreshAsset(
         asset: com.karakept.app.data.local.entity.AssetEntity,
-        bookmark: com.karakept.app.data.local.entity.BookmarkEntity,
+        bookmark: com.karakept.app.data.model.Bookmark,
         // True when the download was started by tapping the row rather than by picking
         // "Download a copy" from the menu: finish the job the tap implied.
         useWhenDone: Boolean = false
@@ -792,7 +774,7 @@ class BookmarkViewerScreenModel(
 
     // Bookmark Actions
 
-    fun toggleBookmarkArchive(bookmark: BookmarkEntity) {
+    fun toggleBookmarkArchive(bookmark: Bookmark) {
         viewModelScope.launch {
             val event = if (bookmark.isArchived) {
                 BookmarkActionEvent.Unarchive(bookmark)
@@ -803,7 +785,7 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun toggleBookmarkFavorite(bookmark: BookmarkEntity) {
+    fun toggleBookmarkFavorite(bookmark: Bookmark) {
         viewModelScope.launch {
             bookmarkActionController.executeAction(
                 BookmarkActionEvent.ToggleFavorite(bookmark)
@@ -811,7 +793,7 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun toggleBookmarkRead(bookmark: BookmarkEntity) {
+    fun toggleBookmarkRead(bookmark: Bookmark) {
         viewModelScope.launch {
             val event = if (bookmark.isRead) {
                 BookmarkActionEvent.MarkUnread(bookmark)
@@ -822,7 +804,7 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun deleteBookmark(bookmark: BookmarkEntity, onSuccess: () -> Unit) {
+    fun deleteBookmark(bookmark: Bookmark, onSuccess: () -> Unit) {
         viewModelScope.launch {
             bookmarkActionController.executeAction(
                 BookmarkActionEvent.Delete(bookmark)
@@ -831,7 +813,7 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
+    fun moveBookmarkToList(bookmark: Bookmark, listId: String) {
         viewModelScope.launch {
             bookmarkActionsRepository.moveToList(
                 bookmark.remoteId,
@@ -841,7 +823,7 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun updateBookmarkTags(bookmark: BookmarkEntity, tags: List<String>) {
+    fun updateBookmarkTags(bookmark: Bookmark, tags: List<String>) {
         viewModelScope.launch {
             bookmarkActionsRepository.updateTags(
                 bookmark.remoteId,
@@ -851,7 +833,7 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun createHighlight(bookmark: BookmarkEntity, text: String, startOffset: Int, endOffset: Int, note: String? = null, color: String? = null, onCreated: (String) -> Unit = {}) {
+    fun createHighlight(bookmark: Bookmark, text: String, startOffset: Int, endOffset: Int, note: String? = null, color: String? = null, onCreated: (String) -> Unit = {}) {
         AppLogger.d("ViewerModel", "createHighlight requested - text='${text.take(30)}...', start=$startOffset, end=$endOffset")
         viewModelScope.launch {
             try {
@@ -872,7 +854,7 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun updateHighlight(bookmark: BookmarkEntity, highlightId: String, note: String?, color: String?) {
+    fun updateHighlight(bookmark: Bookmark, highlightId: String, note: String?, color: String?) {
         viewModelScope.launch {
             val servers = serverRepository.servers.first()
             val server = servers.find { it.id == bookmark.serverId } ?: return@launch
@@ -880,7 +862,7 @@ class BookmarkViewerScreenModel(
         }
     }
 
-    fun deleteHighlight(bookmark: BookmarkEntity, highlightId: String) {
+    fun deleteHighlight(bookmark: Bookmark, highlightId: String) {
         viewModelScope.launch {
             val servers = serverRepository.servers.first()
             val server = servers.find { it.id == bookmark.serverId } ?: return@launch
