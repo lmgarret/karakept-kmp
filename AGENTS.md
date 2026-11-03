@@ -96,6 +96,8 @@ knowing before touching any of it:
   cannot share a namespace, and this is the one components resolve against); `:androidApp` is
   `com.karakept.app.android`; `applicationId` stays `com.karakept.app`.
 - **The Android suite runs once**, as `:composeApp:testAndroidHostTest` — a KMP library has a
+  single variant, so the `androidComponents { beforeVariants … }` block that used to switch off
+  the release/devRelease copies is gone with the build types.
 - **Split modules keep their packages.** `:core:model` (#440) still declares
   `com.karakept.app.data.model`, so moving code between modules changes no import and no
   `NavKey` serial name. Its Android namespace is `com.karakept.core.model` — namespaces must be
@@ -104,8 +106,6 @@ knowing before touching any of it:
   every class as unstable, and composables taking one stop skipping. Code in a split module is
   reached across a module boundary, so `internal` no longer reaches it and the compiler stops
   smart-casting its `val`s — bind to a local first.
-  single variant, so the `androidComponents { beforeVariants … }` block that used to switch off
-  the release/devRelease copies is gone with the build types.
 
 ---
 
