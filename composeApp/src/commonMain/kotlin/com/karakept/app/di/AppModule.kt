@@ -88,7 +88,7 @@ val appModule = module {
     single { createDataStore() }
 
     single { SecureCredentialStore() }
-    single { ServerRepository(get(), get()) }
+    single { ServerRepository(get(), get(), get()) }
     single { SettingsRepository(get()) }
     single { ListRepository(get(), get(), get(), get()) }  // RemoteDataSource, ListDao, SettingsRepository, AppDispatchers
     single { ServerVersionRepository(get(), get()) }
@@ -141,8 +141,8 @@ val appModule = module {
     // screens that scroll share one instance.
     single { com.karakept.app.ui.input.PageTurnDispatcher(get(), get()) }
 
-    viewModel { LoginScreenModel(get(), get(), get(), get()) }
-    viewModel { OnboardingScreenModel(get(), get(), get(), get(), get()) }
+    viewModel { LoginScreenModel(get(), get(), get()) }
+    viewModel { OnboardingScreenModel(get(), get(), get(), get()) }
     // viewModel (not single) so each Nav3 back-stack entry gets a fresh instance scoped
     // to that entry's ViewModelStore (provided by rememberViewModelStoreNavEntryDecorator).
     // A Koin single would share one instance across hosts/entries, but the store clears the
@@ -150,7 +150,7 @@ val appModule = module {
     // singleton would then have dead coroutines and never load bookmarks (SAVE-02).
     viewModel { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), serverVersionRepository = get()) }
     viewModel { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    viewModel { SettingsScreenModel(get(), get(), get(), get(), get()) }
+    viewModel { SettingsScreenModel(get(), get(), get(), get()) }
     viewModel { HighlightsScreenModel(get(), get(), get(), get()) }
     viewModel { com.karakept.app.ui.screens.share.SaveErrorScreenModel(get()) }
     viewModel { com.karakept.app.ui.screens.settings.ListManagementScreenModel(get(), get()) }

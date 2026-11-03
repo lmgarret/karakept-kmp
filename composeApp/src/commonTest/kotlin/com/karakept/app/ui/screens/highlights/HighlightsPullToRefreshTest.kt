@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.highlights
 
-import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -36,7 +36,7 @@ class HighlightsPullToRefreshTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var highlightRepository: HighlightRepository
-    private lateinit var bookmarkDao: BookmarkDao
+    private lateinit var bookmarkRepository: BookmarkRepository
     private lateinit var serverRepository: ServerRepository
     private lateinit var settingsRepository: SettingsRepository
 
@@ -52,7 +52,7 @@ class HighlightsPullToRefreshTest {
         Dispatchers.setMain(testDispatcher)
 
         highlightRepository = mockk(relaxed = true)
-        bookmarkDao = mockk(relaxed = true)
+        bookmarkRepository = mockk(relaxed = true)
         serverRepository = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
 
@@ -69,7 +69,7 @@ class HighlightsPullToRefreshTest {
 
     private fun createScreenModel() = HighlightsScreenModel(
         highlightRepository = highlightRepository,
-        bookmarkDao = bookmarkDao,
+        bookmarkRepository = bookmarkRepository,
         serverRepository = serverRepository,
         settingsRepository = settingsRepository
     )

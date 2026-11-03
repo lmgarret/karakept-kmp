@@ -2,9 +2,9 @@ package com.karakept.app.ui.screens.highlights
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.Server
+import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 
 class HighlightsScreenModel(
     private val highlightRepository: HighlightRepository,
-    private val bookmarkDao: BookmarkDao,
+    private val bookmarkRepository: BookmarkRepository,
     private val serverRepository: ServerRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
@@ -109,7 +109,7 @@ class HighlightsScreenModel(
 
     suspend fun getBookmarkLocalIdForHighlight(highlight: Highlight): Long? {
         val server = selectedServer.value ?: return null
-        val bookmark = bookmarkDao.getBookmarkByRemoteId(highlight.bookmarkId, server.id)
+        val bookmark = bookmarkRepository.getBookmarkByRemoteId(highlight.bookmarkId, server.id)
         return bookmark?.localId
     }
 }

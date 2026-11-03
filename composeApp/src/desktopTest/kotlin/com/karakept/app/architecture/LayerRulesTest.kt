@@ -110,10 +110,6 @@ class LayerRulesTest {
         // expect-actual entries are expects whose actuals sit in differently named files
         // (Database.*, AppLoggerPlatform.kt, ...) or whose file name lacks the .android/.jvm suffix.
         val KNOWN_VIOLATIONS: Set<String> = setOf(
-            "ui-data:commonMain/kotlin/com/karakept/app/ui/screens/onboarding/LoginScreenModel.kt",
-            "ui-data:commonMain/kotlin/com/karakept/app/ui/screens/onboarding/OnboardingScreenModel.kt",
-            "ui-data:commonMain/kotlin/com/karakept/app/ui/screens/settings/SettingsScreenModel.kt",
-            "ui-data:commonMain/kotlin/com/karakept/app/ui/screens/highlights/HighlightsScreenModel.kt",
             "ui-data:commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreenModel.kt",
             "expect-actual:commonMain/kotlin/com/karakept/app/data/local/AppDatabase.kt",
             "expect-actual:commonMain/kotlin/com/karakept/app/ui/theme/WindowThemeSync.kt",

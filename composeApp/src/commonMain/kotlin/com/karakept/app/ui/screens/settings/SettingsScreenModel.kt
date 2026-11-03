@@ -60,7 +60,6 @@ import kotlinx.coroutines.launch
 
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.DefaultListType
-import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.ListRepository
 import com.karakept.app.data.repository.ServerVersionRepository
 import com.karakept.app.domain.ServerVersionCheck
@@ -70,7 +69,6 @@ import kotlinx.coroutines.flow.first
 class SettingsScreenModel(
     private val settingsRepository: SettingsRepository,
     private val serverRepository: ServerRepository,
-    private val remoteDataSource: RemoteDataSource,
     private val listRepository: ListRepository,
     private val serverVersionRepository: ServerVersionRepository
 ) : ViewModel() {

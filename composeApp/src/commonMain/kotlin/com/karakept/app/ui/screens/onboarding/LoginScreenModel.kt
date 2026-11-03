@@ -13,7 +13,6 @@ import kotlinx.coroutines.launch
 class LoginScreenModel(
     private val serverRepository: ServerRepository,
     private val settingsRepository: SettingsRepository,
-    private val remoteDataSource: com.karakept.app.data.remote.RemoteDataSource,
     private val serverVersionRepository: ServerVersionRepository
 ) : ViewModel() {
 
@@ -36,7 +35,7 @@ class LoginScreenModel(
     /** Reports whether [url] accepts [apiKey] and, when it does, what version the server runs. */
     fun testConnection(url: String, apiKey: String, onResult: (Boolean, ServerVersionCheck?) -> Unit) {
         viewModelScope.launch {
-            val success = remoteDataSource.testConnection(url.trim(), apiKey.trim())
+            val success = serverRepository.testConnection(url.trim(), apiKey.trim())
             val version = if (success) serverVersionRepository.check(url.trim()) else null
             onResult(success, version)
         }

@@ -2,7 +2,6 @@ package com.karakept.app.ui.screens.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.BackupRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.ServerVersionRepository
@@ -16,7 +15,6 @@ import kotlinx.coroutines.launch
 class OnboardingScreenModel(
     private val settingsRepository: SettingsRepository,
     private val serverRepository: ServerRepository,
-    private val remoteDataSource: RemoteDataSource,
     private val backupRepository: BackupRepository,
     private val serverVersionRepository: ServerVersionRepository
 ) : ViewModel() {
@@ -54,7 +52,7 @@ class OnboardingScreenModel(
     /** Reports whether [url] accepts [apiKey] and, when it does, what version the server runs. */
     fun testConnection(url: String, apiKey: String, onResult: (Boolean, ServerVersionCheck?) -> Unit) {
         viewModelScope.launch {
-            val success = remoteDataSource.testConnection(url.trim(), apiKey.trim())
+            val success = serverRepository.testConnection(url.trim(), apiKey.trim())
             val version = if (success) serverVersionRepository.check(url.trim()) else null
             onResult(success, version)
         }
