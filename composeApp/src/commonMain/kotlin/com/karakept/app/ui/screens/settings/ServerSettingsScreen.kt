@@ -153,6 +153,5 @@ fun ServerSettingsContent(
 internal fun serverVersionLabel(check: ServerVersionCheck?, isChecking: Boolean): String = when {
     check == null && isChecking -> "checking…"
     check == null -> "unknown"
-    check.version == null -> "not reported"
-    else -> check.version
+    else -> check.version ?: "not reported"
 }

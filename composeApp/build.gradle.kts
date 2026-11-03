@@ -19,8 +19,6 @@ plugins {
     alias(libs.plugins.compose.compiler)
     id("org.jetbrains.compose.hot-reload")
     alias(libs.plugins.kotlinSerialization)
-    alias(libs.plugins.room)
-    alias(libs.plugins.ksp)
 }
 
 // The deprecated `compose.desktop.currentOs` shorthand picks the desktop-jvm-<os>-<arch> artifact
@@ -146,6 +144,7 @@ kotlin {
                 // API Client (generated from OpenAPI spec)
                 implementation(project(":api-client"))
                 implementation(project(":core:model"))
+                implementation(project(":core:data"))
                 
                 implementation(libs.compose.runtime)
                 implementation(libs.compose.foundation)
@@ -253,6 +252,7 @@ kotlin {
         }
         val commonTest by getting {
             dependencies {
+                implementation(project(":core:testing"))
                 implementation(libs.kotlin.test)
                 implementation(libs.kotlinx.coroutines.test)
                 implementation(libs.mockk)
@@ -260,16 +260,6 @@ kotlin {
             }
         }
     }
-}
-
-room3 {
-    schemaDirectory("$projectDir/schemas")
-}
-
-dependencies {
-    add("kspCommonMainMetadata", libs.androidx.room.compiler)
-    add("kspAndroid", libs.androidx.room.compiler)
-    add("kspDesktop", libs.androidx.room.compiler)
 }
 
 compose.desktop {

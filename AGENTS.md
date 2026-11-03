@@ -47,13 +47,13 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 | UI screens & ScreenModels | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/<feature>/` (`main`, `viewer`, `onboarding`, `settings`, `highlights`, `share`) |
 | Reusable UI components | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/` |
 | Theme (MD3 colors, typography) | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/theme/` |
-| Domain logic | `composeApp/src/commonMain/kotlin/com/karakept/app/domain/` |
-| Repositories | `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/` |
-| Local DB (Room entities, DAOs, migrations) | `composeApp/src/commonMain/kotlin/com/karakept/app/data/local/` |
-| Remote API (Ktor, RemoteDataSource) | `composeApp/src/commonMain/kotlin/com/karakept/app/data/remote/` |
+| Domain logic | `core/data/src/commonMain/kotlin/com/karakept/app/domain/` |
+| Repositories | `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/` |
+| Local DB (Room entities, DAOs, migrations) | `core/data/src/commonMain/kotlin/com/karakept/app/data/local/` |
+| Remote API (Ktor, RemoteDataSource) | `core/data/src/commonMain/kotlin/com/karakept/app/data/remote/` |
 | Domain data models | `core/model/src/commonMain/kotlin/com/karakept/app/data/model/` (module `:core:model`) |
 | DI module | `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` |
-| Shared utilities | `composeApp/src/commonMain/kotlin/com/karakept/app/utils/` |
+| Shared utilities | `composeApp/src/commonMain/kotlin/com/karakept/app/utils/`; the ones the data layer needs (`AppDispatchers`, `AppLogger`, `FileUtils`, …) in `core/data/src/commonMain/kotlin/com/karakept/app/utils/` |
 | Android-specific code | `composeApp/src/androidMain/` |
 | Android application shell | `androidApp/` (build types, signing, applicationId — no Kotlin) |
 | Generated API client | `api-client/` (OpenAPI-generated, committed) |
@@ -73,6 +73,8 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 | `:androidApp` | `com.android.application` | Nothing but build config: `applicationId`, build types, signing, versioning. **No Kotlin sources.** |
 | `:api-client` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | The OpenAPI-generated client |
 | `:core:model` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | `data/model`, `OfflineRetention`, `PlatformKeyCodes` — no dependency on any other app code |
+| `:core:data` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Room (+ KSP, `schemas/`), Ktor, repositories, `data/cache`, `data/secure`, `domain/`, and the utils those need |
+| `:core:testing` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Test fixtures shared by several suites (`BaseRepositoryTest`, `TestAppDispatchers`, `FakeDataStore`) — test dependencies only |
 
 AGP 9 refuses to apply `com.android.application` alongside the Kotlin Multiplatform plugin, and
 its replacement (`com.android.kotlin.multiplatform.library`) is library-only. So the KMP module
@@ -106,6 +108,11 @@ knowing before touching any of it:
   every class as unstable, and composables taking one stop skipping. Code in a split module is
   reached across a module boundary, so `internal` no longer reaches it and the compiler stops
   smart-casting its `val`s — bind to a local first.
+- **`domain/` lives in `:core:data` for now**: `BookmarkActionController` reads DAOs directly,
+  so a `:core:domain` above the data layer could not reach them once they are `internal`.
+- **Code the data layer calls has to sit in or below `:core:data`.** `CoilThumbnailCache` stays in
+  `:composeApp` (same package, `data/cache`) because it needs the image loader the app sets up;
+  `:core:data` holds only the `ThumbnailCache` interface.
 
 ---
 
@@ -716,8 +723,8 @@ Every new feature or bug fix **must** include new or updated tests. Tests that b
 
 | Type | Location |
 |---|---|
-| Common unit tests | `composeApp/src/commonTest/kotlin/com/karakept/app/` |
-| Desktop integration tests | `composeApp/src/desktopTest/kotlin/com/karakept/app/data/integration/` |
+| Common unit tests | `<module>/src/commonTest/kotlin/com/karakept/app/` — data and domain tests in `core/data`, model tests in `core/model`, the rest in `composeApp` |
+| Desktop integration tests | `core/data/src/desktopTest/kotlin/com/karakept/app/data/integration/` |
 | Android unit tests | `composeApp/src/androidHostTest/kotlin/com/karakept/app/` |
 
 ### Running the Desktop App
@@ -754,7 +761,7 @@ that keeps the version in the repo instead of in someone's memory.
 ./gradlew desktopTest           # Desktop (JVM) suite — commonTest + desktopTest
 ./gradlew :composeApp:testAndroidHostTest   # Android (Robolectric) suite
 ./gradlew -t test               # Watch mode
-./gradlew :composeApp:desktopTest --tests BookmarkRepositoryUnitTest
+./gradlew :core:data:desktopTest --tests BookmarkRepositoryUnitTest
 ```
 
 ### Test Patterns

@@ -48,6 +48,7 @@ abstract class BaseDockerIntegrationTest {
             val possiblePaths = listOf(
                 "karakeep-upstream/docker/docker-compose.dev.yml",
                 "../karakeep-upstream/docker/docker-compose.dev.yml",
+                "../../karakeep-upstream/docker/docker-compose.dev.yml",
                 "/workspaces/karakept-kmp/karakeep-upstream/docker/docker-compose.dev.yml"
             )
 

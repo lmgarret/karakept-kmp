@@ -35,5 +35,17 @@ kotlin {
                 api(libs.kotlinx.serialization.json)
             }
         }
+        commonTest {
+            dependencies {
+                implementation(libs.kotlin.test)
+            }
+        }
     }
+}
+
+// See :composeApp — without it `./gradlew test` would skip this module's suite.
+tasks.register("test") {
+    group = "verification"
+    description = "Alias for allTests."
+    dependsOn("allTests")
 }

@@ -25,27 +25,27 @@
 
 **Domain Layer (Business Logic):**
 - Purpose: Encapsulate business rules, filtering logic, and centralized action handling
-- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/domain/`
+- Location: `core/data/src/commonMain/kotlin/com/karakept/app/domain/`
 - Contains: BookmarkActionController (with undo support), BookmarkActionEvent sealed class hierarchy, ActionSnackbarManager, filter utilities (BookmarkFilterUtils), list hierarchy utilities
 - Depends on: Data layer (repositories, DAOs)
 - Used by: ScreenModels and repositories
 
 **Data Layer (Repositories):**
 - Purpose: Abstract data sources (local DB and remote API), provide unified interfaces for data access
-- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/`
+- Location: `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/`
 - Contains: BookmarkRepository, ListRepository, ServerRepository, SettingsRepository, HighlightRepository, BookmarkActionsRepository, BackupRepository, AssetRepository (a bookmark's asset rows, cached files and server copies)
 - Depends on: Local data source (DAOs, SQLDelight DB), Remote data source (Ktor client with generated API)
 - Used by: ScreenModels and domain layer (BookmarkActionController)
 
 **Local Data Source:**
 - Purpose: Persistent storage via Room/SQLDelight, offline state, pending actions queue
-- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/local/`
+- Location: `core/data/src/commonMain/kotlin/com/karakept/app/data/local/`
 - Contains: AppDatabase (Room), DAOs (BookmarkDao, ListDao, ServerDao, etc.), entities (BookmarkEntity, ListEntity, PendingActionEntity, HighlightEntity)
-- Platform-specific: `composeApp/src/androidMain/kotlin/com/karakept/app/data/local/` handles database builder and DataStore initialization
+- Platform-specific: `core/data/src/androidMain/kotlin/com/karakept/app/data/local/` handles database builder and DataStore initialization
 
 **Remote Data Source:**
 - Purpose: HTTP communication with Karakept server, API abstraction, offline mode guard
-- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/data/remote/`
+- Location: `core/data/src/commonMain/kotlin/com/karakept/app/data/remote/`
 - Contains: RemoteDataSource (wraps generated API clients), KtorClient (HTTP setup), API client instances (BookmarksApi, ListsApi, TagsApi, HighlightsApi, UsersApi)
 - Uses: Ktor HttpClient with authentication interceptor, generated API clients
 
@@ -59,7 +59,9 @@
 
 The first Gradle module split (#440) moved `data/model` into `:core:model`, which depends on
 nothing but `:api-client`: the compiler, not `LayerRulesTest`, now keeps the models free of the
-data, domain and UI layers.
+data, domain and UI layers. The second moved the data layer and `domain/` into `:core:data`
+(Room, KSP and `schemas/` with it), so nothing in `:core:data` can reach the UI either.
+Shared test fixtures live in `:core:testing`.
 
 Offenders that predate a rule sit in `LayerRulesTest.KNOWN_VIOLATIONS`; the rule fails on a new offender and on a stale entry, so a fix must delete its entry. `AppModuleGraphTest` resolves every ScreenModel and repository from `appModule` to catch wiring gaps.
 
@@ -133,7 +135,7 @@ the DB. Instead `BookmarkSyncPipeline` commits each page as it arrives:
 **BookmarkActionEvent (Sealed Class):**
 - Purpose: Type-safe representation of all possible bookmark mutations
 - Examples: Archive, Unarchive, MarkRead, MarkUnread, ToggleFavorite, Delete, UpdateTags, MoveToList, RemoveFromList
-- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/domain/action/BookmarkActionEvent.kt`
+- Location: `core/data/src/commonMain/kotlin/com/karakept/app/domain/action/BookmarkActionEvent.kt`
 - Pattern: Sealed class hierarchy with discriminator field `requiresUndo` to determine if undo support applies
 
 **Server (Data Model):**
@@ -197,7 +199,7 @@ current view, rebuilt on every write, to answer these.
 
 **AppDispatchers:**
 - Purpose: The dispatcher set used by the data layer, injected instead of referenced statically
-- Location: `composeApp/src/commonMain/kotlin/com/karakept/app/utils/AppDispatchers.kt`
+- Location: `core/data/src/commonMain/kotlin/com/karakept/app/utils/AppDispatchers.kt`
 - Bound as a Koin `single<AppDispatchers> { DefaultAppDispatchers() }`; tests bind
   `TestAppDispatchers(testDispatcher)` so every coroutine the code starts stays on the test
   scheduler and is drained by `advanceUntilIdle()`

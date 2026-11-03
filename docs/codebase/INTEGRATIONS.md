@@ -147,7 +147,7 @@ settle on the last one to push.
 - Location: Platform-specific
   - Android: `/data/data/com.karakept.app/databases/`
   - Desktop: User config directory (platform-dependent)
-- Schema directory: `composeApp/schemas/` (for version tracking)
+- Schema directory: `core/data/schemas/` (for version tracking)
 
 **Preferences (Key-Value Store):**
 - Type: DataStore (androidx.datastore:datastore-preferences-core)
