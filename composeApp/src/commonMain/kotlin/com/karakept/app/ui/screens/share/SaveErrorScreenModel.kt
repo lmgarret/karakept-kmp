@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import com.karakept.app.ui.screens.main.createBookmark
 
 @Serializable
 data class SaveError(val url: String, val message: String)

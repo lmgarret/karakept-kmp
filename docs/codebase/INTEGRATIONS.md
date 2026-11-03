@@ -294,7 +294,7 @@ settle on the last one to push.
 
 **Asset Storage:**
 - Downloaded assets stored in `AssetEntity` (SQLite)
-- Accessible via `AssetDao`
+- Accessible via `AssetRepository`
 - Used for: Thumbnails, preview images
 
 ## Desktop Tray & Notifications

@@ -20,7 +20,6 @@ import com.karakept.app.data.repository.BookmarkRepository
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import com.karakept.app.ui.screens.main.MainScreen
-import com.karakept.app.ui.screens.main.createBookmark
 
 private enum class UrlSaveStatus { PENDING, SAVING, SAVED, ERROR }
 

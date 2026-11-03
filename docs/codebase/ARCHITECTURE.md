@@ -167,7 +167,7 @@ over the view and holds only the pages under the viewport; everything else is a
   cursor above all — is `scrollToItem` and the page under it is fetched afterwards. It used to
   be a walk: the list was indexed by the rows read so far, so reaching an arbitrary row meant
   reading everything in between (#273).
-- **The whole view is one `WHERE`** (`BookmarkRepository.buildViewPredicate`), including the
+- **The whole view is one `WHERE`** (`BookmarkViewQueries.buildViewPredicate`), including the
   clauses that were once applied in Kotlin after the read — tags, a multi-list selection, the
   read filter, the content filter. That is what makes an offset mean a view index; split across
   the two, a read had to over-fetch and estimate what the Kotlin side would discard.

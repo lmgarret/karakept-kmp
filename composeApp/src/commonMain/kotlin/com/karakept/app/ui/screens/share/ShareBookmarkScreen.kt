@@ -17,7 +17,6 @@ import com.karakept.app.ui.navigation.currentOrThrow
 import com.karakept.app.data.repository.BookmarkRepository
 import org.koin.compose.koinInject
 import com.karakept.app.ui.screens.main.MainScreen
-import com.karakept.app.ui.screens.main.createBookmark
 import com.karakept.app.ui.screens.viewer.BookmarkViewerScreen
 
 @Serializable

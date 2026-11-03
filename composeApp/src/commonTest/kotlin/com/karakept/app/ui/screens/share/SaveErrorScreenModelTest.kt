@@ -17,7 +17,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import com.karakept.app.ui.screens.main.createBookmark
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SaveErrorScreenModelTest {

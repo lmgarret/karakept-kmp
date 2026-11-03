@@ -39,7 +39,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-import com.karakept.app.ui.screens.main.runAiAction
 import com.karakept.app.utils.TestAppDispatchers
 
 /**

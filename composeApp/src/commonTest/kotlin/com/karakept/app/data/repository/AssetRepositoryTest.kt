@@ -1,5 +1,7 @@
 package com.karakept.app.data.repository
 
+import com.karakept.api.model.Bookmark
+import com.karakept.api.model.BookmarkContent
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.AssetEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
@@ -14,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class AssetRepositoryTest : BaseRepositoryTest() {
 
@@ -98,5 +101,29 @@ class AssetRepositoryTest : BaseRepositoryTest() {
 
         // Assert
         assertEquals(listOf(asset), assets)
+    }
+
+    @Test
+    fun fetchArchiveIsNullWhenTheServerHoldsNoArchive() = runTest(testDispatcher) {
+        // Arrange
+        coEvery { remoteDataSource.fetchBookmark(server, "remote-100") } returns Bookmark(
+            id = "remote-100",
+            title = "Test Article",
+            archived = false,
+            favourited = false,
+            tags = emptyList(),
+            content = BookmarkContent(type = BookmarkContent.Type.LINK, url = "https://example.com/article"),
+            createdAt = "2026-01-01T00:00:00Z",
+            modifiedAt = null,
+            assets = emptyList()
+        )
+
+        // Act
+        val result = repository.fetchArchive(server, bookmark)
+
+        // Assert
+        assertNull(result)
+        coVerify(exactly = 0) { remoteDataSource.downloadAsset(any(), any()) }
+        coVerify(exactly = 0) { assetDao.insertAssets(any()) }
     }
 }

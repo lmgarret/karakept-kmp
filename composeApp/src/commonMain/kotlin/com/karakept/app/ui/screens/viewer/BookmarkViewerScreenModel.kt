@@ -42,13 +42,6 @@ import com.karakept.app.domain.action.AiAction
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
 import com.karakept.app.domain.action.ServerCrawlAction
-import com.karakept.app.ui.screens.main.deleteBookmark
-import com.karakept.app.ui.screens.main.moveBookmarkToList
-import com.karakept.app.ui.screens.main.runAiAction
-import com.karakept.app.ui.screens.main.toggleBookmarkArchive
-import com.karakept.app.ui.screens.main.toggleBookmarkFavorite
-import com.karakept.app.ui.screens.main.toggleBookmarkRead
-import com.karakept.app.ui.screens.main.updateBookmarkTags
 import com.karakept.app.ui.utils.ParsedDocumentCache
 import com.karakept.app.utils.AppLogger
 import getPlatform

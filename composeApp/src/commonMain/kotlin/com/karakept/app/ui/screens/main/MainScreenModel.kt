@@ -407,7 +407,7 @@ class MainScreenModel(
      * scroll cursor maps over.
      *
      * Asked of the database, from the same `WHERE` that selects the view's rows
-     * ([BookmarkRepository.buildViewPredicate]), so the count and the rows it counts cannot
+     * ([BookmarkViewQueries.buildViewPredicate]), so the count and the rows it counts cannot
      * disagree: a thumb at the end of the track points at a row the query will return.
      *
      * It used to be the size of [filteredBookmarks] — the whole view rebuilt in memory on every

@@ -18,6 +18,7 @@ karakept-kmp/
 │   │   │   │   ├── transitions/            # Navigation transitions
 │   │   │   │   └── utils/                  # UI-specific utilities
 │   │   │   ├── data/
+│   │   │   │   ├── cache/                  # Image/asset disk caches
 │   │   │   │   ├── local/                  # Room database, DAOs, entities, migrations
 │   │   │   │   ├── remote/                 # Ktor client, RemoteDataSource, API clients
 │   │   │   │   ├── repository/             # Data repositories (abstraction layer)
@@ -27,7 +28,7 @@ karakept-kmp/
 │   │   │   │   ├── BookmarkFilterUtils.kt  # Filtering logic
 │   │   │   │   └── ListHierarchyUtils.kt   # List hierarchy sorting and filtering
 │   │   │   ├── di/                         # Koin dependency injection module
-│   │   │   ├── utils/                      # Shared utilities (Date, File, Image, etc.)
+│   │   │   ├── utils/                      # Shared utilities (Date, File, etc.)
 │   │   │   ├── api/                        # Generated API model types
 │   │   │   └── composeResources/           # Images, fonts, drawable assets
 │   │   └── androidMain/kotlin/com/karakept/app/
@@ -92,6 +93,7 @@ karakept-kmp/
 - Purpose: Data abstraction layer, single source of truth for each domain concept
 - Contains:
   - `BookmarkRepository.kt` - Bookmark queries, sync strategies (full/filtered/per-list)
+  - `AssetRepository.kt` - Asset (archive, attachment) fetch, cache and detach
   - `ListRepository.kt` - List CRUD and sync
   - `ServerRepository.kt` - Server management and multi-server support
   - `SettingsRepository.kt` - User preferences (theme, offline mode, reader appearance, etc.)

@@ -151,7 +151,7 @@ knowing before touching any of it:
 | New thing | Where |
 |---|---|
 | New screen | `ui/screens/[feature]/[Feature]Screen.kt` (a `@Serializable` `NavKey` with `Content()`) + `[Feature]ScreenModel.kt`; register `viewModel { }` in `AppModule.kt`, add an `entry<…>` in `appEntryProvider()` and a `subclass(…)` in `navKeySerializersModule` |
-| New reusable component | `ui/components/[Component].kt` |
+| New reusable component | `ui/components/[feature]/[Component].kt` for bookmark/tags/highlight/reader components, `ui/components/[Component].kt` for generic ones |
 | New repository | `data/repository/[Domain]Repository.kt`, add `single()` to `AppModule.kt` |
 | New DB entity | `data/local/entity/`, new DAO, update `AppDatabase.kt`, add migration, register in builders |
 | New domain logic | `domain/[Logic]Utils.kt` or extend `BookmarkActionEvent` + `BookmarkActionController` |
