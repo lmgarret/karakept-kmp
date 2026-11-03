@@ -7,10 +7,10 @@
 **Unsafe exception silencing:**
 - Issue: Multiple repository classes use `.printStackTrace()` without proper logging or error propagation, masking failures from monitoring
 - Files:
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkRepository.kt` (5 occurrences)
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt` (1 occurrence)
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/ListRepository.kt` (3 occurrences)
-  - `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/HighlightRepository.kt` (1 occurrence)
+  - `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkRepository.kt` (5 occurrences)
+  - `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt` (1 occurrence)
+  - `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/ListRepository.kt` (3 occurrences)
+  - `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/HighlightRepository.kt` (1 occurrence)
   - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreenModel.kt` (4 occurrences)
   - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreenModel.kt` (2 occurrences)
   - `composeApp/src/androidMain/kotlin/com/karakept/app/ui/components/reader/HtmlRenderer.android.kt` (2 occurrences)
@@ -20,7 +20,7 @@
 
 **Insufficient error boundaries:**
 - Issue: `RemoteDataSource.kt` has debug println instead of proper error handling (line 469)
-- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/data/remote/RemoteDataSource.kt`
+- Files: `core/data/src/commonMain/kotlin/com/karakept/app/data/remote/RemoteDataSource.kt`
 - Impact: Read progress sync failures are silently logged to stdout instead of being tracked
 - Fix approach: Use consistent error propagation pattern across all remote operations
 
@@ -57,13 +57,13 @@
 
 **Race condition handling in read/unread toggling:**
 - Issue: Comment at line 56 of `BookmarkActionsRepository.kt` mentions "Cache for tag IDs to handle read/unread toggling race conditions"
-- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt`
+- Files: `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt`
 - Impact: Tag caching workaround suggests underlying race between local state updates and remote sync
 - Fix approach: Document the race scenario and verify the cache actually prevents it. Consider mutex-protected access to critical sections.
 
 **Test-documented race conditions:**
 - Issue: Unit tests contain comments indicating known race timing issues
-- Files: `composeApp/src/commonTest/kotlin/com/karakept/app/data/repository/BookmarkActionsRepositoryUnitTest.kt` (lines 111, 180)
+- Files: `core/data/src/commonTest/kotlin/com/karakept/app/data/repository/BookmarkActionsRepositoryUnitTest.kt` (lines 111, 180)
 - Details: Test delays added before subscription to prevent emissions racing ahead of collection
 - Impact: Indicates emission buffer or timing issues in real usage under async load
 - Fix approach: Verify `extraBufferCapacity` and flow emission strategies are tuned for real workloads. Consider redesign of emission points.
@@ -96,9 +96,9 @@
 - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreen.kt` (1311 lines) - Main screen composable
 - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreenModel.kt` (1034 lines) - State management for main screen
 - `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/BookmarkViewerScreen.kt` (1030 lines) - Viewer screen composable
-- `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt` (999 lines) - Offline-first action queueing
-- `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkRepository.kt` (964 lines) - Bookmark CRUD and sync
-- `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/SettingsRepository.kt` (988 lines) - Settings persistence
+- `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt` (999 lines) - Offline-first action queueing
+- `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkRepository.kt` (964 lines) - Bookmark CRUD and sync
+- `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/SettingsRepository.kt` (988 lines) - Settings persistence
 - `composeApp/src/androidMain/kotlin/com/karakept/app/ui/components/reader/HtmlRenderer.android.kt` (990 lines) - Android WebView renderer
 
 **Issues:**
@@ -129,13 +129,13 @@
 
 **Filter configuration crash guard:**
 - Issue: Test comment at `BookmarkFilterUtilsTest.kt` line 164 mentions "These tests guard the crash that occurred when FilterConfig had both..." (incomplete comment)
-- Files: `composeApp/src/commonTest/kotlin/com/karakept/app/domain/BookmarkFilterUtilsTest.kt`
+- Files: `core/data/src/commonTest/kotlin/com/karakept/app/domain/BookmarkFilterUtilsTest.kt`
 - Impact: Critical filters may have edge cases not covered beyond a single test
 - Fix approach: Complete the test documentation. Add more comprehensive filter combination tests. Test all boolean flag combinations.
 
 **Offline-first action queueing:**
 - Issue: Complex offline-first sync with pending actions, optimistic updates, and server reconciliation
-- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt`
+- Files: `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt`
 - Coverage gaps: No obvious unit tests for conflict resolution, duplicate action handling, or server rejection scenarios
 - Impact: Unsynced actions could silently fail or create duplicate state on retry
 - Fix approach: Add comprehensive unit tests for: action queue ordering, conflict resolution, network timeout scenarios, server rejections, recovery from inconsistent state.

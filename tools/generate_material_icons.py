@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "tools" / "material-icons.txt"
 OUTPUT = (
     REPO_ROOT
-    / "composeApp/src/commonMain/kotlin/com/karakept/app/ui/icons/AppIcons.kt"
+    / "core/ui/src/commonMain/kotlin/com/karakept/app/ui/icons/AppIcons.kt"
 )
 
 RAW_BASE = "https://raw.githubusercontent.com/google/material-design-icons/master"

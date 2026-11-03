@@ -34,7 +34,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 - **ScreenModel** = an `androidx.lifecycle.ViewModel` subclass (named `*ScreenModel` by convention), scoped per Nav3 back-stack entry via `rememberViewModelStoreNavEntryDecorator`, injected with `koinViewModel`.
 - **Navigation 3**: the back stack is a developer-owned `NavBackStack` of `@Serializable` `NavKey`s, rendered by `NavDisplay`. Each screen *is* a `NavKey` with a `Content()` composable; routing goes through `AppNavigator`/`LocalNavigator` (`ui/navigation/`). Predictive back (Android 14+) is wired via `NavDisplay`'s `predictivePopTransitionSpec`. A `NavKey` that is ever moved to another package keeps its old serial name with `@SerialName("<old fq name>")` (`NavKeySerialNamesTest` pins the ones that moved), since the name is what a saved back stack is restored by.
 - **Repository pattern**: each domain concept (`BookmarkRepository`, `ListRepository`, etc.) is the single source of truth.
-- **Domain `Bookmark`, not `BookmarkEntity`, above the data layer.** `BookmarkRepository` maps Room rows to `data/model/Bookmark.kt` (`BookmarkMapper.kt`); offline-cache and sync bookkeeping stays on the entity. A decision that needs those fields belongs in the repository (see `shouldPersistFetchedContent`).
+- **Domain `Bookmark`, not `BookmarkEntity`, above the data layer.** `BookmarkRepository` maps Room rows to `data/model/Bookmark.kt` (`BookmarkMapper.kt`); offline-cache and sync bookkeeping stays on the entity. A decision that needs those fields belongs in the repository (see `shouldPersistFetchedContent`). Assets go the same way: `AssetRepository` hands out `BookmarkAsset` (`data/model/`), mapped losslessly from `AssetEntity` (`AssetMapper.kt`).
 - **Offline-first**: mutations are queued in `PendingActionDao` and synced on reconnect.
 - **Layer rules** are enforced by `LayerRulesTest` (`composeApp/src/desktopTest/.../architecture/`); pre-existing offenders are listed in its `KNOWN_VIOLATIONS`, which only shrinks.
 - **BookmarkActionController**: centralizes all bookmark mutations with 5-second undo support.
@@ -44,16 +44,17 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 | Layer | Path |
 |---|---|
-| UI screens & ScreenModels | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/<feature>/` (`main`, `viewer`, `onboarding`, `settings`, `highlights`, `share`) |
-| Reusable UI components | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/` |
-| Theme (MD3 colors, typography) | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/theme/` |
-| Domain logic | `composeApp/src/commonMain/kotlin/com/karakept/app/domain/` |
-| Repositories | `composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/` |
-| Local DB (Room entities, DAOs, migrations) | `composeApp/src/commonMain/kotlin/com/karakept/app/data/local/` |
-| Remote API (Ktor, RemoteDataSource) | `composeApp/src/commonMain/kotlin/com/karakept/app/data/remote/` |
-| Domain data models | `composeApp/src/commonMain/kotlin/com/karakept/app/data/model/` |
-| DI module | `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` |
-| Shared utilities | `composeApp/src/commonMain/kotlin/com/karakept/app/utils/` |
+| UI screens & ScreenModels | `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/<feature>/` (`main`, `onboarding`, `settings`, `highlights`, `share`); the viewer in `feature/reader/src/commonMain/kotlin/com/karakept/app/ui/screens/viewer/` |
+| Reader (HTML renderer, highlights in text, gallery, page snapping) | `feature/reader/src/commonMain/kotlin/com/karakept/app/ui/components/reader/` (module `:feature:reader`) |
+| Reusable UI components | `core/ui/src/commonMain/kotlin/com/karakept/app/ui/components/` (module `:core:ui`; `FilePicker` stays in `composeApp`) |
+| Theme (MD3 colors, typography), icons, `ui/utils`, `ui/input` | `core/ui/src/commonMain/kotlin/com/karakept/app/ui/` |
+| Domain logic | `core/data/src/commonMain/kotlin/com/karakept/app/domain/` |
+| Repositories | `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/` |
+| Local DB (Room entities, DAOs, migrations) | `core/data/src/commonMain/kotlin/com/karakept/app/data/local/` |
+| Remote API (Ktor, RemoteDataSource) | `core/data/src/commonMain/kotlin/com/karakept/app/data/remote/` |
+| Domain data models | `core/model/src/commonMain/kotlin/com/karakept/app/data/model/` (module `:core:model`) |
+| DI modules | `composeApp/src/commonMain/kotlin/com/karakept/app/di/AppModule.kt` (ScreenModels, app services); `core/data/src/commonMain/kotlin/com/karakept/app/di/DataModule.kt` (repositories, DAOs, domain) |
+| Shared utilities | `composeApp/src/commonMain/kotlin/com/karakept/app/utils/`; the ones the data layer needs (`AppDispatchers`, `AppLogger`, `FileUtils`, …) in `core/data/src/commonMain/kotlin/com/karakept/app/utils/` |
 | Android-specific code | `composeApp/src/androidMain/` |
 | Android application shell | `androidApp/` (build types, signing, applicationId — no Kotlin) |
 | Generated API client | `api-client/` (OpenAPI-generated, committed) |
@@ -62,16 +63,22 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 
 - **`App.kt`**: root composable, initializes Koin, routes to initial screen based on app state.
 - **`MainActivity.kt`** (Android): sets up the Compose activity.
-- **`AppModule.kt`**: all Koin bindings — repositories as `single()`, ScreenModels as `viewModel()`.
+- **`AppModule.kt`**: the app's Koin bindings — ScreenModels as `viewModel()`, app services as `single()` — and `includes(dataModule)`.
+- **`DataModule.kt`** (`:core:data`): every data and domain binding, repositories as `single()`. It lives there because the DAOs and `RemoteDataSource` it builds from are `internal` to `:core:data`.
 - **`ui/navigation/`**: `AppNavigator`/`LocalNavigator` (back-stack wrapper + CompositionLocal), `appEntryProvider()` + `navKeySerializersModule` (NavKey↔content map and polymorphic registry), and the Shared Axis Z `NavDisplay` transition specs.
 
 ### Gradle Modules
 
 | Module | Plugin | Holds |
 |---|---|---|
-| `:composeApp` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Everything — commonMain, desktopMain, **and all of androidMain** (MainActivity, the workers, the manifest, `res/`) |
+| `:composeApp` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | The app shell: navigation, every screen but the viewer, Koin's `appModule`, services — **and all of the app's androidMain** (MainActivity, the workers, the manifest, `res/`) |
 | `:androidApp` | `com.android.application` | Nothing but build config: `applicationId`, build types, signing, versioning. **No Kotlin sources.** |
 | `:api-client` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | The OpenAPI-generated client |
+| `:core:model` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | `data/model`, `OfflineRetention`, `PlatformKeyCodes` — no dependency on any other app code |
+| `:core:data` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Room (+ KSP, `schemas/`), Ktor, repositories, `data/cache`, `data/secure`, `domain/`, and the utils those need |
+| `:core:ui` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Theme, `AppIcons`, `EinkAware` and every reusable component (bookmark, tags, highlight), `ui/utils`, `ui/input`, `AppNavigator`, the reader fonts (its own Compose resources), `getPlatform()` |
+| `:feature:reader` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | `ui/components/reader` and `ui/screens/viewer` (the bookmark viewer, its ScreenModel and `NavKey`) |
+| `:core:testing` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Test fixtures shared by several suites (`BaseRepositoryTest`, `TestAppDispatchers`, `FakeDataStore`) — test dependencies only |
 
 AGP 9 refuses to apply `com.android.application` alongside the Kotlin Multiplatform plugin, and
 its replacement (`com.android.kotlin.multiplatform.library`) is library-only. So the KMP module
@@ -79,8 +86,8 @@ stays a library and `:androidApp` supplies the parts a library cannot have. Cons
 knowing before touching any of it:
 
 - **Android code belongs in `composeApp/src/androidMain`, not `:androidApp`.** `:androidApp`
-  having no sources is what keeps the 200-odd `internal` declarations in `commonMain` reachable
-  from `MainActivity` and friends, and what keeps `AppIconManager`'s `ALIAS_PACKAGE` (derived
+  having no sources is what keeps the `internal` declarations in `:composeApp`'s `commonMain`
+  reachable from `MainActivity` and friends, and what keeps `AppIconManager`'s `ALIAS_PACKAGE` (derived
   from `MainActivity::class.java.name`) pointing at `com.karakept.app`.
 - **A KMP library has no build types and no `BuildConfig`.** `isDevBuild` reads the
   `karakept_is_dev` bool resource, declared `false` in `composeApp/src/androidMain/res` and
@@ -97,6 +104,34 @@ knowing before touching any of it:
 - **The Android suite runs once**, as `:composeApp:testAndroidHostTest` — a KMP library has a
   single variant, so the `androidComponents { beforeVariants … }` block that used to switch off
   the release/devRelease copies is gone with the build types.
+- **Split modules keep their packages.** `:core:model` (#440) still declares
+  `com.karakept.app.data.model`, so moving code between modules changes no import and no
+  `NavKey` serial name. Its Android namespace is `com.karakept.core.model` — namespaces must be
+  unique, packages need not be. It applies the Compose compiler plugin with no composables in
+  it, so its data classes keep their inferred stability; a module without the plugin exports
+  every class as unstable, and composables taking one stop skipping. Code in a split module is
+  reached across a module boundary, so `internal` no longer reaches it and the compiler stops
+  smart-casting its `val`s — bind to a local first.
+- **DAOs, entities, migrations, `AppDatabase` and `RemoteDataSource` are `internal` to
+  `:core:data`.** Repositories are its API: a public repository taking a DAO has an `internal
+  constructor`, and is built only by `dataModule`. A test outside `:core:data` mocks the
+  repository rather than building one over DAO mocks; for a real graph it loads
+  `inMemoryDatabaseModule()` (JVM only) after `appModule`. What stays public in `data.remote`
+  is the error contract — `ApiException`, `OfflineModeException`,
+  `UnsupportedServerActionException`, `hasHttpStatus` — and in `data.local` the query
+  projections repositories return and the Android init hooks (`AndroidContext`,
+  `initializeDataStore`).
+- **`domain/` lives in `:core:data` for now**: `BookmarkActionController` reads DAOs directly,
+  so a `:core:domain` above the data layer could not reach them once they are `internal`.
+- **`:core:ui` owns the reader fonts as Compose resources** (`Res` in
+  `com.karakept.core.ui.resources`), so it enables `androidResources` like `:composeApp`. The
+  app icon and preview drawables stay in `:composeApp`, whose `Res` is a different class.
+- **`getPlatform()` lives in `:core:ui` as `PlatformInfo.kt`**; `isDevBuild` and the image-loader
+  hooks stay in the app's `Platform.kt`. A file split across modules within one package needs a
+  new name: two `PlatformKt` facades in the same package would collide on the classpath.
+- **Code the data layer calls has to sit in or below `:core:data`.** `CoilThumbnailCache` stays in
+  `:composeApp` (same package, `data/cache`) because it needs the image loader the app sets up;
+  `:core:data` holds only the `ThumbnailCache` interface.
 
 ---
 
@@ -153,7 +188,7 @@ knowing before touching any of it:
 |---|---|
 | New screen | `ui/screens/[feature]/[Feature]Screen.kt` (a `@Serializable` `NavKey` with `Content()`) + `[Feature]ScreenModel.kt`; register `viewModel { }` in `AppModule.kt`, add an `entry<…>` in `appEntryProvider()` and a `subclass(…)` in `navKeySerializersModule` |
 | New reusable component | `ui/components/[feature]/[Component].kt` for bookmark/tags/highlight/reader components, `ui/components/[Component].kt` for generic ones |
-| New repository | `data/repository/[Domain]Repository.kt`, add `single()` to `AppModule.kt` |
+| New repository | `data/repository/[Domain]Repository.kt` in `:core:data` with an `internal constructor` if it takes a DAO, add `single()` to `DataModule.kt` |
 | New DB entity | `data/local/entity/`, new DAO, update `AppDatabase.kt`, add migration, register in builders |
 | New domain logic | `domain/[Logic]Utils.kt` or extend `BookmarkActionEvent` + `BookmarkActionController` |
 | New shared utility | `utils/[Util]Utils.kt` (commonMain) or `utils/[Util].android.kt` (androidMain) |
@@ -707,9 +742,9 @@ Every new feature or bug fix **must** include new or updated tests. Tests that b
 
 | Type | Location |
 |---|---|
-| Common unit tests | `composeApp/src/commonTest/kotlin/com/karakept/app/` |
-| Desktop integration tests | `composeApp/src/desktopTest/kotlin/com/karakept/app/data/integration/` |
-| Android unit tests | `composeApp/src/androidHostTest/kotlin/com/karakept/app/` |
+| Common unit tests | `<module>/src/commonTest/kotlin/com/karakept/app/` — data and domain tests in `core/data`, model tests in `core/model`, the rest in `composeApp` |
+| Desktop integration tests | `core/data/src/desktopTest/kotlin/com/karakept/app/data/integration/` |
+| Android unit tests | `composeApp/src/androidHostTest/kotlin/com/karakept/app/` — every module's: only `:composeApp` has the Robolectric setup, so what they reach in another module has to be public |
 
 ### Running the Desktop App
 
@@ -745,7 +780,7 @@ that keeps the version in the repo instead of in someone's memory.
 ./gradlew desktopTest           # Desktop (JVM) suite — commonTest + desktopTest
 ./gradlew :composeApp:testAndroidHostTest   # Android (Robolectric) suite
 ./gradlew -t test               # Watch mode
-./gradlew :composeApp:desktopTest --tests BookmarkRepositoryUnitTest
+./gradlew :core:data:desktopTest --tests BookmarkRepositoryUnitTest
 ```
 
 ### Test Patterns

@@ -14,7 +14,7 @@ git submodule update --init
 
 [tasks."test:desktop"]
 description = "Desktop suite (commonTest + desktopTest) — the PR CI entry point"
-run = "./gradlew :composeApp:desktopTest --rerun"
+run = "./gradlew desktopTest --rerun"
 
 [tasks."test:android"]
 description = "Android (Robolectric) suite — needs an Android SDK and ~6 GB RAM"

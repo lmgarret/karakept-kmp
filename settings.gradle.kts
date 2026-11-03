@@ -37,3 +37,8 @@ dependencyResolutionManagement {
 include(":composeApp")
 include(":androidApp")
 include(":api-client")
+include(":core:model")
+include(":core:data")
+include(":core:testing")
+include(":core:ui")
+include(":feature:reader")

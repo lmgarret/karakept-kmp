@@ -7,6 +7,7 @@ android-targetSdk = "35"
 androidx-activityCompose = "1.12.4"
 androidx-lifecycle = "2.11.0"
 androidx-core-splashscreen = "1.2.0"
+androidx-core = "1.16.0"
 androidx-browser = "1.10.0"
 androidx-webkit = "1.16.0"
 compose-plugin = "1.12.2"
@@ -43,6 +44,7 @@ androidx-lifecycle-viewmodel = { group = "org.jetbrains.androidx.lifecycle", nam
 androidx-lifecycle-runtime-compose = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 androidx-lifecycle-viewmodel-navigation3 = { group = "org.jetbrains.androidx.lifecycle", name = "lifecycle-viewmodel-navigation3", version.ref = "androidx-lifecycle" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidx-core-splashscreen" }
+androidx-core = { group = "androidx.core", name = "core", version.ref = "androidx-core" }
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "androidx-browser" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "androidx-webkit" }
 

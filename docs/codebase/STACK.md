@@ -122,15 +122,21 @@
 - androidx-browser 1.9.0 - Custom Chrome tabs for opening web content
 - androidx-webkit 1.16.0 - WebSettingsCompat/WebViewFeature (algorithmic darkening control for Web mode archive rendering)
 - androidx-core-splashscreen 1.2.0 - Splash screen API
+- androidx-core 1.16.0 - `FileProvider` for sharing exported files (`:core:data`; previously only transitive via activity-compose)
 - androidx-work-runtime-ktx 2.10.5 - Background task scheduling
 
 ## Build & Code Generation
 
 **Build System:**
 - Gradle 9.8.0 (wrapper) with AGP 9.4.0 (Android Gradle Plugin); requires JDK 17+ to run the build
+- Modules (#440): `:core:model` → `:core:data` → `:core:ui` → `:feature:reader` → `:composeApp`,
+  each a `com.android.kotlin.multiplatform.library` + `jvm("desktop")`; `:core:testing` holds
+  shared test fixtures; `:androidApp` is the application shell. Room's KSP runs in `:core:data`
+  only (schemas in `core/data/schemas/`); Compose resources live in `:composeApp` (app icon,
+  preview drawable) and `:core:ui` (reader fonts)
 
 **Code Generation:**
-- KSP 2.3.9 (Kotlin Symbol Processing) - Annotation processor
+- KSP 2.3.9 (Kotlin Symbol Processing) - Annotation processor (Room, in `:core:data`)
 - `:composeApp:generateAppVersion` - Writes `AppVersion.kt` (`name`, `commit`, `dirty`) into
   `build/generated/appVersion`, a `commonMain` source dir. Reads `-PversionName` / `-Pcommit`
   first, then git; never fails when there is no repository.

@@ -24,7 +24,7 @@
 
 **Location:**
 - Common unit tests: `composeApp/src/commonTest/kotlin/com/karakept/app/`
-- Desktop-specific integration tests: `composeApp/src/desktopTest/kotlin/com/karakept/app/data/integration/`
+- Desktop-specific integration tests: `core/data/src/desktopTest/kotlin/com/karakept/app/data/integration/`
 - Tests are co-located with source by feature area (not separate test directory structure)
 - Test package matches source package exactly
 
@@ -53,7 +53,7 @@ composeApp/src/commonTest/
 │   └── ui/screens/
 │       └── PaginationUtilsTest.kt
 
-composeApp/src/desktopTest/
+core/data/src/desktopTest/
 ├── kotlin/com/karakept/app/data/integration/
 │   ├── BaseDockerIntegrationTest.kt              # Base class for Docker tests
 │   ├── ApiClientIntegrationTest.kt
@@ -184,7 +184,7 @@ val lists = listOf(
 **Integration Tests:**
 - Scope: Test real database (Room in-memory), real HTTP client, multiple layers working together
 - Approach: Start Docker Compose with real backend, use real room database, no mocking of data layer
-- Located: `composeApp/src/desktopTest/kotlin/com/karakept/app/data/integration/`
+- Located: `core/data/src/desktopTest/kotlin/com/karakept/app/data/integration/`
 - Docker management: BaseDockerIntegrationTest handles Docker Compose lifecycle
 - Run on desktop only (desktopTest) due to Docker dependency
 - Examples: `BookmarkSyncIntegrationTest.kt`, `ApiClientIntegrationTest.kt`, `ListRepositoryIntegrationTest.kt`
@@ -287,13 +287,13 @@ fun settingsSerializeAndDeserialize() {
 
 ## Test Inheritance Hierarchy
 
-**BaseRepositoryTest** (`composeApp/src/commonTest/kotlin/com/karakept/app/data/repository/BaseRepositoryTest.kt`)
+**BaseRepositoryTest** (`core/data/src/commonTest/kotlin/com/karakept/app/data/repository/BaseRepositoryTest.kt`)
 - Provides `testDispatcher` (StandardTestDispatcher for controlled execution)
 - Provides `testScope` (TestScope for running suspend functions)
 - Defines `@BeforeTest` and `@AfterTest` hooks for setup/teardown
 - All repository unit tests inherit from this class
 
-**BaseDockerIntegrationTest** (`composeApp/src/desktopTest/kotlin/com/karakept/app/data/integration/BaseDockerIntegrationTest.kt`)
+**BaseDockerIntegrationTest** (`core/data/src/desktopTest/kotlin/com/karakept/app/data/integration/BaseDockerIntegrationTest.kt`)
 - Manages Docker Compose lifecycle for backend
 - Provides static configuration: `baseUrl`, `apiKey`
 - Detects docker-compose.dev.yml location (handles multiple possible paths)
@@ -310,8 +310,8 @@ fun settingsSerializeAndDeserialize() {
 
 **Specific test class:**
 ```bash
-./gradlew :composeApp:desktopTest --tests BookmarkRepositoryUnitTest
-./gradlew :composeApp:desktopTest --tests BookmarkSyncIntegrationTest
+./gradlew :core:data:desktopTest --tests BookmarkRepositoryUnitTest
+./gradlew :core:data:desktopTest -PwithIntegrationTests --tests BookmarkSyncIntegrationTest
 ```
 
 **Watch mode (re-run on changes):**
