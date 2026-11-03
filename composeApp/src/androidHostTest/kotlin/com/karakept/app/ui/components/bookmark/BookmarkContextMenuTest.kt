@@ -6,7 +6,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.karakept.api.model.KarakeepList
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import org.junit.Rule
@@ -28,7 +28,7 @@ class BookmarkContextMenuTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private val bookmark = BookmarkEntity(
+    private val bookmark = Bookmark(
         localId = 1,
         remoteId = "remote-1",
         serverId = "server-1",

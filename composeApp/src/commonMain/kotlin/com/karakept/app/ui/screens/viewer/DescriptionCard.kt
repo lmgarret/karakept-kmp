@@ -107,7 +107,7 @@ internal fun DescriptionCard(
  * The AI-generated summary, shown above the article.
  *
  * Reuses [DescriptionCard]'s container so the two read as the same kind of block, with a label on
- * top: [BookmarkEntity.summary] and [BookmarkEntity.description] are different things — one is the
+ * top: [Bookmark.summary] and [Bookmark.description] are different things — one is the
  * server's model summarizing the article, the other the page's own meta description — and they can
  * both be present, so the card has to say which one this is.
  */

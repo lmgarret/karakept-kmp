@@ -24,7 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.karakept.api.model.KarakeepList as KarakeepList
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
 import com.karakept.app.ui.components.ListPickerDialog
@@ -43,7 +43,7 @@ import getPlatform
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookmarkActionsMenu(
-    bookmark: BookmarkEntity,
+    bookmark: Bookmark,
     availableLists: List<KarakeepList>,
     availableTags: List<String> = emptyList(),
     aiCapabilities: AiCapabilities = AiCapabilities(),

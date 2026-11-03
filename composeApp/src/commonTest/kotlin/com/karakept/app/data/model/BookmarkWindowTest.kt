@@ -1,6 +1,6 @@
 package com.karakept.app.data.model
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
  */
 class BookmarkWindowTest {
 
-    private fun row(id: Long) = BookmarkEntity(
+    private fun row(id: Long) = Bookmark(
         localId = id,
         remoteId = "remote-$id",
         serverId = "server-1",
@@ -35,7 +35,7 @@ class BookmarkWindowTest {
     private fun window(
         viewTotal: Int,
         vararg pageIndices: Int,
-        prepended: List<BookmarkEntity> = emptyList()
+        prepended: List<Bookmark> = emptyList()
     ) = BookmarkWindow(
         viewTotal = viewTotal,
         pageSize = 10,

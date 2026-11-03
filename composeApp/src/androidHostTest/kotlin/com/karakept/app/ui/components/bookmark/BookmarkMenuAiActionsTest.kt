@@ -7,7 +7,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.repository.AiCapabilities
 import kotlin.test.assertEquals
 import org.junit.Rule
@@ -30,7 +30,7 @@ class BookmarkMenuAiActionsTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private val bookmark = BookmarkEntity(
+    private val bookmark = Bookmark(
         localId = 1,
         remoteId = "remote-1",
         serverId = "server-1",

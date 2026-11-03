@@ -1,11 +1,10 @@
 package com.karakept.app.data.model
 
 import androidx.compose.runtime.Immutable
-import com.karakept.app.data.local.entity.BookmarkEntity
 
 /** What the list renders at one index. */
 sealed interface BookmarkSlot {
-    data class Loaded(val bookmark: BookmarkEntity) : BookmarkSlot
+    data class Loaded(val bookmark: Bookmark) : BookmarkSlot
 
     /** Not read yet — renders as a placeholder and asks for the page holding it. */
     data object Placeholder : BookmarkSlot
@@ -36,8 +35,8 @@ data class BookmarkWindow(
     val viewTotal: Int,
     val pageSize: Int = DEFAULT_PAGE_SIZE,
     /** Page index to that page's rows, in view order. */
-    val pages: Map<Int, List<BookmarkEntity>> = emptyMap(),
-    val prepended: List<BookmarkEntity> = emptyList(),
+    val pages: Map<Int, List<Bookmark>> = emptyMap(),
+    val prepended: List<Bookmark> = emptyList(),
     val generation: Int = 0,
     /**
      * Whether the database has said how big the view is.
@@ -62,7 +61,7 @@ data class BookmarkWindow(
         bookmarkAt(index)?.let(BookmarkSlot::Loaded) ?: BookmarkSlot.Placeholder
 
     /** The row at [index], or null when its page has not been read yet. */
-    fun bookmarkAt(index: Int): BookmarkEntity? {
+    fun bookmarkAt(index: Int): Bookmark? {
         if (index < 0 || index >= total) return null
         if (index < prepended.size) return prepended[index]
         val viewIndex = index - prepended.size
@@ -122,7 +121,7 @@ data class BookmarkWindow(
     }
 
     /** Every loaded row, in view order — for the callers that want the rows and not the slots. */
-    fun loadedRows(): List<BookmarkEntity> =
+    fun loadedRows(): List<Bookmark> =
         prepended + pages.entries.sortedBy { it.key }.flatMap { it.value }
 
     companion object {
@@ -132,7 +131,7 @@ data class BookmarkWindow(
 
         /** Every slot loaded — the whole view on hand, with nothing left to read. */
         fun dense(
-            rows: List<BookmarkEntity>,
+            rows: List<Bookmark>,
             generation: Int = 0,
             pageSize: Int = DEFAULT_PAGE_SIZE
         ): BookmarkWindow = BookmarkWindow(

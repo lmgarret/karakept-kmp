@@ -116,7 +116,7 @@
 **Return Values:**
 - Explicit return types on all public functions (Kotlin best practice)
 - Result<T> used for fallible operations
-- Flow<T> used for observables: `Flow<List<BookmarkEntity>>`
+- Flow<T> used for observables: `Flow<List<Bookmark>>`
 - StateFlow<T> used for mutable observable state
 - Suspend functions return T directly, throwing exceptions on failure
 - Composable functions return Unit implicitly

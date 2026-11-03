@@ -13,7 +13,7 @@ import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.DescriptionPosition
 import com.karakept.app.data.model.ItemContainerStyle
@@ -48,7 +48,7 @@ class BookmarkRowTilingTest {
     private val rowWidth = 400.dp
 
     /** A worst-case row: the title wraps to its two-line cap and the description fills its own. */
-    private val bookmark = BookmarkEntity(
+    private val bookmark = Bookmark(
         localId = 1,
         remoteId = "1",
         serverId = "server",

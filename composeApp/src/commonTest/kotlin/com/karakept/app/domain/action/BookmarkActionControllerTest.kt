@@ -3,6 +3,8 @@ package com.karakept.app.domain.action
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.toBookmark
+import com.karakept.app.data.local.entity.toBookmarks
 import com.karakept.app.data.repository.BaseRepositoryTest
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.SettingsRepository
@@ -52,7 +54,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     @Test
     fun archiveAction_callsRepositoryArchive_returnsSuccess() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
-        val result = controller.executeAction(BookmarkActionEvent.Archive(bookmark))
+        val result = controller.executeAction(BookmarkActionEvent.Archive(bookmark.toBookmark()))
 
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Bookmark archived", result.message)
@@ -62,7 +64,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     @Test
     fun unarchiveAction_callsRepositoryUnarchive_returnsSuccess() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
-        val result = controller.executeAction(BookmarkActionEvent.Unarchive(bookmark))
+        val result = controller.executeAction(BookmarkActionEvent.Unarchive(bookmark.toBookmark()))
 
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Bookmark unarchived", result.message)
@@ -72,7 +74,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     @Test
     fun markReadAction_callsRepositoryMarkRead_returnsSuccess() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
-        val result = controller.executeAction(BookmarkActionEvent.MarkRead(bookmark))
+        val result = controller.executeAction(BookmarkActionEvent.MarkRead(bookmark.toBookmark()))
 
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Marked as read", result.message)
@@ -82,7 +84,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     @Test
     fun markUnreadAction_callsRepositoryMarkUnread_returnsSuccess() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
-        val result = controller.executeAction(BookmarkActionEvent.MarkUnread(bookmark))
+        val result = controller.executeAction(BookmarkActionEvent.MarkUnread(bookmark.toBookmark()))
 
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Marked as unread", result.message)
@@ -100,7 +102,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
         coEvery { settingsRepository.resetProgressOnMarkUnread } returns flowOf(true)
         val bookmark = makeBookmark()
 
-        controller.executeAction(BookmarkActionEvent.MarkUnread(bookmark))
+        controller.executeAction(BookmarkActionEvent.MarkUnread(bookmark.toBookmark()))
 
         coVerify {
             bookmarkActionsRepository.markAsUnread(
@@ -114,7 +116,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     @Test
     fun toggleFavoriteAction_starredBookmark_callsToggleWithCurrentState() = runTest(testDispatcher) {
         val bookmark = makeBookmark(isStarred = true)
-        val result = controller.executeAction(BookmarkActionEvent.ToggleFavorite(bookmark))
+        val result = controller.executeAction(BookmarkActionEvent.ToggleFavorite(bookmark.toBookmark()))
 
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Removed from favorites", result.message)
@@ -126,7 +128,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     @Test
     fun toggleFavoriteAction_unstarredBookmark_returnsAddedMessage() = runTest(testDispatcher) {
         val bookmark = makeBookmark(isStarred = false)
-        val result = controller.executeAction(BookmarkActionEvent.ToggleFavorite(bookmark))
+        val result = controller.executeAction(BookmarkActionEvent.ToggleFavorite(bookmark.toBookmark()))
 
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Added to favorites", result.message)
@@ -138,7 +140,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     @Test
     fun deleteAction_callsRepositoryDelete_returnsSuccess() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
-        val result = controller.executeAction(BookmarkActionEvent.Delete(bookmark))
+        val result = controller.executeAction(BookmarkActionEvent.Delete(bookmark.toBookmark()))
 
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Bookmark deleted", result.message)
@@ -156,7 +158,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
         val bookmark = makeBookmark()
         val newTags = listOf("tag1", "tag2")
 
-        val result = controller.executeAction(BookmarkActionEvent.UpdateTags(bookmark, newTags))
+        val result = controller.executeAction(BookmarkActionEvent.UpdateTags(bookmark.toBookmark(), newTags))
 
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Tags updated", result.message)
@@ -169,7 +171,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     fun moveToListAction_callsRepositoryMoveToList() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
 
-        val result = controller.executeAction(BookmarkActionEvent.MoveToList(bookmark, "list-1"))
+        val result = controller.executeAction(BookmarkActionEvent.MoveToList(bookmark.toBookmark(), "list-1"))
 
         assertIs<BookmarkActionResult.Success>(result)
         assertEquals("Moved to list", result.message)
@@ -183,7 +185,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
         val bookmark = makeBookmark()
 
         val result = controller.executeAction(
-            BookmarkActionEvent.RemoveFromList(bookmark, "list-1")
+            BookmarkActionEvent.RemoveFromList(bookmark.toBookmark(), "list-1")
         )
 
         assertIs<BookmarkActionResult.Success>(result)
@@ -208,7 +210,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
             bookmarkActionsRepository.archiveBookmark(any(), any())
         } throws RuntimeException("network fail")
 
-        val result = controller.executeAction(BookmarkActionEvent.Archive(bookmark))
+        val result = controller.executeAction(BookmarkActionEvent.Archive(bookmark.toBookmark()))
 
         assertIs<BookmarkActionResult.Error>(result)
         assertEquals("network fail", result.message)
@@ -222,7 +224,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     fun undoableAction_showsSnackbarWithUndo() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
         // Archive has requiresUndo = true by default
-        controller.executeAction(BookmarkActionEvent.Archive(bookmark))
+        controller.executeAction(BookmarkActionEvent.Archive(bookmark.toBookmark()))
 
         coVerify { snackbarManager.showSnackbarWithUndo(any(), any(), any()) }
         coVerify(exactly = 0) { snackbarManager.showSnackbar(any(), any()) }
@@ -232,7 +234,7 @@ class BookmarkActionControllerTest : BaseRepositoryTest() {
     fun nonUndoableAction_showsPlainSnackbar() = runTest(testDispatcher) {
         val bookmark = makeBookmark()
         // UpdateTags has requiresUndo = false by default
-        controller.executeAction(BookmarkActionEvent.UpdateTags(bookmark, listOf("tag")))
+        controller.executeAction(BookmarkActionEvent.UpdateTags(bookmark.toBookmark(), listOf("tag")))
 
         coVerify { snackbarManager.showSnackbar(any(), any()) }
         coVerify(exactly = 0) { snackbarManager.showSnackbarWithUndo(any(), any(), any()) }

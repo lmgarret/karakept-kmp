@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.viewer
 
 import com.karakept.app.data.local.entity.AssetEntity
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.data.remote.OfflineModeException
@@ -37,7 +37,7 @@ internal class ViewerAssetsController(
     private val snackbarManager: ActionSnackbarManager,
     private val viewerMode: StateFlow<ViewerMode>,
     private val isOffline: () -> Boolean,
-    private val currentBookmark: () -> BookmarkEntity?
+    private val currentBookmark: () -> Bookmark?
 ) {
     // Session-only content source selection (not persisted to settings)
     private val _selectedSource = MutableStateFlow(ContentSource.EXTRACTED)
@@ -90,7 +90,7 @@ internal class ViewerAssetsController(
         }
     }
 
-    fun setContentSource(source: ContentSource, bookmark: BookmarkEntity?) {
+    fun setContentSource(source: ContentSource, bookmark: Bookmark?) {
         scope.launch {
             _selectedSource.value = source
             if (source == ContentSource.FULL_PAGE_ARCHIVE) {
@@ -120,7 +120,7 @@ internal class ViewerAssetsController(
         }
     }
 
-    fun fetchAndCacheArchive(bookmark: BookmarkEntity) {
+    fun fetchAndCacheArchive(bookmark: Bookmark) {
         scope.launch {
             _isLoadingSource.value = true
             try {
@@ -162,7 +162,7 @@ internal class ViewerAssetsController(
      * user out of the content source they picked.
      */
     suspend fun reloadAssets(
-        bookmark: BookmarkEntity,
+        bookmark: Bookmark,
         applyPreferredSource: Boolean = false
     ) {
         val assets = assetRepository.assetsFor(bookmark)
@@ -210,7 +210,7 @@ internal class ViewerAssetsController(
      * Delete an asset on the server (not just the local copy). Irreversible — the UI gates
      * this behind a confirmation dialog.
      */
-    fun deleteAssetOnServer(asset: AssetEntity, bookmark: BookmarkEntity) {
+    fun deleteAssetOnServer(asset: AssetEntity, bookmark: Bookmark) {
         scope.launch {
             try {
                 val server = serverRepository.servers.first().find { it.id == bookmark.serverId }
@@ -240,7 +240,7 @@ internal class ViewerAssetsController(
      */
     fun downloadOrRefreshAsset(
         asset: AssetEntity,
-        bookmark: BookmarkEntity,
+        bookmark: Bookmark,
         // True when the download was started by tapping the row rather than by picking
         // "Download a copy" from the menu: finish the job the tap implied.
         useWhenDone: Boolean = false

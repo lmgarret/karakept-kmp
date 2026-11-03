@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.FilterConfig
@@ -56,13 +56,13 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
     )
 
     /** The whole view, in order. Changing it is a write landing in the table. */
-    var rows: List<BookmarkEntity>
+    var rows: List<Bookmark>
         get() = viewRows.value
         set(value) {
             viewRows.value = value
         }
 
-    private val viewRows = MutableStateFlow<List<BookmarkEntity>>(emptyList())
+    private val viewRows = MutableStateFlow<List<Bookmark>>(emptyList())
 
     /**
      * Whether a sync is running for the view on screen — what drives the sync indicator, and
@@ -146,7 +146,7 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
     }
 
     /** Publishes [newRows] as the view, as a database write would. */
-    fun publish(newRows: List<BookmarkEntity>) {
+    fun publish(newRows: List<Bookmark>) {
         viewRows.value = newRows
     }
 
@@ -179,7 +179,7 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
             isArchived: Boolean = false,
             tags: String = "",
             listIds: String = ""
-        ) = BookmarkEntity(
+        ) = Bookmark(
             localId = id,
             remoteId = remoteId,
             serverId = "server-1",
@@ -208,7 +208,7 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
  */
 internal fun bookmarkRepositoryCountsOf(
     repository: com.karakept.app.data.repository.BookmarkRepository,
-    bookmarks: List<com.karakept.app.data.local.entity.BookmarkEntity>
+    bookmarks: List<com.karakept.app.data.model.Bookmark>
 ) {
     io.mockk.every { repository.listMembershipGroups(any()) } returns kotlinx.coroutines.flow.flowOf(
         bookmarks

@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkSlot
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
@@ -148,7 +148,7 @@ class MainScreenModelWindowTest {
         tagFilterRequests = TagFilterRequests()
     )
 
-    private fun row(index: Int) = BookmarkEntity(
+    private fun row(index: Int) = Bookmark(
         localId = index.toLong(),
         remoteId = "remote-$index",
         serverId = "server-1",

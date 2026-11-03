@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SwipeAction
@@ -131,7 +131,7 @@ class MainScreenModelAiBatchTest {
         tagFilterRequests = TagFilterRequests()
     )
 
-    private fun bookmark(remoteId: Long) = BookmarkEntity(
+    private fun bookmark(remoteId: Long) = Bookmark(
         localId = remoteId,
         remoteId = "remote-$remoteId",
         serverId = "server-1",
@@ -153,7 +153,7 @@ class MainScreenModelAiBatchTest {
      * The rows behind a selection are read by id, so the view is described to the repository
      * rather than pushed into the list — a selection can cover rows the list has never shown.
      */
-    private fun MainScreenModel.withHandPickedSelection(count: Int): List<BookmarkEntity> {
+    private fun MainScreenModel.withHandPickedSelection(count: Int): List<Bookmark> {
         val bookmarks = (1L..count).map { bookmark(it) }
         stubView(bookmarks)
         bookmarks.forEach { toggleBookmarkSelection(it) }
@@ -161,7 +161,7 @@ class MainScreenModelAiBatchTest {
     }
 
     /** Makes [bookmarks] the view the repository answers for. */
-    private fun stubView(bookmarks: List<BookmarkEntity>) {
+    private fun stubView(bookmarks: List<Bookmark>) {
         coEvery { bookmarkRepository.getViewRemoteIds(any(), any()) } returns
             bookmarks.map { it.remoteId }
         coEvery { bookmarkRepository.getBookmarksByRemoteIds(any(), any()) } answers {

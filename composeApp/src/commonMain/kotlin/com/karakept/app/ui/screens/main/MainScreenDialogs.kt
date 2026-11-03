@@ -24,7 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.karakept.api.model.KarakeepList
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.ActionSnackbarManager
@@ -146,7 +146,7 @@ fun MainScreenFilterOverlay(
  */
 @Composable
 fun MainScreenBookmarkActionsMenu(
-    bookmark: BookmarkEntity?,
+    bookmark: Bookmark?,
     lists: List<KarakeepList>,
     allAvailableTags: List<String>,
     screenModel: MainScreenModel,
@@ -306,7 +306,7 @@ fun BatchListPickerDialog(
 @Composable
 fun BatchTagEditorDialog(
     selectedBookmarkIds: Set<String>,
-    bookmarks: List<BookmarkEntity>,
+    bookmarks: List<Bookmark>,
     allAvailableTags: List<String>,
     onTagsUpdated: (List<String>) -> Unit,
     onDismiss: () -> Unit

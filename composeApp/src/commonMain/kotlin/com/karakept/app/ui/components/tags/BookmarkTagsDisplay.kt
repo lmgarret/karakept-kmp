@@ -30,7 +30,7 @@ internal fun parseTagString(tags: String): List<String> {
 /**
  * Displays bookmark tags as chips in a flow layout or a single scrollable row.
  *
- * @param tags Comma-separated tag string from BookmarkEntity
+ * @param tags Comma-separated tag string from Bookmark
  * @param style Visual style variant (COMPACT for main screen, READER for banner)
  * @param scrollable When true, renders tags in a single horizontally-scrollable line
  * @param maxLines Rows of chips the flow layout may wrap onto. A row held to a fixed height — a

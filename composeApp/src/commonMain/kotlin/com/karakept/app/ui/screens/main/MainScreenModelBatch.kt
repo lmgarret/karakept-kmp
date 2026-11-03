@@ -2,7 +2,7 @@
 package com.karakept.app.ui.screens.main
 
 import androidx.lifecycle.viewModelScope
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.karakept.app.data.remote.UnsupportedServerActionException
@@ -30,7 +30,7 @@ fun MainScreenModel.trackLastClickedIndex(index: Int) {
     _lastSelectedIndex = index
 }
 
-fun MainScreenModel.enterSelectionMode(bookmark: BookmarkEntity) {
+fun MainScreenModel.enterSelectionMode(bookmark: Bookmark) {
     _selectedViaSelectAll.value = false
     _selectedBookmarkIds.value = setOf(bookmark.remoteId)
     _lastSelectedIndex = bookmarkWindow.value.indexOfRemoteId(bookmark.remoteId)
@@ -54,7 +54,7 @@ fun MainScreenModel.enterSelectionModeWithRange(toIndex: Int) {
     _lastSelectedIndex = toIndex
 }
 
-fun MainScreenModel.toggleBookmarkSelection(bookmark: BookmarkEntity) {
+fun MainScreenModel.toggleBookmarkSelection(bookmark: Bookmark) {
     _selectedViaSelectAll.value = false
     val current = _selectedBookmarkIds.value
     _selectedBookmarkIds.value = if (bookmark.remoteId in current) {
@@ -105,7 +105,7 @@ fun MainScreenModel.selectAll() {
  * A selection can cover rows the list has never shown — "select all" is exactly that — so it
  * cannot be a filter over what happens to be loaded.
  */
-internal suspend fun MainScreenModel.getSelectedBookmarks(): List<BookmarkEntity> {
+internal suspend fun MainScreenModel.getSelectedBookmarks(): List<Bookmark> {
     val ids = _selectedBookmarkIds.value
     if (ids.isEmpty()) return emptyList()
     val server = _selectedServer.value ?: return emptyList()
@@ -120,10 +120,10 @@ internal suspend fun MainScreenModel.getSelectedBookmarks(): List<BookmarkEntity
  * rows out of an unarchived view, and undoing it puts them back where the sort wants them.
  */
 private fun MainScreenModel.batchAction(
-    keep: (BookmarkEntity) -> Boolean = { true },
+    keep: (Bookmark) -> Boolean = { true },
     message: (Int) -> String,
-    undo: (suspend (List<BookmarkEntity>) -> Unit)? = null,
-    act: suspend (List<BookmarkEntity>) -> Unit
+    undo: (suspend (List<Bookmark>) -> Unit)? = null,
+    act: suspend (List<Bookmark>) -> Unit
 ) {
     viewModelScope.launch {
         val bookmarks = getSelectedBookmarks().filter(keep)

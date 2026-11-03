@@ -1,6 +1,6 @@
 package com.karakept.app.ui.components.bookmark
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.SortOption
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -22,7 +22,7 @@ class ScrollCursorLabelWidthTest {
     private val now = Clock.System.now().toEpochMilliseconds()
 
     private fun bookmark(createdAt: Long = now, title: String = "T", readingTime: Int = 0) =
-        BookmarkEntity(
+        Bookmark(
             localId = 1,
             remoteId = "r1",
             serverId = "s1",

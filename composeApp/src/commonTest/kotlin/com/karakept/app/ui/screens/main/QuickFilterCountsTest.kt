@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SwipeAction
@@ -116,7 +116,7 @@ class QuickFilterCountsTest {
         remoteId: Long,
         isArchived: Boolean = false,
         isStarred: Boolean = false
-    ) = BookmarkEntity(
+    ) = Bookmark(
         localId = remoteId,
         remoteId = "remote-$remoteId",
         serverId = "server-1",

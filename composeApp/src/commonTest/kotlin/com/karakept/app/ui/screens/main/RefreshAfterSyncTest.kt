@@ -2,7 +2,7 @@ package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
 import com.karakept.api.model.KarakeepList
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
@@ -104,8 +104,8 @@ class RefreshAfterSyncTest {
     // A page and a bit of bookmarks; only the three oldest belong to the home list, so they
     // sit on the second page of the unfiltered query and the first page of the list query.
     // Sized from PAGE_SIZE so that stays true whatever the page size is tuned to.
-    private val tableFlow = MutableStateFlow<List<BookmarkEntity>>(emptyList())
-    private var allBookmarks: List<BookmarkEntity>
+    private val tableFlow = MutableStateFlow<List<Bookmark>>(emptyList())
+    private var allBookmarks: List<Bookmark>
         get() = tableFlow.value
         set(value) { tableFlow.value = value }
 
@@ -186,11 +186,11 @@ class RefreshAfterSyncTest {
     }
 
     /** [table] narrowed and ordered the way the real query would for [filter]. */
-    private fun viewOf(table: List<BookmarkEntity>, filter: FilterConfig): List<BookmarkEntity> {
+    private fun viewOf(table: List<Bookmark>, filter: FilterConfig): List<Bookmark> {
         val singleListId = filter.lists.singleOrNull()
         return table
             .sortedWith(
-                compareByDescending<BookmarkEntity> { it.createdAt }.thenByDescending { it.localId }
+                compareByDescending<Bookmark> { it.createdAt }.thenByDescending { it.localId }
             )
             .filter { bookmark ->
                 val lists = bookmark.listIds.split(",")
@@ -209,7 +209,7 @@ class RefreshAfterSyncTest {
         Dispatchers.resetMain()
     }
 
-    private fun makeBookmark(id: Long, listIds: String) = BookmarkEntity(
+    private fun makeBookmark(id: Long, listIds: String) = Bookmark(
         localId = id,
         remoteId = "remote-$id",
         serverId = "server-1",
@@ -459,7 +459,7 @@ class RefreshAfterSyncTest {
      */
     private suspend fun awaitWindow(
         model: MainScreenModel,
-        predicate: (List<BookmarkEntity>) -> Boolean
+        predicate: (List<Bookmark>) -> Boolean
     ): List<Long> {
         withContext(Dispatchers.Default) {
             withTimeoutOrNull(SETTLE_TIMEOUT_MS) {

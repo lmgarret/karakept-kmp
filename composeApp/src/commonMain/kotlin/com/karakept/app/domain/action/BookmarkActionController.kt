@@ -3,6 +3,8 @@ package com.karakept.app.domain.action
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
 import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.local.entity.toBookmark
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.utils.AppDispatchers
@@ -19,7 +21,7 @@ import kotlinx.coroutines.flow.first
  * Event emitted when an undo operation completes
  */
 data class UndoCompletedEvent(
-    val restoredBookmark: BookmarkEntity,
+    val restoredBookmark: Bookmark,
     val originalPosition: Int
 )
 
@@ -174,11 +176,12 @@ class BookmarkActionController(
      * this action. Using the DB state ensures the undo snapshot reflects all prior
      * changes (including scroll-action list membership additions).
      */
-    private suspend fun captureUndoState(event: BookmarkActionEvent, originalPosition: Int): UndoableActionState {
-        // Read the authoritative state from DB — the UI entity may have stale listIds
+    private suspend fun captureUndoState(event: BookmarkActionEvent, originalPosition: Int): UndoableActionState? {
+        // Read the authoritative state from DB — the UI entity may have stale listIds. A bookmark
+        // with no row (one still being created) has nothing to restore.
         val currentBookmark = bookmarkDao.getBookmarkByRemoteId(
             event.bookmark.remoteId, event.bookmark.serverId
-        ) ?: event.bookmark
+        ) ?: return null
 
         // Get current pending actions for this bookmark (to remove on undo)
         val pendingActions = pendingActionDao.getPendingActionsList(event.bookmark.serverId)
@@ -248,7 +251,7 @@ class BookmarkActionController(
                     undoState.originalBookmark.serverId
                 )
                 if (restoredBookmark != null) {
-                    _undoCompletedEvents.emit(UndoCompletedEvent(restoredBookmark, undoState.originalPosition))
+                    _undoCompletedEvents.emit(UndoCompletedEvent(restoredBookmark.toBookmark(), undoState.originalPosition))
                 }
 
                 // 6. Confirmation is shown by the snackbar collector after onUndo completes

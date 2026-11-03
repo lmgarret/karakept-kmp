@@ -1,10 +1,10 @@
 package com.karakept.app.ui.screens.viewer
 
-import com.karakept.api.model.Bookmark
+import com.karakept.api.model.Bookmark as ApiBookmark
 import com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.entity.AssetEntity
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ViewerMode
@@ -51,7 +51,7 @@ class ViewerAssetsControllerTest {
         label = "Test"
     )
 
-    private val bookmark = BookmarkEntity(
+    private val bookmark = Bookmark(
         localId = 1L,
         remoteId = "remote-100",
         serverId = "server-1",
@@ -137,7 +137,7 @@ class ViewerAssetsControllerTest {
         // Arrange
         val bytes = "<html>archived</html>".encodeToByteArray()
         every { serverRepository.servers } returns flowOf(listOf(server))
-        coEvery { remoteDataSource.fetchBookmark(server, "remote-100") } returns mockk<Bookmark>(relaxed = true) {
+        coEvery { remoteDataSource.fetchBookmark(server, "remote-100") } returns mockk<ApiBookmark>(relaxed = true) {
             every { assets } returns listOf(
                 BookmarksBookmarkIdAssetsPost201Response(
                     id = "archive-1",

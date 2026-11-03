@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SwipeAction
@@ -113,7 +113,7 @@ class MainScreenModelInitialLoadingStateTest {
      * The size is what settles whether the list has resolved: until it arrives, an empty window
      * is a view nobody has counted rather than a view with nothing in it.
      */
-    private fun stubView(rows: List<BookmarkEntity>) {
+    private fun stubView(rows: List<Bookmark>) {
         every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns flowOf(rows.size)
         coEvery { bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
             val offset = thirdArg<Int>()
@@ -128,7 +128,7 @@ class MainScreenModelInitialLoadingStateTest {
         Dispatchers.resetMain()
     }
 
-    private fun makeBookmark(id: Long) = BookmarkEntity(
+    private fun makeBookmark(id: Long) = Bookmark(
         localId = id,
         remoteId = "remote-$id",
         serverId = "server-1",

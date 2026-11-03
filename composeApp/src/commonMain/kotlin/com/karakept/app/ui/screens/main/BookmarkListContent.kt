@@ -45,7 +45,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.karakept.app.data.cache.OfflineHeroImages
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -121,7 +121,7 @@ internal fun BookmarkListContent(
     sortOption: SortOption = SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
     /** Names the row at an absolute index, for the scroll cursor's tooltip. */
-    bookmarkAtIndex: suspend (Int) -> BookmarkEntity? = { null },
+    bookmarkAtIndex: suspend (Int) -> Bookmark? = { null },
     layoutType: LayoutType,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -157,22 +157,22 @@ internal fun BookmarkListContent(
     isSelectionMode: Boolean = false,
     selectedBookmarkIds: Set<String> = emptySet(),
     activeBookmarkId: Long? = null,
-    onBookmarkSelectionToggle: (BookmarkEntity) -> Unit = {},
+    onBookmarkSelectionToggle: (Bookmark) -> Unit = {},
     listState: LazyListState,
     isDesktop: Boolean = false,
-    onBookmarkClick: (BookmarkEntity) -> Unit,
-    onBookmarkLongClick: (BookmarkEntity) -> Unit,
-    onSwipeAction: (BookmarkEntity, SwipeAction, CustomSwipeActionConfig?) -> Unit,
+    onBookmarkClick: (Bookmark) -> Unit,
+    onBookmarkLongClick: (Bookmark) -> Unit,
+    onSwipeAction: (Bookmark, SwipeAction, CustomSwipeActionConfig?) -> Unit,
     onRefresh: () -> Unit,
     /** Reports the slots on screen, so the pages holding them are the ones read. */
     onVisibleSlotsChanged: (IntRange) -> Unit = {},
     serverUrl: String? = null,
-    onCtrlClick: ((BookmarkEntity) -> Unit)? = null,
+    onCtrlClick: ((Bookmark) -> Unit)? = null,
     onShiftClick: ((Int) -> Unit)? = null,
     contextMenuLists: List<com.karakept.api.model.KarakeepList> = emptyList(),
     contextMenuTags: List<String> = emptyList(),
     contextMenuAiCapabilities: AiCapabilities = AiCapabilities(),
-    onContextMenuAction: ((BookmarkEntity, BookmarkAction) -> Unit)? = null,
+    onContextMenuAction: ((Bookmark, BookmarkAction) -> Unit)? = null,
     newBookmarksAbove: Int = 0,
     onClearNewBookmarksAbove: () -> Unit = {},
     /**
@@ -253,7 +253,7 @@ internal fun BookmarkListContent(
     val updatedSelectedIds = rememberUpdatedState(selectedBookmarkIds)
 
     // Desktop context menu state
-    var contextMenuBookmark by remember { mutableStateOf<BookmarkEntity?>(null) }
+    var contextMenuBookmark by remember { mutableStateOf<Bookmark?>(null) }
     var contextMenuOffset by remember { mutableStateOf(androidx.compose.ui.unit.DpOffset.Zero) }
     val density = androidx.compose.ui.platform.LocalDensity.current
 

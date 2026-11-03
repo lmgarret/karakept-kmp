@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation3.runtime.NavKey
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.DateDisplayMode
 import com.karakept.app.data.model.DescriptionPosition
@@ -169,7 +169,7 @@ class LayoutEditorScreenModel(
 }
 
 /** Mock bookmark used for live preview in the editor. */
-private val PREVIEW_BOOKMARK = BookmarkEntity(
+private val PREVIEW_BOOKMARK = Bookmark(
     localId = -1L,
     remoteId = "preview",
     serverId = "preview",
