@@ -122,6 +122,7 @@
 - androidx-browser 1.9.0 - Custom Chrome tabs for opening web content
 - androidx-webkit 1.16.0 - WebSettingsCompat/WebViewFeature (algorithmic darkening control for Web mode archive rendering)
 - androidx-core-splashscreen 1.2.0 - Splash screen API
+- androidx-core 1.16.0 - `FileProvider` for sharing exported files (`:core:data`; previously only transitive via activity-compose)
 - androidx-work-runtime-ktx 2.10.5 - Background task scheduling
 
 ## Build & Code Generation

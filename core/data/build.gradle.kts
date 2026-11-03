@@ -55,6 +55,9 @@ kotlin {
         androidMain {
             dependencies {
                 implementation(libs.androidx.datastore.preferences.android)
+                // FileProvider (FileUtils.android.kt). :composeApp gets it through activity-compose;
+                // this module has to ask for it. 1.16.0 is what activity-compose already pulls in.
+                implementation(libs.androidx.core)
             }
         }
         commonTest {
