@@ -5,7 +5,7 @@
 ## Languages
 
 **Primary:**
-- Kotlin 2.4.20 - Core application logic, multiplatform targets (Android, JVM Desktop)
+- Kotlin 2.4.21 - Core application logic, multiplatform targets (Android, JVM Desktop)
 - JavaScript/TypeScript - Upstream monorepo (Node.js services and tooling)
 
 **Secondary:**
@@ -27,7 +27,7 @@
 ## Frameworks
 
 **Core UI:**
-- Jetbrains Compose Multiplatform 1.12.1 - Cross-platform UI framework
+- Jetbrains Compose Multiplatform 1.12.2 - Cross-platform UI framework
 - Material Design 3 (androidx.compose.material3) - Material components and theme system
 - Compose Material 1.x (androidx.compose.material) - Base Material components
 - Material icons - vendored, not a dependency. `material-icons-extended` is frozen at 1.7.3
@@ -35,15 +35,15 @@
   google/material-design-icons (Apache 2.0) by `tools/generate_material_icons.py`
 
 **Navigation:**
-- Compose Navigation 3 (1.1.1) - developer-owned back stack of `@Serializable` `NavKey`s rendered by `NavDisplay`; supports Android, desktop, iOS, web
+- Compose Navigation 3 (runtime 1.1.1, UI 1.2.0) - developer-owned back stack of `@Serializable` `NavKey`s rendered by `NavDisplay`; supports Android, desktop, iOS, web
   - `androidx.navigation3:navigation3-runtime` (1.1.1): `NavKey`, `NavBackStack`, `rememberNavBackStack`, `entryProvider`
-  - `org.jetbrains.androidx.navigation3:navigation3-ui` (1.1.1): `NavDisplay` (CMP build) + transition/predictive-back specs
+  - `org.jetbrains.androidx.navigation3:navigation3-ui` (1.2.0): `NavDisplay` (CMP build) + transition/predictive-back specs
   - `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (2.11.0): per-entry `ViewModelStore` scoping
   - `io.insert-koin:koin-compose-navigation3` + `koin-compose-viewmodel` (4.2.2): `koinViewModel` injection per nav entry
   - App wiring lives in `ui/navigation/` (`AppNavigator`, `LocalNavigator`, `appEntryProvider`, `navKeySerializersModule`, Shared Axis Z specs)
 
 **Networking:**
-- Ktor Client 3.6.0 - HTTP client with multiplatform support
+- Ktor Client 3.6.1 - HTTP client with multiplatform support
   - ktor-client-core: Core HTTP client
   - ktor-client-okhttp: OkHttp engine for JVM (Android + Desktop)
   - ktor-client-content-negotiation: Content type negotiation
@@ -52,7 +52,7 @@
   - ktor-client-logging: Request/response logging
 
 **Database:**
-- Room 3.0.2 (`androidx.room3`) - Local SQLite ORM with KMP support
+- Room 3.0.3 (`androidx.room3`) - Local SQLite ORM with KMP support
   - androidx-room-runtime: Runtime database support
   - androidx-room-compiler: Code generation via KSP
 - SQLite 2.7.0 (bundled) - Embedded database
@@ -66,17 +66,17 @@
   - koin-androidx-workmanager: WorkManager task scheduling
 
 **Serialization:**
-- kotlinx-serialization 1.11.0 - Multiplatform serialization
+- kotlinx-serialization 1.12.0 - Multiplatform serialization
   - kotlinx-serialization-json: JSON codec
 - kotlinx-datetime 0.8.0 - Multiplatform date/time handling
 
 **Image Loading:**
-- Coil 3.6.0 - Image loading and caching
+- Coil 3.6.3 - Image loading and caching
   - coil-compose: Compose integration with Image() composable
   - coil-network-ktor: Ktor HTTP client engine for image loading
 
 **Local Preferences:**
-- DataStore 1.2.1 - Type-safe key-value store (successor to SharedPreferences)
+- DataStore 1.3.0 - Type-safe key-value store (successor to SharedPreferences)
   - androidx-datastore-preferences-core: Core library
   - androidx-datastore-preferences-android: Android-specific implementation
 
@@ -97,7 +97,7 @@
   - Desktop: System notifications
 
 **Desktop-Specific:**
-- Compose Native Tray 2.1.6 (`dev.nucleusframework`) - System tray integration
+- Compose Native Tray 2.1.7 (`dev.nucleusframework`) - System tray integration
   - macOS: Native NSStatusBar
   - Windows: Native taskbar
   - Linux: D-Bus interface (via DBus-x11); no tray without a D-Bus session, and no AWT
@@ -119,16 +119,16 @@
 
 **Android Integration:**
 - androidx-activity-compose 1.12.4 - Activity + Compose integration
-- androidx-browser 1.9.0 - Custom Chrome tabs for opening web content
-- androidx-webkit 1.16.0 - WebSettingsCompat/WebViewFeature (algorithmic darkening control for Web mode archive rendering)
+- androidx-browser 1.10.0 - Custom Chrome tabs for opening web content
+- androidx-webkit 1.18.0 - WebSettingsCompat/WebViewFeature (algorithmic darkening control for Web mode archive rendering)
 - androidx-core-splashscreen 1.2.0 - Splash screen API
 - androidx-core 1.16.0 - `FileProvider` for sharing exported files (`:core:data`; previously only transitive via activity-compose)
-- androidx-work-runtime-ktx 2.10.5 - Background task scheduling
+- androidx-work-runtime-ktx 2.12.0 - Background task scheduling
 
 ## Build & Code Generation
 
 **Build System:**
-- Gradle 9.8.0 (wrapper) with AGP 9.4.0 (Android Gradle Plugin); requires JDK 17+ to run the build
+- Gradle 9.8.2 (wrapper) with AGP 9.5.0 (Android Gradle Plugin); requires JDK 17+ to run the build
 - Modules (#440): `:core:model` → `:core:data` → `:core:ui` → `:feature:reader` → `:composeApp`,
   each a `com.android.kotlin.multiplatform.library` + `jvm("desktop")`; `:core:testing` holds
   shared test fixtures; `:androidApp` is the application shell. Room's KSP runs in `:core:data`
@@ -136,18 +136,18 @@
   preview drawable) and `:core:ui` (reader fonts)
 
 **Code Generation:**
-- KSP 2.3.9 (Kotlin Symbol Processing) - Annotation processor (Room, in `:core:data`)
+- KSP 2.3.13 (Kotlin Symbol Processing) - Annotation processor (Room, in `:core:data`)
 - `:composeApp:generateAppVersion` - Writes `AppVersion.kt` (`name`, `commit`, `dirty`) into
   `build/generated/appVersion`, a `commonMain` source dir. Reads `-PversionName` / `-Pcommit`
   first, then git; never fails when there is no repository.
-- OpenAPI Generator 7.25.0 - Generate API client from OpenAPI spec
+- OpenAPI Generator 7.26.0 - Generate API client from OpenAPI spec
   - Generates Kotlin multiplatform client to `com.karakept.api.*`
   - Located at: `api-client/` module
   - Source spec: `/karakeep-upstream/packages/open-api/karakeep-openapi-spec.json`
 
 **Kotlin Compiler Plugin:**
 - compose-compiler (bundled with kotlin-plugin-compose) - Compose IR compiler
-- org.jetbrains.compose.hot-reload (bundled with CMP 1.12.1) - Compose Hot Reload for desktop dev workflow; adds `hotRunDesktop` Gradle task (requires JBR 21, auto-provisioned via foojay toolchain resolver)
+- org.jetbrains.compose.hot-reload (bundled with CMP 1.12.2) - Compose Hot Reload for desktop dev workflow; adds `hotRunDesktop` Gradle task (requires JBR 21, auto-provisioned via foojay toolchain resolver)
 
 ## Key Dependencies
 

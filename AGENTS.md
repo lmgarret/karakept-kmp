@@ -7,13 +7,13 @@ targeting Android and JVM Desktop (Linux, macOS, Windows).
 The UI follows **Material Design 3 (MD3)** guidelines throughout.
 
 Key technologies:
-- Kotlin 2.4.20 / Compose Multiplatform 1.12.1
+- Kotlin 2.4.21 / Compose Multiplatform 1.12.2
 - Material3 (`androidx.compose.material3`)
-- Compose Navigation 3 (`androidx.navigation3` / `org.jetbrains.androidx.navigation3` 1.1.1) for navigation
+- Compose Navigation 3 (`androidx.navigation3` runtime 1.1.1 / `org.jetbrains.androidx.navigation3` UI 1.2.0) for navigation
 - `androidx.lifecycle` `ViewModel` (multiplatform) for per-screen state (MVVM)
 - Koin 4.2.2 for dependency injection (incl. `koin-compose-viewmodel`, `koin-compose-navigation3`)
-- Room 3.0.2 (`androidx.room3`) for local SQLite storage
-- Ktor 3.6.0 for HTTP/API communication
+- Room 3.0.3 (`androidx.room3`) for local SQLite storage
+- Ktor 3.6.1 for HTTP/API communication
 - kotlinx-serialization, kotlinx-coroutines, kotlinx-datetime
 
 ---
@@ -893,7 +893,7 @@ Releases (`.github/workflows/release.yml`):
 ## API Client
 
 The `api-client/` module is **generated** from the Karakeep OpenAPI spec at
-`karakeep-upstream/packages/open-api/karakeep-openapi-spec.json` using OpenAPI Generator 7.10.0.
+`karakeep-upstream/packages/open-api/karakeep-openapi-spec.json` using OpenAPI Generator 7.26.0.
 
 - The spec lives in the `karakeep-upstream` git submodule. If a build fails with a
   missing-spec error on `:api-client:openApiGenerate`, initialize it first:

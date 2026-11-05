@@ -56,14 +56,14 @@
 
 | | |
 |---|---|
-| **Language** | Kotlin 2.2.0 |
-| **UI** | Compose Multiplatform 1.10.0 (Material 3) |
-| **Navigation** | Voyager 1.1.0-beta03 |
-| **Networking** | Ktor 3.3.2 |
-| **Database** | Room 2.7.0-alpha11 |
-| **DI** | Koin 4.0.0 |
-| **Image loading** | Coil 3.0.0 |
-| **HTML parsing** | KSoup 0.2.1 |
+| **Language** | Kotlin 2.4.21 |
+| **UI** | Compose Multiplatform 1.12.2 (Material 3) |
+| **Navigation** | Navigation 3 1.2.0 |
+| **Networking** | Ktor 3.6.1 |
+| **Database** | Room 3.0.3 |
+| **DI** | Koin 4.2.2 |
+| **Image loading** | Coil 3.6.3 |
+| **HTML parsing** | KSoup 0.2.6 |
 
 **Platforms:** Android (minSdk 24) and Desktop (JVM) on Linux, macOS, and Windows.
 
