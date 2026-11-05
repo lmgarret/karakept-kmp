@@ -196,9 +196,6 @@ kotlin {
 
                 // HTML Parsing (KMP)
                 implementation(libs.ksoup)
-
-                // Native WebView (WKWebView on macOS, WebView2 on Windows, WebKitGTK on Linux)
-                implementation(libs.compose.webview)
             }
         }
         val androidMain by getting {

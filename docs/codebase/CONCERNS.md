@@ -28,11 +28,6 @@
 - Fix approach: The library moved from `io.github.kdroidfilter` (abandoned at 1.3.3) to `dev.nucleusframework:composenativetray`, now on 2.1.7 and built against Skiko 0.150.x. Remember the groupId moved — the old coordinates still resolve and look up to date.
 - Why this should stop recurring: 2.1.1 wrapped the call in a `NoSuchMethodError` catch that retries the legacy two-argument overload by reflection (`ComposableIconUtils.encodeToPngBytes`), so the tray now tolerates a Skiko signature change in *either* direction rather than dying at startup. Still worth a desktop smoke-launch after a Compose bump, but this is no longer expected to be fatal.
 
-**Pre-release dependency:**
-- Compose WebView 1.0.0-beta-02 is the one pre-release version left in the production app.
-- Impact: May receive breaking changes, limited stability guarantees.
-- Fix approach: Move to a stable release once one ships; read its release notes on every bump.
-
 ## Concurrency & Race Conditions
 
 **Sequential startup in MainScreenModel:**
