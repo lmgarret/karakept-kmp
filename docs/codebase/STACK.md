@@ -35,8 +35,8 @@
   google/material-design-icons (Apache 2.0) by `tools/generate_material_icons.py`
 
 **Navigation:**
-- Compose Navigation 3 (runtime 1.1.1, UI 1.2.0) - developer-owned back stack of `@Serializable` `NavKey`s rendered by `NavDisplay`; supports Android, desktop, iOS, web
-  - `androidx.navigation3:navigation3-runtime` (1.1.1): `NavKey`, `NavBackStack`, `rememberNavBackStack`, `entryProvider`
+- Compose Navigation 3 (1.2.0) - developer-owned back stack of `@Serializable` `NavKey`s rendered by `NavDisplay`; supports Android, desktop, iOS, web
+  - `androidx.navigation3:navigation3-runtime` (1.2.0): `NavKey`, `NavBackStack`, `rememberNavBackStack`, `entryProvider`
   - `org.jetbrains.androidx.navigation3:navigation3-ui` (1.2.0): `NavDisplay` (CMP build) + transition/predictive-back specs
   - `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (2.11.0): per-entry `ViewModelStore` scoping
   - `io.insert-koin:koin-compose-navigation3` + `koin-compose-viewmodel` (4.2.2): `koinViewModel` injection per nav entry

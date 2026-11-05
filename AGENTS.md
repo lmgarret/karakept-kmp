@@ -9,7 +9,7 @@ The UI follows **Material Design 3 (MD3)** guidelines throughout.
 Key technologies:
 - Kotlin 2.4.21 / Compose Multiplatform 1.12.2
 - Material3 (`androidx.compose.material3`)
-- Compose Navigation 3 (`androidx.navigation3` runtime 1.1.1 / `org.jetbrains.androidx.navigation3` UI 1.2.0) for navigation
+- Compose Navigation 3 (`androidx.navigation3` / `org.jetbrains.androidx.navigation3` 1.2.0) for navigation
 - `androidx.lifecycle` `ViewModel` (multiplatform) for per-screen state (MVVM)
 - Koin 4.2.2 for dependency injection (incl. `koin-compose-viewmodel`, `koin-compose-navigation3`)
 - Room 3.0.3 (`androidx.room3`) for local SQLite storage
