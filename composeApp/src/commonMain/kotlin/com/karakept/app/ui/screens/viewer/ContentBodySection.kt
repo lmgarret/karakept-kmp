@@ -75,10 +75,13 @@ internal fun ContentBodySection(
     onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
     onSearchMatchPosition: (Float) -> Unit = {}
 ) {
-    // Resolve effective content and local file path based on source + mode
+    // Resolve effective content and local file path based on source + mode.
+    // The sanitized copy is a <body> fragment, so it only ever renders through the Reader path —
+    // handing it to the web view as a local file would show a bare fragment with no document.
     val effectiveContent = when {
         selectedSource == ContentSource.FULL_PAGE_ARCHIVE && viewerMode == ViewerMode.READER ->
             sourceContentOverride ?: content
+        selectedSource == ContentSource.SANITIZED -> sourceContentOverride ?: content
         else -> content
     }
     val effectiveLocalFilePath = when {
@@ -154,7 +157,7 @@ internal fun ContentBodySection(
                         textAlign = TextAlign.Center
                     )
 
-                    if (archiveAvailableOnServer && selectedSource == ContentSource.EXTRACTED) {
+                    if (archiveAvailableOnServer && selectedSource != ContentSource.FULL_PAGE_ARCHIVE) {
                         Spacer(modifier = Modifier.height(20.dp))
                         FilledTonalButton(
                             onClick = onFetchArchive,

@@ -4,6 +4,8 @@ import com.karakept.app.data.model.AppBackup
 import com.karakept.app.data.model.AutoExportInterval
 import com.karakept.app.data.model.EncryptedBackupEnvelope
 import com.karakept.app.data.model.ServerBackup
+import com.karakept.app.data.model.SidecarBackup
+import com.karakept.app.data.model.SidecarConfig
 import com.karakept.app.utils.BackupCrypto
 import com.karakept.app.utils.FileUtils
 import kotlinx.coroutines.flow.first
@@ -17,7 +19,8 @@ import kotlinx.serialization.json.Json
 
 class BackupRepository(
     private val settingsRepository: SettingsRepository,
-    private val serverRepository: ServerRepository
+    private val serverRepository: ServerRepository,
+    private val sidecarRepository: SidecarRepository
 ) {
     private val json = Json {
         prettyPrint = true
@@ -37,12 +40,25 @@ class BackupRepository(
         val servers = serverRepository.servers.first().map {
             ServerBackup(it.id, it.url, it.apiKey, it.label)
         }
+        // Sidecars travel with their tokens, like servers do, and for the same reason: a restore
+        // that brought a server back without the service attached to it would look like a working
+        // restore and quietly stop offering the actions the user had set up.
+        val sidecars = sidecarRepository.exportAll().map { (config, token) ->
+            SidecarBackup(
+                serverId = config.serverId,
+                kind = config.kind,
+                baseUrl = config.baseUrl,
+                enabled = config.enabled,
+                token = token
+            )
+        }
         val now = Clock.System.now().toLocalDateTime(TimeZone.UTC)
         val timestamp = "$now".replace("T", " ").take(19) + " UTC"
         return AppBackup(
             exportedAt = timestamp,
             settings = settingsRepository.currentSettings(),
-            servers = servers
+            servers = servers,
+            sidecars = sidecars
         )
     }
 
@@ -114,10 +130,31 @@ class BackupRepository(
             }
         }
 
+        // After the servers: a sidecar is keyed by server id, and a server's id is derived from
+        // its URL, so the keys line up as long as the servers are back first.
+        if (backup.sidecars.isNotEmpty()) {
+            sidecarRepository.restoreAll(
+                backup.sidecars.map { s ->
+                    SidecarExport(
+                        config = SidecarConfig(
+                            serverId = s.serverId,
+                            kind = s.kind,
+                            baseUrl = s.baseUrl,
+                            enabled = s.enabled
+                        ),
+                        token = s.token
+                    )
+                }
+            )
+        }
+
         return buildString {
             appendLine("Settings restored from backup (exported ${backup.exportedAt}).")
             if (backup.servers.isNotEmpty()) {
                 appendLine("${backup.servers.size} server connection(s) have been restored.")
+            }
+            if (backup.sidecars.isNotEmpty()) {
+                appendLine("${backup.sidecars.size} sidecar(s) have been restored.")
             }
         }.trim()
     }

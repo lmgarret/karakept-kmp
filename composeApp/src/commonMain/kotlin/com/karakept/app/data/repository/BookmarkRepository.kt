@@ -22,11 +22,16 @@ import com.karakept.app.data.model.SYNC_KEY_FAVORITES
 import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SortOption
+import com.karakept.app.data.model.SANITIZED_ASSET_NAME
+import com.karakept.app.data.model.SANITIZED_ASSET_TYPE
+import com.karakept.app.data.model.isSanitizedAsset
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.ReadingTimeCalculator
 import com.karakept.app.utils.ImageCacheManager
 import com.karakept.app.utils.AppDispatchers
+import com.karakept.app.data.local.AssetTypeMapping
+import com.karakept.app.data.local.pruneSupersededNamedAsset
 import com.karakept.app.data.local.entity.AssetEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -495,6 +500,17 @@ class BookmarkRepository(
                 }
                 if (archiveAsset?.id != null) {
                     cacheArchiveAsset(server, existing.remoteId, existing.serverId, archiveAsset)
+                }
+            }
+
+            // Same for a sidecar's sanitized copy: with the preference on, the reader should open
+            // on it offline too, not only once something has downloaded it on demand.
+            if (settingsRepository.preferSanitizedHtml.first()) {
+                val sanitizedAsset = dto.assets?.find {
+                    isSanitizedAsset(it.assetType?.value, it.fileName)
+                }
+                if (sanitizedAsset?.id != null) {
+                    cacheSanitizedAsset(server, existing.remoteId, existing.serverId, sanitizedAsset)
                 }
             }
 
@@ -1256,26 +1272,65 @@ class BookmarkRepository(
         bookmarkRemoteId: String,
         serverId: String
     ) {
-        val typeStrings = mapOf(
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT to "linkHtmlContent",
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE to "fullPageArchive",
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE to "precrawledArchive",
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PDF to "pdf"
-        )
         val metadata = dto.assets?.mapNotNull { asset ->
-            val typeStr = typeStrings[asset.assetType] ?: return@mapNotNull null
+            val typeStr = AssetTypeMapping.storedAssetType(asset.assetType, asset.fileName)
+                ?: return@mapNotNull null
             val assetId = asset.id ?: return@mapNotNull null
             AssetEntity(
                 id = assetId,
                 bookmarkRemoteId = bookmarkRemoteId,
                 serverId = serverId,
                 assetType = typeStr,
-                fileName = null,
+                // Kept, not nulled: a sidecar's asset is resolved by name, so this is the only
+                // thing that tells its row apart from any other hand-attached upload.
+                fileName = asset.fileName,
                 contentType = null,
                 localPath = null
             )
         } ?: return
         if (metadata.isNotEmpty()) assetDao.insertAssetMetadataOnly(metadata)
+        metadata.filter { isSanitizedAsset(it.assetType, it.fileName) }.forEach { sanitized ->
+            assetDao.pruneSupersededNamedAsset(
+                bookmarkRemoteId, serverId, SANITIZED_ASSET_NAME, sanitized.id
+            )
+        }
+    }
+
+    /**
+     * Download and cache a sidecar's sanitized copy.
+     *
+     * Named `asset_<id>` like every other on-demand download, so the offline-cache sweeper already
+     * manages the file; the row is what identifies it, by name.
+     */
+    private suspend fun cacheSanitizedAsset(
+        server: Server,
+        bookmarkRemoteId: String,
+        serverId: String,
+        asset: com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response
+    ) {
+        val assetId = asset.id ?: return
+        try {
+            val existing = assetDao.getAssetsForBookmark(bookmarkRemoteId, serverId)
+                .find { it.id == assetId }
+            if (existing?.localPath != null) return
+
+            val bytes = remoteDataSource.downloadAsset(server, assetId)
+            val cacheDir = com.karakept.app.utils.FileUtils.getImageCacheDirectory()
+            val localPath = com.karakept.app.utils.FileUtils.saveFile(cacheDir, "asset_$assetId", bytes)
+            assetDao.insertAssets(listOf(AssetEntity(
+                id = assetId,
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = serverId,
+                assetType = SANITIZED_ASSET_TYPE,
+                fileName = SANITIZED_ASSET_NAME,
+                contentType = null,
+                localPath = localPath
+            )))
+            assetDao.pruneSupersededNamedAsset(bookmarkRemoteId, serverId, SANITIZED_ASSET_NAME, assetId)
+            AppLogger.d("BookmarkRepository", "Cached sanitized HTML for bookmark $bookmarkRemoteId")
+        } catch (e: Exception) {
+            AppLogger.e("BookmarkRepository", "Failed to cache sanitized HTML: ${e.message}")
+        }
     }
 
     private suspend fun cacheArchiveAsset(

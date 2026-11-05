@@ -9,6 +9,7 @@ import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.SidecarRepository
 import com.karakept.app.data.repository.pullReadingProgressFromServer
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
@@ -63,6 +64,7 @@ class BookmarkViewerProgressTest {
     private lateinit var bookmarkActionController: BookmarkActionController
     private lateinit var highlightRepository: HighlightRepository
     private lateinit var snackbarManager: ActionSnackbarManager
+    private lateinit var sidecarRepository: SidecarRepository
 
     private val testBookmark = BookmarkEntity(
         localId = 1L,
@@ -99,6 +101,7 @@ class BookmarkViewerProgressTest {
         bookmarkActionController = mockk(relaxed = true)
         highlightRepository = mockk(relaxed = true)
         snackbarManager = mockk(relaxed = true)
+        sidecarRepository = mockk(relaxed = true)
 
         // Default stubs for SettingsRepository flows consumed via stateIn in the constructor
         every { settingsRepository.viewerMode } returns flowOf(com.karakept.app.data.model.ViewerMode.READER)
@@ -116,6 +119,7 @@ class BookmarkViewerProgressTest {
         // Consumed by reloadAssets at the tail of every load — a relaxed Flow mock makes
         // first() throw, which left the screen model in Error instead of FullyLoaded.
         every { settingsRepository.preferFullPageHtml } returns flowOf(false)
+        every { settingsRepository.preferSanitizedHtml } returns flowOf(false)
 
         // Default stub for pullReadingProgressFromServer extension function
         coEvery {
@@ -124,6 +128,9 @@ class BookmarkViewerProgressTest {
 
         // Default stubs for ServerRepository
         every { serverRepository.servers } returns flowOf(emptyList())
+        // A relaxed mock returns a Flow that never emits; sidecar lookups call first() on it.
+        every { sidecarRepository.sidecars } returns flowOf(emptyMap())
+        coEvery { sidecarRepository.isUsable(any(), any()) } returns false
 
         // Default stubs for BookmarkDao
         every { bookmarkDao.observeBookmarkById(any()) } returns flowOf(testBookmark)
@@ -146,7 +153,8 @@ class BookmarkViewerProgressTest {
         bookmarkRepository = bookmarkRepository,
         bookmarkActionController = bookmarkActionController,
         highlightRepository = highlightRepository,
-        snackbarManager = snackbarManager
+        snackbarManager = snackbarManager,
+        sidecarRepository = sidecarRepository
     )
 
     // -----------------------------------------------------------------------

@@ -52,6 +52,23 @@ interface AssetDao {
     suspend fun clearAllLocalPaths(): Int
 
     // Rows left behind by bookmarks deleted locally or on the server.
+    /**
+     * Rows for a bookmark that share [fileName] but are not [keepAssetId].
+     *
+     * Karakeep's asset replacement deletes the old row and points a new id at the new blob, so a
+     * re-cleaned article leaves a row behind that names a file nobody will ever fetch again.
+     */
+    @Query(
+        "SELECT * FROM assets WHERE bookmarkRemoteId = :bookmarkRemoteId AND serverId = :serverId " +
+            "AND fileName = :fileName AND id != :keepAssetId"
+    )
+    suspend fun getSupersededNamedAssets(
+        bookmarkRemoteId: String,
+        serverId: String,
+        fileName: String,
+        keepAssetId: String
+    ): List<AssetEntity>
+
     @Query(
         "DELETE FROM assets WHERE NOT EXISTS (" +
             "SELECT 1 FROM bookmarks b WHERE b.remoteId = assets.bookmarkRemoteId " +

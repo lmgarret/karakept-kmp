@@ -8,6 +8,7 @@ import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.ServerBackup
 import com.karakept.app.utils.BackupCrypto
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -30,11 +31,16 @@ class BackupRepositoryTest : BaseRepositoryTest() {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    private val repository = BackupRepository(settingsRepository, serverRepository)
+    private val sidecarRepository: SidecarRepository = mockk(relaxed = true)
+    private val repository = BackupRepository(settingsRepository, serverRepository, sidecarRepository)
 
     @BeforeTest
     override fun setup() {
         super.setup()
+        // A relaxed mock gives back a Flow that never emits, and buildBackup()
+        // calls first() on it.
+        every { sidecarRepository.sidecars } returns flowOf(emptyMap<String, com.karakept.app.data.model.SidecarConfig>())
+        coEvery { sidecarRepository.exportAll() } returns emptyList()
         mockkStatic("com.karakept.app.data.repository.SettingsRepositoryMutationsKt")
     }
 

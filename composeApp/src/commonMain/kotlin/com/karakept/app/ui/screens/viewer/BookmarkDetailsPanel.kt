@@ -6,6 +6,8 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.BorderStroke
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
+import com.karakept.app.domain.action.SidecarAction
+import com.karakept.app.data.model.isSanitizedAsset
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.InlineLoadingDots
 import com.karakept.app.ui.components.einkModalBorder
@@ -110,6 +112,9 @@ internal fun BookmarkDetailsPanel(
     onDeleteAssetOnServer: (AssetEntity) -> Unit = {},
     onRequestServerCrawl: (ServerCrawlAction) -> Unit = {},
     onRunAiAction: (AiAction) -> Unit = {},
+    sanitizeActionAvailable: Boolean = false,
+    sidecarActionInFlight: SidecarAction? = null,
+    onRunSidecarAction: (SidecarAction) -> Unit = {},
     onLinkCopied: () -> Unit = {},
     onOpenLink: () -> Unit = {},
     onDismiss: () -> Unit
@@ -278,6 +283,33 @@ internal fun BookmarkDetailsPanel(
                                 onSelect = { onSourceSelected(ContentSource.EXTRACTED) }
                             )
 
+                            // Resolved by name: a re-clean gives the asset a new id every time.
+                            val sanitizedAsset = assets.find {
+                                isSanitizedAsset(it.assetType, it.fileName)
+                            }
+                            if (sanitizedAsset != null) {
+                                ContentSourceRow(
+                                    icon = AppIcons.Default.AutoAwesome,
+                                    label = "Cleaned-up copy",
+                                    statusText = if (sanitizedAsset.localPath != null) "Downloaded" else "On server",
+                                    isActive = selectedSource == ContentSource.SANITIZED,
+                                    // Unlike an archive, this row activates straight from the
+                                    // server: the payload is small and the reader renders it the
+                                    // same way it renders extracted content.
+                                    canActivate = selectedSource != ContentSource.SANITIZED,
+                                    asset = sanitizedAsset,
+                                    canDeleteOnServer = serverActionsEnabled,
+                                    downloadProgress = progressFor(sanitizedAsset),
+                                    onSelect = { onSourceSelected(ContentSource.SANITIZED) },
+                                    onDownload = { onDownloadAsset(sanitizedAsset) },
+                                    onDownloadAndUse = { onDownloadAndUseAsset(sanitizedAsset) },
+                                    onRefresh = { onRefreshAsset(sanitizedAsset) },
+                                    onOpenExternally = { onOpenAssetExternally(sanitizedAsset) },
+                                    onDelete = { onDeleteAssetLocal(sanitizedAsset) },
+                                    onDeleteOnServer = { assetPendingServerDelete = sanitizedAsset }
+                                )
+                            }
+
                             if (fullPageArchiveAsset != null) {
                                 ContentSourceRow(
                                     icon = AppIcons.Default.Web,
@@ -443,6 +475,21 @@ internal fun BookmarkDetailsPanel(
                                 }
                             }
 
+                            // Sidecar actions. Hidden entirely unless a service is configured for
+                            // this server and has told us it can do the work.
+                            if (sanitizeActionAvailable) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                DetailsSectionTitle("Sidecars")
+                                ServerActionRow(
+                                    icon = AppIcons.Default.AutoAwesome,
+                                    label = SidecarAction.SANITIZE_HTML.label,
+                                    supportingText = "Ask karhtmlscrub to strip the noise from this article",
+                                    enabled = serverActionsEnabled && sidecarActionInFlight == null,
+                                    inFlight = sidecarActionInFlight == SidecarAction.SANITIZE_HTML,
+                                    onClick = { onRunSidecarAction(SidecarAction.SANITIZE_HTML) }
+                                )
+                            }
+
                         }
                     }
                 }
@@ -497,6 +544,7 @@ private fun serverAssetLabel(assetType: String): String = when (assetType) {
     "pdf" -> "The PDF"
     "bannerImage" -> "The banner image"
     "screenshot" -> "The screenshot"
+    com.karakept.app.data.model.SANITIZED_ASSET_TYPE -> "The cleaned-up copy"
     else -> "This asset"
 }
 

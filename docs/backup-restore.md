@@ -77,6 +77,7 @@ All backups are encrypted. Server connections are always restored after successf
 | Data | Behaviour |
 |---|---|
 | Server connections (`servers`, including API keys) | Restored automatically after successful PIN decryption |
+| Sidecar services (`sidecars`, including bearer tokens) | Restored automatically, after the servers — a sidecar is keyed by server id, and a server's id is derived from its URL, so the keys line up once the servers are back |
 
 ### Not backed up
 
@@ -122,7 +123,8 @@ The plaintext behind `data` is the serialized `AppBackup` JSON. The key is deriv
   "version": 1,
   "exportedAt": "2025-03-01 14:23:05 UTC",
   "settings": { ... },
-  "servers": [ ... ]
+  "servers": [ ... ],
+  "sidecars": [ ... ]
 }
 ```
 
@@ -132,6 +134,7 @@ The plaintext behind `data` is the serialized `AppBackup` JSON. The key is deriv
 | `exportedAt` | `String` | Human-readable UTC timestamp of when the backup was created. |
 | `settings` | `BackupSettings` | All backed-up app settings (see below). |
 | `servers` | `List<ServerBackup>` | Server connection info (may be empty). |
+| `sidecars` | `List<SidecarBackup>` | Optional sidecar services (may be empty; absent in backups from builds before sidecars existed). |
 
 ### Settings schema (`BackupSettings`)
 
@@ -197,6 +200,27 @@ All fields have defaults — missing fields (from older backups) fall back to th
 ```
 
 > **Security note:** The `apiKey` field contains the full API key. Treat backup files as sensitive credentials and store them securely.
+
+### Sidecar schema (`SidecarBackup`)
+
+```json
+{
+  "serverId": "123456789",
+  "kind": "htmlScrub",
+  "baseUrl": "http://karhtmlscrub:8080",
+  "enabled": true,
+  "token": "..."
+}
+```
+
+A sidecar's address and enabled flag live in DataStore, but its bearer token lives in the platform
+credential store — the two are reunited only here, crossing the backup boundary. `BackupRepository`
+handles this list itself (through `SidecarRepository`), the way it handles `servers`; it is not part
+of `BackupSettings`.
+
+> **Security note:** `token` is a credential, exactly like `apiKey` above. Without it a restore would
+> bring a server back and silently drop the service attached to it — which looks like a working
+> restore right up to the point the actions are missing. See `docs/sidecars.md`.
 
 ---
 

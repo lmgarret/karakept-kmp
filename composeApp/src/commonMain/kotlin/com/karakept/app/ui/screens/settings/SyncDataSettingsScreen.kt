@@ -152,6 +152,42 @@ fun SyncDataSettingsContent(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Sidecars link. Below the server because a sidecar is configured per server.
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigate(SidecarsSettingsScreen()) }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Default.Dns,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Sidecars",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Optional self-hosted services that do extra work on bookmarks",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        imageVector = AppIcons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Open"
+                    )
+                }
+            }
+
             // Server Connection link
             Card(
                 modifier = Modifier

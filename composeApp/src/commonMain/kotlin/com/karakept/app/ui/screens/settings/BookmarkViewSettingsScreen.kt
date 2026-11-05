@@ -357,6 +357,45 @@ fun BookmarkViewSettingsContent(
                 }
             }
 
+            val preferSanitizedHtml by screenModel.preferSanitizedHtml.collectAsState()
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Default.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                    ) {
+                        Text(
+                            text = "Prefer Cleaned-Up HTML",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Open articles on a sidecar's cleaned-up copy when one exists, and download it while syncing. Takes precedence over the full page archive. Does nothing unless a service like karhtmlscrub is attached to your Karakeep server.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = preferSanitizedHtml,
+                        onCheckedChange = { screenModel.setPreferSanitizedHtml(it) }
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             // Link Opening Settings

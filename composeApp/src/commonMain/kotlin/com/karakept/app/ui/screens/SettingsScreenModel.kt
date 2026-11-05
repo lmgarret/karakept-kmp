@@ -45,6 +45,7 @@ import com.karakept.app.data.repository.setRowActionMode
 import com.karakept.app.data.repository.setShowReaderHeroImage
 import com.karakept.app.data.repository.setShowTagsInViewer
 import com.karakept.app.data.repository.setPreferFullPageHtml
+import com.karakept.app.data.repository.setPreferSanitizedHtml
 import com.karakept.app.data.repository.setNotificationsEnabled
 import com.karakept.app.data.repository.setLinkOpenMode
 import com.karakept.app.data.repository.setContentSyncStrategy
@@ -453,6 +454,18 @@ class SettingsScreenModel(
     fun setPreferFullPageHtml(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setPreferFullPageHtml(enabled)
+        }
+    }
+
+    val preferSanitizedHtml: StateFlow<Boolean> = settingsRepository.preferSanitizedHtml.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    fun setPreferSanitizedHtml(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setPreferSanitizedHtml(enabled)
         }
     }
 

@@ -64,6 +64,7 @@ internal data class StoredReaderSettings(
     val showTagsInViewer: Boolean = true,
     val scrollToTopEnabled: Boolean = true,
     val preferFullPageHtml: Boolean = false,
+    val preferSanitizedHtml: Boolean = false,
     /** Multiplies the per-block line-height ratios baked into the HTML renderer. */
     val readerLineHeightScale: Float = 1.0f,
     val readerHorizontalMarginDp: Int = 28,

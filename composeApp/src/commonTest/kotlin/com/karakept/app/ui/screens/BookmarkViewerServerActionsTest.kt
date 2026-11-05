@@ -13,6 +13,7 @@ import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.data.repository.HighlightRepository
 import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
+import com.karakept.app.data.repository.SidecarRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.ServerCrawlAction
@@ -57,6 +58,7 @@ class BookmarkViewerServerActionsTest {
     private lateinit var bookmarkActionController: BookmarkActionController
     private lateinit var highlightRepository: HighlightRepository
     private lateinit var snackbarManager: ActionSnackbarManager
+    private lateinit var sidecarRepository: SidecarRepository
 
     private val testServer = Server(
         id = "server-1",
@@ -106,6 +108,7 @@ class BookmarkViewerServerActionsTest {
         bookmarkActionController = mockk(relaxed = true)
         highlightRepository = mockk(relaxed = true)
         snackbarManager = mockk(relaxed = true)
+        sidecarRepository = mockk(relaxed = true)
 
         every { settingsRepository.viewerMode } returns flowOf(com.karakept.app.data.model.ViewerMode.READER)
         every { settingsRepository.hideArticleThumbnails } returns flowOf(true)
@@ -119,8 +122,12 @@ class BookmarkViewerServerActionsTest {
         every { settingsRepository.offlineMode } returns flowOf(false)
         every { settingsRepository.trackReadingProgress } returns flowOf(true)
         every { settingsRepository.preferFullPageHtml } returns flowOf(false)
+        every { settingsRepository.preferSanitizedHtml } returns flowOf(false)
 
         every { serverRepository.servers } returns flowOf(listOf(testServer))
+        // A relaxed mock returns a Flow that never emits; sidecar lookups call first() on it.
+        every { sidecarRepository.sidecars } returns flowOf(emptyMap())
+        coEvery { sidecarRepository.isUsable(any(), any()) } returns false
         every { bookmarkDao.observeBookmarkById(any()) } returns flowOf(testBookmark)
         coEvery { assetDao.getAssetsForBookmark(any(), any()) } returns emptyList()
     }
@@ -140,7 +147,8 @@ class BookmarkViewerServerActionsTest {
         bookmarkRepository = bookmarkRepository,
         bookmarkActionController = bookmarkActionController,
         highlightRepository = highlightRepository,
-        snackbarManager = snackbarManager
+        snackbarManager = snackbarManager,
+        sidecarRepository = sidecarRepository
     )
 
     // -----------------------------------------------------------------------

@@ -15,6 +15,20 @@
   - Engine: Ktor HttpClient (multiplatform)
   - Auth: Configured via `ApiClient` and `RemoteDataSource` in DI
 
+**Sidecar services (optional, user-supplied):**
+- Service: a self-hosted companion to Karakeep; today only
+  [karhtmlscrub](https://github.com/lmgarret/karhtmlscrub), which sanitizes crawled article HTML
+- Base URL: entered per Karakeep server in Settings → Sync & Data → Sidecars; none by default
+- What it's used for: asking for one bookmark's HTML to be cleaned now, instead of waiting for the
+  next crawl. **Reading** a sidecar's output needs no configuration — it arrives as a Karakeep asset
+  named `karhtmlscrub-sanitized.html`
+- Client: `data/remote/SidecarDataSource.kt`, hand-written against `/api/v1/{capabilities,sanitize}`.
+  Shares the app's single Ktor `HttpClient` but not `RemoteDataSource`, whose offline guard and
+  `/api/v1` path rules are Karakeep-specific
+- Auth: optional bearer token, stored in `SecureCredentialStore` under `sidecar:<serverId>:<kind>`
+- Gating: an action is offered only when the service reports `llmEnabled: true`
+- See `docs/sidecars.md`
+
 **API Endpoints (from OpenAPI generation):**
 - `BookmarksApi` - Create, read, update, delete bookmarks
   - Generated at: `api-client/build/generated/openapi/src/main/kotlin/com/karakept/api/client/BookmarksApi.kt`

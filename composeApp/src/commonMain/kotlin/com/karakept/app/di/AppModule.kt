@@ -91,6 +91,12 @@ val appModule = module {
     single { ListRepository(get(), get(), get(), get()) }  // RemoteDataSource, ListDao, SettingsRepository, AppDispatchers
     single { ServerVersionRepository(get(), get()) }
 
+    // Optional sidecar services. The data source shares the app's one HttpClient but not
+    // RemoteDataSource: a sidecar is a different host, with its own token and no Karakeep paths.
+    single { com.karakept.app.data.remote.SidecarDataSource(get()) }
+    // SettingsRepository, SecureCredentialStore, SidecarDataSource, AppDispatchers
+    single { com.karakept.app.data.repository.SidecarRepository(get(), get(), get(), get()) }
+
     // BookmarkActionsRepository depends on BookmarkDao, PendingActionDao, RemoteDataSource, ServerRepository, SettingsRepository, AppDispatchers
     single { BookmarkActionsRepository(get(), get(), get(), get(), get(), get()) }
 
@@ -128,7 +134,7 @@ val appModule = module {
     single { BackgroundSyncOrchestrator(get(), get(), get(), get()) }
 
     // Backup & Restore
-    single { BackupRepository(get(), get()) }
+    single { BackupRepository(get(), get(), get()) }
 
     // Hardware page-turn buttons. A single so the platform key-dispatch entry point and the
     // screens that scroll share one instance.
@@ -142,7 +148,7 @@ val appModule = module {
     // ViewModel (cancelling viewModelScope) when its entry leaves the back stack — a reused
     // singleton would then have dead coroutines and never load bookmarks (SAVE-02).
     viewModel { MainScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), serverVersionRepository = get()) }
-    viewModel { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { BookmarkViewerScreenModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { SettingsScreenModel(get(), get(), get(), get(), get()) }
     viewModel { HighlightsScreenModel(get(), get(), get(), get()) }
     viewModel { com.karakept.app.ui.screens.SaveErrorScreenModel(get()) }
@@ -154,4 +160,5 @@ val appModule = module {
     viewModel { com.karakept.app.ui.screens.settings.LayoutsScreenModel(get()) }
     viewModel { com.karakept.app.ui.screens.settings.OfflineStorageScreenModel(get(), get()) }
     viewModel { com.karakept.app.ui.screens.settings.LayoutEditorScreenModel(get()) }
+    viewModel { com.karakept.app.ui.screens.settings.SidecarsSettingsScreenModel(get(), get()) }
 }

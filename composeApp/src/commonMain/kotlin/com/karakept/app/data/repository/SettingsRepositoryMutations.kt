@@ -20,6 +20,8 @@ import com.karakept.app.data.model.ListSyncConfig
 import com.karakept.app.data.model.PageTurnDirection
 import com.karakept.app.data.model.PageTurnKeyBindings
 import com.karakept.app.data.model.ReaderFontFamily
+import com.karakept.app.data.model.SidecarConfig
+import com.karakept.app.data.model.sidecarKey
 import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.SwipeAction
@@ -111,6 +113,7 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         resetProgressOnMarkUnread = reader.resetProgressOnMarkUnread,
         linkOpenMode = reader.linkOpenMode,
         preferFullPageHtml = reader.preferFullPageHtml,
+        preferSanitizedHtml = reader.preferSanitizedHtml,
         readerLineHeightScale = reader.readerLineHeightScale,
         readerHorizontalMarginDp = reader.readerHorizontalMarginDp,
         readerMaxWidthDp = reader.readerMaxWidthDp,
@@ -186,6 +189,7 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                 resetProgressOnMarkUnread = s.resetProgressOnMarkUnread,
                 linkOpenMode = s.linkOpenMode,
                 preferFullPageHtml = s.preferFullPageHtml,
+                preferSanitizedHtml = s.preferSanitizedHtml,
                 readerLineHeightScale = s.readerLineHeightScale,
                 readerHorizontalMarginDp = s.readerHorizontalMarginDp,
                 readerMaxWidthDp = s.readerMaxWidthDp,
@@ -320,6 +324,9 @@ suspend fun SettingsRepository.setScrollToTopEnabled(enabled: Boolean) =
 
 suspend fun SettingsRepository.setPreferFullPageHtml(enabled: Boolean) =
     updateReaderSettings { copy(preferFullPageHtml = enabled) }
+
+suspend fun SettingsRepository.setPreferSanitizedHtml(enabled: Boolean) =
+    updateReaderSettings { copy(preferSanitizedHtml = enabled) }
 
 suspend fun SettingsRepository.setReaderLineHeightScale(scale: Float) = updateReaderSettings {
     copy(
@@ -579,6 +586,28 @@ suspend fun SettingsRepository.setListSettings(listId: String, settings: ListSet
         current[listId] = settings
         prefs[PER_LIST_SETTINGS_KEY] =
             settingsJson.encodeToString<Map<String, ListSettings>>(current)
+    }
+}
+
+private fun SettingsRepository.readSidecars(prefs: Preferences): MutableMap<String, SidecarConfig> =
+    runCatching {
+        settingsJson.decodeFromString<Map<String, SidecarConfig>>(prefs[SIDECARS_KEY] ?: "{}")
+            .toMutableMap()
+    }.getOrDefault(mutableMapOf())
+
+suspend fun SettingsRepository.setSidecarConfig(config: SidecarConfig) {
+    dataStore.edit { prefs ->
+        val current = readSidecars(prefs)
+        current[sidecarKey(config.serverId, config.kind)] = config
+        prefs[SIDECARS_KEY] = settingsJson.encodeToString<Map<String, SidecarConfig>>(current)
+    }
+}
+
+suspend fun SettingsRepository.removeSidecarConfig(serverId: String, kind: String) {
+    dataStore.edit { prefs ->
+        val current = readSidecars(prefs)
+        current.remove(sidecarKey(serverId, kind))
+        prefs[SIDECARS_KEY] = settingsJson.encodeToString<Map<String, SidecarConfig>>(current)
     }
 }
 

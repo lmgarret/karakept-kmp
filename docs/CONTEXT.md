@@ -11,6 +11,8 @@ Karakept is an end-user app, not a library or an API. Nobody links against this 
 - Sync, offline caching, and the pending-action queue — including *not* losing queued edits.
 - Settings, backups (export/restore), and server connection warnings.
 - Platform behaviour: e-ink mode, hardware page-turn buttons, the system tray, the launcher icon.
+- Optional sidecar services: whether the reader opens on a cleaned-up copy of an article, and
+  whether the "Clean up article" action is offered. Users with no sidecar deployed see no change.
 
 Android, macOS and Linux desktop are all first-class. Say which platform a change affects when
 it is only one of them.

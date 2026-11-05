@@ -389,6 +389,64 @@ The generated text is `BookmarkEntity.summary`, **not** `description`: the crawl
 `description` from the page's meta tags and Karakeep's inference worker never touches it. Both can
 be present, and the reader shows both. See `docs/ai-actions.md`.
 
+### Sidecars
+
+A **sidecar** is an optional self-hosted service beside the Karakeep server. Today there is one:
+karhtmlscrub, which sanitizes crawled article HTML. The app assumes none is deployed — nothing about
+them appears in the UI until one is configured. See `docs/sidecars.md`.
+
+The whole design follows from one asymmetry: **reading a sidecar's output needs no sidecar
+configuration.** karhtmlscrub uploads its result into Karakeep as an asset named
+`karhtmlscrub-sanitized.html`, so it arrives through ordinary sync. `SidecarRepository` is therefore
+absent from the reading path entirely, and is needed only to ask for work on demand.
+
+- `ContentSource.SANITIZED` is the third content source. Its payload is a `<body>` fragment, like
+  extracted content and unlike a full-page archive, so it renders through the **Reader path only** —
+  never as a local file for the web view.
+- `preferSanitizedHtml` (default off) opens a bookmark on it and pre-caches it during sync.
+  Precedence is **sanitized → full-page archive → extracted**. A separate flag rather than a third
+  value on `preferFullPageHtml`, which would be a breaking migration for a setting users have set.
+- `SidecarAction.SANITIZE_HTML` bypasses `BookmarkActionController` and the pending-action queue,
+  like `AiAction` and `ServerCrawlAction`, and claims its own in-flight slot: a sidecar is a
+  different backend from the server's AI, and one being busy says nothing about the other.
+
+> **Rule:** the asset is resolved by **name**, never by id. Karakeep's asset replacement deletes the
+> old row and points a *new* id at the new blob, so the id changes on every re-clean.
+> `AssetEntity.fileName` is the handle — both sync paths keep it (they wrote `null` before this
+> feature) and `pruneSupersededNamedAsset` drops the row a re-clean left behind, or the viewer can
+> pick the dead one.
+
+> **Rule:** `userUploaded` is the only asset type attachable over Karakeep's API, so it covers every
+> asset anyone attached by hand. `AssetTypeMapping.storedAssetType` admits one **only** when its
+> file name is the sidecar's. Tracking all hand-attached uploads would start listing unrelated files
+> in the details panel — a separate decision, and not this one.
+
+> **Rule:** an action is offered only when the service reports `llmEnabled: true`. `/healthz`
+> answers 200 with no model configured and then cleans nothing forever, so reachability alone must
+> not light up the action. As with `aiCapabilities`, a failed probe leaves a known-good entry
+> untouched (demoting it would make the action vanish mid-session) and the cache is in memory, since
+> a re-probe on next launch is when a reconfigured service is most likely to answer differently.
+
+> **Rule:** nothing a sidecar does can stop a bookmark from opening. The capability probe in
+> `loadBookmark` is guarded so it cannot fail; the action simply stays hidden.
+
+The service reports a typed **outcome** per job (`uploaded`, `skipped_filtered`,
+`skipped_too_large`, `skipped_llm_disabled`, `skipped_no_content`, `failed`), and a *terminal* one
+means retrying unchanged could never answer differently — so the poll loop stops and says why
+instead of waiting out its budget. That is the one way this differs from the `awaitCrawlResult`
+polling it otherwise copies.
+
+Configuration is **per Karakeep server** (a sidecar talks to one instance): address and enabled flag
+in DataStore under `sidecars_json`, keyed `"<serverId>:<kind>"` and mirroring `perListSettings`; the
+bearer token in `SecureCredentialStore` under `sidecar:<serverId>:<kind>`, never in a settings blob
+or a database column. Both travel in the encrypted backup as `AppBackup.sidecars`, handled by
+`BackupRepository` like `servers` — without that, a restore brings servers back and silently drops
+their sidecars.
+
+Adding another kind: a constant in `SidecarKind` (+ label and description), a capabilities parser if
+its shape differs, and an action branch. The settings screen renders one card per `SidecarKind.ALL`
+entry and storage keys everything by kind, so neither needs touching.
+
 ### Highlight offsets
 
 A highlight is a character range, and a range means nothing without the stream it counts in. That

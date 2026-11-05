@@ -31,6 +31,7 @@ import com.karakept.app.ui.screens.settings.ListManagementScreen
 import com.karakept.app.ui.screens.settings.NotificationSettingsScreen
 import com.karakept.app.ui.screens.settings.PerListSettingsScreen
 import com.karakept.app.ui.screens.settings.ServerSettingsScreen
+import com.karakept.app.ui.screens.settings.SidecarsSettingsScreen
 import com.karakept.app.ui.screens.settings.SyncDataSettingsScreen
 import com.karakept.app.ui.screens.settings.ThemeSettingsScreen
 import kotlinx.serialization.modules.SerializersModule
@@ -57,6 +58,7 @@ val navKeySerializersModule: SerializersModule = SerializersModule {
         subclass(ShareBookmarkScreen::class)
         subclass(ShareMultipleBookmarksScreen::class)
         subclass(ServerSettingsScreen::class)
+        subclass(SidecarsSettingsScreen::class)
         subclass(ThemeSettingsScreen::class)
         subclass(AppearanceSettingsScreen::class)
         subclass(DefaultDisplaySettingsScreen::class)
@@ -97,6 +99,7 @@ fun appEntryProvider(): (NavKey) -> NavEntry<NavKey> = entryProvider {
     entry<ShareBookmarkScreen> { it.Content() }
     entry<ShareMultipleBookmarksScreen> { it.Content() }
     entry<ServerSettingsScreen> { it.Content() }
+    entry<SidecarsSettingsScreen> { it.Content() }
     entry<ThemeSettingsScreen> { it.Content() }
     entry<AppearanceSettingsScreen> { it.Content() }
     entry<DefaultDisplaySettingsScreen> { it.Content() }

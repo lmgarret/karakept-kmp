@@ -172,6 +172,8 @@ fun ViewerContentPanels(
     val assetDownloads by screenModel.assetDownloads.collectAsState()
     val aiActionInFlight by screenModel.aiActionInFlight.collectAsState()
     val aiCapabilitiesByServer by screenModel.aiCapabilities.collectAsState()
+    val sidecarActionInFlight by screenModel.sidecarActionInFlight.collectAsState()
+    val sanitizeActionAvailable by screenModel.sanitizeActionAvailable.collectAsState()
     BookmarkDetailsPanel(
         visible = showDetailsPanel,
         bookmark = detailsBookmark,
@@ -180,6 +182,8 @@ fun ViewerContentPanels(
         serverCrawlInFlight = serverCrawlInFlight,
         aiActionInFlight = aiActionInFlight,
         aiCapabilities = aiCapabilitiesByServer[detailsBookmark?.serverId] ?: AiCapabilities(),
+        sanitizeActionAvailable = sanitizeActionAvailable,
+        sidecarActionInFlight = sidecarActionInFlight,
         serverActionsEnabled = !offlineMode,
         assetDownloads = assetDownloads,
         onSourceSelected = { source ->
@@ -206,6 +210,9 @@ fun ViewerContentPanels(
         },
         onRunAiAction = { action ->
             if (detailsBookmark != null) screenModel.runAiAction(detailsBookmark, action)
+        },
+        onRunSidecarAction = { action ->
+            if (detailsBookmark != null) screenModel.runSidecarAction(detailsBookmark, action)
         },
         onLinkCopied = onLinkCopied,
         onOpenLink = onOpenLink,

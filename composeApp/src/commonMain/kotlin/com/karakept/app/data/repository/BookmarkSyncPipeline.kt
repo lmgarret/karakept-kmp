@@ -11,6 +11,10 @@ import com.karakept.app.data.model.ListSyncStatus
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SyncStrategy
 import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.data.local.AssetTypeMapping
+import com.karakept.app.data.local.pruneSupersededNamedAsset
+import com.karakept.app.data.model.SANITIZED_ASSET_NAME
+import com.karakept.app.data.model.isSanitizedAsset
 import com.karakept.app.domain.OfflineRetention
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.ReadingTimeCalculator
@@ -711,25 +715,19 @@ internal class BookmarkSyncPipeline(
     ) {
         val entityByRemoteId = entities.associateBy { it.remoteId }
         val metadata = mutableListOf<AssetEntity>()
-        val typeStrings = mapOf(
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT to "linkHtmlContent",
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE to "fullPageArchive",
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PRECRAWLED_ARCHIVE to "precrawledArchive",
-            com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.PDF to "pdf"
-        )
-        val trackableTypes = typeStrings.keys
         for (dto in dtos) {
             val entity = entityByRemoteId[dto.id ?: ""] ?: continue
             dto.assets?.forEach { asset ->
-                val type = asset.assetType ?: return@forEach
-                if (type !in trackableTypes) return@forEach
+                val typeStr = AssetTypeMapping.storedAssetType(asset.assetType, asset.fileName)
+                    ?: return@forEach
                 val assetId = asset.id ?: return@forEach
                 metadata.add(AssetEntity(
                     id = assetId,
                     bookmarkRemoteId = entity.remoteId,
                     serverId = config.server.id,
-                    assetType = typeStrings[type] ?: return@forEach,
-                    fileName = null,
+                    assetType = typeStr,
+                    // Kept, not nulled: a sidecar's asset is resolved by name.
+                    fileName = asset.fileName,
                     contentType = null,
                     localPath = null
                 ))
@@ -737,6 +735,14 @@ internal class BookmarkSyncPipeline(
         }
         if (metadata.isNotEmpty()) {
             assetDao.insertAssetMetadataOnly(metadata)
+            metadata.filter { isSanitizedAsset(it.assetType, it.fileName) }.forEach { sanitized ->
+                assetDao.pruneSupersededNamedAsset(
+                    sanitized.bookmarkRemoteId,
+                    sanitized.serverId,
+                    SANITIZED_ASSET_NAME,
+                    sanitized.id
+                )
+            }
         }
     }
 

@@ -23,6 +23,7 @@ import com.karakept.app.data.model.LinkOpenMode
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncConfig
 import com.karakept.app.data.model.PageTurnKeyBindings
+import com.karakept.app.data.model.SidecarConfig
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.data.model.RowActionMode
@@ -58,6 +59,12 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     internal val ACTIVE_SERVER_ID_KEY = stringPreferencesKey("active_server_id")
     internal val LAST_AUTO_EXPORT_TIME_KEY = longPreferencesKey("last_auto_export_time")
     internal val PER_LIST_SETTINGS_KEY = stringPreferencesKey("per_list_settings")
+
+    /**
+     * Sidecar services, keyed by "<serverId>:<kind>". Holds where each one is and whether it is
+     * on — never its bearer token, which lives in the platform credential store.
+     */
+    internal val SIDECARS_KEY = stringPreferencesKey("sidecars_json")
 
     /**
      * The actual backup PIN (4–6 digits), stored locally for use by scheduled auto-exports.
@@ -367,6 +374,16 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
     val preferFullPageHtml: Flow<Boolean> =
         readerSettingsFlow.map { it.preferFullPageHtml }.distinctUntilChanged()
 
+    /**
+     * Open a bookmark on its sidecar-sanitized copy when one exists.
+     *
+     * A separate flag rather than a third value on [preferFullPageHtml]: turning that boolean into
+     * an enum would be a breaking migration for a setting users have already set. Sanitized wins
+     * over the archive when both are preferred and both are present.
+     */
+    val preferSanitizedHtml: Flow<Boolean> =
+        readerSettingsFlow.map { it.preferSanitizedHtml }.distinctUntilChanged()
+
     val showReaderHeroImage: Flow<Boolean> =
         readerSettingsFlow.map { it.showReaderHeroImage }.distinctUntilChanged()
 
@@ -586,6 +603,14 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
             settingsJson.decodeFromString<Map<String, ListSettings>>(prefs[PER_LIST_SETTINGS_KEY] ?: "{}")
         }.getOrDefault(emptyMap())
     }
+
+    // ── Sidecars (separate JSON blob; CRUD in SettingsRepositoryMutations.kt) ─
+
+    val sidecarConfigs: Flow<Map<String, SidecarConfig>> = dataStore.data.map { prefs ->
+        runCatching {
+            settingsJson.decodeFromString<Map<String, SidecarConfig>>(prefs[SIDECARS_KEY] ?: "{}")
+        }.getOrDefault(emptyMap())
+    }.distinctUntilChanged()
 
     fun getListSettings(listId: String): Flow<ListSettings> = dataStore.data.map { prefs ->
         runCatching {

@@ -151,6 +151,8 @@ fun BookmarkViewerContent(
     val isRefreshing by screenModel.isRefreshing.collectAsState()
     val aiActionInFlight by screenModel.aiActionInFlight.collectAsState()
     val aiCapabilitiesByServer by screenModel.aiCapabilities.collectAsState()
+    val sidecarActionInFlight by screenModel.sidecarActionInFlight.collectAsState()
+    val sanitizeActionAvailable by screenModel.sanitizeActionAvailable.collectAsState()
     val offlineMode by screenModel.offlineMode.collectAsState()
     val highlights by screenModel.highlights.collectAsState()
     val linkOpenMode by screenModel.linkOpenMode.collectAsState()
@@ -873,7 +875,12 @@ fun BookmarkViewerContent(
                         onDetailsClick = { showDetailsPanel = true },
                         aiCapabilities = aiCapabilitiesByServer[state.bookmark.serverId] ?: AiCapabilities(),
                         aiActionInFlight = aiActionInFlight,
-                        onRunAiAction = { action -> screenModel.runAiAction(state.bookmark, action) }
+                        onRunAiAction = { action -> screenModel.runAiAction(state.bookmark, action) },
+                        sanitizeActionAvailable = sanitizeActionAvailable,
+                        sidecarActionInFlight = sidecarActionInFlight,
+                        onRunSidecarAction = { action ->
+                            screenModel.runSidecarAction(state.bookmark, action)
+                        }
                     )
 
                     // Search bar — floating pill, to the left of FAB on Android

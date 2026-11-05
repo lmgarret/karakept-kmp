@@ -18,6 +18,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.repository.AiCapabilities
 import com.karakept.app.domain.action.AiAction
+import com.karakept.app.domain.action.SidecarAction
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -80,7 +81,10 @@ internal fun ViewerTopBar(
     onDetailsClick: (() -> Unit)? = null,
     aiCapabilities: AiCapabilities = AiCapabilities(),
     aiActionInFlight: AiAction? = null,
-    onRunAiAction: (AiAction) -> Unit = {}
+    onRunAiAction: (AiAction) -> Unit = {},
+    sanitizeActionAvailable: Boolean = false,
+    sidecarActionInFlight: SidecarAction? = null,
+    onRunSidecarAction: (SidecarAction) -> Unit = {}
 ) {
     // Status bar background - fades in with top bar for parallax effect
     Box(
@@ -379,6 +383,23 @@ internal fun ViewerTopBar(
                             }
                         )
                     }
+                }
+
+                // Sidecar actions sit with the AI ones: both ask another backend to redo work on
+                // this bookmark. Hidden unless a sidecar is configured and says it can run it.
+                if (sanitizeActionAvailable) {
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(SidecarAction.SANITIZE_HTML.label) },
+                        leadingIcon = {
+                            Icon(imageVector = AppIcons.Default.AutoAwesome, contentDescription = null)
+                        },
+                        enabled = sidecarActionInFlight == null,
+                        onClick = {
+                            onRunSidecarAction(SidecarAction.SANITIZE_HTML)
+                            onMenuToggle(false)
+                        }
+                    )
                 }
 
                 // Delete (destructive action)

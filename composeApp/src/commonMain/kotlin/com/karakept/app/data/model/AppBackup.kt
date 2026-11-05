@@ -12,7 +12,8 @@ data class AppBackup(
     val version: Int = 1,
     val exportedAt: String,
     val settings: BackupSettings,
-    val servers: List<ServerBackup> = emptyList()
+    val servers: List<ServerBackup> = emptyList(),
+    val sidecars: List<SidecarBackup> = emptyList()
 )
 
 /**
@@ -37,6 +38,22 @@ data class ServerBackup(
     val url: String,
     val apiKey: String,
     val label: String
+)
+
+/**
+ * An optional sidecar service included in a backup.
+ *
+ * Carries the bearer token, so like [ServerBackup] it only ever exists inside an encrypted backup.
+ * A restore brings servers back by URL, and a server's id is derived from its URL, so [serverId]
+ * still resolves on the importing device.
+ */
+@Serializable
+data class SidecarBackup(
+    val serverId: String,
+    val kind: String,
+    val baseUrl: String,
+    val enabled: Boolean,
+    val token: String? = null
 )
 
 /**
@@ -71,6 +88,7 @@ data class BackupSettings(
     val resetProgressOnMarkUnread: Boolean = true,
     val linkOpenMode: String = LinkOpenMode.CUSTOM_TAB.name,
     val preferFullPageHtml: Boolean = false,
+    val preferSanitizedHtml: Boolean = false,
     val readerLineHeightScale: Float = 1.0f,
     val readerHorizontalMarginDp: Int = 28,
     val readerMaxWidthDp: Int = 900,

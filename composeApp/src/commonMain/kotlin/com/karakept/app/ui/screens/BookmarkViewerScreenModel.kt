@@ -62,6 +62,14 @@ import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
 import com.karakept.app.domain.action.ServerCrawlAction
+import com.karakept.app.domain.action.SidecarAction
+import com.karakept.app.domain.sidecar.SidecarKind
+import com.karakept.app.data.model.SANITIZED_ASSET_NAME
+import com.karakept.app.data.model.SanitizeJobStatus
+import com.karakept.app.data.model.SanitizeOutcome
+import com.karakept.app.data.model.isSanitizedAsset
+import com.karakept.app.data.remote.SidecarUnavailableException
+import com.karakept.app.data.repository.SidecarRepository
 import com.karakept.app.ui.utils.ParsedDocumentCache
 import getPlatform
 
@@ -70,6 +78,12 @@ import getPlatform
 // spinner indefinitely on a slow one.
 private const val CRAWL_POLL_INTERVAL_MS = 4_000L
 private const val CRAWL_POLL_ATTEMPTS = 5
+
+// A sanitize run is an LLM pass over an article, so it takes longer than a crawl and is worth
+// waiting on: three seconds apart for a minute. The service reports a typed outcome, so a run
+// that can never produce anything ends the loop early rather than using the whole budget.
+private const val SANITIZE_POLL_INTERVAL_MS = 3_000L
+private const val SANITIZE_POLL_ATTEMPTS = 20
 
 class BookmarkViewerScreenModel(
     private val bookmarkDao: BookmarkDao,
@@ -81,7 +95,9 @@ class BookmarkViewerScreenModel(
     private val bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository,
     private val bookmarkActionController: BookmarkActionController,
     private val highlightRepository: com.karakept.app.data.repository.HighlightRepository,
-    private val snackbarManager: ActionSnackbarManager
+    private val snackbarManager: ActionSnackbarManager,
+    // Appended last on purpose: AppModule wires this model with positional get()s.
+    private val sidecarRepository: SidecarRepository
 ) : ViewModel() {
     private val parsedDocumentCache = ParsedDocumentCache(maxSize = 5)
 
@@ -154,6 +170,14 @@ class BookmarkViewerScreenModel(
     private val _archiveAvailable = MutableStateFlow(false)
     val archiveAvailable: StateFlow<Boolean> = _archiveAvailable.asStateFlow()
 
+    // The sidecar-sanitized copy: where it is cached, and whether a row for it exists at all
+    // (which is all the server needs to have told us — reading it needs no sidecar configured).
+    private val _sanitizedAssetPath = MutableStateFlow<String?>(null)
+    val sanitizedAssetPath: StateFlow<String?> = _sanitizedAssetPath.asStateFlow()
+
+    private val _sanitizedAvailable = MutableStateFlow(false)
+    val sanitizedAvailable: StateFlow<Boolean> = _sanitizedAvailable.asStateFlow()
+
     // Full list of asset entities for this bookmark (server metadata + local cache status)
     private val _assets = MutableStateFlow<List<com.karakept.app.data.local.entity.AssetEntity>>(emptyList())
     val assets: StateFlow<List<com.karakept.app.data.local.entity.AssetEntity>> = _assets.asStateFlow()
@@ -174,6 +198,20 @@ class BookmarkViewerScreenModel(
     // disable each other the way the three crawl variants already do.
     private val _aiActionInFlight = MutableStateFlow<AiAction?>(null)
     val aiActionInFlight: StateFlow<AiAction?> = _aiActionInFlight.asStateFlow()
+
+    // Non-null while a sidecar job is running for this bookmark. Its own slot: a sidecar is a
+    // different backend from the server's AI, and one being busy says nothing about the other.
+    private val _sidecarActionInFlight = MutableStateFlow<SidecarAction?>(null)
+    val sidecarActionInFlight: StateFlow<SidecarAction?> = _sidecarActionInFlight.asStateFlow()
+
+    /**
+     * Whether this server has a usable cleanup sidecar, so the action can be offered.
+     *
+     * False until a probe says otherwise: a sidecar is optional, and offering an action no backend
+     * will run is worse than not offering it.
+     */
+    private val _sanitizeActionAvailable = MutableStateFlow(false)
+    val sanitizeActionAvailable: StateFlow<Boolean> = _sanitizeActionAvailable.asStateFlow()
 
     /** Per-server AI capabilities, shared with the list. Callers index it by the bookmark's serverId. */
     val aiCapabilities: StateFlow<Map<String, AiCapabilities>> = bookmarkActionsRepository.aiCapabilities
@@ -238,12 +276,13 @@ class BookmarkViewerScreenModel(
         // ensure the archive string is loaded for the native renderer.
         viewModelScope.launch {
             viewerMode.collect { mode ->
-                if (_selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE
-                    && mode == ViewerMode.READER
-                    && _sourceContentOverride.value == null
-                ) {
-                    val localPath = _precrawledAssetPath.value
-                    if (localPath != null) loadArchiveContentString(localPath)
+                // The archive is a whole document, so WEB mode loads it as a file instead; the
+                // sanitized copy is a fragment and is rendered from the string in either mode.
+                val needsString = _selectedSource.value == ContentSource.SANITIZED ||
+                    mode == ViewerMode.READER
+                if (needsString && _sourceContentOverride.value == null) {
+                    val localPath = localPathForSource(_selectedSource.value)
+                    if (localPath != null) loadSourceContentString(localPath)
                 }
             }
         }
@@ -452,6 +491,8 @@ class BookmarkViewerScreenModel(
                                     .find { it.id == bookmark.serverId }
                                 if (server != null) bookmarkActionsRepository.refreshAiCapabilities(server)
                             }
+                            // Same for the optional cleanup sidecar, which is per server too.
+                            viewModelScope.launch { refreshSanitizeAvailability(bookmark) }
                             // Trigger on-demand sync for highlights
                             viewModelScope.launch {
                                 try {
@@ -653,30 +694,52 @@ class BookmarkViewerScreenModel(
     fun setContentSource(source: ContentSource, bookmark: BookmarkEntity?) {
         viewModelScope.launch {
             _selectedSource.value = source
-            if (source == ContentSource.FULL_PAGE_ARCHIVE) {
-                val localPath = _precrawledAssetPath.value
-                if (localPath != null) {
-                    // Archive is cached — load as string if READER mode needs it
-                    if (viewerMode.value == ViewerMode.READER && _sourceContentOverride.value == null) {
-                        loadArchiveContentString(localPath)
+            when (source) {
+                ContentSource.FULL_PAGE_ARCHIVE -> {
+                    val localPath = _precrawledAssetPath.value
+                    if (localPath != null) {
+                        // Cleared first: the override is one slot shared by every string-rendered
+                        // source, so switching between two of them must not keep the old text.
+                        _sourceContentOverride.value = null
+                        if (viewerMode.value == ViewerMode.READER) {
+                            loadSourceContentString(localPath)
+                        }
+                    } else if (!offlineMode.value && bookmark != null) {
+                        fetchAndCacheArchive(bookmark)
+                    } else {
+                        snackbarManager.showSnackbar("Full page archive not available offline")
+                        _selectedSource.value = ContentSource.EXTRACTED
                     }
-                } else if (!offlineMode.value && bookmark != null) {
-                    fetchAndCacheArchive(bookmark)
-                } else {
-                    snackbarManager.showSnackbar("Full page archive not available offline")
-                    _selectedSource.value = ContentSource.EXTRACTED
                 }
-            } else {
-                _sourceContentOverride.value = null
+                ContentSource.SANITIZED -> {
+                    val localPath = _sanitizedAssetPath.value
+                    if (localPath != null) {
+                        _sourceContentOverride.value = null
+                        loadSourceContentString(localPath)
+                    } else if (!offlineMode.value && bookmark != null) {
+                        fetchAndCacheSanitized(bookmark)
+                    } else {
+                        snackbarManager.showSnackbar("Cleaned-up copy not available offline")
+                        _selectedSource.value = ContentSource.EXTRACTED
+                    }
+                }
+                ContentSource.EXTRACTED -> _sourceContentOverride.value = null
             }
         }
     }
 
-    private suspend fun loadArchiveContentString(localPath: String) {
+    /** The cached file backing [source], for the sources the reader renders from a string. */
+    private fun localPathForSource(source: ContentSource): String? = when (source) {
+        ContentSource.FULL_PAGE_ARCHIVE -> _precrawledAssetPath.value
+        ContentSource.SANITIZED -> _sanitizedAssetPath.value
+        ContentSource.EXTRACTED -> null
+    }
+
+    private suspend fun loadSourceContentString(localPath: String) {
         try {
             _sourceContentOverride.value = com.karakept.app.utils.FileUtils.readFileAsText(localPath)
         } catch (e: Exception) {
-            AppLogger.e("ViewerModel", "Failed to read archive as string: ${e.message}", e)
+            AppLogger.e("ViewerModel", "Failed to read content source as string: ${e.message}", e)
         }
     }
 
@@ -738,6 +801,58 @@ class BookmarkViewerScreenModel(
     }
 
     /**
+     * Download and show the sidecar's sanitized copy.
+     *
+     * Resolves the asset from the **local row**, unlike [fetchAndCacheArchive], which re-resolves
+     * it from the server and can stamp the local path onto a different row.
+     */
+    fun fetchAndCacheSanitized(bookmark: BookmarkEntity) {
+        viewModelScope.launch {
+            _isLoadingSource.value = true
+            try {
+                val server = serverRepository.servers.first().find { it.id == bookmark.serverId }
+                if (server == null) {
+                    snackbarManager.showSnackbar("Server not found")
+                    _selectedSource.value = ContentSource.EXTRACTED
+                    return@launch
+                }
+                val row = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+                    .find { isSanitizedAsset(it.assetType, it.fileName) }
+                if (row == null) {
+                    snackbarManager.showSnackbar("No cleaned-up copy for this bookmark")
+                    _selectedSource.value = ContentSource.EXTRACTED
+                    return@launch
+                }
+                val bytes = remoteDataSource.downloadAsset(server, row.id)
+                val localPath = com.karakept.app.utils.FileUtils.saveFile(
+                    com.karakept.app.utils.FileUtils.getImageCacheDirectory(),
+                    "asset_${row.id}",
+                    bytes
+                )
+                assetDao.insertAssets(listOf(row.copy(localPath = localPath)))
+                _sanitizedAssetPath.value = localPath
+                _sanitizedAvailable.value = true
+                // Not gated on READER, unlike the archive: this is a fragment, and WEB mode has no
+                // document to load it as a file instead.
+                _sourceContentOverride.value = bytes.decodeToString()
+                _selectedSource.value = ContentSource.SANITIZED
+                _assets.value = assetDao.getAssetsForBookmark(bookmark.remoteId, bookmark.serverId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: OfflineModeException) {
+                snackbarManager.showSnackbar("Not available in offline mode")
+                _selectedSource.value = ContentSource.EXTRACTED
+            } catch (e: Exception) {
+                AppLogger.e("ViewerModel", "Failed to fetch sanitized copy: ${e.message}", e)
+                snackbarManager.showSnackbar("Couldn't load the cleaned-up copy")
+                _selectedSource.value = ContentSource.EXTRACTED
+            } finally {
+                _isLoadingSource.value = false
+            }
+        }
+    }
+
+    /**
      * Re-reads this bookmark's asset rows and republishes every piece of state derived from
      * them. Called after anything that adds, removes, or caches an asset.
      *
@@ -758,16 +873,44 @@ class BookmarkViewerScreenModel(
         // so the "Load full page archive" button appears when the server has it.
         _archiveAvailable.value = archive != null
 
+        // Resolved by name, not by id: Karakeep points a new asset id at the blob every time a
+        // sidecar re-cleans an article, so the name is the only stable handle.
+        val sanitized = assets.find { isSanitizedAsset(it.assetType, it.fileName) }
+        _sanitizedAssetPath.value = sanitized?.localPath
+        _sanitizedAvailable.value = sanitized != null
+
         if (applyPreferredSource) {
-            // Default to FULL_PAGE_ARCHIVE only when the user has explicitly opted in.
-            // Without the setting, extracted content is always the default so that
-            // "Extracted" source selection reliably shows extracted HTML (or no content).
+            // Default to anything other than EXTRACTED only when the user has explicitly opted in.
+            // Without a setting, extracted content is always the default so that "Extracted"
+            // reliably shows extracted HTML (or no content).
+            //
+            // Sanitized wins over the archive when both are preferred and both exist: it is the
+            // cleaned version of the same article the archive holds a raw copy of.
+            val preferSanitized = settingsRepository.preferSanitizedHtml.first()
             val preferArchive = settingsRepository.preferFullPageHtml.first()
-            if (archive?.localPath != null && preferArchive && _selectedSource.value == ContentSource.EXTRACTED) {
-                _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
+            when {
+                sanitized != null && preferSanitized && _selectedSource.value == ContentSource.EXTRACTED -> {
+                    _selectedSource.value = ContentSource.SANITIZED
+                    if (sanitized.localPath != null) {
+                        loadSourceContentString(sanitized.localPath)
+                    } else if (!offlineMode.value) {
+                        // Only the metadata row has arrived so far. Fetching here is what makes
+                        // the preference mean "open on the cleaned copy" rather than "offer it".
+                        fetchAndCacheSanitized(bookmark)
+                    } else {
+                        _selectedSource.value = ContentSource.EXTRACTED
+                    }
+                }
+                archive?.localPath != null && preferArchive && _selectedSource.value == ContentSource.EXTRACTED ->
+                    _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
             }
         } else if (_selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE && archive?.localPath == null) {
             // The archive we were displaying is gone (deleted locally or on the server).
+            _selectedSource.value = ContentSource.EXTRACTED
+            _sourceContentOverride.value = null
+        } else if (_selectedSource.value == ContentSource.SANITIZED && sanitized == null) {
+            // Same for the sanitized copy — a re-clean that failed, or an asset deleted on the
+            // server. Only a missing *row* demotes: a row without a local path is still fetchable.
             _selectedSource.value = ContentSource.EXTRACTED
             _sourceContentOverride.value = null
         }
@@ -918,6 +1061,111 @@ class BookmarkViewerScreenModel(
     }
 
     /**
+     * Ask a configured sidecar to do work on this bookmark.
+     *
+     * Same shape as [runAiAction] — one in-flight slot, no undo, no offline queue — with one
+     * difference that matters: the sidecar reports a typed **outcome**, so a run that will never
+     * produce anything says why instead of being polled until the budget runs out.
+     */
+    fun runSidecarAction(bookmark: BookmarkEntity, action: SidecarAction) {
+        // Claim the slot before launching, for the same reason requestServerCrawl does.
+        if (!_sidecarActionInFlight.compareAndSet(null, action)) return
+        viewModelScope.launch {
+            try {
+                when (action) {
+                    SidecarAction.SANITIZE_HTML -> {
+                        val job = sidecarRepository.requestSanitize(bookmark, SidecarKind.HTML_SCRUB)
+                        snackbarManager.showSnackbar("Cleanup requested")
+                        awaitSanitizeResult(bookmark, job.status)
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: OfflineModeException) {
+                snackbarManager.showSnackbar("Not available in offline mode")
+            } catch (e: SidecarUnavailableException) {
+                snackbarManager.showSnackbar(e.message ?: "The cleanup service can't do this")
+            } catch (e: Exception) {
+                AppLogger.e("ViewerModel", "Sidecar action ${action.name} failed: ${e.message}", e)
+                snackbarManager.showErrorWithRetry("Couldn't reach the cleanup service") {
+                    runSidecarAction(bookmark, action)
+                }
+            } finally {
+                _sidecarActionInFlight.value = null
+            }
+        }
+    }
+
+    /**
+     * Poll the sidecar until its job finishes, then pick up what it produced.
+     *
+     * The job is the signal rather than the asset: an outcome of "filtered", "too long" or "no
+     * model" means no asset is ever coming, and saying so beats waiting out the budget. A job the
+     * service has forgotten (it keeps them in memory, and loses them on restart) falls back to
+     * looking for the asset, which is the only durable record either way.
+     */
+    private suspend fun awaitSanitizeResult(bookmark: BookmarkEntity, initialStatus: SanitizeJobStatus) {
+        var status = initialStatus
+        var outcome: SanitizeOutcome? = null
+        var attempt = 0
+
+        while (status != SanitizeJobStatus.DONE) {
+            if (attempt >= SANITIZE_POLL_ATTEMPTS) {
+                snackbarManager.showSnackbar("Still cleaning up — pull to refresh later")
+                return
+            }
+            attempt++
+            delay(SANITIZE_POLL_INTERVAL_MS)
+            val job = try {
+                sidecarRepository.fetchSanitizeStatus(bookmark, SidecarKind.HTML_SCRUB)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLogger.d("ViewerModel", "Sanitize poll failed: ${e.message}")
+                null
+            }
+            if (job != null) {
+                status = job.status
+                outcome = job.outcome
+            }
+        }
+
+        val finished = outcome
+        if (finished != null && finished != SanitizeOutcome.UPLOADED) {
+            snackbarManager.showSnackbar(finished.message)
+            return
+        }
+
+        // The asset lives in Karakeep, so a sync is what brings it here.
+        bookmarkRepository.syncSingleBookmark(bookmark.remoteId, bookmark.serverId)
+        reloadAssets(bookmark)
+        if (_sanitizedAvailable.value) {
+            fetchAndCacheSanitized(bookmark)
+            snackbarManager.showSnackbar(SanitizeOutcome.UPLOADED.message)
+        } else {
+            snackbarManager.showSnackbar("Cleaned up, but the copy hasn't synced yet")
+        }
+    }
+
+    /**
+     * Find out whether this server has a usable cleanup sidecar.
+     *
+     * Guarded so hard it cannot fail: a misconfigured or unreachable sidecar must never be able to
+     * stop a bookmark from opening. The action simply stays hidden.
+     */
+    private suspend fun refreshSanitizeAvailability(bookmark: BookmarkEntity) {
+        try {
+            sidecarRepository.refreshCapabilities(bookmark.serverId, SidecarKind.HTML_SCRUB)
+            _sanitizeActionAvailable.value =
+                sidecarRepository.isUsable(bookmark.serverId, SidecarKind.HTML_SCRUB)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLogger.d("ViewerModel", "Sidecar availability check failed: ${e.message}")
+        }
+    }
+
+    /**
      * Re-syncs the bookmark until the crawl job's output shows up, or the budget runs out.
      *
      * A single fixed delay was never enough: the server enqueues the crawl, so a page of any
@@ -1011,6 +1259,7 @@ class BookmarkViewerScreenModel(
                 reloadAssets(bookmark)
 
                 val isArchive = asset.assetType == "fullPageArchive" || asset.assetType == "precrawledArchive"
+                val isSanitized = isSanitizedAsset(asset.assetType, asset.fileName)
                 when {
                     // Tapping the row meant "I want to use this", so finish the thought once
                     // the bytes are here rather than making the user tap again.
@@ -1018,10 +1267,18 @@ class BookmarkViewerScreenModel(
                         _sourceContentOverride.value = bytes.decodeToString()
                         _selectedSource.value = ContentSource.FULL_PAGE_ARCHIVE
                     }
+                    useWhenDone && isSanitized -> {
+                        _sourceContentOverride.value = bytes.decodeToString()
+                        _selectedSource.value = ContentSource.SANITIZED
+                    }
                     useWhenDone && asset.assetType == "pdf" -> openAssetExternally(downloaded)
-                    // Not a tap, but the reader is already showing this archive — swap in the
+                    // Not a tap, but the reader is already showing this source — swap in the
                     // fresh bytes so a re-download is reflected immediately.
                     isArchive && _selectedSource.value == ContentSource.FULL_PAGE_ARCHIVE &&
+                        viewerMode.value == ViewerMode.READER -> {
+                        _sourceContentOverride.value = bytes.decodeToString()
+                    }
+                    isSanitized && _selectedSource.value == ContentSource.SANITIZED &&
                         viewerMode.value == ViewerMode.READER -> {
                         _sourceContentOverride.value = bytes.decodeToString()
                     }
@@ -1061,6 +1318,7 @@ class BookmarkViewerScreenModel(
     private fun mimeTypeFor(assetType: String): String = when (assetType) {
         "pdf" -> "application/pdf"
         "fullPageArchive", "precrawledArchive", "linkHtmlContent" -> "text/html"
+        com.karakept.app.data.model.SANITIZED_ASSET_TYPE -> "text/html"
         "bannerImage", "screenshot" -> "image/*"
         else -> "*/*"
     }
