@@ -117,7 +117,7 @@ settle on the last one to push.
 > can say the server doesn't support the action rather than offering a pointless retry.
 
 **HTTP Client Configuration:**
-- Library: `io.ktor:ktor-client-core` v3.6.1
+- Library: `io.ktor:ktor-client-core`
 - Engine: `io.ktor:ktor-client-okhttp` (JVM/Android + Desktop)
 - Serialization: kotlinx-serialization JSON
 - Logging: Ktor Logger.SIMPLE at INFO level
@@ -134,7 +134,7 @@ settle on the last one to push.
 
 **SQLite (Local):**
 - Type: SQLite 3 (via androidx.sqlite:sqlite-bundled)
-- Client: Room ORM (androidx.room3 3.0.3)
+- Client: Room ORM (`androidx.room3`)
 - Database: `AppDatabase` at `com/karakept/app/data/local/AppDatabase.kt`
 - Current schema version: 8 (migrations in `data/local/migrations/`)
 - Entities:
@@ -207,7 +207,6 @@ settle on the last one to push.
   - `KEYSTORE_PASSWORD` - Keystore password
   - `KEY_ALIAS` - Key alias
   - `KEY_PASSWORD` - Key password
-- Python 3.11 for language_data dependency (changelog generation)
 - Changelog context lives in `docs/CONTEXT.md`: what users notice, what counts as breaking for
   an app (as opposed to a library), and what to leave out. Keep it short — it has to fit the
   action's 800-token context budget without being summarized.
@@ -272,7 +271,7 @@ settle on the last one to push.
 **Source:**
 - `karakeep-upstream/` - Git submodule pointing to upstream Karakeep monorepo
 - Contains Node.js/TypeScript services (browser extension, web, API spec)
-- Package manager: pnpm 9.15.9
+- Package manager: pnpm
 - Key packages:
   - `@karakeep/db` - Database schema and migrations
   - `@karakeep/api` - OpenAPI spec definition
@@ -287,7 +286,7 @@ settle on the last one to push.
 ## Image & Asset Handling
 
 **Image Loading:**
-- Library: Coil 3.6.3 with Ktor network engine
+- Library: Coil 3 with Ktor network engine
 - Caching: Automatic disk + memory caching via Coil
 - Manager: `ImageCacheManager` in `com/karakept/app/data/cache/`
 - Network: Uses Ktor HttpClient for downloads
@@ -300,7 +299,7 @@ settle on the last one to push.
 ## Desktop Tray & Notifications
 
 **System Tray:**
-- Library: Compose Native Tray 2.1.7 (`dev.nucleusframework:composenativetray`)
+- Library: Compose Native Tray (`dev.nucleusframework:composenativetray`)
 - macOS: NSStatusBar menu bar
 - Windows: Taskbar icon
 - Linux: D-Bus StatusNotifierItem (SNI) via native C/JNI bridge
@@ -327,7 +326,7 @@ settle on the last one to push.
 - Icons are not rendered in submenus on GNOME — keep submenu items text-only.
 
 **Notifications:**
-- Library: KMP Notifier 1.6.1
+- Library: KNotify (`io.github.kdroidfilter:knotify`)
 - Android: NotificationManager API
 - Desktop: System notification center
 - Usage: Action feedback, sync completion alerts
@@ -351,9 +350,8 @@ settle on the last one to push.
 ## Content Processing
 
 **HTML Parsing:**
-- Library: ksoup 0.2.1
-- Purpose: Extract metadata from bookmarked web content
-- Used by: Metadata extraction during bookmark sync
+- Library: ksoup (`com.fleeksoft.ksoup`)
+- Purpose: Parse article HTML for the native reader, and sanitise it (`HtmlSanitizer` for Reader mode, `HtmlArchiveProcessor` for Web mode)
 
 ---
 
