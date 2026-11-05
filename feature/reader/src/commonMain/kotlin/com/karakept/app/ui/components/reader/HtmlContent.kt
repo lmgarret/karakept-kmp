@@ -36,9 +36,10 @@ import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.SkeletonLoader
 import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.theme.LocalEinkMode
+import com.karakept.app.utils.AppDispatchers
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.HtmlSanitizer
-import kotlinx.coroutines.Dispatchers
+import org.koin.compose.koinInject
 import kotlinx.coroutines.withContext
 
 /**
@@ -84,6 +85,7 @@ fun HtmlContent(
     onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
     onSearchMatchPosition: (Float) -> Unit = {}
 ) {
+    val appDispatchers = koinInject<AppDispatchers>()
     // Process HTML based on viewer mode asynchronously
     val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
         if (localFilePath != null) {
@@ -98,7 +100,7 @@ fun HtmlContent(
             return@produceState
         }
 
-        value = withContext(Dispatchers.Default) {
+        value = withContext(appDispatchers.default) {
             try {
                 val result = when (viewerMode) {
                     ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = removeFirstImage)
