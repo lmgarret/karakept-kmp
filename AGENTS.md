@@ -616,8 +616,10 @@ landing inside an image or a table is left alone rather than rewinding most of t
 The whole article is a *single* lazy item, so `layoutInfo` knows nothing about lines and
 `PageTurnScrollEffect`'s `predictiveSnap` answers from a registry instead.
 `ReaderSnapRegistry` (`ui/components/reader/ReaderSnapPoints.kt`, provided through
-`LocalReaderSnapRegistry`) collects every line top and bottom in root coordinates, fed from
-`AnnotatedClickableText`'s existing `onGloballyPositioned` and `onTextLayout` callbacks. Since every
+`LocalReaderSnapRegistry`) collects every line top and bottom, fed from `AnnotatedClickableText`'s
+`onPlaced` and `onTextLayout` callbacks. A block registers its live `LayoutCoordinates`, not a
+position: the registry resolves it to root coordinates only when a turn queries it, so scrolling
+costs nothing per block. Since every
 block is eagerly composed — above and below the viewport alike — the landing line is known *before*
 the turn and folds into a single `scrollBy`, so no intermediate position is ever observable to the
 reader's scroll guard.
@@ -650,9 +652,10 @@ lands on a handover.
 
 > **Rule:** a new reader text renderer that does not go through `AnnotatedClickableText` silently
 > loses line snapping. Register it with `LocalReaderSnapRegistry` or route it through
-> `AnnotatedClickableText`. Report from layout callbacks into the registry's plain map only —
-> snapshot state written during layout drags the whole article into recomposition on every scroll
-> frame. Non-text blocks (images, tables, rules) register nothing on purpose: they have no line to
+> `AnnotatedClickableText`. Register coordinates once, from `onPlaced`, and let the registry read
+> the position lazily — never push a position from `onGloballyPositioned`, which runs for every block
+> on every scroll frame, and never write snapshot state from either, which recomposes the whole
+> article on every frame (`ReaderScrollCostTest` pins this). Non-text blocks (images, tables, rules) register nothing on purpose: they have no line to
 > keep whole, and the snap cap then leaves those folds alone.
 
 Snapping aligns the *top* of a page. Both edges cannot sit on a boundary at once — they are one
