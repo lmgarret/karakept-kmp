@@ -11,9 +11,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * blocks are all eagerly composed in a plain `Column` though, so every one of them is positioned —
  * including those scrolled past and those below the fold — and can report itself here.
  *
- * Deliberately *not* snapshot state: this is written from layout callbacks on every scroll frame,
- * and a snapshot write there would schedule a recomposition of the whole article each time. Nothing
- * observes the registry reactively; it is read once per page turn.
+ * Deliberately *not* snapshot state: nothing observes the registry reactively; it is read once per
+ * page turn. Blocks register their coordinates and line layout, not a position, so scrolling writes
+ * nothing here at all.
  *
  * Non-text blocks — images, tables, rules — register nothing on purpose. A fold inside one finds
  * only the last line of the paragraph above it, which the caller's snap limit rejects, so the turn
@@ -21,7 +21,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * screenful of content.
  */
 class ReaderSnapRegistry {
-    private class Entry(val topInRoot: Float, val lineTops: FloatArray, val lineBottoms: FloatArray)
+    private class Entry(val topInRoot: () -> Float, val lineTops: FloatArray, val lineBottoms: FloatArray)
 
     private val blocks = mutableMapOf<Any, Entry>()
 
@@ -30,12 +30,25 @@ class ReaderSnapRegistry {
      * [topInRoot] is where the block itself sits, so the two add up to root coordinates.
      */
     fun report(key: Any, topInRoot: Float, lineTops: FloatArray, lineBottoms: FloatArray) {
+        report(key, { topInRoot }, lineTops, lineBottoms)
+    }
+
+    /**
+     * Like the other overload, but the block's position is asked for only when a page turn
+     * queries the registry. A position pushed from `onGloballyPositioned` costs one callback per
+     * block per scroll frame, which on a long article is most of the frame; read lazily it is
+     * paid once per turn. [topInRoot] returns NaN for a block that is no longer attached, which
+     * every query skips.
+     */
+    fun report(key: Any, topInRoot: () -> Float, lineTops: FloatArray, lineBottoms: FloatArray) {
         blocks[key] = Entry(topInRoot, lineTops, lineBottoms)
     }
 
     fun forget(key: Any) {
         blocks.remove(key)
     }
+
+    private var contentEnd: (() -> Float)? = null
 
     /**
      * Where the last rendered block stops, in root coordinates — the end of the *article*, which is
@@ -44,16 +57,22 @@ class ReaderSnapRegistry {
      * Null until the renderer reports it, and a caller with no answer should assume there is more
      * below rather than less, so a reader without a registry keeps behaving as it always did.
      */
-    var contentEndInRoot: Float? = null
-        private set
+    val contentEndInRoot: Float?
+        get() = contentEnd?.invoke()?.takeUnless { it.isNaN() }
 
     fun reportContentEnd(yInRoot: Float) {
-        contentEndInRoot = yInRoot
+        reportContentEnd { yInRoot }
+    }
+
+    /** Lazily read, for the same reason as the lazy [report]. */
+    fun reportContentEnd(yInRoot: () -> Float) {
+        contentEnd = yInRoot
     }
 
     /** Whether any registered line is still, wholly or partly, below [yInRoot]. */
     fun hasLineBelow(yInRoot: Float): Boolean = blocks.values.any { entry ->
-        entry.lineBottoms.any { bottom -> entry.topInRoot + bottom > yInRoot }
+        val top = entry.topInRoot()
+        entry.lineBottoms.any { bottom -> top + bottom > yInRoot }
     }
 
     /**
@@ -71,9 +90,11 @@ class ReaderSnapRegistry {
     /** The line [yInRoot] falls inside, top and bottom, with the same null as [lineTopAt]. */
     fun lineAt(yInRoot: Float): LineSpan? {
         for (entry in blocks.values) {
+            val blockTop = entry.topInRoot()
+            if (blockTop.isNaN()) continue
             for (line in entry.lineTops.indices) {
-                val top = entry.topInRoot + entry.lineTops[line]
-                val bottom = entry.topInRoot + entry.lineBottoms[line]
+                val top = blockTop + entry.lineTops[line]
+                val bottom = blockTop + entry.lineBottoms[line]
                 if (yInRoot >= top && yInRoot < bottom) return LineSpan(top, bottom)
             }
         }

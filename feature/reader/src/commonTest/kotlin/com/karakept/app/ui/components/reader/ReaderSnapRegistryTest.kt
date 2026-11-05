@@ -115,4 +115,39 @@ class ReaderSnapRegistryTest {
         registry.forget("p2")
         assertNull(registry.lineTopAt(330f))
     }
+
+    @Test
+    fun `a lazily reported block is read where it is now, not where it was reported`() {
+        val registry = ReaderSnapRegistry()
+        var top = 100f
+        registry.report("p1", topInRoot = { top }, lineTops = floatArrayOf(0f), lineBottoms = floatArrayOf(20f))
+        assertEquals(100f, registry.lineTopAt(110f))
+
+        // Scrolling moves the block without anything being reported again.
+        top = 40f
+        assertNull(registry.lineTopAt(110f))
+        assertEquals(40f, registry.lineTopAt(50f))
+        assertFalse(registry.hasLineBelow(60f))
+    }
+
+    @Test
+    fun `a detached block reads as nowhere`() {
+        val registry = twoParagraphs()
+        registry.report("p1", topInRoot = { Float.NaN }, lineTops = floatArrayOf(0f), lineBottoms = floatArrayOf(20f))
+        assertNull(registry.lineTopAt(110f))
+        assertEquals(300f, registry.lineTopAt(310f))
+        assertFalse(registry.hasLineBelow(400f))
+    }
+
+    @Test
+    fun `a lazily reported article end follows the scroll and is unknown once detached`() {
+        val registry = ReaderSnapRegistry()
+        var end = 348f
+        registry.reportContentEnd { end }
+        assertEquals(348f, registry.contentEndInRoot)
+        end = 120f
+        assertEquals(120f, registry.contentEndInRoot)
+        end = Float.NaN
+        assertNull(registry.contentEndInRoot)
+    }
 }

@@ -23,8 +23,7 @@ import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.platform.LocalTextToolbar
@@ -255,8 +254,10 @@ fun NativeHtmlRenderer(
                 // changes, which a hardcoded margin would not.
                 LocalReaderSnapRegistry.current?.let { registry ->
                     Spacer(
-                        Modifier.height(0.dp).onGloballyPositioned {
-                            registry.reportContentEnd(it.positionInRoot().y)
+                        Modifier.height(0.dp).onPlaced { coords ->
+                            registry.reportContentEnd {
+                                if (coords.isAttached) coords.positionInRoot().y else Float.NaN
+                            }
                         }
                     )
                 }

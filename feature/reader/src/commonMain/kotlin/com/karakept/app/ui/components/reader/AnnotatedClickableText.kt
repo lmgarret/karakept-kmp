@@ -19,7 +19,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
@@ -108,7 +110,15 @@ fun AnnotatedClickableText(
     }
     val ruleColor = MaterialTheme.colorScheme.onSecondaryContainer
 
+    // Only the block holding the selected highlight needs to follow its own root position: its
+    // reported outline moves with the article. Tracking it everywhere wrote snapshot state from every
+    // block on every scroll frame, recomposing the whole article each frame.
     var rootOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    val rootOffsetTracking = if (selectionRange != null) {
+        Modifier.onGloballyPositioned { coords -> rootOffset = coords.positionInRoot() }
+    } else {
+        Modifier
+    }
 
     val linkHover = rememberReaderLinkHoverState()
 
@@ -117,9 +127,9 @@ fun AnnotatedClickableText(
     val positionSourceKey = remember { Any() }
 
     // Page snapping needs where every line of this block sits so a turn can stop on a line top
-    // rather than through the middle of one. Position and text layout arrive in either order and
+    // rather than through the middle of one. Coordinates and text layout arrive in either order and
     // from two different callbacks, so they are staged in a plain holder — snapshot state would
-    // subscribe the layout pass to itself, and this is written on every scroll frame.
+    // subscribe the layout pass to itself.
     val snapRegistry = LocalReaderSnapRegistry.current
     val snapReport = remember { SnapLineReport() }
     if (snapRegistry != null) {
@@ -173,11 +183,14 @@ fun AnnotatedClickableText(
 
     Box(
         modifier = modifier
-            .onGloballyPositioned { coords ->
-                val position = coords.positionInRoot()
-                rootOffset = position
-                snapRegistry?.let { snapReport.onPositioned(it, positionSourceKey, position.y) }
-            }
+            .then(rootOffsetTracking)
+            .then(
+                if (snapRegistry != null) {
+                    Modifier.onPlaced { coords -> snapReport.onPlaced(snapRegistry, positionSourceKey, coords) }
+                } else {
+                    Modifier
+                }
+            )
             .readerLinkHover(linkHover, text) { layoutResult.value }
             .pointerInput(text) {
                 awaitEachGesture {
@@ -308,12 +321,15 @@ internal fun highlightLineRects(
  * observe the other as snapshot state without dragging layout into recomposition.
  */
 private class SnapLineReport {
-    private var topInRoot: Float? = null
+    private var coordinates: LayoutCoordinates? = null
     private var lineTops: FloatArray? = null
     private var lineBottoms: FloatArray? = null
 
-    fun onPositioned(registry: ReaderSnapRegistry, key: Any, y: Float) {
-        topInRoot = y
+    // The coordinates object is live: the registry asks it for a position only when a page turns.
+    // Republishing is needed only when the node behind it changes, not each time it is placed.
+    fun onPlaced(registry: ReaderSnapRegistry, key: Any, coords: LayoutCoordinates) {
+        if (coords === coordinates) return
+        coordinates = coords
         publish(registry, key)
     }
 
@@ -324,9 +340,14 @@ private class SnapLineReport {
     }
 
     private fun publish(registry: ReaderSnapRegistry, key: Any) {
-        val top = topInRoot ?: return
+        val coords = coordinates ?: return
         val tops = lineTops ?: return
         val bottoms = lineBottoms ?: return
-        registry.report(key, top, tops, bottoms)
+        registry.report(
+            key,
+            topInRoot = { if (coords.isAttached) coords.positionInRoot().y else Float.NaN },
+            lineTops = tops,
+            lineBottoms = bottoms
+        )
     }
 }
