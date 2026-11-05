@@ -527,7 +527,7 @@ here fires from touch, and the tooltip is placed clear of the pointer hotspot
   above 1x, so panning a zoomed image never gets mistaken for a page flip.
 - The page-wide image list comes from `LocalGalleryImages` (`ReaderGalleryState.kt`), pre-scanned
   once per document by `NativeHtmlRenderer` via `collectGalleryImages`.
-- Wired into `RenderResolvedImage` (`HtmlBlockRenderer.kt`) — every `<img>`/`<picture>`
+- Wired into `RenderResolvedImage` (`HtmlImageRenderer.kt`) — every `<img>`/`<picture>`
   rendered in Reader mode is tappable to open the gallery positioned on that exact image.
 - The reader's hero banner is page 0 of that list, whichever image was tapped. It is not part of
   the article's HTML, so `heroGalleryImage(...)` builds its entry (with a null `element` and,
