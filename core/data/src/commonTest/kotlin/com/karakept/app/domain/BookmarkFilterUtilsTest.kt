@@ -1,5 +1,6 @@
 package com.karakept.app.domain
 
+import com.karakept.app.testing.testBookmarkEntity
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.ContentFilter
 import com.karakept.app.data.model.FilterConfig
@@ -16,7 +17,6 @@ import kotlin.test.assertTrue
  * All tests use simple [BookmarkEntity] stubs created by [makeBookmark].
  */
 class BookmarkFilterUtilsTest {
-
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -34,24 +34,19 @@ class BookmarkFilterUtilsTest {
         createdAt: Long = idCounter,
         readingTimeMinutes: Int = 0,
         description: String? = null
-    ) = BookmarkEntity(
+    ) = testBookmarkEntity(
         localId = idCounter,
-        remoteId = "remote-${idCounter}",
         serverId = "server-1",
         title = title,
         url = url,
         description = description,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
         tags = tags,
         listIds = listIds,
         isStarred = isStarred,
         isArchived = isArchived,
         isRead = isRead,
         createdAt = createdAt,
-        readingTimeMinutes = readingTimeMinutes,
-        content = null
+        readingTimeMinutes = readingTimeMinutes
     )
 
     // -------------------------------------------------------------------------

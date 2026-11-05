@@ -1,5 +1,6 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.testing.testBookmarkEntity
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
 import com.karakept.app.data.local.entity.BookmarkEntity
@@ -25,7 +26,6 @@ import kotlin.test.assertTrue
  * list and tag mutation operations.
  */
 class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
-
     private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)
     private val pendingActionDao = mockk<PendingActionDao>(relaxed = true)
     private val remoteDataSource = mockk<RemoteDataSource>(relaxed = true)
@@ -47,7 +47,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun moveToList_updatesLocalDbWithNewListId() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(listIds = "")
+        val bookmark = testBookmarkEntity(listIds = "")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true) // skip auto-sync
 
@@ -60,7 +60,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun moveToList_appendsListIdToExistingListIds() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(listIds = "list-1,list-2")
+        val bookmark = testBookmarkEntity(listIds = "list-1,list-2")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -75,7 +75,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
     @Test
     fun moveToList_stripsSmartListMembershipOptimistically() = runTest(testDispatcher) {
         // Bookmark is in a smart list ("all-feeds") and a manual list ("keep-manual").
-        val bookmark = makeBookmark(listIds = "all-feeds,keep-manual")
+        val bookmark = testBookmarkEntity(listIds = "all-feeds,keep-manual")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -93,7 +93,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun moveToList_doesNotDuplicateExistingListId() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(listIds = "list-1")
+        val bookmark = testBookmarkEntity(listIds = "list-1")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -105,7 +105,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun moveToList_queuesPendingAction() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(listIds = "")
+        val bookmark = testBookmarkEntity(listIds = "")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -119,7 +119,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun moveToList_emitsBookmarkChangedEvent() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(listIds = "")
+        val bookmark = testBookmarkEntity(listIds = "")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -145,7 +145,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun removeFromList_removesListIdFromLocalDb() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(listIds = "list-1,list-2")
+        val bookmark = testBookmarkEntity(listIds = "list-1,list-2")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -160,7 +160,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun removeFromList_resultsInEmptyListIdsWhenOnlyEntry() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(listIds = "list-1")
+        val bookmark = testBookmarkEntity(listIds = "list-1")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -174,7 +174,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun removeFromList_queuesPendingAction() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(listIds = "list-1")
+        val bookmark = testBookmarkEntity(listIds = "list-1")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -188,7 +188,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun removeFromList_emitsBookmarkChangedEvent() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(listIds = "list-1")
+        val bookmark = testBookmarkEntity(listIds = "list-1")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -214,7 +214,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun updateTags_updatesLocalDbWithNewTags() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(tags = "old-tag")
+        val bookmark = testBookmarkEntity(tags = "old-tag")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -230,7 +230,7 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
 
     @Test
     fun updateTags_queuesPendingAction() = runTest(testDispatcher) {
-        val bookmark = makeBookmark(tags = "")
+        val bookmark = testBookmarkEntity(tags = "")
         coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
         coEvery { settingsRepository.offlineMode } returns flowOf(true)
 
@@ -242,30 +242,4 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         assertTrue(actionSlot.captured.actionData.contains("tag-a"))
     }
 
-    private fun makeBookmark(
-        localId: Long = 1L,
-        remoteId: String = "remote-42",
-        serverId: String = "server1",
-        tags: String = "",
-        listIds: String = "",
-        isRead: Boolean = false
-    ) = BookmarkEntity(
-        localId = 1L,
-        remoteId = remoteId,
-        serverId = serverId,
-        title = "Test",
-        url = "https://example.com",
-        description = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        tags = tags,
-        listIds = listIds,
-        isStarred = false,
-        isArchived = false,
-        isRead = isRead,
-        createdAt = 0L,
-        readingTimeMinutes = 0,
-        content = null
-    )
 }
