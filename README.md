@@ -56,14 +56,16 @@
 
 | | |
 |---|---|
-| **Language** | Kotlin 2.4.21 |
-| **UI** | Compose Multiplatform 1.12.2 (Material 3) |
-| **Navigation** | Navigation 3 1.2.0 |
-| **Networking** | Ktor 3.6.1 |
-| **Database** | Room 3.0.3 |
-| **DI** | Koin 4.2.2 |
-| **Image loading** | Coil 3.6.3 |
-| **HTML parsing** | KSoup 0.2.6 |
+| **Language** | Kotlin Multiplatform |
+| **UI** | Compose Multiplatform (Material 3) |
+| **Navigation** | Navigation 3 |
+| **Networking** | Ktor |
+| **Database** | Room 3 |
+| **DI** | Koin |
+| **Image loading** | Coil |
+| **HTML parsing** | KSoup |
+
+Versions are in [`gradle/libs.versions.toml`](gradle/libs.versions.toml); what each library is for is in [`docs/codebase/STACK.md`](docs/codebase/STACK.md).
 
 **Platforms:** Android (minSdk 24) and Desktop (JVM) on Linux, macOS, and Windows.
 
