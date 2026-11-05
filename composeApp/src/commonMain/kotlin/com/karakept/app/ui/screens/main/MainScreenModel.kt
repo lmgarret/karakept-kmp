@@ -132,12 +132,12 @@ class MainScreenModel(
         statuses[resolveCurrentKey(listId, filter)] != null
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    private val _tagFilterSourceBookmarkId = MutableStateFlow<Long?>(null)
+    internal val _tagFilterSourceBookmarkId = MutableStateFlow<Long?>(null)
     val tagFilterSourceBookmarkId: StateFlow<Long?> = _tagFilterSourceBookmarkId
 
     val lists: StateFlow<List<KarakeepList>> = listRepository.lists
 
-    private val _expandedLists = MutableStateFlow<Set<String>>(emptySet())
+    internal val _expandedLists = MutableStateFlow<Set<String>>(emptySet())
     val expandedLists: StateFlow<Set<String>> = _expandedLists
 
     private val listSettings: StateFlow<Map<String, ListSettings>> = settingsRepository.allListSettings
@@ -558,7 +558,6 @@ class MainScreenModel(
         _topSlotLowWater.value = Int.MAX_VALUE
     }
 
-
     // RemoteIds of bookmarks on which the user has explicitly performed a list-membership
     // action (add/remove list). Prevents the scroll-triggered action from auto-firing on a
     // bookmark that is about to leave the list via async reconciliation — the reconcile
@@ -567,8 +566,8 @@ class MainScreenModel(
     internal val _actedOnBookmarkIds = MutableStateFlow<Set<String>>(emptySet())
     val actedOnBookmarkIds: StateFlow<Set<String>> = _actedOnBookmarkIds
 
-    // Hoisted scroll position — survives Voyager push/pop within the same Navigator because
-    // the same MainScreenModel instance is reused for the same Navigator's ScreenModelStore.
+    // Hoisted scroll position — survives pushing another screen on top, because Nav3 keeps this
+    // entry's ViewModelStore (and so this instance) for as long as the entry is on the back stack.
     // Updated by a LaunchedEffect in MainScreen that observes LazyListState;
     // read back when the composable re-enters composition to initialise a new LazyListState.
     @Volatile var savedScrollIndex: Int = 0
@@ -809,273 +808,8 @@ class MainScreenModel(
         scrollToTop()
     }
 
-    /**
-     * Syncs the list just navigated to when a recent list-membership action may have left its
-     * smart-list membership stale (GET /lists/{id}/bookmarks is always fresh), then folds the
-     * result into the view in place so the correction lands without the list jumping.
-     *
-     * Called from the reload observer, so navigating away cancels it before it runs.
-     */
-    private suspend fun refreshStaleSmartList(server: Server, filter: FilterConfig) {
-        val listId = _currentListContext.value ?: return
-        if (listId !in _smartListsNeedingRefresh.value) return
-        _smartListsNeedingRefresh.value -= listId
-        try {
-            // The list just navigated to, so it takes the same exemption as syncCurrentView.
-            bookmarkRepository.syncBookmarksForList(server, listId, isCurrentView = true)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            AppLogger.e("MainScreenModel", "Smart list refresh failed for $listId: ${e.message}", e)
-        }
-    }
-
-    // Pagination — see MainScreenModelPagination.kt
-
-    /** Maps the current view (list context + filter) to a [SyncKey] for progress tracking. */
-    private fun resolveCurrentKey(listId: String?, filter: FilterConfig): SyncKey = when {
-        listId != null -> listId
-        filter.status == FilterStatus.FAVORITES -> SYNC_KEY_FAVORITES
-        filter.status == FilterStatus.ARCHIVED  -> SYNC_KEY_ARCHIVED
-        else -> null
-    }
-
-    /**
-     * Fills in reading progress for the rows currently on screen.
-     *
-     * The sync pass covers a bounded slice of the library, which leaves rows further down the
-     * list showing nothing until a later pass reaches them. Scrolling to them asks for exactly
-     * those, so what the user is looking at is right even when the rotation has not. Only rows
-     * whose progress is missing or stale cost a request, so scrolling back and forth is free.
-     */
-    fun onBookmarksVisible(remoteIds: List<String>) {
-        val server = _selectedServer.value ?: return
-        if (remoteIds.isEmpty()) return
-        viewModelScope.launch {
-            try {
-                bookmarkRepository.pullReadingProgressForVisible(server.id, remoteIds)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                AppLogger.d("MainScreenModel", "Visible-row progress pull failed: ${e.message}")
-            }
-        }
-    }
-
-    fun syncBookmarks() {
-        viewModelScope.launch {
-            // Capture state BEFORE any suspension so the sync strategy and the
-            // post-sync reload always use the same consistent snapshot.
-            val capturedListContext = _currentListContext.value
-            val capturedFilter = _currentFilter.value
-            val capturedEffectiveFilter = effectiveFilterNow()
-
-            val isOffline: Boolean = settingsRepository.offlineMode.first()
-            if (isOffline) return@launch
-
-            val server = selectedServer.value ?: return@launch
-
-            try {
-                // Step 1: Fetch lists first so the drawer updates immediately.
-                listRepository.refreshLists(server)
-
-                // Step 2: Sync the currently-rendered list/filter first so the user
-                // sees their bookmarks as soon as possible.
-                syncCurrentView(server, capturedListContext, capturedFilter)
-
-                // Step 3: Sync all other named lists concurrently.
-                // Each call is independently deduplicated by BookmarkRepository.
-                val currentKey = resolveCurrentKey(capturedListContext, capturedFilter)
-                syncOtherLists(server, currentKey)
-
-                // Nothing to refresh at either step: every pass writes the rows it fetched,
-                // and the list re-reads the pages on screen when the table changes. A bookmark
-                // this view has never seen appears as soon as whichever pass returns it commits
-                // it, rather than at the next refresh call someone remembered to make.
-
-                // Record completion so the startup auto-sync is throttled next time (#276).
-                bookmarkRepository.markAutoSyncCompleted(server.id)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                // Scope cancelled (e.g. screen navigated away) — not a sync error.
-                bookmarkRepository.resetSyncProgress()
-                throw e
-            } catch (e: Exception) {
-                AppLogger.e("MainScreenModel", "Sync failed: ${e.message}", e)
-                if (e.hasHttpStatus(401)) {
-                    // Retrying with the same credentials can't succeed — point the user
-                    // at re-authentication instead (#173).
-                    snackbarManager.showSnackbar(
-                        "Authentication failed — check your API key in server settings",
-                        androidx.compose.material3.SnackbarDuration.Long
-                    )
-                } else {
-                    snackbarManager.showErrorWithRetry("Couldn't sync bookmarks") {
-                        syncBookmarks()
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Dispatches the correct repository call for the currently-viewed list or filter.
-     *
-     * `isCurrentView` exempts this pass from the reading-progress ration, which is per server:
-     * a list opened moments after another list's pass took the slot would otherwise skip its
-     * own, leaving the one view the user is actually looking at as the place the counts stay
-     * stale until scrolling fetched them row by row.
-     */
-    private suspend fun syncCurrentView(
-        server: com.karakept.app.data.model.Server,
-        listContext: String?,
-        filter: FilterConfig
-    ) {
-        when {
-            listContext != null ->
-                bookmarkRepository.syncBookmarksForList(server, listContext, isCurrentView = true)
-            filter.status == FilterStatus.FAVORITES ->
-                bookmarkRepository.syncFavorites(server, isCurrentView = true)
-            filter.status == FilterStatus.ARCHIVED ->
-                bookmarkRepository.syncArchived(server, isCurrentView = true)
-            else -> bookmarkRepository.syncBookmarks(server)
-        }
-    }
-
-    /**
-     * Syncs all named lists except [skipKey] concurrently.
-     * Failures of individual lists are logged but not re-thrown — they are non-fatal
-     * and do not block the user from seeing already-synced data.
-     */
-    private suspend fun syncOtherLists(
-        server: com.karakept.app.data.model.Server,
-        skipKey: SyncKey
-    ) {
-        // Bounded, like BookmarkRepository.syncAllWithLists. Unbounded fan-out here put one
-        // paginated fetch per list on the wire at once, starving the list the user is
-        // actually looking at (and its content downloads) of connections.
-        val semaphore = kotlinx.coroutines.sync.Semaphore(3)
-        val allLists = listRepository.lists.value
-        AppLogger.d(
-            "MainScreenModel",
-            "syncOtherLists: ${allLists.size} known list(s), skipping key=$skipKey"
-        )
-        coroutineScope {
-            allLists.forEach { list ->
-                val key = list.id ?: return@forEach
-                if (key == skipKey) return@forEach
-                launch {
-                    semaphore.acquire()
-                    try {
-                        bookmarkRepository.syncBookmarksForList(server, key)
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        AppLogger.w("MainScreenModel", "Other-list sync failed for list $key: ${e.message}")
-                    } finally {
-                        semaphore.release()
-                    }
-                }
-            }
-        }
-    }
-
-    // Filter management
-
-    fun applyFilter(filter: FilterConfig) {
-        AppLogger.d("MainScreenModel", "applyFilter: status=${filter.status} lists=${filter.lists} tags=${filter.tags}")
-        _currentFilter.value = filter
-        _currentListContext.value = if (filter.lists.size == 1) filter.lists.first() else null
-        if (filter.lists.size == 1) {
-            _expandedLists.value = _expandedLists.value +
-                ListHierarchyUtils.getAncestorIds(filter.lists.first(), lists.value)
-        }
-        // scrollToTop() removed — resetPaginationAndLoad emits it after the new data is ready
-        persistActiveFilter(filter)
-    }
-
-    fun applyTagFilter(tag: String, sourceBookmarkId: Long) {
-        _tagFilterSourceBookmarkId.value = sourceBookmarkId
-        applyFilter(FilterConfig(tags = listOf(tag)))
-    }
-
-    fun consumeTagFilterSource(): Long? {
-        val id = _tagFilterSourceBookmarkId.value
-        _tagFilterSourceBookmarkId.value = null
-        return id
-    }
-
-    fun clearFilter() {
-        AppLogger.d("MainScreenModel", "clearFilter")
-        _currentFilter.value = FilterConfig()
-        _currentListContext.value = null
-        _tagFilterSourceBookmarkId.value = null
-        // scrollToTop() removed — resetPaginationAndLoad emits it after the new data is ready
-        persistActiveFilter(FilterConfig())
-    }
-
-    private fun persistActiveFilter(filter: FilterConfig) {
-        viewModelScope.launch {
-            settingsRepository.saveLastActiveFilter(
-                status = filter.status.name,
-                listId = filter.lists.singleOrNull()
-            )
-        }
-    }
-
-    fun setDefaultList(listId: String) {
-        viewModelScope.launch {
-            settingsRepository.setDefaultListType(DefaultListType.SPECIFIC_LIST)
-            settingsRepository.setDefaultListId(listId)
-        }
-    }
-
-    fun setDefaultListType(type: DefaultListType) {
-        viewModelScope.launch {
-            settingsRepository.setDefaultListType(type)
-            if (type != DefaultListType.SPECIFIC_LIST) {
-                settingsRepository.setDefaultListId(null)
-            }
-        }
-    }
-
-    fun toggleListExpanded(listId: String) {
-        _expandedLists.value = if (_expandedLists.value.contains(listId)) {
-            _expandedLists.value - listId
-        } else {
-            _expandedLists.value + listId
-        }
-    }
-
-    fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun clearSearch() {
-        _searchQuery.value = ""
-    }
-
-    fun selectServer(serverId: String) {
-        viewModelScope.launch {
-            val server = servers.value.find { it.id == serverId }
-            _selectedServer.value = server
-        }
-    }
-
-    // tryEmit rather than launch { emit }: the trigger is consumed alongside a list swap, and
-    // an extra coroutine hop is enough to push the scroll reset a frame past it. The flow has
-    // spare buffer capacity, so the emission always lands.
-    fun scrollToTop() {
-        _scrollToTopTrigger.tryEmit(Unit)
-    }
-
-    private fun loadLists() {
-        viewModelScope.launch {
-            selectedServer.value?.let { server ->
-                listRepository.refreshLists(server)
-            }
-        }
-    }
-
+    // Sync — see MainScreenModelSync.kt
+    // Filters, search and navigation — see MainScreenModelFilters.kt
     // Bookmark actions — see MainScreenModelActions.kt
     // Multi-select & batch operations — see MainScreenModelBatch.kt
 

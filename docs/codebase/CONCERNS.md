@@ -5,7 +5,7 @@
 ## Security
 
 **Android WebView (Web mode) runs archived pages with JavaScript and a native bridge:**
-- Files: `feature/reader/src/androidMain/kotlin/com/karakept/app/ui/components/reader/HtmlRenderer.android.kt` (WebView settings around line 946), `core/data/src/commonMain/kotlin/com/karakept/app/data/cache/HtmlArchiveProcessor.kt`
+- Files: `feature/reader/src/androidMain/kotlin/com/karakept/app/ui/components/reader/HtmlRenderer.android.kt` (WebView settings around line 595), `core/data/src/commonMain/kotlin/com/karakept/app/data/cache/HtmlArchiveProcessor.kt`
 - Current settings:
   - `javaScriptEnabled = true`, with `addJavascriptInterface(webInterface, "Android")` exposing a bridge to the page (the highlight JS needs it)
   - `allowFileAccess = true` (cached local images are loaded from `file://`)
@@ -36,10 +36,10 @@
 ## Concurrency & Race Conditions
 
 **Sequential startup in MainScreenModel:**
-- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreenModel.kt` ("Coroutine B", around line 636)
+- Files: `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreenModel.kt` ("Coroutine B" in `init`)
 - Details: startup is an explicit sequence — read the persisted default filter, wait for a server, load the first page with that filter, then observe filter and server changes and kick off the throttled auto-sync. It exists because earlier, independent coroutines raced and loaded the list twice.
 - Impact: The ordering is load-bearing. A new startup step added outside the sequence can reintroduce a duplicate or wrong-filter load.
-- Fix approach: Keep new startup work inside the sequence; cover it with a test asserting a single initial load.
+- Fix approach: Keep new startup work inside the sequence. `MainScreenModelStartupTest` asserts a single view switch and that the first page is read with the default filter.
 
 **Emission/subscription timing in tests:**
 - Files: `core/data/src/commonTest/kotlin/com/karakept/app/data/repository/BookmarkActionsRepositoryUnitTest.kt` (lines 131, 200)
@@ -49,26 +49,13 @@
 
 ## Code Complexity & Maintainability
 
-**Files over 1000 lines:**
-- `feature/reader/src/commonMain/kotlin/com/karakept/app/ui/components/reader/HtmlBlockRenderer.kt` (1286) — block-level reader rendering
-- `feature/reader/src/androidMain/kotlin/com/karakept/app/ui/components/reader/HtmlRenderer.android.kt` (1151) — Android WebView renderer
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/MainScreenModel.kt` (1090) — pagination, filtering, selection, startup, sync triggers
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/main/BookmarkListContent.kt` (1090) — the bookmark list, tiling, paging
-- `composeApp/src/commonMain/kotlin/com/karakept/app/ui/screens/settings/LayoutEditorScreen.kt` (1056) — layout editor
-- `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkRepository.kt` (1035) — bookmark CRUD and sync
+**Files approaching 1000 lines:**
+- `feature/reader/.../screens/viewer/BookmarkViewerContent.kt` (987) and `BookmarkDetailsPanel.kt` (984)
+- `core/ui/.../components/bookmark/BookmarkLayouts.kt` (918)
+- `core/data/.../data/remote/RemoteDataSource.kt` (892)
+- `core/data/src/commonTest/.../repository/BookmarkSyncPipelineTest.kt` (1890) — test code, but the hardest file in the repo to review
 - Impact: High cognitive load, hard review, larger bug surface.
-- Fix approach: Extract helper composables to their own files; split `MainScreenModel` by concern (pagination, selection, sync); split `BookmarkRepository` along read/sync lines.
-
-**Stale Voyager references:**
-- Comments still describe Voyager behaviour after the move to Navigation 3: `MainScreenModel.kt` (~line 570), `LayoutEditorScreen.kt` (~line 159). (`AppNavigator.kt` and `NavTransitions.kt` mention it only as history.)
-- Fix approach: Reword them against Nav3's per-entry `ViewModelStore`, or delete them if the behaviour they explain no longer applies.
-
-**Hardcoded dispatcher:**
-- `feature/reader/src/commonMain/kotlin/com/karakept/app/ui/components/reader/HtmlContent.kt` (~line 101) uses `Dispatchers.Default` directly, against the project rule to inject `AppDispatchers`.
-- Impact: The HTML processing is invisible to `advanceUntilIdle()` in tests.
-
-**Remaining `!!`:**
-- `HtmlBlockRenderer.kt` line 118 (`ref.y!!`), read on the line after `ref.y` is assigned. Safe today; a local `val` would make it obviously so.
+- Fix approach: what worked for the files split on 2026-11-05 — break a single long composable into helper composables of its own file, pull pure logic out where a unit test can reach it, and give a ScreenModel's methods extension files by concern (`MainScreenModelSync.kt`, `…Filters.kt`, `…Actions.kt`, `…Batch.kt`) while its state and startup sequence stay in the class.
 
 ## Platform-Specific Fragility
 
@@ -87,7 +74,7 @@
 ## Resolved since the 2026-03-20 audit
 
 - `printStackTrace()` silencing and the debug `println` in `RemoteDataSource` — gone; errors go through `AppLogger`.
-- 20× `!!` — down to the one listed above.
+- 20× `!!` — all gone.
 - Read/unread tag-cache race in `BookmarkActionsRepository` — the code documents why it no longer applies (~line 113).
 - Voyager unique-key workaround for the viewer — Voyager replaced by Navigation 3.
 - Credentials in cleartext — moved to the platform `SecureCredentialStore` (`core/data/.../data/secure/`).
@@ -97,7 +84,11 @@
 - Reading-progress race in `BookmarkViewerScreenModel` — logic moved to `ViewerScrollRestoration.kt`, gated on `serverProgressChecked`.
 - Compose DSL deprecations, ActionMode crash, double taskbar icon on Linux — fixed earlier, dropped from the list.
 - Room / SQLite / Voyager pre-releases — all replaced by stable releases.
+- Six files over 1000 lines (2026-11-05) — split: `BookmarkListContent` (row, drag selection, overlays and `ItemAnimationGate` in their own files; takes `MainScreenDisplayConfig` instead of 24 parameters), `LayoutEditorScreen` (ScreenModel, sections, controls and preview in their own files), `MainScreenModel` (sync and filter methods in extension files), `HtmlBlockRenderer` (images and tables in `HtmlImageRenderer.kt` / `HtmlTableRenderer.kt`), `HtmlRenderer.android.kt` (the WebView highlight script in `ReaderHighlightScript.kt`), `BookmarkRepository` (asset downloads in `BookmarkAssetCache`).
+- Stale Voyager comments in `MainScreenModel` and `LayoutEditorScreenModel` — reworded against Nav3's per-entry `ViewModelStore`.
+- Hardcoded `Dispatchers.Default` in `HtmlContent.kt` — uses the injected `AppDispatchers`.
+- Last `!!` in `HtmlBlockRenderer.kt` — replaced by a local.
 
 ---
 
-*Concerns audit: 2026-11-05*
+*Concerns audit: 2026-11-05 (maintainability items resolved the same day)*

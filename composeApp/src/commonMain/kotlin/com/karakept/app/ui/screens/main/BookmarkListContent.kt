@@ -1,29 +1,19 @@
 package com.karakept.app.ui.screens.main
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,55 +29,26 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import com.karakept.app.data.cache.OfflineHeroImages
 import com.karakept.app.data.model.Bookmark
-import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.model.CustomSwipeActionConfig
-import com.karakept.app.data.model.DateDisplayMode
-import com.karakept.app.data.model.DescriptionPosition
-import com.karakept.app.data.model.ItemContainerStyle
-import com.karakept.app.data.model.LayoutType
-import com.karakept.app.data.model.MetadataPosition
 import com.karakept.app.data.model.PageTurnDirection
-import com.karakept.app.data.model.QuickActionPosition
-import com.karakept.app.data.model.ReadIndicatorStyle
 import com.karakept.app.data.model.RowActionMode
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.data.model.ThumbnailSide
-import com.karakept.app.data.model.TitlePosition
-import com.karakept.app.data.model.UrlDisplayMode
-import com.karakept.app.data.model.UrlIconMode
-import com.karakept.app.data.model.UrlPosition
+import com.karakept.app.data.model.SyncProgress
 import com.karakept.app.data.repository.AiCapabilities
-import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.BusyIndicator
-import com.karakept.app.ui.components.EinkAwareSmallFab
-import com.karakept.app.ui.components.FloatingBusyCard
-import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.components.RefreshableBox
 import com.karakept.app.ui.components.bookmark.BookmarkAction
-import com.karakept.app.ui.components.bookmark.BookmarkCardLayout
-import com.karakept.app.ui.components.bookmark.BookmarkContextMenu
-import com.karakept.app.ui.components.bookmark.BookmarkListLayout
-import com.karakept.app.ui.components.bookmark.BookmarkPlaceholderItem
 import com.karakept.app.ui.components.bookmark.BookmarkRowSkeleton
-import com.karakept.app.ui.components.bookmark.QuickActionBookmarkItem
 import com.karakept.app.ui.components.bookmark.ScrollCursorIndicator
-import com.karakept.app.ui.components.bookmark.SwipeableBookmarkItem
-import com.karakept.app.ui.components.bookmark.getEffectiveColor
 import com.karakept.app.ui.components.bookmark.rememberBookmarkRowMetrics
 import com.karakept.app.ui.components.bookmark.rememberTiledRows
-import com.karakept.app.ui.components.borderStroke
-import com.karakept.app.ui.components.floatingSurfaceStyle
 import com.karakept.app.ui.components.scrollToTop
-import com.karakept.app.ui.icons.AppIcons
 import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.input.PageTurnScrollEffect
 import com.karakept.app.ui.theme.LocalEinkMode
@@ -95,10 +56,7 @@ import com.karakept.app.ui.utils.onDesktopModifiedClick
 import com.karakept.app.ui.utils.onSecondaryClickWithPosition
 import com.karakept.app.ui.utils.tiledTurnAdjustment
 import com.karakept.app.ui.utils.trailingPagePaddingFor
-import com.karakept.app.utils.AssetUrlUtils
-import com.karakept.app.utils.FileUtils
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -114,7 +72,7 @@ internal fun BookmarkListContent(
      */
     window: BookmarkWindow,
     isSyncing: Boolean,
-    syncProgress: com.karakept.app.data.model.SyncProgress?,
+    syncProgress: SyncProgress?,
     isLoadingMore: Boolean,
     isLoadingInitialPage: Boolean = false,
     showScrollCursor: Boolean = false,
@@ -122,36 +80,13 @@ internal fun BookmarkListContent(
     totalBookmarkCount: Int = 0,
     /** Names the row at an absolute index, for the scroll cursor's tooltip. */
     bookmarkAtIndex: suspend (Int) -> Bookmark? = { null },
-    layoutType: LayoutType,
+    /** The active layout's settings, resolved against the global defaults. */
+    display: MainScreenDisplayConfig,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
     swipeLeftConfig: CustomSwipeActionConfig? = null,
     swipeRightConfig: CustomSwipeActionConfig? = null,
-    dimReadBookmarks: Boolean,
-    showReadingTimeBadge: Boolean,
     showReadingProgress: Boolean = true,
-    showTags: Boolean,
-    showDate: Boolean = true,
-    dateDisplayMode: DateDisplayMode = DateDisplayMode.ELAPSED,
-    thumbnailSide: ThumbnailSide = ThumbnailSide.LEFT,
-    showFavicon: Boolean = true,
-    thumbnailSize: Int = 80,
-    metadataPosition: MetadataPosition = MetadataPosition.BELOW,
-    tagsScrollable: Boolean = false,
-    quickActionPosition: QuickActionPosition = QuickActionPosition.RIGHT,
-    showDescription: Boolean = true,
-    descriptionPosition: DescriptionPosition = DescriptionPosition.BELOW_TITLE,
-    showUrl: Boolean = false,
-    urlDisplayMode: UrlDisplayMode = UrlDisplayMode.DOMAIN_ONLY,
-    urlPosition: UrlPosition = UrlPosition.BELOW_TITLE,
-    urlIconMode: UrlIconMode = UrlIconMode.GLOBE_ONLY,
-    faviconByLinkSize: Int = 16,
-    showThumbnail: Boolean = true,
-    itemContainerStyle: ItemContainerStyle = ItemContainerStyle.CARD,
-    readIndicatorStyle: ReadIndicatorStyle = ReadIndicatorStyle.DIM,
-    showRowDivider: Boolean = true,
-    titlePosition: TitlePosition = TitlePosition.BESIDE_THUMBNAIL,
-    descriptionMaxLines: Int = BookmarkLayout.DESCRIPTION_LINES_DEFAULT,
     offlineMode: Boolean = false,
     pendingBookmarkRemoteIds: Set<String> = emptySet(),
     isSelectionMode: Boolean = false,
@@ -229,7 +164,6 @@ internal fun BookmarkListContent(
     val pagedRendering = einkMode.enabled && pageTurnBindings.snapToContent
     // The gate compares the rows themselves — it is asking whether this is the same list
     // shifted or a different list entirely, which only the rows can answer.
-    val loadedRows = remember(window) { window.loadedRows() }
     val animationGate = remember { ItemAnimationGate(window) }
     val animateItems = animationGate.update(window) && !einkMode.animationsDisabled
 
@@ -248,691 +182,248 @@ internal fun BookmarkListContent(
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
     val showNewBookmarksPill = newBookmarksAbove > 0 && scrolledAwayFromTop
-    val hapticFeedback = LocalHapticFeedback.current
-    val updatedWindow = rememberUpdatedState(window)
-    val updatedSelectedIds = rememberUpdatedState(selectedBookmarkIds)
 
-    // Desktop context menu state
-    var contextMenuBookmark by remember { mutableStateOf<Bookmark?>(null) }
-    var contextMenuOffset by remember { mutableStateOf(androidx.compose.ui.unit.DpOffset.Zero) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
+    // Desktop context menu: at most one open, on the row that was right-clicked.
+    var contextMenuBookmarkId by remember { mutableStateOf<String?>(null) }
+    var contextMenuOffset by remember { mutableStateOf(DpOffset.Zero) }
+    val density = LocalDensity.current
 
-    // Tracks whether a drag-selection gesture is currently active (started from long press in selection mode)
-    val isDragSelecting = remember { mutableStateOf(false) }
-    // Scroll speed (px/frame) applied at the list edges during drag selection.
-    // Negative = scroll up, positive = scroll down, 0 = no auto-scroll.
-    val autoScrollSpeed = remember { mutableStateOf(0f) }
+    val dragSelection = rememberDragSelectionModifier(
+        isSelectionMode = isSelectionMode,
+        listState = listState,
+        window = window,
+        selectedBookmarkIds = selectedBookmarkIds,
+        onBookmarkSelectionToggle = onBookmarkSelectionToggle
+    )
+    val rowActions = RowActionSettings(
+        swipeLeftAction = swipeLeftAction,
+        swipeRightAction = swipeRightAction,
+        swipeLeftConfig = swipeLeftConfig,
+        swipeRightConfig = swipeRightConfig,
+        rowActionMode = rowActionMode,
+    )
 
-    // Edge-scroll loop: while a drag-selection is active, scroll the list at `autoScrollSpeed`
-    // at ~60 fps. The speed is updated by the container's onDrag handler based on proximity to
-    // the viewport edges (0 at the zone boundary → maxSpeed at the very edge, quadratic easing).
-    LaunchedEffect(isDragSelecting.value) {
-        if (!isDragSelecting.value) {
-            autoScrollSpeed.value = 0f
-            return@LaunchedEffect
-        }
-        while (isDragSelecting.value) {
-            val speed = autoScrollSpeed.value
-            if (speed != 0f) {
-                listState.scrollBy(speed)
-            }
-            delay(16L) // ~60 fps
-        }
-        autoScrollSpeed.value = 0f
-    }
-
-    val listContent: @Composable () -> Unit = {
-        Box(modifier = Modifier.fillMaxSize()) {
-        // Container-level drag selection: the gesture lives here (not per-item) so that
-        // edge-scroll auto-scrolling does not recycle the item that owns the gesture detector,
-        // which would kill the drag mid-gesture.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(isSelectionMode) {
-                    if (!isSelectionMode) return@pointerInput
-                    // Bidirectional range selection:
-                    //  - dragStartIndex: fixed anchor (where the long-press started)
-                    //  - lastDragIndex: updated on each drag event to the current finger position
-                    // On each event the OLD range [dragStartIndex, lastDragIndex] and the NEW range
-                    // [dragStartIndex, currentIndex] are diffed:
-                    //  - items entering the new range → selected
-                    //  - items leaving the new range → deselected
-                    // "Pulling back" the finger therefore un-selects the overshoot items.
-                    var dragStartIndex = -1
-                    var lastDragIndex = -1
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { offset ->
-                            val viewportStart = listState.layoutInfo.viewportStartOffset
-                            val absoluteY = offset.y + viewportStart
-                            val initialItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
-                                absoluteY.toInt() in info.offset until (info.offset + info.size)
-                            } ?: return@detectDragGesturesAfterLongPress
-                            dragStartIndex = initialItem.index
-                            lastDragIndex = dragStartIndex
-                            isDragSelecting.value = true
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            val bm = updatedWindow.value.bookmarkAt(initialItem.index)
-                            if (bm != null && bm.remoteId !in updatedSelectedIds.value) {
-                                onBookmarkSelectionToggle(bm)
-                            }
-                        },
-                        onDrag = { change, _ ->
-                            change.consume()
-                            if (dragStartIndex >= 0) {
-                                val viewportStart = listState.layoutInfo.viewportStartOffset
-                                val absoluteY = change.position.y + viewportStart
-                                val targetItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
-                                    absoluteY.toInt() in info.offset until (info.offset + info.size)
-                                }
-                                if (targetItem != null) {
-                                    val currentIndex = targetItem.index
-                                    if (currentIndex != lastDragIndex) {
-                                        val oldRangeStart = minOf(dragStartIndex, lastDragIndex)
-                                        val oldRangeEnd = maxOf(dragStartIndex, lastDragIndex)
-                                        val newRangeStart = minOf(dragStartIndex, currentIndex)
-                                        val newRangeEnd = maxOf(dragStartIndex, currentIndex)
-                                        val dragWindow = updatedWindow.value
-                                        val selectedIds = updatedSelectedIds.value
-                                        // Select items entering the range
-                                        for (i in newRangeStart..newRangeEnd) {
-                                            if (i < oldRangeStart || i > oldRangeEnd) {
-                                                val bm = dragWindow.bookmarkAt(i)
-                                                if (bm != null && bm.remoteId !in selectedIds) {
-                                                    onBookmarkSelectionToggle(bm)
-                                                }
-                                            }
-                                        }
-                                        // Deselect items leaving the range
-                                        for (i in oldRangeStart..oldRangeEnd) {
-                                            if (i < newRangeStart || i > newRangeEnd) {
-                                                val bm = dragWindow.bookmarkAt(i)
-                                                if (bm != null && bm.remoteId in selectedIds) {
-                                                    onBookmarkSelectionToggle(bm)
-                                                }
-                                            }
-                                        }
-                                        lastDragIndex = currentIndex
-                                    }
-                                }
-                            }
-
-                            // Edge-scroll: speed scales quadratically from 0 at zone boundary
-                            // to maxSpeed at the very edge (15% zone on each side).
-                            val viewportHeight = (listState.layoutInfo.viewportEndOffset -
-                                listState.layoutInfo.viewportStartOffset).toFloat()
-                            val edgeZone = viewportHeight * 0.15f
-                            val maxSpeed = 25f
-                            val y = change.position.y
-                            autoScrollSpeed.value = when {
-                                y < edgeZone -> {
-                                    val fraction = ((edgeZone - y) / edgeZone).coerceIn(0f, 1f)
-                                    -maxSpeed * fraction * fraction
-                                }
-                                y > viewportHeight - edgeZone -> {
-                                    val fraction = ((y - (viewportHeight - edgeZone)) / edgeZone).coerceIn(0f, 1f)
-                                    maxSpeed * fraction * fraction
-                                }
-                                else -> 0f
-                            }
-                        },
-                        onDragEnd = {
-                            dragStartIndex = -1
-                            lastDragIndex = -1
-                            autoScrollSpeed.value = 0f
-                            isDragSelecting.value = false
-                        },
-                        onDragCancel = {
-                            dragStartIndex = -1
-                            lastDragIndex = -1
-                            autoScrollSpeed.value = 0f
-                            isDragSelecting.value = false
-                        }
-                    )
-                }
-        ) {
-        // One measurement for the whole list: a row cannot ask for its own width without a
-        // subcomposition, and the width is identical for every one of them. Only the automatic
-        // description line count needs it.
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val rowWidth = maxWidth
-        // The page is the list's own height, read off the constraints rather than off `layoutInfo`:
-        // the tile is settled before the first row is laid out, so the list is never drawn once at
-        // its natural height and then again at the tile.
-        val rowMetrics = rememberBookmarkRowMetrics(
-                itemContainerStyle = itemContainerStyle,
-                showThumbnail = showThumbnail,
-                thumbnailSize = thumbnailSize,
-                titlePosition = titlePosition,
-                showDescription = showDescription,
-                descriptionMaxLines = descriptionMaxLines,
-                descriptionPosition = descriptionPosition,
-                showUrl = showUrl,
-                urlPosition = urlPosition,
-                showTags = showTags,
-                showDate = showDate,
-                showReadingTime = showReadingTimeBadge,
-            metadataPosition = metadataPosition,
-            showRowDivider = showRowDivider
-        )
-        val tiledRows = rememberTiledRows(
-            enabled = pagedRendering,
-            viewportPx = with(density) { maxHeight.roundToPx() },
-            layoutType = layoutType,
-            metrics = rowMetrics
-        )
-        // A slot whose page has not arrived is drawn at the height its row will be, declared by
-        // the same metrics the tiling uses. A placeholder of the wrong height moves everything
-        // below it when the row lands, which on a list being scrolled is the position jumping
-        // under the reader.
-        val placeholderHeight = tiledRows?.itemHeight
-            ?: with(density) { rowMetrics.naturalHeightPx.toDp() }
-        // Enough rows to fill the viewport, so an uncounted view looks like a list rather than
-        // like a handful of bars at the top of an empty page.
-        val placeholderScreenful = remember(placeholderHeight, maxHeight) {
-            if (placeholderHeight <= 0.dp) 0
-            else ((maxHeight / placeholderHeight).toInt() + 1).coerceIn(1, 20)
-        }
-        // Room for the last turn to put the final rows at the top of the page. Without it that turn
-        // clamps against the end of the content and the page it lands on is one the previous page
-        // had already shown almost all of.
-        val trailingPadPx by remember(tiledRows) {
-            derivedStateOf {
-                val tiling = tiledRows?.tiling ?: return@derivedStateOf 0
-                trailingPagePaddingFor(listState.layoutInfo, tiling.rowHeightPx)
-            }
-        }
-        // A page is a whole number of rows once they are tiled, so a turn can be landed on a row top
-        // from wherever it starts — including a position the user dragged to. Untiled, the list
-        // keeps its flat delta: rows of their own heights have no boundary to be pulled onto.
-        val turnSnap: ((PageTurnDirection, Float) -> Float)? = tiledRows?.let { tiled ->
-            { direction, pageDeltaPx ->
-                // The offset is a distance into the *first visible item*, which is only a row while
-                // the list is showing bookmarks rather than its loading or end-of-list footer.
-                if (listState.firstVisibleItemIndex < window.total) {
-                    tiledTurnAdjustment(
-                        direction = direction,
-                        pageDeltaPx = pageDeltaPx,
-                        tiling = tiled.tiling,
-                        firstVisibleOffsetPx = listState.firstVisibleItemScrollOffset
-                    )
-                } else 0f
-            }
-        }
-        PageTurnScrollEffect(
-            listState = listState,
-            enabled = pageTurnEnabled,
-            predictiveSnap = turnSnap,
-            hasTrailingPadding = trailingPadPx > 0
-        )
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            contentPadding = PaddingValues(bottom = with(density) { trailingPadPx.toDp() })
-        ) {
-            items(
-                count = window.total,
-                key = { index -> window.keyAt(index) },
-                contentType = { index ->
-                    if (window.bookmarkAt(index) != null) "bookmark" else "placeholder"
-                }
-            ) { itemIndex ->
-                val bookmark = window.bookmarkAt(itemIndex)
-                if (bookmark == null) {
-                    BookmarkRowSkeleton(
-                        metrics = rowMetrics,
-                        itemContainerStyle = itemContainerStyle,
-                        thumbnailSide = thumbnailSide,
-                        showRowDivider = showRowDivider,
-                        fixedRowHeight = tiledRows?.rowHeight
-                    )
-                    return@items
-                }
-                Box(
-                    modifier = Modifier
-                        // Uniform height is what lets an exact number of rows fill the page. The row
-                        // absorbs the difference through its description budget and its own
-                        // whitespace; the clip catches whatever still will not fit.
-                        .then(
-                            if (tiledRows != null) {
-                                Modifier.height(tiledRows.itemHeight).clipToBounds()
-                            } else Modifier
-                        )
-                        // fadeOutSpec = null: a fading-out item is kept in the layout and drawn
-                        // over whatever replaces it, using the spec recorded on the *previous*
-                        // measure pass — so a dataset swap renders the outgoing list on top of
-                        // the incoming one, and no amount of switching animations off in time
-                        // can undo it. Removed rows disappear at once; the rest still slide up
-                        // via placementSpec.
-                        .then(if (animateItems) Modifier.animateItem(fadeOutSpec = null) else Modifier)
-                        .then(
-                            // Desktop: intercept Ctrl+Click and Shift+Click for multi-selection
-                            if (isDesktop && (onCtrlClick != null || onShiftClick != null)) {
-                                Modifier.onDesktopModifiedClick(
-                                    key1 = bookmark.remoteId,
-                                    key2 = itemIndex,
-                                    onCtrlClick = onCtrlClick?.let { { it.invoke(bookmark) } },
-                                    onShiftClick = onShiftClick?.let { { it.invoke(itemIndex) } }
-                                )
-                            } else Modifier
-                        )
-                        .then(
-                            // Desktop: right-click shows context menu
-                            if (isDesktop && onContextMenuAction != null) {
-                                Modifier.onSecondaryClickWithPosition { position ->
-                                    contextMenuBookmark = bookmark
-                                    contextMenuOffset = with(density) {
-                                        androidx.compose.ui.unit.DpOffset(
-                                            position.x.toDp(),
-                                            position.y.toDp()
-                                        )
-                                    }
-                                }
-                            } else Modifier
-                        )
-                ) {
-                    // Desktop context menu anchored at right-click position.
-                    // The menu is hosted in a zero-size Box offset to the cursor so the
-                    // DropdownMenu opens at the click point rather than below the whole item.
-                    if (isDesktop && contextMenuBookmark?.remoteId == bookmark.remoteId && onContextMenuAction != null) {
-                        Box(
-                            modifier = Modifier
-                                .offset(contextMenuOffset.x, contextMenuOffset.y)
-                                .size(0.dp)
-                        ) {
-                            BookmarkContextMenu(
-                                expanded = true,
-                                bookmark = bookmark,
-                                availableLists = contextMenuLists,
-                                availableTags = contextMenuTags,
-                                aiCapabilities = contextMenuAiCapabilities,
-                                onAction = { action ->
-                                    onContextMenuAction.invoke(bookmark, action)
-                                },
-                                onDismiss = { contextMenuBookmark = null }
-                            )
-                        }
-                    }
-
-                    if (bookmark.remoteId in pendingBookmarkRemoteIds) {
-                        BookmarkPlaceholderItem(
-                            url = bookmark.url,
-                            layoutType = layoutType,
-                            itemContainerStyle = itemContainerStyle,
-                            showThumbnail = showThumbnail,
-                            thumbnailSize = thumbnailSize,
-                            thumbnailSide = thumbnailSide,
-                            titlePosition = titlePosition,
-                            showRowDivider = showRowDivider
-                        )
-                        return@Box
-                    }
-
-                    // Dynamic icon logic for Mark Read/Unread
-                    val leftIcon = if (swipeLeftAction == SwipeAction.MARK_READ) {
-                        if (bookmark.isRead) AppIcons.Filled.VisibilityOff else AppIcons.Filled.Visibility
-                    } else null
-
-                    val rightIcon = if (swipeRightAction == SwipeAction.MARK_READ) {
-                        if (bookmark.isRead) AppIcons.Filled.VisibilityOff else AppIcons.Filled.Visibility
-                    } else null
-
-                    // Compute whether each custom action is already applied to this bookmark
-                    val leftIsApplied = when (swipeLeftAction) {
-                        SwipeAction.ADD_TAG -> {
-                            val tagName = swipeLeftConfig?.tagName
-                            tagName != null && bookmark.tags.split(",").map { it.trim() }.contains(tagName)
-                        }
-                        SwipeAction.ADD_TO_LIST -> {
-                            val listId = swipeLeftConfig?.listId
-                            listId != null && bookmark.listIds.split(",").map { it.trim() }.contains(listId)
-                        }
-                        else -> false
-                    }
-                    val rightIsApplied = when (swipeRightAction) {
-                        SwipeAction.ADD_TAG -> {
-                            val tagName = swipeRightConfig?.tagName
-                            tagName != null && bookmark.tags.split(",").map { it.trim() }.contains(tagName)
-                        }
-                        SwipeAction.ADD_TO_LIST -> {
-                            val listId = swipeRightConfig?.listId
-                            listId != null && bookmark.listIds.split(",").map { it.trim() }.contains(listId)
-                        }
-                        else -> false
-                    }
-
-                    // Compute short label text for custom swipe actions
-                    val leftLabel = when (swipeLeftAction) {
-                        SwipeAction.ADD_TAG -> swipeLeftConfig?.tagName
-                        SwipeAction.ADD_TO_LIST -> swipeLeftConfig?.listName
-                        else -> null
-                    }
-                    val rightLabel = when (swipeRightAction) {
-                        SwipeAction.ADD_TAG -> swipeRightConfig?.tagName
-                        SwipeAction.ADD_TO_LIST -> swipeRightConfig?.listName
-                        else -> null
-                    }
-
-                    val isSelected = bookmark.remoteId in selectedBookmarkIds
-                    val effectiveLeftAction = if (isSelectionMode) SwipeAction.NONE else swipeLeftAction
-                    val effectiveRightAction = if (isSelectionMode) SwipeAction.NONE else swipeRightAction
-                    val actionTriggered: (SwipeAction, Boolean) -> Unit = { action, isRightSwipe ->
-                        val config = if (isRightSwipe) swipeRightConfig else swipeLeftConfig
-                        onSwipeAction(bookmark, action, config)
-                    }
-
-                    val wrapper: @Composable (@Composable () -> Unit) -> Unit = { innerContent ->
-                        if (isDesktop || rowActionMode == RowActionMode.BUTTONS) {
-                            QuickActionBookmarkItem(
-                                flat = itemContainerStyle == ItemContainerStyle.FLAT,
-                                // On touch there is no hover to reveal them.
-                                alwaysVisible = !isDesktop,
-                                leftAction = effectiveLeftAction,
-                                rightAction = effectiveRightAction,
-                                leftIcon = leftIcon,
-                                rightIcon = rightIcon,
-                                leftIsApplied = leftIsApplied,
-                                rightIsApplied = rightIsApplied,
-                                position = quickActionPosition,
-                                onActionTriggered = actionTriggered,
-                                content = innerContent
-                            )
-                        } else {
-                            SwipeableBookmarkItem(
-                                flat = itemContainerStyle == ItemContainerStyle.FLAT,
-                                leftSwipeAction = effectiveLeftAction,
-                                rightSwipeAction = effectiveRightAction,
-                                leftIcon = leftIcon,
-                                rightIcon = rightIcon,
-                                leftColor = swipeLeftConfig.getEffectiveColor(swipeLeftAction).takeIf {
-                                    swipeLeftConfig?.colorHex != null
-                                },
-                                rightColor = swipeRightConfig.getEffectiveColor(swipeRightAction).takeIf {
-                                    swipeRightConfig?.colorHex != null
-                                },
-                                leftLabel = leftLabel,
-                                rightLabel = rightLabel,
-                                leftIsApplied = leftIsApplied,
-                                rightIsApplied = rightIsApplied,
-                                onActionTriggered = actionTriggered,
-                                content = innerContent
-                            )
-                        }
-                    }
-
-                    wrapper {
-                        // Construct banner and screenshot URLs if available
-                        // The offline copy's file when there is one, so the row works offline and
-                        // the image loader does not keep a second copy of it.
-                        val bannerAssetId = bookmark.bannerImageAssetId
-                        val bannerImageUrl = if (serverUrl != null && bannerAssetId != null) {
-                            OfflineHeroImages.resolve(
-                                remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, bannerAssetId),
-                                directory = FileUtils.getImageCacheDirectory(),
-                                fileName = OfflineHeroImages.bannerFileName(bannerAssetId)
-                            )
-                        } else null
-
-                        val screenshotAssetId = bookmark.screenshotAssetId
-                        val screenshotUrl = if (serverUrl != null && screenshotAssetId != null) {
-                            OfflineHeroImages.resolve(
-                                remoteUrl = AssetUrlUtils.getAssetUrl(serverUrl, screenshotAssetId),
-                                directory = FileUtils.getImageCacheDirectory(),
-                                fileName = OfflineHeroImages.screenshotFileName(screenshotAssetId)
-                            )
-                        } else null
-
-                        val isActiveBookmark = bookmark.localId == activeBookmarkId
-                        when (layoutType) {
-                            LayoutType.CARD -> BookmarkCardLayout(
-                                bookmark = bookmark,
-                                onClick = remember(bookmark.localId, isSelectionMode) {
-                                    {
-                                        if (isSelectionMode) onBookmarkSelectionToggle(bookmark)
-                                        else onBookmarkClick(bookmark)
-                                    }
-                                },
-                                // In selection mode, long press is handled by detectDragGesturesAfterLongPress
-                                onLongClick = remember(bookmark.localId, isSelectionMode) {
-                                    if (isSelectionMode) null else { { onBookmarkLongClick(bookmark) } }
-                                },
-                                showReadingTime = showReadingTimeBadge,
-                                showReadingProgress = showReadingProgress,
-                                showTags = showTags,
-                                showDate = showDate,
-                                dateDisplayMode = dateDisplayMode,
-                                dimRead = dimReadBookmarks,
-                                offlineMode = offlineMode,
-                                bannerImageUrl = bannerImageUrl,
-                                screenshotUrl = screenshotUrl,
-                                isSelected = isSelected,
-                                tagsScrollable = tagsScrollable,
-                                isActive = isActiveBookmark,
-                                showDescription = showDescription,
-                                showUrl = showUrl,
-                                urlDisplayMode = urlDisplayMode,
-                                urlPosition = urlPosition,
-                                urlIconMode = urlIconMode,
-                                faviconByLinkSize = faviconByLinkSize,
-                            )
-                            LayoutType.LIST, @Suppress("DEPRECATION") LayoutType.COMPACT_LIST -> BookmarkListLayout(
-                                bookmark = bookmark,
-                                onClick = remember(bookmark.localId, isSelectionMode) {
-                                    {
-                                        if (isSelectionMode) onBookmarkSelectionToggle(bookmark)
-                                        else onBookmarkClick(bookmark)
-                                    }
-                                },
-                                // In selection mode, long press is handled by detectDragGesturesAfterLongPress
-                                onLongClick = remember(bookmark.localId, isSelectionMode) {
-                                    if (isSelectionMode) null else { { onBookmarkLongClick(bookmark) } }
-                                },
-                                showReadingTime = showReadingTimeBadge,
-                                showReadingProgress = showReadingProgress,
-                                showTags = showTags,
-                                showDate = showDate,
-                                dateDisplayMode = dateDisplayMode,
-                                dimRead = dimReadBookmarks,
-                                offlineMode = offlineMode,
-                                bannerImageUrl = bannerImageUrl,
-                                screenshotUrl = screenshotUrl,
-                                isSelected = isSelected,
-                                thumbnailSide = thumbnailSide,
-                                showFavicon = showFavicon,
-                                thumbnailSize = thumbnailSize,
-                                metadataPosition = metadataPosition,
-                                tagsScrollable = tagsScrollable,
-                                isActive = isActiveBookmark,
-                                showDescription = showDescription,
-                                descriptionPosition = descriptionPosition,
-                                showUrl = showUrl,
-                                urlDisplayMode = urlDisplayMode,
-                                urlPosition = urlPosition,
-                                urlIconMode = urlIconMode,
-                                faviconByLinkSize = faviconByLinkSize,
-                                showThumbnail = showThumbnail,
-                                itemContainerStyle = itemContainerStyle,
-                                readIndicatorStyle = readIndicatorStyle,
-                                showRowDivider = showRowDivider,
-                                titlePosition = titlePosition,
-                                descriptionMaxLines = descriptionMaxLines,
-                                rowWidth = rowWidth,
-                                fixedRowHeight = tiledRows?.rowHeight,
-                                descriptionFillHeight = tiledRows?.bodyHeight,
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Before the view has been counted there are no slots to render, so the list would
-            // be blank. A screenful of the same skeletons says "rows are coming" in the shape
-            // they will come in — and is what stops a list switch flashing the empty state,
-            // since an uncounted view is not an empty one.
-            //
-            // On e-ink a placeholder row draws nothing, so a screenful of them says nothing —
-            // a blank page, which is the one thing an uncounted view must not look like. One
-            // indicator for the screen instead, which is what the rest of the app does there.
-            if (!window.resolved) {
-                if (einkMode.enabled) {
-                    item(contentType = "placeholder") {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            BusyIndicator()
-                        }
-                    }
-                } else {
-                    items(
-                        count = placeholderScreenful,
-                        contentType = { "placeholder" }
-                    ) {
-                        BookmarkRowSkeleton(
-                            metrics = rowMetrics,
-                            itemContainerStyle = itemContainerStyle,
-                            thumbnailSide = thumbnailSide,
-                            showRowDivider = showRowDivider,
-                            fixedRowHeight = tiledRows?.rowHeight
-                        )
-                    }
-                }
-            }
-
-            // An explicit empty state, and only once the view has actually been counted —
-            // otherwise every switch flashes "nothing here" before the list arrives.
-            if (window.isEmpty) {
-                item(contentType = "empty") {
-                    EmptyBookmarkList()
-                }
-            }
-
-            // Loading indicator at bottom
-            if (isLoadingMore) {
-                item(contentType = "loading") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        BusyIndicator()
-                    }
-                }
-            }
-
-            // End of list indicator
-            if (!window.isEmpty) {
-                item(contentType = "end") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No more bookmarks",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-        } // end row-width BoxWithConstraints
-        } // end drag-selection container Box
-
-        if (isSyncing) {
-            SyncProgressBar(
-                progress = syncProgress,
-                modifier = if (einkMode.animationsDisabled) {
-                    Modifier.align(Alignment.Center)
-                } else {
-                    Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                }
-            )
-        }
-
-        // "N new bookmarks" pill — tap to jump to the newly synced items at the top.
-        val pillStyle = floatingSurfaceStyle(4.dp)
-        AnimatedVisibilityOrPlain(
-            visible = showNewBookmarksPill,
-            animated = !einkMode.animationsDisabled,
-            durationMillis = 200,
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
-        ) {
-            Surface(
-                onClick = {
-                    scope.launch { listState.scrollToTop(einkMode.instantScroll) }
-                    onClearNewBookmarksAbove()
-                },
-                shape = MaterialTheme.shapes.large,
-                // `primary` is solid ink on the e-ink scheme. A filled pill would read, but it
-                // lays down — and then ghosts — a block of ink for a transient prompt; an
-                // outlined one on the page colour says the same thing for a fraction of it.
-                color = if (pillStyle.outlined) {
-                    MaterialTheme.colorScheme.surface
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-                contentColor = if (pillStyle.outlined) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onPrimary
-                },
-                border = pillStyle.borderStroke(),
-                shadowElevation = pillStyle.shadowElevation
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = AppIcons.Default.ArrowUpward,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = if (newBookmarksAbove == 1) "1 new bookmark"
-                               else "$newBookmarksAbove new bookmarks",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            }
-        }
-
-        // Scroll-to-top FAB
-        AnimatedVisibilityOrPlain(
-            visible = showScrollToTop,
-            animated = !einkMode.animationsDisabled,
-            durationMillis = 300,
-            modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
-        ) {
-            EinkAwareSmallFab(
-                onClick = { scope.launch { listState.scrollToTop(einkMode.instantScroll) } }
-            ) {
-                Icon(
-                    imageVector = AppIcons.Default.ArrowUpward,
-                    contentDescription = "Scroll to top"
-                )
-            }
-        }
-
-        } // end inner Box
-    }
-
-    // ScrollCursorIndicator is intentionally placed OUTSIDE listContent so it renders
-    // as the last child of the RefreshableBox. This guarantees it is drawn on top of
-    // everything inside listContent (including the scroll-to-top FAB whose Material3
-    // Surface creates a hardware-accelerated layer that ignores zIndex).
+    // ScrollCursorIndicator is the last child of the RefreshableBox so it is drawn on top of
+    // everything in the list, including the scroll-to-top FAB, whose Material3 Surface creates a
+    // hardware-accelerated layer that ignores zIndex.
     RefreshableBox(
         isRefreshing = isSyncing,
         onRefresh = onRefresh,
         enabled = !isDesktop,
         modifier = Modifier.fillMaxSize()
     ) {
-        listContent()
+        Box(modifier = Modifier.fillMaxSize()) {
+            // One measurement for the whole list: a row cannot ask for its own width without a
+            // subcomposition, and the width is identical for every one of them. Only the automatic
+            // description line count needs it.
+            BoxWithConstraints(modifier = Modifier.fillMaxSize().then(dragSelection)) {
+                val rowWidth = maxWidth
+                // The page is the list's own height, read off the constraints rather than off
+                // `layoutInfo`: the tile is settled before the first row is laid out, so the list is
+                // never drawn once at its natural height and then again at the tile.
+                val rowMetrics = rememberBookmarkRowMetrics(
+                    itemContainerStyle = display.itemContainerStyle,
+                    showThumbnail = display.showThumbnail,
+                    thumbnailSize = display.thumbnailSize,
+                    titlePosition = display.titlePosition,
+                    showDescription = display.showDescription,
+                    descriptionMaxLines = display.descriptionMaxLines,
+                    descriptionPosition = display.descriptionPosition,
+                    showUrl = display.showUrl,
+                    urlPosition = display.urlPosition,
+                    showTags = display.showTags,
+                    showDate = display.showDate,
+                    showReadingTime = display.showReadingTimeBadge,
+                    metadataPosition = display.metadataPosition,
+                    showRowDivider = display.showRowDivider
+                )
+                val tiledRows = rememberTiledRows(
+                    enabled = pagedRendering,
+                    viewportPx = with(density) { maxHeight.roundToPx() },
+                    layoutType = display.layoutType,
+                    metrics = rowMetrics
+                )
+                // A slot whose page has not arrived is drawn at the height its row will be,
+                // declared by the same metrics the tiling uses. A placeholder of the wrong height
+                // moves everything below it when the row lands, which on a list being scrolled is
+                // the position jumping under the reader.
+                val placeholderHeight = tiledRows?.itemHeight
+                    ?: with(density) { rowMetrics.naturalHeightPx.toDp() }
+                // Enough rows to fill the viewport, so an uncounted view looks like a list rather
+                // than like a handful of bars at the top of an empty page.
+                val placeholderScreenful = remember(placeholderHeight, maxHeight) {
+                    if (placeholderHeight <= 0.dp) 0
+                    else ((maxHeight / placeholderHeight).toInt() + 1).coerceIn(1, 20)
+                }
+                // Room for the last turn to put the final rows at the top of the page. Without it
+                // that turn clamps against the end of the content and the page it lands on is one
+                // the previous page had already shown almost all of.
+                val trailingPadPx by remember(tiledRows) {
+                    derivedStateOf {
+                        val tiling = tiledRows?.tiling ?: return@derivedStateOf 0
+                        trailingPagePaddingFor(listState.layoutInfo, tiling.rowHeightPx)
+                    }
+                }
+                // A page is a whole number of rows once they are tiled, so a turn can be landed on
+                // a row top from wherever it starts — including a position the user dragged to.
+                // Untiled, the list keeps its flat delta: rows of their own heights have no
+                // boundary to be pulled onto.
+                val turnSnap: ((PageTurnDirection, Float) -> Float)? = tiledRows?.let { tiled ->
+                    { direction, pageDeltaPx ->
+                        // The offset is a distance into the *first visible item*, which is only a
+                        // row while the list is showing bookmarks rather than its loading or
+                        // end-of-list footer.
+                        if (listState.firstVisibleItemIndex < window.total) {
+                            tiledTurnAdjustment(
+                                direction = direction,
+                                pageDeltaPx = pageDeltaPx,
+                                tiling = tiled.tiling,
+                                firstVisibleOffsetPx = listState.firstVisibleItemScrollOffset
+                            )
+                        } else 0f
+                    }
+                }
+                PageTurnScrollEffect(
+                    listState = listState,
+                    enabled = pageTurnEnabled,
+                    predictiveSnap = turnSnap,
+                    hasTrailingPadding = trailingPadPx > 0
+                )
+                val skeleton: @Composable () -> Unit = {
+                    BookmarkRowSkeleton(
+                        metrics = rowMetrics,
+                        itemContainerStyle = display.itemContainerStyle,
+                        thumbnailSide = display.thumbnailSide,
+                        showRowDivider = display.showRowDivider,
+                        fixedRowHeight = tiledRows?.rowHeight
+                    )
+                }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = with(density) { trailingPadPx.toDp() })
+                ) {
+                    items(
+                        count = window.total,
+                        key = { index -> window.keyAt(index) },
+                        contentType = { index ->
+                            if (window.bookmarkAt(index) != null) "bookmark" else "placeholder"
+                        }
+                    ) { itemIndex ->
+                        val bookmark = window.bookmarkAt(itemIndex)
+                        if (bookmark == null) {
+                            skeleton()
+                            return@items
+                        }
+                        Box(
+                            modifier = Modifier
+                                // Uniform height is what lets an exact number of rows fill the
+                                // page. The row absorbs the difference through its description
+                                // budget and its own whitespace; the clip catches whatever still
+                                // will not fit.
+                                .then(
+                                    if (tiledRows != null) {
+                                        Modifier.height(tiledRows.itemHeight).clipToBounds()
+                                    } else Modifier
+                                )
+                                // fadeOutSpec = null: a fading-out item is kept in the layout and
+                                // drawn over whatever replaces it, using the spec recorded on the
+                                // *previous* measure pass — so a dataset swap renders the outgoing
+                                // list on top of the incoming one, and no amount of switching
+                                // animations off in time can undo it. Removed rows disappear at
+                                // once; the rest still slide up via placementSpec.
+                                .then(if (animateItems) Modifier.animateItem(fadeOutSpec = null) else Modifier)
+                                .then(
+                                    // Desktop: intercept Ctrl+Click and Shift+Click for multi-selection
+                                    if (isDesktop && (onCtrlClick != null || onShiftClick != null)) {
+                                        Modifier.onDesktopModifiedClick(
+                                            key1 = bookmark.remoteId,
+                                            key2 = itemIndex,
+                                            onCtrlClick = onCtrlClick?.let { { it.invoke(bookmark) } },
+                                            onShiftClick = onShiftClick?.let { { it.invoke(itemIndex) } }
+                                        )
+                                    } else Modifier
+                                )
+                                .then(
+                                    // Desktop: right-click shows context menu
+                                    if (isDesktop && onContextMenuAction != null) {
+                                        Modifier.onSecondaryClickWithPosition { position ->
+                                            contextMenuBookmarkId = bookmark.remoteId
+                                            contextMenuOffset = with(density) {
+                                                DpOffset(position.x.toDp(), position.y.toDp())
+                                            }
+                                        }
+                                    } else Modifier
+                                )
+                        ) {
+                            BookmarkListRow(
+                                bookmark = bookmark,
+                                display = display,
+                                actions = rowActions,
+                                showReadingProgress = showReadingProgress,
+                                isPending = bookmark.remoteId in pendingBookmarkRemoteIds,
+                                isSelectionMode = isSelectionMode,
+                                isSelected = bookmark.remoteId in selectedBookmarkIds,
+                                isActive = bookmark.localId == activeBookmarkId,
+                                isDesktop = isDesktop,
+                                offlineMode = offlineMode,
+                                serverUrl = serverUrl,
+                                rowWidth = rowWidth,
+                                fixedRowHeight = tiledRows?.rowHeight,
+                                descriptionFillHeight = tiledRows?.bodyHeight,
+                                contextMenuOffset = contextMenuOffset.takeIf {
+                                    isDesktop && contextMenuBookmarkId == bookmark.remoteId
+                                },
+                                contextMenuLists = contextMenuLists,
+                                contextMenuTags = contextMenuTags,
+                                contextMenuAiCapabilities = contextMenuAiCapabilities,
+                                onContextMenuAction = onContextMenuAction,
+                                onDismissContextMenu = { contextMenuBookmarkId = null },
+                                onBookmarkClick = onBookmarkClick,
+                                onBookmarkLongClick = onBookmarkLongClick,
+                                onBookmarkSelectionToggle = onBookmarkSelectionToggle,
+                                onSwipeAction = onSwipeAction,
+                            )
+                        }
+                    }
+                    bookmarkListFooters(
+                        window = window,
+                        isLoadingMore = isLoadingMore,
+                        einkEnabled = einkMode.enabled,
+                        placeholderScreenful = placeholderScreenful,
+                        skeleton = skeleton
+                    )
+                }
+            }
+
+            if (isSyncing) {
+                SyncProgressBar(
+                    progress = syncProgress,
+                    modifier = if (einkMode.animationsDisabled) {
+                        Modifier.align(Alignment.Center)
+                    } else {
+                        Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                    }
+                )
+            }
+
+            NewBookmarksPill(
+                visible = showNewBookmarksPill,
+                count = newBookmarksAbove,
+                onClick = {
+                    scope.launch { listState.scrollToTop(einkMode.instantScroll) }
+                    onClearNewBookmarksAbove()
+                },
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
+            )
+
+            ScrollToTopFab(
+                visible = showScrollToTop,
+                onClick = { scope.launch { listState.scrollToTop(einkMode.instantScroll) } },
+                modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
+            )
+        }
+
         if (showScrollCursor) {
             ScrollCursorIndicator(
                 listState = listState,
@@ -947,144 +438,68 @@ internal fun BookmarkListContent(
     }
 }
 
-/**
- * Decides whether the LazyColumn should animate its item changes.
- *
- * Item animations are for *surgical* changes — an item removed by smart-list reconciliation,
- * an item updated in place by a sync, a page appended by load-more. Switching lists instead
- * replaces the whole dataset, and animating that fades a whole list in over the one being
- * replaced. The decision is derived from the data itself, and taken during composition, so it
- * lands in the very frame that renders the swap; a flag delivered by a separate flow, or read
- * from an effect, always arrives at least one frame too late to suppress anything.
- *
- * A prepend is excluded too. Rows inserted at the head displace every row below them, and
- * the viewport is held at the top for a user who has not scrolled — so the placement spring
- * animates the whole visible list down from the top edge, which reads as the order shuffling
- * and settling back rather than as new items arriving. Landing them in place is what looks
- * like an insertion.
- *
- * Plain fields rather than snapshot state: updating them must not invalidate the composition
- * that is reading them.
- */
-internal class ItemAnimationGate(initial: BookmarkWindow) {
-    private var previous = initial
-    private var previousRows = initial.loadedRows()
-    private var enabled = true
-
-    fun update(window: BookmarkWindow): Boolean {
-        if (window === previous) return enabled
-        val previousIds = previousRows.mapTo(HashSet(previousRows.size)) { it.remoteId }
-        val rows = window.loadedRows()
-        val survivors = rows.count { it.remoteId in previousIds }
-        // Half of the shorter list surviving still reads as "the same list, changed".
-        val sameList = previousRows.isEmpty() || rows.isEmpty() ||
-            survivors * 2 >= minOf(previousRows.size, rows.size)
-        enabled = sameList && !isPrepend(window)
-        previous = window
-        previousRows = rows
-        return enabled
-    }
-
-    /**
-     * True when rows were inserted above the row that used to be first.
-     *
-     * Asked of slots rather than of the loaded rows. Those are the window compacted, and they
-     * slide as the user scrolls — so the row that was at their head lands further down them on
-     * every scroll back up, which read as a prepend and switched the animations off. A slot is a
-     * position in the view: it only moves when something really was inserted above it.
-     */
-    private fun isPrepend(window: BookmarkWindow): Boolean {
-        val previousFirstId = previousRows.firstOrNull()?.remoteId ?: return false
-        val was = previous.indexOfRemoteId(previousFirstId)
-        val now = window.indexOfRemoteId(previousFirstId)
-        return was >= 0 && now > was
-    }
-}
-
-@Composable
-private fun SyncProgressBar(
-    progress: com.karakept.app.data.model.SyncProgress?,
-    modifier: Modifier = Modifier
+/** What follows the rows: placeholders for an uncounted view, the empty state, and the list's end. */
+private fun LazyListScope.bookmarkListFooters(
+    window: BookmarkWindow,
+    isLoadingMore: Boolean,
+    einkEnabled: Boolean,
+    placeholderScreenful: Int,
+    skeleton: @Composable () -> Unit
 ) {
-    // Only the *indeterminate* bar is a problem on e-ink: it animates continuously. The
-    // determinate one redraws once per progress change, which the panel handles fine.
-    val einkMode = LocalEinkMode.current
-    val fetched = (progress as? com.karakept.app.data.model.SyncProgress.FetchingContent)
-        ?.takeIf { it.total > 0 }
+    // Before the view has been counted there are no slots to render, so the list would
+    // be blank. A screenful of the same skeletons says "rows are coming" in the shape
+    // they will come in — and is what stops a list switch flashing the empty state,
+    // since an uncounted view is not an empty one.
+    //
+    // On e-ink a placeholder row draws nothing, so a screenful of them says nothing —
+    // a blank page, which is the one thing an uncounted view must not look like. One
+    // indicator for the screen instead, which is what the rest of the app does there.
+    if (!window.resolved) {
+        if (einkEnabled) {
+            item(contentType = "placeholder") {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    BusyIndicator()
+                }
+            }
+        } else {
+            items(count = placeholderScreenful, contentType = { "placeholder" }) { skeleton() }
+        }
+    }
 
-    if (einkMode.animationsDisabled) {
-        // A strip at the top edge of the list is easy to overlook on a monochrome panel, so the
-        // whole sync state moves into one card in the middle of the page — determinate or not,
-        // rather than splitting it across two places.
-        FloatingBusyCard(modifier = modifier) {
-            if (fetched != null) {
-                Text(
-                    text = "Syncing…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                LinearProgressIndicator(
-                    progress = { fetched.current.toFloat() / fetched.total.toFloat() },
-                    modifier = Modifier.width(SyncCardProgressWidth)
-                )
-                Text(
-                    text = "${fetched.current} / ${fetched.total}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                LoadingDotsIndicator(label = "Syncing…", dotSize = 8.dp)
+    // An explicit empty state, and only once the view has actually been counted —
+    // otherwise every switch flashes "nothing here" before the list arrives.
+    if (window.isEmpty) {
+        item(contentType = "empty") {
+            EmptyBookmarkList()
+        }
+    }
+
+    if (isLoadingMore) {
+        item(contentType = "loading") {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                BusyIndicator()
             }
         }
-        return
     }
 
-    Column(modifier = modifier) {
-        if (fetched != null) {
-            LinearProgressIndicator(
-                progress = { fetched.current.toFloat() / fetched.total.toFloat() },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Text(
-                text = "${fetched.current} / ${fetched.total}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-            )
-        } else {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    if (!window.isEmpty) {
+        item(contentType = "end") {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No more bookmarks",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-    }
-}
-
-/** Wide enough to read as a progress bar, narrow enough to keep the card off the page edges. */
-private val SyncCardProgressWidth = 160.dp
-
-@Composable
-private fun EmptyBookmarkList() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 32.dp, vertical = 64.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Icon(
-            imageVector = AppIcons.Default.BookmarkBorder,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(48.dp)
-        )
-        Text(
-            text = "Nothing here yet",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "Bookmarks you save will show up here.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
     }
 }
