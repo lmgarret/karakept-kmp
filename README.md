@@ -186,11 +186,11 @@ HTML reports: `composeApp/build/reports/tests/desktopTest/index.html`
 
 ### Devcontainer (Recommended)
 
-Open the project in VS Code or any devcontainer-compatible editor and select **"Reopen in Container"**. The devcontainer includes Java 17, Android SDK with NDK, and all required tools.
+Open the project in VS Code or any devcontainer-compatible editor and select **"Reopen in Container"**. The devcontainer includes a JDK, the Android SDK with NDK, and all required tools.
 
 ### Manual
 
-1. Install Java 17+
+1. Install the JDK pinned in `mise.toml` (or run `mise install`)
 2. Install Android SDK
 3. Initialize the OpenAPI submodule (required to build the generated `api-client`):
    ```bash
