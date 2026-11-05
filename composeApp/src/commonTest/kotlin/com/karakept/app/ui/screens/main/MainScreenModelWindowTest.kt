@@ -1,25 +1,12 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.model.Bookmark
+import com.karakept.app.testing.testBookmark
 import com.karakept.app.data.model.BookmarkSlot
-import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.Server
-import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.HighlightRepository
-import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.domain.action.BookmarkActionController
-import com.karakept.app.utils.TestAppDispatchers
 import io.mockk.coEvery
 import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,17 +33,8 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenModelWindowTest {
-
     private val testDispatcher = StandardTestDispatcher()
-
-    private lateinit var serverRepository: ServerRepository
-    private lateinit var bookmarkRepository: BookmarkRepository
-    private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var listRepository: ListRepository
-    private lateinit var bookmarkActionController: BookmarkActionController
-    private lateinit var snackbarManager: ActionSnackbarManager
-    private lateinit var highlightRepository: HighlightRepository
+    private val harness = MainScreenModelHarness(testDispatcher)
 
     private val fakeServer = Server(
         id = "server-1",
@@ -78,49 +56,19 @@ class MainScreenModelWindowTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
-        serverRepository = mockk(relaxed = true)
-        bookmarkRepository = mockk(relaxed = true)
-        bookmarkActionsRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        listRepository = mockk(relaxed = true)
-        bookmarkActionController = mockk(relaxed = true)
-        snackbarManager = mockk(relaxed = true)
-        highlightRepository = mockk(relaxed = true)
-
-        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
-        every { settingsRepository.allListSettings } returns flowOf(emptyMap())
-        every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
-        every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
-        every { settingsRepository.customSwipeActionConfigs } returns flowOf(emptyList())
-        every { settingsRepository.swipeLeftConfigId } returns flowOf(null)
-        every { settingsRepository.swipeRightConfigId } returns flowOf(null)
-        every { settingsRepository.dimReadBookmarks } returns flowOf(true)
-        every { settingsRepository.defaultLayoutId } returns flowOf(null)
-        every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(true)
-        every { settingsRepository.activeServerId } returns flowOf("server-1")
-        every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
-        every { settingsRepository.defaultListId } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns MutableStateFlow(emptyList())
-        every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns
+        every { harness.serverRepository.servers } returns flowOf(listOf(fakeServer))
+        every { harness.bookmarkActionsRepository.bookmarkChangedEvents } returns
             kotlinx.coroutines.flow.MutableSharedFlow()
-        every { bookmarkActionsRepository.aiCapabilities } returns MutableStateFlow(emptyMap())
-        every { bookmarkActionController.undoCompletedEvents } returns
+        every { harness.bookmarkActionController.undoCompletedEvents } returns
             kotlinx.coroutines.flow.MutableSharedFlow()
-        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
-        every { bookmarkRepository.backgroundSyncCompleted } returns
+        every { harness.bookmarkRepository.backgroundSyncCompleted } returns
             kotlinx.coroutines.flow.MutableSharedFlow()
 
         viewTotal = MutableStateFlow(4397)
         pageReads.clear()
         readFilters.clear()
-        every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns viewTotal
-        coEvery { bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
+        every { harness.bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns viewTotal
+        coEvery { harness.bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
             val filter = secondArg<FilterConfig>()
             val offset = thirdArg<Int>()
             val limit = arg<Int>(3)
@@ -135,34 +83,7 @@ class MainScreenModelWindowTest {
         Dispatchers.resetMain()
     }
 
-    private fun createModel() = MainScreenModel(
-        serverRepository = serverRepository,
-        bookmarkRepository = bookmarkRepository,
-        bookmarkActionsRepository = bookmarkActionsRepository,
-        settingsRepository = settingsRepository,
-        listRepository = listRepository,
-        bookmarkActionController = bookmarkActionController,
-        snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository,
-        appDispatchers = TestAppDispatchers(testDispatcher),
-        tagFilterRequests = TagFilterRequests()
-    )
-
-    private fun row(index: Int) = Bookmark(
-        localId = index.toLong(),
-        remoteId = "remote-$index",
-        serverId = "server-1",
-        url = "https://example.com/$index",
-        title = "Bookmark $index",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = index.toLong(),
-        isArchived = false,
-        isStarred = false
-    )
+    private fun row(index: Int) = testBookmark(index.toLong())
 
     /** Offsets read since the last [clearReads]. */
     private fun offsetsRead() = pageReads.map { it.first }.distinct().sorted()
@@ -174,7 +95,7 @@ class MainScreenModelWindowTest {
 
     @Test
     fun `the list is sized by the view before any row has been read`() = runTest(testDispatcher) {
-        val model = createModel()
+        val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
@@ -189,7 +110,7 @@ class MainScreenModelWindowTest {
 
     @Test
     fun `opening a view reads the first page, not the whole view`() = runTest(testDispatcher) {
-        val model = createModel()
+        val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
@@ -200,7 +121,7 @@ class MainScreenModelWindowTest {
 
     @Test
     fun `a jump reads the page it lands on and nothing on the way`() = runTest(testDispatcher) {
-        val model = createModel()
+        val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
         clearReads()
@@ -221,7 +142,7 @@ class MainScreenModelWindowTest {
     @Test
     fun `a row outside the pages on screen is a placeholder, not a wrong row`() =
         runTest(testDispatcher) {
-            val model = createModel()
+            val model = harness.createModel()
             val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
 
@@ -237,7 +158,7 @@ class MainScreenModelWindowTest {
 
     @Test
     fun `scrolling within a page reads nothing`() = runTest(testDispatcher) {
-        val model = createModel()
+        val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
         clearReads()
@@ -257,7 +178,7 @@ class MainScreenModelWindowTest {
         // Room re-emits the count on every write, which is what brings a row edited elsewhere —
         // or a page a sync has just committed — back onto the screen. There is no refresh call:
         // the rows on screen are simply read again.
-        val model = createModel()
+        val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
         clearReads()
@@ -272,7 +193,7 @@ class MainScreenModelWindowTest {
 
     @Test
     fun `switching filter reads the new view, not the old one`() = runTest(testDispatcher) {
-        val model = createModel()
+        val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
         clearReads()
@@ -294,7 +215,7 @@ class MainScreenModelWindowTest {
     fun `a view with nothing in it has no slots and reads no pages`() = runTest(testDispatcher) {
         viewTotal.value = 0
 
-        val model = createModel()
+        val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
@@ -308,7 +229,7 @@ class MainScreenModelWindowTest {
     fun `the last page is short and the list stops at the view's end`() = runTest(testDispatcher) {
         viewTotal.value = 120
 
-        val model = createModel()
+        val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 

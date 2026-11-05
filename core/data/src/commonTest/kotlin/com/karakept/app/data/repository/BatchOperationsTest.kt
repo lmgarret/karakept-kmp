@@ -1,9 +1,9 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.testing.testBookmarkEntity
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
 import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.local.entity.toBookmark
 import com.karakept.app.data.local.entity.toBookmarks
 import com.karakept.app.data.local.entity.PendingActionEntity
 import com.karakept.app.data.local.entity.PendingActionType
@@ -26,7 +26,6 @@ import kotlin.test.assertTrue
  * pending actions for all bookmarks in the batch.
  */
 class BatchOperationsTest : BaseRepositoryTest() {
-
     private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)
     private val pendingActionDao = mockk<PendingActionDao>(relaxed = true)
     private val remoteDataSource = mockk<RemoteDataSource>(relaxed = true)
@@ -311,24 +310,18 @@ class BatchOperationsTest : BaseRepositoryTest() {
         isArchived: Boolean = false,
         isStarred: Boolean = false,
         readingProgress: Float = 0f
-    ) = BookmarkEntity(
+    ) = testBookmarkEntity(
         localId = localId,
         remoteId = remoteId,
         serverId = serverId,
         title = "Test $remoteId",
         url = "https://example.com/$remoteId",
-        description = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
         tags = tags,
         listIds = listIds,
         isStarred = isStarred,
         isArchived = isArchived,
         isRead = isRead,
         createdAt = 0L,
-        readingTimeMinutes = 0,
-        readingProgress = readingProgress,
-        content = null
+        readingProgress = readingProgress
     )
 }

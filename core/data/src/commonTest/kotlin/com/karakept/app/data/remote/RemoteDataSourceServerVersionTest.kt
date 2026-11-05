@@ -1,6 +1,5 @@
 package com.karakept.app.data.remote
 
-import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.HttpRequestData
@@ -19,7 +18,7 @@ import kotlin.test.assertNull
 class RemoteDataSourceServerVersionTest {
 
     private fun sourceFor(engine: MockEngine) =
-        RemoteDataSource(HttpClient(engine) { applyKarakeptClientDefaults() })
+        RemoteDataSource(karakeptTestClient(engine))
 
     // Client calls run on a real dispatcher — under the test scheduler's virtual time the
     // HttpTimeout budget expires instantly while MockEngine responds elsewhere.

@@ -1,10 +1,7 @@
 package com.karakept.app.data.local
 
-import androidx.room3.Room
-import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.FilterConfig
-import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.repository.BookmarkRepository
@@ -12,11 +9,8 @@ import com.karakept.app.domain.ListCountUtils
 import com.karakept.app.domain.TagCountUtils
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.ListSettings
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import org.junit.After
-import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -30,9 +24,7 @@ import kotlin.test.assertTrue
  * and what sits at one position in the view. What matters is that the answers are the same as
  * walking the rows would give, so each is checked against the rows themselves.
  */
-class BookmarkCountingQueriesTest {
-
-    private lateinit var db: AppDatabase
+internal class BookmarkCountingQueriesTest : InMemoryDatabaseTest() {
     private val serverId = "server-1"
     private val server = Server(id = serverId, url = "https://example.com", apiKey = "k", label = "T")
 
@@ -64,18 +56,6 @@ class BookmarkCountingQueriesTest {
         listIds = listIds
     )
 
-    @Before
-    fun setUp(): Unit = runBlocking {
-        db = Room.inMemoryDatabaseBuilder<AppDatabase>()
-            .setDriver(BundledSQLiteDriver())
-            .setQueryCoroutineContext(Dispatchers.IO)
-            .build()
-    }
-
-    @After
-    fun tearDown() {
-        db.close()
-    }
 
     private suspend fun insert(vararg rows: BookmarkEntity) =
         db.bookmarkDao().insertBookmarks(rows.toList())

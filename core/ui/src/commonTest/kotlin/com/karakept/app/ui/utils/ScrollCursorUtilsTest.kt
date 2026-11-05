@@ -1,6 +1,6 @@
 package com.karakept.app.ui.utils
 
-import com.karakept.app.data.model.Bookmark
+import com.karakept.app.testing.testBookmark
 import com.karakept.app.data.model.BookmarkSlot
 import com.karakept.app.data.model.BookmarkWindow
 import kotlin.test.Test
@@ -12,7 +12,6 @@ import kotlin.test.assertTrue
  * Unit tests for the fast-scroll cursor's mapping onto the whole list (#273).
  */
 class ScrollCursorUtilsTest {
-
     // -------------------------------------------------------------------------
     // Thumb position
     // -------------------------------------------------------------------------
@@ -85,21 +84,7 @@ class ScrollCursorUtilsTest {
         pages = mapOf(0 to (1..50).map(::row))
     )
 
-    private fun row(id: Int) = Bookmark(
-        localId = id.toLong(),
-        remoteId = "remote-$id",
-        serverId = "server-1",
-        url = "https://example.com/$id",
-        title = "Bookmark $id",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = id.toLong(),
-        isArchived = false,
-        isStarred = false
-    )
+    private fun row(id: Int) = testBookmark(id.toLong())
 
     @Test
     fun `every row the thumb can name is a slot the list already holds`() {

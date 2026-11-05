@@ -78,7 +78,7 @@ Data Layer (repositories → local Room DB + remote Ktor API)
 | `:core:data` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Room (+ KSP, `schemas/`), Ktor, repositories, `data/cache`, `data/secure`, `domain/`, and the utils those need |
 | `:core:ui` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Theme, `AppIcons`, `EinkAware` and every reusable component (bookmark, tags, highlight), `ui/utils`, `ui/input`, `AppNavigator`, the reader fonts (its own Compose resources), `getPlatform()` |
 | `:feature:reader` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | `ui/components/reader` and `ui/screens/viewer` (the bookmark viewer, its ScreenModel and `NavKey`) |
-| `:core:testing` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Test fixtures shared by several suites (`BaseRepositoryTest`, `TestAppDispatchers`, `FakeDataStore`) — test dependencies only |
+| `:core:testing` | `com.android.kotlin.multiplatform.library` + `jvm("desktop")` | Test fixtures shared by several suites (`BaseRepositoryTest`, `TestAppDispatchers`, `FakeDataStore`, `testBookmark`) — test dependencies only |
 
 AGP 9 refuses to apply `com.android.application` alongside the Kotlin Multiplatform plugin, and
 its replacement (`com.android.kotlin.multiplatform.library`) is library-only. So the KMP module
@@ -793,6 +793,14 @@ that keeps the version in the repo instead of in someone's memory.
 - Mock `suspend` functions with `coEvery { }`.
 - Follow **Arrange / Act / Assert** structure.
 - Prefer real data instances for models/entities; mock only external dependencies.
+- Build bookmarks with **`testBookmark(...)`** (`:core:testing`) and entities with
+  **`testBookmarkEntity(...)`** (`core/data/src/commonTest/.../testing/EntityFixtures.kt` — the
+  entity is `internal`, so it cannot live in `:core:testing`). Pass only the fields the test is
+  about; never add another private `makeBookmark`.
+- A `MainScreenModel` test gets its mocks and `createModel()` from **`MainScreenModelHarness`**,
+  and overrides only the stubs it is about.
+- A DAO or query test against a real in-memory database extends **`InMemoryDatabaseTest`**
+  (`core/data/src/desktopTest/.../data/local/`).
 - Integration tests inherit from **`BaseDockerIntegrationTest`** and run against a real Docker backend.
 
 ```kotlin

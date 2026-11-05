@@ -1,7 +1,6 @@
 package com.karakept.app.data.remote
 
 import com.karakept.app.data.model.Server
-import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
@@ -27,7 +26,7 @@ import kotlin.test.assertFailsWith
  */
 class KtorClientConfigTest {
 
-    private fun clientFor(engine: MockEngine) = HttpClient(engine) { applyKarakeptClientDefaults() }
+    private fun clientFor(engine: MockEngine) = karakeptTestClient(engine)
 
     private fun runRealTime(block: suspend CoroutineScope.() -> Unit) = runTest {
         withContext(Dispatchers.Default) { block() }

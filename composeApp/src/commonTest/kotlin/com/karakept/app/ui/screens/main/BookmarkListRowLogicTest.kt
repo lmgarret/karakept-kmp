@@ -1,6 +1,6 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.data.model.Bookmark
+import com.karakept.app.testing.testBookmark
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.CustomSwipeActionType
 import com.karakept.app.data.model.SwipeAction
@@ -12,25 +12,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class BookmarkListRowLogicTest {
-
-    private fun bookmark(tags: String = "", listIds: String = "", isRead: Boolean = false) = Bookmark(
-        localId = 1L,
-        remoteId = "r1",
-        serverId = "server-1",
-        url = "https://example.com",
-        title = "t",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = 0L,
-        isArchived = false,
-        isStarred = false,
-        listIds = listIds,
-        tags = tags,
-        isRead = isRead,
-    )
+    private fun bookmark(tags: String = "", listIds: String = "", isRead: Boolean = false) =
+        testBookmark(remoteId = "r1", title = "t", createdAt = 0L, tags = tags, listIds = listIds, isRead = isRead)
 
     private val tagConfig = CustomSwipeActionConfig(id = "c1", type = CustomSwipeActionType.ADD_TAG, tagName = "later")
     private val listConfig = CustomSwipeActionConfig(

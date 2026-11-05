@@ -1,7 +1,5 @@
 package com.karakept.app.data.local
 
-import androidx.room3.Room
-import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.local.entity.of
@@ -12,10 +10,8 @@ import com.karakept.app.data.model.ReadFilter
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.domain.BookmarkFilterUtils
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -37,9 +33,7 @@ import kotlin.test.assertTrue
  * non-ASCII titles, tag and list filters that only the client side applies, and page boundaries
  * that fall inside a run of equal keys.
  */
-class BookmarkViewIndexAgreementTest {
-
-    private lateinit var db: AppDatabase
+internal class BookmarkViewIndexAgreementTest : InMemoryDatabaseTest() {
     private val serverId = "server-1"
 
     /**
@@ -64,11 +58,6 @@ class BookmarkViewIndexAgreementTest {
 
     @Before
     fun setUp(): Unit = runBlocking {
-        db = Room.inMemoryDatabaseBuilder<AppDatabase>()
-            .setDriver(BundledSQLiteDriver())
-            .setQueryCoroutineContext(Dispatchers.IO)
-            .build()
-
         db.bookmarkDao().insertBookmarks(
             (1..180).map { id ->
                 val hasContent = id % 4 == 0
@@ -108,11 +97,6 @@ class BookmarkViewIndexAgreementTest {
                 )
             }
         )
-    }
-
-    @After
-    fun tearDown() {
-        db.close()
     }
 
     /** Every row as `MainScreenModel.allBookmarks` holds it — content stripped by the DAO. */
