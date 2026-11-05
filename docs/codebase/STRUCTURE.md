@@ -57,7 +57,7 @@ karakept-kmp/
 - Purpose: Screen-level composables and their ScreenModels (MVVM state holders)
 - Contains: only feature sub-packages, no files at the root (enforced by `LayerRulesTest`)
 - Key files:
-  - `main/MainScreenModel.kt` - Primary screen state: server selection, filters, pagination, sync
+  - `main/MainScreenModel.kt` - Primary screen state: server selection, filters, pagination, sync. Its state and startup sequence live in the class; its methods are split by concern into extension files beside it (`MainScreenModelSync.kt`, `MainScreenModelFilters.kt`, `MainScreenModelActions.kt`, `MainScreenModelBatch.kt`)
   - `viewer/BookmarkViewerScreenModel.kt` - Detail view state: highlight management, reader appearance
   - `settings/SettingsScreenModel.kt` - Settings mutations, list management, backup/restore
   - `main/` - MainScreen and its ScreenModel, dialogs, drawer, list content
