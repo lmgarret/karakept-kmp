@@ -73,7 +73,7 @@ Versions are in [`gradle/libs.versions.toml`](gradle/libs.versions.toml); what e
 
 ### Prerequisites
 
-- Java 21 (`mise install` handles this — see below)
+- A JDK (`mise install` handles this — see below)
 - For Android: Android SDK
 - For Desktop: X11 or Wayland display
 
@@ -81,12 +81,12 @@ Versions are in [`gradle/libs.versions.toml`](gradle/libs.versions.toml); what e
 versions CI uses, so one command reproduces them:
 
 ```bash
-mise install          # java 21, gradle 9.8.2, python 3.13
+mise install          # the JDK, Gradle and Python pinned in mise.toml
 mise run setup        # the above, plus the karakeep-upstream submodule
 ```
 
 `mise tasks` lists the project's tasks (`test:desktop`, `test:android`, `icons`). Without mise,
-install JDK 21 and Gradle 9.8.2 yourself — `./gradlew` still works standalone.
+install the JDK and Gradle versions from `mise.toml` yourself — `./gradlew` still works standalone.
 
 > **Clone with submodules.** The `api-client` module is generated at build
 > time from the Karakeep OpenAPI spec, which lives in the `karakeep-upstream`
