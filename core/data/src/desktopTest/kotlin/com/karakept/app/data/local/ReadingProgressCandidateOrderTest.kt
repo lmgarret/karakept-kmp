@@ -1,12 +1,7 @@
 package com.karakept.app.data.local
 
-import androidx.room3.Room
-import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.karakept.app.data.local.entity.BookmarkEntity
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import org.junit.After
-import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -16,23 +11,9 @@ import kotlin.test.assertTrue
  * what decides whether the screen agrees with the server. The rotation is ordered by what the
  * user is most likely to be looking at rather than by staleness alone.
  */
-class ReadingProgressCandidateOrderTest {
-
-    private lateinit var db: AppDatabase
+internal class ReadingProgressCandidateOrderTest : InMemoryDatabaseTest() {
     private val serverId = "server-1"
 
-    @Before
-    fun setUp(): Unit = runBlocking {
-        db = Room.inMemoryDatabaseBuilder<AppDatabase>()
-            .setDriver(BundledSQLiteDriver())
-            .setQueryCoroutineContext(Dispatchers.IO)
-            .build()
-    }
-
-    @After
-    fun tearDown() {
-        db.close()
-    }
 
     private suspend fun insert(
         id: Long,

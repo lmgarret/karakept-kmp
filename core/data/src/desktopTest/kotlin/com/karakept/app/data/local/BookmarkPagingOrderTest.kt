@@ -1,7 +1,5 @@
 package com.karakept.app.data.local
 
-import androidx.room3.Room
-import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.local.entity.of
@@ -10,9 +8,7 @@ import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.repository.BookmarkRepository
 import com.karakept.app.domain.BookmarkFilterUtils
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -31,9 +27,7 @@ import kotlin.test.assertEquals
  * not been downloaded. These tests run against real SQLite, on a table where *every* sort key
  * is tied, so only the tiebreaker can order it.
  */
-class BookmarkPagingOrderTest {
-
-    private lateinit var db: AppDatabase
+internal class BookmarkPagingOrderTest : InMemoryDatabaseTest() {
     private val serverId = "server-1"
 
     /** Every row identical apart from its identity — the worst case for every sort option. */
@@ -41,11 +35,6 @@ class BookmarkPagingOrderTest {
 
     @Before
     fun setUp(): Unit = runBlocking {
-        db = Room.inMemoryDatabaseBuilder<AppDatabase>()
-            .setDriver(BundledSQLiteDriver())
-            .setQueryCoroutineContext(Dispatchers.IO)
-            .build()
-
         db.bookmarkDao().insertBookmarks(
             (1..rowCount).map { id ->
                 BookmarkEntity(
@@ -66,11 +55,6 @@ class BookmarkPagingOrderTest {
                 )
             }
         )
-    }
-
-    @After
-    fun tearDown() {
-        db.close()
     }
 
     private suspend fun read(
