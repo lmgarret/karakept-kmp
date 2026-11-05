@@ -1,247 +1,125 @@
 # Technology Stack
 
-**Analysis Date:** 2026-08-04
+What each dependency is for, and the decisions behind the ones that need explaining.
 
-## Languages
+**Versions live in [`gradle/libs.versions.toml`](../../gradle/libs.versions.toml)** (libraries and
+Gradle plugins) and [`mise.toml`](../../mise.toml) (JDK, Gradle, Python). This file deliberately
+repeats none of them — a copy here only drifts. Android SDK levels (`android-compileSdk`,
+`android-minSdk`, `android-targetSdk`) are in the version catalog too.
 
-**Primary:**
-- Kotlin 2.4.20 - Core application logic, multiplatform targets (Android, JVM Desktop)
-- JavaScript/TypeScript - Upstream monorepo (Node.js services and tooling)
+## Languages and targets
 
-**Secondary:**
-- XML - Android manifest and resource definitions
-- JSON - Configuration and OpenAPI specifications
+- **Kotlin Multiplatform**, targeting Android and JVM desktop (Linux, macOS, Windows). All
+  modules compile to JVM 11 bytecode.
+- The `karakeep-upstream` submodule is the Karakeep TypeScript monorepo; the build only reads its
+  OpenAPI spec from it.
 
-## Runtime
+## Modules
 
-**Environment:**
-- JVM 11 (both Android and Desktop targets compile to JVM 11 bytecode)
-- Android Runtime (ART) - Android 7.0+ (API 24)
-- Java Desktop (JVM via Gradle Compose Desktop)
+`:core:model` → `:core:data` → `:core:ui` → `:feature:reader` → `:composeApp`, each a
+`com.android.kotlin.multiplatform.library` + `jvm("desktop")`. `:core:testing` holds shared test
+fixtures; `:androidApp` is the Android application shell (build types, signing, applicationId —
+no sources). Room's KSP runs in `:core:data` only (schemas in `core/data/schemas/`); Compose
+resources live in `:composeApp` (app icon, preview drawable) and `:core:ui` (reader fonts). Why it
+is split this way is in `AGENTS.md` → "Gradle Modules".
 
-**Package Manager:**
-- Gradle 9.x with Kotlin DSL
-- Gradle Wrapper (local versioning)
-- npm/pnpm 9.15.9 (for upstream monorepo)
+## UI
 
-## Frameworks
+- **Compose Multiplatform** with **Material 3** (`compose-material3`). `compose-material` (M2) is
+  still declared in `:composeApp`, though no source file imports from it directly.
+- **Material icons are vendored, not a dependency.** `material-icons-extended` is frozen upstream,
+  so the icons the app draws live in `ui/icons/AppIcons.kt`, generated from
+  google/material-design-icons (Apache 2.0) by `tools/generate_material_icons.py`.
+- **Compose Hot Reload** (bundled with CMP) adds `hotRunDesktop`; it needs JBR 21, provisioned
+  through the foojay toolchain resolver.
 
-**Core UI:**
-- Jetbrains Compose Multiplatform 1.12.1 - Cross-platform UI framework
-- Material Design 3 (androidx.compose.material3) - Material components and theme system
-- Compose Material 1.x (androidx.compose.material) - Base Material components
-- Material icons - vendored, not a dependency. `material-icons-extended` is frozen at 1.7.3
-  upstream, so the ~120 icons the app draws live in `ui/icons/AppIcons.kt`, generated from
-  google/material-design-icons (Apache 2.0) by `tools/generate_material_icons.py`
+## Navigation
 
-**Navigation:**
-- Compose Navigation 3 (1.1.1) - developer-owned back stack of `@Serializable` `NavKey`s rendered by `NavDisplay`; supports Android, desktop, iOS, web
-  - `androidx.navigation3:navigation3-runtime` (1.1.1): `NavKey`, `NavBackStack`, `rememberNavBackStack`, `entryProvider`
-  - `org.jetbrains.androidx.navigation3:navigation3-ui` (1.1.1): `NavDisplay` (CMP build) + transition/predictive-back specs
-  - `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-navigation3` (2.11.0): per-entry `ViewModelStore` scoping
-  - `io.insert-koin:koin-compose-navigation3` + `koin-compose-viewmodel` (4.2.2): `koinViewModel` injection per nav entry
-  - App wiring lives in `ui/navigation/` (`AppNavigator`, `LocalNavigator`, `appEntryProvider`, `navKeySerializersModule`, Shared Axis Z specs)
+- **Navigation 3**: a developer-owned back stack of `@Serializable` `NavKey`s rendered by
+  `NavDisplay`.
+  - `androidx.navigation3:navigation3-runtime` — `NavKey`, `NavBackStack`, `entryProvider`.
+  - `org.jetbrains.androidx.navigation3:navigation3-ui` — the CMP build of `NavDisplay`, plus
+    transition and predictive-back specs. It pulls a matching runtime transitively; keep the two
+    catalog entries on the same version so the pin means what it says.
+  - `lifecycle-viewmodel-navigation3` — per-entry `ViewModelStore` scoping.
+  - `koin-compose-navigation3` + `koin-compose-viewmodel` — `koinViewModel` per entry.
+- App wiring is in `ui/navigation/` (`AppNavigator`, `appEntryProvider`, `navKeySerializersModule`,
+  Shared Axis Z specs).
 
-**Networking:**
-- Ktor Client 3.6.0 - HTTP client with multiplatform support
-  - ktor-client-core: Core HTTP client
-  - ktor-client-okhttp: OkHttp engine for JVM (Android + Desktop)
-  - ktor-client-content-negotiation: Content type negotiation
-  - ktor-serialization-kotlinx-json: JSON serialization plugin
-  - ktor-client-auth: Authentication plugin
-  - ktor-client-logging: Request/response logging
+## Data
 
-**Database:**
-- Room 3.0.2 (`androidx.room3`) - Local SQLite ORM with KMP support
-  - androidx-room-runtime: Runtime database support
-  - androidx-room-compiler: Code generation via KSP
-- SQLite 2.7.0 (bundled) - Embedded database
-  - androidx-sqlite-bundled: Bundled SQLite driver for consistent behavior
+- **Ktor client** (OkHttp engine on both platforms) with content negotiation, kotlinx JSON, auth
+  and logging plugins. `ktor-client-mock` in tests. `RemoteDataSource` is the only consumer of the
+  generated API client.
+- **Room 3** (`androidx.room3`) over **`sqlite-bundled`**, so both platforms run the same SQLite
+  rather than the OS's. History of the move from Room 2: `room3-migration.md`.
+- **DataStore (preferences)** for settings — see "Adding a New Setting" in `AGENTS.md`.
+- **kotlinx-serialization** (JSON), **kotlinx-datetime**, **kotlinx-coroutines** (`-android` for
+  the main dispatcher, `-swing` for the desktop UI thread).
+- **Koin** for DI, with `koin-androidx-workmanager` so workers are built from the graph.
+- **ksoup** parses article HTML for the native reader and for sanitising (`HtmlSanitizer`,
+  `HtmlArchiveProcessor`).
+- **Coil 3** (`coil-network-ktor`, so images share the Ktor engine).
 
-**State Management:**
-- Koin 4.2.2 - Dependency injection
-  - koin-core: Core DI container
-  - koin-compose: Compose integration
-  - koin-android: Android-specific support
-  - koin-androidx-workmanager: WorkManager task scheduling
+## Platform integration
 
-**Serialization:**
-- kotlinx-serialization 1.11.0 - Multiplatform serialization
-  - kotlinx-serialization-json: JSON codec
-- kotlinx-datetime 0.8.0 - Multiplatform date/time handling
+**Android**
+- `activity-compose`, `core-splashscreen`.
+- `androidx-browser` — Custom Tabs for opening links.
+- `androidx-webkit` — `WebSettingsCompat`/`WebViewFeature`, for algorithmic-darkening control in
+  Web mode.
+- `androidx-core` — `FileProvider` for sharing exported files; declared in `:core:data` rather than
+  relied on transitively through activity-compose.
+- `work-runtime` — background sync (`BackgroundSyncWorker`) and saving shared links
+  (`SaveBookmarkWorker`).
 
-**Image Loading:**
-- Coil 3.6.0 - Image loading and caching
-  - coil-compose: Compose integration with Image() composable
-  - coil-network-ktor: Ktor HTTP client engine for image loading
+**Desktop**
+- **Compose Native Tray** (`dev.nucleusframework`). The groupId moved from `io.github.kdroidfilter`,
+  whose last release is incompatible with current Skiko and whose coordinates still resolve — see
+  `CONCERNS.md`. Linux needs a D-Bus session for the tray; there is no AWT fallback.
+- **Native File Dialog** — GTK chooser / NSOpenPanel / IFileOpenDialog.
+- **Compose WebView** — WKWebView / WebView2 / WebKitGTK. The one pre-release dependency.
+- **KNotify** — local notifications on both platforms.
 
-**Local Preferences:**
-- DataStore 1.2.1 - Type-safe key-value store (successor to SharedPreferences)
-  - androidx-datastore-preferences-core: Core library
-  - androidx-datastore-preferences-android: Android-specific implementation
+## Build and code generation
 
-**Async Programming:**
-- kotlinx-coroutines 1.11.0 - Async and concurrency primitives
-  - kotlinx-coroutines-core: Core coroutine runtime
-  - kotlinx-coroutines-android: Android dispatcher integration
-  - kotlinx-coroutines-swing: Swing dispatcher for desktop UI thread
-  - kotlinx-coroutines-test: Testing utilities
+- **AGP** with the KMP library plugin; `:androidApp` applies `com.android.application`. The build
+  runs on JDK 17+, and CI and `mise` use 21.
+- **KSP** — Room only.
+- **OpenAPI Generator** — builds `api-client/` (`com.karakept.api.*`) from
+  `karakeep-upstream/packages/open-api/karakeep-openapi-spec.json`. Generated code is committed;
+  never hand-edit it.
+- **`:composeApp:generateAppVersion`** writes `AppVersion.kt` (`name`, `commit`, `dirty`) into a
+  generated `commonMain` source dir. It reads `-PversionName` / `-Pcommit` first, then git, and
+  never fails without a repository.
 
-**HTML Parsing:**
-- ksoup 0.2.6 - HTML/XML parsing library (KMP-compatible)
-- Used for metadata extraction from bookmarked web content
+## Testing
 
-**Notifications:**
-- KNotify 0.4.3 - Multiplatform local notifications
-  - Android: Native notifications via NotificationManager
-  - Desktop: System notifications
+- `kotlin-test`, JUnit 4, **MockK**, `kotlinx-coroutines-test`.
+- `compose.desktop.uiTestJUnit4` for headless layout and semantics checks in `desktopTest`;
+  Android UI tests use `ui-test-junit4` under **Robolectric**.
+- Patterns and locations: `TESTING.md` and `AGENTS.md` → "Testing Requirements".
 
-**Desktop-Specific:**
-- Compose Native Tray 2.1.6 (`dev.nucleusframework`) - System tray integration
-  - macOS: Native NSStatusBar
-  - Windows: Native taskbar
-  - Linux: D-Bus interface (via DBus-x11); no tray without a D-Bus session, and no AWT
-    fallback since 2.0.0
-  - Menu built with the composable DSL (`ComposableTrayMenuScope`): reactive `Item` /
-    `CheckableItem` / `SubMenu`, `DrawableResource` icons, `onMenuOpened` refresh
-  - Pulls `dev.nucleusframework:nucleus.core-runtime` and `nucleus.darkmode-detector`
-    transitively (replacing `io.github.kdroidfilter:platformtools`)
-- Native File Dialog 1.0.3 - File picker dialogs
-  - Linux: GTK file chooser
-  - macOS: NSOpenPanel
-  - Windows: IFileOpenDialog
+## CI
 
-**WebView:**
-- Compose WebView 1.0.0-beta-02 - Web content rendering
-  - macOS: WKWebView
-  - Windows: WebView2
-  - Linux: WebKitGTK
+- GitHub Actions: `ci.yml` (desktop suite on PRs), `pr-build.yml`, `release.yml` (build, sign,
+  release; the Android suite runs here), `cache-warm.yml` (seeds the Gradle cache from the default
+  branch, since setup-gradle only saves its cache there).
+- **`gradle/actions/setup-gradle` uses `cache-provider: basic`** — the MIT provider built on
+  `actions/cache`. The default `enhanced` provider depends on the proprietary
+  `gradle-actions-caching` component under Gradle's commercial terms and is deliberately not used.
+- Release notes come from `lmgarret/llm-release-action`, fed by `docs/CONTEXT.md`.
+- Signing reads `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
 
-**Android Integration:**
-- androidx-activity-compose 1.12.4 - Activity + Compose integration
-- androidx-browser 1.9.0 - Custom Chrome tabs for opening web content
-- androidx-webkit 1.16.0 - WebSettingsCompat/WebViewFeature (algorithmic darkening control for Web mode archive rendering)
-- androidx-core-splashscreen 1.2.0 - Splash screen API
-- androidx-core 1.16.0 - `FileProvider` for sharing exported files (`:core:data`; previously only transitive via activity-compose)
-- androidx-work-runtime-ktx 2.10.5 - Background task scheduling
+## Development environment
 
-## Build & Code Generation
+- `mise run setup` installs the pinned toolchain and the submodule.
+- Android SDK for Android builds and the Robolectric suite.
+- Linux desktop development: GTK and WebKit2GTK development libraries, and a D-Bus session for the
+  tray.
+- `.devcontainer/` provides all of the above (with `setup.sh` to build and bundle).
 
-**Build System:**
-- Gradle 9.8.0 (wrapper) with AGP 9.4.0 (Android Gradle Plugin); requires JDK 17+ to run the build
-- Modules (#440): `:core:model` → `:core:data` → `:core:ui` → `:feature:reader` → `:composeApp`,
-  each a `com.android.kotlin.multiplatform.library` + `jvm("desktop")`; `:core:testing` holds
-  shared test fixtures; `:androidApp` is the application shell. Room's KSP runs in `:core:data`
-  only (schemas in `core/data/schemas/`); Compose resources live in `:composeApp` (app icon,
-  preview drawable) and `:core:ui` (reader fonts)
+## Runtime requirements
 
-**Code Generation:**
-- KSP 2.3.9 (Kotlin Symbol Processing) - Annotation processor (Room, in `:core:data`)
-- `:composeApp:generateAppVersion` - Writes `AppVersion.kt` (`name`, `commit`, `dirty`) into
-  `build/generated/appVersion`, a `commonMain` source dir. Reads `-PversionName` / `-Pcommit`
-  first, then git; never fails when there is no repository.
-- OpenAPI Generator 7.25.0 - Generate API client from OpenAPI spec
-  - Generates Kotlin multiplatform client to `com.karakept.api.*`
-  - Located at: `api-client/` module
-  - Source spec: `/karakeep-upstream/packages/open-api/karakeep-openapi-spec.json`
-
-**Kotlin Compiler Plugin:**
-- compose-compiler (bundled with kotlin-plugin-compose) - Compose IR compiler
-- org.jetbrains.compose.hot-reload (bundled with CMP 1.12.1) - Compose Hot Reload for desktop dev workflow; adds `hotRunDesktop` Gradle task (requires JBR 21, auto-provisioned via foojay toolchain resolver)
-
-## Key Dependencies
-
-**Critical Infrastructure:**
-- Room ORM - Single source of truth for local data
-- Ktor HttpClient - All remote API communication
-- Koin - Application dependency graph and lifecycle management
-- kotlinx-coroutines - Structured concurrency for all async operations
-
-**Serialization Pipeline:**
-- OpenAPI Generator → Kotlin models (api-client module)
-- kotlinx-serialization JSON codec ↔ API models
-- Room Entity mappers ↔ Database models
-
-## Testing & Development
-
-**Testing:**
-- JUnit 4.13.2 - Unit test framework
-- mockk 1.14.11 - Kotlin mocking library
-- kotlinx-coroutines-test - Coroutine testing utilities
-- compose.desktop.uiTestJUnit4 - Headless Compose layout/semantics assertions (desktopTest;
-  Android UI tests use androidx.compose.ui:ui-test-junit4 with Robolectric)
-
-**Kotlin Test Framework:**
-- kotlin-test - Standard library test assertions
-
-## Configuration
-
-**Environment:**
-- `.devcontainer/devcontainer.json` - VS Code devcontainer for development
-  - Java 21 base image (bookworm)
-  - Android SDK 36 with NDK 26.1
-  - Node.js LTS
-  - Desktop build dependencies (Ninja, GTK, WebKit)
-  - D-Bus for system tray on Linux
-  - Includes build/bundle script at `setup.sh`
-
-**Build Properties:**
-- `gradle.properties`:
-  - JVM args: `-Xmx2048m` max heap
-  - Kotlin code style: official
-  - Android/Compose settings for Gradle plugin behavior
-  - File encoding: UTF-8
-
-**Android Configuration:**
-- Min SDK: 24 (Android 7.0)
-- Target SDK: 35 (Android 14)
-- Compile SDK: 36 (Android 15)
-- Application ID: `com.karakept.app`
-- Build variants: debug, release, devRelease (staging) — declared in `:androidApp`, the plain
-  Android application module; `:composeApp` is a KMP library and has no build types
-
-**Desktop Application:**
-- Runs on JVM via Compose Desktop
-- macOS, Windows, Linux support
-- Native menu bar integration via compose-native-tray
-- File picker via GTK/native dialogs
-
-**CI/CD:**
-- GitHub Actions workflow (`.github/workflows/`)
-  - `release.yml` - Version resolution, build, and release
-  - `pr-build.yml` - Pull request validation
-  - `ci.yml` - Continuous integration
-  - `cache-warm.yml` - Seeds the Gradle cache from the default branch
-  - `gradle/actions/setup-gradle@v6` (MIT) - Gradle setup + caching in CI. Pinned to
-    `cache-provider: basic`, the open-source (MIT) cache provider built on `actions/cache`.
-    The v6 default `enhanced` provider relies on the proprietary `gradle-actions-caching`
-    component governed by Gradle's commercial Terms of Use and is deliberately not used.
-  - Uses LLM for changelog generation (`lmgarret/llm-release-action` v2.1.0, anthropic/claude-sonnet-5-5)
-  - Signing configured via environment variables (KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)
-
-## Platform Requirements
-
-**Development:**
-- JDK 21 (CI uses temurin-21; pinned in `mise.toml` alongside Gradle 9.8.1 and Python 3.13)
-- Android SDK 36
-- Android NDK 26.1+ (for native libraries if needed)
-- Node.js LTS (for upstream monorepo tooling)
-- GTK development libraries (Linux desktop development)
-- WebKit development libraries (Linux desktop development)
-- D-Bus (for system tray on Linux desktop)
-
-**Android Runtime:**
-- Android 7.0+ (API 24+)
-- Minimum 2GB RAM recommended
-- Vibration permission required
-- POST_NOTIFICATIONS permission (Android 13+)
-
-**Desktop Runtime:**
-- JVM 8+ compatible
-- Linux: GTK 3+, WebKit2GTK 4.1+, D-Bus
-- macOS: 10.13+, native runtime environment
-- Windows: WebView2 runtime
-
----
-
-*Stack analysis: 2026-05-30*
+- **Android:** API level from `android-minSdk`; `POST_NOTIFICATIONS` on Android 13+.
+- **Desktop:** JVM 11+. Linux: GTK 3, WebKit2GTK 4.1, D-Bus. Windows: WebView2 runtime.
