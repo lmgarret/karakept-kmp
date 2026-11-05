@@ -6,14 +6,14 @@ Karakept is a Kotlin Multiplatform (KMP) bookmark manager app built with Compose
 targeting Android and JVM Desktop (Linux, macOS, Windows).
 The UI follows **Material Design 3 (MD3)** guidelines throughout.
 
-Key technologies:
-- Kotlin 2.4.21 / Compose Multiplatform 1.12.2
+Key technologies (versions in `gradle/libs.versions.toml`; what each is for in `docs/codebase/STACK.md`):
+- Kotlin Multiplatform / Compose Multiplatform
 - Material3 (`androidx.compose.material3`)
-- Compose Navigation 3 (`androidx.navigation3` / `org.jetbrains.androidx.navigation3` 1.2.0) for navigation
+- Compose Navigation 3 (`androidx.navigation3` / `org.jetbrains.androidx.navigation3`) for navigation
 - `androidx.lifecycle` `ViewModel` (multiplatform) for per-screen state (MVVM)
-- Koin 4.2.2 for dependency injection (incl. `koin-compose-viewmodel`, `koin-compose-navigation3`)
-- Room 3.0.3 (`androidx.room3`) for local SQLite storage
-- Ktor 3.6.1 for HTTP/API communication
+- Koin for dependency injection (incl. `koin-compose-viewmodel`, `koin-compose-navigation3`)
+- Room 3 (`androidx.room3`) for local SQLite storage
+- Ktor for HTTP/API communication
 - kotlinx-serialization, kotlinx-coroutines, kotlinx-datetime
 
 ---
@@ -840,7 +840,7 @@ Before adding any dependency:
 
 1. **Check the license.** Verify it is compatible with the project (MIT, Apache 2.0, and similar permissive licenses are fine; GPL/LGPL requires careful review).
 2. **Add it to the open-source licenses screen.** The in-app open-source credits screen must be updated to include the new library name, version, and license.
-3. **Document it.** Add the dependency to the relevant section in `docs/codebase/STACK.md`.
+3. **Document it.** Add the dependency to the relevant section in `docs/codebase/STACK.md` — what it is for and any decision behind it, not its version.
 
 ---
 
@@ -893,7 +893,7 @@ Releases (`.github/workflows/release.yml`):
 ## API Client
 
 The `api-client/` module is **generated** from the Karakeep OpenAPI spec at
-`karakeep-upstream/packages/open-api/karakeep-openapi-spec.json` using OpenAPI Generator 7.26.0.
+`karakeep-upstream/packages/open-api/karakeep-openapi-spec.json` using OpenAPI Generator (version in `gradle/libs.versions.toml`).
 
 - The spec lives in the `karakeep-upstream` git submodule. If a build fails with a
   missing-spec error on `:api-client:openApiGenerate`, initialize it first:
