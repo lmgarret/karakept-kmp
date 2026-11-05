@@ -724,9 +724,8 @@ fun BookmarkViewerContent(
                                     onContentReady = { scrollRestoration.onContentRendered() },
                                     scrollToHighlightId = scrollToHighlightId,
                                     selectedHighlightId = selectedHighlightId ?: scrollToHighlightId,
-                                    parseDocument = { sanitizedHtml ->
-                                        screenModel.getCachedOrParseDocument(bookmarkId, sanitizedHtml)
-                                    },
+                                    cachedDocument = { sanitizedHtml -> screenModel.cachedDocument(bookmarkId, sanitizedHtml) },
+                                    onDocumentPrepared = { document -> screenModel.cacheDocument(bookmarkId, document) },
                                     searchQuery = if (showSearch) searchQuery else "",
                                     activeSearchMatchIndex = currentMatchIndex,
                                     onSearchMatchesFound = { matches ->

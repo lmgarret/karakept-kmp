@@ -29,7 +29,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.fleeksoft.ksoup.nodes.Document
+import com.karakept.app.ui.components.reader.PreparedReaderDocument
 import com.karakept.app.data.model.ContentSource
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
@@ -67,7 +67,8 @@ internal fun ContentBodySection(
     onContentReady: (() -> Unit)? = null,
     scrollToHighlightId: String? = null,
     selectedHighlightId: String? = null,
-    parseDocument: ((String) -> Document?)? = null,
+    cachedDocument: ((String) -> PreparedReaderDocument?)? = null,
+    onDocumentPrepared: (PreparedReaderDocument) -> Unit = {},
     searchQuery: String = "",
     activeSearchMatchIndex: Int = 0,
     onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
@@ -220,7 +221,8 @@ internal fun ContentBodySection(
                     onHighlightPosition = onHighlightPosition,
                     scrollToHighlightId = scrollToHighlightId,
                     selectedHighlightId = selectedHighlightId,
-                    parseDocument = parseDocument,
+                    cachedDocument = cachedDocument,
+                    onDocumentPrepared = onDocumentPrepared,
                     searchQuery = searchQuery,
                     activeSearchMatchIndex = activeSearchMatchIndex,
                     onSearchMatchesFound = onSearchMatchesFound,

@@ -434,8 +434,8 @@ text nodes concatenated in document order and nothing else — the same count ka
 makes with a `TreeWalker` (`BookmarkHtmlHighlighter.getTextNodeOffset`) and the same one the
 WebView viewer's JS makes, so a highlight means the same thing in both viewers and on the server.
 
-`buildReaderTextOffsets(body)` walks it once per document; the reader remembers the result and
-every renderer reads its offsets rather than counting along as it draws. That counting is what
+`buildReaderTextOffsets(body)` walks it once per document, inside `prepareReaderDocument`
+(`PreparedReaderDocument.kt`); every renderer reads its offsets rather than counting along as it draws. That counting is what
 drifted: creation resolved a selection through one walk and drawing accumulated another, and
 wherever the second forgot something — a container walked with `children()` instead of
 `childNodes()`, a `<br>`, the whitespace between two `<li>`s — every later highlight moved a
@@ -491,6 +491,19 @@ solid (yellow) / double (blue) / dashed (green) / dotted (red).
 - A pattern is only learnable if it is named, so `HighlightCard` and the colour picker spell the
   colour out (`TagChip`, and a label under each swatch) under `highContrast`.
 
+### Preparing an article
+
+Parsing an article and every walk over the whole of it — `buildReaderTextOffsets`,
+`computeReaderTextSpans`, `collectGalleryImages` — happen once, in `prepareReaderDocument`
+(`ui/components/reader/PreparedReaderDocument.kt`), which `HtmlContent` runs on
+`AppDispatchers.default` right after sanitising. `NativeHtmlRenderer` takes the finished
+`PreparedReaderDocument` and the loader stays up until it exists. On a long article those walks
+are most of a second; done in composition they froze the UI on open.
+
+> **Rule:** a new full-document walk goes into `prepareReaderDocument`, not into a `remember` in
+> the renderer. `BookmarkViewerScreenModel` caches prepared documents per bookmark, checked
+> against the HTML they were prepared from.
+
 ### Reader link hover
 
 A pointer resting on a link in the reader gets a hand cursor and, after a second, a plain tooltip
@@ -526,7 +539,7 @@ here fires from touch, and the tooltip is placed clear of the pointer hotspot
 - The pager's own swipe-to-change-image gesture is disabled while the active page is zoomed in
   above 1x, so panning a zoomed image never gets mistaken for a page flip.
 - The page-wide image list comes from `LocalGalleryImages` (`ReaderGalleryState.kt`), pre-scanned
-  once per document by `NativeHtmlRenderer` via `collectGalleryImages`.
+  once per document by `prepareReaderDocument` via `collectGalleryImages`.
 - Wired into `RenderResolvedImage` (`HtmlBlockRenderer.kt`) — every `<img>`/`<picture>`
   rendered in Reader mode is tappable to open the gallery positioned on that exact image.
 - The reader's hero banner is page 0 of that list, whichever image was tapped. It is not part of

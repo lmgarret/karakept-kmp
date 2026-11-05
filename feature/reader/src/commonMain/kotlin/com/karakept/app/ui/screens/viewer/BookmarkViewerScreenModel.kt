@@ -42,6 +42,7 @@ import com.karakept.app.domain.action.BookmarkActionController
 import com.karakept.app.domain.action.BookmarkActionEvent
 import com.karakept.app.domain.action.ServerCrawlAction
 import com.karakept.app.ui.utils.ParsedDocumentCache
+import com.karakept.app.ui.components.reader.PreparedReaderDocument
 import com.karakept.app.utils.AppLogger
 import getPlatform
 import kotlinx.coroutines.FlowPreview
@@ -323,19 +324,14 @@ class BookmarkViewerScreenModel(
     }
 
     /**
-     * Returns a cached parsed Document for the given bookmark, or parses [html]
-     * and caches the result.  This avoids re-parsing on back-navigation when
-     * the ScreenModel is still alive.
+     * The document already prepared from [html] for this bookmark, so going back to it while
+     * the ScreenModel is alive skips parsing it again.
      */
-    fun getCachedOrParseDocument(bookmarkId: Long, html: String): com.fleeksoft.ksoup.nodes.Document? {
-        parsedDocumentCache.get(bookmarkId)?.let { return it }
-        return try {
-            com.fleeksoft.ksoup.Ksoup.parse(html).also {
-                parsedDocumentCache.put(bookmarkId, it)
-            }
-        } catch (e: Exception) {
-            null
-        }
+    fun cachedDocument(bookmarkId: Long, html: String): PreparedReaderDocument? =
+        parsedDocumentCache.get(bookmarkId, html)
+
+    fun cacheDocument(bookmarkId: Long, document: PreparedReaderDocument) {
+        parsedDocumentCache.put(bookmarkId, document)
     }
 
     /** Refreshes whatever bookmark the screen currently holds; a no-op before it is loaded. */

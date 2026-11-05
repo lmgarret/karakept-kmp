@@ -31,10 +31,6 @@ import androidx.compose.ui.relocation.BringIntoViewModifierNode
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fleeksoft.ksoup.Ksoup
-import com.fleeksoft.ksoup.nodes.Document
-import com.fleeksoft.ksoup.nodes.Element
-import com.fleeksoft.ksoup.nodes.TextNode
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
@@ -51,10 +47,52 @@ import com.karakept.app.ui.theme.rememberFontFamily
  * Highlight offsets are compatible with the WebView's JavaScript TreeWalker
  * approach: both walk text nodes in document order and count characters.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NativeHtmlRenderer(
     html: String,
+    modifier: Modifier = Modifier,
+    highlights: List<Highlight> = emptyList(),
+    textColor: Color? = null,
+    fontSize: Int = 16,
+    fontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
+    onLinkClick: (String) -> Unit = {},
+    onHighlightClick: (String) -> Unit = {},
+    onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
+    onHighlightPosition: (String, HighlightPosition) -> Unit = { _, _ -> },
+    scrollToHighlightId: String? = null,
+    onLoaded: (() -> Unit)? = null
+) {
+    // Prepared in composition, on the main thread: only for callers with no coroutine to
+    // prepare it in. The reader goes through HtmlContent, which prepares it in the background.
+    val document = remember(html) { prepareReaderDocument(html) }
+    if (document == null) {
+        onLoaded?.invoke()
+        return
+    }
+    NativeHtmlRenderer(
+        document = document,
+        modifier = modifier,
+        highlights = highlights,
+        textColor = textColor,
+        fontSize = fontSize,
+        fontFamily = fontFamily,
+        onLinkClick = onLinkClick,
+        onHighlightClick = onHighlightClick,
+        onCreateHighlight = onCreateHighlight,
+        onHighlightPosition = onHighlightPosition,
+        scrollToHighlightId = scrollToHighlightId,
+        onLoaded = onLoaded
+    )
+}
+
+/**
+ * Renders an article [document] already prepared by [prepareReaderDocument], which is where every
+ * full-document walk happens — nothing here walks the whole tree.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun NativeHtmlRenderer(
+    document: PreparedReaderDocument,
     modifier: Modifier = Modifier,
     highlights: List<Highlight> = emptyList(),
     textColor: Color? = null,
@@ -69,7 +107,6 @@ fun NativeHtmlRenderer(
     scrollToHighlightId: String? = null,
     selectedHighlightId: String? = null,
     onLoaded: (() -> Unit)? = null,
-    parseDocument: ((String) -> Document?)? = null,
     searchQuery: String = "",
     activeSearchMatchIndex: Int = 0,
     onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
@@ -114,25 +151,8 @@ fun NativeHtmlRenderer(
         )
     }
 
-    // Parse HTML once and cache
-    val document = remember(html) {
-        parseDocument?.invoke(html) ?: try {
-            Ksoup.parse(html)
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    if (document == null) {
-        onLoaded?.invoke()
-        return
-    }
-
-    val body = document.body()
-
-    // Walked once: every offset the reader draws with, and the one a new selection
-    // is resolved to, come from here.
-    val offsets = remember(document) { buildReaderTextOffsets(body) }
+    // Every offset the reader draws with, and the one a new selection is resolved to, come from here.
+    val offsets = document.offsets
 
     // Offsets outlive the document they were taken in — another client, an older
     // build, a re-crawl — so each highlight is checked against the text it was
@@ -145,7 +165,7 @@ fun NativeHtmlRenderer(
     val galleryViewerState = LocalGalleryViewerState.current
     val heroImage = galleryViewerState?.heroImage
     val galleryImages = remember(document, heroImage) {
-        listOfNotNull(heroImage) + collectGalleryImages(document)
+        listOfNotNull(heroImage) + document.galleryImages
     }
     // So the hero banner, which cannot read the composition local below, opens the same list.
     SideEffect { galleryViewerState?.images = galleryImages }
@@ -199,19 +219,16 @@ fun NativeHtmlRenderer(
                         .padding(horizontal = typography.horizontalMarginDp.dp, vertical = 0.dp)
                         .padding(bottom = 28.dp)
                 ) {
-                // Build list of renderable children once, each carrying the offset
-                // its text starts at, so a block's position never depends on how
-                // much of the document has been revealed so far.
-                val renderableChildren = remember(offsets) {
-                    computeReaderTextSpans(body, offsets).filter { it.isRenderable }
-                }
+                // Each block carries the offset its text starts at, so a block's position
+                // never depends on how much of the document has been revealed so far.
+                val renderableChildren = document.renderableChildren
 
                 // Progressive rendering: show first 20 blocks immediately, reveal rest in batches
                 val initialChunkSize = 20
-                var visibleCount by remember(html) { mutableStateOf(minOf(initialChunkSize, renderableChildren.size)) }
+                var visibleCount by remember(document) { mutableStateOf(minOf(initialChunkSize, renderableChildren.size)) }
 
                 if (visibleCount < renderableChildren.size) {
-                    LaunchedEffect(html, renderableChildren.size) {
+                    LaunchedEffect(document) {
                         while (visibleCount < renderableChildren.size) {
                             kotlinx.coroutines.delay(16) // ~1 frame at 60fps
                             visibleCount = minOf(visibleCount + 10, renderableChildren.size)
