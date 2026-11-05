@@ -222,7 +222,7 @@
 ## Platform Requirements
 
 **Development:**
-- JDK 21 (CI uses temurin-21; pinned in `mise.toml` alongside Gradle 9.8.1 and Python 3.13)
+- JDK 21 (CI uses temurin-21; pinned in `mise.toml` alongside Gradle 9.8.2 and Python 3.13)
 - Android SDK 36
 - Android NDK 26.1+ (for native libraries if needed)
 - Node.js LTS (for upstream monorepo tooling)

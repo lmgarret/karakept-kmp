@@ -79,12 +79,12 @@
 versions CI uses, so one command reproduces them:
 
 ```bash
-mise install          # java 21, gradle 9.8.1, python 3.13
+mise install          # java 21, gradle 9.8.2, python 3.13
 mise run setup        # the above, plus the karakeep-upstream submodule
 ```
 
 `mise tasks` lists the project's tasks (`test:desktop`, `test:android`, `icons`). Without mise,
-install JDK 21 and Gradle 9.8.1 yourself — `./gradlew` still works standalone.
+install JDK 21 and Gradle 9.8.2 yourself — `./gradlew` still works standalone.
 
 > **Clone with submodules.** The `api-client` module is generated at build
 > time from the Karakeep OpenAPI spec, which lives in the `karakeep-upstream`

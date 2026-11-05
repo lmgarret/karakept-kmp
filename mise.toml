@@ -2,7 +2,7 @@
 # Every version here matches .github/workflows/*.yml; keep them in step.
 [tools]
 java = "temurin-21"
-gradle = "9.8.1"
+gradle = "9.8.2"
 python = "3.13"
 
 [tasks.setup]

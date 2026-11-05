@@ -86,9 +86,9 @@
 - Fix approach: Regularly review build.gradle for new deprecation warnings
 
 **Alpha/Beta dependencies:**
-- Room 2.7.0-alpha11, SQLite 2.5.0-alpha11, Voyager 1.1.0-beta03 - pre-release versions in production app
+- Compose WebView 1.0.0-beta-02 - the one pre-release version left in the production app (Room, SQLite and navigation are all on stable releases now)
 - Impact: May receive breaking changes, limited stability guarantees
-- Fix approach: Plan upgrade path as stable versions release. Monitor alpha/beta release notes for breaking changes.
+- Fix approach: Move to a stable release once one ships. Monitor its release notes for breaking changes.
 
 ## Code Complexity & Maintainability
 
