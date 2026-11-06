@@ -30,6 +30,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewFeature
+import com.karakept.app.data.cache.HtmlArchiveProcessor
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ViewerMode
 import com.karakept.app.ui.theme.EinkMode
@@ -123,25 +124,9 @@ private fun isSameDocumentAnchor(uri: android.net.Uri): Boolean {
     return uri.scheme == "file" || (uri.scheme == "https" && uri.host == ARCHIVE_VIRTUAL_HOST)
 }
 
-/**
- * Injects the viewport/CSP meta tags and highlight styles/scripts into a full-page
- * archive document (Web mode), which is already a complete `<html>` document as
- * downloaded from the server.
- */
-private fun injectArchiveScripts(html: String, highlightStyles: String, highlightScripts: String): String {
-    return html
-        .replace("</head>", """
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data: file:; style-src 'unsafe-inline' http: https:; script-src 'unsafe-inline';">
-            <style>
-                $highlightStyles
-            </style>
-        </head>""".trimIndent())
-        .replace("</body>", """
-            <script>
-                $highlightScripts
-            </script>
-        </body>""".trimIndent())
+private fun newScriptNonce(): String {
+    val bytes = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+    return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
 }
 
 /**
@@ -154,8 +139,8 @@ private fun injectArchiveScripts(html: String, highlightStyles: String, highligh
  * - Mixed content always allowed (HTTP images from a `file://` context)
  * - Link clicks intercepted
  *
- * A cached full-page archive is served raw through [WebViewAssetLoader], without
- * `HtmlArchiveProcessor`; only the injected CSP applies to it.
+ * A cached full-page archive is served through [WebViewAssetLoader] after the same
+ * `HtmlArchiveProcessor` pass the inline archive gets.
  */
 @Composable
 actual fun HtmlRenderer(
@@ -351,7 +336,7 @@ actual fun HtmlRenderer(
                 // Archive mode: inject our scripts and styles into the existing HTML.
                 // Only used for the inline (non-file) archive path; cached archives are
                 // injected on the fly by the WebViewAssetLoader path handler instead.
-                injectArchiveScripts(html, highlightStyles, highlightScripts)
+                injectArchiveScripts(html, highlightStyles, highlightScripts, newScriptNonce())
             }
         }
     }
@@ -366,7 +351,8 @@ actual fun HtmlRenderer(
                 val path = localFilePathState.value ?: return@addPathHandler null
                 try {
                     val raw = File(path).readText(Charsets.UTF_8)
-                    val injected = injectArchiveScripts(raw, highlightStyles, highlightScripts)
+                    val sanitized = HtmlArchiveProcessor.processForArchive(raw)
+                    val injected = injectArchiveScripts(sanitized, highlightStyles, highlightScripts, newScriptNonce())
                     WebResourceResponse(
                         "text/html",
                         "UTF-8",

@@ -5,67 +5,49 @@ import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.HtmlSanitizer
 
 /**
- * Processes HTML for Archive mode rendering.
+ * Processes HTML for Archive (Web) mode rendering, both an inline archive and a cached
+ * full-page archive read from disk.
  *
- * Archive mode preserves original stylesheets but removes all JavaScript
- * and event handlers for security.
- *
- * Security measures:
- * - Remove all <script> tags
- * - Remove all inline event handlers (onclick, onload, etc.)
- * - Validate URLs in href/src attributes
- * - Keep <style> and <link rel="stylesheet"> for visual fidelity
+ * Archive mode keeps the page's own stylesheets but removes everything that can run script,
+ * navigate on its own or load another document, because the WebView it is shown in has
+ * JavaScript on and a native bridge for the highlight script.
  */
 object HtmlArchiveProcessor {
+    private val URL_ATTRIBUTES = listOf("href", "xlink:href", "src", "action", "formaction", "poster", "background")
+
     fun processForArchive(html: String?): String {
         if (html.isNullOrBlank()) return ""
 
         return try {
             val doc = Ksoup.parse(html)
-
-            // Optimize: Disable pretty printing
             doc.outputSettings().prettyPrint(false)
 
-            // Remove ALL script tags
-            doc.select("script").remove()
-
-            // Remove dangerous embedding elements that can load external content/JS
-            doc.select("iframe, object, embed, applet").remove()
-
-            // Remove forms to prevent phishing attacks
+            doc.select("script, noscript").remove()
+            doc.select("iframe, frame, frameset, object, embed, applet, portal").remove()
             doc.select("form").remove()
+            // A refresh or a CSP of the page's own, a document base, and every <link> but a
+            // stylesheet (preload, import, manifest, …) act without the user.
+            doc.select("meta[http-equiv], base").remove()
+            doc.select("link").filterNot { it.attr("rel").lowercase().split(' ').contains("stylesheet") }
+                .forEach { it.remove() }
+            // SVG animation can rewrite an href into a javascript: URL after sanitising.
+            doc.select("animate, set, animateMotion, animateTransform, handler, listener").remove()
 
-            // Remove inline event handlers (defense in depth)
-            // Optimize: Select only elements with these attributes instead of iterating all elements
-            val eventHandlers = listOf(
-                "onclick", "onload", "onerror", "onmouseover", "onmouseout",
-                "onfocus", "onblur", "onchange", "onsubmit", "onkeydown",
-                "onkeyup", "onkeypress", "ondblclick", "onmousedown", "onmouseup",
-                "onmousemove", "onmouseleave", "onmouseenter", "oncontextmenu",
-                "oninput", "onscroll", "onwheel", "oncopy", "oncut", "onpaste"
-            )
-            
-            // Build a selector for all event handlers: [onclick], [onload], ...
-            val selector = eventHandlers.joinToString(", ") { "[$it]" }
-            doc.select(selector).forEach { element ->
-                eventHandlers.forEach { handler ->
-                    element.removeAttr(handler)
-                }
-            }
+            doc.getAllElements().forEach { element ->
+                element.attributes()
+                    .map { it.key }
+                    .filter { name ->
+                        val lower = name.lowercase()
+                        lower.startsWith("on") || lower == "srcdoc"
+                    }
+                    .forEach { element.removeAttr(it) }
 
-            // Validate href URLs
-            doc.select("[href]").forEach { element ->
-                val href = element.attr("href")
-                if (!HtmlSanitizer.isValidUrl(href) && !href.startsWith("#")) {
-                    element.removeAttr("href")
-                }
-            }
-
-            // Validate src URLs
-            doc.select("[src]").forEach { element ->
-                val src = element.attr("src")
-                if (!HtmlSanitizer.isValidUrl(src)) {
-                    element.removeAttr("src")
+                URL_ATTRIBUTES.forEach { name ->
+                    if (element.hasAttr(name)) {
+                        val value = element.attr(name)
+                        val keepAnchor = (name == "href" || name == "xlink:href") && value.startsWith("#")
+                        if (!keepAnchor && !HtmlSanitizer.isValidUrl(value)) element.removeAttr(name)
+                    }
                 }
             }
 
@@ -73,9 +55,6 @@ object HtmlArchiveProcessor {
             val children = doc.body().childNodes().toList()
             doc.body().empty()
             doc.body().appendElement("div").attr("id", "karakept-content").appendChildren(children)
-            
-            // Keep <style> and <link rel="stylesheet"> for original styling
-            // They are preserved by not removing them
 
             doc.html()
         } catch (e: Exception) {

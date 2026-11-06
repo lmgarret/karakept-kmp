@@ -100,6 +100,56 @@ class HtmlArchiveProcessorTest {
     }
 
     @Test
+    fun `processForArchive strips every on-attribute, not only common ones`() {
+        val html = """<html><body><div onanimationstart="a()" onpointerover="b()" ontoggle="c()">x</div><svg><rect onbegin="d()"/></svg></body></html>"""
+        val result = HtmlArchiveProcessor.processForArchive(html)
+        listOf("onanimationstart", "onpointerover", "ontoggle", "onbegin").forEach {
+            assertFalse(result.contains(it), "$it should be stripped")
+        }
+    }
+
+    @Test
+    fun `processForArchive removes meta http-equiv and base`() {
+        val html = """<html><head><meta http-equiv="refresh" content="0;url=https://evil.com"><base href="https://evil.com/"><meta charset="utf-8"></head><body>x</body></html>"""
+        val result = HtmlArchiveProcessor.processForArchive(html)
+        assertFalse(result.contains("http-equiv"), "meta http-equiv should be removed")
+        assertFalse(result.contains("<base"), "base should be removed")
+        assertTrue(result.contains("charset"), "plain meta should be kept")
+    }
+
+    @Test
+    fun `processForArchive keeps stylesheet links and drops other links`() {
+        val html = """<html><head><link rel="stylesheet" href="https://example.com/a.css"><link rel="preload" href="https://example.com/b.js"><link rel="import" href="https://evil.com/c.html"></head><body>x</body></html>"""
+        val result = HtmlArchiveProcessor.processForArchive(html)
+        assertTrue(result.contains("a.css"), "stylesheet should be kept")
+        assertFalse(result.contains("b.js"), "preload should be removed")
+        assertFalse(result.contains("c.html"), "import should be removed")
+    }
+
+    @Test
+    fun `processForArchive drops javascript URLs in href, xlink href and action attributes`() {
+        val html = """<html><body><a href="javascript:alert(1)">a</a><svg><a xlink:href="javascript:alert(2)"><text>t</text></a></svg><button formaction="javascript:alert(3)">b</button></body></html>"""
+        val result = HtmlArchiveProcessor.processForArchive(html)
+        assertFalse(result.contains("javascript:"), "javascript: URLs should be removed")
+    }
+
+    @Test
+    fun `processForArchive removes SVG animation that can rewrite attributes`() {
+        val html = """<html><body><svg><a><animate attributeName="href" to="javascript:alert(1)"/><set attributeName="href" to="javascript:alert(2)"/><text>t</text></a></svg></body></html>"""
+        val result = HtmlArchiveProcessor.processForArchive(html)
+        assertFalse(result.contains("<animate"), "animate should be removed")
+        assertFalse(result.contains("<set"), "set should be removed")
+    }
+
+    @Test
+    fun `processForArchive keeps in-page anchors and data images`() {
+        val html = """<html><body><a href="#top">top</a><img src="data:image/png;base64,AAAA"></body></html>"""
+        val result = HtmlArchiveProcessor.processForArchive(html)
+        assertTrue(result.contains("href=\"#top\""))
+        assertTrue(result.contains("data:image/png;base64,AAAA"))
+    }
+
+    @Test
     fun `processForArchive returns empty string for null input`() {
         assertEquals("", HtmlArchiveProcessor.processForArchive(null))
     }
