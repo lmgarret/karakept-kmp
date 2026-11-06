@@ -5,8 +5,9 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Source-text guards for the layer boundaries described in AGENTS.md. Offenders that predate a
- * rule are listed in [KNOWN_VIOLATIONS] as `"<rule-id>:<path relative to composeApp/src>"`; a
+ * Source-text guards for the layer boundaries described in AGENTS.md, across every app module.
+ * Offenders that predate a rule are listed in [KNOWN_VIOLATIONS] as
+ * `"<rule-id>:<path relative to the repository root>"`; a
  * rule fails on any offender not listed and on any listed entry that no longer offends, so
  * whoever fixes a violation must delete its entry.
  */
@@ -15,19 +16,23 @@ class LayerRulesTest {
     private val repoRoot: File = generateSequence(File(".").absoluteFile) { it.parentFile }
         .first { File(it, "tools/material-icons.txt").isFile }
 
-    private val srcRoot = File(repoRoot, "composeApp/src")
+    // Every module holding app code. Packages do not follow modules, so each rule runs over all.
+    private val srcRoots = listOf("composeApp", "core/model", "core/data", "core/ui", "feature/reader")
+        .map { File(repoRoot, "$it/src") }
+        .filter { it.isDirectory }
 
     private val sourceSets = listOf("commonMain", "androidMain", "desktopMain")
 
-    private fun packageDir(sourceSet: String) =
-        File(srcRoot, "$sourceSet/kotlin/com/karakept/app")
+    private fun packageDirs(sourceSet: String) =
+        srcRoots.map { File(it, "$sourceSet/kotlin/com/karakept/app") }
 
-    private fun kotlinFiles(sourceSet: String, subDir: String? = null): List<File> {
-        val base = packageDir(sourceSet).let { if (subDir == null) it else File(it, subDir) }
-        return base.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
-    }
+    private fun kotlinFiles(sourceSet: String, subDir: String? = null): List<File> =
+        packageDirs(sourceSet).flatMap { dir ->
+            val base = if (subDir == null) dir else File(dir, subDir)
+            base.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+        }
 
-    private fun relative(file: File) = file.relativeTo(srcRoot).invariantSeparatorsPath
+    private fun relative(file: File) = file.relativeTo(repoRoot).invariantSeparatorsPath
 
     private fun check(ruleId: String, offenders: Collection<String>) {
         val actual = offenders.map { "$ruleId:$it" }.toSet()
@@ -59,19 +64,8 @@ class LayerRulesTest {
             }
         }.map(::relative)
 
-    @Test
-    fun uiDoesNotReachDataInternals() {
-        check(
-            "ui-data",
-            filesContaining(
-                listOf("ui"),
-                listOf(
-                    "com.karakept.app.data.local.dao.",
-                    "com.karakept.app.data.remote.RemoteDataSource",
-                ),
-            ),
-        )
-    }
+    // ui-data (DAOs, RemoteDataSource) and ui-bookmark-entity were rules here until #440: both
+    // are internal to :core:data now, so the compiler refuses what they used to catch.
 
     @Test
     fun lowerLayersDoNotImportUi() {
@@ -84,8 +78,10 @@ class LayerRulesTest {
     @Test
     fun screensRootHoldsNoFiles() {
         val offenders = sourceSets.flatMap { set ->
-            File(packageDir(set), "ui/screens").listFiles { f -> f.isFile && f.extension == "kt" }
-                .orEmpty().toList()
+            packageDirs(set).flatMap { dir ->
+                File(dir, "ui/screens").listFiles { f -> f.isFile && f.extension == "kt" }
+                    .orEmpty().toList()
+            }
         }.map(::relative)
         check("screens-root", offenders)
     }
@@ -95,6 +91,7 @@ class LayerRulesTest {
         val expectDecl = Regex("""(?m)^\s*(?:(?:public|internal)\s+)?expect\s+(?:fun|object|class)\b""")
         val offenders = kotlinFiles("commonMain").filter { expectDecl.containsMatchIn(it.readText()) }
             .filter { file ->
+                val srcRoot = srcRoots.first { file.startsWith(it) }
                 val dir = file.parentFile.relativeTo(File(srcRoot, "commonMain")).path
                 val base = file.nameWithoutExtension
                 fun exists(set: String, vararg suffixes: String) = suffixes.any {
@@ -110,10 +107,10 @@ class LayerRulesTest {
         // expect-actual entries are expects whose actuals sit in differently named files
         // (Database.*, AppLoggerPlatform.kt, ...) or whose file name lacks the .android/.jvm suffix.
         val KNOWN_VIOLATIONS: Set<String> = setOf(
-            "expect-actual:commonMain/kotlin/com/karakept/app/data/local/AppDatabase.kt",
-            "expect-actual:commonMain/kotlin/com/karakept/app/ui/theme/WindowThemeSync.kt",
-            "expect-actual:commonMain/kotlin/com/karakept/app/utils/AppLogger.kt",
-            "expect-actual:commonMain/kotlin/com/karakept/app/data/cache/ImageCacheManager.kt",
+            "expect-actual:core/data/src/commonMain/kotlin/com/karakept/app/data/local/AppDatabase.kt",
+            "expect-actual:core/ui/src/commonMain/kotlin/com/karakept/app/ui/theme/WindowThemeSync.kt",
+            "expect-actual:core/data/src/commonMain/kotlin/com/karakept/app/utils/AppLogger.kt",
+            "expect-actual:core/data/src/commonMain/kotlin/com/karakept/app/data/cache/ImageCacheManager.kt",
         )
     }
 }

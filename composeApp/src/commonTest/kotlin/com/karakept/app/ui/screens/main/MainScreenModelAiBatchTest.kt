@@ -1,33 +1,21 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.testing.testBookmark
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
-import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.remote.ApiException
 import com.karakept.app.data.remote.UnsupportedServerActionException
-import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.HighlightRepository
-import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.data.repository.requestAiRetag
 import com.karakept.app.data.repository.summarizeBookmark
-import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.AiAction
-import com.karakept.app.domain.action.BookmarkActionController
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -41,7 +29,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Tests for AI actions over a multi-selection.
@@ -53,17 +40,8 @@ import com.karakept.app.utils.TestAppDispatchers
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenModelAiBatchTest {
-
     private val testDispatcher = StandardTestDispatcher()
-
-    private lateinit var serverRepository: ServerRepository
-    private lateinit var bookmarkRepository: BookmarkRepository
-    private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var listRepository: ListRepository
-    private lateinit var bookmarkActionController: BookmarkActionController
-    private lateinit var snackbarManager: ActionSnackbarManager
-    private lateinit var highlightRepository: HighlightRepository
+    private val harness = MainScreenModelHarness(testDispatcher)
 
     private val fakeServer = Server(id = "server-1", url = "https://example.com", apiKey = "k", label = "Test")
 
@@ -73,43 +51,11 @@ class MainScreenModelAiBatchTest {
         // The AI actions are extension functions, so they are stubbed on their file class.
         mockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositoryAiKt")
 
-        serverRepository = mockk(relaxed = true)
-        bookmarkRepository = mockk(relaxed = true)
-        bookmarkActionsRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        listRepository = mockk(relaxed = true)
-        bookmarkActionController = mockk(relaxed = true)
-        snackbarManager = mockk(relaxed = true)
-        highlightRepository = mockk(relaxed = true)
-
         // The rows behind a selection are read by id, which needs a server to read them from.
-        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
-        every { settingsRepository.allListSettings } returns flowOf(emptyMap())
-        every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
-        every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
-        every { settingsRepository.customSwipeActionConfigs } returns flowOf(emptyList())
-        every { settingsRepository.swipeLeftConfigId } returns flowOf(null)
-        every { settingsRepository.swipeRightConfigId } returns flowOf(null)
-        every { settingsRepository.dimReadBookmarks } returns flowOf(true)
-        every { settingsRepository.defaultLayoutId } returns flowOf(null)
-        every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(true)
-        every { settingsRepository.activeServerId } returns flowOf("server-1")
-        every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
-        every { settingsRepository.defaultListId } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns MutableStateFlow(emptyList())
-        every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<String>()
-        every { bookmarkActionsRepository.aiCapabilities } returns MutableStateFlow(emptyMap())
-        every { bookmarkActionController.undoCompletedEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.domain.action.UndoCompletedEvent>()
-        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
-        every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        every { harness.serverRepository.servers } returns flowOf(listOf(fakeServer))
 
-        coEvery { bookmarkActionsRepository.summarizeBookmark(any()) } returns "A summary."
-        coEvery { bookmarkActionsRepository.requestAiRetag(any(), any()) } returns true
+        coEvery { harness.bookmarkActionsRepository.summarizeBookmark(any()) } returns "A summary."
+        coEvery { harness.bookmarkActionsRepository.requestAiRetag(any(), any()) } returns true
     }
 
     @AfterTest
@@ -118,53 +64,24 @@ class MainScreenModelAiBatchTest {
         Dispatchers.resetMain()
     }
 
-    private fun createMainScreenModel() = MainScreenModel(
-        serverRepository = serverRepository,
-        bookmarkRepository = bookmarkRepository,
-        bookmarkActionsRepository = bookmarkActionsRepository,
-        settingsRepository = settingsRepository,
-        listRepository = listRepository,
-        bookmarkActionController = bookmarkActionController,
-        snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository,
-        appDispatchers = TestAppDispatchers(testDispatcher),
-        tagFilterRequests = TagFilterRequests()
-    )
-
-    private fun bookmark(remoteId: Long) = BookmarkEntity(
-        localId = remoteId,
-        remoteId = "remote-$remoteId",
-        serverId = "server-1",
-        url = "https://example.com/$remoteId",
-        title = "Bookmark $remoteId",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = 0L,
-        isArchived = false,
-        isStarred = false
-    )
-
     /**
      * A model with [count] bookmarks hand-selected.
      *
      * The rows behind a selection are read by id, so the view is described to the repository
      * rather than pushed into the list — a selection can cover rows the list has never shown.
      */
-    private fun MainScreenModel.withHandPickedSelection(count: Int): List<BookmarkEntity> {
-        val bookmarks = (1L..count).map { bookmark(it) }
+    private fun MainScreenModel.withHandPickedSelection(count: Int): List<Bookmark> {
+        val bookmarks = (1L..count).map { testBookmark(it) }
         stubView(bookmarks)
         bookmarks.forEach { toggleBookmarkSelection(it) }
         return bookmarks
     }
 
     /** Makes [bookmarks] the view the repository answers for. */
-    private fun stubView(bookmarks: List<BookmarkEntity>) {
-        coEvery { bookmarkRepository.getViewRemoteIds(any(), any()) } returns
+    private fun stubView(bookmarks: List<Bookmark>) {
+        coEvery { harness.bookmarkRepository.getViewRemoteIds(any(), any()) } returns
             bookmarks.map { it.remoteId }
-        coEvery { bookmarkRepository.getBookmarksByRemoteIds(any(), any()) } answers {
+        coEvery { harness.bookmarkRepository.getBookmarksByRemoteIds(any(), any()) } answers {
             val ids = secondArg<List<String>>().toSet()
             bookmarks.filter { it.remoteId in ids }
         }
@@ -174,9 +91,9 @@ class MainScreenModelAiBatchTest {
 
     @Test
     fun `selectAll marks the selection so AI actions can be withheld`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
-        stubView((1L..3L).map { bookmark(it) })
+        stubView((1L..3L).map { testBookmark(it) })
 
         model.selectAll()
         advanceUntilIdle()
@@ -186,9 +103,9 @@ class MainScreenModelAiBatchTest {
 
     @Test
     fun `hand-picking after Select All clears the mark`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
-        val bookmarks = (1L..3L).map { bookmark(it) }
+        val bookmarks = (1L..3L).map { testBookmark(it) }
         stubView(bookmarks)
         model.selectAll()
         advanceUntilIdle()
@@ -201,9 +118,9 @@ class MainScreenModelAiBatchTest {
 
     @Test
     fun `clearing the selection clears the mark`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
-        stubView((1L..3L).map { bookmark(it) })
+        stubView((1L..3L).map { testBookmark(it) })
         model.selectAll()
         advanceUntilIdle()
 
@@ -214,10 +131,10 @@ class MainScreenModelAiBatchTest {
 
     @Test
     fun `entering selection mode from a long press does not mark it`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
 
-        model.enterSelectionMode(bookmark(1L))
+        model.enterSelectionMode(testBookmark(1L))
 
         assertFalse(model.selectedViaSelectAll.value)
     }
@@ -226,19 +143,19 @@ class MainScreenModelAiBatchTest {
 
     @Test
     fun `summarize runs once per selected bookmark`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
         val bookmarks = model.withHandPickedSelection(3)
 
         model.batchAiAction(AiAction.SUMMARIZE)
         advanceUntilIdle()
 
-        bookmarks.forEach { coVerify(exactly = 1) { bookmarkActionsRepository.summarizeBookmark(it) } }
+        bookmarks.forEach { coVerify(exactly = 1) { harness.bookmarkActionsRepository.summarizeBookmark(it) } }
     }
 
     @Test
     fun `retag runs once per selected bookmark`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
         val bookmarks = model.withHandPickedSelection(2)
 
@@ -247,23 +164,23 @@ class MainScreenModelAiBatchTest {
 
         // awaitResult = false: a batch queues the jobs rather than polling each one for its tags.
         bookmarks.forEach {
-            coVerify(exactly = 1) { bookmarkActionsRepository.requestAiRetag(it, awaitResult = false) }
+            coVerify(exactly = 1) { harness.bookmarkActionsRepository.requestAiRetag(it, awaitResult = false) }
         }
-        coVerify(exactly = 0) { bookmarkActionsRepository.summarizeBookmark(any()) }
+        coVerify(exactly = 0) { harness.bookmarkActionsRepository.summarizeBookmark(any()) }
     }
 
     @Test
     fun `items run one at a time rather than all at once`() = runTest(testDispatcher) {
         var inFlight = 0
         var maxInFlight = 0
-        coEvery { bookmarkActionsRepository.summarizeBookmark(any()) } coAnswers {
+        coEvery { harness.bookmarkActionsRepository.summarizeBookmark(any()) } coAnswers {
             inFlight++
             maxInFlight = maxOf(maxInFlight, inFlight)
             kotlinx.coroutines.yield()
             inFlight--
             "summary"
         }
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
         model.withHandPickedSelection(4)
 
@@ -277,11 +194,11 @@ class MainScreenModelAiBatchTest {
     fun `progress counts through the selection and is cleared at the end`() = runTest(testDispatcher) {
         val gate = CompletableDeferred<String?>()
         var started = 0
-        coEvery { bookmarkActionsRepository.summarizeBookmark(any()) } coAnswers {
+        coEvery { harness.bookmarkActionsRepository.summarizeBookmark(any()) } coAnswers {
             started++
             if (started == 1) gate.await() else "summary"
         }
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
         model.withHandPickedSelection(3)
 
@@ -301,8 +218,8 @@ class MainScreenModelAiBatchTest {
     @Test
     fun `cancelling stops the run and leaves the rest untouched`() = runTest(testDispatcher) {
         val gate = CompletableDeferred<String?>()
-        coEvery { bookmarkActionsRepository.summarizeBookmark(any()) } coAnswers { gate.await() }
-        val model = createMainScreenModel()
+        coEvery { harness.bookmarkActionsRepository.summarizeBookmark(any()) } coAnswers { gate.await() }
+        val model = harness.createModel()
         advanceUntilIdle()
         model.withHandPickedSelection(5)
 
@@ -312,7 +229,7 @@ class MainScreenModelAiBatchTest {
         model.cancelAiBatchAction()
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { bookmarkActionsRepository.summarizeBookmark(any()) }
+        coVerify(exactly = 1) { harness.bookmarkActionsRepository.summarizeBookmark(any()) }
         assertNull(model.aiBatchProgress.value)
         assertTrue(model.selectedBookmarkIds.value.isEmpty())
     }
@@ -320,41 +237,41 @@ class MainScreenModelAiBatchTest {
     @Test
     fun `one failure does not abandon the rest of the selection`() = runTest(testDispatcher) {
         var call = 0
-        coEvery { bookmarkActionsRepository.summarizeBookmark(any()) } coAnswers {
+        coEvery { harness.bookmarkActionsRepository.summarizeBookmark(any()) } coAnswers {
             call++
             if (call == 2) throw ApiException("HTTP 500") else "summary"
         }
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
         model.withHandPickedSelection(3)
 
         model.batchAiAction(AiAction.SUMMARIZE)
         advanceUntilIdle()
 
-        coVerify(exactly = 3) { bookmarkActionsRepository.summarizeBookmark(any()) }
-        coVerify { snackbarManager.showSnackbar("Summarized 2 of 3 — 1 failed", any()) }
+        coVerify(exactly = 3) { harness.bookmarkActionsRepository.summarizeBookmark(any()) }
+        coVerify { harness.snackbarManager.showSnackbar("Summarized 2 of 3 — 1 failed", any()) }
     }
 
     @Test
     fun `an unsupported server stops the run instead of failing every item in turn`() = runTest(testDispatcher) {
-        coEvery { bookmarkActionsRepository.summarizeBookmark(any()) } throws
+        coEvery { harness.bookmarkActionsRepository.summarizeBookmark(any()) } throws
             UnsupportedServerActionException("This Karakeep server has no AI model configured")
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
         model.withHandPickedSelection(4)
 
         model.batchAiAction(AiAction.SUMMARIZE)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { bookmarkActionsRepository.summarizeBookmark(any()) }
-        coVerify { snackbarManager.showSnackbar("This Karakeep server has no AI model configured", any()) }
+        coVerify(exactly = 1) { harness.bookmarkActionsRepository.summarizeBookmark(any()) }
+        coVerify { harness.snackbarManager.showSnackbar("This Karakeep server has no AI model configured", any()) }
     }
 
     @Test
     fun `a second run while one is in flight is ignored`() = runTest(testDispatcher) {
         val gate = CompletableDeferred<String?>()
-        coEvery { bookmarkActionsRepository.summarizeBookmark(any()) } coAnswers { gate.await() }
-        val model = createMainScreenModel()
+        coEvery { harness.bookmarkActionsRepository.summarizeBookmark(any()) } coAnswers { gate.await() }
+        val model = harness.createModel()
         advanceUntilIdle()
         model.withHandPickedSelection(2)
 
@@ -366,18 +283,18 @@ class MainScreenModelAiBatchTest {
         gate.complete("summary")
         advanceUntilIdle()
 
-        coVerify(exactly = 2) { bookmarkActionsRepository.summarizeBookmark(any()) }
+        coVerify(exactly = 2) { harness.bookmarkActionsRepository.summarizeBookmark(any()) }
     }
 
     @Test
     fun `an empty selection just exits selection mode`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
 
         model.batchAiAction(AiAction.SUMMARIZE)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { bookmarkActionsRepository.summarizeBookmark(any()) }
+        coVerify(exactly = 0) { harness.bookmarkActionsRepository.summarizeBookmark(any()) }
         assertTrue(model.selectedBookmarkIds.value.isEmpty())
     }
 }

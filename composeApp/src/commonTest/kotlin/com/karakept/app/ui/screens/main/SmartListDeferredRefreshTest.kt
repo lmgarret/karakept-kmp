@@ -1,8 +1,8 @@
 package com.karakept.app.ui.screens.main
 
+import com.karakept.app.testing.testBookmark
 import com.karakept.app.domain.action.TagFilterRequests
 import com.karakept.api.model.KarakeepList
-import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.ListSettings
@@ -52,7 +52,6 @@ import com.karakept.app.utils.TestAppDispatchers
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SmartListDeferredRefreshTest {
-
     private val testDispatcher = StandardTestDispatcher()
 
     private val testServer = Server(
@@ -134,25 +133,8 @@ class SmartListDeferredRefreshTest {
         unmockkStatic("com.karakept.app.data.repository.BookmarkActionsRepositorySyncKt")
     }
 
-    private fun bookmarkEntity(
-        localId: Long = 1L,
-        listIds: String = ""
-    ) = BookmarkEntity(
-        localId = localId,
-        remoteId = "orig-$localId",
-        serverId = testServer.id,
-        url = "https://example.com/$localId",
-        title = "Bookmark $localId",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = 1000L,
-        isArchived = false,
-        isStarred = false,
-        listIds = listIds
-    )
+    private fun bookmarkEntity(localId: Long = 1L, listIds: String = "") =
+        testBookmark(localId, remoteId = "orig-$localId", serverId = testServer.id, createdAt = 1000L, listIds = listIds)
 
     private fun smartList(id: String) =
         KarakeepList(id = id, name = "Smart $id", type = KarakeepList.Type.SMART)

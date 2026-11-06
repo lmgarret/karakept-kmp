@@ -3,10 +3,7 @@ package com.karakept.app.ui.screens.main
 import com.karakept.app.domain.action.TagFilterRequests
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.Server
-import com.karakept.app.data.remote.ApiException
-import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.data.repository.ServerVersionRepository
-import com.karakept.app.domain.ServerCompatibility
 import com.karakept.app.data.model.SwipeAction
 import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
@@ -16,6 +13,7 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
+import com.karakept.app.domain.ServerVersionUtils
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -33,7 +31,6 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import com.karakept.app.utils.TestAppDispatchers
 
 /** The non-blocking startup warning for a server older than the app's minimum. */
@@ -45,7 +42,6 @@ class MainScreenModelServerVersionTest {
     private lateinit var serverRepository: ServerRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var serversFlow: MutableStateFlow<List<Server>>
-    private val remoteDataSource: RemoteDataSource = mockk()
     private val snackbarManager: ActionSnackbarManager = mockk(relaxed = true)
     private lateinit var serverVersionRepository: ServerVersionRepository
 
@@ -60,7 +56,10 @@ class MainScreenModelServerVersionTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         serversFlow = MutableStateFlow(listOf(initialServer))
-        serverVersionRepository = ServerVersionRepository(remoteDataSource, TestAppDispatchers(testDispatcher))
+        // Remembering answers and claiming the warning once per server is ServerVersionRepositoryTest's;
+        // here the screen only has to act on what the repository says.
+        serverVersionRepository = mockk(relaxed = true)
+        every { serverVersionRepository.claimOutdatedWarning(initialServer.id) } returnsMany listOf(true, false)
 
         serverRepository = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
@@ -118,7 +117,7 @@ class MainScreenModelServerVersionTest {
 
     @Test
     fun outdatedServer_warnsOnce() = runTest(testDispatcher) {
-        coEvery { remoteDataSource.fetchServerVersion(initialServer.url) } returns "0.1.0"
+        coEvery { serverVersionRepository.refresh(initialServer) } returns ServerVersionUtils.evaluate("0.1.0")
 
         createMainScreenModel()
         advanceUntilIdle()
@@ -127,15 +126,11 @@ class MainScreenModelServerVersionTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { snackbarManager.showSnackbar(match { "0.1.0" in it }, any()) }
-        assertEquals(
-            ServerCompatibility.OUTDATED,
-            serverVersionRepository.versions.value[initialServer.id]?.compatibility
-        )
     }
 
     @Test
     fun supportedServer_doesNotWarn() = runTest(testDispatcher) {
-        coEvery { remoteDataSource.fetchServerVersion(initialServer.url) } returns "99.0.0"
+        coEvery { serverVersionRepository.refresh(initialServer) } returns ServerVersionUtils.evaluate("99.0.0")
 
         createMainScreenModel()
         advanceUntilIdle()
@@ -145,7 +140,8 @@ class MainScreenModelServerVersionTest {
 
     @Test
     fun unreachableServer_doesNotWarn() = runTest(testDispatcher) {
-        coEvery { remoteDataSource.fetchServerVersion(initialServer.url) } throws ApiException("offline")
+        // An unreachable server comes back from the repository as no answer at all.
+        coEvery { serverVersionRepository.refresh(initialServer) } returns null
 
         createMainScreenModel()
         advanceUntilIdle()

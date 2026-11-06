@@ -1,6 +1,6 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.testing.testBookmark
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -14,23 +14,7 @@ import kotlin.test.assertTrue
  * removal, a sync update, a load-more append — must keep animating.
  */
 class ItemAnimationGateTest {
-
-    private fun bookmark(remoteId: Long) = BookmarkEntity(
-        localId = remoteId,
-        remoteId = "orig-$remoteId",
-        serverId = "server-1",
-        url = "https://example.com/$remoteId",
-        title = "Bookmark $remoteId",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = remoteId * 1000L,
-        isArchived = false,
-        isStarred = false,
-        listIds = ""
-    )
+    private fun bookmark(id: Long) = testBookmark(id, remoteId = "orig-$id", createdAt = id * 1000L)
 
     private fun listOfIds(ids: Iterable<Long>) = ids.map { bookmark(it) }
 

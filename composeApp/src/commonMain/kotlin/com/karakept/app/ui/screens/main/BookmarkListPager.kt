@@ -1,6 +1,6 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.model.FilterConfig
@@ -56,7 +56,7 @@ internal class BookmarkListPager(
      * be anywhere, including over rows the list has not read — and the old answer was to keep the
      * whole view ordered in memory so any index could be looked up. A row is a query.
      */
-    suspend fun bookmarkAtIndex(index: Int): BookmarkEntity? {
+    suspend fun bookmarkAtIndex(index: Int): Bookmark? {
         val server = selectedServer.value ?: return null
         return runCatching {
             bookmarkRepository.getBookmarkAt(server, effectiveFilterNow(), index)
@@ -179,7 +179,7 @@ internal class BookmarkListPager(
     private suspend fun readMissing(
         server: Server,
         filter: FilterConfig,
-        pages: MutableMap<Int, List<BookmarkEntity>>,
+        pages: MutableMap<Int, List<Bookmark>>,
         range: IntRange
     ) {
         range.filterNot { it in pages }.forEach { page ->

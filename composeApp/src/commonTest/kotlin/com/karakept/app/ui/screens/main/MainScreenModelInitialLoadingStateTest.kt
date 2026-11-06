@@ -1,22 +1,10 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.testing.testBookmark
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
-import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.HighlightRepository
-import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.domain.action.BookmarkActionController
-import com.karakept.app.domain.action.UndoCompletedEvent
 import io.mockk.coEvery
 import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -33,7 +21,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * A cold start used to render an empty LazyColumn, which looks exactly like a list that has
@@ -43,17 +30,8 @@ import com.karakept.app.utils.TestAppDispatchers
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenModelInitialLoadingStateTest {
-
     private val testDispatcher = StandardTestDispatcher()
-
-    private lateinit var serverRepository: ServerRepository
-    private lateinit var bookmarkRepository: BookmarkRepository
-    private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var listRepository: ListRepository
-    private lateinit var bookmarkActionController: BookmarkActionController
-    private lateinit var snackbarManager: ActionSnackbarManager
-    private lateinit var highlightRepository: HighlightRepository
+    private val harness = MainScreenModelHarness(testDispatcher)
 
     private val fakeServer = Server(
         id = "server-1",
@@ -66,44 +44,13 @@ class MainScreenModelInitialLoadingStateTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
-        serverRepository = mockk(relaxed = true)
-        bookmarkRepository = mockk(relaxed = true)
-        bookmarkActionsRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        listRepository = mockk(relaxed = true)
-        bookmarkActionController = mockk(relaxed = true)
-        snackbarManager = mockk(relaxed = true)
-        highlightRepository = mockk(relaxed = true)
-
-        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
-        every { settingsRepository.allListSettings } returns flowOf(emptyMap())
-        every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
-        every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
-        every { settingsRepository.customSwipeActionConfigs } returns flowOf(emptyList())
-        every { settingsRepository.swipeLeftConfigId } returns flowOf(null)
-        every { settingsRepository.swipeRightConfigId } returns flowOf(null)
-        every { settingsRepository.dimReadBookmarks } returns flowOf(true)
-        every { settingsRepository.defaultLayoutId } returns flowOf(null)
-        every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(false)
-        every { settingsRepository.activeServerId } returns flowOf("server-1")
-        every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
-        every { settingsRepository.defaultListId } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns MutableStateFlow(emptyList())
-        every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
-        every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
-        every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
-        every { bookmarkRepository.syncReports } returns MutableSharedFlow()
-        every { bookmarkRepository.backgroundSyncCompleted } returns MutableSharedFlow()
-        every { bookmarkRepository.pageCommitted } returns MutableSharedFlow()
-        every { bookmarkRepository.syncProgress } returns MutableStateFlow(
+        every { harness.serverRepository.servers } returns flowOf(listOf(fakeServer))
+        every { harness.settingsRepository.offlineMode } returns flowOf(false)
+        every { harness.bookmarkRepository.pageCommitted } returns MutableSharedFlow()
+        every { harness.bookmarkRepository.syncProgress } returns MutableStateFlow(
             com.karakept.app.data.model.SyncProgress.Idle
         )
-        coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
+        coEvery { harness.bookmarkRepository.shouldAutoSync(any()) } returns false
         stubView(emptyList())
     }
 
@@ -113,9 +60,9 @@ class MainScreenModelInitialLoadingStateTest {
      * The size is what settles whether the list has resolved: until it arrives, an empty window
      * is a view nobody has counted rather than a view with nothing in it.
      */
-    private fun stubView(rows: List<BookmarkEntity>) {
-        every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns flowOf(rows.size)
-        coEvery { bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
+    private fun stubView(rows: List<Bookmark>) {
+        every { harness.bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns flowOf(rows.size)
+        coEvery { harness.bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
             val offset = thirdArg<Int>()
             val limit = arg<Int>(3)
             if (offset >= rows.size) emptyList()
@@ -128,38 +75,9 @@ class MainScreenModelInitialLoadingStateTest {
         Dispatchers.resetMain()
     }
 
-    private fun makeBookmark(id: Long) = BookmarkEntity(
-        localId = id,
-        remoteId = "remote-$id",
-        serverId = "server-1",
-        url = "https://example.com/$id",
-        title = "Bookmark $id",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = id,
-        isArchived = false,
-        isStarred = false
-    )
-
-    private fun createMainScreenModel() = MainScreenModel(
-        serverRepository = serverRepository,
-        bookmarkRepository = bookmarkRepository,
-        bookmarkActionsRepository = bookmarkActionsRepository,
-        settingsRepository = settingsRepository,
-        listRepository = listRepository,
-        bookmarkActionController = bookmarkActionController,
-        snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository,
-        appDispatchers = TestAppDispatchers(testDispatcher),
-        tagFilterRequests = TagFilterRequests()
-    )
-
     @Test
     fun `is loading before the view has been counted`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+        val model = harness.createModel()
 
         assertTrue(model.isLoadingInitialPage.value, "should report loading before init completes")
     }
@@ -167,7 +85,7 @@ class MainScreenModelInitialLoadingStateTest {
     @Test
     fun `stops loading once an empty result resolves so the empty state can show`() =
         runTest(testDispatcher) {
-            val model = createMainScreenModel()
+            val model = harness.createModel()
             val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
 
@@ -180,9 +98,9 @@ class MainScreenModelInitialLoadingStateTest {
 
     @Test
     fun `stops loading once bookmarks are available`() = runTest(testDispatcher) {
-        stubView(listOf(makeBookmark(1), makeBookmark(2)))
+        stubView(listOf(testBookmark(1), testBookmark(2)))
 
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
@@ -193,7 +111,7 @@ class MainScreenModelInitialLoadingStateTest {
     @Test
     fun `bottom spinner stays hidden while a view switch reloads page zero`() =
         runTest(testDispatcher) {
-            val model = createMainScreenModel()
+            val model = harness.createModel()
             advanceUntilIdle()
 
             // resetPaginationAndLoad raises _isLoadingMore as a mutex against loadNextPage.

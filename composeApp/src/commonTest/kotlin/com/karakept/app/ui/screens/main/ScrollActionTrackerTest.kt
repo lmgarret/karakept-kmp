@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.testing.testBookmark
+import com.karakept.app.data.model.Bookmark
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -13,23 +14,7 @@ import kotlin.test.assertTrue
  * prepend rows. None of that is a scroll, so none of it may fire the list's scroll action.
  */
 class ScrollActionTrackerTest {
-
-    private fun bookmark(remoteId: Long) = BookmarkEntity(
-        localId = remoteId,
-        remoteId = "orig-$remoteId",
-        serverId = "server-1",
-        url = "https://example.com/$remoteId",
-        title = "Bookmark $remoteId",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = remoteId * 1000L,
-        isArchived = false,
-        isStarred = false,
-        listIds = ""
-    )
+    private fun bookmark(id: Long) = testBookmark(id, remoteId = "orig-$id", createdAt = id * 1000L)
 
     private fun listOfIds(vararg ids: Long) = ids.map { bookmark(it) }
 
@@ -38,7 +23,7 @@ class ScrollActionTrackerTest {
      * list so the bottom sweep stays out of the way unless a test opts into it.
      */
     private fun snapshot(
-        bookmarks: List<BookmarkEntity>,
+        bookmarks: List<Bookmark>,
         firstIndex: Int = 0,
         firstOffset: Int = 0,
         visibleCount: Int = 5,
@@ -69,7 +54,7 @@ class ScrollActionTrackerTest {
 
     // Decodes the fixture id back to the number it was built from, so the assertions
     // below read as row numbers rather than as "orig-" strings.
-    private fun ids(bookmarks: List<BookmarkEntity>) =
+    private fun ids(bookmarks: List<Bookmark>) =
         bookmarks.map { it.remoteId.substringAfter('-').toLong() }
 
     private val longList = (1L..30L).map { bookmark(it) }

@@ -172,7 +172,7 @@ object MainScreen : NavKey {
         var renameListTarget by remember { mutableStateOf<Triple<String, String, String?>?>(null) }
         val pendingBookmarkRemoteIds by screenModel.pendingBookmarkRemoteIds.collectAsState()
         var isSearchActive by remember { mutableStateOf(false) }
-        var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.local.entity.BookmarkEntity?>(null) }
+        var selectedBookmarkForActions by remember { mutableStateOf<com.karakept.app.data.model.Bookmark?>(null) }
         var showBatchDeleteConfirm by remember { mutableStateOf(false) }
         var showBatchListPicker by remember { mutableStateOf(false) }
         var showBatchTagEditor by remember { mutableStateOf(false) }
@@ -270,7 +270,7 @@ object MainScreen : NavKey {
         val topTagsWithCounts by screenModel.topTagsWithCounts.collectAsState()
 
         // Swipe action handler shared between modes
-        val handleSwipeAction: (com.karakept.app.data.local.entity.BookmarkEntity, SwipeAction, com.karakept.app.data.model.CustomSwipeActionConfig?) -> Unit = { bookmark, action, config ->
+        val handleSwipeAction: (com.karakept.app.data.model.Bookmark, SwipeAction, com.karakept.app.data.model.CustomSwipeActionConfig?) -> Unit = { bookmark, action, config ->
             when (action) {
                 SwipeAction.ARCHIVE -> screenModel.toggleBookmarkArchive(bookmark)
                 SwipeAction.MARK_READ -> screenModel.toggleBookmarkRead(bookmark)
@@ -323,7 +323,7 @@ object MainScreen : NavKey {
         }
 
         // Common scaffold content builder used by both layout modes
-        val scaffoldContent: @Composable (isExpanded: Boolean, activeBookmarkId: Long?, onBookmarkClick: (com.karakept.app.data.local.entity.BookmarkEntity) -> Unit, onMenuClick: () -> Unit) -> Unit =
+        val scaffoldContent: @Composable (isExpanded: Boolean, activeBookmarkId: Long?, onBookmarkClick: (com.karakept.app.data.model.Bookmark) -> Unit, onMenuClick: () -> Unit) -> Unit =
             { isExpanded, activeBmId, onBookmarkClick, onMenuClick ->
                 MainScreenScaffoldContent(
                     isExpandedLayout = isExpanded, bookmarks = bookmarks, window = bookmarkWindow, isSyncing = isSyncing, syncProgress = syncProgress,

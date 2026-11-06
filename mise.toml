@@ -2,7 +2,7 @@
 # Every version here matches .github/workflows/*.yml; keep them in step.
 [tools]
 java = "temurin-21"
-gradle = "9.8.1"
+gradle = "9.8.2"
 python = "3.13"
 
 [tasks.setup]
@@ -14,7 +14,7 @@ git submodule update --init
 
 [tasks."test:desktop"]
 description = "Desktop suite (commonTest + desktopTest) — the PR CI entry point"
-run = "./gradlew :composeApp:desktopTest --rerun"
+run = "./gradlew desktopTest --rerun"
 
 [tasks."test:android"]
 description = "Android (Robolectric) suite — needs an Android SDK and ~6 GB RAM"

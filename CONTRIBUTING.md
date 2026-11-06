@@ -50,7 +50,7 @@ data class BackupSettings(
 Open:
 
 ```
-composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/StoredSettings.kt
+core/data/src/commonMain/kotlin/com/karakept/app/data/repository/StoredSettings.kt
 ```
 
 Pick the category that best fits the setting and add the field with the **same default**:
@@ -78,7 +78,7 @@ internal data class StoredAppSettings(
 Open:
 
 ```
-composeApp/src/commonMain/kotlin/com/karakept/app/data/repository/SettingsRepository.kt
+core/data/src/commonMain/kotlin/com/karakept/app/data/repository/SettingsRepository.kt
 ```
 
 Three places to update:

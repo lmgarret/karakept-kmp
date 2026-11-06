@@ -9,7 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.model.CustomSwipeActionConfig
 import com.karakept.app.data.model.SwipeAction
@@ -137,7 +137,7 @@ internal class ScrollActionTracker {
     // next scroll-down. Kept across dataset swaps so a sync never re-fires a surviving item.
     private val processedIds = mutableSetOf<String>()
 
-    fun onSnapshot(snapshot: ScrollActionSnapshot): List<BookmarkEntity> {
+    fun onSnapshot(snapshot: ScrollActionSnapshot): List<Bookmark> {
         val previousWindow = lastWindow
         // What re-indexes rows, and nothing else. A page loading or being dropped changes the
         // window without moving a single row: a slot is a position in the view, so the rows
@@ -193,7 +193,7 @@ internal class ScrollActionTracker {
         }
         val topIndex = snapshot.firstKey?.let(window::indexOfRemoteId) ?: -1
 
-        val fired = mutableListOf<BookmarkEntity>()
+        val fired = mutableListOf<Bookmark>()
 
         when {
             topIndex > anchorIndex -> {
@@ -248,7 +248,7 @@ internal class ScrollActionTracker {
         from: Int,
         until: Int,
         snapshot: ScrollActionSnapshot,
-        into: MutableList<BookmarkEntity>,
+        into: MutableList<Bookmark>,
         alreadyPresent: Set<String>? = null
     ) {
         for (i in from until until) {

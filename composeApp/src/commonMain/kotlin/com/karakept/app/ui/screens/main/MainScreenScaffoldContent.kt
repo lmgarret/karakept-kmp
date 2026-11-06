@@ -17,7 +17,7 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key as keyboardKey
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.model.CustomSwipeActionConfig
@@ -90,7 +90,7 @@ data class MainScreenDisplayConfig(
 @Composable
 fun MainScreenScaffoldContent(
     isExpandedLayout: Boolean,
-    bookmarks: List<BookmarkEntity>,
+    bookmarks: List<Bookmark>,
     /** The same rows the list renders, addressed by absolute index. */
     window: BookmarkWindow,
     isSyncing: Boolean,
@@ -102,7 +102,7 @@ fun MainScreenScaffoldContent(
     sortOption: com.karakept.app.data.model.SortOption = com.karakept.app.data.model.SortOption.NEWEST,
     totalBookmarkCount: Int = 0,
     /** Names the row at an absolute index, for the scroll cursor's tooltip. */
-    bookmarkAtIndex: suspend (Int) -> BookmarkEntity? = { null },
+    bookmarkAtIndex: suspend (Int) -> Bookmark? = { null },
     displayConfig: MainScreenDisplayConfig,
     swipeLeftAction: SwipeAction,
     swipeRightAction: SwipeAction,
@@ -139,9 +139,9 @@ fun MainScreenScaffoldContent(
     aiBatchProgress: AiBatchProgress? = null,
     onShowBatchAiConfirm: (AiAction) -> Unit = {},
     contextMenuTags: List<String> = emptyList(),
-    onBookmarkClick: (BookmarkEntity) -> Unit,
-    onBookmarkLongClick: (BookmarkEntity) -> Unit,
-    onSwipeAction: (BookmarkEntity, SwipeAction, CustomSwipeActionConfig?) -> Unit,
+    onBookmarkClick: (Bookmark) -> Unit,
+    onBookmarkLongClick: (Bookmark) -> Unit,
+    onSwipeAction: (Bookmark, SwipeAction, CustomSwipeActionConfig?) -> Unit,
     onShowAddBookmarkDialog: () -> Unit,
     onShowBatchTagEditor: () -> Unit,
     onShowBatchListPicker: () -> Unit,
@@ -262,36 +262,12 @@ fun MainScreenScaffoldContent(
                 totalBookmarkCount =
                     if (searchQuery.isNotBlank()) bookmarks.size else totalBookmarkCount,
                 bookmarkAtIndex = bookmarkAtIndex,
-                layoutType = displayConfig.layoutType,
+                display = displayConfig,
                 swipeLeftAction = swipeLeftAction,
                 swipeRightAction = swipeRightAction,
                 swipeLeftConfig = customSwipeActionConfigs.find { it.id == swipeLeftConfigId },
                 swipeRightConfig = customSwipeActionConfigs.find { it.id == swipeRightConfigId },
-                dimReadBookmarks = displayConfig.dimReadBookmarks,
-                showReadingTimeBadge = displayConfig.showReadingTimeBadge,
                 showReadingProgress = trackReadingProgress,
-                showTags = displayConfig.showTags,
-                showDate = displayConfig.showDate,
-                dateDisplayMode = displayConfig.dateDisplayMode,
-                thumbnailSide = displayConfig.thumbnailSide,
-                showFavicon = displayConfig.showFavicon,
-                thumbnailSize = displayConfig.thumbnailSize,
-                metadataPosition = displayConfig.metadataPosition,
-                tagsScrollable = displayConfig.tagsScrollable,
-                quickActionPosition = displayConfig.quickActionPosition,
-                showDescription = displayConfig.showDescription,
-                descriptionPosition = displayConfig.descriptionPosition,
-                showUrl = displayConfig.showUrl,
-                urlDisplayMode = displayConfig.urlDisplayMode,
-                urlPosition = displayConfig.urlPosition,
-                urlIconMode = displayConfig.urlIconMode,
-                faviconByLinkSize = displayConfig.faviconByLinkSize,
-                showThumbnail = displayConfig.showThumbnail,
-                itemContainerStyle = displayConfig.itemContainerStyle,
-                readIndicatorStyle = displayConfig.readIndicatorStyle,
-                showRowDivider = displayConfig.showRowDivider,
-                titlePosition = displayConfig.titlePosition,
-                descriptionMaxLines = displayConfig.descriptionMaxLines,
                 offlineMode = offlineMode,
                 pendingBookmarkRemoteIds = pendingBookmarkRemoteIds,
                 isSelectionMode = isSelectionMode,
