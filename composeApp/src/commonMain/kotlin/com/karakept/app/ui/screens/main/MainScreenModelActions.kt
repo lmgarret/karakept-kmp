@@ -17,7 +17,7 @@ package com.karakept.app.ui.screens.main
 
 import androidx.lifecycle.viewModelScope
 import com.karakept.api.model.KarakeepList
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.domain.action.BookmarkActionEvent
 import com.karakept.app.data.remote.OfflineModeException
@@ -32,7 +32,7 @@ import com.karakept.app.utils.AppLogger
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-fun MainScreenModel.toggleBookmarkArchive(bookmark: BookmarkEntity) {
+fun MainScreenModel.toggleBookmarkArchive(bookmark: Bookmark) {
     viewModelScope.launch {
         val event = if (bookmark.isArchived) {
             BookmarkActionEvent.Unarchive(bookmark)
@@ -43,13 +43,13 @@ fun MainScreenModel.toggleBookmarkArchive(bookmark: BookmarkEntity) {
     }
 }
 
-fun MainScreenModel.toggleBookmarkFavorite(bookmark: BookmarkEntity) {
+fun MainScreenModel.toggleBookmarkFavorite(bookmark: Bookmark) {
     viewModelScope.launch {
         bookmarkActionController.executeAction(BookmarkActionEvent.ToggleFavorite(bookmark))
     }
 }
 
-fun MainScreenModel.toggleBookmarkRead(bookmark: BookmarkEntity) {
+fun MainScreenModel.toggleBookmarkRead(bookmark: Bookmark) {
     viewModelScope.launch {
         val markingUnread = bookmark.isRead
         val event = if (markingUnread) {
@@ -61,13 +61,13 @@ fun MainScreenModel.toggleBookmarkRead(bookmark: BookmarkEntity) {
     }
 }
 
-fun MainScreenModel.deleteBookmark(bookmark: BookmarkEntity) {
+fun MainScreenModel.deleteBookmark(bookmark: Bookmark) {
     viewModelScope.launch {
         bookmarkActionController.executeAction(BookmarkActionEvent.Delete(bookmark))
     }
 }
 
-fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<String>) {
+fun MainScreenModel.updateBookmarkTags(bookmark: Bookmark, newTags: List<String>) {
     viewModelScope.launch {
         bookmarkActionsRepository.updateTags(
             bookmark.remoteId, bookmark.serverId, newTags
@@ -81,7 +81,7 @@ fun MainScreenModel.updateBookmarkTags(bookmark: BookmarkEntity, newTags: List<S
  * Then updates the visible list surgically so the UI reflects the change immediately
  * without discarding the user's scroll position.
  */
-internal fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
+internal fun MainScreenModel.reconcileBookmarkLists(bookmark: Bookmark) {
     val server = _selectedServer.value ?: return
     val smartListIds = listRepository.lists.value
         .filter { it.type == KarakeepList.Type.SMART }
@@ -107,7 +107,7 @@ internal fun MainScreenModel.reconcileBookmarkLists(bookmark: BookmarkEntity) {
     }
 }
 
-fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
+fun MainScreenModel.moveBookmarkToList(bookmark: Bookmark, listId: String) {
     _actedOnBookmarkIds.value += bookmark.remoteId
     val smartListIds = listRepository.lists.value
         .filter { it.type == KarakeepList.Type.SMART }
@@ -130,7 +130,7 @@ fun MainScreenModel.moveBookmarkToList(bookmark: BookmarkEntity, listId: String)
  * with the original [removeBookmarkFromList]'s reconciliation coroutine.
  * Smart list reconciliation will happen on the next sync.
  */
-fun MainScreenModel.restoreAndMoveBookmarkToList(bookmark: BookmarkEntity, listId: String) {
+fun MainScreenModel.restoreAndMoveBookmarkToList(bookmark: Bookmark, listId: String) {
     viewModelScope.launch {
         bookmarkActionsRepository.moveToList(bookmark.remoteId, bookmark.serverId, listId)
     }
@@ -149,13 +149,13 @@ fun MainScreenModel.restoreAndMoveBookmarkToList(bookmark: BookmarkEntity, listI
  * list if it's missing, so the user sees it immediately. Smart list
  * membership will be fully reconciled on the next sync.
  */
-fun MainScreenModel.restoreAndRemoveBookmarkFromList(bookmark: BookmarkEntity, listId: String) {
+fun MainScreenModel.restoreAndRemoveBookmarkFromList(bookmark: Bookmark, listId: String) {
     viewModelScope.launch {
         bookmarkActionsRepository.removeFromList(bookmark.remoteId, bookmark.serverId, listId)
     }
 }
 
-fun MainScreenModel.addBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
+fun MainScreenModel.addBookmarkTag(bookmark: Bookmark, tagName: String) {
     viewModelScope.launch {
         val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
         if (!currentTags.contains(tagName)) {
@@ -167,7 +167,7 @@ fun MainScreenModel.addBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
     }
 }
 
-fun MainScreenModel.removeBookmarkTag(bookmark: BookmarkEntity, tagName: String) {
+fun MainScreenModel.removeBookmarkTag(bookmark: Bookmark, tagName: String) {
     viewModelScope.launch {
         val currentTags = bookmark.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
         if (currentTags.contains(tagName)) {
@@ -179,7 +179,7 @@ fun MainScreenModel.removeBookmarkTag(bookmark: BookmarkEntity, tagName: String)
     }
 }
 
-fun MainScreenModel.removeBookmarkFromList(bookmark: BookmarkEntity, listId: String) {
+fun MainScreenModel.removeBookmarkFromList(bookmark: Bookmark, listId: String) {
     _actedOnBookmarkIds.value += bookmark.remoteId
     viewModelScope.launch {
         bookmarkActionsRepository.removeFromList(
@@ -212,7 +212,7 @@ fun MainScreenModel.renameList(listId: String, newName: String, newIcon: String?
 }
 
 fun MainScreenModel.executeScrollAction(
-    bookmark: BookmarkEntity,
+    bookmark: Bookmark,
     action: com.karakept.app.data.model.SwipeAction,
     config: com.karakept.app.data.model.CustomSwipeActionConfig?
 ) {
@@ -249,7 +249,7 @@ fun MainScreenModel.createBookmark(url: String) {
         val server = _selectedServer.value ?: return@launch
         // Distinct from any server id, so the placeholder can never collide with a real row.
         val tempRemoteId = "pending-${kotlin.random.Random.nextLong()}"
-        val placeholder = BookmarkEntity(
+        val placeholder = Bookmark(
             remoteId = tempRemoteId,
             serverId = server.id,
             url = url,
@@ -287,7 +287,7 @@ fun MainScreenModel.createBookmark(url: String) {
  * Feedback is a snackbar rather than a spinner on the row: these menus fire and dismiss, and the
  * updated row arrives on its own through `bookmarkChangedEvents` once the repository writes it.
  */
-fun MainScreenModel.runAiAction(bookmark: BookmarkEntity, action: AiAction) {
+fun MainScreenModel.runAiAction(bookmark: Bookmark, action: AiAction) {
     viewModelScope.launch {
         try {
             snackbarManager.showSnackbar("${action.runningLabel}\u2026")

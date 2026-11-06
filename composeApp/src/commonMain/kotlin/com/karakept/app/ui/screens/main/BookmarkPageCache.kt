@@ -1,6 +1,6 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 
 /**
  * The pages one view has in hand, between one read of the window and the next.
@@ -21,7 +21,7 @@ import com.karakept.app.data.local.entity.BookmarkEntity
  */
 internal class BookmarkPageCache {
     private var revision = Int.MIN_VALUE
-    private var pages: Map<Int, List<BookmarkEntity>> = emptyMap()
+    private var pages: Map<Int, List<Bookmark>> = emptyMap()
 
     /**
      * The pages of [span] still valid at [revision].
@@ -30,7 +30,7 @@ internal class BookmarkPageCache {
      * table can change any row of any page, including how many rows there are, so a page read
      * before it says nothing about the view after it.
      */
-    fun held(revision: Int, span: IntRange): Map<Int, List<BookmarkEntity>> {
+    fun held(revision: Int, span: IntRange): Map<Int, List<Bookmark>> {
         if (revision != this.revision) {
             this.revision = revision
             pages = emptyMap()
@@ -41,7 +41,7 @@ internal class BookmarkPageCache {
     }
 
     /** Records [read] as what the window holds at [revision]. */
-    fun store(revision: Int, read: Map<Int, List<BookmarkEntity>>) {
+    fun store(revision: Int, read: Map<Int, List<Bookmark>>) {
         this.revision = revision
         pages = read
         if (read.isNotEmpty()) primed = true

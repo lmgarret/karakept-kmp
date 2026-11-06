@@ -20,7 +20,7 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SortOption
@@ -367,7 +367,7 @@ fun main(args: Array<String> = emptyArray()) {
         // lands in time for the *next* open rather than the one in progress. That is still
         // far cheaper than holding a query subscription for the whole process lifetime.
         var recentRefreshTick by remember { mutableStateOf(0) }
-        var recentBookmarks by remember { mutableStateOf<List<BookmarkEntity>>(emptyList()) }
+        var recentBookmarks by remember { mutableStateOf<List<Bookmark>>(emptyList()) }
         LaunchedEffect(activeServer, recentRefreshTick) {
             val server = activeServer ?: return@LaunchedEffect
             recentBookmarks = try {

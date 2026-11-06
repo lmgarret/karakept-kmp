@@ -1,0 +1,639 @@
+package com.karakept.app.data.repository
+
+import com.karakept.app.data.local.dao.BookmarkDao
+import com.karakept.app.data.local.dao.PendingActionDao
+import com.karakept.app.data.local.entity.PendingActionEntity
+import com.karakept.app.data.local.entity.PendingActionType
+import com.karakept.app.data.model.Server
+import com.karakept.app.data.remote.RemoteDataSource
+import com.karakept.app.utils.AppDispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.SharedFlow
+import com.karakept.app.utils.AppLogger
+
+/**
+ * Repository for handling bookmark actions with offline-first approach.
+ * Actions are queued locally and synced when online.
+ */
+class BookmarkActionsRepository internal constructor(
+    internal val bookmarkDao: BookmarkDao,
+    internal val pendingActionDao: PendingActionDao,
+    internal val remoteDataSource: RemoteDataSource,
+    internal val serverRepository: com.karakept.app.data.repository.ServerRepository,
+    private val settingsRepository: com.karakept.app.data.repository.SettingsRepository,
+    internal val appDispatchers: AppDispatchers
+) {
+    internal val jsonSerializer = Json { ignoreUnknownKeys = true }
+
+    // Lazy injection to break circular dependency
+    internal var bookmarkRepository: com.karakept.app.data.repository.BookmarkRepository? = null
+        private set
+    internal var highlightDao: com.karakept.app.data.local.dao.HighlightDao? = null
+        private set
+
+    // Track when actions are being performed
+    private val _isPerformingAction = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val isPerformingAction: kotlinx.coroutines.flow.StateFlow<Boolean> = _isPerformingAction
+
+    // Emits the remoteId of a bookmark whenever it has been locally modified by an action.
+    // Observers (e.g. MainScreenModel) can react to keep their lists up-to-date without a full sync.
+    private val _bookmarkChangedEvents = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    val bookmarkChangedEvents: SharedFlow<String> = _bookmarkChangedEvents
+
+    fun notifyBookmarkChanged(remoteId: String) {
+        _bookmarkChangedEvents.tryEmit(remoteId)
+    }
+
+    // "Rows changed underneath you, re-read what you are showing." Emitted by work that
+    // touches many bookmarks at once — a reading-progress pass applies hundreds — where a
+    // per-row event would cost the listener a read and a rebuild apiece, and where sixteen of
+    // them would silently overflow the buffer above. Conflated: one re-read answers any
+    // number of them.
+    private val _bookmarksReloaded = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
+    val bookmarksReloaded: SharedFlow<Unit> = _bookmarksReloaded
+
+    fun notifyBookmarksReloaded() {
+        _bookmarksReloaded.tryEmit(Unit)
+    }
+
+    // What AI actions each server will accept, keyed by server id. Populated by
+    // refreshAiCapabilities and narrowed when a call comes back "this server can't".
+    // In-memory on purpose: it re-probes on next launch, which is when a reconfigured
+    // server is most likely to have changed its answer.
+    internal val _aiCapabilities =
+        kotlinx.coroutines.flow.MutableStateFlow<Map<String, AiCapabilities>>(emptyMap())
+
+    /** Every server's AI capabilities. ScreenModels narrow this to the server they are showing. */
+    val aiCapabilities: kotlinx.coroutines.flow.StateFlow<Map<String, AiCapabilities>> = _aiCapabilities
+
+    /** What [serverId] will accept right now, defaulting to "summarize yes, admin no" before a probe. */
+    fun aiCapabilitiesFor(serverId: String?): AiCapabilities =
+        _aiCapabilities.value[serverId] ?: AiCapabilities()
+
+    /**
+     * Find out what [server] will let this account do. Only the admin probe needs a request —
+     * summarize availability is learned from the first summarize that comes back rejected.
+     *
+     * A transport failure leaves the entry untouched rather than caching a wrong "not an admin":
+     * demoting a known admin mid-session would make the action disappear under the user.
+     */
+    suspend fun refreshAiCapabilities(server: Server) {
+        withContext(appDispatchers.io) {
+            val isAdmin = try {
+                remoteDataSource.isServerAdmin(server)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLogger.d("BookmarkActionsRepository", "Admin probe failed for ${server.id}: ${e.message}")
+                return@withContext
+            }
+            _aiCapabilities.update { current ->
+                current + (server.id to (current[server.id] ?: AiCapabilities()).copy(isAdmin = isAdmin))
+            }
+        }
+    }
+
+    /** Narrow [serverId]'s capabilities, e.g. after the server refuses an action outright. */
+    internal fun narrowAiCapabilities(serverId: String, transform: AiCapabilities.() -> AiCapabilities) {
+        _aiCapabilities.update { current ->
+            current + (serverId to (current[serverId] ?: AiCapabilities()).transform())
+        }
+    }
+    
+    // Audit (Phase 02): No tag cache exists -- markAsRead/markAsUnread use direct DB writes.
+    // The originally-feared read/unread race condition does not apply to the current implementation.
+    
+    fun setBookmarkRepository(repository: com.karakept.app.data.repository.BookmarkRepository) {
+        bookmarkRepository = repository
+    }
+
+    internal fun setHighlightDao(dao: com.karakept.app.data.local.dao.HighlightDao) {
+        highlightDao = dao
+    }
+
+    // Scope for background operations like auto-sync
+    private val repositoryScope =
+        kotlinx.coroutines.CoroutineScope(appDispatchers.io + kotlinx.coroutines.SupervisorJob())
+
+    /**
+     * Archive a bookmark. Updates locally and queues for sync.
+     */
+    suspend fun archiveBookmark(bookmarkRemoteId: String, serverId: String) {
+        performAction {
+            withContext(appDispatchers.io) {
+                // Update local copy immediately (optimistic update)
+                val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+                bookmark?.let {
+                    bookmarkDao.insertBookmark(it.copy(isArchived = true))
+                }
+
+                // Queue action (last state wins: collapse prior archive/unarchive toggles)
+                dedupPairedActions(bookmarkRemoteId, serverId, PendingActionType.ARCHIVE, PendingActionType.UNARCHIVE)
+                queueAction(
+                    bookmarkRemoteId = bookmarkRemoteId,
+                    serverId = serverId,
+                    actionType = PendingActionType.ARCHIVE,
+                    actionData = "{}"
+                )
+
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
+
+                // Auto-sync if not in offline mode
+                triggerAutoSync(serverId)
+            }
+        }
+    }
+
+    /**
+     * Unarchive a bookmark.
+     */
+    suspend fun unarchiveBookmark(bookmarkRemoteId: String, serverId: String) {
+        performAction {
+            withContext(appDispatchers.io) {
+                val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+                bookmark?.let {
+                    bookmarkDao.insertBookmark(it.copy(isArchived = false))
+                }
+
+                dedupPairedActions(bookmarkRemoteId, serverId, PendingActionType.ARCHIVE, PendingActionType.UNARCHIVE)
+                queueAction(
+                    bookmarkRemoteId = bookmarkRemoteId,
+                    serverId = serverId,
+                    actionType = PendingActionType.UNARCHIVE,
+                    actionData = "{}"
+                )
+
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
+
+                // Auto-sync if not in offline mode
+                triggerAutoSync(serverId)
+            }
+        }
+    }
+
+    /**
+     * Toggle favourite status of a bookmark.
+     */
+    suspend fun toggleFavourite(
+        bookmarkRemoteId: String,
+        serverId: String,
+        currentlyFavourited: Boolean
+    ) {
+        performAction {
+            withContext(appDispatchers.io) {
+                val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+                bookmark?.let {
+                    bookmarkDao.insertBookmark(it.copy(isStarred = !currentlyFavourited))
+                }
+
+                dedupPairedActions(bookmarkRemoteId, serverId, PendingActionType.FAVOURITE, PendingActionType.UNFAVOURITE)
+                queueAction(
+                    bookmarkRemoteId = bookmarkRemoteId,
+                    serverId = serverId,
+                    actionType = if (currentlyFavourited) PendingActionType.UNFAVOURITE else PendingActionType.FAVOURITE,
+                    actionData = "{}"
+                )
+
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
+
+                // Auto-sync if not in offline mode
+                triggerAutoSync(serverId)
+            }
+        }
+    }
+
+    /**
+     * Mark bookmark as read locally and sync the completed progress (100%) to server.
+     * Read status is primarily driven by reading progress reaching 1.0,
+     * but this allows manual override.
+     */
+    suspend fun markAsRead(bookmarkRemoteId: String, serverId: String) {
+        performAction {
+            withContext(appDispatchers.io) {
+                val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+                bookmark?.let {
+                    bookmarkDao.insertBookmark(it.copy(isRead = true, readingProgress = 1f))
+                    queueReadingProgressUpdate(bookmarkRemoteId, serverId, progressPercent = 100)
+                }
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
+                triggerAutoSync(serverId)
+            }
+        }
+    }
+
+    /**
+     * Mark bookmark as unread locally, and with [resetProgress] also clear the reading
+     * position and tell the server about it.
+     *
+     * Read state has no field of its own on the server: the reading percentage is the only
+     * thing that carries it between devices, so an unread that keeps its position cannot
+     * travel — there is nothing to send that means "unread but 80% in". [resetProgress]
+     * (the `resetProgressOnMarkUnread` setting, on by default) is therefore also the choice
+     * between an unread that reaches other devices and one that stays on this one.
+     */
+    suspend fun markAsUnread(bookmarkRemoteId: String, serverId: String, resetProgress: Boolean = false) {
+        performAction {
+            withContext(appDispatchers.io) {
+                val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+                bookmark?.let {
+                    val updated = if (resetProgress) {
+                        it.copy(isRead = false, readingProgress = 0f, readingScrollIndex = 0, readingScrollOffset = 0)
+                    } else {
+                        it.copy(isRead = false)
+                    }
+                    bookmarkDao.insertBookmark(updated)
+                    if (resetProgress) {
+                        queueReadingProgressUpdate(bookmarkRemoteId, serverId, progressPercent = 0)
+                        triggerAutoSync(serverId)
+                    }
+                }
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
+            }
+        }
+    }
+
+    /**
+     * Queue a reading progress update to be synced to the server.
+     * Only one pending update per bookmark is kept (latest wins), so stale updates are discarded.
+     */
+    suspend fun queueReadingProgressUpdate(
+        bookmarkRemoteId: String,
+        serverId: String,
+        progressPercent: Int
+    ) {
+        withContext(appDispatchers.io) {
+            AppLogger.d("ReadProgressSync", "queueReadingProgressUpdate remoteId=$bookmarkRemoteId serverId=$serverId percent=$progressPercent")
+            // Remove any stale pending update for this bookmark (keep only latest)
+            pendingActionDao.deleteActionsForBookmarkByType(
+                bookmarkRemoteId, serverId, PendingActionType.UPDATE_READING_PROGRESS
+            )
+            queueAction(
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = serverId,
+                actionType = PendingActionType.UPDATE_READING_PROGRESS,
+                actionData = jsonSerializer.encodeToString(mapOf("progressPercent" to progressPercent.toString()))
+            )
+            AppLogger.d("ReadProgressSync", "queued pending action successfully")
+        }
+        triggerAutoSync(serverId)
+    }
+
+    /**
+     * Delete a bookmark.
+     */
+    suspend fun deleteBookmark(bookmarkLocalId: Long, bookmarkRemoteId: String, serverId: String) {
+        performAction {
+            withContext(appDispatchers.io) {
+                // Delete locally. The queued action carries [bookmarkRemoteId] itself, so it
+                // outlives the row without needing anything read off it first.
+                bookmarkDao.getBookmarkById(bookmarkLocalId)?.let {
+                    bookmarkDao.deleteBookmark(it)
+                }
+
+                // A delete supersedes every other queued action for this bookmark
+                pendingActionDao.deleteActionsForBookmark(bookmarkRemoteId, serverId)
+
+                queueAction(
+                    bookmarkRemoteId = bookmarkRemoteId,
+                    serverId = serverId,
+                    actionType = PendingActionType.DELETE,
+                    actionData = "{}"
+                )
+
+                _bookmarkChangedEvents.emit(bookmarkRemoteId)
+
+                // Auto-sync if not in offline mode
+                triggerAutoSync(serverId)
+            }
+        }
+    }
+
+    /**
+     * Update tags on a bookmark.
+     */
+    suspend fun updateTags(
+        bookmarkRemoteId: String,
+        serverId: String,
+        newTags: List<String>
+    ) {
+        withContext(appDispatchers.io) {
+            val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+            bookmark?.let {
+                bookmarkDao.insertBookmark(it.copy(
+                    tags = newTags.joinToString(",")
+                ))
+            }
+
+            // actionData carries the full desired tag list — only the latest matters
+            pendingActionDao.deleteActionsForBookmarkByType(
+                bookmarkRemoteId, serverId, PendingActionType.UPDATE_TAGS
+            )
+            queueAction(
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = serverId,
+                actionType = PendingActionType.UPDATE_TAGS,
+                actionData = jsonSerializer.encodeToString(mapOf("tags" to newTags))
+            )
+
+            // Auto-sync if not in offline mode
+            triggerAutoSync(serverId)
+        }
+    }
+
+    /**
+     * Move bookmark to a list.
+     */
+    suspend fun moveToList(
+        bookmarkRemoteId: String,
+        serverId: String,
+        listId: String,
+        smartListIds: Set<String> = emptySet()
+    ) {
+        withContext(appDispatchers.io) {
+            // Update local DB immediately (optimistic update).
+            // Also strip smart-list membership: the server recomputes it from the bookmark's
+            // manual lists, so a smart list that excludes the target list (e.g. All Feeds
+            // excludes Read Later) must lose this bookmark right away — otherwise it flashes
+            // back into that smart list when the user navigates to it before the sync lands.
+            // Smart lists it still belongs to are re-added by the next ForList sync.
+            val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+            bookmark?.let {
+                val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
+                val newListIds = (currentListIds - smartListIds) + listId
+                if (newListIds.toSet() != currentListIds.toSet()) {
+                    bookmarkDao.insertBookmark(it.copy(listIds = newListIds.distinct().joinToString(",")))
+                }
+            }
+
+            // Last state wins per (bookmark, list): a move/remove toggle storm collapses
+            // to the single action matching the final local state
+            dedupListMembershipActions(bookmarkRemoteId, serverId, listId)
+            queueAction(
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = serverId,
+                actionType = PendingActionType.MOVE_TO_LIST,
+                actionData = jsonSerializer.encodeToString(mapOf("listId" to listId))
+            )
+
+            _bookmarkChangedEvents.emit(bookmarkRemoteId)
+
+            // Auto-sync if not in offline mode
+            triggerAutoSync(serverId)
+        }
+    }
+
+    /**
+     * Remove bookmark from a list.
+     */
+    suspend fun removeFromList(
+        bookmarkRemoteId: String,
+        serverId: String,
+        listId: String
+    ) {
+        withContext(appDispatchers.io) {
+            // Update local DB immediately (optimistic update)
+            val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkRemoteId, serverId)
+            bookmark?.let {
+                val currentListIds = it.listIds.split(",").map { id -> id.trim() }.filter { id -> id.isNotBlank() }
+                val newListIds = currentListIds.filter { id -> id != listId }
+                bookmarkDao.insertBookmark(it.copy(listIds = newListIds.joinToString(",")))
+            }
+
+            dedupListMembershipActions(bookmarkRemoteId, serverId, listId)
+            queueAction(
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = serverId,
+                actionType = PendingActionType.REMOVE_FROM_LIST,
+                actionData = jsonSerializer.encodeToString(mapOf("listId" to listId))
+            )
+
+            _bookmarkChangedEvents.emit(bookmarkRemoteId)
+
+            // Auto-sync if not in offline mode
+            triggerAutoSync(serverId)
+        }
+    }
+
+    /**
+     * Queue a highlight creation action.
+     */
+    suspend fun queueCreateHighlight(
+        server: Server,
+        bookmarkRemoteId: String,
+        text: String,
+        startOffset: Int,
+        endOffset: Int,
+        note: String? = null,
+        color: String? = null,
+        tempId: String? = null
+    ) {
+        withContext(appDispatchers.io) {
+            queueAction(
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = server.id,
+                actionType = PendingActionType.CREATE_HIGHLIGHT,
+                actionData = jsonSerializer.encodeToString(mapOf(
+                    "text" to text,
+                    "startOffset" to startOffset.toString(),
+                    "endOffset" to endOffset.toString(),
+                    "note" to note,
+                    "color" to color,
+                    "tempId" to tempId
+                ))
+            )
+
+            // Auto-sync if not in offline mode
+            triggerAutoSync(server.id)
+        }
+    }
+
+    /**
+     * Queue a highlight deletion action.
+     */
+    suspend fun queueDeleteHighlight(
+        server: Server,
+        bookmarkRemoteId: String,
+        highlightRemoteId: String
+    ) {
+        withContext(appDispatchers.io) {
+            queueAction(
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = server.id,
+                actionType = PendingActionType.DELETE_HIGHLIGHT,
+                actionData = jsonSerializer.encodeToString(mapOf(
+                    "highlightId" to highlightRemoteId
+                ))
+            )
+            triggerAutoSync(server.id)
+        }
+    }
+
+    /**
+     * Queue a highlight update action.
+     */
+    suspend fun queueUpdateHighlight(
+        server: Server,
+        bookmarkRemoteId: String,
+        highlightRemoteId: String,
+        note: String? = null,
+        color: String? = null
+    ) {
+        AppLogger.d("BookmarkActionsRepository", "queueUpdateHighlight called - highlightRemoteId=$highlightRemoteId, note=$note, color=$color")
+        withContext(appDispatchers.io) {
+            val actionData = jsonSerializer.encodeToString(mapOf(
+                "highlightId" to highlightRemoteId,
+                "note" to note,
+                "color" to color
+            ))
+            AppLogger.d("BookmarkActionsRepository", "queueUpdateHighlight - actionData=$actionData")
+            queueAction(
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = server.id,
+                actionType = PendingActionType.UPDATE_HIGHLIGHT,
+                actionData = actionData
+            )
+            AppLogger.d("BookmarkActionsRepository", "queueUpdateHighlight - action queued, triggering sync")
+            triggerAutoSync(server.id)
+        }
+    }
+    
+    /**
+     * Helper function to wrap action execution with loading state
+     */
+    private suspend fun performAction(action: suspend () -> Unit) {
+        try {
+            _isPerformingAction.value = true
+            action()
+        } finally {
+            _isPerformingAction.value = false
+        }
+    }
+
+    /**
+     * Queue an action for later sync.
+     */
+    internal suspend fun queueAction(
+        bookmarkRemoteId: String,
+        serverId: String,
+        actionType: String,
+        actionData: String
+    ) {
+        pendingActionDao.insertAction(
+            PendingActionEntity(
+                bookmarkRemoteId = bookmarkRemoteId,
+                serverId = serverId,
+                actionType = actionType,
+                actionData = actionData,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    /**
+     * Removes queued actions of either paired type for a bookmark so that only the
+     * action being enqueued next remains (last state wins — e.g. archive/unarchive
+     * toggles collapse to the final one instead of replaying the whole storm).
+     */
+    internal suspend fun dedupPairedActions(
+        bookmarkRemoteId: String,
+        serverId: String,
+        typeA: String,
+        typeB: String
+    ) {
+        pendingActionDao.deleteActionsForBookmarkByType(bookmarkRemoteId, serverId, typeA)
+        pendingActionDao.deleteActionsForBookmarkByType(bookmarkRemoteId, serverId, typeB)
+    }
+
+    /**
+     * Removes queued move/remove actions targeting the same list for a bookmark,
+     * so only the latest membership intent for that (bookmark, list) pair survives.
+     */
+    internal suspend fun dedupListMembershipActions(
+        bookmarkRemoteId: String,
+        serverId: String,
+        listId: String
+    ) {
+        val membershipTypes = setOf(PendingActionType.MOVE_TO_LIST, PendingActionType.REMOVE_FROM_LIST)
+        pendingActionDao.getPendingActionsList(serverId)
+            .filter { action ->
+                action.bookmarkRemoteId == bookmarkRemoteId &&
+                    action.actionType in membershipTypes &&
+                    runCatching {
+                        jsonSerializer.decodeFromString<Map<String, String>>(action.actionData)["listId"]
+                    }.getOrNull() == listId
+            }
+            .forEach { pendingActionDao.deleteAction(it) }
+    }
+
+    /**
+     * Actions that exhausted retries or hit a permanent server rejection. Exposed so
+     * the UI can offer retry/discard instead of silently losing the user's changes.
+     */
+    fun failedActionsCount(serverId: String): kotlinx.coroutines.flow.Flow<Int> =
+        pendingActionDao.countFailedActions(serverId)
+
+    /**
+     * Trigger auto-sync if not in offline mode (manual OR auto-detected).
+     * Called after every action to sync changes to server automatically.
+     */
+    internal suspend fun triggerAutoSync(serverId: String) {
+        repositoryScope.launch {
+            try {
+                // Only the user's manual offline toggle blocks auto-sync now. A dead network
+                // is handled by the pending-action queue's backoff, not by pausing sync.
+                if (!settingsRepository.offlineMode.first()) {
+                    // Get server and trigger sync
+                    val servers = serverRepository.servers.first()
+                    val server = servers.find { it.id == serverId }
+                    server?.let {
+                        // Start processing pending actions immediately (Push only)
+                        AppLogger.d("BookmarkActionsRepository", "Triggering push-only sync for server ${server.id}")
+                        processPendingActions(it)
+                    }
+                }
+            } catch (e: Exception) {
+                AppLogger.e("BookmarkActionsRepository", "Error in auto-sync: ${e.message}")
+                // Don't propagate error - auto-sync is a best-effort operation
+            }
+        }
+    }
+
+    /**
+     * Persists a final reading position and queues it for sync, on this repository's own
+     * scope. Called from ViewModel disposal, where `viewModelScope` is already being
+     * cancelled: the write has to outlive the screen, but must stay bound to a scope the
+     * app owns (and tests can drain) rather than escaping into `GlobalScope`.
+     */
+    fun persistFinalReadingProgress(
+        bookmarkLocalId: Long,
+        bookmarkRemoteId: String,
+        serverId: String?,
+        progress: Float,
+        scrollIndex: Int,
+        scrollOffset: Int
+    ) {
+        repositoryScope.launch {
+            bookmarkDao.writeReadingProgress(bookmarkLocalId, progress, scrollIndex, scrollOffset)
+            notifyBookmarkChanged(bookmarkRemoteId)
+            if (serverId != null) {
+                queueReadingProgressUpdate(
+                    bookmarkRemoteId = bookmarkRemoteId,
+                    serverId = serverId,
+                    progressPercent = (progress * 100).toInt()
+                )
+            }
+        }
+    }
+
+    // Mutex to ensure only one action processing happens at a time
+    internal val actionMutex = kotlinx.coroutines.sync.Mutex()
+}

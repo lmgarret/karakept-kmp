@@ -215,7 +215,7 @@ fun PerListSettingsContent(
                             Column(modifier = Modifier.padding(start = 8.dp)) {
                                 Text(layout.name, style = MaterialTheme.typography.bodyLarge)
                                 if (layout.description != null) {
-                                    Text(layout.description, style = MaterialTheme.typography.bodySmall,
+                                    Text(layout.description.orEmpty(), style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }

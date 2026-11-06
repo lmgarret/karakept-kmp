@@ -1,25 +1,12 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.model.DefaultListType
+import com.karakept.app.testing.testBookmark
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.Server
-import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.data.repository.BookmarkActionsRepository
-import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.HighlightRepository
-import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.domain.action.BookmarkActionController
-import com.karakept.app.domain.action.UndoCompletedEvent
 import io.mockk.coEvery
 import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -32,9 +19,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
-import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * Regression tests for SAVE-02: MainScreenModel must correctly initialise and
@@ -43,17 +28,8 @@ import com.karakept.app.utils.TestAppDispatchers
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class Save02RegressionTest {
-
     private val testDispatcher = StandardTestDispatcher()
-
-    private lateinit var serverRepository: ServerRepository
-    private lateinit var bookmarkRepository: BookmarkRepository
-    private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var listRepository: ListRepository
-    private lateinit var bookmarkActionController: BookmarkActionController
-    private lateinit var snackbarManager: ActionSnackbarManager
-    private lateinit var highlightRepository: HighlightRepository
+    private val harness = MainScreenModelHarness(testDispatcher)
 
     private val fakeServer = Server(
         id = "server-1",
@@ -66,41 +42,10 @@ class Save02RegressionTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
 
-        serverRepository = mockk(relaxed = true)
-        bookmarkRepository = mockk(relaxed = true)
-        bookmarkActionsRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        listRepository = mockk(relaxed = true)
-        bookmarkActionController = mockk(relaxed = true)
-        snackbarManager = mockk(relaxed = true)
-        highlightRepository = mockk(relaxed = true)
-
-        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
-        every { settingsRepository.allListSettings } returns flowOf(emptyMap())
-        every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
-        every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
-        every { settingsRepository.customSwipeActionConfigs } returns flowOf(emptyList())
-        every { settingsRepository.swipeLeftConfigId } returns flowOf(null)
-        every { settingsRepository.swipeRightConfigId } returns flowOf(null)
-        every { settingsRepository.dimReadBookmarks } returns flowOf(true)
-        every { settingsRepository.defaultLayoutId } returns flowOf(null)
-        every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(false)
-        every { settingsRepository.activeServerId } returns flowOf("server-1")
-        every { settingsRepository.defaultListType } returns flowOf(DefaultListType.ALL_BOOKMARKS)
-        every { settingsRepository.defaultListId } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns MutableStateFlow(emptyList())
-        every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        bookmarkRepositoryCountsOf(bookmarkRepository, emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
-        every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
-        every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
-        every { bookmarkRepository.syncReports } returns kotlinx.coroutines.flow.MutableSharedFlow()
-        every { bookmarkRepository.backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
-        every { bookmarkRepository.syncProgress } returns MutableStateFlow(
+        every { harness.serverRepository.servers } returns flowOf(listOf(fakeServer))
+        every { harness.settingsRepository.offlineMode } returns flowOf(false)
+        bookmarkRepositoryCountsOf(harness.bookmarkRepository, emptyList())
+        every { harness.bookmarkRepository.syncProgress } returns MutableStateFlow(
             com.karakept.app.data.model.SyncProgress.Idle
         )
     }
@@ -110,39 +55,10 @@ class Save02RegressionTest {
         Dispatchers.resetMain()
     }
 
-    private fun createBookmarkEntity(remoteId: Long) = BookmarkEntity(
-        localId = remoteId,
-        remoteId = "remote-$remoteId",
-        serverId = "server-1",
-        url = "https://example.com/$remoteId",
-        title = "Bookmark $remoteId",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = 0L,
-        isArchived = false,
-        isStarred = false
-    )
-
-    private fun createMainScreenModel() = MainScreenModel(
-        serverRepository = serverRepository,
-        bookmarkRepository = bookmarkRepository,
-        bookmarkActionsRepository = bookmarkActionsRepository,
-        settingsRepository = settingsRepository,
-        listRepository = listRepository,
-        bookmarkActionController = bookmarkActionController,
-        snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository,
-        appDispatchers = TestAppDispatchers(testDispatcher),
-        tagFilterRequests = TagFilterRequests()
-    )
-
     /** Makes [rows] the view the repository answers for — its size, and its pages. */
-    private fun stubView(rows: List<BookmarkEntity>) {
-        every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns flowOf(rows.size)
-        coEvery { bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
+    private fun stubView(rows: List<Bookmark>) {
+        every { harness.bookmarkRepository.countBookmarksForViewFlow(any(), any()) } returns flowOf(rows.size)
+        coEvery { harness.bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
             val offset = thirdArg<Int>()
             val limit = arg<Int>(3)
             if (offset >= rows.size) emptyList()
@@ -152,10 +68,10 @@ class Save02RegressionTest {
 
     @Test
     fun `the list holds rows after init when the server has some`() = runTest(testDispatcher) {
-        val fakeBookmarks = (1L..5L).map { createBookmarkEntity(it) }
+        val fakeBookmarks = (1L..5L).map { testBookmark(it) }
         stubView(fakeBookmarks)
 
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         val job = launch { model.bookmarkWindow.collect {} }
         advanceUntilIdle()
 
@@ -168,10 +84,10 @@ class Save02RegressionTest {
     @Test
     fun `bookmarks StateFlow is non-empty after init when server available and bookmarks exist`() =
         runTest(testDispatcher) {
-            val fakeBookmarks = (1L..3L).map { createBookmarkEntity(it) }
+            val fakeBookmarks = (1L..3L).map { testBookmark(it) }
             stubView(fakeBookmarks)
 
-            val model = createMainScreenModel()
+            val model = harness.createModel()
             val job = launch { model.bookmarks.collect {} }
             advanceUntilIdle()
 
@@ -185,18 +101,18 @@ class Save02RegressionTest {
 
     @Test
     fun `quickFilterCounts reflects loaded bookmarks after init`() = runTest(testDispatcher) {
-        val fakeBookmarks = (1L..4L).map { createBookmarkEntity(it) }
+        val fakeBookmarks = (1L..4L).map { testBookmark(it) }
         coEvery {
-            bookmarkRepository.getBookmarksPaged(
+            harness.bookmarkRepository.getBookmarksPaged(
                 server = any(), status = any(), after = any(), limit = any(),
                 listId = any()
             )
         } returns fakeBookmarks
 
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(fakeBookmarks)
-        bookmarkRepositoryCountsOf(bookmarkRepository, fakeBookmarks)
+        every { harness.bookmarkRepository.getBookmarks(any()) } returns flowOf(fakeBookmarks)
+        bookmarkRepositoryCountsOf(harness.bookmarkRepository, fakeBookmarks)
 
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         val job = launch { model.quickFilterCounts.collect {} }
         advanceUntilIdle()
 

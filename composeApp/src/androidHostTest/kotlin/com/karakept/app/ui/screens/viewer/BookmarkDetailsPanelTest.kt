@@ -9,7 +9,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,7 +32,7 @@ class BookmarkDetailsPanelTest {
     private val longUrl =
         "https://example.com/a/very/long/path/that/would/otherwise/be/truncated/in/a/single/line/details/row?query=some-value&another=value"
 
-    private val bookmark = BookmarkEntity(
+    private val bookmark = Bookmark(
         localId = 1,
         remoteId = "remote-1",
         serverId = "server-1",

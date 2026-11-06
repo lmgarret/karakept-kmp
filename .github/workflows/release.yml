@@ -44,7 +44,7 @@ jobs:
         # On tag pushes the version comes from the tag, so an LLM outage only
         # drops the AI changelog. Manual runs need next_version, so they still fail.
         continue-on-error: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        uses: lmgarret/llm-release-action@d0581cd59ed14f3db5864b2ca6479a6623c308ab # v2.1.0
+        uses: lmgarret/llm-release-action@d83e2c706b87f8a94a53f3b6d11d8610ace338e3 # v2.2.0
         with:
           model: anthropic/claude-sonnet-5-5
           # Cheap model for project type, context and diff extraction.
@@ -144,7 +144,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
@@ -175,7 +175,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.
@@ -230,7 +230,7 @@ jobs:
       # Releases run on tags (non-default ref), where setup-gradle defaults to a
       # read-only cache. Allow writes so back-to-back releases reuse this runner's
       # compiled outputs. No extra job/run is added — only a cache-save step.
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: false
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
@@ -282,7 +282,7 @@ jobs:
 
       # See build-macos: allow cache writes on tag-triggered releases so
       # consecutive releases reuse compiled outputs. No extra run is added.
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: false
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
@@ -330,7 +330,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           # basic = open-source (MIT) cache provider; v6's default 'enhanced'
           # provider is proprietary under Gradle's commercial Terms of Use.

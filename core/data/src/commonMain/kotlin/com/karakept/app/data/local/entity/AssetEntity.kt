@@ -1,0 +1,17 @@
+package com.karakept.app.data.local.entity
+
+import androidx.room3.Entity
+import androidx.room3.PrimaryKey
+import androidx.compose.runtime.Immutable
+
+@Immutable
+@Entity(tableName = "assets")
+internal data class AssetEntity(
+    @PrimaryKey val id: String, // Asset ID from remote
+    val bookmarkRemoteId: String,
+    val serverId: String,
+    val assetType: String,
+    val fileName: String?,
+    val contentType: String?,
+    val localPath: String? // Path to the downloaded file
+)

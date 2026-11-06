@@ -1,7 +1,7 @@
 package com.karakept.app.ui.screens.main
 
 import com.karakept.app.domain.action.TagFilterRequests
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
 import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.FilterConfig
@@ -17,6 +17,7 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
+import com.karakept.app.testing.testBookmark
 import com.karakept.app.utils.TestAppDispatchers
 import io.mockk.coEvery
 import io.mockk.every
@@ -38,7 +39,6 @@ import kotlinx.coroutines.flow.map
  * screen are read again.
  */
 class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
-
     val serverRepository: ServerRepository = mockk(relaxed = true)
     val bookmarkRepository: BookmarkRepository = mockk(relaxed = true)
     val bookmarkActionsRepository: BookmarkActionsRepository = mockk(relaxed = true)
@@ -56,13 +56,13 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
     )
 
     /** The whole view, in order. Changing it is a write landing in the table. */
-    var rows: List<BookmarkEntity>
+    var rows: List<Bookmark>
         get() = viewRows.value
         set(value) {
             viewRows.value = value
         }
 
-    private val viewRows = MutableStateFlow<List<BookmarkEntity>>(emptyList())
+    private val viewRows = MutableStateFlow<List<Bookmark>>(emptyList())
 
     /**
      * Whether a sync is running for the view on screen — what drives the sync indicator, and
@@ -146,7 +146,7 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
     }
 
     /** Publishes [newRows] as the view, as a database write would. */
-    fun publish(newRows: List<BookmarkEntity>) {
+    fun publish(newRows: List<Bookmark>) {
         viewRows.value = newRows
     }
 
@@ -158,7 +158,7 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
     /** Offsets read since the last [clearReads], de-duplicated and in order. */
     fun offsetsRead(): List<Int> = pageReads.map { it.first }.distinct().sorted()
 
-    fun createModel() = MainScreenModel(
+    fun createModel(tagFilterRequests: TagFilterRequests = TagFilterRequests()) = MainScreenModel(
         serverRepository = serverRepository,
         bookmarkRepository = bookmarkRepository,
         bookmarkActionsRepository = bookmarkActionsRepository,
@@ -168,7 +168,7 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
         snackbarManager = snackbarManager,
         highlightRepository = highlightRepository,
         appDispatchers = TestAppDispatchers(testDispatcher),
-        tagFilterRequests = TagFilterRequests()
+        tagFilterRequests = tagFilterRequests
     )
 
     companion object {
@@ -179,21 +179,11 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
             isArchived: Boolean = false,
             tags: String = "",
             listIds: String = ""
-        ) = BookmarkEntity(
+        ) = testBookmark(
             localId = id,
             remoteId = remoteId,
-            serverId = "server-1",
-            url = "https://example.com/$id",
-            title = "Bookmark $id",
-            content = null,
-            imageUrl = null,
-            bannerImageAssetId = null,
-            screenshotAssetId = null,
-            description = null,
-            createdAt = id,
-            isArchived = isArchived,
-            isStarred = false,
             isRead = isRead,
+            isArchived = isArchived,
             tags = tags,
             listIds = listIds
         )
@@ -208,7 +198,7 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
  */
 internal fun bookmarkRepositoryCountsOf(
     repository: com.karakept.app.data.repository.BookmarkRepository,
-    bookmarks: List<com.karakept.app.data.local.entity.BookmarkEntity>
+    bookmarks: List<com.karakept.app.data.model.Bookmark>
 ) {
     io.mockk.every { repository.listMembershipGroups(any()) } returns kotlinx.coroutines.flow.flowOf(
         bookmarks

@@ -1,6 +1,6 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkWindow
 
 /**
@@ -15,11 +15,11 @@ import com.karakept.app.data.model.BookmarkWindow
  * [loadedPages] left null loads everything, which is the shape a short view really does have.
  */
 internal fun viewWindow(
-    rows: List<BookmarkEntity>,
+    rows: List<Bookmark>,
     pageSize: Int = BookmarkWindow.DEFAULT_PAGE_SIZE,
     loadedPages: Set<Int>? = null,
     generation: Int = 0,
-    prepended: List<BookmarkEntity> = emptyList()
+    prepended: List<Bookmark> = emptyList()
 ): BookmarkWindow = BookmarkWindow(
     viewTotal = rows.size,
     pageSize = pageSize,

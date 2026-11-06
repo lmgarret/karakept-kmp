@@ -56,14 +56,16 @@
 
 | | |
 |---|---|
-| **Language** | Kotlin 2.2.0 |
-| **UI** | Compose Multiplatform 1.10.0 (Material 3) |
-| **Navigation** | Voyager 1.1.0-beta03 |
-| **Networking** | Ktor 3.3.2 |
-| **Database** | Room 2.7.0-alpha11 |
-| **DI** | Koin 4.0.0 |
-| **Image loading** | Coil 3.0.0 |
-| **HTML parsing** | KSoup 0.2.1 |
+| **Language** | Kotlin Multiplatform |
+| **UI** | Compose Multiplatform (Material 3) |
+| **Navigation** | Navigation 3 |
+| **Networking** | Ktor |
+| **Database** | Room 3 |
+| **DI** | Koin |
+| **Image loading** | Coil |
+| **HTML parsing** | KSoup |
+
+Versions are in [`gradle/libs.versions.toml`](gradle/libs.versions.toml); what each library is for is in [`docs/codebase/STACK.md`](docs/codebase/STACK.md).
 
 **Platforms:** Android (minSdk 24) and Desktop (JVM) on Linux, macOS, and Windows.
 
@@ -71,7 +73,7 @@
 
 ### Prerequisites
 
-- Java 21 (`mise install` handles this — see below)
+- A JDK (`mise install` handles this — see below)
 - For Android: Android SDK
 - For Desktop: X11 or Wayland display
 
@@ -79,12 +81,12 @@
 versions CI uses, so one command reproduces them:
 
 ```bash
-mise install          # java 21, gradle 9.8.1, python 3.13
+mise install          # the JDK, Gradle and Python pinned in mise.toml
 mise run setup        # the above, plus the karakeep-upstream submodule
 ```
 
 `mise tasks` lists the project's tasks (`test:desktop`, `test:android`, `icons`). Without mise,
-install JDK 21 and Gradle 9.8.1 yourself — `./gradlew` still works standalone.
+install the JDK and Gradle versions from `mise.toml` yourself — `./gradlew` still works standalone.
 
 > **Clone with submodules.** The `api-client` module is generated at build
 > time from the Karakeep OpenAPI spec, which lives in the `karakeep-upstream`
@@ -184,11 +186,11 @@ HTML reports: `composeApp/build/reports/tests/desktopTest/index.html`
 
 ### Devcontainer (Recommended)
 
-Open the project in VS Code or any devcontainer-compatible editor and select **"Reopen in Container"**. The devcontainer includes Java 17, Android SDK with NDK, and all required tools.
+Open the project in VS Code or any devcontainer-compatible editor and select **"Reopen in Container"**. The devcontainer includes a JDK, the Android SDK with NDK, and all required tools.
 
 ### Manual
 
-1. Install Java 17+
+1. Install the JDK pinned in `mise.toml` (or run `mise install`)
 2. Install Android SDK
 3. Initialize the OpenAPI submodule (required to build the generated `api-client`):
    ```bash

@@ -1,6 +1,7 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.testing.testBookmark
+import com.karakept.app.data.model.Bookmark
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -14,23 +15,7 @@ import kotlin.test.assertNull
  * the anchor bookmark must be re-pinned to its new index so the list stays put.
  */
 class ListScrollAnchorTest {
-
-    private fun bookmark(remoteId: Long) = BookmarkEntity(
-        localId = remoteId,
-        remoteId = "orig-$remoteId",
-        serverId = "server-1",
-        url = "https://example.com/$remoteId",
-        title = "Bookmark $remoteId",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = remoteId * 1000L,
-        isArchived = false,
-        isStarred = false,
-        listIds = ""
-    )
+    private fun bookmark(id: Long) = testBookmark(id, remoteId = "orig-$id", createdAt = id * 1000L)
 
     private fun listOfIds(vararg ids: Long) = ids.map { bookmark(it) }
 
@@ -154,7 +139,7 @@ class ListScrollAnchorTest {
      * it publishes — and the anchor uses the pair to tell a reload from a surgical change.
      */
     private fun snapshot(
-        bookmarks: List<BookmarkEntity>,
+        bookmarks: List<Bookmark>,
         firstIndex: Int = 0,
         firstOffset: Int = 0,
         isScrolling: Boolean = false,
