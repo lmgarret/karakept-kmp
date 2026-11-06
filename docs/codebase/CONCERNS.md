@@ -2,21 +2,6 @@
 
 **Analysis Date:** 2026-11-05 (rewrite of the 2026-03-20 audit; resolved entries are summarised at the end)
 
-## Security
-
-**Android WebView (Web mode) runs archived pages with JavaScript and a native bridge:**
-- Files: `feature/reader/src/androidMain/kotlin/com/karakept/app/ui/components/reader/HtmlRenderer.android.kt` (WebView settings around line 595), `core/data/src/commonMain/kotlin/com/karakept/app/data/cache/HtmlArchiveProcessor.kt`
-- Current settings:
-  - `javaScriptEnabled = true`, with `addJavascriptInterface(webInterface, "Android")` exposing a bridge to the page (the highlight JS needs it)
-  - `allowFileAccess = true` (cached local images are loaded from `file://`)
-  - `mixedContentMode = MIXED_CONTENT_ALWAYS_ALLOW` (HTTP images from a `file://` context)
-  - `allowContentAccess = false`; link clicks intercepted by the `WebViewClient`
-- Current mitigations: every archive — inline or cached on disk (sanitised in the `WebViewAssetLoader` path handler before injection) — goes through `processForArchive`, which removes `<script>`/`<noscript>`, frames/`object`/`embed`/`applet`, `<form>`, `meta[http-equiv]`, `<base>`, every `<link>` but a stylesheet, SVG animation elements, every attribute whose name starts with `on`, and any `href`/`xlink:href`/`src`/`action`/`formaction` that is not `http(s):`, `data:` or `file:`. `injectArchiveScripts` (`ArchiveInjection.kt`) then puts the CSP first in `<head>` with `script-src 'nonce-…'` (fresh per load), so only the app's own highlight script runs.
-- Remaining risk: `img-src http: https:` is still an exfiltration channel for anything a page could read, though with no page script left there is little to read. JavaScript and the `Android` bridge remain on for the highlight script; the bridge exposes only `onHighlightClick`, `onTextSelected`, `onSelectionChanged`, `onLog`, none of which reads app data.
-- Fix approach: keep the bridge's surface as small as it is now (no method that reads app data or acts without the user). Consider injecting the app's own JS via `evaluateJavascript` and leaving page JS off if the bridge can do without it.
-
-**Reader mode** sanitises with `HtmlSanitizer` (KSoup `Safelist.relaxed()`) and renders natively, without a WebView, so it is not exposed to the above.
-
 ## Dependency Version Issues
 
 **Skiko/tray binary compatibility (RECURRING — currently FIXED):**
