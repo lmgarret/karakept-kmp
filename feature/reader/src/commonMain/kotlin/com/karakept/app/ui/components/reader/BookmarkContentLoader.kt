@@ -19,6 +19,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.screens.viewer.BookmarkLoadingState
@@ -85,6 +87,46 @@ fun BookmarkContentLoader(
         }
     }
 }
+
+/**
+ * Skeleton for reopening an article at a saved reading position: the screen will land somewhere
+ * in the body, so it shows nothing but paragraphs of text — no banner, no URL line — filling the
+ * whole viewport from just under the top bar ([topInset]).
+ */
+@Composable
+fun ReaderResumeSkeleton(
+    modifier: Modifier = Modifier,
+    topInset: Dp = 0.dp
+) {
+    if (LocalEinkMode.current.animationsDisabled) {
+        Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            LoadingDotsIndicator(label = "Loading…")
+        }
+        return
+    }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clipToBounds()
+            .padding(start = 16.dp, end = 16.dp, top = topInset + 16.dp)
+    ) {
+        // More than a tall screen holds; clipToBounds drops the overflow.
+        repeat(RESUME_SKELETON_PARAGRAPHS) { paragraph ->
+            val lines = 3 + paragraph % 3
+            repeat(lines) { line ->
+                ShimmerBox(
+                    modifier = Modifier
+                        .fillMaxWidth(if (line == lines - 1) 0.6f else 1f)
+                        .height(20.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+private const val RESUME_SKELETON_PARAGRAPHS = 12
 
 /**
  * Shimmer effect box for loading skeletons.
