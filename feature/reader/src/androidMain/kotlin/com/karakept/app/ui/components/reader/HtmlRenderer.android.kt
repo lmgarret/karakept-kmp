@@ -147,12 +147,15 @@ private fun injectArchiveScripts(html: String, highlightStyles: String, highligh
 /**
  * Android implementation of HtmlRenderer using WebView.
  *
- * Security measures:
- * - JavaScript enabled (required for highlight functionality and JS bridge)
- * - File access disabled
+ * Settings (see CONCERNS.md for the risks they carry):
+ * - JavaScript enabled, with the `Android` bridge (the highlight script needs both)
+ * - File access enabled (cached images load from `file://`)
  * - Content access disabled
- * - Mixed content blocked
+ * - Mixed content always allowed (HTTP images from a `file://` context)
  * - Link clicks intercepted
+ *
+ * A cached full-page archive is served raw through [WebViewAssetLoader], without
+ * `HtmlArchiveProcessor`; only the injected CSP applies to it.
  */
 @Composable
 actual fun HtmlRenderer(

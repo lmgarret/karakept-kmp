@@ -11,9 +11,10 @@
   - `allowFileAccess = true` (cached local images are loaded from `file://`)
   - `mixedContentMode = MIXED_CONTENT_ALWAYS_ALLOW` (HTTP images from a `file://` context)
   - `allowContentAccess = false`; link clicks intercepted by the `WebViewClient`
-- Current mitigations: `processForArchive` removes `<script>`, `iframe`/`object`/`embed`/`applet`, `<form>`, and validates `href`/`src` URLs.
-- Risk: inline event handlers are stripped from a **fixed list** of 25 names. Anything else (`onanimationstart`, `onpointerover`, `ontoggle`, `onfocusin`, SVG `onbegin`, …) survives, and with JavaScript on it runs with access to the `Android` bridge — `onHighlightClick`, `onTextSelected`, `onSelectionChanged`, `onLog`. None reads app data, but a page could fake a selection and drive the highlight-creation UI. `<meta http-equiv="refresh">`, `<base>` and `<link>` are not removed either.
-- Fix approach: strip every attribute whose name starts with `on`, remove `meta[http-equiv]`/`base`, and keep the bridge's surface as small as it is now (no method that reads app data or acts without the user). Consider injecting the app's own JS via `evaluateJavascript` and leaving page JS off if the bridge can do without it.
+- Current mitigations (inline HTML only — see below for cached archives): `processForArchive` removes `<script>`, `iframe`/`object`/`embed`/`applet`, `<form>`, and validates `href`/`src` URLs.
+- **Cached full-page archives are not sanitised at all.** When the archive is on disk, `HtmlContent.kt` skips processing and the `WebViewAssetLoader` path handler (`HtmlRenderer.android.kt` ~line 361) serves the raw file with only `injectArchiveScripts` applied. Its `<script>`s, handlers and URLs all survive, with the `Android` bridge available. The only barrier is the injected CSP (~line 135), and it is weak: `script-src 'unsafe-inline'` lets inline scripts and handlers run; the `<meta>` is inserted before `</head>`, so scripts earlier in `<head>` run before it takes effect; and `img-src http: https:` leaves an exfiltration channel even though `default-src 'none'` blocks `fetch`.
+- Risk (inline path, `processForArchive`): inline event handlers are stripped from a **fixed list** of 25 names. Anything else (`onanimationstart`, `onpointerover`, `ontoggle`, `onfocusin`, SVG `onbegin`, …) survives, and with JavaScript on it runs with access to the `Android` bridge — `onHighlightClick`, `onTextSelected`, `onSelectionChanged`, `onLog`. None reads app data, but a page could fake a selection and drive the highlight-creation UI. `<meta http-equiv="refresh">`, `<base>` and `<link>` are not removed either.
+- Fix approach: run cached archives through `processForArchive` too (in the path handler, before injection); inject the CSP as the first child of `<head>` and drop `'unsafe-inline'` in favour of a nonce for the app's own script; strip every attribute whose name starts with `on`, remove `meta[http-equiv]`/`base`, and keep the bridge's surface as small as it is now (no method that reads app data or acts without the user). Consider injecting the app's own JS via `evaluateJavascript` and leaving page JS off if the bridge can do without it.
 
 **Reader mode** sanitises with `HtmlSanitizer` (KSoup `Safelist.relaxed()`) and renders natively, without a WebView, so it is not exposed to the above.
 
@@ -36,11 +37,11 @@
 - Impact: The ordering is load-bearing. A new startup step added outside the sequence can reintroduce a duplicate or wrong-filter load.
 - Fix approach: Keep new startup work inside the sequence. `MainScreenModelStartupTest` asserts a single view switch and that the first page is read with the default filter.
 
-**Emission/subscription timing in tests:**
-- Files: `core/data/src/commonTest/kotlin/com/karakept/app/data/repository/BookmarkActionsRepositoryUnitTest.kt` (lines 131, 200)
-- Details: Tests subscribe before `moveToList`/`removeFromList` emit, or the emission races ahead of the collector.
-- Impact: A `SharedFlow` without replay or buffer drops events a late collector would want; the same can happen to a real UI collector that subscribes late.
-- Fix approach: Check the `extraBufferCapacity`/replay of those flows against how the UI collects them, and use `turbine`-style collection in the tests rather than ordering by hand.
+**Bookmark change events have no production collector:**
+- Files: `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt` (`bookmarkChangedEvents`, `bookmarksReloaded`)
+- Details: both flows are emitted from about 20 places (list moves, AI actions, reading-progress passes), but only tests collect them; no ScreenModel subscribes, and none did before the `:core:data` split either.
+- Impact: dead code at best. At worst, a screen that does not otherwise observe Room misses those updates — not yet checked whether the list refreshes after an AI job or a list move by some other route.
+- Fix approach: either collect them in `MainScreenModel` (and then the tests' hand-ordered subscription, `BookmarkActionsRepositoryUnitTest` ~lines 127 and 197, is worth replacing with Turbine — the flows have no replay, so a late collector misses events) or delete the flows and their emissions.
 
 ## Code Complexity & Maintainability
 
@@ -55,15 +56,16 @@
 ## Platform-Specific Fragility
 
 **Linux tray icon and D-Bus:**
-- Files: `composeApp/src/desktopMain/kotlin/main.kt` (~line 344)
+- Files: `composeApp/src/desktopMain/kotlin/main.kt` (~lines 344 and 508)
 - Details: On Linux the tray is skipped when `DBUS_SESSION_BUS_ADDRESS` is unset, so the app starts without one instead of failing. Flatpak needs the session-bus socket; the devcontainer needs D-Bus forwarded.
-- Impact: Without D-Bus, Linux users get no tray icon and no dark-mode detection.
+- Impact: Without D-Bus, Linux users get no tray icon, and closing the window quits the app instead of hiding it. (`isMenuBarInDarkMode()` only tints the tray icon, so losing it costs nothing else.)
+- Unverified risk: the check looks for a session bus, not a tray host. On GNOME without the AppIndicator extension there is a bus but no StatusNotifierItem watcher; unless the library reports that, `trayAvailable` is true and closing the window hides the app with no tray to restore it from.
 - Status: the requirement is documented in `INTEGRATIONS.md` (Linux tray) and `STACK.md` (desktop requirements). Still missing: packaging notes for Flatpak (the session-bus socket permission).
 
 ## Performance (unmeasured)
 
 - **Large libraries:** the list is paged (`PAGE_SIZE`) and rendered by a `LazyColumn`, but nothing has measured scroll or filter changes at 1000+ bookmarks.
-- **Long articles:** the reader composes every block eagerly — page-turn snapping depends on it (see "Hardware page-turn buttons" in `AGENTS.md`) — so a very long article costs its full layout on open. Scrolling one used to cost work per block per frame too (a ~20-minute article measured 20 ms median frames on a 120 Hz phone, all on the UI thread); that per-block work is gone (`ReaderScrollCostTest`). Still open: the progressive reveal in `NativeHtmlRenderer` re-measures the whole column every batch, and one lazy item per block would remove the open cost.
+- **Long articles:** the reader composes every block eagerly — page-turn snapping depends on it (see "Hardware page-turn buttons" in `AGENTS.md`) — so a very long article costs its full layout on open. Scrolling one used to cost work per block per frame too (a ~20-minute article measured 20 ms median frames on a 120 Hz phone, all on the UI thread); that per-block work is gone (`ReaderScrollCostTest`). Still open: the progressive reveal in `NativeHtmlRenderer` (~line 209: 20 blocks, then 10 more every 16 ms) re-measures the whole column every batch, and one lazy item per block would remove the open cost.
 - Fix approach: Add a benchmark before optimising the list; re-measure long articles with `adb shell dumpsys gfxinfo <package>` before going further.
 
 ## Resolved since the 2026-03-20 audit
