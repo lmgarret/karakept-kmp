@@ -223,12 +223,25 @@ fun NativeHtmlRenderer(
             Box(modifier = Modifier.then(BlockBringIntoViewElement)) {
             HighlightContextMenuProvider(onHighlightRequested = highlightAction) {
             SelectionContainer {
+                // Built a frame's worth at a time so no single frame composes and measures the
+                // whole article. The parent keeps the article invisible and is told it has loaded
+                // only once every block is in (below): scroll restoration, page snapping and
+                // progress tracking all read the article's full height, never a partial one.
+                val renderableChildren = document.renderableChildren
+                var visibleCount by remember(document) {
+                    mutableStateOf(minOf(INITIAL_REVEAL_BLOCKS, renderableChildren.size))
+                }
+                val fullyRevealed = visibleCount >= renderableChildren.size
+
                 Column(
                     modifier = modifier
                         // The article's own layer: anything else in its list item that redraws —
                         // a skeleton leaving, a sibling changing size — then reuses the article's
                         // recorded drawing instead of re-recording all of its text.
                         .graphicsLayer()
+                        // Inside the layer, which is re-recorded on every batch otherwise: nothing
+                        // shows the article before it is complete, so it is drawn once, then.
+                        .drawnOnlyWhen(fullyRevealed)
                         .layout { measurable, constraints ->
                             val mark = TimeSource.Monotonic.markNow()
                             val placeable = measurable.measure(constraints)
@@ -249,17 +262,7 @@ fun NativeHtmlRenderer(
                 ) {
                 // Each block carries the offset its text starts at, so a block's position
                 // never depends on how much of the document has been revealed so far.
-                val renderableChildren = document.renderableChildren
                 val composeMark = TimeSource.Monotonic.markNow()
-
-                // Built a frame's worth at a time so no single frame composes and measures the
-                // whole article. The parent keeps the article invisible and is told it has loaded
-                // only once every block is in (below): scroll restoration, page snapping and
-                // progress tracking all read the article's full height, never a partial one.
-                var visibleCount by remember(document) {
-                    mutableStateOf(minOf(INITIAL_REVEAL_BLOCKS, renderableChildren.size))
-                }
-                val fullyRevealed = visibleCount >= renderableChildren.size
 
                 if (!fullyRevealed) {
                     LaunchedEffect(document) {

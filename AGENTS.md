@@ -510,6 +510,11 @@ A container holding blocks is replaced by the units `groupRenderChildren` gives 
 function `RenderChildren` draws from, so a run of inline content becomes one paragraph either way. `NativeHtmlRenderer` then builds the article a frame's budget at a time
 (`nextRevealBatchSize`, 8 ms per frame) behind the invisible body.
 
+Drawing is the other half of the cost. The article has its own `graphicsLayer`, so a redraw anywhere
+else in its list item reuses its recording rather than re-recording 300k px of text; and inside that
+layer `drawnOnlyWhen` draws nothing until the build is complete — Android re-records a changed layer
+whether or not its parent draws it, so hiding it from outside the layer saves nothing.
+
 > **Rule:** `onLoaded` fires only once every block is composed. Scroll restoration, the progress
 > fallback, `blankBelowContent`, page snapping and progress saving (gated on `contentRendered`)
 > all read the article's height, and must never see a partial one. `ReaderRevealTest` pins this.

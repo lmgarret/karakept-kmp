@@ -6,7 +6,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
@@ -54,6 +57,15 @@ class ReaderRevealTest {
             if (loadedCount > 0) return@repeat
             mainClock.advanceTimeByFrame()
             if (!lastBlockComposed()) {
+                if (!sawPartialReveal) {
+                    // Drawing a partial article re-recorded all of it on every batch.
+                    val pixels = onRoot().captureToImage().toPixelMap()
+                    val first = pixels[0, 0]
+                    val blank = (0 until pixels.width step 4).all { x ->
+                        (0 until pixels.height step 4).all { y -> pixels[x, y] == first }
+                    }
+                    assertTrue(blank, "a partly built article must draw nothing")
+                }
                 sawPartialReveal = true
                 assertEquals(0, loadedCount, "onLoaded fired before the last block was composed")
             }

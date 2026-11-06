@@ -1,4 +1,4 @@
-package com.karakept.app.ui.screens.viewer
+package com.karakept.app.ui.components.reader
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
