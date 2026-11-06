@@ -63,7 +63,6 @@ class SmartListDeferredRefreshTest {
 
     private val serversFlow = MutableStateFlow(listOf(testServer))
     private val listsFlow = MutableStateFlow<List<KarakeepList>>(emptyList())
-    private val bookmarkChangedEvents = MutableSharedFlow<String>()
     private val undoCompletedEvents = MutableSharedFlow<UndoCompletedEvent>()
 
     private val serverRepository: ServerRepository = mockk(relaxed = true) {
@@ -75,7 +74,6 @@ class SmartListDeferredRefreshTest {
         every { backgroundSyncCompleted } returns kotlinx.coroutines.flow.MutableSharedFlow()
     }
     private val bookmarkActionsRepository: BookmarkActionsRepository = mockk(relaxed = true) {
-        every { bookmarkChangedEvents } returns this@SmartListDeferredRefreshTest.bookmarkChangedEvents
         every { aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
     }
     private val settingsRepository: SettingsRepository = mockk(relaxed = true) {

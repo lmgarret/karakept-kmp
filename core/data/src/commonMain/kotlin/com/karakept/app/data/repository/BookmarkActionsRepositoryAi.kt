@@ -14,8 +14,8 @@ import kotlinx.coroutines.withContext
  * These deliberately skip the pending-action queue: an AI job has no local optimistic result to
  * show while offline and nothing to undo once it lands, exactly like
  * [com.karakept.app.domain.action.ServerCrawlAction]. What they do share with every other mutation
- * is the finish: write the row, then [BookmarkActionsRepository.notifyBookmarkChanged], which is
- * what makes the list and the reader pick the change up without a full sync.
+ * is the finish: write the row, and Room's invalidation is what makes the list and the reader
+ * pick the change up without a full sync.
  */
 
 /** Which AI actions a given server will accept from this account. */
@@ -60,7 +60,6 @@ suspend fun BookmarkActionsRepository.summarizeBookmark(bookmark: Bookmark): Str
             throw e
         }
         bookmarkDao.updateSummary(bookmark.localId, result.summary, result.summarizationStatus)
-        notifyBookmarkChanged(bookmark.remoteId)
         result.summary
     }
 
@@ -89,7 +88,6 @@ suspend fun BookmarkActionsRepository.requestAiRetag(
             repository.syncSingleBookmark(bookmark.remoteId, bookmark.serverId)
             val current = bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId)
             if (current != null && current.tags != tagsBefore) {
-                notifyBookmarkChanged(bookmark.remoteId)
                 return@withContext true
             }
         }

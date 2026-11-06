@@ -84,24 +84,6 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun summarize_announcesTheChangeSoOtherScreensRefresh() = runTest(testDispatcher) {
-        withConfiguredServer()
-        val bookmark = testBookmarkEntity()
-        coEvery { remoteDataSource.summarizeBookmark(any(), any()) } returns
-            SummarizeResult("Summary", "success")
-
-        var emitted: String? = null
-        val job = launch { repository.bookmarkChangedEvents.collect { emitted = it } }
-        advanceUntilIdle() // SharedFlow has replay 0 — subscribe before the emit
-
-        repository.summarizeBookmark(bookmark.toBookmark())
-        advanceUntilIdle()
-
-        assertEquals(bookmark.remoteId, emitted)
-        job.cancel()
-    }
-
-    @Test
     fun summarize_stopsOfferingItselfOnceTheServerSaysItHasNoModel() = runTest(testDispatcher) {
         withConfiguredServer()
         val bookmark = testBookmarkEntity()

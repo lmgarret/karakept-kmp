@@ -25,7 +25,6 @@ suspend fun BookmarkActionsRepository.batchArchive(bookmarks: List<Bookmark>) {
                 actionType = PendingActionType.ARCHIVE,
                 actionData = "{}"
             )
-            notifyBookmarkChanged(bookmark.remoteId)
         }
         bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
     }
@@ -45,7 +44,6 @@ suspend fun BookmarkActionsRepository.batchUnarchive(bookmarks: List<Bookmark>) 
                 actionType = PendingActionType.UNARCHIVE,
                 actionData = "{}"
             )
-            notifyBookmarkChanged(bookmark.remoteId)
         }
         bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
     }
@@ -62,7 +60,6 @@ suspend fun BookmarkActionsRepository.batchMarkRead(bookmarks: List<Bookmark>) {
                 bookmarkDao.insertBookmark(it.copy(isRead = true, readingProgress = 1f))
                 queueReadingProgressUpdate(bookmark.remoteId, bookmark.serverId, progressPercent = 100)
             }
-            notifyBookmarkChanged(bookmark.remoteId)
         }
         bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
     }
@@ -86,7 +83,6 @@ suspend fun BookmarkActionsRepository.batchMarkUnread(bookmarks: List<Bookmark>,
                     queueReadingProgressUpdate(bookmark.remoteId, bookmark.serverId, progressPercent = 0)
                 }
             }
-            notifyBookmarkChanged(bookmark.remoteId)
         }
         if (resetProgress) {
             bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
@@ -108,7 +104,6 @@ suspend fun BookmarkActionsRepository.batchSetFavourite(bookmarks: List<Bookmark
                 actionType = if (makeFavourite) PendingActionType.FAVOURITE else PendingActionType.UNFAVOURITE,
                 actionData = "{}"
             )
-            notifyBookmarkChanged(bookmark.remoteId)
         }
         bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
     }
@@ -129,7 +124,6 @@ suspend fun BookmarkActionsRepository.batchDelete(bookmarks: List<Bookmark>) {
                     actionType = PendingActionType.DELETE,
                     actionData = "{}"
                 )
-                notifyBookmarkChanged(bookmark.remoteId)
             }
         }
         bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
@@ -150,7 +144,6 @@ suspend fun BookmarkActionsRepository.batchUpdateTags(bookmarks: List<Bookmark>,
                 actionType = PendingActionType.UPDATE_TAGS,
                 actionData = jsonSerializer.encodeToString(mapOf("tags" to newTags))
             )
-            notifyBookmarkChanged(bookmark.remoteId)
         }
         bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
     }
@@ -175,7 +168,6 @@ suspend fun BookmarkActionsRepository.batchMoveToList(bookmarks: List<Bookmark>,
                 actionType = PendingActionType.MOVE_TO_LIST,
                 actionData = jsonSerializer.encodeToString(mapOf("listId" to listId))
             )
-            notifyBookmarkChanged(bookmark.remoteId)
         }
         bookmarks.firstOrNull()?.serverId?.let { triggerAutoSync(it) }
     }

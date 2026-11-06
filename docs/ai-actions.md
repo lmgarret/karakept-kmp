@@ -72,8 +72,8 @@ only refuse is worse than not offering it.
 These bypass `BookmarkActionController` and the pending-action queue, like
 `ServerCrawlAction` does. A generated summary has no previous value worth restoring, a re-tag is
 the server's own judgement, and neither has a local optimistic result to show while offline. What
-they do share with every other mutation is the ending: write the row, then
-`notifyBookmarkChanged`, which is what refreshes the list and the reader without a full sync.
+they do share with every other mutation is the ending: write the row. The list and the reader
+both observe Room, so that write is what refreshes them without a full sync.
 
 ## Multi-selection
 

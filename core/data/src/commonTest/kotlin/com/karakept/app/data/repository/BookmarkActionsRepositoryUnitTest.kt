@@ -117,28 +117,6 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         assertTrue(actionSlot.captured.actionData.contains("list-99"))
     }
 
-    @Test
-    fun moveToList_emitsBookmarkChangedEvent() = runTest(testDispatcher) {
-        val bookmark = testBookmarkEntity(listIds = "")
-        coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
-        coEvery { settingsRepository.offlineMode } returns flowOf(true)
-
-        var emittedId: String? = null
-        val job = launch {
-            repository.bookmarkChangedEvents.collect { emittedId = it }
-        }
-        // Advance scheduler so the collector coroutine starts and subscribes to the SharedFlow
-        // before moveToList emits. Without this, the emission races ahead of the subscription
-        // and the value is lost (SharedFlow has replay=0).
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        repository.moveToList(bookmark.remoteId, bookmark.serverId, "list-99")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(bookmark.remoteId, emittedId)
-        job.cancel()
-    }
-
     // ──────────────────────────────────────────────────────────
     // removeFromList
     // ──────────────────────────────────────────────────────────
@@ -184,28 +162,6 @@ class BookmarkActionsRepositoryUnitTest : BaseRepositoryTest() {
         coVerify { pendingActionDao.insertAction(capture(actionSlot)) }
         assertEquals(PendingActionType.REMOVE_FROM_LIST, actionSlot.captured.actionType)
         assertTrue(actionSlot.captured.actionData.contains("list-1"))
-    }
-
-    @Test
-    fun removeFromList_emitsBookmarkChangedEvent() = runTest(testDispatcher) {
-        val bookmark = testBookmarkEntity(listIds = "list-1")
-        coEvery { bookmarkDao.getBookmarkByRemoteId(bookmark.remoteId, bookmark.serverId) } returns bookmark
-        coEvery { settingsRepository.offlineMode } returns flowOf(true)
-
-        var emittedId: String? = null
-        val job = launch {
-            repository.bookmarkChangedEvents.collect { emittedId = it }
-        }
-        // Advance scheduler so the collector coroutine starts and subscribes to the SharedFlow
-        // before removeFromList emits. Without this, the emission races ahead of the subscription
-        // and the value is lost (SharedFlow has replay=0).
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        repository.removeFromList(bookmark.remoteId, bookmark.serverId, "list-1")
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(bookmark.remoteId, emittedId)
-        job.cancel()
     }
 
     // ──────────────────────────────────────────────────────────
