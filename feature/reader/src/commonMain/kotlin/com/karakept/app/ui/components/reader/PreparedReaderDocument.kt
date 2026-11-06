@@ -84,22 +84,6 @@ private fun unwrapInto(container: Element, offsets: ReaderTextOffsets, out: Muta
 private fun isUnwrappable(element: Element): Boolean =
     element.tagName().lowercase() in UNWRAPPABLE_TAGS && hasBlockChildren(element)
 
-/** One line describing the article's top-level shape, for the `ReaderPerf` log. */
-internal fun describeTopLevel(document: PreparedReaderDocument): String {
-    val units = document.renderableChildren
-    val inline = units.count { it.inlineNodes != null }
-    val head = units.take(3).joinToString { span ->
-        val node = span.node
-        when {
-            span.inlineNodes != null -> "inline×${span.inlineNodes.size}"
-            node is Element -> "<${node.tagName()}> ${node.childNodeSize()} children, " +
-                "${node.children().count { isBlockElement(it) }} blocks"
-            else -> "text"
-        }
-    }
-    return "${units.size} units ($inline inline runs); first: $head"
-}
-
 /** How long one frame may spend composing and measuring newly revealed blocks. */
 internal val REVEAL_FRAME_BUDGET = 8.milliseconds
 

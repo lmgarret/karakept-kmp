@@ -1003,19 +1003,12 @@ private fun RenderResolvedImage(
             onLoading = { isLoading = true },
             onSuccess = { state ->
                 isLoading = false
-                val image = state.result.image
-                ReaderPerf.log(
-                    "image loaded ${urls[idx].takeLast(40)}: ${image.width}x${image.height}" +
-                        if (dimensions == null) " (no declared size: relayout)" else " (declared size)"
-                )
                 if (dimensions == null) {
+                    val image = state.result.image
                     loadedDimensions = loadedImageDimensions(image.width, image.height)
                 }
             },
-            onError = {
-                ReaderPerf.log("image failed ${urls[idx].takeLast(40)}")
-                idx++
-            },
+            onError = { idx++ },
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(shape)

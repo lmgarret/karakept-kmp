@@ -19,7 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Color
@@ -164,7 +163,7 @@ fun NativeHtmlRenderer(
     // build, a re-crawl — so each highlight is checked against the text it was
     // created from before it is drawn.
     val resolvedHighlights = remember(offsets, highlights) {
-        ReaderPerf.time("resolveHighlights ${highlights.size}") { resolveHighlights(highlights, offsets) }
+        resolveHighlights(highlights, offsets)
     }
 
     // Pre-scanned once per document so the full-screen viewer can swipe between all of a
@@ -242,19 +241,12 @@ fun NativeHtmlRenderer(
                         // Inside the layer, which is re-recorded on every batch otherwise: nothing
                         // shows the article before it is complete, so it is drawn once, then.
                         .drawnOnlyWhen(fullyRevealed)
+                        // Measured for the reveal's frame budget.
                         .layout { measurable, constraints ->
                             val mark = TimeSource.Monotonic.markNow()
                             val placeable = measurable.measure(constraints)
                             revealMeter.record(mark.elapsedNow())
-                            val ms = mark.elapsedNow().inWholeMilliseconds
-                            if (ms >= 2) ReaderPerf.log("article measure: $ms ms, height ${placeable.height} px")
                             layout(placeable.width, placeable.height) { placeable.place(0, 0) }
-                        }
-                        .drawWithContent {
-                            val mark = TimeSource.Monotonic.markNow()
-                            drawContent()
-                            val ms = mark.elapsedNow().inWholeMilliseconds
-                            if (ms >= 2) ReaderPerf.log("article draw: $ms ms")
                         }
                         .fillMaxWidth()
                         .padding(horizontal = typography.horizontalMarginDp.dp, vertical = 0.dp)
@@ -262,12 +254,11 @@ fun NativeHtmlRenderer(
                 ) {
                 // Each block carries the offset its text starts at, so a block's position
                 // never depends on how much of the document has been revealed so far.
+                // Timed, with the measure above, for the reveal's frame budget.
                 val composeMark = TimeSource.Monotonic.markNow()
 
                 if (!fullyRevealed) {
                     LaunchedEffect(document) {
-                        val revealMark = TimeSource.Monotonic.markNow()
-                        var batches = 0
                         var lastBatch = visibleCount
                         while (visibleCount < renderableChildren.size) {
                             withFrameNanos { }
@@ -276,45 +267,13 @@ fun NativeHtmlRenderer(
                             if (cost == Duration.ZERO) continue
                             lastBatch = nextRevealBatchSize(lastBatch, cost)
                             visibleCount = minOf(visibleCount + lastBatch, renderableChildren.size)
-                            batches++
                         }
-                        ReaderPerf.log(
-                            "reveal done: ${renderableChildren.size} blocks, $batches batches, " +
-                                "${revealMark.elapsedNow().inWholeMilliseconds} ms"
-                        )
                     }
                 } else {
                     LaunchedEffect(document) { onLoaded?.invoke() }
                 }
 
-                val composeInputs = listOf(
-                    "highlights" to resolvedHighlights,
-                    "selectedHighlight" to selectedHighlightId,
-                    "search" to searchState,
-                    "gallery" to galleryImages,
-                    "theme" to theme,
-                    "visibleCount" to visibleCount
-                )
-                val lastInputs = remember(document) { arrayOfNulls<List<Pair<String, Any?>>>(1) }
-                SideEffect {
-                    val previous = lastInputs[0]
-                    if (previous != null) {
-                        val changed = composeInputs.indices
-                            .filter {
-                                val before = previous[it].second
-                                val now = composeInputs[it].second
-                                if (before is Int) before != now else before !== now
-                            }
-                            .map { composeInputs[it].first }
-                        ReaderPerf.log("article recomposed, changed: ${changed.ifEmpty { listOf("none of the tracked inputs") }}")
-                    }
-                    lastInputs[0] = composeInputs
-                    revealMeter.record(composeMark.elapsedNow())
-                    ReaderPerf.log(
-                        "article compose: ${composeMark.elapsedNow().inWholeMilliseconds} ms, " +
-                            "$visibleCount/${renderableChildren.size} blocks"
-                    )
-                }
+                SideEffect { revealMeter.record(composeMark.elapsedNow()) }
 
                 // Render visible children
                 for (span in renderableChildren.take(visibleCount)) {
