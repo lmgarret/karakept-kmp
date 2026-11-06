@@ -75,7 +75,7 @@ Offenders that predate a rule sit in `LayerRulesTest.KNOWN_VIOLATIONS`; the rule
 **Bookmark Sync Flow:**
 
 1. ScreenModel (MainScreenModel) triggers `syncBookmarks(server)` on user action
-2. BookmarkRepository.executeSyncPipeline(SyncConfiguration) called
+2. BookmarkRepository delegates to `BookmarkSyncRunner.executeSyncPipeline(SyncConfiguration)`, which runs a `BookmarkSyncPipeline`
 3. RemoteDataSource guards against offline mode and fetches from API
 4. Bookmarks mapped from API model → BookmarkEntity and persisted to Room DB
 5. BookmarkRepository maps rows to the domain `Bookmark` (`data/model/Bookmark.kt`) and emits that to the UI —
@@ -149,7 +149,7 @@ the DB. Instead `BookmarkSyncPipeline` commits each page as it arrives:
 - Contains: id, url, apiKey, userId, username
 - Used by: All repositories to route requests to correct server
 
-**SyncConfiguration (Internal to BookmarkRepository):**
+**SyncConfiguration (internal to the sync runner/pipeline):**
 - Purpose: Describes what bookmarks to sync and how to handle deletions
 - Variants: Full (fetch all, delete removed), Filtered (archived/favorited only, upsert only), ForList (specific list)
 - Pattern: Sealed class with abstract properties controlling sync behavior
@@ -254,7 +254,7 @@ current view, rebuilt on every write, to answer these.
 
 **Patterns:**
 
-- RemoteDataSource.guardedCall() blocks all network requests if offline mode enabled → throws OfflineModeException
+- RemoteApiContext.guardedCall() (behind every RemoteDataSource call) blocks all network requests if offline mode enabled → throws OfflineModeException
 - BookmarkActionController.executeAction() returns BookmarkActionResult (Success or Error sealed class)
 - Repositories catch exceptions and emit empty lists or null on failure (best-effort)
 - ScreenModels catch exceptions in LaunchedEffect and emit failure to UI via SharedFlow (e.g., _createBookmarkResult)
@@ -280,7 +280,7 @@ current view, rebuilt on every write, to answer these.
 **Synchronization (Offline-First):**
 - Pending actions queued in PendingActionDao before network attempt, replayed with exponential backoff
 - Queued actions are flushed when the app returns to the foreground (see App.kt)
-- Sync mutex in BookmarkRepository prevents concurrent syncs
+- Per-key sync locks in `BookmarkSyncRunner` (one instance, owned by BookmarkRepository) prevent concurrent syncs of the same view
 - SettingsRepository.offlineMode (the user's manual toggle) checked before remote calls
 - Exception: server-side crawl actions (`ServerCrawlAction` — refresh / preserve archive /
   preserve PDF, plus deleting an asset on the server) deliberately bypass the pending-action
@@ -288,7 +288,7 @@ current view, rebuilt on every write, to answer these.
   so there is nothing to apply offline or to undo; the UI disables them in offline mode instead.
 
 **Threading:**
-- Repositories are main-safe: `BookmarkRepository.executeSyncPipeline` and
+- Repositories are main-safe: `BookmarkSyncRunner.executeSyncPipeline` (behind BookmarkRepository's sync methods) and
   `ListRepository.refreshListsInternal` switch to `appDispatchers.io` themselves, so ScreenModels
   never wrap a repository call in `withContext`
 - Background work that must outlive its caller runs on the owning `single`'s scope

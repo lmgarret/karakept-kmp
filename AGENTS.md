@@ -579,8 +579,8 @@ that ghosts, and MD3's tonal surface steps collapse into indistinguishable greys
   `LazyListState.scrollToTop(instant)` instead of `animateScrollToItem(0, 0)`.
 - Never rely on a tonal fill or `shadowElevation` alone to separate an element from the page —
   under `highContrast` every surface role is the same colour. Add
-  `border(1.dp, colorScheme.outline)` in that case, as `TagChip`, `BookmarkLayouts` and
-  `BaseBottomPanel` do — or, for anything floating above the content, take the border and the
+  `border(1.dp, colorScheme.outline)` in that case, as `TagChip`, `BookmarkCardLayout`/`BookmarkListLayout`
+  and `BaseBottomPanel` do — or, for anything floating above the content, take the border and the
   elevation together from `floatingSurfaceStyle()` (see "Elements that float above the page").
 - No shimmer or indeterminate spinner as the only "busy" signal; fall back to the stepped dots
   (`BusyIndicator` / `InlineLoadingDots` in `ui/components/EinkAware.kt` do this).
@@ -939,7 +939,10 @@ The `api-client/` module is **generated** from the Karakeep OpenAPI spec at
   `git submodule update --init`.
 - **Do not hand-edit** files under `api-client/src/` — they will be overwritten on regeneration.
 - Generated models live at `com.karakept.api.*`.
-- `RemoteDataSource.kt` is the only place that consumes the generated API clients.
+- `data/remote/` in `:core:data` is the only place that consumes the generated API clients:
+  `RemoteDataSource.kt` (the facade repositories call), `RemoteApiContext.kt` (client, offline
+  guard, URLs, auth) and the `RemoteDataSource{Bookmarks,Highlights,ReadingProgress,ServerActions}.kt`
+  files holding the calls. `RemoteErrors.kt` is the public error contract.
 
 ---
 

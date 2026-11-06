@@ -69,12 +69,12 @@ karakept-kmp/
 
 **composeApp/src/commonMain/kotlin/com/karakept/app/ui/components/:**
 - Purpose: Reusable, single-purpose composable building blocks
-- Contains: generic components at the root (BaseBottomPanel, EinkAware, ListPickerDialog, FilterBottomPanel) and feature subpackages: `tags/` (TagChip, BookmarkTagsDisplay, TagEditorDialog), `bookmark/` (BookmarkActionsMenu, BookmarkLayouts, row items and badges), `highlight/` (HighlightCard and friends), `reader/` (HtmlRenderer, HtmlContent, HighlightTextToolbar, ViewerModeToggle)
+- Contains: generic components at the root (BaseBottomPanel, EinkAware, ListPickerDialog, FilterBottomPanel) and feature subpackages: `tags/` (TagChip, BookmarkTagsDisplay, TagEditorDialog), `bookmark/` (BookmarkActionsMenu, BookmarkCardLayout, BookmarkListLayout, row items and badges), `highlight/` (HighlightCard and friends), `reader/` (HtmlRenderer, HtmlContent, HighlightTextToolbar, ViewerModeToggle)
 - Key files:
   - `tags/TagChip.kt` - Single tag display (canonical design: secondaryContainer, shapes.small, 2dp elevation)
   - `tags/BookmarkTagsDisplay.kt` - Renders comma-separated tag string as FlowRow
   - `FilterBottomPanel.kt` - Filter UI with tag, list, and status controls
-  - `bookmark/BookmarkLayouts.kt` - Layout variants for bookmark items (compact, expanded, reader)
+  - `bookmark/BookmarkCardLayout.kt` / `bookmark/BookmarkListLayout.kt` - The two bookmark row layouts (hero-image card; thumbnail row, its parts in `BookmarkListRowParts.kt`), wrapped by `BookmarkRowContainer.kt`
   - `BaseBottomPanel.kt` - Base for modal bottom sheets (matches ModalBottomSheet styling)
   - `reader/` - HTML content rendering, highlight toolbar, scrollable containers
 
@@ -96,7 +96,10 @@ karakept-kmp/
 **core/data/src/commonMain/kotlin/com/karakept/app/data/remote/:**
 - Purpose: Remote API communication, HTTP client setup
 - Contains:
-  - `RemoteDataSource.kt` - Wraps generated API clients, handles offline mode guard
+  - `RemoteDataSource.kt` - Facade repositories call (and tests mock); each member delegates to an extension on `RemoteApiContext`
+  - `RemoteApiContext.kt` - HttpClient, offline mode guard, per-server URLs and auth for the generated API clients
+  - `RemoteDataSourceBookmarks.kt`, `RemoteDataSourceHighlights.kt`, `RemoteDataSourceReadingProgress.kt`, `RemoteDataSourceServerActions.kt` - The calls, by concern
+  - `RemoteErrors.kt` - Public error contract (`ApiException`, `OfflineModeException`, `UnsupportedServerActionException`, `hasHttpStatus`)
   - `KtorClient.kt` - HttpClient configuration with serialization and plugin setup
   - Generated API clients: BookmarksApi, ListsApi, TagsApi, HighlightsApi, UsersApi (auto-generated from server API)
 

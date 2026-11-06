@@ -49,8 +49,8 @@ is split this way is in `AGENTS.md` → "Gradle Modules".
 ## Data
 
 - **Ktor client** (OkHttp engine on both platforms) with content negotiation, kotlinx JSON, auth
-  and logging plugins. `ktor-client-mock` in tests. `RemoteDataSource` is the only consumer of the
-  generated API client.
+  and logging plugins. `ktor-client-mock` in tests. `RemoteDataSource` and the `data/remote` files it
+  delegates to are the only consumers of the generated API client.
 - **Room 3** (`androidx.room3`) over **`sqlite-bundled`**, so both platforms run the same SQLite
   rather than the OS's. History of the move from Room 2: `room3-migration.md`.
 - **DataStore (preferences)** for settings — see "Adding a New Setting" in `AGENTS.md`.
