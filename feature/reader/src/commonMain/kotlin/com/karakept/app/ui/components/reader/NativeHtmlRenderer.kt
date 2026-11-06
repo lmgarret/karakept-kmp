@@ -279,7 +279,28 @@ fun NativeHtmlRenderer(
                     LaunchedEffect(document) { onLoaded?.invoke() }
                 }
 
+                val composeInputs = listOf(
+                    "highlights" to resolvedHighlights,
+                    "selectedHighlight" to selectedHighlightId,
+                    "search" to searchState,
+                    "gallery" to galleryImages,
+                    "theme" to theme,
+                    "visibleCount" to visibleCount
+                )
+                val lastInputs = remember(document) { arrayOfNulls<List<Pair<String, Any?>>>(1) }
                 SideEffect {
+                    val previous = lastInputs[0]
+                    if (previous != null) {
+                        val changed = composeInputs.indices
+                            .filter {
+                                val before = previous[it].second
+                                val now = composeInputs[it].second
+                                if (before is Int) before != now else before !== now
+                            }
+                            .map { composeInputs[it].first }
+                        ReaderPerf.log("article recomposed, changed: ${changed.ifEmpty { listOf("none of the tracked inputs") }}")
+                    }
+                    lastInputs[0] = composeInputs
                     revealMeter.record(composeMark.elapsedNow())
                     ReaderPerf.log(
                         "article compose: ${composeMark.elapsedNow().inWholeMilliseconds} ms, " +
