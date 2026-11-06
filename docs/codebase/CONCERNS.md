@@ -47,18 +47,18 @@
 **Files approaching 1000 lines:**
 - `feature/reader/.../screens/viewer/BookmarkViewerContent.kt` (987) and `BookmarkDetailsPanel.kt` (984)
 - `core/ui/.../components/bookmark/BookmarkLayouts.kt` (918)
+- `core/data/.../data/repository/BookmarkRepository.kt` (904) — grew back past 900 after `BookmarkAssetCache` was extracted
 - `core/data/.../data/remote/RemoteDataSource.kt` (892)
-- `core/data/src/commonTest/.../repository/BookmarkSyncPipelineTest.kt` (1890) — test code, but the hardest file in the repo to review
 - Impact: High cognitive load, hard review, larger bug surface.
 - Fix approach: what worked for the files split on 2026-11-05 — break a single long composable into helper composables of its own file, pull pure logic out where a unit test can reach it, and give a ScreenModel's methods extension files by concern (`MainScreenModelSync.kt`, `…Filters.kt`, `…Actions.kt`, `…Batch.kt`) while its state and startup sequence stay in the class.
 
 ## Platform-Specific Fragility
 
 **Linux tray icon and D-Bus:**
-- Files: `composeApp/src/desktopMain/kotlin/main.kt` (~line 343)
+- Files: `composeApp/src/desktopMain/kotlin/main.kt` (~line 344)
 - Details: On Linux the tray is skipped when `DBUS_SESSION_BUS_ADDRESS` is unset, so the app starts without one instead of failing. Flatpak needs the session-bus socket; the devcontainer needs D-Bus forwarded.
 - Impact: Without D-Bus, Linux users get no tray icon and no dark-mode detection.
-- Fix approach: Document the D-Bus requirement in the Linux packaging notes.
+- Status: the requirement is documented in `INTEGRATIONS.md` (Linux tray) and `STACK.md` (desktop requirements). Still missing: packaging notes for Flatpak (the session-bus socket permission).
 
 ## Performance (unmeasured)
 
@@ -83,7 +83,8 @@
 - Stale Voyager comments in `MainScreenModel` and `LayoutEditorScreenModel` — reworded against Nav3's per-entry `ViewModelStore`.
 - Hardcoded `Dispatchers.Default` in `HtmlContent.kt` — uses the injected `AppDispatchers`.
 - Last `!!` in `HtmlBlockRenderer.kt` — replaced by a local.
+- `BookmarkSyncPipelineTest.kt` (1890 lines) — split by concern into smaller suites.
 
 ---
 
-*Concerns audit: 2026-11-05 (maintainability items resolved the same day)*
+*Concerns audit: 2026-11-05 (maintainability items resolved the same day; re-checked 2026-11-06)*
