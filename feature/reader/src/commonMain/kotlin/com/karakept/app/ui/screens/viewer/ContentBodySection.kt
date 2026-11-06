@@ -25,7 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -204,7 +204,7 @@ internal fun ContentBodySection(
                 HtmlContent(
                     html = effectiveContent,
                     viewerMode = viewerMode,
-                    modifier = Modifier.alpha(if (bodyRevealed) 1f else 0f),
+                    modifier = Modifier.drawnOnlyWhen(bodyRevealed),
                     removeFirstImage = removeFirstImage,
                     onLinkClick = onLinkClick,
                     onReady = { htmlContentReady = true },
@@ -254,6 +254,15 @@ internal fun ContentBodySection(
  * The article body is revealed only once both scroll restoration and highlight scrolling
  * are done, so the hero can appear immediately while the body waits.
  */
+/**
+ * Lays the content out but draws none of it until [visible]. An `alpha(0f)` hides it too, but
+ * still records every block's drawing each frame — and while a long article is built a batch at a
+ * time, that re-recorded the whole article on every frame. Skipping the draw records it once, when
+ * it is shown.
+ */
+internal fun Modifier.drawnOnlyWhen(visible: Boolean): Modifier =
+    drawWithContent { if (visible) drawContent() }
+
 internal fun computeContentRevealed(needsScrollRestore: Boolean, needsHighlightScroll: Boolean): Boolean =
     !needsScrollRestore && !needsHighlightScroll
 
