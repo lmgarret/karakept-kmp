@@ -12,9 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.flow.SharedFlow
 import com.karakept.app.utils.AppLogger
 
 /**
@@ -40,30 +38,6 @@ class BookmarkActionsRepository internal constructor(
     // Track when actions are being performed
     private val _isPerformingAction = kotlinx.coroutines.flow.MutableStateFlow(false)
     val isPerformingAction: kotlinx.coroutines.flow.StateFlow<Boolean> = _isPerformingAction
-
-    // Emits the remoteId of a bookmark whenever it has been locally modified by an action.
-    // Observers (e.g. MainScreenModel) can react to keep their lists up-to-date without a full sync.
-    private val _bookmarkChangedEvents = MutableSharedFlow<String>(extraBufferCapacity = 16)
-    val bookmarkChangedEvents: SharedFlow<String> = _bookmarkChangedEvents
-
-    fun notifyBookmarkChanged(remoteId: String) {
-        _bookmarkChangedEvents.tryEmit(remoteId)
-    }
-
-    // "Rows changed underneath you, re-read what you are showing." Emitted by work that
-    // touches many bookmarks at once — a reading-progress pass applies hundreds — where a
-    // per-row event would cost the listener a read and a rebuild apiece, and where sixteen of
-    // them would silently overflow the buffer above. Conflated: one re-read answers any
-    // number of them.
-    private val _bookmarksReloaded = MutableSharedFlow<Unit>(
-        extraBufferCapacity = 1,
-        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
-    )
-    val bookmarksReloaded: SharedFlow<Unit> = _bookmarksReloaded
-
-    fun notifyBookmarksReloaded() {
-        _bookmarksReloaded.tryEmit(Unit)
-    }
 
     // What AI actions each server will accept, keyed by server id. Populated by
     // refreshAiCapabilities and narrowed when a call comes back "this server can't".
@@ -145,8 +119,6 @@ class BookmarkActionsRepository internal constructor(
                     actionData = "{}"
                 )
 
-                _bookmarkChangedEvents.emit(bookmarkRemoteId)
-
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
             }
@@ -171,8 +143,6 @@ class BookmarkActionsRepository internal constructor(
                     actionType = PendingActionType.UNARCHIVE,
                     actionData = "{}"
                 )
-
-                _bookmarkChangedEvents.emit(bookmarkRemoteId)
 
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
@@ -203,8 +173,6 @@ class BookmarkActionsRepository internal constructor(
                     actionData = "{}"
                 )
 
-                _bookmarkChangedEvents.emit(bookmarkRemoteId)
-
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
             }
@@ -224,7 +192,6 @@ class BookmarkActionsRepository internal constructor(
                     bookmarkDao.insertBookmark(it.copy(isRead = true, readingProgress = 1f))
                     queueReadingProgressUpdate(bookmarkRemoteId, serverId, progressPercent = 100)
                 }
-                _bookmarkChangedEvents.emit(bookmarkRemoteId)
                 triggerAutoSync(serverId)
             }
         }
@@ -256,7 +223,6 @@ class BookmarkActionsRepository internal constructor(
                         triggerAutoSync(serverId)
                     }
                 }
-                _bookmarkChangedEvents.emit(bookmarkRemoteId)
             }
         }
     }
@@ -308,8 +274,6 @@ class BookmarkActionsRepository internal constructor(
                     actionType = PendingActionType.DELETE,
                     actionData = "{}"
                 )
-
-                _bookmarkChangedEvents.emit(bookmarkRemoteId)
 
                 // Auto-sync if not in offline mode
                 triggerAutoSync(serverId)
@@ -384,8 +348,6 @@ class BookmarkActionsRepository internal constructor(
                 actionData = jsonSerializer.encodeToString(mapOf("listId" to listId))
             )
 
-            _bookmarkChangedEvents.emit(bookmarkRemoteId)
-
             // Auto-sync if not in offline mode
             triggerAutoSync(serverId)
         }
@@ -415,8 +377,6 @@ class BookmarkActionsRepository internal constructor(
                 actionType = PendingActionType.REMOVE_FROM_LIST,
                 actionData = jsonSerializer.encodeToString(mapOf("listId" to listId))
             )
-
-            _bookmarkChangedEvents.emit(bookmarkRemoteId)
 
             // Auto-sync if not in offline mode
             triggerAutoSync(serverId)
@@ -623,7 +583,6 @@ class BookmarkActionsRepository internal constructor(
     ) {
         repositoryScope.launch {
             bookmarkDao.writeReadingProgress(bookmarkLocalId, progress, scrollIndex, scrollOffset)
-            notifyBookmarkChanged(bookmarkRemoteId)
             if (serverId != null) {
                 queueReadingProgressUpdate(
                     bookmarkRemoteId = bookmarkRemoteId,

@@ -57,8 +57,6 @@ class MainScreenModelWindowTest {
         Dispatchers.setMain(testDispatcher)
 
         every { harness.serverRepository.servers } returns flowOf(listOf(fakeServer))
-        every { harness.bookmarkActionsRepository.bookmarkChangedEvents } returns
-            kotlinx.coroutines.flow.MutableSharedFlow()
         every { harness.bookmarkActionController.undoCompletedEvents } returns
             kotlinx.coroutines.flow.MutableSharedFlow()
         every { harness.bookmarkRepository.backgroundSyncCompleted } returns

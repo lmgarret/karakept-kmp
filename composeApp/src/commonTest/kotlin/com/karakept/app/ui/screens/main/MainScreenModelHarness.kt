@@ -104,7 +104,6 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow()
         every { bookmarkActionsRepository.aiCapabilities } returns MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow()
         every { bookmarkRepository.syncReports } returns MutableSharedFlow()

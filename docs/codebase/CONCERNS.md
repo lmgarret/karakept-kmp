@@ -37,12 +37,6 @@
 - Impact: The ordering is load-bearing. A new startup step added outside the sequence can reintroduce a duplicate or wrong-filter load.
 - Fix approach: Keep new startup work inside the sequence. `MainScreenModelStartupTest` asserts a single view switch and that the first page is read with the default filter.
 
-**Bookmark change events have no production collector:**
-- Files: `core/data/src/commonMain/kotlin/com/karakept/app/data/repository/BookmarkActionsRepository.kt` (`bookmarkChangedEvents`, `bookmarksReloaded`)
-- Details: both flows are emitted from about 20 places (list moves, AI actions, reading-progress passes), but only tests collect them; no ScreenModel subscribes, and none did before the `:core:data` split either.
-- Impact: dead code at best. At worst, a screen that does not otherwise observe Room misses those updates — not yet checked whether the list refreshes after an AI job or a list move by some other route.
-- Fix approach: either collect them in `MainScreenModel` (and then the tests' hand-ordered subscription, `BookmarkActionsRepositoryUnitTest` ~lines 127 and 197, is worth replacing with Turbine — the flows have no replay, so a late collector misses events) or delete the flows and their emissions.
-
 ## Code Complexity & Maintainability
 
 **Files approaching 1000 lines:**
@@ -86,6 +80,7 @@
 - Hardcoded `Dispatchers.Default` in `HtmlContent.kt` — uses the injected `AppDispatchers`.
 - Last `!!` in `HtmlBlockRenderer.kt` — replaced by a local.
 - `BookmarkSyncPipelineTest.kt` (1890 lines) — split by concern into smaller suites.
+- `bookmarkChangedEvents` / `bookmarksReloaded` (2026-11-06) — emitted from about 20 places but never collected outside tests; removed. The list re-reads its window on Room's invalidation of the view count (`BookmarkListPager`) and the reader observes its row (`observeBookmark`), so a write to the table is already the signal.
 
 ---
 

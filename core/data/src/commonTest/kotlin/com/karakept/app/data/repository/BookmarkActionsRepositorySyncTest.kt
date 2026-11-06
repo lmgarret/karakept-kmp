@@ -205,54 +205,6 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         coVerify(exactly = 0) { remoteDataSource.getReadingProgressBatch(any(), any(), any()) }
     }
 
-    // The write moves the read flag, and the list holds a snapshot of its rows while the
-    // drawer's unread count reads the table live. Without an event the two disagree: the
-    // count reports a bookmark the pull turned back to unread and the list keeps drawing it
-    // as read, so there is nothing on screen to scroll to (#333).
-    @Test
-    fun pullReadingProgress_applied_asksTheListToReload() = runTest(testDispatcher) {
-        val bookmark = testBookmarkEntity(readingProgress = 1f)
-        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns bookmark
-        coEvery {
-            remoteDataSource.getReadingProgressBatch(any(), any(), any())
-        } returns mapOf(bookmark.remoteId to 0)
-
-        var reloads = 0
-        val collector = backgroundScope.launch {
-            repository.bookmarksReloaded.collect { reloads++ }
-        }
-        runCurrent()
-
-        val result = repository.pullReadingProgressFromServer("remote-1", "server1")
-        runCurrent()
-        collector.cancel()
-
-        assertEquals(ReadingProgressPullResult.APPLIED, result)
-        assertEquals(1, reloads, "the rows the list is holding are now out of date")
-    }
-
-    @Test
-    fun pullReadingProgress_skipped_asksForNoReload() = runTest(testDispatcher) {
-        val bookmark = testBookmarkEntity(readingProgress = 0.3f)
-        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returns bookmark
-        coEvery {
-            remoteDataSource.getReadingProgressBatch(any(), any(), any())
-        } returns mapOf(bookmark.remoteId to 30)
-
-        var reloads = 0
-        val collector = backgroundScope.launch {
-            repository.bookmarksReloaded.collect { reloads++ }
-        }
-        runCurrent()
-
-        repository.pullReadingProgressFromServer("remote-1", "server1")
-        runCurrent()
-        collector.cancel()
-
-        // A backfill walks the whole library; only a pass that changed something may ask.
-        assertEquals(0, reloads, "nothing changed, so nothing to re-read")
-    }
-
     // ──────────────────────────────────────────────────────────
     // Batched pull + conflict rule
     // ──────────────────────────────────────────────────────────
@@ -330,27 +282,6 @@ class BookmarkActionsRepositorySyncTest : BaseRepositoryTest() {
         assertEquals(ReadingProgressPullResult.FAILED, outcomes["a"])
         assertEquals(ReadingProgressPullResult.FAILED, outcomes["b"])
         coVerify(exactly = 0) { bookmarkDao.applyServerReadingProgress(any(), any(), any(), any(), any()) }
-    }
-
-    @Test
-    fun batchPull_asksForOneReloadPerPassNotPerRow() = runTest(testDispatcher) {
-        val targets = listOf(target(1L, "a"), target(2L, "b"))
-        coEvery { remoteDataSource.getReadingProgressBatch(any(), any(), any()) } returns
-            mapOf("a" to 100, "b" to 0)
-
-        var reloads = 0
-        val collector = backgroundScope.launch {
-            repository.bookmarksReloaded.collect { reloads++ }
-        }
-        runCurrent()
-
-        repository.pullReadingProgressForTargets(targets, "server1")
-        runCurrent()
-        collector.cancel()
-
-        // Two rows in the batch, one of which moved — and one signal either way. Per-row
-        // events would cost the list a read and a rebuild apiece, and a pass applies hundreds.
-        assertEquals(1, reloads)
     }
 
     // A pass snapshots [target]'s progress before the network round trip, which can take
