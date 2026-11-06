@@ -463,7 +463,8 @@ object MainScreen : NavKey {
                                 BookmarkViewerScreen(
                                     bookmark.localId,
                                     initialTitle = bookmark.title,
-                                    initialUrl = bookmark.url
+                                    initialUrl = bookmark.url,
+                                    initialReadingProgress = bookmark.readingProgress
                                 )
                             )
                         }, { scope.launch { drawerState.openDrawer(einkMode.animationsDisabled) } })

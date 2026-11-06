@@ -19,7 +19,8 @@ data class BookmarkViewerScreen(
     // Known from the caller (e.g. the bookmark list already has this in memory) so the top bar
     // can show a title immediately instead of waiting on this screen's own DB query to resolve.
     val initialTitle: String? = null,
-    val initialUrl: String? = null
+    val initialUrl: String? = null,
+    val initialReadingProgress: Float? = null
 ) : NavKey {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
@@ -36,6 +37,7 @@ data class BookmarkViewerScreen(
             scrollToHighlightId = scrollToHighlightId,
             initialTitle = initialTitle,
             initialUrl = initialUrl,
+            initialReadingProgress = initialReadingProgress,
             screenModel = screenModel,
             onBack = { navigator.pop() },
             onTagFilterApply = { tag ->
