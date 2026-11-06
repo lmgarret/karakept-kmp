@@ -23,6 +23,7 @@ import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.node.ModifierNodeElement
@@ -37,6 +38,7 @@ import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.ui.components.highlight.HighlightPosition
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.theme.rememberFontFamily
+import kotlin.time.TimeSource
 
 /**
  * Native Compose Multiplatform HTML renderer for READER mode.
@@ -157,7 +159,9 @@ fun NativeHtmlRenderer(
     // Offsets outlive the document they were taken in — another client, an older
     // build, a re-crawl — so each highlight is checked against the text it was
     // created from before it is drawn.
-    val resolvedHighlights = remember(offsets, highlights) { resolveHighlights(highlights, offsets) }
+    val resolvedHighlights = remember(offsets, highlights) {
+        ReaderPerf.time("resolveHighlights ${highlights.size}") { resolveHighlights(highlights, offsets) }
+    }
 
     // Pre-scanned once per document so the full-screen viewer can swipe between all of a
     // page's images, not just the one that was tapped — see LocalGalleryImages. The hero
@@ -215,6 +219,13 @@ fun NativeHtmlRenderer(
             SelectionContainer {
                 Column(
                     modifier = modifier
+                        .layout { measurable, constraints ->
+                            val mark = TimeSource.Monotonic.markNow()
+                            val placeable = measurable.measure(constraints)
+                            val ms = mark.elapsedNow().inWholeMilliseconds
+                            if (ms >= 2) ReaderPerf.log("article measure: $ms ms, height ${placeable.height} px")
+                            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                        }
                         .fillMaxWidth()
                         .padding(horizontal = typography.horizontalMarginDp.dp, vertical = 0.dp)
                         .padding(bottom = 28.dp)
@@ -222,6 +233,7 @@ fun NativeHtmlRenderer(
                 // Each block carries the offset its text starts at, so a block's position
                 // never depends on how much of the document has been revealed so far.
                 val renderableChildren = document.renderableChildren
+                val composeMark = TimeSource.Monotonic.markNow()
 
                 // Progressive rendering: show first 20 blocks immediately, reveal rest in batches
                 val initialChunkSize = 20
@@ -229,11 +241,25 @@ fun NativeHtmlRenderer(
 
                 if (visibleCount < renderableChildren.size) {
                     LaunchedEffect(document) {
+                        val revealMark = TimeSource.Monotonic.markNow()
+                        var batches = 0
                         while (visibleCount < renderableChildren.size) {
+                            batches++
                             kotlinx.coroutines.delay(16) // ~1 frame at 60fps
                             visibleCount = minOf(visibleCount + 10, renderableChildren.size)
                         }
+                        ReaderPerf.log(
+                            "reveal done: ${renderableChildren.size} blocks, $batches batches, " +
+                                "${revealMark.elapsedNow().inWholeMilliseconds} ms"
+                        )
                     }
+                }
+
+                SideEffect {
+                    ReaderPerf.log(
+                        "article compose: ${composeMark.elapsedNow().inWholeMilliseconds} ms, " +
+                            "$visibleCount/${renderableChildren.size} blocks"
+                    )
                 }
 
                 // Render visible children

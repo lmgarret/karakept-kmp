@@ -38,6 +38,8 @@ import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.utils.AppDispatchers
 import com.karakept.app.utils.AppLogger
 import com.karakept.app.utils.HtmlSanitizer
+import androidx.compose.runtime.withFrameNanos
+import kotlin.time.TimeSource
 import org.koin.compose.koinInject
 import kotlinx.coroutines.withContext
 
@@ -86,6 +88,7 @@ fun HtmlContent(
     onSearchMatchPosition: (Float) -> Unit = {}
 ) {
     val dispatchers = koinInject<AppDispatchers>()
+    val openMark = remember(html) { TimeSource.Monotonic.markNow() }
 
     // Process HTML based on viewer mode asynchronously
     val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
@@ -103,11 +106,12 @@ fun HtmlContent(
 
         value = withContext(dispatchers.default) {
             try {
-                val result = when (viewerMode) {
-                    ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = removeFirstImage)
-                    ViewerMode.WEB -> HtmlArchiveProcessor.processForArchive(html)
+                ReaderPerf.time("sanitize ${html.length} chars ($viewerMode)") {
+                    when (viewerMode) {
+                        ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = removeFirstImage)
+                        ViewerMode.WEB -> HtmlArchiveProcessor.processForArchive(html)
+                    }
                 }
-                result
             } catch (e: Exception) {
                 AppLogger.e("HtmlContent", "Processing failed: ${e.message}", e)
                 null // Processing failed
@@ -127,12 +131,15 @@ fun HtmlContent(
         }
         val cached = cachedDocument?.invoke(sanitized)
         if (cached != null) {
+            ReaderPerf.log("prepare: cache hit, ${cached.renderableChildren.size} blocks")
             value = cached
             return@produceState
         }
         val prepared = withContext(dispatchers.default) {
             try {
-                prepareReaderDocument(sanitized)
+                ReaderPerf.time("prepare ${sanitized.length} chars (off main thread)") {
+                    prepareReaderDocument(sanitized)
+                }?.also { ReaderPerf.log("prepare: ${it.renderableChildren.size} blocks") }
             } catch (e: Exception) {
                 AppLogger.e("HtmlContent", "Preparing document failed: ${e.message}", e)
                 null
@@ -141,7 +148,16 @@ fun HtmlContent(
         // Nothing will render to report itself loaded, so lift the loader here instead.
         if (prepared != null) onDocumentPrepared(prepared) else isContentLoaded = true
         value = prepared
+        ReaderPerf.log("document ready +${openMark.elapsedNow().inWholeMilliseconds} ms since open")
     }
+
+    androidx.compose.runtime.LaunchedEffect(isContentLoaded) {
+        if (!isContentLoaded) return@LaunchedEffect
+        ReaderPerf.log("loaded +${openMark.elapsedNow().inWholeMilliseconds} ms since open")
+        withFrameNanos { }
+        ReaderPerf.log("first frame after loaded +${openMark.elapsedNow().inWholeMilliseconds} ms since open")
+    }
+    ReaderFrameGapLogger(key = html)
 
     // Notify parent when both processed and loaded
     androidx.compose.runtime.LaunchedEffect(processedHtml, isContentLoaded) {
