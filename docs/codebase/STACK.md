@@ -78,7 +78,6 @@ is split this way is in `AGENTS.md` → "Gradle Modules".
   whose last release is incompatible with current Skiko and whose coordinates still resolve — see
   `CONCERNS.md`. Linux needs a D-Bus session for the tray; there is no AWT fallback.
 - **Native File Dialog** — GTK chooser / NSOpenPanel / IFileOpenDialog.
-- **Compose WebView** — WKWebView / WebView2 / WebKitGTK. The one pre-release dependency.
 - **KNotify** — local notifications on both platforms.
 
 ## Build and code generation
@@ -115,11 +114,10 @@ is split this way is in `AGENTS.md` → "Gradle Modules".
 
 - `mise run setup` installs the pinned toolchain and the submodule.
 - Android SDK for Android builds and the Robolectric suite.
-- Linux desktop development: GTK and WebKit2GTK development libraries, and a D-Bus session for the
-  tray.
+- Linux desktop development: GTK development libraries, and a D-Bus session for the tray.
 - `.devcontainer/` provides all of the above (with `setup.sh` to build and bundle).
 
 ## Runtime requirements
 
 - **Android:** API level from `android-minSdk`; `POST_NOTIFICATIONS` on Android 13+.
-- **Desktop:** JVM 11+. Linux: GTK 3, WebKit2GTK 4.1, D-Bus. Windows: WebView2 runtime.
+- **Desktop:** JVM 11+. Linux: GTK 3, D-Bus.

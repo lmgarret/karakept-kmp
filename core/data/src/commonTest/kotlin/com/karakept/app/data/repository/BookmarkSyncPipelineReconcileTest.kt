@@ -1,6 +1,6 @@
 package com.karakept.app.data.repository
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.testing.testBookmarkEntity
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -13,40 +13,11 @@ import kotlin.test.assertTrue
  * but absent from the server response must have the listId stripped.
  */
 class BookmarkSyncPipelineReconcileTest {
-
-    private fun makeBookmarkEntity(
-        localId: Long = 1L,
-        remoteId: String = "bk-1",
-        serverId: String = "server1",
-        listIds: String = ""
-    ) = BookmarkEntity(
-        localId = localId,
-        remoteId = remoteId,
-        serverId = serverId,
-        title = "Test Bookmark",
-        url = "https://example.com",
-        description = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        tags = "",
-        listIds = listIds,
-        isStarred = false,
-        isArchived = false,
-        isRead = false,
-        createdAt = 1000L,
-        readingTimeMinutes = 0,
-        readingProgress = 0f,
-        readingScrollIndex = 0,
-        readingScrollOffset = 0,
-        content = null
-    )
-
     @Test
     fun `returns empty when all local bookmarks appear in server response`() {
         val local = listOf(
-            makeBookmarkEntity(localId = 1, remoteId = "bk-1", listIds = "smart-1"),
-            makeBookmarkEntity(localId = 2, remoteId = "bk-2", listIds = "smart-1,manual-1")
+            testBookmarkEntity(localId = 1, remoteId = "bk-1", listIds = "smart-1"),
+            testBookmarkEntity(localId = 2, remoteId = "bk-2", listIds = "smart-1,manual-1")
         )
         val serverIds = setOf("bk-1", "bk-2")
 
@@ -58,7 +29,7 @@ class BookmarkSyncPipelineReconcileTest {
     @Test
     fun `strips stale listId but preserves other list memberships`() {
         val local = listOf(
-            makeBookmarkEntity(localId = 10, remoteId = "bk-10", listIds = "smart-1,manual-1")
+            testBookmarkEntity(localId = 10, remoteId = "bk-10", listIds = "smart-1,manual-1")
         )
         val serverIds = setOf("bk-99") // bk-10 is NOT in server response
 
@@ -72,7 +43,7 @@ class BookmarkSyncPipelineReconcileTest {
     @Test
     fun `handles bookmark whose only listId is the reconciled one`() {
         val local = listOf(
-            makeBookmarkEntity(localId = 20, remoteId = "bk-20", listIds = "smart-1")
+            testBookmarkEntity(localId = 20, remoteId = "bk-20", listIds = "smart-1")
         )
         val serverIds = emptySet<String>() // bk-20 is NOT in server response
 
@@ -86,9 +57,9 @@ class BookmarkSyncPipelineReconcileTest {
     @Test
     fun `returns multiple entries when multiple bookmarks are stale`() {
         val local = listOf(
-            makeBookmarkEntity(localId = 1, remoteId = "bk-1", listIds = "smart-1"),
-            makeBookmarkEntity(localId = 2, remoteId = "bk-2", listIds = "smart-1,other"),
-            makeBookmarkEntity(localId = 3, remoteId = "bk-3", listIds = "smart-1")
+            testBookmarkEntity(localId = 1, remoteId = "bk-1", listIds = "smart-1"),
+            testBookmarkEntity(localId = 2, remoteId = "bk-2", listIds = "smart-1,other"),
+            testBookmarkEntity(localId = 3, remoteId = "bk-3", listIds = "smart-1")
         )
         val serverIds = emptySet<String>() // None are in server response
 
@@ -102,9 +73,9 @@ class BookmarkSyncPipelineReconcileTest {
     @Test
     fun `does not strip listId from bookmarks present in server response`() {
         val local = listOf(
-            makeBookmarkEntity(localId = 1, remoteId = "bk-1", listIds = "smart-1"),
-            makeBookmarkEntity(localId = 2, remoteId = "bk-2", listIds = "smart-1,manual-1"),
-            makeBookmarkEntity(localId = 3, remoteId = "bk-3", listIds = "smart-1")
+            testBookmarkEntity(localId = 1, remoteId = "bk-1", listIds = "smart-1"),
+            testBookmarkEntity(localId = 2, remoteId = "bk-2", listIds = "smart-1,manual-1"),
+            testBookmarkEntity(localId = 3, remoteId = "bk-3", listIds = "smart-1")
         )
         // bk-1 and bk-3 are in server response; bk-2 is NOT
         val serverIds = setOf("bk-1", "bk-3")

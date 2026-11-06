@@ -236,7 +236,6 @@ fun AboutContent(
                     FossLibrary("Kotlinx DateTime", "Apache 2.0", "https://github.com/Kotlin/kotlinx-datetime"),
                     FossLibrary("DataStore", "Apache 2.0", "https://developer.android.com/topic/libraries/architecture/datastore"),
                     FossLibrary("Ksoup", "MIT", "https://github.com/fleeksoft/ksoup"),
-                    FossLibrary("ComposeWebView", "MIT", "https://github.com/kdroidFilter/ComposeNativeWebview"),
                     FossLibrary("ComposeNativeTray", "MIT", "https://github.com/NucleusFramework/ComposeNativeTray"),
                     FossLibrary("KNotify", "MIT", "https://github.com/kdroidFilter/KNotify"),
                     FossLibrary("nativefiledialog-java", "zlib", "https://github.com/WonderzGmbH/nativefiledialog-java"),

@@ -109,14 +109,6 @@ internal suspend fun BookmarkActionsRepository.pullReadingProgressForTargets(
             bookmarkDao.markProgressSyncedAt(answeredIds, System.currentTimeMillis())
         }
 
-        // One signal for the pass, not one per row. These writes move the read flag, so the
-        // list's window is now stale — but a pass applies hundreds of rows, and per-row events
-        // both overflow the change channel's buffer and cost the window a DB read and a rebuild
-        // apiece. Re-reading the window once is a single query (#333), and it is the only form
-        // that gets *membership* right: a row this pull turns back to unread has to be able to
-        // join a view filtered on unread, which patching a row already in the window cannot do.
-        if (applied.isNotEmpty()) notifyBookmarksReloaded()
-
         AppLogger.d(
             "ReadProgressSync",
             "batch pull: ${targets.size} target(s) -> ${applied.size} applied"

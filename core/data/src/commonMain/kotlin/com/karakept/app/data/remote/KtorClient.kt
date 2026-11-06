@@ -4,6 +4,7 @@ import com.karakept.app.utils.AppLogger
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.HttpRequestRetry
+import io.ktor.client.plugins.HttpRequestRetryConfig
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
@@ -32,9 +33,12 @@ internal fun createHttpClient(): HttpClient {
 
 /**
  * Shared client configuration, extracted so tests can apply the exact production
- * setup (timeouts, retry policy, serialization) onto a mock engine.
+ * setup (timeouts, retry policy, serialization) onto a mock engine. [retryDelay] lets them
+ * keep the retry policy while skipping the real-time backoff between attempts.
  */
-internal fun HttpClientConfig<*>.applyKarakeptClientDefaults() {
+internal fun HttpClientConfig<*>.applyKarakeptClientDefaults(
+    retryDelay: HttpRequestRetryConfig.() -> Unit = { exponentialDelay() },
+) {
     install(ContentNegotiation) {
         json(Json {
             ignoreUnknownKeys = true
@@ -64,7 +68,7 @@ internal fun HttpClientConfig<*>.applyKarakeptClientDefaults() {
     // could double-apply it.
     install(HttpRequestRetry) {
         maxRetries = 2
-        exponentialDelay()
+        retryDelay()
         retryIf { request, response ->
             request.method == HttpMethod.Get && response.status.value in 500..599
         }

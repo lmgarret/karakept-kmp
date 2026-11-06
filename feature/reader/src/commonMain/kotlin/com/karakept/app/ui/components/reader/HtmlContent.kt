@@ -85,7 +85,7 @@ fun HtmlContent(
     onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
     onSearchMatchPosition: (Float) -> Unit = {}
 ) {
-    val dispatchers = koinInject<AppDispatchers>()
+    val appDispatchers = koinInject<AppDispatchers>()
 
     // Process HTML based on viewer mode asynchronously
     val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
@@ -101,7 +101,7 @@ fun HtmlContent(
             return@produceState
         }
 
-        value = withContext(dispatchers.default) {
+        value = withContext(appDispatchers.default) {
             try {
                 when (viewerMode) {
                     ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = removeFirstImage)
@@ -129,7 +129,7 @@ fun HtmlContent(
             value = cached
             return@produceState
         }
-        val prepared = withContext(dispatchers.default) {
+        val prepared = withContext(appDispatchers.default) {
             try {
                 prepareReaderDocument(sanitized)
             } catch (e: Exception) {

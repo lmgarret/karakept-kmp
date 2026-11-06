@@ -17,6 +17,7 @@ import com.karakept.app.data.repository.ServerRepository
 import com.karakept.app.data.repository.SettingsRepository
 import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.domain.action.BookmarkActionController
+import com.karakept.app.testing.testBookmark
 import com.karakept.app.utils.TestAppDispatchers
 import io.mockk.coEvery
 import io.mockk.every
@@ -38,7 +39,6 @@ import kotlinx.coroutines.flow.map
  * screen are read again.
  */
 class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
-
     val serverRepository: ServerRepository = mockk(relaxed = true)
     val bookmarkRepository: BookmarkRepository = mockk(relaxed = true)
     val bookmarkActionsRepository: BookmarkActionsRepository = mockk(relaxed = true)
@@ -104,7 +104,6 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
         every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getOfflineBookmarkCount(any()) } returns flowOf(0)
         every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow()
         every { bookmarkActionsRepository.aiCapabilities } returns MutableStateFlow(emptyMap())
         every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow()
         every { bookmarkRepository.syncReports } returns MutableSharedFlow()
@@ -158,7 +157,7 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
     /** Offsets read since the last [clearReads], de-duplicated and in order. */
     fun offsetsRead(): List<Int> = pageReads.map { it.first }.distinct().sorted()
 
-    fun createModel() = MainScreenModel(
+    fun createModel(tagFilterRequests: TagFilterRequests = TagFilterRequests()) = MainScreenModel(
         serverRepository = serverRepository,
         bookmarkRepository = bookmarkRepository,
         bookmarkActionsRepository = bookmarkActionsRepository,
@@ -168,7 +167,7 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
         snackbarManager = snackbarManager,
         highlightRepository = highlightRepository,
         appDispatchers = TestAppDispatchers(testDispatcher),
-        tagFilterRequests = TagFilterRequests()
+        tagFilterRequests = tagFilterRequests
     )
 
     companion object {
@@ -179,21 +178,11 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
             isArchived: Boolean = false,
             tags: String = "",
             listIds: String = ""
-        ) = Bookmark(
+        ) = testBookmark(
             localId = id,
             remoteId = remoteId,
-            serverId = "server-1",
-            url = "https://example.com/$id",
-            title = "Bookmark $id",
-            content = null,
-            imageUrl = null,
-            bannerImageAssetId = null,
-            screenshotAssetId = null,
-            description = null,
-            createdAt = id,
-            isArchived = isArchived,
-            isStarred = false,
             isRead = isRead,
+            isArchived = isArchived,
             tags = tags,
             listIds = listIds
         )

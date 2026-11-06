@@ -284,8 +284,7 @@ fun MainScreenModel.createBookmark(url: String) {
 /**
  * Run a server-side AI job for one bookmark from the list.
  *
- * Feedback is a snackbar rather than a spinner on the row: these menus fire and dismiss, and the
- * updated row arrives on its own through `bookmarkChangedEvents` once the repository writes it.
+ * Feedback is a snackbar rather than a spinner on the row: these menus fire and dismiss.
  */
 fun MainScreenModel.runAiAction(bookmark: Bookmark, action: AiAction) {
     viewModelScope.launch {

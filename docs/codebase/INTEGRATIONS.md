@@ -343,7 +343,6 @@ settle on the last one to push.
 
 **Desktop (Linux/macOS/Windows):**
 - Native file picker via Native File Dialog
-- WebKit-based content viewer (WebKitGTK on Linux)
 - D-Bus integration (Linux system tray)
 - Native menu bar (tray icon on Windows/macOS)
 

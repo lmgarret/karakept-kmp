@@ -1,7 +1,6 @@
 package com.karakept.app.data.remote
 
 import com.karakept.app.data.model.Server
-import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.request.HttpRequestData
@@ -32,7 +31,7 @@ class RemoteDataSourceAiActionsTest {
     private val server = Server(id = "s1", url = "https://kk.example.com", apiKey = "KEY", label = "t")
 
     private fun sourceFor(engine: MockEngine) =
-        RemoteDataSource(HttpClient(engine) { applyKarakeptClientDefaults() })
+        RemoteDataSource(karakeptTestClient(engine))
 
     private fun bodyText(request: HttpRequestData): String =
         (request.body as? TextContent)?.text ?: request.body.toString()

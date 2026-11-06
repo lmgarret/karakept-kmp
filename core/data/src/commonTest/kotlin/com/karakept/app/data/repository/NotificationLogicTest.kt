@@ -1,6 +1,6 @@
 package com.karakept.app.data.repository
 
-import com.karakept.app.data.local.entity.BookmarkEntity
+import com.karakept.app.testing.testBookmarkEntity
 import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.model.ListSettings
 import kotlin.test.Test
@@ -15,35 +15,6 @@ import kotlin.test.assertTrue
  * and with what bookmark count?
  */
 class NotificationLogicTest {
-
-    private fun makeBookmarkEntity(
-        localId: Long = 1L,
-        remoteId: String = "bk-1",
-        serverId: String = "server1",
-        listIds: String = ""
-    ) = BookmarkEntity(
-        localId = localId,
-        remoteId = remoteId,
-        serverId = serverId,
-        title = "Test Bookmark",
-        url = "https://example.com",
-        description = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        tags = "",
-        listIds = listIds,
-        isStarred = false,
-        isArchived = false,
-        isRead = false,
-        createdAt = 1000L,
-        readingTimeMinutes = 0,
-        readingProgress = 0f,
-        readingScrollIndex = 0,
-        readingScrollOffset = 0,
-        content = null
-    )
-
     private fun makeListEntity(
         remoteId: String,
         name: String,
@@ -70,8 +41,8 @@ class NotificationLogicTest {
             "list-c" to ListSettings(notifyOnNewBookmarks = false)
         )
         val bookmarks = listOf(
-            makeBookmarkEntity(remoteId = "bk-1", listIds = "list-a"),
-            makeBookmarkEntity(remoteId = "bk-2", listIds = "list-b")
+            testBookmarkEntity(remoteId = "bk-1", listIds = "list-a"),
+            testBookmarkEntity(remoteId = "bk-2", listIds = "list-b")
         )
         val lists = listOf(
             makeListEntity("list-a", "List A"),
@@ -92,7 +63,7 @@ class NotificationLogicTest {
             "list-a" to ListSettings(notifyOnNewBookmarks = true)
         )
         val bookmarks = listOf(
-            makeBookmarkEntity(remoteId = "bk-1", listIds = "list-b")
+            testBookmarkEntity(remoteId = "bk-1", listIds = "list-b")
         )
         val lists = listOf(
             makeListEntity("list-a", "List A"),
@@ -110,7 +81,7 @@ class NotificationLogicTest {
             "list-a" to ListSettings(notifyOnNewBookmarks = false)
         )
         val bookmarks = listOf(
-            makeBookmarkEntity(remoteId = "bk-1", listIds = "list-a")
+            testBookmarkEntity(remoteId = "bk-1", listIds = "list-a")
         )
         val lists = listOf(
             makeListEntity("list-a", "List A")
@@ -125,7 +96,7 @@ class NotificationLogicTest {
     fun emptySettings_returnsEmpty() {
         val settings = emptyMap<String, ListSettings>()
         val bookmarks = listOf(
-            makeBookmarkEntity(remoteId = "bk-1", listIds = "list-a")
+            testBookmarkEntity(remoteId = "bk-1", listIds = "list-a")
         )
         val lists = listOf(
             makeListEntity("list-a", "List A")
@@ -142,7 +113,7 @@ class NotificationLogicTest {
             "list-x" to ListSettings(notifyOnNewBookmarks = true)
         )
         val bookmarks = listOf(
-            makeBookmarkEntity(remoteId = "bk-1", listIds = "list-other, list-x, list-another")
+            testBookmarkEntity(remoteId = "bk-1", listIds = "list-other, list-x, list-another")
         )
         val lists = listOf(
             makeListEntity("list-x", "List X")
@@ -160,9 +131,9 @@ class NotificationLogicTest {
             "list-a" to ListSettings(notifyOnNewBookmarks = true)
         )
         val bookmarks = listOf(
-            makeBookmarkEntity(remoteId = "bk-1", listIds = "list-a"),
-            makeBookmarkEntity(remoteId = "bk-2", listIds = "list-a"),
-            makeBookmarkEntity(remoteId = "bk-3", listIds = "list-a")
+            testBookmarkEntity(remoteId = "bk-1", listIds = "list-a"),
+            testBookmarkEntity(remoteId = "bk-2", listIds = "list-a"),
+            testBookmarkEntity(remoteId = "bk-3", listIds = "list-a")
         )
         val lists = listOf(
             makeListEntity("list-a", "List A")
@@ -181,9 +152,9 @@ class NotificationLogicTest {
             "list-b" to ListSettings(notifyOnNewBookmarks = true)
         )
         val bookmarks = listOf(
-            makeBookmarkEntity(remoteId = "bk-1", listIds = "list-a"),
-            makeBookmarkEntity(remoteId = "bk-2", listIds = "list-a"),
-            makeBookmarkEntity(remoteId = "bk-3", listIds = "list-b")
+            testBookmarkEntity(remoteId = "bk-1", listIds = "list-a"),
+            testBookmarkEntity(remoteId = "bk-2", listIds = "list-a"),
+            testBookmarkEntity(remoteId = "bk-3", listIds = "list-b")
         )
         val lists = listOf(
             makeListEntity("list-a", "List A"),

@@ -1,6 +1,6 @@
 package com.karakept.app.ui.screens.main
 
-import com.karakept.app.domain.action.TagFilterRequests
+import com.karakept.app.testing.testBookmark
 import com.karakept.api.model.KarakeepList
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.DefaultListType
@@ -8,20 +8,10 @@ import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
 import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.Server
-import com.karakept.app.data.model.SwipeAction
-import com.karakept.app.data.repository.BookmarkActionsRepository
 import com.karakept.app.data.repository.BookmarkRepository
-import com.karakept.app.data.repository.HighlightRepository
-import com.karakept.app.data.repository.ListRepository
-import com.karakept.app.data.repository.ServerRepository
-import com.karakept.app.data.repository.SettingsRepository
-import com.karakept.app.domain.action.ActionSnackbarManager
-import com.karakept.app.domain.action.BookmarkActionController
-import com.karakept.app.domain.action.UndoCompletedEvent
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -30,9 +20,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -42,7 +31,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import com.karakept.app.utils.TestAppDispatchers
 
 /**
  * A list opened at startup must still show its bookmarks once the startup sync finishes.
@@ -56,17 +44,8 @@ import com.karakept.app.utils.TestAppDispatchers
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RefreshAfterSyncTest {
-
     private val testDispatcher = StandardTestDispatcher()
-
-    private lateinit var serverRepository: ServerRepository
-    private lateinit var bookmarkRepository: BookmarkRepository
-    private lateinit var bookmarkActionsRepository: BookmarkActionsRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var listRepository: ListRepository
-    private lateinit var bookmarkActionController: BookmarkActionController
-    private lateinit var snackbarManager: ActionSnackbarManager
-    private lateinit var highlightRepository: HighlightRepository
+    private val harness = MainScreenModelHarness(testDispatcher)
 
     private val fakeServer = Server(
         id = "server-1",
@@ -79,7 +58,7 @@ class RefreshAfterSyncTest {
     private val childList =
         KarakeepList(id = "list-a-1", name = "Child", parentId = "list-a", type = KarakeepList.Type.MANUAL)
 
-    /** Lets a test drive the in-place refresh without the sync's hop to Dispatchers.IO. */
+    /** Lets a test drive the in-place refresh that follows a background sync. */
     private val backgroundSyncCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     /** Number of paged DB reads, so a refresh's cost can be asserted. */
@@ -90,7 +69,7 @@ class RefreshAfterSyncTest {
 
     /** Ten rows newer than anything in the list, as a sync commits them: at the top. */
     private fun committedMidRefresh() =
-        ((threePages + 1)..(threePages + 10)).map { makeBookmark(it, listIds = "list-a") }
+        ((threePages + 1)..(threePages + 10)).map { testBookmark(it, listIds = "list-a") }
 
     /**
      * Runs after each paged read has been served. Lets a test commit rows the way a sync
@@ -110,7 +89,7 @@ class RefreshAfterSyncTest {
         set(value) { tableFlow.value = value }
 
     private val initialTable = (1L..(PAGE_SIZE + 5).toLong()).map { id ->
-        makeBookmark(id, listIds = if (id <= 3L) "list-a" else "")
+        testBookmark(id, listIds = if (id <= 3L) "list-a" else "")
     }
 
     @BeforeTest
@@ -120,60 +99,34 @@ class RefreshAfterSyncTest {
         queryCount = 0
         afterQuery = null
 
-        serverRepository = mockk(relaxed = true)
-        bookmarkRepository = mockk(relaxed = true)
-        bookmarkActionsRepository = mockk(relaxed = true)
-        settingsRepository = mockk(relaxed = true)
-        listRepository = mockk(relaxed = true)
-        bookmarkActionController = mockk(relaxed = true)
-        snackbarManager = mockk(relaxed = true)
-        highlightRepository = mockk(relaxed = true)
-
-        every { serverRepository.servers } returns flowOf(listOf(fakeServer))
-        every { settingsRepository.allListSettings } returns
+        every { harness.serverRepository.servers } returns flowOf(listOf(fakeServer))
+        every { harness.settingsRepository.allListSettings } returns
             flowOf(mapOf("list-a" to ListSettings(includeChildListBookmarks = true)))
-        every { settingsRepository.getListSettings(any()) } returns
+        every { harness.settingsRepository.getListSettings(any()) } returns
             flowOf(ListSettings(includeChildListBookmarks = true))
-        every { settingsRepository.swipeLeftAction } returns flowOf(SwipeAction.MARK_READ)
-        every { settingsRepository.swipeRightAction } returns flowOf(SwipeAction.ARCHIVE)
-        every { settingsRepository.customSwipeActionConfigs } returns flowOf(emptyList())
-        every { settingsRepository.swipeLeftConfigId } returns flowOf(null)
-        every { settingsRepository.swipeRightConfigId } returns flowOf(null)
-        every { settingsRepository.dimReadBookmarks } returns flowOf(true)
-        every { settingsRepository.defaultLayoutId } returns flowOf(null)
-        every { settingsRepository.customLayouts } returns flowOf(emptyList())
-        every { settingsRepository.offlineMode } returns flowOf(false)
-        every { settingsRepository.activeServerId } returns flowOf("server-1")
-        every { settingsRepository.defaultListType } returns flowOf(DefaultListType.SPECIFIC_LIST)
-        every { settingsRepository.defaultListId } returns flowOf("list-a")
-        every { settingsRepository.lastActiveFilterStatus } returns flowOf(null)
-        every { settingsRepository.lastActiveFilterListId } returns flowOf(null)
-        every { listRepository.lists } returns listsFlow
-        every { highlightRepository.getHighlightsCount(any()) } returns flowOf(0)
-        every { bookmarkRepository.getBookmarks(any()) } returns flowOf(emptyList())
-        every { bookmarkActionsRepository.bookmarkChangedEvents } returns MutableSharedFlow<String>()
-        every { bookmarkActionsRepository.aiCapabilities } returns kotlinx.coroutines.flow.MutableStateFlow(emptyMap())
-        every { bookmarkActionController.undoCompletedEvents } returns MutableSharedFlow<UndoCompletedEvent>()
-        every { bookmarkRepository.syncReports } returns MutableSharedFlow()
-        every { bookmarkRepository.backgroundSyncCompleted } returns backgroundSyncCompleted
-        every { bookmarkRepository.syncProgress } returns MutableStateFlow(
+        every { harness.settingsRepository.offlineMode } returns flowOf(false)
+        every { harness.settingsRepository.defaultListType } returns flowOf(DefaultListType.SPECIFIC_LIST)
+        every { harness.settingsRepository.defaultListId } returns flowOf("list-a")
+        every { harness.listRepository.lists } returns listsFlow
+        every { harness.bookmarkRepository.backgroundSyncCompleted } returns backgroundSyncCompleted
+        every { harness.bookmarkRepository.syncProgress } returns MutableStateFlow(
             com.karakept.app.data.model.SyncProgress.Idle
         )
-        coEvery { bookmarkRepository.shouldAutoSync(any()) } returns true
+        coEvery { harness.bookmarkRepository.shouldAutoSync(any()) } returns true
 
         // Step 1 of the sync: the lists land, so the home list's children become known.
-        coEvery { listRepository.refreshLists(any()) } answers {
+        coEvery { harness.listRepository.refreshLists(any()) } answers {
             listsFlow.value = listOf(homeList, childList)
         }
 
         // Stands in for BookmarkRepository.buildViewPredicate: a single-list view filters on
         // membership and applies no status clause, a multi-list one applies both, and an
         // unfiltered one applies the status.
-        every { bookmarkRepository.countBookmarksForViewFlow(any(), any()) } answers {
+        every { harness.bookmarkRepository.countBookmarksForViewFlow(any(), any()) } answers {
             val filter = secondArg<FilterConfig>()
             tableFlow.map { viewOf(it, filter).size }
         }
-        coEvery { bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
+        coEvery { harness.bookmarkRepository.getBookmarkPage(any(), any(), any(), any()) } answers {
             val filter = secondArg<FilterConfig>()
             val offset = thirdArg<Int>()
             val limit = arg<Int>(3)
@@ -209,44 +162,14 @@ class RefreshAfterSyncTest {
         Dispatchers.resetMain()
     }
 
-    private fun makeBookmark(id: Long, listIds: String) = Bookmark(
-        localId = id,
-        remoteId = "remote-$id",
-        serverId = "server-1",
-        url = "https://example.com/$id",
-        title = "Bookmark $id",
-        content = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        description = null,
-        createdAt = id,
-        isArchived = false,
-        isStarred = false,
-        listIds = listIds
-    )
-
-    private fun createMainScreenModel() = MainScreenModel(
-        serverRepository = serverRepository,
-        bookmarkRepository = bookmarkRepository,
-        bookmarkActionsRepository = bookmarkActionsRepository,
-        settingsRepository = settingsRepository,
-        listRepository = listRepository,
-        bookmarkActionController = bookmarkActionController,
-        snackbarManager = snackbarManager,
-        highlightRepository = highlightRepository,
-        appDispatchers = TestAppDispatchers(testDispatcher),
-        tagFilterRequests = TagFilterRequests()
-    )
-
     @Test
     fun `home list keeps its bookmarks across the startup sync`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
 
         assertEquals(
             listOf(3L, 2L, 1L),
-            awaitWindow(model) { it.isNotEmpty() },
+            settledWindow(model),
             "the home list's bookmarks must survive the sync that follows startup"
         )
         // The list is the size of the view, and the view is the home list's three bookmarks —
@@ -264,10 +187,10 @@ class RefreshAfterSyncTest {
         // Neither the startup sync nor the drawer's own list load brings the lists in here, so
         // the window is loaded while they are still unknown and the change below is the first
         // thing to expand the home list into its child.
-        coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
-        coEvery { listRepository.refreshLists(any()) } returns Unit
+        coEvery { harness.bookmarkRepository.shouldAutoSync(any()) } returns false
+        coEvery { harness.listRepository.refreshLists(any()) } returns Unit
 
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
         assertEquals(listOf(3L, 2L, 1L), window(model), "bookmarks at startup")
         assertEquals(listOf("list-a"), model._loadedView.value?.filter?.lists, "loaded view at startup")
@@ -291,9 +214,9 @@ class RefreshAfterSyncTest {
         // large: 400 bookmarks, 20 full pages. The refresh must settle for the empty first page
         // instead of paging to the end of the table looking for something to show — the window
         // it leaves behind is re-swept page by page by every later refresh.
-        allBookmarks = (1L..400L).map { makeBookmark(it, listIds = "") }
+        allBookmarks = (1L..400L).map { testBookmark(it, listIds = "") }
 
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
 
         queryCount = 0
@@ -310,9 +233,9 @@ class RefreshAfterSyncTest {
 
     @Test
     fun `a list emptied on the server is shown as empty after the refresh`() = runTest(testDispatcher) {
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
-        awaitWindow(model) { it.isNotEmpty() }
+        settledWindow(model)
 
         // Every bookmark loses its membership, so the view really is empty now — the refresh
         // must publish that rather than page on until it finds rows to show.
@@ -326,23 +249,23 @@ class RefreshAfterSyncTest {
     @Test
     fun `bookmarks the sync adds to the current list appear without leaving it`() = runTest(testDispatcher) {
         // The home list's own pass brings in bookmark 4...
-        coEvery { bookmarkRepository.syncBookmarksForList(any(), "list-a", any()) } answers {
-            allBookmarks = allBookmarks + makeBookmark(4L, listIds = "list-a")
+        coEvery { harness.bookmarkRepository.syncBookmarksForList(any(), "list-a", any()) } answers {
+            allBookmarks = allBookmarks + testBookmark(4L, listIds = "list-a")
             1
         }
         // ...and a later pass over the other lists brings in bookmark 5, which the smart list
         // also matches. Both must land in the view while the user is still looking at it.
-        coEvery { bookmarkRepository.syncBookmarksForList(any(), "list-a-1", any()) } answers {
-            allBookmarks = allBookmarks + makeBookmark(5L, listIds = "list-a")
+        coEvery { harness.bookmarkRepository.syncBookmarksForList(any(), "list-a-1", any()) } answers {
+            allBookmarks = allBookmarks + testBookmark(5L, listIds = "list-a")
             1
         }
 
-        val model = createMainScreenModel()
+        val model = harness.createModel()
         advanceUntilIdle()
 
         assertEquals(
             listOf(5L, 4L, 3L, 2L, 1L),
-            awaitWindow(model) { window -> window.any { it.remoteId == "remote-5" } },
+            settledWindow(model),
             "bookmarks synced into the current list must appear without navigating away"
         )
         // Whether these raise the "N new" pill depends on whether they landed before or after
@@ -355,11 +278,11 @@ class RefreshAfterSyncTest {
     fun `rows committed while a page is being read are not stranded`() =
         runTest(testDispatcher) {
             // Three pages of bookmarks, the user scrolled to the end of them.
-            allBookmarks = (1L..threePages).map { makeBookmark(it, listIds = "list-a") }
-            coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
-            coEvery { listRepository.refreshLists(any()) } returns Unit
+            allBookmarks = (1L..threePages).map { testBookmark(it, listIds = "list-a") }
+            coEvery { harness.bookmarkRepository.shouldAutoSync(any()) } returns false
+            coEvery { harness.listRepository.refreshLists(any()) } returns Unit
 
-            val model = createMainScreenModel()
+            val model = harness.createModel()
             val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
 
@@ -395,11 +318,11 @@ class RefreshAfterSyncTest {
         runTest(testDispatcher) {
             // What "paging on skips nothing" becomes: there is no paging to skip anything. Any
             // index the list can show is a slot, and the page under it is read directly.
-            allBookmarks = (1L..threePages).map { makeBookmark(it, listIds = "list-a") }
-            coEvery { bookmarkRepository.shouldAutoSync(any()) } returns false
-            coEvery { listRepository.refreshLists(any()) } returns Unit
+            allBookmarks = (1L..threePages).map { testBookmark(it, listIds = "list-a") }
+            coEvery { harness.bookmarkRepository.shouldAutoSync(any()) } returns false
+            coEvery { harness.listRepository.refreshLists(any()) } returns Unit
 
-            val model = createMainScreenModel()
+            val model = harness.createModel()
             val job = launch { model.bookmarkWindow.collect {} }
             advanceUntilIdle()
 
@@ -427,17 +350,17 @@ class RefreshAfterSyncTest {
             // The ration is per server, so the list the user just opened would skip its own
             // pull whenever another list's pass took the slot moments earlier — leaving the
             // one view being looked at as the place the counts stay stale.
-            val model = createMainScreenModel()
+            val model = harness.createModel()
             advanceUntilIdle()
             model.syncBookmarks()
             advanceUntilIdle()
 
             coVerify {
-                bookmarkRepository.syncBookmarksForList(any(), "list-a", isCurrentView = true)
+                harness.bookmarkRepository.syncBookmarksForList(any(), "list-a", isCurrentView = true)
             }
             // The other lists take their turn as before.
             coVerify {
-                bookmarkRepository.syncBookmarksForList(any(), "list-a-1", isCurrentView = false)
+                harness.bookmarkRepository.syncBookmarksForList(any(), "list-a-1", isCurrentView = false)
             }
         }
 
@@ -448,26 +371,10 @@ class RefreshAfterSyncTest {
     private fun window(model: MainScreenModel): List<Long> =
         model.bookmarkWindow.value.loadedRows().map { it.remoteId.substringAfter('-').toLong() }
 
-    /**
-     * Waits for the loaded window to satisfy [predicate] and returns its bookmark ids.
-     *
-     * The startup sync hops to `Dispatchers.IO`, which the test scheduler does not control, so
-     * [advanceUntilIdle] can return before the refresh that follows it has run. Waiting on the
-     * value rather than sampling it makes the assertion independent of that hop; the wait runs
-     * on `Dispatchers.Default` so its timeout is measured on the real clock, and a genuine
-     * regression still fails as a plain assertion on the value that did settle.
-     */
-    private suspend fun awaitWindow(
-        model: MainScreenModel,
-        predicate: (List<Bookmark>) -> Boolean
-    ): List<Long> {
-        withContext(Dispatchers.Default) {
-            withTimeoutOrNull(SETTLE_TIMEOUT_MS) {
-                model.bookmarkWindow.first { predicate(it.loadedRows()) }
-            }
-        }
+    /** Runs everything the model has scheduled, then returns the loaded window's bookmark ids. */
+    private fun TestScope.settledWindow(model: MainScreenModel): List<Long> {
+        advanceUntilIdle()
         return window(model)
     }
 }
 
-private const val SETTLE_TIMEOUT_MS = 5_000L

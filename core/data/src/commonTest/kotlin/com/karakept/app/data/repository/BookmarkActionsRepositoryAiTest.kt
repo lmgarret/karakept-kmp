@@ -1,10 +1,9 @@
 package com.karakept.app.data.repository
 
+import com.karakept.app.testing.testBookmarkEntity
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.PendingActionDao
-import com.karakept.app.data.local.entity.BookmarkEntity
 import com.karakept.app.data.local.entity.toBookmark
-import com.karakept.app.data.local.entity.toBookmarks
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.remote.ApiException
 import com.karakept.app.data.remote.RemoteDataSource
@@ -36,7 +35,6 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
-
     private val bookmarkDao = mockk<BookmarkDao>(relaxed = true)
     private val pendingActionDao = mockk<PendingActionDao>(relaxed = true)
     private val remoteDataSource = mockk<RemoteDataSource>(relaxed = true)
@@ -61,13 +59,13 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
 
     @Test
     fun requestServerCrawl_mapsTheActionOntoTheRecrawlFlags() = runTest(testDispatcher) {
-        repository.requestServerCrawl(testServer, "remote-42", ServerCrawlAction.REFRESH)
-        repository.requestServerCrawl(testServer, "remote-42", ServerCrawlAction.PRESERVE_ARCHIVE)
-        repository.requestServerCrawl(testServer, "remote-42", ServerCrawlAction.PRESERVE_PDF)
+        repository.requestServerCrawl(testServer, "remote-1", ServerCrawlAction.REFRESH)
+        repository.requestServerCrawl(testServer, "remote-1", ServerCrawlAction.PRESERVE_ARCHIVE)
+        repository.requestServerCrawl(testServer, "remote-1", ServerCrawlAction.PRESERVE_PDF)
 
-        coVerify { remoteDataSource.recrawlBookmark(testServer, "remote-42", false, false) }
-        coVerify { remoteDataSource.recrawlBookmark(testServer, "remote-42", true, false) }
-        coVerify { remoteDataSource.recrawlBookmark(testServer, "remote-42", false, true) }
+        coVerify { remoteDataSource.recrawlBookmark(testServer, "remote-1", false, false) }
+        coVerify { remoteDataSource.recrawlBookmark(testServer, "remote-1", true, false) }
+        coVerify { remoteDataSource.recrawlBookmark(testServer, "remote-1", false, true) }
     }
 
     // ── summarize ──────────────────────────────────────────────
@@ -75,8 +73,8 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
     @Test
     fun summarize_persistsTheGeneratedSummary() = runTest(testDispatcher) {
         withConfiguredServer()
-        val bookmark = makeBookmark()
-        coEvery { remoteDataSource.summarizeBookmark(testServer, "remote-42") } returns
+        val bookmark = testBookmarkEntity()
+        coEvery { remoteDataSource.summarizeBookmark(testServer, "remote-1") } returns
             SummarizeResult(summary = "A short summary.", summarizationStatus = "success")
 
         val returned = repository.summarizeBookmark(bookmark.toBookmark())
@@ -86,27 +84,9 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
     }
 
     @Test
-    fun summarize_announcesTheChangeSoOtherScreensRefresh() = runTest(testDispatcher) {
-        withConfiguredServer()
-        val bookmark = makeBookmark()
-        coEvery { remoteDataSource.summarizeBookmark(any(), any()) } returns
-            SummarizeResult("Summary", "success")
-
-        var emitted: String? = null
-        val job = launch { repository.bookmarkChangedEvents.collect { emitted = it } }
-        advanceUntilIdle() // SharedFlow has replay 0 — subscribe before the emit
-
-        repository.summarizeBookmark(bookmark.toBookmark())
-        advanceUntilIdle()
-
-        assertEquals(bookmark.remoteId, emitted)
-        job.cancel()
-    }
-
-    @Test
     fun summarize_stopsOfferingItselfOnceTheServerSaysItHasNoModel() = runTest(testDispatcher) {
         withConfiguredServer()
-        val bookmark = makeBookmark()
+        val bookmark = testBookmarkEntity()
         coEvery { remoteDataSource.summarizeBookmark(any(), any()) } throws
             UnsupportedServerActionException("This Karakeep server has no AI model configured")
 
@@ -119,7 +99,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
     @Test
     fun summarize_keepsOfferingItselfAfterAnOrdinaryFailure() = runTest(testDispatcher) {
         withConfiguredServer()
-        val bookmark = makeBookmark()
+        val bookmark = testBookmarkEntity()
         coEvery { remoteDataSource.summarizeBookmark(any(), any()) } throws ApiException("HTTP 500")
 
         assertFailsWith<ApiException> { repository.summarizeBookmark(bookmark.toBookmark()) }
@@ -132,7 +112,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
     fun summarize_failsWhenTheServerIsNoLongerConfigured() = runTest(testDispatcher) {
         every { serverRepository.servers } returns flowOf(emptyList())
 
-        assertFailsWith<Exception> { repository.summarizeBookmark(makeBookmark().toBookmark()) }
+        assertFailsWith<Exception> { repository.summarizeBookmark(testBookmarkEntity().toBookmark()) }
         coVerify(exactly = 0) { remoteDataSource.summarizeBookmark(any(), any()) }
     }
 
@@ -142,24 +122,24 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
     fun retag_reportsSuccessOnceTheNewTagsLand() = runTest(testDispatcher) {
         withConfiguredServer()
         repository.setBookmarkRepository(bookmarkRepository)
-        val bookmark = makeBookmark(tags = "old")
+        val bookmark = testBookmarkEntity(tags = "old")
         // Two polls of nothing, then the inference job's output shows up.
-        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-42", "server1") } returnsMany listOf(
+        coEvery { bookmarkDao.getBookmarkByRemoteId("remote-1", "server1") } returnsMany listOf(
             bookmark, bookmark, bookmark.copy(tags = "old,ai-generated")
         )
 
         val landed = repository.requestAiRetag(bookmark.toBookmark())
 
         assertTrue(landed)
-        coVerify { remoteDataSource.requestAiRetag(testServer, "remote-42") }
-        coVerify(atLeast = 1) { bookmarkRepository.syncSingleBookmark("remote-42", "server1") }
+        coVerify { remoteDataSource.requestAiRetag(testServer, "remote-1") }
+        coVerify(atLeast = 1) { bookmarkRepository.syncSingleBookmark("remote-1", "server1") }
     }
 
     @Test
     fun retag_givesUpRatherThanPollingForeverWhenTagsNeverChange() = runTest(testDispatcher) {
         withConfiguredServer()
         repository.setBookmarkRepository(bookmarkRepository)
-        val bookmark = makeBookmark(tags = "old")
+        val bookmark = testBookmarkEntity(tags = "old")
         coEvery { bookmarkDao.getBookmarkByRemoteId(any(), any()) } returns bookmark
 
         // "Still working on it" is not a failure — the caller says so rather than throwing.
@@ -173,7 +153,7 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
         coEvery { remoteDataSource.requestAiRetag(any(), any()) } throws
             UnsupportedServerActionException("needs an admin account")
 
-        assertFailsWith<UnsupportedServerActionException> { repository.requestAiRetag(makeBookmark().toBookmark()) }
+        assertFailsWith<UnsupportedServerActionException> { repository.requestAiRetag(testBookmarkEntity().toBookmark()) }
         coVerify(exactly = 0) { bookmarkRepository.syncSingleBookmark(any(), any()) }
     }
 
@@ -209,28 +189,4 @@ class BookmarkActionsRepositoryAiTest : BaseRepositoryTest() {
         assertNull(repository.aiCapabilities.value["never-probed"])
     }
 
-    private fun makeBookmark(
-        localId: Long = 1L,
-        remoteId: String = "remote-42",
-        serverId: String = "server1",
-        tags: String = ""
-    ) = BookmarkEntity(
-        localId = 1L,
-        remoteId = remoteId,
-        serverId = serverId,
-        title = "Test",
-        url = "https://example.com",
-        description = null,
-        imageUrl = null,
-        bannerImageAssetId = null,
-        screenshotAssetId = null,
-        tags = tags,
-        listIds = "",
-        isStarred = false,
-        isArchived = false,
-        isRead = false,
-        createdAt = 0L,
-        readingTimeMinutes = 0,
-        content = null
-    )
 }

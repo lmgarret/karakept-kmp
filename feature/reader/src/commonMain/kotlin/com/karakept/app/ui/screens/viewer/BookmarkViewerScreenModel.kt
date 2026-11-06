@@ -225,7 +225,6 @@ class BookmarkViewerScreenModel(
                     bookmarkRepository.saveReadingProgress(
                         state.localId, state.progress, state.scrollIndex, state.scrollOffset
                     )
-                    bookmarkActionsRepository.notifyBookmarkChanged(state.remoteId)
                     pendingReadingState = null
 
                     // Queue reading progress sync to server (offline-first).
