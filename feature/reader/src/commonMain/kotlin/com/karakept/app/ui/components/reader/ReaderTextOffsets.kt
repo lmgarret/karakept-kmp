@@ -103,7 +103,9 @@ fun buildReaderTextOffsets(root: Element): ReaderTextOffsets {
 data class ReaderTextSpan(
     val node: Node,
     val startOffset: Int,
-    val isRenderable: Boolean
+    val isRenderable: Boolean,
+    /** Set for a run of inline nodes from an unwrapped container, drawn as one paragraph; [node] is its first. */
+    val inlineNodes: List<Node>? = null
 )
 
 /**

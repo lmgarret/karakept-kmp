@@ -283,7 +283,13 @@ fun NativeHtmlRenderer(
                 // Render visible children
                 for (span in renderableChildren.take(visibleCount)) {
                     val child = span.node
-                    if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
+                    val inlineNodes = span.inlineNodes
+                    if (inlineNodes != null) {
+                        RenderInlineGroup(
+                            inlineNodes, LocalReaderTheme.current, resolvedHighlights, offsets,
+                            onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId
+                        )
+                    } else if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
                         RenderBlock(child, resolvedHighlights, offsets, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
                     } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
                         val text = child.getWholeText()

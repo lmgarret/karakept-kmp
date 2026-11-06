@@ -139,7 +139,7 @@ fun HtmlContent(
             try {
                 ReaderPerf.time("prepare ${sanitized.length} chars (off main thread)") {
                     prepareReaderDocument(sanitized)
-                }?.also { ReaderPerf.log("prepare: ${it.renderableChildren.size} blocks") }
+                }?.also { ReaderPerf.log("prepare: ${describeTopLevel(it)}") }
             } catch (e: Exception) {
                 AppLogger.e("HtmlContent", "Preparing document failed: ${e.message}", e)
                 null

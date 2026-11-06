@@ -24,7 +24,7 @@ class PreparedReaderDocumentTest {
 
         val reference = Ksoup.parse(html)
         val referenceOffsets = buildReaderTextOffsets(reference.body())
-        val referenceSpans = computeReaderTextSpans(unwrapPlainContainers(reference.body().childNodes()), referenceOffsets)
+        val referenceSpans = unwrapPlainContainers(reference.body().childNodes(), referenceOffsets)
             .filter { it.isRenderable }
 
         assertEquals(referenceOffsets.text, prepared.offsets.text)

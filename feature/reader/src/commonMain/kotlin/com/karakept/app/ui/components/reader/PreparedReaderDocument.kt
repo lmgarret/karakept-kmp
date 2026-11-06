@@ -4,7 +4,6 @@ import com.fleeksoft.ksoup.Ksoup
 import com.fleeksoft.ksoup.nodes.Document
 import com.fleeksoft.ksoup.nodes.Element
 import com.fleeksoft.ksoup.nodes.Node
-import com.fleeksoft.ksoup.nodes.TextNode
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -40,8 +39,7 @@ fun prepareReaderDocument(html: String): PreparedReaderDocument? {
         html = html,
         document = document,
         offsets = offsets,
-        renderableChildren = computeReaderTextSpans(unwrapPlainContainers(body.childNodes()), offsets)
-            .filter { it.isRenderable },
+        renderableChildren = unwrapPlainContainers(body.childNodes(), offsets).filter { it.isRenderable },
         galleryImages = collectGalleryImages(document)
     )
 }
@@ -49,36 +47,58 @@ fun prepareReaderDocument(html: String): PreparedReaderDocument? {
 private val UNWRAPPABLE_TAGS = setOf("div", "section", "article", "main")
 
 /**
- * [nodes] with every plain container replaced by its children, recursively.
+ * The article's top-level spans, with every plain container replaced by what it draws, recursively.
  *
  * Readability wraps a whole article in one `<div>`, which made it a single top-level block: the
  * progressive reveal had nothing to split, and an 88-minute article was composed and measured in
- * one frame. A container is plain when it holds only blocks and blank text — then
- * `RenderDiv` draws it as a bare `Column` of those blocks, exactly what the reader's own `Column`
- * draws once it is unwrapped. One holding inline content is kept: `RenderChildren` groups that
- * content into a paragraph, which the top level does not.
+ * one frame. A container holding blocks is drawn by `RenderDiv` as a bare `Column` of
+ * [groupRenderChildren]'s units — each block, and each run of inline content as one paragraph —
+ * so emitting those same units here draws exactly what the container did.
  */
-internal fun unwrapPlainContainers(nodes: List<Node>): List<Node> {
-    val out = ArrayList<Node>(nodes.size)
+internal fun unwrapPlainContainers(nodes: List<Node>, offsets: ReaderTextOffsets): List<ReaderTextSpan> {
+    val out = ArrayList<ReaderTextSpan>(nodes.size)
     for (node in nodes) {
-        if (node is Element && isPlainContainer(node)) {
-            out += unwrapPlainContainers(node.childNodes())
+        if (node is Element && isUnwrappable(node)) {
+            unwrapInto(node, offsets, out)
         } else {
-            out += node
+            out += computeReaderTextSpans(listOf(node), offsets)
         }
     }
     return out
 }
 
-private fun isPlainContainer(element: Element): Boolean =
-    element.tagName().lowercase() in UNWRAPPABLE_TAGS &&
-        element.childNodes().all { child ->
-            when (child) {
-                is Element -> isBlockElement(child)
-                is TextNode -> child.getWholeText().isBlank()
-                else -> true
+private fun unwrapInto(container: Element, offsets: ReaderTextOffsets, out: MutableList<ReaderTextSpan>) {
+    for (unit in groupRenderChildren(container)) {
+        when (unit) {
+            is ChildRenderUnit.Block ->
+                if (isUnwrappable(unit.element)) unwrapInto(unit.element, offsets, out)
+                else out += ReaderTextSpan(unit.element, offsets.startOf(unit.element), isRenderable = true)
+            is ChildRenderUnit.Inline -> {
+                val first = unit.nodes.first()
+                out += ReaderTextSpan(first, offsets.startOf(first), isRenderable = true, inlineNodes = unit.nodes)
             }
         }
+    }
+}
+
+private fun isUnwrappable(element: Element): Boolean =
+    element.tagName().lowercase() in UNWRAPPABLE_TAGS && hasBlockChildren(element)
+
+/** One line describing the article's top-level shape, for the `ReaderPerf` log. */
+internal fun describeTopLevel(document: PreparedReaderDocument): String {
+    val units = document.renderableChildren
+    val inline = units.count { it.inlineNodes != null }
+    val head = units.take(3).joinToString { span ->
+        val node = span.node
+        when {
+            span.inlineNodes != null -> "inline×${span.inlineNodes.size}"
+            node is Element -> "<${node.tagName()}> ${node.childNodeSize()} children, " +
+                "${node.children().count { isBlockElement(it) }} blocks"
+            else -> "text"
+        }
+    }
+    return "${units.size} units ($inline inline runs); first: $head"
+}
 
 /** How long one frame may spend composing and measuring newly revealed blocks. */
 internal val REVEAL_FRAME_BUDGET = 8.milliseconds

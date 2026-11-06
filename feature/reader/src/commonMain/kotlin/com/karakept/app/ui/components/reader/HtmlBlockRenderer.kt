@@ -88,7 +88,7 @@ fun isBlockElement(element: Element): Boolean {
 /**
  * Checks if an element contains any block-level children.
  */
-private fun hasBlockChildren(element: Element): Boolean {
+internal fun hasBlockChildren(element: Element): Boolean {
     return element.children().any { isBlockElement(it) }
 }
 
@@ -239,16 +239,38 @@ fun RenderChildren(
     selectedHighlightId: String? = null
 ) {
     val theme = LocalReaderTheme.current
-    // Group consecutive inline nodes together, render block elements individually
+    val units = remember(element) { groupRenderChildren(element) }
+    for (unit in units) {
+        when (unit) {
+            is ChildRenderUnit.Block ->
+                RenderBlock(unit.element, highlights, offsets, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
+            is ChildRenderUnit.Inline ->
+                RenderInlineGroup(unit.nodes, theme, highlights, offsets, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId)
+        }
+    }
+}
+
+/** What [RenderChildren] draws for one child or run of children. */
+internal sealed interface ChildRenderUnit {
+    data class Block(val element: Element) : ChildRenderUnit
+    data class Inline(val nodes: List<Node>) : ChildRenderUnit
+}
+
+/**
+ * [element]'s children as [RenderChildren] draws them: each block on its own, each run of
+ * consecutive inline nodes as one paragraph. Also how an unwrapped container is laid out at the
+ * top of the article (see [unwrapPlainContainers]), so both draw exactly the same.
+ */
+internal fun groupRenderChildren(element: Element): List<ChildRenderUnit> {
+    val units = mutableListOf<ChildRenderUnit>()
     val children = element.childNodes()
     var i = 0
     while (i < children.size) {
         val child = children[i]
         if (child is Element && isBlockElement(child)) {
-            RenderBlock(child, highlights, offsets, onLinkClick, onHighlightClick, onHighlightPosition, depth, selectedHighlightId = selectedHighlightId)
+            units += ChildRenderUnit.Block(child)
             i++
         } else {
-            // Collect consecutive inline nodes
             val inlineNodes = mutableListOf<Node>()
             while (i < children.size) {
                 val node = children[i]
@@ -264,17 +286,18 @@ fun RenderChildren(
             if (inlineNodes.isNotEmpty() && inlineNodes.any {
                     (it is TextNode && it.getWholeText().isNotBlank()) || it is Element
                 }) {
-                RenderInlineGroup(inlineNodes, theme, highlights, offsets, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId)
+                units += ChildRenderUnit.Inline(inlineNodes)
             }
         }
     }
+    return units
 }
 
 /**
  * Renders a group of consecutive inline nodes as a single Text composable.
  */
 @Composable
-private fun RenderInlineGroup(
+internal fun RenderInlineGroup(
     nodes: List<Node>,
     theme: ReaderThemeData,
     highlights: List<Highlight>,
