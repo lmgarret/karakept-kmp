@@ -5,9 +5,6 @@ import com.karakept.app.data.cache.ImageCacheManager
 import com.karakept.app.data.local.dao.AssetDao
 import com.karakept.app.data.local.dao.BookmarkDao
 import com.karakept.app.data.local.dao.ListDao
-import com.karakept.app.data.local.entity.AssetEntity
-import com.karakept.app.data.local.entity.BookmarkEntity
-import com.karakept.app.data.local.entity.ListEntity
 import com.karakept.app.data.local.entity.toBookmark
 import com.karakept.app.data.local.entity.toBookmarks
 import com.karakept.app.data.model.Bookmark
@@ -17,10 +14,7 @@ import com.karakept.app.data.local.projection.TagGroup
 import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
-import com.karakept.app.data.model.ListSettings
 import com.karakept.app.data.model.ListSyncStatus
-import com.karakept.app.data.model.SYNC_KEY_ARCHIVED
-import com.karakept.app.data.model.SYNC_KEY_FAVORITES
 import com.karakept.app.data.model.Server
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.data.model.SyncStrategy
@@ -30,21 +24,13 @@ import com.karakept.app.data.model.SyncKey
 import com.karakept.app.data.remote.RemoteDataSource
 import com.karakept.app.utils.AppDispatchers
 import com.karakept.app.utils.AppLogger
-import com.karakept.app.utils.ReadingTimeCalculator
-import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -129,38 +115,54 @@ class BookmarkRepository internal constructor(
         return persist
     }
 
-    private val syncKeys = SyncKeyTracker()
-    val perKeyProgress: StateFlow<Map<SyncKey, ListSyncStatus>> = syncKeys.perKeyProgress
+    private val contentSync = BookmarkContentSync(
+        bookmarkDao, remoteDataSource, settingsRepository, serverRepository, imageCacheManager, assetCache
+    )
+
+    private val creator = BookmarkCreator(bookmarkDao, remoteDataSource, serverRepository, contentSync, repositoryScope)
+
+    // A single instance: it holds the per-key sync locks and the reading-progress ration.
+    private val syncRunner = BookmarkSyncRunner(
+        bookmarkDao = bookmarkDao,
+        assetDao = assetDao,
+        remoteDataSource = remoteDataSource,
+        bookmarkActionsRepository = bookmarkActionsRepository,
+        settingsRepository = settingsRepository,
+        highlightRepository = highlightRepository,
+        imageCacheManager = imageCacheManager,
+        listDao = listDao,
+        appDispatchers = appDispatchers,
+        assetCache = assetCache,
+        contentSync = contentSync,
+        offlineCacheRepository = offlineCacheRepository,
+        scope = repositoryScope
+    )
+
+    private val listMembership = BookmarkListMembership(
+        bookmarkDao, remoteDataSource, settingsRepository, listDao,
+        lastSyncNewBookmarks = { syncRunner.lastSyncNewBookmarks }
+    )
+
+    val perKeyProgress: StateFlow<Map<SyncKey, ListSyncStatus>> = syncRunner.perKeyProgress
 
     // Kept for BackgroundSyncOrchestrator backward compatibility.
-    private val _syncProgress = MutableStateFlow<com.karakept.app.data.model.SyncProgress>(com.karakept.app.data.model.SyncProgress.Idle)
-    val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> = _syncProgress.asStateFlow()
+    val syncProgress: StateFlow<com.karakept.app.data.model.SyncProgress> = syncRunner.syncProgress
 
     // Emits a report whenever a pipeline finishes with non-fatal warnings, so partial
     // failures are surfaced to the user instead of silently reporting "sync complete" (Group H).
-    private val _syncReports = kotlinx.coroutines.flow.MutableSharedFlow<com.karakept.app.data.model.SyncReport>(extraBufferCapacity = 16)
-    val syncReports: kotlinx.coroutines.flow.SharedFlow<com.karakept.app.data.model.SyncReport> = _syncReports
+    val syncReports: kotlinx.coroutines.flow.SharedFlow<com.karakept.app.data.model.SyncReport> = syncRunner.syncReports
 
     // Emits once when a background full sync (syncAllWithLists) finishes, so a foreground screen
     // can refresh its currently-displayed list in place to surface newly synced bookmarks.
-    private val _backgroundSyncCompleted = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val backgroundSyncCompleted: kotlinx.coroutines.flow.SharedFlow<Unit> = _backgroundSyncCompleted
+    val backgroundSyncCompleted: kotlinx.coroutines.flow.SharedFlow<Unit> = syncRunner.backgroundSyncCompleted
 
     // Emits the SyncKey of a pipeline that just committed a page of metadata. Lets a screen
     // refresh in place while a long sync is still running, instead of only at the end.
-    // Conflates rather than buffers: a screen only needs to know "there is newer data".
-    private val _pageCommitted = kotlinx.coroutines.flow.MutableSharedFlow<SyncKey>(
-        extraBufferCapacity = 1,
-        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
-    )
-    val pageCommitted: kotlinx.coroutines.flow.SharedFlow<SyncKey> = _pageCommitted
-
-    /** Bookmarks inserted during the last sync, used for per-list notification counts. */
-    private var _lastSyncNewBookmarks: List<BookmarkEntity> = emptyList()
+    val pageCommitted: kotlinx.coroutines.flow.SharedFlow<SyncKey> = syncRunner.pageCommitted
 
     /** Resets sync progress to Idle. Used when a sync is cancelled (not failed). */
     fun resetSyncProgress() {
-        _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
+        syncRunner.resetSyncProgress()
     }
 
     // Last successful top-level auto-sync per server (epoch millis). Lives here (Koin single)
@@ -181,11 +183,6 @@ class BookmarkRepository internal constructor(
     suspend fun markAutoSyncCompleted(serverId: String) = autoSyncMutex.withLock {
         lastAutoSyncCompletedAt[serverId] = System.currentTimeMillis()
     }
-
-    // Rationing for the reading-progress pass. It is per server rather than per sync flavour:
-    // a fan-out of list syncs would otherwise each run their own pass over the same library.
-    private val lastProgressPullAt = mutableMapOf<String, Long>()
-    private val progressPullMutex = Mutex()
 
     /**
      * Pulls reading progress for bookmarks the user is currently looking at, ahead of the
@@ -218,16 +215,10 @@ class BookmarkRepository internal constructor(
     }
 
     internal suspend fun tryAcquireReadingProgressPull(serverId: String, force: Boolean): Boolean =
-        progressPullMutex.withLock {
-            val now = System.currentTimeMillis()
-            val last = lastProgressPullAt[serverId] ?: 0L
-            if (!force && now - last < PROGRESS_PULL_MIN_INTERVAL_MS) return@withLock false
-            lastProgressPullAt[serverId] = now
-            true
-        }
+        syncRunner.tryAcquireReadingProgressPull(serverId, force)
 
     suspend fun syncBookmarks(server: Server): Int =
-        executeSyncPipeline(SyncConfiguration.Full(server))
+        syncRunner.executeSyncPipeline(SyncConfiguration.Full(server))
 
     /**
      * Full sync followed by a per-list membership pass. Each list is fetched exactly once
@@ -236,31 +227,8 @@ class BookmarkRepository internal constructor(
      *
      * @param skipKey a list id already synced by the caller, skipped to avoid re-fetching.
      */
-    suspend fun syncAllWithLists(server: Server, skipKey: SyncKey = null): Int {
-        val newCount = syncBookmarks(server)
-        val lists = listDao.getListsForServerOnce(server.id)
-        val semaphore = kotlinx.coroutines.sync.Semaphore(3)
-        kotlinx.coroutines.coroutineScope {
-            lists.forEach { list ->
-                val listId = list.remoteId
-                if (listId == skipKey) return@forEach
-                launch {
-                    semaphore.acquire()
-                    try {
-                        syncBookmarksForList(server, listId)
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        AppLogger.w("BookmarkRepo", "List membership sync failed for $listId: ${e.message}")
-                    } finally {
-                        semaphore.release()
-                    }
-                }
-            }
-        }
-        _backgroundSyncCompleted.tryEmit(Unit)
-        return newCount
-    }
+    suspend fun syncAllWithLists(server: Server, skipKey: SyncKey = null): Int =
+        syncRunner.syncAllWithLists(server, skipKey)
 
     /**
      * Syncs only favorited bookmarks.
@@ -268,7 +236,7 @@ class BookmarkRepository internal constructor(
      * @param isCurrentView true when this is the view on screen — see [syncBookmarksForList].
      */
     suspend fun syncFavorites(server: Server, isCurrentView: Boolean = false): Int =
-        executeSyncPipeline(
+        syncRunner.executeSyncPipeline(
             SyncConfiguration.Filtered(server, favourited = true),
             forceProgressPull = isCurrentView
         )
@@ -279,7 +247,7 @@ class BookmarkRepository internal constructor(
      * @param isCurrentView true when this is the view on screen — see [syncBookmarksForList].
      */
     suspend fun syncArchived(server: Server, isCurrentView: Boolean = false): Int =
-        executeSyncPipeline(
+        syncRunner.executeSyncPipeline(
             SyncConfiguration.Filtered(server, archived = true),
             forceProgressPull = isCurrentView
         )
@@ -298,238 +266,19 @@ class BookmarkRepository internal constructor(
         server: Server,
         listId: String,
         isCurrentView: Boolean = false
-    ): Int = executeSyncPipeline(
+    ): Int = syncRunner.executeSyncPipeline(
         SyncConfiguration.ForList(server, listId),
         forceProgressPull = isCurrentView
     )
 
-    suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<Bookmark> {
-        onStatusChange?.invoke("Waiting for server response...")
-        val serversList = serverRepository.servers.first()
-        val server = serversList.firstOrNull() ?: return Result.failure(Exception("No server configured"))
+    suspend fun createBookmark(url: String, onStatusChange: ((String) -> Unit)? = null): Result<Bookmark> =
+        creator.createBookmark(url, onStatusChange)
 
-        return try {
-            var dto = remoteDataSource.createBookmark(server, url)
-
-            // Polling for title/content, waiting for the crawl to reach a terminal status.
-            // Karakeep API takes some time to parse the URL, and can pass through an interim
-            // state (e.g. an anti-bot interstitial page) whose title looks valid but isn't final -
-            // only accept a title once the server itself reports the crawl as settled.
-            var attempts = 0
-            while (attempts < 30) { // 30 attempts, 2s apart = 60 seconds total
-                val currentTitle = dto.title ?: dto.content?.title ?: ""
-                val crawlStatusValue = dto.content?.crawlStatus?.value
-                val crawlSettled = crawlStatusValue == null || crawlStatusValue == "success" || crawlStatusValue == "failure"
-                if (currentTitle.isNotBlank() && currentTitle != "Untitled" && crawlSettled) break
-
-                onStatusChange?.invoke("Waiting for bookmark to be parsed...")
-                delay(2000) // Increased to 2 seconds
-                try {
-                    dto = remoteDataSource.fetchBookmark(server, dto.id ?: "")
-                } catch (e: Exception) {
-                    AppLogger.e("BookmarkRepository", "Polling fetch failed: ${e.message}")
-                }
-                attempts++
-                AppLogger.d("BookmarkRepository", "Polling for bookmark parsing: attempt $attempts, title='${dto.title}', content.title='${dto.content?.title}'")
-            }
-
-            onStatusChange?.invoke("Finalizing bookmark...")
-
-            // Initial map to entity
-            val entity = BookmarkEntity(
-                localId = 0L,
-                remoteId = dto.id ?: "",
-                serverId = server.id,
-                title = dto.title ?: dto.content?.title ?: "Untitled",
-                url = dto.content?.url ?: url,
-                description = dto.content?.description,
-                imageUrl = dto.content?.imageUrl,
-                bannerImageAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.BANNER_IMAGE }?.id,
-                screenshotAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.SCREENSHOT }?.id,
-                tags = dto.tags?.joinToString(",") { it.name ?: "" } ?: "",
-                listIds = "",
-                isStarred = dto.favourited ?: false,
-                isArchived = dto.archived ?: false,
-                isRead = false,
-                createdAt = try { Instant.parse(dto.createdAt ?: "").toEpochMilliseconds() } catch (e: Exception) { System.currentTimeMillis() },
-                readingTimeMinutes = 0,
-                content = "",
-                crawlStatus = dto.content?.crawlStatus?.value,
-                crawledAt = com.karakept.app.utils.parseIsoToEpochMillis(dto.content?.crawledAt)
-            )
-
-            // Insert into local DB
-            bookmarkDao.insertBookmarks(listOf(entity))
-
-            // Fetch the inserted entity to get the localId
-            val inserted = bookmarkDao.getBookmarkByRemoteId(entity.remoteId, server.id)
-                ?: entity
-
-            // Trigger background sync for this single bookmark to get full content
-            repositoryScope.launch {
-                try {
-                    syncSingleBookmark(inserted.remoteId, server.id)
-                } catch (e: Exception) {
-                    AppLogger.e("BookmarkRepository", "Background sync failed for new bookmark: ${e.message}")
-                }
-            }
-
-            Result.success(inserted.toBookmark())
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun fetchBookmarkContent(bookmarkId: String, serverId: String): String? {
-        val server = serverRepository.servers.first().find { it.id == serverId } ?: return null
-
-        val bookmark = bookmarkDao.getBookmarkByRemoteId(bookmarkId, serverId) ?: return null
-
-        return try {
-            fetchRemoteContent(server, bookmark.remoteId)
-        } catch (e: Exception) {
-            AppLogger.e("BookmarkRepo", "Failed to fetch content: ${e.message}", e)
-            null
-        }
-    }
+    suspend fun fetchBookmarkContent(bookmarkId: String, serverId: String): String? =
+        contentSync.fetchBookmarkContent(bookmarkId, serverId)
 
     suspend fun syncSingleBookmark(bookmarkId: String, serverId: String) {
-        val server = serverRepository.servers.first().find { it.id == serverId } ?: return
-        val existing = bookmarkDao.getBookmarkByRemoteId(bookmarkId, serverId) ?: return
-
-        try {
-            // Note: intentionally NOT updating _syncProgress here. This method is called
-            // from a background repositoryScope.launch after createBookmark and should not
-            // interfere with the main sync progress state shown in the UI.
-            val dto = remoteDataSource.fetchBookmark(server, existing.remoteId)
-
-            // Map DTO to entity, preserving localId and content if not provided in DTO
-            val syncStrategy = settingsRepository.contentSyncStrategy.first()
-
-            // We use the existing mapping logic but for a single bookmark
-            // To reuse mapDtoToEntity, we need to wrap it in BookmarkSyncPipeline
-            // Or just implement a simplified version here.
-
-            val url = when (dto.content?.type) {
-                com.karakept.api.model.BookmarkContent.Type.LINK -> dto.content?.url ?: ""
-                com.karakept.api.model.BookmarkContent.Type.TEXT -> ""
-                else -> dto.content?.url ?: ""
-            }
-
-            val title = dto.title ?: dto.content?.title ?: "Untitled"
-            val incomingContent = dto.content?.htmlContent ?: dto.content?.text
-
-            // Extract banner and screenshot asset IDs
-            val bannerImageAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.BANNER_IMAGE }?.id
-            val screenshotAssetId = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.SCREENSHOT }?.id
-
-            // Fetch fresh list memberships from the server. Falls back to the existing
-            // value on failure so a transient network issue doesn't wipe local state.
-            val refreshedListIds = try {
-                remoteDataSource.fetchListsForBookmark(server, existing.remoteId)
-                    .mapNotNull { it.id }
-                    .joinToString(",")
-            } catch (e: Exception) {
-                AppLogger.e("BookmarkRepository", "Failed to fetch lists for bookmark ${existing.remoteId}: ${e.message}")
-                existing.listIds
-            }
-
-            // Update metadata — preserve local isRead (read status is client-side only)
-            bookmarkDao.updateBookmarkMetadata(
-                localId = existing.localId,
-                title = title,
-                url = url,
-                description = dto.content?.description,
-                imageUrl = dto.content?.imageUrl,
-                bannerImageAssetId = bannerImageAssetId,
-                screenshotAssetId = screenshotAssetId,
-                tags = dto.tags?.joinToString(",") { it.name ?: "" } ?: "",
-                listIds = refreshedListIds,
-                isStarred = dto.favourited ?: false,
-                isArchived = dto.archived ?: false,
-                isRead = existing.isRead,
-                readingTimeMinutes = existing.readingTimeMinutes, // Will update if content is fetched
-                modifiedAt = dto.modifiedAt?.let {
-                    try { Instant.parse(it).toEpochMilliseconds() } catch (e: Exception) { null }
-                },
-                crawlStatus = dto.content?.crawlStatus?.value ?: existing.crawlStatus,
-                crawledAt = com.karakept.app.utils.parseIsoToEpochMillis(dto.content?.crawledAt)
-                    ?: existing.crawledAt,
-                summary = dto.summary ?: existing.summary,
-                summarizationStatus = dto.summarizationStatus?.value ?: existing.summarizationStatus
-            )
-
-            // Now handle content if needed
-            // For a force refresh, we should probably fetch content if it's available in the DTO
-            // or if we should fetch it on demand.
-
-            var finalContent = incomingContent
-
-            if (finalContent.isNullOrBlank()) {
-                val contentAsset = dto.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT }
-                if (contentAsset != null) {
-                    try {
-                        val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id ?: "")
-                        finalContent = assetBytes.decodeToString()
-                    } catch (e: Exception) {
-                        AppLogger.e("BookmarkRepository", "Failed to download content asset ${contentAsset.id}: ${e.message}")
-                    }
-                }
-            }
-
-            if (finalContent.isNullOrBlank()) {
-                finalContent = dto.note ?: dto.content?.text
-            }
-
-            if (!finalContent.isNullOrBlank()) {
-                // Cache images in HTML for offline reading
-                val cachedContent = try {
-                    imageCacheManager.cacheImagesInHtml(finalContent)
-                } catch (e: Exception) {
-                    AppLogger.e("BookmarkRepository", "Failed to cache images in HTML: ${e.message}")
-                    finalContent
-                }
-                val readingTime = ReadingTimeCalculator.calculateReadingTime(cachedContent)
-                bookmarkDao.updateContent(existing.localId, cachedContent, readingTime)
-            }
-
-            // Cache hero images (banner/screenshot)
-            assetCache.cacheHeroAssets(server, existing.remoteId, existing.serverId, bannerImageAssetId, screenshotAssetId)
-
-            // Track server-side asset metadata (linkHtmlContent, fullPageArchive, precrawledArchive)
-            // so the viewer knows what exists on the server even before downloading locally.
-            assetCache.insertContentAssetMetadata(dto, existing.remoteId, existing.serverId)
-
-            // Cache fullPageArchive asset when user prefers it, so the viewer can switch
-            // sources without touching the content field (which always stores extracted HTML).
-            if (settingsRepository.preferFullPageHtml.first()) {
-                val archiveAsset = dto.assets?.find {
-                    it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.FULL_PAGE_ARCHIVE
-                }
-                if (archiveAsset?.id != null) {
-                    assetCache.cacheArchiveAsset(server, existing.remoteId, existing.serverId, archiveAsset)
-                }
-            }
-
-        } catch (e: Exception) {
-            AppLogger.e("BookmarkRepository", "syncSingleBookmark failed for $bookmarkId: ${e.message}", e)
-            throw e
-        }
-    }
-
-    // After every sync rather than on a timer of its own: that is when read state and deletions
-    // have just caught up with the server. Off the caller's path — nothing on screen waits on it.
-    private fun cleanUpOfflineCache() {
-        val cleaner = offlineCacheRepository ?: return
-        repositoryScope.launch {
-            try {
-                cleaner.cleanUpAfterSync()
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                AppLogger.e("BookmarkRepo", "Offline cache cleanup failed: ${e.message}", e)
-            }
-        }
+        contentSync.syncSingleBookmark(bookmarkId, serverId)
     }
 
     private val viewQueries = BookmarkViewQueries(bookmarkDao)
@@ -645,155 +394,15 @@ class BookmarkRepository internal constructor(
             BookmarkViewQueries.buildCountQuery(serverId, filter)
     }
 
-    /**
-     * Shared logic for fetching bookmark content from server.
-     * Tries: 1. Inline HTML -> 2. Asset HTML -> 3. Note/Text
-     * The fullPageArchive asset is cached separately when preferFullPageHtml is enabled;
-     * it is never stored in the content field so that source-switching works correctly.
-     */
-    internal suspend fun fetchRemoteContent(server: Server, remoteBookmarkId: String): String? {
-        try {
-            val fullBookmark = remoteDataSource.fetchBookmark(server, remoteBookmarkId)
-
-            // Priority 1: inline htmlContent (full content)
-            var content = fullBookmark.content?.htmlContent
-
-            // Priority 2: asset-based content (prefer over description)
-            if (content.isNullOrBlank()) {
-                val contentAsset = fullBookmark.assets?.find { it.assetType == com.karakept.api.model.BookmarksBookmarkIdAssetsPost201Response.AssetType.LINK_HTML_CONTENT }
-                if (contentAsset != null) {
-                    try {
-                        AppLogger.d("BookmarkRepository", "Downloading content from asset ${contentAsset.id}")
-                        val assetBytes = remoteDataSource.downloadAsset(server, contentAsset.id ?: "")
-                        content = assetBytes.decodeToString()
-                        AppLogger.d("BookmarkRepository", "Downloaded ${content.length} chars from asset")
-                    } catch (e: Exception) {
-                        AppLogger.e("BookmarkRepository", "Failed to download content asset ${contentAsset.id}: ${e.message}")
-                    }
-                }
-            }
-
-            // Priority 3: fallback to note or text for non-link content
-            if (content.isNullOrBlank()) {
-                content = fullBookmark.note ?: fullBookmark.content?.text
-                if (!content.isNullOrBlank()) {
-                     AppLogger.d("BookmarkRepository", "Using note/text content (${content.length} chars)")
-                }
-            }
-
-            return content
-        } catch (e: Exception) {
-            AppLogger.e("BookmarkRepository", "Error fetching remote content: ${e.message}")
-            throw e
-        }
-    }
-
-    /**
-     * Executes the sync pipeline with the given configuration.
-     * Uses per-key deduplication: if a pipeline for the same key is already running,
-     * this call returns 0 immediately without starting a new pipeline.
-     * Returns the number of new bookmarks inserted.
-     */
-    private suspend fun executeSyncPipeline(
-        config: SyncConfiguration,
-        forceProgressPull: Boolean = false
-    ): Int = withContext(appDispatchers.io) {
-        val key: SyncKey = when (config) {
-            is SyncConfiguration.Full -> null
-            is SyncConfiguration.Filtered -> if (config.favourited == true) SYNC_KEY_FAVORITES else SYNC_KEY_ARCHIVED
-            is SyncConfiguration.ForList -> config.listId
-        }
-
-        if (!syncKeys.tryAcquireKey(key)) {
-            // A skipped list pass is a silently missed membership reconcile — the caller
-            // gets 0 back and cannot tell it from "nothing to do".
-            AppLogger.d("BookmarkRepo", "SKIPPED sync for key=$key — already in progress")
-            return@withContext 0
-        }
-
-        syncKeys.setKeyStatus(key, ListSyncStatus.FetchingMetadata())
-        // The key is handed off from the foreground stage to enrichment mid-run, so the
-        // finally block must not release a key a *newer* sync has since acquired.
-        var foregroundKeyReleased = false
-        var holdsEnrichmentKey = false
-        try {
-            val pipeline = BookmarkSyncPipeline(
-                config = config,
-                bookmarkDao = bookmarkDao,
-                assetDao = assetDao,
-                remoteDataSource = remoteDataSource,
-                bookmarkActionsRepository = bookmarkActionsRepository,
-                settingsRepository = settingsRepository,
-                highlightRepository = highlightRepository,
-                imageCacheManager = imageCacheManager,
-                listDao = listDao,
-                syncProgress = _syncProgress,
-                fetchRemoteContent = ::fetchRemoteContent,
-                cacheHeroAssetsForBookmark = assetCache::cacheHeroAssets,
-                onProgress = { status -> syncKeys.setKeyStatus(key, status) },
-                onPageCommitted = { _pageCommitted.tryEmit(key) },
-                // Drop the busy indicator AND release the key once the visible rows have
-                // landed. Holding it through enrichment made a pull-to-refresh during a long
-                // content download hit the dedup check and silently do nothing.
-                onForegroundComplete = {
-                    syncKeys.setKeyStatus(key, ListSyncStatus.Idle)
-                    syncKeys.releaseKey(key)
-                    foregroundKeyReleased = true
-                },
-                shouldRunEnrichment = {
-                    syncKeys.tryAcquireEnrichmentKey(key).also { holdsEnrichmentKey = it }
-                },
-                shouldPullReadingProgress = {
-                    tryAcquireReadingProgressPull(
-                        serverId = config.server.id,
-                        // A full sync covers the library, and the view on screen is the one
-                        // whose staleness the user can see. Everything else takes its turn.
-                        force = config is SyncConfiguration.Full || forceProgressPull
-                    )
-                }
-            )
-            val result = pipeline.execute()
-            _lastSyncNewBookmarks = pipeline.newlyInsertedBookmarks
-            cleanUpOfflineCache()
-            if (pipeline.warnings.isNotEmpty()) {
-                _syncReports.tryEmit(
-                    com.karakept.app.data.model.SyncReport(key, result, pipeline.warnings)
-                )
-            }
-            return@withContext result
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
-            throw e
-        } catch (e: Exception) {
-            AppLogger.e("BookmarkRepo", "Failed to fetch bookmarks: ${e.message}", e)
-            _syncProgress.value = com.karakept.app.data.model.SyncProgress.Error(e.message ?: "Unknown error")
-            throw e
-        } finally {
-            if (!foregroundKeyReleased) syncKeys.releaseKey(key)
-            if (holdsEnrichmentKey) syncKeys.releaseEnrichmentKey(key)
-            syncKeys.setKeyStatus(key, ListSyncStatus.Idle)
-            if (_syncProgress.value !is com.karakept.app.data.model.SyncProgress.Error) {
-                _syncProgress.value = com.karakept.app.data.model.SyncProgress.Idle
-            }
-        }
-    }
+    internal suspend fun fetchRemoteContent(server: Server, remoteBookmarkId: String): String? =
+        contentSync.fetchRemoteContent(server, remoteBookmarkId)
 
     /**
      * After sync, finds lists with notifyOnNewBookmarks=true that received new bookmarks.
      * Returns list of (listId, listName, count) triples for notification dispatch.
      */
-    suspend fun getListsNeedingNotification(serverId: String): List<Triple<String, String, Int>> {
-        val allSettings = settingsRepository.allListSettings.first()
-        val notifyListIds = allSettings.filter { it.value.notifyOnNewBookmarks }.keys
-        if (notifyListIds.isEmpty()) return emptyList()
-
-        val newBookmarks = _lastSyncNewBookmarks
-        if (newBookmarks.isEmpty()) return emptyList()
-
-        val allLists = listDao.getListsForServer(serverId).first()
-
-        return findListsWithNewBookmarks(allSettings, newBookmarks, allLists)
-    }
+    suspend fun getListsNeedingNotification(serverId: String): List<Triple<String, String, Int>> =
+        listMembership.getListsNeedingNotification(serverId)
 
     /**
      * Reconciles a bookmark's list membership after a quick action.
@@ -806,8 +415,6 @@ class BookmarkRepository internal constructor(
      *
      * @param smartListIds the IDs of all known smart lists — only these are overwritten
      *                     by the server response; manual list IDs are preserved locally
-     */
-    /**
      * @return true if the server returned smart list membership (fresh data),
      *         false if potentially stale (no smart lists returned by the server).
      */
@@ -815,79 +422,7 @@ class BookmarkRepository internal constructor(
         server: Server,
         bookmarkLocalId: Long,
         smartListIds: Set<String>
-    ): Boolean {
-        val entity = bookmarkDao.getBookmarkById(bookmarkLocalId) ?: return true
-        try {
-            val serverListIds = remoteDataSource.fetchListsForBookmark(server, entity.remoteId)
-                .mapNotNull { it.id }.toSet()
-
-            val currentIds = entity.listIds.split(",").filter { it.isNotEmpty() }.toSet()
-            // Smart lists: server is authoritative (criteria are server-computed)
-            // Manual lists: local DB is authoritative (optimistic update already applied)
-            val updatedIds = ((currentIds - smartListIds) + (serverListIds intersect smartListIds))
-                .joinToString(",")
-
-            if (updatedIds != entity.listIds) {
-                bookmarkDao.updateBookmarkMetadata(
-                    localId = bookmarkLocalId,
-                    title = entity.title,
-                    url = entity.url,
-                    description = entity.description,
-                    imageUrl = entity.imageUrl,
-                    bannerImageAssetId = entity.bannerImageAssetId,
-                    screenshotAssetId = entity.screenshotAssetId,
-                    tags = entity.tags,
-                    listIds = updatedIds,
-                    isStarred = entity.isStarred,
-                    isArchived = entity.isArchived,
-                    isRead = entity.isRead,
-                    readingTimeMinutes = entity.readingTimeMinutes,
-                    modifiedAt = entity.modifiedAt,
-                    crawlStatus = entity.crawlStatus,
-                    crawledAt = entity.crawledAt,
-                    summary = entity.summary,
-                    summarizationStatus = entity.summarizationStatus
-                )
-                AppLogger.d("BookmarkRepository", "Reconciled list membership for bookmark $bookmarkLocalId: $updatedIds")
-            }
-
-            // If the server returned no smart list membership, the response may be stale
-            // (server's async smart list recalculation hasn't completed yet).
-            val serverHasSmartLists = (serverListIds intersect smartListIds).isNotEmpty()
-            return serverHasSmartLists
-        } catch (e: Exception) {
-            AppLogger.e("BookmarkRepository", "Failed to reconcile list membership for bookmark $bookmarkLocalId: ${e.message}", e)
-            return false
-        }
-    }
-}
-
-/**
- * Determines which lists with notifyOnNewBookmarks=true received new bookmarks.
- * Returns list of (listId, listName) pairs for lists that should trigger a notification.
- *
- * Extracted as internal top-level function for testability in commonTest.
- */
-internal fun findListsWithNewBookmarks(
-    allListSettings: Map<String, ListSettings>,
-    newBookmarks: List<BookmarkEntity>,
-    allLists: List<ListEntity>
-): List<Triple<String, String, Int>> {
-    val notifyListIds = allListSettings
-        .filter { it.value.notifyOnNewBookmarks }
-        .keys
-    if (notifyListIds.isEmpty()) return emptyList()
-
-    val listNameMap = allLists.associate { it.remoteId to it.name }
-
-    return notifyListIds.mapNotNull { listId ->
-        val count = newBookmarks.count { bookmark ->
-            bookmark.listIds.split(",").map { it.trim() }.contains(listId)
-        }
-        if (count > 0) {
-            listNameMap[listId]?.let { name -> Triple(listId, name, count) }
-        } else null
-    }
+    ): Boolean = listMembership.reconcileBookmarkSmartListMembership(server, bookmarkLocalId, smartListIds)
 }
 
 // Shared with BookmarkActionsRepository.persistFinalReadingProgress, which must write on its own

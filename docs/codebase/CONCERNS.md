@@ -23,13 +23,8 @@
 
 ## Code Complexity & Maintainability
 
-**Files approaching 1000 lines:**
-- `feature/reader/.../screens/viewer/BookmarkViewerContent.kt` (987) and `BookmarkDetailsPanel.kt` (984)
-- `core/ui/.../components/bookmark/BookmarkLayouts.kt` (918)
-- `core/data/.../data/repository/BookmarkRepository.kt` (904) — grew back past 900 after `BookmarkAssetCache` was extracted
-- `core/data/.../data/remote/RemoteDataSource.kt` (892)
-- Impact: High cognitive load, hard review, larger bug surface.
-- Fix approach: what worked for the files split on 2026-11-05 — break a single long composable into helper composables of its own file, pull pure logic out where a unit test can reach it, and give a ScreenModel's methods extension files by concern (`MainScreenModelSync.kt`, `…Filters.kt`, `…Actions.kt`, `…Batch.kt`) while its state and startup sequence stay in the class.
+**Next-largest files (800+ lines):** `BookmarkViewerScreenModel.kt` (867), `OnboardingScreen.kt` (829), `MainScreenModel.kt` (824), `HtmlBlockRenderer.kt` (821). None is urgent; split by the same approach when one grows or is next touched.
+- Fix approach: break a single long composable into helper composables of its own file, pull pure logic out where a unit test can reach it, give a ScreenModel's methods extension files by concern (`MainScreenModelSync.kt`, `…Filters.kt`, …) while its state and startup sequence stay in the class, and give a repository internal collaborators it builds itself (`BookmarkSyncRunner`, `BookmarkContentSync`, …) behind unchanged public methods.
 
 ## Platform-Specific Fragility
 
@@ -70,3 +65,4 @@
 ---
 
 *Concerns audit: 2026-11-05 (maintainability items resolved the same day; re-checked 2026-11-06)*
+- Five files near 1000 lines — split on 2026-11-06: `BookmarkViewerContent.kt` (990 → 444), `BookmarkDetailsPanel.kt` (984 → 282), `BookmarkLayouts.kt` (918, now six files), `BookmarkRepository.kt` (902 → 437), `RemoteDataSource.kt` (892 → 143-line facade over `RemoteApiContext` extensions, so MockK stubs of its members keep working).
