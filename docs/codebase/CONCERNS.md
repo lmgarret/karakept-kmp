@@ -59,8 +59,8 @@
 ## Performance (unmeasured)
 
 - **Large libraries:** the list is paged (`PAGE_SIZE`) and rendered by a `LazyColumn`, but nothing has measured scroll or filter changes at 1000+ bookmarks.
-- **Long articles:** the reader composes every block eagerly — page-turn snapping depends on it (see "Hardware page-turn buttons" in `AGENTS.md`) — so a very long article costs its full layout on open. Scrolling one used to cost work per block per frame too (a ~20-minute article measured 20 ms median frames on a 120 Hz phone, all on the UI thread); that per-block work is gone (`ReaderScrollCostTest`). Still open: the progressive reveal in `NativeHtmlRenderer` (~line 209: 20 blocks, then 10 more every 16 ms) re-measures the whole column every batch, and one lazy item per block would remove the open cost.
-- Fix approach: Add a benchmark before optimising the list; re-measure long articles with `adb shell dumpsys gfxinfo <package>` before going further.
+- **Long articles:** the reader still composes and lays out every block, and draws the whole article once when it appears — page-turn snapping depends on every block being laid out (see "Hardware page-turn buttons" in `AGENTS.md`). On an 88-minute read that single draw is ~90–120 ms (Pixel 8). Drawing only the on-screen part is #463.
+- Fix approach: Add a benchmark before optimising the list.
 
 ## Resolved since the 2026-03-20 audit
 
@@ -78,6 +78,7 @@
 - Six files over 1000 lines (2026-11-05) — split: `BookmarkListContent` (row, drag selection, overlays and `ItemAnimationGate` in their own files; takes `MainScreenDisplayConfig` instead of 24 parameters), `LayoutEditorScreen` (ScreenModel, sections, controls and preview in their own files), `MainScreenModel` (sync and filter methods in extension files), `HtmlBlockRenderer` (images and tables in `HtmlImageRenderer.kt` / `HtmlTableRenderer.kt`), `HtmlRenderer.android.kt` (the WebView highlight script in `ReaderHighlightScript.kt`), `BookmarkRepository` (asset downloads in `BookmarkAssetCache`).
 - Stale Voyager comments in `MainScreenModel` and `LayoutEditorScreenModel` — reworded against Nav3's per-entry `ViewModelStore`.
 - Hardcoded `Dispatchers.Default` in `HtmlContent.kt` — uses the injected `AppDispatchers`.
+- Opening a long article froze the UI (#457) — an 88-minute read was composed, measured and drawn in one 482 ms frame. It is now prepared off the main thread, built a frame's budget at a time behind the loader and drawn once (longest frame ~120 ms); see "Preparing an article" in `AGENTS.md`. Scrolling one no longer costs work per block per frame either (`ReaderScrollCostTest`).
 - Last `!!` in `HtmlBlockRenderer.kt` — replaced by a local.
 - `BookmarkSyncPipelineTest.kt` (1890 lines) — split by concern into smaller suites.
 
