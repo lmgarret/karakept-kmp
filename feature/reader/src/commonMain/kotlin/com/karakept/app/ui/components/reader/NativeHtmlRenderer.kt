@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -224,6 +225,10 @@ fun NativeHtmlRenderer(
             SelectionContainer {
                 Column(
                     modifier = modifier
+                        // The article's own layer: anything else in its list item that redraws —
+                        // a skeleton leaving, a sibling changing size — then reuses the article's
+                        // recorded drawing instead of re-recording all of its text.
+                        .graphicsLayer()
                         .layout { measurable, constraints ->
                             val mark = TimeSource.Monotonic.markNow()
                             val placeable = measurable.measure(constraints)
