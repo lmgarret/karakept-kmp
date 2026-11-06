@@ -1,6 +1,6 @@
 package com.karakept.app.utils
 
-import com.fleeksoft.ksoup.Ksoup
+import com.karakept.app.ui.components.reader.prepareReaderDocument
 import com.karakept.app.ui.utils.ParsedDocumentCache
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,7 +14,7 @@ class ParsedDocumentCacheTest {
 
     private fun createCache(maxSize: Int = 5) = ParsedDocumentCache(maxSize)
 
-    private fun parseDoc(index: Int) = Ksoup.parse("<html><body>test $index</body></html>")
+    private fun parseDoc(index: Int) = prepareReaderDocument("<html><body>test $index</body></html>")!!
 
     @Test
     fun getMissingKeyReturnsNull() {
@@ -91,5 +91,15 @@ class ParsedDocumentCacheTest {
         assertEquals(1, cache.size)
         assertNull(cache.get(1L))
         assertNotNull(cache.get(2L))
+    }
+
+    @Test
+    fun getWithHtmlMissesWhenTheArticleChanged() {
+        val cache = createCache()
+        val doc = parseDoc(1)
+        cache.put(1L, doc)
+
+        assertEquals(doc, cache.get(1L, doc.html))
+        assertNull(cache.get(1L, "<html><body>re-crawled</body></html>"))
     }
 }

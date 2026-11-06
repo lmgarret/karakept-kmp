@@ -26,7 +26,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.fleeksoft.ksoup.nodes.Document
 import com.karakept.app.data.cache.HtmlArchiveProcessor
 import com.karakept.app.data.cache.HtmlCache
 import com.karakept.app.data.model.ReaderFontFamily
@@ -79,13 +78,15 @@ fun HtmlContent(
     onHighlightPosition: (String, com.karakept.app.ui.components.highlight.HighlightPosition) -> Unit = { _, _ -> },
     scrollToHighlightId: String? = null,
     selectedHighlightId: String? = null,
-    parseDocument: ((String) -> Document?)? = null,
+    cachedDocument: ((String) -> PreparedReaderDocument?)? = null,
+    onDocumentPrepared: (PreparedReaderDocument) -> Unit = {},
     searchQuery: String = "",
     activeSearchMatchIndex: Int = 0,
     onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
     onSearchMatchPosition: (Float) -> Unit = {}
 ) {
     val appDispatchers = koinInject<AppDispatchers>()
+
     // Process HTML based on viewer mode asynchronously
     val processedHtml by produceState<String?>(initialValue = null, html, viewerMode, removeFirstImage, localFilePath) {
         if (localFilePath != null) {
@@ -102,11 +103,10 @@ fun HtmlContent(
 
         value = withContext(appDispatchers.default) {
             try {
-                val result = when (viewerMode) {
+                when (viewerMode) {
                     ViewerMode.READER -> HtmlSanitizer.sanitize(html, removeFirstImage = removeFirstImage)
                     ViewerMode.WEB -> HtmlArchiveProcessor.processForArchive(html)
                 }
-                result
             } catch (e: Exception) {
                 AppLogger.e("HtmlContent", "Processing failed: ${e.message}", e)
                 null // Processing failed
@@ -115,6 +115,32 @@ fun HtmlContent(
     }
 
     var isContentLoaded by remember { mutableStateOf(false) }
+
+    // Parsing and the full-document walks cost the better part of a second on a long article,
+    // so they run here, off the main thread, and the loader stays up until they are done.
+    val preparedDocument by produceState<PreparedReaderDocument?>(initialValue = null, processedHtml, viewerMode) {
+        val sanitized = processedHtml
+        if (viewerMode != ViewerMode.READER || sanitized == null) {
+            value = null
+            return@produceState
+        }
+        val cached = cachedDocument?.invoke(sanitized)
+        if (cached != null) {
+            value = cached
+            return@produceState
+        }
+        val prepared = withContext(appDispatchers.default) {
+            try {
+                prepareReaderDocument(sanitized)
+            } catch (e: Exception) {
+                AppLogger.e("HtmlContent", "Preparing document failed: ${e.message}", e)
+                null
+            }
+        }
+        // Nothing will render to report itself loaded, so lift the loader here instead.
+        if (prepared != null) onDocumentPrepared(prepared) else isContentLoaded = true
+        value = prepared
+    }
 
     // Notify parent when both processed and loaded
     androidx.compose.runtime.LaunchedEffect(processedHtml, isContentLoaded) {
@@ -175,10 +201,10 @@ fun HtmlContent(
                     }
 
                     when (viewerMode) {
-                        ViewerMode.READER -> {
+                        ViewerMode.READER -> preparedDocument?.let { document ->
                             // Native Compose renderer — no WebView needed
                             NativeHtmlRenderer(
-                                html = processedHtml ?: "",
+                                document = document,
                                 modifier = rendererModifier,
                                 highlights = highlights,
                                 textColor = customTextColor,
@@ -197,7 +223,6 @@ fun HtmlContent(
                                 onLoaded = {
                                     isContentLoaded = true
                                 },
-                                parseDocument = parseDocument,
                                 searchQuery = searchQuery,
                                 activeSearchMatchIndex = activeSearchMatchIndex,
                                 onSearchMatchesFound = onSearchMatchesFound,

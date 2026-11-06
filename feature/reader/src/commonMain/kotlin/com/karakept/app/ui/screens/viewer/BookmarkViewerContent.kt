@@ -404,7 +404,11 @@ fun BookmarkViewerContent(
 
     // Push reading state to screen model on scroll changes
     LaunchedEffect(scrollState.firstVisibleItemIndex, scrollState.firstVisibleItemScrollOffset) {
-        if (trackReadingProgress && scrollRestoration.hasRestoredScroll && loadingState is BookmarkLoadingState.FullyLoaded) {
+        // contentRendered: until the article has loaded its height is not final, and a progress
+        // measured against it would be saved as the reader's position.
+        if (trackReadingProgress && scrollRestoration.hasRestoredScroll && scrollRestoration.contentRendered &&
+            loadingState is BookmarkLoadingState.FullyLoaded
+        ) {
             val currentState = loadingState as BookmarkLoadingState.FullyLoaded
             val meaningfulProgress = readingProgress > 0.02f
             if (meaningfulProgress) {
@@ -724,9 +728,8 @@ fun BookmarkViewerContent(
                                     onContentReady = { scrollRestoration.onContentRendered() },
                                     scrollToHighlightId = scrollToHighlightId,
                                     selectedHighlightId = selectedHighlightId ?: scrollToHighlightId,
-                                    parseDocument = { sanitizedHtml ->
-                                        screenModel.getCachedOrParseDocument(bookmarkId, sanitizedHtml)
-                                    },
+                                    cachedDocument = { sanitizedHtml -> screenModel.cachedDocument(bookmarkId, sanitizedHtml) },
+                                    onDocumentPrepared = { document -> screenModel.cacheDocument(bookmarkId, document) },
                                     searchQuery = if (showSearch) searchQuery else "",
                                     activeSearchMatchIndex = currentMatchIndex,
                                     onSearchMatchesFound = { matches ->

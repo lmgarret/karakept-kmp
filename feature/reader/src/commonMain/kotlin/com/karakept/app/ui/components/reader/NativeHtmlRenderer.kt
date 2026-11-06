@@ -19,10 +19,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.node.ModifierNodeElement
@@ -31,16 +33,15 @@ import androidx.compose.ui.relocation.BringIntoViewModifierNode
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fleeksoft.ksoup.Ksoup
-import com.fleeksoft.ksoup.nodes.Document
-import com.fleeksoft.ksoup.nodes.Element
-import com.fleeksoft.ksoup.nodes.TextNode
 import com.karakept.app.data.model.Highlight
 import com.karakept.app.data.model.ReaderFontFamily
 import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.ui.components.highlight.HighlightPosition
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.theme.rememberFontFamily
+import androidx.compose.runtime.withFrameNanos
+import kotlin.time.Duration
+import kotlin.time.TimeSource
 
 /**
  * Native Compose Multiplatform HTML renderer for READER mode.
@@ -51,10 +52,52 @@ import com.karakept.app.ui.theme.rememberFontFamily
  * Highlight offsets are compatible with the WebView's JavaScript TreeWalker
  * approach: both walk text nodes in document order and count characters.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NativeHtmlRenderer(
     html: String,
+    modifier: Modifier = Modifier,
+    highlights: List<Highlight> = emptyList(),
+    textColor: Color? = null,
+    fontSize: Int = 16,
+    fontFamily: ReaderFontFamily = ReaderFontFamily.SYSTEM,
+    onLinkClick: (String) -> Unit = {},
+    onHighlightClick: (String) -> Unit = {},
+    onCreateHighlight: (String, Int, Int, String?, String?) -> Unit = { _, _, _, _, _ -> },
+    onHighlightPosition: (String, HighlightPosition) -> Unit = { _, _ -> },
+    scrollToHighlightId: String? = null,
+    onLoaded: (() -> Unit)? = null
+) {
+    // Prepared in composition, on the main thread: only for callers with no coroutine to
+    // prepare it in. The reader goes through HtmlContent, which prepares it in the background.
+    val document = remember(html) { prepareReaderDocument(html) }
+    if (document == null) {
+        onLoaded?.invoke()
+        return
+    }
+    NativeHtmlRenderer(
+        document = document,
+        modifier = modifier,
+        highlights = highlights,
+        textColor = textColor,
+        fontSize = fontSize,
+        fontFamily = fontFamily,
+        onLinkClick = onLinkClick,
+        onHighlightClick = onHighlightClick,
+        onCreateHighlight = onCreateHighlight,
+        onHighlightPosition = onHighlightPosition,
+        scrollToHighlightId = scrollToHighlightId,
+        onLoaded = onLoaded
+    )
+}
+
+/**
+ * Renders an article [document] already prepared by [prepareReaderDocument], which is where every
+ * full-document walk happens — nothing here walks the whole tree.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun NativeHtmlRenderer(
+    document: PreparedReaderDocument,
     modifier: Modifier = Modifier,
     highlights: List<Highlight> = emptyList(),
     textColor: Color? = null,
@@ -69,7 +112,6 @@ fun NativeHtmlRenderer(
     scrollToHighlightId: String? = null,
     selectedHighlightId: String? = null,
     onLoaded: (() -> Unit)? = null,
-    parseDocument: ((String) -> Document?)? = null,
     searchQuery: String = "",
     activeSearchMatchIndex: Int = 0,
     onSearchMatchesFound: (List<SearchMatch>) -> Unit = {},
@@ -114,30 +156,15 @@ fun NativeHtmlRenderer(
         )
     }
 
-    // Parse HTML once and cache
-    val document = remember(html) {
-        parseDocument?.invoke(html) ?: try {
-            Ksoup.parse(html)
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    if (document == null) {
-        onLoaded?.invoke()
-        return
-    }
-
-    val body = document.body()
-
-    // Walked once: every offset the reader draws with, and the one a new selection
-    // is resolved to, come from here.
-    val offsets = remember(document) { buildReaderTextOffsets(body) }
+    // Every offset the reader draws with, and the one a new selection is resolved to, come from here.
+    val offsets = document.offsets
 
     // Offsets outlive the document they were taken in — another client, an older
     // build, a re-crawl — so each highlight is checked against the text it was
     // created from before it is drawn.
-    val resolvedHighlights = remember(offsets, highlights) { resolveHighlights(highlights, offsets) }
+    val resolvedHighlights = remember(offsets, highlights) {
+        resolveHighlights(highlights, offsets)
+    }
 
     // Pre-scanned once per document so the full-screen viewer can swipe between all of a
     // page's images, not just the one that was tapped — see LocalGalleryImages. The hero
@@ -145,7 +172,7 @@ fun NativeHtmlRenderer(
     val galleryViewerState = LocalGalleryViewerState.current
     val heroImage = galleryViewerState?.heroImage
     val galleryImages = remember(document, heroImage) {
-        listOfNotNull(heroImage) + collectGalleryImages(document)
+        listOfNotNull(heroImage) + document.galleryImages
     }
     // So the hero banner, which cannot read the composition local below, opens the same list.
     SideEffect { galleryViewerState?.images = galleryImages }
@@ -182,6 +209,8 @@ fun NativeHtmlRenderer(
     // Custom text toolbar with "Highlight" action (for drag-selection on desktop, ActionMode on Android)
     val highlightToolbar = rememberHighlightTextToolbar(onHighlightRequested = highlightAction)
 
+    val revealMeter = remember(document) { RevealCostMeter() }
+
     ReaderThemeProvider(theme = theme) {
         val textToolbar = highlightToolbar ?: LocalTextToolbar.current
         CompositionLocalProvider(
@@ -193,36 +222,69 @@ fun NativeHtmlRenderer(
             Box(modifier = Modifier.then(BlockBringIntoViewElement)) {
             HighlightContextMenuProvider(onHighlightRequested = highlightAction) {
             SelectionContainer {
+                // Built a frame's worth at a time so no single frame composes and measures the
+                // whole article. The parent keeps the article invisible and is told it has loaded
+                // only once every block is in (below): scroll restoration, page snapping and
+                // progress tracking all read the article's full height, never a partial one.
+                val renderableChildren = document.renderableChildren
+                var visibleCount by remember(document) {
+                    mutableStateOf(minOf(INITIAL_REVEAL_BLOCKS, renderableChildren.size))
+                }
+                val fullyRevealed = visibleCount >= renderableChildren.size
+
                 Column(
                     modifier = modifier
+                        // The article's own layer: anything else in its list item that redraws —
+                        // a skeleton leaving, a sibling changing size — then reuses the article's
+                        // recorded drawing instead of re-recording all of its text.
+                        .graphicsLayer()
+                        // Inside the layer, which is re-recorded on every batch otherwise: nothing
+                        // shows the article before it is complete, so it is drawn once, then.
+                        .drawnOnlyWhen(fullyRevealed)
+                        // Measured for the reveal's frame budget.
+                        .layout { measurable, constraints ->
+                            val mark = TimeSource.Monotonic.markNow()
+                            val placeable = measurable.measure(constraints)
+                            revealMeter.record(mark.elapsedNow())
+                            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                        }
                         .fillMaxWidth()
                         .padding(horizontal = typography.horizontalMarginDp.dp, vertical = 0.dp)
                         .padding(bottom = 28.dp)
                 ) {
-                // Build list of renderable children once, each carrying the offset
-                // its text starts at, so a block's position never depends on how
-                // much of the document has been revealed so far.
-                val renderableChildren = remember(offsets) {
-                    computeReaderTextSpans(body, offsets).filter { it.isRenderable }
-                }
+                // Each block carries the offset its text starts at, so a block's position
+                // never depends on how much of the document has been revealed so far.
+                // Timed, with the measure above, for the reveal's frame budget.
+                val composeMark = TimeSource.Monotonic.markNow()
 
-                // Progressive rendering: show first 20 blocks immediately, reveal rest in batches
-                val initialChunkSize = 20
-                var visibleCount by remember(html) { mutableStateOf(minOf(initialChunkSize, renderableChildren.size)) }
-
-                if (visibleCount < renderableChildren.size) {
-                    LaunchedEffect(html, renderableChildren.size) {
+                if (!fullyRevealed) {
+                    LaunchedEffect(document) {
+                        var lastBatch = visibleCount
                         while (visibleCount < renderableChildren.size) {
-                            kotlinx.coroutines.delay(16) // ~1 frame at 60fps
-                            visibleCount = minOf(visibleCount + 10, renderableChildren.size)
+                            withFrameNanos { }
+                            val cost = revealMeter.take()
+                            // Nothing measured since the last batch: it has not been laid out yet.
+                            if (cost == Duration.ZERO) continue
+                            lastBatch = nextRevealBatchSize(lastBatch, cost)
+                            visibleCount = minOf(visibleCount + lastBatch, renderableChildren.size)
                         }
                     }
+                } else {
+                    LaunchedEffect(document) { onLoaded?.invoke() }
                 }
+
+                SideEffect { revealMeter.record(composeMark.elapsedNow()) }
 
                 // Render visible children
                 for (span in renderableChildren.take(visibleCount)) {
                     val child = span.node
-                    if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
+                    val inlineNodes = span.inlineNodes
+                    if (inlineNodes != null) {
+                        RenderInlineGroup(
+                            inlineNodes, LocalReaderTheme.current, resolvedHighlights, offsets,
+                            onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId
+                        )
+                    } else if (child is com.fleeksoft.ksoup.nodes.Element && isBlockElement(child)) {
                         RenderBlock(child, resolvedHighlights, offsets, onLinkClick, onHighlightClick, onHighlightPosition, selectedHighlightId = selectedHighlightId)
                     } else if (child is com.fleeksoft.ksoup.nodes.TextNode) {
                         val text = child.getWholeText()
@@ -270,11 +332,19 @@ fun NativeHtmlRenderer(
             } // Box (bringIntoView blocker)
         }
     }
+}
 
-    // Notify parent that content is ready
-    LaunchedEffect(document) {
-        onLoaded?.invoke()
+private const val INITIAL_REVEAL_BLOCKS = 20
+
+/** Compose and measure time spent on the article since the reveal last looked. Not snapshot state: nothing redraws on it. */
+private class RevealCostMeter {
+    private var spent = Duration.ZERO
+
+    fun record(duration: Duration) {
+        spent += duration
     }
+
+    fun take(): Duration = spent.also { spent = Duration.ZERO }
 }
 
 /**

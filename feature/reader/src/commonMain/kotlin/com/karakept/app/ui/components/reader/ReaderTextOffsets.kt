@@ -103,7 +103,9 @@ fun buildReaderTextOffsets(root: Element): ReaderTextOffsets {
 data class ReaderTextSpan(
     val node: Node,
     val startOffset: Int,
-    val isRenderable: Boolean
+    val isRenderable: Boolean,
+    /** Set for a run of inline nodes from an unwrapped container, drawn as one paragraph; [node] is its first. */
+    val inlineNodes: List<Node>? = null
 )
 
 /**
@@ -111,7 +113,11 @@ data class ReaderTextSpan(
  * its text starts at, read straight off [offsets].
  */
 fun computeReaderTextSpans(root: Element, offsets: ReaderTextOffsets): List<ReaderTextSpan> =
-    root.childNodes().mapNotNull { child ->
+    computeReaderTextSpans(root.childNodes(), offsets)
+
+/** As above, for an explicit list of top-level nodes — see [unwrapPlainContainers]. */
+fun computeReaderTextSpans(nodes: List<Node>, offsets: ReaderTextOffsets): List<ReaderTextSpan> =
+    nodes.mapNotNull { child ->
         when (child) {
             is TextNode -> ReaderTextSpan(
                 node = child,
