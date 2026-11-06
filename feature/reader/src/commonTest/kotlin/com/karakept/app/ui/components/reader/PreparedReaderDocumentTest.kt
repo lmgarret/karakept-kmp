@@ -24,7 +24,8 @@ class PreparedReaderDocumentTest {
 
         val reference = Ksoup.parse(html)
         val referenceOffsets = buildReaderTextOffsets(reference.body())
-        val referenceSpans = computeReaderTextSpans(reference.body(), referenceOffsets).filter { it.isRenderable }
+        val referenceSpans = computeReaderTextSpans(unwrapPlainContainers(reference.body().childNodes()), referenceOffsets)
+            .filter { it.isRenderable }
 
         assertEquals(referenceOffsets.text, prepared.offsets.text)
         assertEquals(referenceSpans.map { it.startOffset }, prepared.renderableChildren.map { it.startOffset })
@@ -38,8 +39,7 @@ class PreparedReaderDocumentTest {
     fun prepare_spansAndImagesPointIntoThePreparedTree() {
         val prepared = assertNotNull(prepareReaderDocument(html))
 
-        val bodyChildren = prepared.body.childNodes()
-        assertTrue(prepared.renderableChildren.all { span -> bodyChildren.any { it === span.node } })
+        assertTrue(prepared.renderableChildren.all { it.node.ownerDocument() === prepared.document })
         val firstImg = prepared.document.select("img").first()
         assertSame(firstImg, prepared.galleryImages.first().element)
     }

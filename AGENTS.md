@@ -504,6 +504,15 @@ are most of a second; done in composition they froze the UI on open.
 > the renderer. `BookmarkViewerScreenModel` caches prepared documents per bookmark, checked
 > against the HTML they were prepared from.
 
+Preparing also unwraps plain containers (`unwrapPlainContainers`): Readability puts a whole article
+in one `<div>`, which would otherwise be a single top-level block, composed and measured in one
+frame. `NativeHtmlRenderer` then builds the article a frame's budget at a time
+(`nextRevealBatchSize`, 8 ms per frame) behind the invisible body.
+
+> **Rule:** `onLoaded` fires only once every block is composed. Scroll restoration, the progress
+> fallback, `blankBelowContent`, page snapping and progress saving (gated on `contentRendered`)
+> all read the article's height, and must never see a partial one. `ReaderRevealTest` pins this.
+
 ### Reader link hover
 
 A pointer resting on a link in the reader gets a hand cursor and, after a second, a plain tooltip

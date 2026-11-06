@@ -111,7 +111,11 @@ data class ReaderTextSpan(
  * its text starts at, read straight off [offsets].
  */
 fun computeReaderTextSpans(root: Element, offsets: ReaderTextOffsets): List<ReaderTextSpan> =
-    root.childNodes().mapNotNull { child ->
+    computeReaderTextSpans(root.childNodes(), offsets)
+
+/** As above, for an explicit list of top-level nodes — see [unwrapPlainContainers]. */
+fun computeReaderTextSpans(nodes: List<Node>, offsets: ReaderTextOffsets): List<ReaderTextSpan> =
+    nodes.mapNotNull { child ->
         when (child) {
             is TextNode -> ReaderTextSpan(
                 node = child,

@@ -38,6 +38,8 @@ import com.karakept.app.data.model.ReaderTypography
 import com.karakept.app.ui.components.highlight.HighlightPosition
 import com.karakept.app.ui.theme.LocalEinkMode
 import com.karakept.app.ui.theme.rememberFontFamily
+import androidx.compose.runtime.withFrameNanos
+import kotlin.time.Duration
 import kotlin.time.TimeSource
 
 /**
@@ -206,6 +208,8 @@ fun NativeHtmlRenderer(
     // Custom text toolbar with "Highlight" action (for drag-selection on desktop, ActionMode on Android)
     val highlightToolbar = rememberHighlightTextToolbar(onHighlightRequested = highlightAction)
 
+    val revealMeter = remember(document) { RevealCostMeter() }
+
     ReaderThemeProvider(theme = theme) {
         val textToolbar = highlightToolbar ?: LocalTextToolbar.current
         CompositionLocalProvider(
@@ -222,6 +226,7 @@ fun NativeHtmlRenderer(
                         .layout { measurable, constraints ->
                             val mark = TimeSource.Monotonic.markNow()
                             val placeable = measurable.measure(constraints)
+                            revealMeter.record(mark.elapsedNow())
                             val ms = mark.elapsedNow().inWholeMilliseconds
                             if (ms >= 2) ReaderPerf.log("article measure: $ms ms, height ${placeable.height} px")
                             layout(placeable.width, placeable.height) { placeable.place(0, 0) }
@@ -235,27 +240,40 @@ fun NativeHtmlRenderer(
                 val renderableChildren = document.renderableChildren
                 val composeMark = TimeSource.Monotonic.markNow()
 
-                // Progressive rendering: show first 20 blocks immediately, reveal rest in batches
-                val initialChunkSize = 20
-                var visibleCount by remember(document) { mutableStateOf(minOf(initialChunkSize, renderableChildren.size)) }
+                // Built a frame's worth at a time so no single frame composes and measures the
+                // whole article. The parent keeps the article invisible and is told it has loaded
+                // only once every block is in (below): scroll restoration, page snapping and
+                // progress tracking all read the article's full height, never a partial one.
+                var visibleCount by remember(document) {
+                    mutableStateOf(minOf(INITIAL_REVEAL_BLOCKS, renderableChildren.size))
+                }
+                val fullyRevealed = visibleCount >= renderableChildren.size
 
-                if (visibleCount < renderableChildren.size) {
+                if (!fullyRevealed) {
                     LaunchedEffect(document) {
                         val revealMark = TimeSource.Monotonic.markNow()
                         var batches = 0
+                        var lastBatch = visibleCount
                         while (visibleCount < renderableChildren.size) {
+                            withFrameNanos { }
+                            val cost = revealMeter.take()
+                            // Nothing measured since the last batch: it has not been laid out yet.
+                            if (cost == Duration.ZERO) continue
+                            lastBatch = nextRevealBatchSize(lastBatch, cost)
+                            visibleCount = minOf(visibleCount + lastBatch, renderableChildren.size)
                             batches++
-                            kotlinx.coroutines.delay(16) // ~1 frame at 60fps
-                            visibleCount = minOf(visibleCount + 10, renderableChildren.size)
                         }
                         ReaderPerf.log(
                             "reveal done: ${renderableChildren.size} blocks, $batches batches, " +
                                 "${revealMark.elapsedNow().inWholeMilliseconds} ms"
                         )
                     }
+                } else {
+                    LaunchedEffect(document) { onLoaded?.invoke() }
                 }
 
                 SideEffect {
+                    revealMeter.record(composeMark.elapsedNow())
                     ReaderPerf.log(
                         "article compose: ${composeMark.elapsedNow().inWholeMilliseconds} ms, " +
                             "$visibleCount/${renderableChildren.size} blocks"
@@ -313,11 +331,19 @@ fun NativeHtmlRenderer(
             } // Box (bringIntoView blocker)
         }
     }
+}
 
-    // Notify parent that content is ready
-    LaunchedEffect(document) {
-        onLoaded?.invoke()
+private const val INITIAL_REVEAL_BLOCKS = 20
+
+/** Compose and measure time spent on the article since the reveal last looked. Not snapshot state: nothing redraws on it. */
+private class RevealCostMeter {
+    private var spent = Duration.ZERO
+
+    fun record(duration: Duration) {
+        spent += duration
     }
+
+    fun take(): Duration = spent.also { spent = Duration.ZERO }
 }
 
 /**
