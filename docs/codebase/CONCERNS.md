@@ -80,7 +80,6 @@
 - Hardcoded `Dispatchers.Default` in `HtmlContent.kt` — uses the injected `AppDispatchers`.
 - Last `!!` in `HtmlBlockRenderer.kt` — replaced by a local.
 - `BookmarkSyncPipelineTest.kt` (1890 lines) — split by concern into smaller suites.
-- `bookmarkChangedEvents` / `bookmarksReloaded` (2026-11-06) — emitted from about 20 places but never collected outside tests; removed. The list re-reads its window on Room's invalidation of the view count (`BookmarkListPager`) and the reader observes its row (`observeBookmark`), so a write to the table is already the signal.
 
 ---
 
