@@ -115,6 +115,7 @@ suspend fun SettingsRepository.currentSettings(): BackupSettings {
         readerHorizontalMarginDp = reader.readerHorizontalMarginDp,
         readerMaxWidthDp = reader.readerMaxWidthDp,
         showReaderHeroImage = reader.showReaderHeroImage,
+        readerScrollCursor = reader.readerScrollCursor,
         einkModeEnabled = eink.einkModeEnabled,
         einkDisableAnimations = eink.disableAnimations,
         einkHighContrast = eink.highContrast,
@@ -189,7 +190,8 @@ suspend fun SettingsRepository.restoreSettings(s: BackupSettings) {
                 readerLineHeightScale = s.readerLineHeightScale,
                 readerHorizontalMarginDp = s.readerHorizontalMarginDp,
                 readerMaxWidthDp = s.readerMaxWidthDp,
-                showReaderHeroImage = s.showReaderHeroImage
+                showReaderHeroImage = s.showReaderHeroImage,
+                readerScrollCursor = s.readerScrollCursor
             )
         )
         prefs[EINK_SETTINGS_KEY] = settingsJson.encodeToString(
@@ -352,6 +354,9 @@ suspend fun SettingsRepository.setReaderMaxWidthDp(width: Int) = updateReaderSet
 
 suspend fun SettingsRepository.setShowReaderHeroImage(show: Boolean) =
     updateReaderSettings { copy(showReaderHeroImage = show) }
+
+suspend fun SettingsRepository.setReaderScrollCursor(enabled: Boolean) =
+    updateReaderSettings { copy(readerScrollCursor = enabled) }
 
 suspend fun SettingsRepository.resetReaderAppearance() = updateReaderSettings {
     copy(

@@ -24,6 +24,7 @@ import com.karakept.app.domain.action.ActionSnackbarManager
 import com.karakept.app.ui.components.EinkAwareSnackbarHost
 import com.karakept.app.ui.components.reader.GalleryViewerState
 import com.karakept.app.ui.components.reader.ReaderSnapRegistry
+import com.karakept.app.ui.components.reader.ReaderTocState
 import com.karakept.app.ui.components.rememberCustomTabOpener
 import com.karakept.app.ui.input.PageTurnDispatcher
 import com.karakept.app.ui.input.PageTurnScrollEffect
@@ -213,6 +214,13 @@ fun BookmarkViewerContent(
     }
     val displayState = if (loadingState is BookmarkLoadingState.Error && lastValidState is BookmarkLoadingState.FullyLoaded) lastValidState else loadingState
 
+    // The article's table of contents, and where each of its sections has been laid out — the
+    // scroll cursor's preview. Per bookmark: the entries are the document's, and the positions
+    // belong to this article's layout.
+    val readerScrollCursorEnabled by screenModel.readerScrollCursor.collectAsState()
+    val showReaderScrollCursor = readerScrollCursorEnabled && isNativeRenderer
+    val tocState = remember(bookmarkId) { ReaderTocState() }
+
     // Line boundaries for page snapping. The whole article is a single lazy item, so the snap
     // points cannot come from `layoutInfo` — the text blocks report themselves instead.
     val pageTurnBindings by pageTurnDispatcher.bindings.collectAsState()
@@ -344,6 +352,8 @@ fun BookmarkViewerContent(
                 galleryViewerState = galleryViewerState,
                 snapRegistry = snapRegistry,
                 snapToContent = pageTurnBindings.snapToContent,
+                tocState = tocState,
+                showScrollCursor = showReaderScrollCursor,
                 listTopInRoot = { listTopInRoot },
                 onListTopInRootChanged = { listTopInRoot = it },
                 pagedRendering = pagedRendering,

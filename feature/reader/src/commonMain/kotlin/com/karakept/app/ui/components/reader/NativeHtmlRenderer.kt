@@ -177,6 +177,11 @@ fun NativeHtmlRenderer(
     // So the hero banner, which cannot read the composition local below, opens the same list.
     SideEffect { galleryViewerState?.images = galleryImages }
 
+    // The scroll cursor's table of contents, walked with the rest of the document. Each section's
+    // position is registered separately, by the heading itself — see ReaderTocState.
+    val tocState = LocalReaderToc.current
+    SideEffect { tocState?.entries = document.toc }
+
     // Compute search matches whenever query or document changes
     val searchMatches = remember(offsets, searchQuery) {
         if (searchQuery.length < 2) emptyList()

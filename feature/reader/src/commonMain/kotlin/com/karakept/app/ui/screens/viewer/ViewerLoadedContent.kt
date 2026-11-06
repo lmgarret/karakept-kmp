@@ -5,7 +5,9 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -46,7 +48,10 @@ import com.karakept.app.ui.components.reader.GalleryViewerState
 import com.karakept.app.ui.components.reader.ImageGalleryOverlay
 import com.karakept.app.ui.components.reader.LocalGalleryViewerState
 import com.karakept.app.ui.components.reader.LocalReaderSnapRegistry
+import com.karakept.app.ui.components.reader.LocalReaderToc
+import com.karakept.app.ui.components.reader.ReaderScrollCursor
 import com.karakept.app.ui.components.reader.ReaderSnapRegistry
+import com.karakept.app.ui.components.reader.ReaderTocState
 import com.karakept.app.ui.components.reader.heroGalleryImage
 import com.karakept.app.ui.components.scrollToTop
 import com.karakept.app.ui.theme.LocalEinkMode
@@ -72,6 +77,8 @@ internal fun ViewerLoadedContent(
     galleryViewerState: GalleryViewerState,
     snapRegistry: ReaderSnapRegistry,
     snapToContent: Boolean,
+    tocState: ReaderTocState,
+    showScrollCursor: Boolean,
     listTopInRoot: () -> Float,
     onListTopInRootChanged: (Float) -> Unit,
     pagedRendering: Boolean,
@@ -165,7 +172,10 @@ internal fun ViewerLoadedContent(
             // Null switches the reporting off entirely in every text block, so the
             // registry costs nothing when the user has snapping turned off.
             LocalReaderSnapRegistry provides
-                snapRegistry.takeIf { snapToContent }
+                snapRegistry.takeIf { snapToContent },
+            // Null switches the registration off in every heading, so the table of contents
+            // costs nothing when the cursor is turned off.
+            LocalReaderToc provides tocState.takeIf { showScrollCursor }
         ) {
         val needsScrollRestore = trackReadingProgress && !scrollRestoration.hasRestoredScroll &&
             loadingState is BookmarkLoadingState.FullyLoaded &&
@@ -315,6 +325,26 @@ internal fun ViewerLoadedContent(
                     )
                 }
             }
+        }
+
+        if (showScrollCursor && contentRevealed) {
+            ReaderScrollCursor(
+                listState = scrollState,
+                toc = tocState,
+                listTopInRoot = listTopInRoot,
+                // Not scrollState.scrollToItem: the reader's scroll guard snaps back any move it
+                // did not sanction, and a drag is a long run of them.
+                onScrollTo = scrollRestoration.safeScrollToItem,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    // The top bar and the system bars are painted over the list, so the track has
+                    // to stop short of both or its ends are ungrabbable.
+                    .padding(
+                        top = with(density) { chromeInsets.topPx.toDp() },
+                        bottom = with(density) { chromeInsets.bottomPx.toDp() }
+                    )
+            )
         }
 
         // Full-page shimmer while restoring to a saved reading position. It sits

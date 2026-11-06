@@ -21,7 +21,9 @@ class PreparedReaderDocument internal constructor(
     val document: Document,
     val offsets: ReaderTextOffsets,
     val renderableChildren: List<ReaderTextSpan>,
-    internal val galleryImages: List<GalleryImage>
+    internal val galleryImages: List<GalleryImage>,
+    /** The article's headings — the table of contents the reader's scroll cursor previews. */
+    val toc: List<ReaderTocEntry>
 ) {
     val body: Element get() = document.body()
 }
@@ -40,7 +42,8 @@ fun prepareReaderDocument(html: String): PreparedReaderDocument? {
         document = document,
         offsets = offsets,
         renderableChildren = unwrapPlainContainers(body.childNodes(), offsets).filter { it.isRenderable },
-        galleryImages = collectGalleryImages(document)
+        galleryImages = collectGalleryImages(document),
+        toc = extractReaderToc(body, offsets)
     )
 }
 

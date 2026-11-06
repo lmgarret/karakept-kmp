@@ -276,6 +276,44 @@ fun BookmarkViewSettingsContent(
                 }
             }
 
+            val readerScrollCursor by screenModel.readerScrollCursor.collectAsState()
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = AppIcons.AutoMirrored.Filled.List,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Scroll Cursor",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Drag the thumb on the right edge to move through an article. " +
+                                "Holding it lays the article's headings out along the track",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = readerScrollCursor,
+                        onCheckedChange = { screenModel.setReaderScrollCursor(it) }
+                    )
+                }
+            }
+
             val showTagsInViewer by screenModel.showTagsInViewer.collectAsState()
 
             Card(

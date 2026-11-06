@@ -185,7 +185,8 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
                     readerLineHeightScale = all.readerLineHeightScale,
                     readerHorizontalMarginDp = all.readerHorizontalMarginDp,
                     readerMaxWidthDp = all.readerMaxWidthDp,
-                    showReaderHeroImage = all.showReaderHeroImage
+                    showReaderHeroImage = all.showReaderHeroImage,
+                    readerScrollCursor = all.readerScrollCursor
                 )
             }
         }
@@ -369,6 +370,9 @@ class SettingsRepository(internal val dataStore: DataStore<Preferences>) {
 
     val showReaderHeroImage: Flow<Boolean> =
         readerSettingsFlow.map { it.showReaderHeroImage }.distinctUntilChanged()
+
+    val readerScrollCursor: Flow<Boolean> =
+        readerSettingsFlow.map { it.readerScrollCursor }.distinctUntilChanged()
 
     val readerTypography: Flow<ReaderTypography> = readerSettingsFlow.map {
         ReaderTypography(

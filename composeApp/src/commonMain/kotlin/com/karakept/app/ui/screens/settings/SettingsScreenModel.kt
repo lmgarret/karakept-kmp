@@ -42,6 +42,7 @@ import com.karakept.app.data.repository.setShowScrollCursor
 import com.karakept.app.data.repository.setTrackReadingProgress
 import com.karakept.app.data.repository.setResetProgressOnMarkUnread
 import com.karakept.app.data.repository.setRowActionMode
+import com.karakept.app.data.repository.setReaderScrollCursor
 import com.karakept.app.data.repository.setShowReaderHeroImage
 import com.karakept.app.data.repository.setShowTagsInViewer
 import com.karakept.app.data.repository.setPreferFullPageHtml
@@ -415,6 +416,18 @@ class SettingsScreenModel(
     fun setShowHeroImage(show: Boolean) {
         viewModelScope.launch {
             settingsRepository.setShowReaderHeroImage(show)
+        }
+    }
+
+    val readerScrollCursor: StateFlow<Boolean> = settingsRepository.readerScrollCursor.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    fun setReaderScrollCursor(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setReaderScrollCursor(enabled)
         }
     }
 
