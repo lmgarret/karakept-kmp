@@ -235,6 +235,36 @@ class ReaderScrollCursorTest {
     }
 
     @Test
+    fun aSectionIsNamedOnceItsHeadingIsALookaheadIntoTheReadableArea() {
+        // With a 300px bar and a 200px lookahead, a heading names its section once it is 500px
+        // below the viewport top — on screen, under the bar — not once it has reached the bar.
+        val head = entry(0)
+        val geometry = ReaderCursorGeometry(
+            itemHeights = listOf(800, 12_000),
+            rangePx = 10_000,
+            absolutePx = 1000,
+            viewportStartOffsetPx = 0,
+            obscuredTopPx = 300,
+            lookaheadPx = 200
+        )
+
+        fun named(headingInRoot: Float): Int {
+            val sections = projectToc(tocOf(head to headingInRoot), geometry, listTopInRoot = 0f)
+            return sectionIndexAt(sections.map { it.fraction }, 1000f / 10_000f)
+        }
+
+        assertEquals(-1, named(520f))
+        assertEquals(0, named(500f))
+        assertEquals(0, named(350f))
+    }
+
+    @Test
+    fun theLookaheadIsAQuarterOfTheReadableHeight() {
+        assertEquals(170, sectionLookaheadPx(viewportHeightPx = 800, obscuredTopPx = 120))
+        assertEquals(0, sectionLookaheadPx(viewportHeightPx = 100, obscuredTopPx = 120))
+    }
+
+    @Test
     fun aForgottenHeadingStopsBeingProjected() {
         val head = entry(0)
         val toc = tocOf(head to 100f)
