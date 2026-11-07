@@ -767,6 +767,14 @@ class MainScreenModel(
         viewModelScope.launch {
             var anchor: BookmarkCursor? = null
             var anchorView: BookmarkViewKey? = null
+            var aboveAtStart = 0
+            var excludeRead = false
+            suspend fun countAbove(view: BookmarkViewKey, cursor: BookmarkCursor): Int? {
+                val server = _selectedServer.value?.takeIf { it.id == view.serverId } ?: return null
+                return runCatching {
+                    bookmarkRepository.countBookmarksBefore(server, view.filter, cursor, excludeRead)
+                }.getOrNull()
+            }
             combine(isSyncing, bookmarkWindow) { syncing, window -> syncing to window }
                 .collect { (syncing, window) ->
                     val view = requestedView()
@@ -775,9 +783,12 @@ class MainScreenModel(
                             anchor = null
                             anchorView = null
                         }
-                        if (anchor == null && window.resolved && window.view == view) {
-                            anchor = pager.topVisibleCursor(window)
-                            if (anchor != null) anchorView = view
+                        if (anchor == null && view != null && window.resolved && window.view == view) {
+                            val cursor = pager.topVisibleCursor(window) ?: return@collect
+                            excludeRead = effectiveDimReadBookmarks.value
+                            aboveAtStart = countAbove(view, cursor) ?: return@collect
+                            anchor = cursor
+                            anchorView = view
                         }
                         return@collect
                     }
@@ -788,17 +799,11 @@ class MainScreenModel(
                     // isSyncing follows the view's sync key, so switching view drops it too:
                     // that is the user leaving, not the sync finishing.
                     if (view != startedIn) return@collect
-                    val server = _selectedServer.value ?: return@collect
-                    val arrived = runCatching {
-                        bookmarkRepository.countBookmarksBefore(
-                            server,
-                            startedIn.filter,
-                            startedAt,
-                            excludeRead = effectiveDimReadBookmarks.value
-                        )
-                    }.getOrElse { 0 }
+                    // What the sync added, not what sits above the anchor: rows that were there
+                    // before it started are not new, wherever the anchor happened to land.
+                    val aboveAtEnd = countAbove(startedIn, startedAt) ?: return@collect
                     if (requestedView() != startedIn) return@collect
-                    _syncedAbove.value = arrived
+                    _syncedAbove.value = (aboveAtEnd - aboveAtStart).coerceAtLeast(0)
                     // Whatever is on screen now has been seen, so a sync landing while the user
                     // sits at the top raises nothing.
                     _topSlotLowWater.value = pager.visibleSlots.value.first

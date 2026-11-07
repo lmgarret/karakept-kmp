@@ -74,7 +74,13 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
     /** Cursors the pill's count was asked about, in order. */
     val countedBefore = mutableListOf<BookmarkCursor>()
 
-    /** What the database answers when asked how many rows sort before a cursor. */
+    /** The filter each of [countedBefore] was counted in, in the same order. */
+    val countedIn = mutableListOf<FilterConfig>()
+
+    /** How many rows sort before the anchor while a sync runs. */
+    var aboveBeforeSync: Int = 0
+
+    /** How many more sort before it once no sync is running — what the sync brought in. */
     var arrivedAbove: Int = 0
 
     /** Every (offset, limit) a page was read at, in order. */
@@ -112,7 +118,8 @@ class MainScreenModelHarness(private val testDispatcher: CoroutineDispatcher) {
             bookmarkRepository.countBookmarksBefore(any(), any(), any(), any())
         } answers {
             countedBefore += thirdArg<BookmarkCursor>()
-            arrivedAbove
+            countedIn += secondArg<FilterConfig>()
+            aboveBeforeSync + if (syncStatuses.value.isEmpty()) arrivedAbove else 0
         }
         every { bookmarkRepository.backgroundSyncCompleted } returns MutableSharedFlow()
 
