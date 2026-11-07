@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.karakept.app.ui.components.LoadingDotsIndicator
 import com.karakept.app.ui.screens.viewer.BookmarkLoadingState
 import com.karakept.app.ui.theme.LocalEinkMode
+import kotlin.random.Random
 
 /**
  * Skeleton screens for each loading stage with shimmer animations.
@@ -111,12 +113,12 @@ fun ReaderResumeSkeleton(
             .padding(start = 16.dp, end = 16.dp, top = topInset + 16.dp)
     ) {
         // More than a tall screen holds; clipToBounds drops the overflow.
-        repeat(RESUME_SKELETON_PARAGRAPHS) { paragraph ->
-            val lines = 3 + paragraph % 3
-            repeat(lines) { line ->
+        val paragraphs = remember { resumeSkeletonParagraphs(Random.Default) }
+        paragraphs.forEach { lineWidths ->
+            lineWidths.forEach { width ->
                 ShimmerBox(
                     modifier = Modifier
-                        .fillMaxWidth(if (line == lines - 1) 0.6f else 1f)
+                        .fillMaxWidth(width)
                         .height(20.dp)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -127,6 +129,20 @@ fun ReaderResumeSkeleton(
 }
 
 private const val RESUME_SKELETON_PARAGRAPHS = 12
+
+/**
+ * Line widths (fractions of the column) for each skeleton paragraph, so the paragraphs read as
+ * prose of uneven length rather than one block repeated: 1–6 lines, near-full lines that wrap a
+ * little short, and a last line anywhere from a few words to almost full.
+ */
+internal fun resumeSkeletonParagraphs(random: Random): List<List<Float>> =
+    List(RESUME_SKELETON_PARAGRAPHS) {
+        val lines = random.nextInt(1, 7)
+        List(lines) { line ->
+            if (line == lines - 1) random.nextDouble(0.25, 0.9).toFloat()
+            else random.nextDouble(0.9, 1.0).toFloat()
+        }
+    }
 
 /**
  * Shimmer effect box for loading skeletons.
