@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.karakept.api.model.KarakeepList as KarakeepList
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkCursor
+import com.karakept.app.data.model.BookmarkViewKey
 import com.karakept.app.data.model.BookmarkLayout
 import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.model.DefaultListType
@@ -547,8 +548,8 @@ class MainScreenModel(
             minOf(above, lowWater).coerceAtLeast(0)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
-    private fun requestedView(): LoadedView? =
-        _selectedServer.value?.let { LoadedView(it.id, effectiveFilterNow()) }
+    private fun requestedView(): BookmarkViewKey? =
+        _selectedServer.value?.let { BookmarkViewKey(it.id, effectiveFilterNow()) }
 
     /** Empties the pill. Called when the user taps it to jump to what arrived. */
     fun clearNewBookmarksAbove() {
@@ -758,38 +759,50 @@ class MainScreenModel(
         // rather than a row id, so a sync that deletes that row still leaves a position the
         // count means something against. When it finishes, the database says how many rows of
         // the view now sort above it.
+        //
+        // The cursor is only ever taken from rows read for the view on screen. Right after a
+        // switch the window still holds the previous view's rows, and a sync starting then (the
+        // new view's own, or one already running for it) would otherwise be anchored on a row
+        // of the list the user just left — counting that list's arrivals into this one.
         viewModelScope.launch {
             var anchor: BookmarkCursor? = null
-            var anchorView: LoadedView? = null
-            isSyncing.collect { syncing ->
-                if (syncing) {
-                    anchor = pager.topVisibleCursor(bookmarkWindow.value)
-                    anchorView = requestedView()
-                    return@collect
+            var anchorView: BookmarkViewKey? = null
+            combine(isSyncing, bookmarkWindow) { syncing, window -> syncing to window }
+                .collect { (syncing, window) ->
+                    val view = requestedView()
+                    if (syncing) {
+                        if (anchorView != view) {
+                            anchor = null
+                            anchorView = null
+                        }
+                        if (anchor == null && window.resolved && window.view == view) {
+                            anchor = pager.topVisibleCursor(window)
+                            if (anchor != null) anchorView = view
+                        }
+                        return@collect
+                    }
+                    val startedAt = anchor ?: return@collect
+                    val startedIn = anchorView ?: return@collect
+                    anchor = null
+                    anchorView = null
+                    // isSyncing follows the view's sync key, so switching view drops it too:
+                    // that is the user leaving, not the sync finishing.
+                    if (view != startedIn) return@collect
+                    val server = _selectedServer.value ?: return@collect
+                    val arrived = runCatching {
+                        bookmarkRepository.countBookmarksBefore(
+                            server,
+                            startedIn.filter,
+                            startedAt,
+                            excludeRead = effectiveDimReadBookmarks.value
+                        )
+                    }.getOrElse { 0 }
+                    if (requestedView() != startedIn) return@collect
+                    _syncedAbove.value = arrived
+                    // Whatever is on screen now has been seen, so a sync landing while the user
+                    // sits at the top raises nothing.
+                    _topSlotLowWater.value = pager.visibleSlots.value.first
                 }
-                val startedAt = anchor ?: return@collect
-                val startedIn = anchorView ?: return@collect
-                anchor = null
-                anchorView = null
-                // isSyncing follows the view's sync key, so switching view drops it too. The
-                // cursor is a position in the view the sync started in and means nothing in
-                // another one — nor does a count that finishes after the user has left.
-                if (requestedView() != startedIn) return@collect
-                val server = _selectedServer.value ?: return@collect
-                val arrived = runCatching {
-                    bookmarkRepository.countBookmarksBefore(
-                        server,
-                        startedIn.filter,
-                        startedAt,
-                        excludeRead = effectiveDimReadBookmarks.value
-                    )
-                }.getOrElse { 0 }
-                if (requestedView() != startedIn) return@collect
-                _syncedAbove.value = arrived
-                // Whatever is on screen now has been seen, so a sync landing while the user sits
-                // at the top raises nothing.
-                _topSlotLowWater.value = pager.visibleSlots.value.first
-            }
         }
 
         // A bookmark mutated by another screen, and a bookmark restored by undo, both reach
@@ -808,11 +821,15 @@ class MainScreenModel(
      * scrolls to the top and drops the anchors belonging to the view being left.
      */
     private fun switchToView(server: Server, filter: FilterConfig) {
+        val leaving = _loadedView.value
         _loadedView.value = LoadedView(server.id, filter)
         _actedOnBookmarkIds.value = emptySet()
         // A different view is a different question, so whatever a previous sync reported about
         // the view being left does not carry over.
         resetNewBookmarksAbove()
+        // The slots on screen belong to the view being left until the list reports again from
+        // the top of this one; read against this view they name rows the user never saw.
+        if (leaving != null) pager.reportVisibleSlots(0..0)
         // Announce the reload *before* the rows arrive. The version bump makes the scroll anchor
         // drop its anchor and the scroll request re-pins the viewport to the top; both are
         // applied on the next measure, which is the one that renders the new view.
