@@ -354,7 +354,7 @@ class MainScreenModelPaginationSortingTest {
                 "the count was about the view the sync started in"
             )
             assertTrue(
-                harness.countedBefore.isEmpty(),
+                harness.countedIn.none { it.status == FilterStatus.ARCHIVED },
                 "a cursor from the view left behind was never counted in this one"
             )
             job.cancel()
@@ -381,12 +381,31 @@ class MainScreenModelPaginationSortingTest {
             harness.setSyncing(false, key = SYNC_KEY_ARCHIVED)
             advanceUntilIdle()
 
+            val countedInNewView = harness.countedBefore
+                .filterIndexed { i, _ -> harness.countedIn[i].status == FilterStatus.ARCHIVED }
             assertEquals(
-                listOf(BookmarkCursor.of(topOfNewView)),
-                harness.countedBefore,
+                listOf(BookmarkCursor.of(topOfNewView), BookmarkCursor.of(topOfNewView)),
+                countedInNewView,
                 "anchored on the row the user stood on in this view, not the one they left"
             )
             assertEquals(3, model.newBookmarksAbove.value)
             job.cancel()
         }
+
+    @Test
+    fun `rows already above the anchor before the sync are not new`() = runTest(testDispatcher) {
+        val model = modelScrolledTo(40)
+        val job = launch { model.bookmarkWindow.collect {} }
+        advanceUntilIdle()
+
+        harness.aboveBeforeSync = 40
+        harness.arrivedAbove = 2
+        harness.setSyncing(true)
+        advanceUntilIdle()
+        harness.setSyncing(false)
+        advanceUntilIdle()
+
+        assertEquals(2, model.newBookmarksAbove.value, "only what the sync added")
+        job.cancel()
+    }
 }
