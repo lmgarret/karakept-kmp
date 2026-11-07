@@ -45,7 +45,7 @@ All user-configurable preferences stored in the `settings_json` DataStore blob:
 | Group | Settings |
 |---|---|
 | Layout | `layoutType`, `hideArticleThumbnails`, `showReadingTimeBadge`, `showTags`, `dimReadBookmarks` |
-| Viewer / reader | `viewerMode`, `htmlTextColor`, `htmlBackgroundColor`, `htmlFontSize`, `htmlFontFamily`, `readingSpeedWpm`, `trackReadingProgress`, `resetProgressOnMarkUnread`, `linkOpenMode`, `preferFullPageHtml`, `readerLineHeightScale`, `readerHorizontalMarginDp`, `readerMaxWidthDp`, `showReaderHeroImage` |
+| Viewer / reader | `viewerMode`, `htmlTextColor`, `htmlBackgroundColor`, `htmlFontSize`, `htmlFontFamily`, `readingSpeedWpm`, `trackReadingProgress`, `resetProgressOnMarkUnread`, `linkOpenMode`, `preferFullPageHtml`, `readerLineHeightScale`, `readerHorizontalMarginDp`, `readerMaxWidthDp`, `showReaderHeroImage`, `readerScrollCursor` |
 | E-ink | `einkModeEnabled`, `einkDisableAnimations`, `einkHighContrast`, `einkInstantPageScroll`, `einkMonochromeIcon`, `pageTurnKeysEnabled`, `pageTurnPreviousKeyCode`, `pageTurnNextKeyCode`, `pageTurnOverlapPercent` |
 | Theme | `themeMode`, `accentColor` |
 | Swipe actions | `swipeLeftAction`, `swipeRightAction`, `customSwipeConfigsJson`, `swipeLeftConfigId`, `swipeRightConfigId`, `rowActionMode` |
@@ -158,6 +158,7 @@ All fields have defaults — missing fields (from older backups) fall back to th
   "readerHorizontalMarginDp": 28,
   "readerMaxWidthDp": 900,
   "showReaderHeroImage": true,
+  "readerScrollCursor": true,
   "einkModeEnabled": false,
   "einkDisableAnimations": true,
   "einkHighContrast": true,

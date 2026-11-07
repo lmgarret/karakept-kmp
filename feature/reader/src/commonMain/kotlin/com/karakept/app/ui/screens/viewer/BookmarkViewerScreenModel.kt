@@ -132,6 +132,9 @@ class BookmarkViewerScreenModel(
     val scrollToTopEnabled: StateFlow<Boolean> = settingsRepository.scrollToTopEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val readerScrollCursor: StateFlow<Boolean> = settingsRepository.readerScrollCursor
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     val dateDisplayMode: StateFlow<DateDisplayMode> = settingsRepository.dateDisplayMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DateDisplayMode.ELAPSED)
 

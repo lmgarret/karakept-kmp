@@ -75,6 +75,7 @@ data class BackupSettings(
     val readerHorizontalMarginDp: Int = 28,
     val readerMaxWidthDp: Int = 900,
     val showReaderHeroImage: Boolean = true,
+    val readerScrollCursor: Boolean = true,
 
     // E-ink display mode and hardware page-turn buttons
     val einkModeEnabled: Boolean = false,

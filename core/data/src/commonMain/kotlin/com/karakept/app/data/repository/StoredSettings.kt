@@ -68,7 +68,8 @@ internal data class StoredReaderSettings(
     val readerLineHeightScale: Float = 1.0f,
     val readerHorizontalMarginDp: Int = 28,
     val readerMaxWidthDp: Int = 900,
-    val showReaderHeroImage: Boolean = true
+    val showReaderHeroImage: Boolean = true,
+    val readerScrollCursor: Boolean = true
 )
 
 /**

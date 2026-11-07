@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,6 +44,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -519,6 +521,27 @@ private fun RenderHeading(
     val text = buildInlineAnnotatedString(element, theme, highlights, offsets, onLinkClick, onHighlightClick, selectedHighlightId, searchState)
     val blockEnd = offsets.endOf(element)
     val scrollMod = rememberSearchScrollModifier(blockStart, blockEnd, searchState, searchCallback)
+
+    // The scroll cursor's table of contents names the sections; only the heading itself can say
+    // where one starts, because the whole article is a single lazy item. Its coordinates are
+    // registered once and read when a drag asks, never pushed on a scroll frame — see
+    // ReaderTocState. Null registry, no registration at all.
+    val toc = LocalReaderToc.current
+    if (toc != null) {
+        DisposableEffect(toc, blockStart) {
+            onDispose { toc.forget(blockStart) }
+        }
+    }
+    val tocMod = if (toc != null) {
+        Modifier.onPlaced { coords ->
+            toc.report(blockStart) {
+                if (coords.isAttached) coords.positionInRoot().y else Float.NaN
+            }
+        }
+    } else {
+        Modifier
+    }
+
     if (text.isNotEmpty()) {
         AnnotatedClickableText(
             text = text,
@@ -530,7 +553,8 @@ private fun RenderHeading(
             fontFamily = theme.fontFamily,
             fontWeight = FontWeight.Bold,
             lineHeight = theme.tightLineHeight(scaleFactor),
-            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp).fillMaxWidth().then(scrollMod),
+            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp).fillMaxWidth()
+                .then(scrollMod).then(tocMod),
             selectedHighlightId = selectedHighlightId,
             highlights = highlights
         )

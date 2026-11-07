@@ -536,6 +536,68 @@ Hover is mouse-only by construction — events from any other `PointerType` are 
 here fires from touch, and the tooltip is placed clear of the pointer hotspot
 (`tooltipPosition`), which would otherwise take the hover from the text and flicker.
 
+### Reader scroll cursor
+
+**`ReaderScrollCursor`** (`ui/components/reader/ReaderScrollCursor.kt`) — the reader's fast-scroll
+thumb, and its table-of-contents preview. Grabbing the thumb lays every heading out along the track
+as a small muted pill at the place that names it, the current one in the accent colour, and the
+thumb carries the bookmark list cursor's speech bubble with that section's title. The thumb maps
+linearly onto the article, as the list's does. Gated on the "Scroll cursor" reader setting
+(`SettingsRepository.readerScrollCursor`) and on Reader mode — the table of contents comes from the
+native renderer's own parse, so Web mode has none.
+
+The table of contents comes from both ends of the reader at once, because neither end has both:
+
+- **`extractReaderToc(body, offsets)`** (`ui/components/reader/ReaderToc.kt`) reads the headings off
+  the parsed document — title, level, and an id, which is where the heading's text starts in
+  `ReaderTextOffsets`' stream. One more full-document walk, so it belongs to
+  `prepareReaderDocument` with the rest of them, and arrives as `PreparedReaderDocument.toc`.
+- **Where each section sits** cannot be read from anywhere above the article: the whole of it is a
+  *single* lazy item, so `LazyListState.layoutInfo` knows only "the body". `RenderHeading`
+  registers its own coordinates under the same id.
+
+**`ReaderTocState`** (provided through `LocalReaderToc`) holds the two halves — `entries` published
+by the renderer the way the page's gallery reaches `GalleryViewerState`, positions registered by
+the headings. Null switches the registration off in every heading, so the mechanism costs nothing
+when the cursor is off.
+
+> **Rule:** positions are **coordinates read on demand**, never a position pushed from
+> `onGloballyPositioned`, and never snapshot state — the same rule, for the same two reasons, as
+> `ReaderSnapRegistry`: nothing observes them reactively, and a push would cost one callback per
+> heading per scroll frame. `ReaderTocRegistrationTest` pins it alongside `ReaderScrollCostTest`.
+
+> **Rule:** a heading rendered by something other than `RenderHeading` silently drops out of the
+> preview — it has an entry with no position, and `projectToc` drops those rather than guessing.
+
+Everything the cursor computes is pixels, not item indices: the bookmark list's cursor can say
+"60% down the list" because every row is an item (`ScrollCursorUtils`), and the reader's cannot.
+`ui/utils/ReaderScrollCursorUtils.kt` reconstructs the absolute scroll position from the heights of
+the items seen so far — the same trick `rememberReadingProgress` uses — and resolves a fraction
+back to a `scrollToItem` pair.
+
+> **Rule:** a section is named once its heading has come `sectionLookaheadPx` — a quarter of the
+> readable height — **below the top bar**. Below the bar, because the bar is painted over the list
+> rather than reserved by the Scaffold (`rememberViewerChromeInsets().topPx`); projected from the
+> viewport top, a section went current only once its heading had scrolled a bar's height out of
+> sight. A lookahead, because the map is linear and a long article moves tens of pixels per pixel of
+> thumb: named only when its heading reached the very top, a section's first frame had the heading
+> behind the bar already, the crossing frame having been skipped. `projectToc` applies both, and its
+> result is a position in the article, projected once per layout change rather than per frame.
+> `ReaderScrollCursorDragTest` drags a real rendered article and checks each frame against the
+> headings' own laid-out positions — that the named heading is on screen, that the bubble rides the
+> thumb, and that the article follows the thumb at one speed.
+
+The finger holds the thumb by its middle: mapping it over the whole track, as the bookmark list's
+cursor does, drifts half a thumb from the marks towards each end.
+
+Two things the cursor goes through rather than around:
+
+- **`ScrollRestorationState.safeScrollToItem`, never `LazyListState.scrollToItem`.** The reader runs
+  a scroll guard that snaps back movement it did not sanction, and a drag is a long run of it.
+- **Under E-ink mode the article moves once, on release.** A drag is a finger tracked across many
+  frames, and following it live is a full-panel refresh per frame; the table of contents is what
+  says where the release will land in the meantime.
+
 ### Empty states
 
 - A list with nothing in it needs an **explicit empty state**, never a blank area — the two
