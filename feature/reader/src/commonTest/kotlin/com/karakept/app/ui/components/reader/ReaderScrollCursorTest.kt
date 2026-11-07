@@ -1,5 +1,6 @@
 package com.karakept.app.ui.components.reader
 
+import com.karakept.app.ui.utils.sectionIndexAt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -16,12 +17,14 @@ class ReaderScrollCursorTest {
     private fun geometry(
         absolutePx: Int = 500,
         rangePx: Int = 10_000,
-        viewportStartOffsetPx: Int = 0
+        viewportStartOffsetPx: Int = 0,
+        obscuredTopPx: Int = 0
     ) = ReaderCursorGeometry(
         itemHeights = listOf(800, 12_000),
         rangePx = rangePx,
         absolutePx = absolutePx,
-        viewportStartOffsetPx = viewportStartOffsetPx
+        viewportStartOffsetPx = viewportStartOffsetPx,
+        obscuredTopPx = obscuredTopPx
     )
 
     private fun entry(id: Int, title: String = "Section $id", level: Int = 2) =
@@ -143,6 +146,92 @@ class ReaderScrollCursorTest {
 
         topInRoot = 4100f
         assertEquals(0.45f, projectToc(toc, geometry(absolutePx = 500), 100f).single().fraction)
+    }
+
+    @Test
+    fun aSectionSitsWhereTheReaderMustScrollToSeeItsHeading() {
+        // The top bar is painted over the list, so the heading has to come to rest below it. With
+        // a 300px bar, a heading 2000px below the viewport top is reached 1700px from here.
+        val head = entry(0)
+        val toc = tocOf(head to 2100f)
+
+        val sections = projectToc(
+            toc,
+            geometry(absolutePx = 500, obscuredTopPx = 300),
+            listTopInRoot = 100f
+        )
+
+        assertEquals(0.22f, sections.single().fraction)
+    }
+
+    /**
+     * Whether the section headed at [headingInRoot] is the one the reader is in, with a 300px bar
+     * painted over the top of the list and the list scrolled 1000px in.
+     */
+    private fun currentSectionWithHeadingAt(headingInRoot: Float): Int {
+        val head = entry(0)
+        val toc = tocOf(head to headingInRoot)
+        val sections = projectToc(
+            toc,
+            geometry(absolutePx = 1000, rangePx = 10_000, obscuredTopPx = 300),
+            listTopInRoot = 0f
+        )
+        return sectionIndexAt(sections.map { it.fraction }, 1000f / 10_000f)
+    }
+
+    @Test
+    fun aSectionIsNotCurrentWhileItsHeadingIsStillBelowTheReadableTop() {
+        // Root 400 is under the fold of the readable area, which starts at 300: the heading is on
+        // its way up the screen and the reader is still in whatever came before it.
+        assertEquals(-1, currentSectionWithHeadingAt(400f))
+    }
+
+    @Test
+    fun aSectionGoesCurrentAsItsHeadingReachesTheReadableTop() {
+        // Root 300 is the first pixel the bar is not covering, so this is the moment the reader
+        // arrives at the section — and the label lands on the thumb, both being scroll offsets.
+        assertEquals(0, currentSectionWithHeadingAt(300f))
+
+        val head = entry(0)
+        val sections = projectToc(
+            tocOf(head to 300f),
+            geometry(absolutePx = 1000, rangePx = 10_000, obscuredTopPx = 300),
+            listTopInRoot = 0f
+        )
+        assertEquals(1000f / 10_000f, sections.single().fraction)
+    }
+
+    @Test
+    fun aSectionStaysCurrentOnceItsHeadingHasScrolledUnderTheTopBar() {
+        // The regression (#277). Root 150 is above the readable top and behind the bar: the
+        // heading has gone, and its body is what is being read, so it is plainly the current
+        // section. Projected as a document position it was not — that only happened once the
+        // heading passed root 0, a whole bar's height later, which is what made the pill light up
+        // long after the heading had disappeared.
+        assertEquals(0, currentSectionWithHeadingAt(150f))
+
+        // What the uncorrected projection would have said at the same position.
+        val headingPx = 1000f + 150f
+        assertEquals(-1, sectionIndexAt(listOf(headingPx / 10_000f), 1000f / 10_000f))
+    }
+
+    @Test
+    fun droppingTheThumbOnALabelPutsThatHeadingWhereItCanBeRead() {
+        // What the two above add up to: a section's fraction is a scroll offset, so scrolling to
+        // it leaves the heading at the top of the readable area rather than behind the bar.
+        val head = entry(0)
+        val obscured = 300
+        val rangePx = 10_000
+        val headingInRoot = 2100f
+        val toc = tocOf(head to headingInRoot)
+        val geometry = geometry(absolutePx = 500, rangePx = rangePx, obscuredTopPx = obscured)
+
+        val fraction = projectToc(toc, geometry, listTopInRoot = 100f).single().fraction
+
+        // Where the list would be after the drop, and where the heading sits in the document.
+        val landedAt = fraction * rangePx
+        val headingPx = geometry.absolutePx + (headingInRoot - 100f)
+        assertEquals(obscured.toFloat(), headingPx - landedAt)
     }
 
     @Test

@@ -335,6 +335,9 @@ internal fun ViewerLoadedContent(
                 // Not scrollState.scrollToItem: the reader's scroll guard snaps back any move it
                 // did not sanction, and a drag is a long run of them.
                 onScrollTo = scrollRestoration.safeScrollToItem,
+                // The bar is painted over the list, so a section is reached when its heading
+                // arrives at the top of what can be seen, not at the top of the viewport.
+                obscuredTopPx = chromeInsets.topPx,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .fillMaxHeight()

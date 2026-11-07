@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
@@ -66,6 +67,10 @@ import kotlin.math.roundToInt
  * @param onScrollTo how the cursor moves the reader. The reader runs a scroll guard that snaps
  * back movement it did not sanction, so this has to be its `safeScrollToItem` rather than
  * `LazyListState.scrollToItem`.
+ * @param obscuredTopPx how much of the viewport's top the reader paints its own chrome over. The
+ * top bar is not a Scaffold `topBar` but a sibling drawn above the list, so the first band of the
+ * viewport is not readable — and a section is reached when its heading arrives at the top of what
+ * can be *seen*, not at the top of the viewport. See [projectToc].
  */
 @Composable
 fun ReaderScrollCursor(
@@ -73,6 +78,7 @@ fun ReaderScrollCursor(
     toc: ReaderTocState,
     listTopInRoot: () -> Float,
     onScrollTo: suspend (Int, Int) -> Unit,
+    obscuredTopPx: Int,
     modifier: Modifier = Modifier
 ) {
     val einkMode = LocalEinkMode.current
@@ -86,7 +92,7 @@ fun ReaderScrollCursor(
     // another, and the last one's hero height is not this one's.
     val itemHeights = remember(toc) { mutableMapOf<Int, Int>() }
 
-    val geometry by remember(listState, toc) {
+    val geometry by remember(listState, toc, obscuredTopPx) {
         derivedStateOf {
             val info = listState.layoutInfo
             for (item in info.visibleItemsInfo) itemHeights[item.index] = item.size
@@ -103,7 +109,8 @@ fun ReaderScrollCursor(
                     firstVisibleIndex = listState.firstVisibleItemIndex,
                     firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset
                 ),
-                viewportStartOffsetPx = info.viewportStartOffset
+                viewportStartOffsetPx = info.viewportStartOffset,
+                obscuredTopPx = obscuredTopPx
             )
         }
     }
@@ -139,8 +146,9 @@ fun ReaderScrollCursor(
     val density = LocalDensity.current
     val thumbHeightPx = with(density) { ThumbHeight.toPx() }
     val touchTargetWidthPx = with(density) { TouchTargetWidth.toPx() }
-    val labelHeightPx = with(density) { LabelHeight.toPx() }
-    val minLabelSpacingPx = with(density) { (LabelHeight + 2.dp).toPx() }
+    // Spacing stays keyed to the *active* label, the tallest of them, so shrinking the inactive
+    // ones reduces their footprint without packing more of them onto the track.
+    val minLabelSpacingPx = with(density) { (tocLabelHeight(isCurrent = true) + 2.dp).toPx() }
 
     // The span the thumb's *top* travels over, so a fraction means the same thing to the thumb,
     // the ticks and the labels.
@@ -244,7 +252,9 @@ fun ReaderScrollCursor(
                                     0,
                                     labelTopPx(
                                         centerPx = centerOf(displayFraction),
-                                        labelHeightPx = labelHeightPx,
+                                        labelHeightPx = with(density) {
+                                            tocLabelHeight(isCurrent = true).toPx()
+                                        },
                                         trackHeightPx = trackHeightPx
                                     )
                                 )
@@ -259,10 +269,12 @@ fun ReaderScrollCursor(
                     )
                     for (index in visibleLabels) {
                         val section = sections[index]
+                        val isCurrent = index == currentSection
+                        val ownHeightPx = with(density) { tocLabelHeight(isCurrent).toPx() }
                         TocLabel(
                             text = section.entry.title,
                             level = section.entry.level,
-                            isCurrent = index == currentSection,
+                            isCurrent = isCurrent,
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(end = TickWidth + 4.dp)
@@ -271,7 +283,7 @@ fun ReaderScrollCursor(
                                         0,
                                         labelTopPx(
                                             centerPx = centerOf(section.fraction),
-                                            labelHeightPx = labelHeightPx,
+                                            labelHeightPx = ownHeightPx,
                                             trackHeightPx = trackHeightPx
                                         )
                                     )
@@ -292,11 +304,23 @@ internal data class ReaderCursorGeometry(
     val itemHeights: List<Int>,
     val rangePx: Int,
     val absolutePx: Int,
-    val viewportStartOffsetPx: Int
+    val viewportStartOffsetPx: Int,
+    /** The band at the top of the viewport the reader's own top bar is painted over. */
+    val obscuredTopPx: Int = 0
 )
 
 /**
- * Turns each laid-out heading's root position into the scroll fraction it sits at.
+ * Where each laid-out heading goes on the track: the scroll offset that brings it to the top of
+ * what the reader can actually *see*, as a fraction of the scroll range.
+ *
+ * Not the heading's own position in the document, which is that offset plus
+ * [ReaderCursorGeometry.obscuredTopPx] — the reader's top bar is painted over the list rather than
+ * reserved by the Scaffold, so the first band of the viewport is covered. Projecting the document
+ * position instead put every section a bar's height too far down the track, with two visible
+ * consequences: a section only became the current one once its heading had scrolled that far past
+ * the top of the readable area (#277), and dropping the thumb on a label landed its heading behind
+ * the bar. Taking the band off here puts the thumb, the active label and the drop target in one
+ * coordinate — the same one `onScrollTo` moves the list in — so all three agree.
  *
  * Headings that have not been laid out are dropped rather than guessed at: the article is eagerly
  * composed in full, so that only happens before the body item is first measured.
@@ -310,8 +334,9 @@ internal fun projectToc(
     val viewportTopInRoot = listTopInRoot + geometry.viewportStartOffsetPx
     return toc.entries.mapNotNull { entry ->
         val topInRoot = toc.positionOf(entry.id) ?: return@mapNotNull null
-        val absolute = geometry.absolutePx + (topInRoot - viewportTopInRoot)
-        ReaderTocSection(entry, (absolute / geometry.rangePx).coerceIn(0f, 1f))
+        val headingPx = geometry.absolutePx + (topInRoot - viewportTopInRoot)
+        val aimPx = headingPx - geometry.obscuredTopPx
+        ReaderTocSection(entry, (aimPx / geometry.rangePx).coerceIn(0f, 1f))
     }
 }
 
@@ -320,6 +345,13 @@ private fun labelTopPx(centerPx: Float, labelHeightPx: Float, trackHeightPx: Flo
         .coerceIn(0f, (trackHeightPx - labelHeightPx).coerceAtLeast(0f))
         .roundToInt()
 
+/**
+ * One section's name on the track.
+ *
+ * Only the section being pointed at is a full pill. The rest are context — they say what is above
+ * and below without being read — so they get the smaller type, a narrower truncation and a quieter
+ * container: a column of equally loud pills covered most of the page it was previewing.
+ */
 @Composable
 private fun TocLabel(
     text: String,
@@ -327,7 +359,7 @@ private fun TocLabel(
     isCurrent: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val style = floatingSurfaceStyle(if (isCurrent) 4.dp else 2.dp)
+    val style = floatingSurfaceStyle(if (isCurrent) 4.dp else 1.dp)
     Surface(
         shape = MaterialTheme.shapes.small,
         color = if (isCurrent) {
@@ -343,15 +375,22 @@ private fun TocLabel(
         shadowElevation = style.shadowElevation,
         tonalElevation = 0.dp,
         border = style.borderStroke(),
-        modifier = modifier.height(LabelHeight).widthIn(max = LabelMaxWidth)
+        modifier = modifier
+            .height(tocLabelHeight(isCurrent))
+            .widthIn(max = if (isCurrent) LabelMaxWidth else InactiveLabelMaxWidth)
     ) {
         Text(
             text = text,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-            style = if (level <= 2) {
-                MaterialTheme.typography.labelLarge
-            } else {
-                MaterialTheme.typography.labelMedium
+            modifier = Modifier.padding(
+                horizontal = if (isCurrent) 8.dp else 6.dp,
+                vertical = if (isCurrent) 3.dp else 2.dp
+            ),
+            // The active label is the one being read, so its heading level is worth showing; an
+            // inactive one carries its level in the length of its tick instead.
+            style = when {
+                !isCurrent -> MaterialTheme.typography.labelSmall
+                level <= 2 -> MaterialTheme.typography.labelLarge
+                else -> MaterialTheme.typography.labelMedium
             },
             fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
             maxLines = 1,
@@ -362,10 +401,16 @@ private fun TocLabel(
     }
 }
 
+/** Kept next to [TocLabel] because the track's label spacing and centring both need it. */
+internal fun tocLabelHeight(isCurrent: Boolean): Dp =
+    if (isCurrent) LabelHeight else InactiveLabelHeight
+
 private val ThumbHeight = 28.dp
 private val ThumbWidth = 4.dp
 private val TrackWidth = 2.dp
 private val TickWidth = 10.dp
 private val TouchTargetWidth = 24.dp
 private val LabelHeight = 24.dp
+private val InactiveLabelHeight = 18.dp
 private val LabelMaxWidth = 220.dp
+private val InactiveLabelMaxWidth = 132.dp

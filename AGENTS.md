@@ -574,6 +574,19 @@ Everything the cursor computes is pixels, not item indices: the bookmark list's 
 the items seen so far — the same trick `rememberReadingProgress` uses — and resolves a fraction
 back to a `scrollToItem` pair.
 
+> **Rule:** a section's place on the track is the **scroll offset that brings its heading into
+> view**, not the heading's own position in the document — the two differ by
+> `rememberViewerChromeInsets().topPx`, since the top bar is painted over the list rather than
+> reserved by the Scaffold. Projecting the document position put every section a bar's height too
+> far down: a section went current only once its heading had scrolled that far past the top of the
+> readable area, and dropping the thumb on a label landed its heading behind the bar. Taking the
+> band off in `projectToc` puts the thumb, the active label and the drop target in one coordinate —
+> the one `onScrollTo` moves the list in — so all three agree.
+
+Only the section being pointed at is a full pill; the rest are context, at smaller type and a
+narrower truncation (`tocLabelHeight`). Label spacing stays keyed to the active label, the tallest,
+so shrinking the inactive ones reduces their footprint rather than packing more onto the track.
+
 Two things the cursor goes through rather than around:
 
 - **`ScrollRestorationState.safeScrollToItem`, never `LazyListState.scrollToItem`.** The reader runs
