@@ -547,6 +547,9 @@ class MainScreenModel(
             minOf(above, lowWater).coerceAtLeast(0)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
+    private fun requestedView(): LoadedView? =
+        _selectedServer.value?.let { LoadedView(it.id, effectiveFilterNow()) }
+
     /** Empties the pill. Called when the user taps it to jump to what arrived. */
     fun clearNewBookmarksAbove() {
         resetNewBookmarksAbove()
@@ -757,22 +760,31 @@ class MainScreenModel(
         // the view now sort above it.
         viewModelScope.launch {
             var anchor: BookmarkCursor? = null
+            var anchorView: LoadedView? = null
             isSyncing.collect { syncing ->
                 if (syncing) {
                     anchor = pager.topVisibleCursor(bookmarkWindow.value)
+                    anchorView = requestedView()
                     return@collect
                 }
                 val startedAt = anchor ?: return@collect
+                val startedIn = anchorView ?: return@collect
                 anchor = null
+                anchorView = null
+                // isSyncing follows the view's sync key, so switching view drops it too. The
+                // cursor is a position in the view the sync started in and means nothing in
+                // another one — nor does a count that finishes after the user has left.
+                if (requestedView() != startedIn) return@collect
                 val server = _selectedServer.value ?: return@collect
                 val arrived = runCatching {
                     bookmarkRepository.countBookmarksBefore(
                         server,
-                        effectiveFilterNow(),
+                        startedIn.filter,
                         startedAt,
                         excludeRead = effectiveDimReadBookmarks.value
                     )
                 }.getOrElse { 0 }
+                if (requestedView() != startedIn) return@collect
                 _syncedAbove.value = arrived
                 // Whatever is on screen now has been seen, so a sync landing while the user sits
                 // at the top raises nothing.

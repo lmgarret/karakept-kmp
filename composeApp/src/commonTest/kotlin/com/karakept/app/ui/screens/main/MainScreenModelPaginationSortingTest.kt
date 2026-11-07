@@ -328,4 +328,33 @@ class MainScreenModelPaginationSortingTest {
         )
         job.cancel()
     }
+
+    @Test
+    fun `a sync started in another view does not raise the pill in this one`() =
+        runTest(testDispatcher) {
+            val model = modelScrolledTo(40)
+            val job = launch { model.bookmarkWindow.collect {} }
+            advanceUntilIdle()
+            harness.arrivedAbove = 9
+            harness.setSyncing(true)
+            advanceUntilIdle()
+
+            model.applyFilter(FilterConfig(status = FilterStatus.ARCHIVED))
+            advanceUntilIdle()
+            model.reportVisibleSlots(40..49)
+            advanceUntilIdle()
+            harness.setSyncing(false)
+            advanceUntilIdle()
+
+            assertEquals(
+                0,
+                model.newBookmarksAbove.value,
+                "the count was about the view the sync started in"
+            )
+            assertTrue(
+                harness.countedBefore.isEmpty(),
+                "a cursor from the view left behind was never counted in this one"
+            )
+            job.cancel()
+        }
 }
