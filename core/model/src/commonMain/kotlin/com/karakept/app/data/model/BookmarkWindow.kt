@@ -2,6 +2,10 @@ package com.karakept.app.data.model
 
 import androidx.compose.runtime.Immutable
 
+/** A view of the bookmark list: a server and the effective filter it is read with. */
+@Immutable
+data class BookmarkViewKey(val serverId: String, val filter: FilterConfig)
+
 /** What the list renders at one index. */
 sealed interface BookmarkSlot {
     data class Loaded(val bookmark: Bookmark) : BookmarkSlot
@@ -46,7 +50,9 @@ data class BookmarkWindow(
      * empty state: the list is rebuilt for the new view, and for a moment that window is empty
      * because no answer has arrived, not because there is nothing there.
      */
-    val resolved: Boolean = false
+    val resolved: Boolean = false,
+    /** The view these rows were read for, or null for a window read for no view. */
+    val view: BookmarkViewKey? = null
 ) {
     /** Slots the list renders. */
     val total: Int = prepended.size + viewTotal

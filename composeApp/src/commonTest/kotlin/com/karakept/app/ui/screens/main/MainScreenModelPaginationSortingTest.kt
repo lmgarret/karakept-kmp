@@ -1,7 +1,9 @@
 package com.karakept.app.ui.screens.main
 
+import com.karakept.app.data.model.BookmarkCursor
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.FilterStatus
+import com.karakept.app.data.model.SYNC_KEY_ARCHIVED
 import com.karakept.app.data.model.SortOption
 import com.karakept.app.ui.screens.main.MainScreenModelHarness.Companion.bookmark
 import io.mockk.coVerify
@@ -355,6 +357,36 @@ class MainScreenModelPaginationSortingTest {
                 harness.countedBefore.isEmpty(),
                 "a cursor from the view left behind was never counted in this one"
             )
+            job.cancel()
+        }
+
+    @Test
+    fun `a view syncing when the user arrives counts from where they stand in it`() =
+        runTest(testDispatcher) {
+            val model = modelScrolledTo(40)
+            val job = launch { model.bookmarkWindow.collect {} }
+            advanceUntilIdle()
+            harness.setSyncing(true)
+            advanceUntilIdle()
+
+            // The list switched to is already syncing, so isSyncing never falls in between.
+            model.applyFilter(FilterConfig(status = FilterStatus.ARCHIVED))
+            harness.setSyncing(true, key = SYNC_KEY_ARCHIVED)
+            advanceUntilIdle()
+            val topOfNewView = model.bookmarkWindow.value.bookmarkAt(0)!!
+            model.reportVisibleSlots(5..14)
+            advanceUntilIdle()
+
+            harness.arrivedAbove = 3
+            harness.setSyncing(false, key = SYNC_KEY_ARCHIVED)
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(BookmarkCursor.of(topOfNewView)),
+                harness.countedBefore,
+                "anchored on the row the user stood on in this view, not the one they left"
+            )
+            assertEquals(3, model.newBookmarksAbove.value)
             job.cancel()
         }
 }
