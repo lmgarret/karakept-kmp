@@ -2,6 +2,7 @@ package com.karakept.app.ui.screens.main
 
 import com.karakept.app.data.model.Bookmark
 import com.karakept.app.data.model.BookmarkCursor
+import com.karakept.app.data.model.BookmarkViewKey
 import com.karakept.app.data.model.BookmarkWindow
 import com.karakept.app.data.model.FilterConfig
 import com.karakept.app.data.model.Server
@@ -149,7 +150,12 @@ internal class BookmarkListPager(
         cache: BookmarkPageCache
     ) {
         // Resolved: the database has answered, so an empty view here means an empty view.
-        val shape = BookmarkWindow(viewTotal = total, pageSize = pageSize, resolved = true)
+        val shape = BookmarkWindow(
+            viewTotal = total,
+            pageSize = pageSize,
+            resolved = true,
+            view = BookmarkViewKey(server.id, filter)
+        )
         if (total <= 0) {
             cache.store(revision, emptyMap())
             emit(shape)
@@ -210,6 +216,7 @@ internal class BookmarkListPager(
                 bookmarkRepository.countBookmarksForViewFlow(server, filter).mapLatest {
                     val matches = bookmarkRepository.searchBookmarks(server, filter, query)
                     BookmarkWindow.dense(matches, pageSize = pageSize)
+                        .copy(view = BookmarkViewKey(server.id, filter))
                 }
             }
 }
