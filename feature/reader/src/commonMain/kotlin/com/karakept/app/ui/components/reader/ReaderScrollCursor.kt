@@ -1,19 +1,23 @@
 package com.karakept.app.ui.components.reader
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -21,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -28,42 +33,47 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.karakept.app.ui.components.AnimatedVisibilityOrPlain
 import com.karakept.app.ui.components.borderStroke
 import com.karakept.app.ui.components.floatingSurfaceStyle
 import com.karakept.app.ui.theme.LocalEinkMode
-import com.karakept.app.ui.utils.ReaderScrollTarget
-import com.karakept.app.ui.utils.pickTocLabels
 import com.karakept.app.ui.utils.readerAbsoluteScrollOffset
+import com.karakept.app.ui.utils.readerCursorTrack
 import com.karakept.app.ui.utils.readerScrollRange
 import com.karakept.app.ui.utils.readerScrollTarget
 import com.karakept.app.ui.utils.sectionIndexAt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
  * Fast-scroll thumb on the right edge of the reader, previewing the article's table of contents.
  *
- * Grabbing the thumb lays the article's headings out along the track at the scroll position each
- * one sits at, with the section the thumb is currently pointing at picked out — so a drag is aimed
- * at a section rather than at a percentage. Articles with no headings still get the thumb, and the
- * percentage in place of a section name.
+ * Grabbing the thumb lays every heading out along the track as a small grey mark at the place
+ * that scrolls to it. The section the thumb is in grows out of its mark into the bookmark list's
+ * cursor bubble, named — so a drag is aimed at a section rather than at a percentage. Articles
+ * with no headings get the bubble on the thumb with the percentage instead.
+ *
+ * Each heading also gets a short *dwell* on the track over which the article holds still with that
+ * heading at the top of the readable area — see [com.karakept.app.ui.utils.ReaderCursorTrack].
  *
  * @param listTopInRoot where the reader's list sits in root coordinates. Headings register
  * themselves in root coordinates, and on the wide desktop layout the reader pane's top is not the
- * window's. A lambda for the same reason the registry's positions are: read when a drag asks.
+ * window's.
  * @param onScrollTo how the cursor moves the reader. The reader runs a scroll guard that snaps
  * back movement it did not sanction, so this has to be its `safeScrollToItem` rather than
  * `LazyListState.scrollToItem`.
@@ -118,42 +128,61 @@ fun ReaderScrollCursor(
     if (geometry.rangePx <= 0) return
 
     var isDragging by remember { mutableStateOf(false) }
-    var dragFraction by remember { mutableStateOf(0f) }
+    var dragThumb by remember { mutableStateOf(0f) }
     var trackHeightPx by remember { mutableStateOf(0f) }
     var scrollJob by remember { mutableStateOf<Job?>(null) }
 
+    val density = LocalDensity.current
+    val thumbHeightPx = with(density) { ThumbHeight.toPx() }
+    val touchTargetWidthPx = with(density) { TouchTargetWidth.toPx() }
+    // The span the thumb's *top* travels over: a fraction means the same place to the thumb, the
+    // marks and the finger.
+    val effectiveTrackPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
+    fun centerOf(fraction: Float) = fraction * effectiveTrackPx + thumbHeightPx / 2f
+
+    // A section's scroll offset is a position in the article, not on screen, so it changes only
+    // when the article's layout does — and that changes the item heights this is keyed on. Projected
+    // once per layout, then, not once per scroll frame.
+    val listTop = listTopInRoot()
+    val entries = toc.entries
+    val sections = remember(entries, geometry.itemHeights, geometry.rangePx, obscuredTopPx, listTop) {
+        projectToc(toc, geometry, listTop)
+    }
+    val dwellHalfWidth = if (effectiveTrackPx > 0f) {
+        with(density) { DwellHalfHeight.toPx() } / effectiveTrackPx
+    } else {
+        0f
+    }
+    val track = remember(sections, dwellHalfWidth) {
+        readerCursorTrack(sections.map { it.fraction }, dwellHalfWidth)
+    }
+    val sectionScrolls = remember(track) { track.dwells.map { it.scroll } }
+    // About a pixel and a half of scroll: what rounding a fraction to whole pixels and back costs.
+    val scrollEpsilon = 1.5f / geometry.rangePx
+
+    val scrollFraction = if (isDragging) {
+        track.scrollAt(dragThumb)
+    } else {
+        (geometry.absolutePx.toFloat() / geometry.rangePx).coerceIn(0f, 1f)
+    }
+    val thumbFraction = if (isDragging) dragThumb else track.thumbAt(scrollFraction, scrollEpsilon)
+    val currentSection = sectionIndexAt(sectionScrolls, scrollFraction, scrollEpsilon)
+
     val geometryState = rememberUpdatedState(geometry)
+    val trackState = rememberUpdatedState(track)
     val onScrollToState = rememberUpdatedState(onScrollTo)
     // A drag is a finger tracked across many frames, and following it live means a full-panel
     // refresh per frame. On e-ink the article is moved once, when the thumb is let go; the table
     // of contents is what says where it will land in the meantime.
     val followDrag = !einkMode.enabled
 
-    val requestScroll: (Float) -> Unit = { fraction ->
+    val requestScroll: (Float) -> Unit = { thumb ->
         val g = geometryState.value
-        val target: ReaderScrollTarget =
-            readerScrollTarget(g.itemHeights, (fraction * g.rangePx).roundToInt())
+        val scrollPx = (trackState.value.scrollAt(thumb) * g.rangePx).roundToInt()
+        val target = readerScrollTarget(g.itemHeights, scrollPx)
         scrollJob?.cancel()
         scrollJob = scope.launch { onScrollToState.value(target.index, target.offsetPx) }
     }
-
-    val displayFraction = if (isDragging) {
-        dragFraction
-    } else {
-        (geometry.absolutePx.toFloat() / geometry.rangePx).coerceIn(0f, 1f)
-    }
-
-    val density = LocalDensity.current
-    val thumbHeightPx = with(density) { ThumbHeight.toPx() }
-    val touchTargetWidthPx = with(density) { TouchTargetWidth.toPx() }
-    // Spacing stays keyed to the *active* label, the tallest of them, so shrinking the inactive
-    // ones reduces their footprint without packing more of them onto the track.
-    val minLabelSpacingPx = with(density) { (tocLabelHeight(isCurrent = true) + 2.dp).toPx() }
-
-    // The span the thumb's *top* travels over, so a fraction means the same thing to the thumb,
-    // the ticks and the labels.
-    val effectiveTrackPx = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
-    fun centerOf(fraction: Float) = fraction * effectiveTrackPx + thumbHeightPx / 2f
 
     Box(
         modifier = modifier
@@ -163,20 +192,27 @@ fun ReaderScrollCursor(
             // the article's own tap handler, the selection container, or the FAB. A press outside
             // the right-edge touch target is left unconsumed so it reaches the article underneath,
             // which is what keeps tap-to-toggle-chrome and text selection working up to the track.
-            .pointerInput(Unit) {
+            .pointerInput(thumbHeightPx, touchTargetWidthPx) {
+                // The finger holds the thumb by its middle. Mapped over the whole track instead, as
+                // the bookmark list's cursor does, it drifted half a thumb from the marks towards
+                // each end — as wide as a dwell, so a mark under the finger could miss its section.
+                fun thumbUnder(y: Float): Float {
+                    val travel = size.height - thumbHeightPx
+                    return if (travel <= 0f) 0f else ((y - thumbHeightPx / 2f) / travel).coerceIn(0f, 1f)
+                }
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     if (down.position.x < size.width - touchTargetWidthPx) return@awaitEachGesture
                     down.consume()
                     isDragging = true
-                    dragFraction = (down.position.y / size.height).coerceIn(0f, 1f)
-                    if (followDrag) requestScroll(dragFraction)
+                    dragThumb = thumbUnder(down.position.y)
+                    if (followDrag) requestScroll(dragThumb)
                     drag(down.id) { change ->
                         change.consume()
-                        dragFraction = (change.position.y / size.height).coerceIn(0f, 1f)
-                        if (followDrag) requestScroll(dragFraction)
+                        dragThumb = thumbUnder(change.position.y)
+                        if (followDrag) requestScroll(dragThumb)
                     }
-                    requestScroll(dragFraction)
+                    requestScroll(dragThumb)
                     isDragging = false
                 }
             }
@@ -195,7 +231,7 @@ fun ReaderScrollCursor(
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .offset { IntOffset(0, (displayFraction * effectiveTrackPx).roundToInt()) }
+                .offset { IntOffset(0, (thumbFraction * effectiveTrackPx).roundToInt()) }
                 .size(ThumbWidth, ThumbHeight)
                 .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
         )
@@ -207,88 +243,30 @@ fun ReaderScrollCursor(
             modifier = Modifier.align(Alignment.TopEnd).fillMaxHeight()
         ) {
             Box(modifier = Modifier.fillMaxHeight()) {
-                // Projected here, inside the preview, so a reader that is merely being scrolled
-                // pays nothing: asking every heading for its position is cheap next to the
-                // per-frame recomposition a pushed position would cost, but it is not free, and
-                // outside a drag there is nobody to show it to. Composed for the whole exit
-                // animation too, so the preview never spends its fade showing the fallback.
-                val sections = projectToc(toc, geometry, listTopInRoot())
-                val fractions = sections.map { it.fraction }
-                val currentSection = sectionIndexAt(fractions, displayFraction)
-
-                // Every section gets a tick, even the ones with no room for a label — the ticks
-                // are the map, the labels only name the parts of it that fit.
-                if (sections.isNotEmpty()) {
-                    val tickColor = MaterialTheme.colorScheme.primary
-                    Canvas(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .fillMaxHeight()
-                            .width(TickWidth)
-                    ) {
-                        for (section in sections) {
-                            val y = centerOf(section.fraction)
-                            val length =
-                                if (section.entry.level <= 2) size.width else size.width * 0.55f
-                            drawRect(
-                                color = tickColor,
-                                topLeft = Offset(size.width - length, y - 0.75f),
-                                size = Size(length, 1.5f)
-                            )
-                        }
-                    }
-                }
-
                 if (sections.isEmpty()) {
-                    TocLabel(
-                        text = "${(displayFraction * 100).roundToInt()}%",
-                        level = 1,
-                        isCurrent = true,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(end = TickWidth + 4.dp)
-                            .offset {
-                                IntOffset(
-                                    0,
-                                    labelTopPx(
-                                        centerPx = centerOf(displayFraction),
-                                        labelHeightPx = with(density) {
-                                            tocLabelHeight(isCurrent = true).toPx()
-                                        },
-                                        trackHeightPx = trackHeightPx
-                                    )
-                                )
-                            }
+                    SectionMark(
+                        text = "${(scrollFraction * 100).roundToInt()}%",
+                        markWidth = MarkWidthMajor,
+                        isActive = true,
+                        animated = !einkMode.animationsDisabled,
+                        centerPx = centerOf(thumbFraction),
+                        trackHeightPx = trackHeightPx,
+                        modifier = Modifier.align(Alignment.TopEnd)
                     )
                 } else {
-                    val visibleLabels = pickTocLabels(
-                        fractions = fractions,
-                        trackHeightPx = effectiveTrackPx,
-                        minSpacingPx = minLabelSpacingPx,
-                        current = currentSection
-                    )
-                    for (index in visibleLabels) {
-                        val section = sections[index]
-                        val isCurrent = index == currentSection
-                        val ownHeightPx = with(density) { tocLabelHeight(isCurrent).toPx() }
-                        TocLabel(
-                            text = section.entry.title,
-                            level = section.entry.level,
-                            isCurrent = isCurrent,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(end = TickWidth + 4.dp)
-                                .offset {
-                                    IntOffset(
-                                        0,
-                                        labelTopPx(
-                                            centerPx = centerOf(section.fraction),
-                                            labelHeightPx = ownHeightPx,
-                                            trackHeightPx = trackHeightPx
-                                        )
-                                    )
-                                }
-                        )
+                    sections.forEachIndexed { index, section ->
+                        key(section.entry.id) {
+                            SectionMark(
+                                text = section.entry.title,
+                                markWidth = if (section.entry.level <= 2) MarkWidthMajor else MarkWidthMinor,
+                                isActive = index == currentSection,
+                                animated = !einkMode.animationsDisabled,
+                                centerPx = centerOf(track.dwells[index].center),
+                                trackHeightPx = trackHeightPx,
+                                testTag = ACTIVE_SECTION_TAG,
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            )
+                        }
                     }
                 }
             }
@@ -296,7 +274,7 @@ fun ReaderScrollCursor(
     }
 }
 
-/** A section of the article, and where along the track it sits. */
+/** A section of the article, and the scroll fraction that brings its heading into view. */
 internal data class ReaderTocSection(val entry: ReaderTocEntry, val fraction: Float)
 
 /** The reader's scroll extent, reconstructed from the item heights seen so far. */
@@ -315,12 +293,13 @@ internal data class ReaderCursorGeometry(
  *
  * Not the heading's own position in the document, which is that offset plus
  * [ReaderCursorGeometry.obscuredTopPx] — the reader's top bar is painted over the list rather than
- * reserved by the Scaffold, so the first band of the viewport is covered. Projecting the document
- * position instead put every section a bar's height too far down the track, with two visible
- * consequences: a section only became the current one once its heading had scrolled that far past
- * the top of the readable area (#277), and dropping the thumb on a label landed its heading behind
- * the bar. Taking the band off here puts the thumb, the active label and the drop target in one
- * coordinate — the same one `onScrollTo` moves the list in — so all three agree.
+ * reserved by the Scaffold, so the first band of the viewport is covered. Taking the band off here
+ * puts the thumb, the active section and the place a drop lands in one coordinate — the one
+ * `onScrollTo` moves the list in — so all three agree.
+ *
+ * The result is a position in the article, not on screen: [ReaderCursorGeometry.absolutePx] and
+ * the headings' root positions move together as the list scrolls, so a projection taken at any
+ * scroll offset gives the same answer.
  *
  * Headings that have not been laid out are dropped rather than guessed at: the article is eagerly
  * composed in full, so that only happens before the body item is first measured.
@@ -340,77 +319,158 @@ internal fun projectToc(
     }
 }
 
-private fun labelTopPx(centerPx: Float, labelHeightPx: Float, trackHeightPx: Float): Int =
-    (centerPx - labelHeightPx / 2f)
-        .coerceIn(0f, (trackHeightPx - labelHeightPx).coerceAtLeast(0f))
-        .roundToInt()
-
 /**
- * One section's name on the track.
+ * One heading on the track: a small muted pill while it is somewhere else in the article, growing
+ * into the bookmark list cursor's accent bubble, with its title, while it is the section the thumb
+ * is in — and shrinking back when the thumb moves on.
  *
- * Only the section being pointed at is a full pill. The rest are context — they say what is above
- * and below without being read — so they get the smaller type, a narrower truncation and a quieter
- * container: a column of equally loud pills covered most of the page it was previewing.
+ * The bubble is centred on its own mark and its arrow points at it, so a section is named where it
+ * sits rather than wherever the finger is. The thumb arrives at the mark at the moment the section
+ * activates, which is when the two coincide; past that, the bubble stays put to say where the
+ * section began.
  */
 @Composable
-private fun TocLabel(
+private fun SectionMark(
     text: String,
-    level: Int,
-    isCurrent: Boolean,
-    modifier: Modifier = Modifier
+    markWidth: Dp,
+    isActive: Boolean,
+    animated: Boolean,
+    centerPx: Float,
+    trackHeightPx: Float,
+    modifier: Modifier = Modifier,
+    testTag: String? = null
 ) {
-    val style = floatingSurfaceStyle(if (isCurrent) 4.dp else 1.dp)
+    val progress by animateFloatAsState(
+        targetValue = if (isActive) 1f else 0f,
+        animationSpec = if (animated) tween(GROW_MILLIS) else snap(),
+        label = "sectionMarkGrow"
+    )
+    val density = LocalDensity.current
+    val arrowWidthPx = with(density) { BubbleArrowWidth.toPx() }
+    val cornerPx = with(density) { BubbleCornerRadius.toPx() }
+
+    var heightPx by remember { mutableStateOf(0f) }
+    val topPx = (centerPx - heightPx / 2f).coerceIn(0f, (trackHeightPx - heightPx).coerceAtLeast(0f))
+    // Pinned against either end of the track, the bubble cannot be centred on its mark, so its
+    // arrow moves along it instead — keeping to the straight part of the edge, clear of the
+    // rounded corners, the way the bookmark list's bubble does.
+    val arrowFraction = if (heightPx > 1f) {
+        val inset = ((cornerPx + arrowWidthPx * 0.7f) / heightPx).coerceAtMost(0.5f)
+        ((centerPx - topPx) / heightPx).coerceIn(inset, 1f - inset)
+    } else {
+        0.5f
+    }
+    val shape = remember(progress, arrowWidthPx, cornerPx, arrowFraction) {
+        sectionMarkShape(arrowWidthPx * progress, cornerPx, arrowFraction)
+    }
+
+    val muted = if (LocalEinkMode.current.highContrast) {
+        MaterialTheme.colorScheme.outline
+    } else {
+        MaterialTheme.colorScheme.outlineVariant
+    }
+    val style = floatingSurfaceStyle(BubbleElevation)
+
     Surface(
-        shape = MaterialTheme.shapes.small,
-        color = if (isCurrent) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        },
-        contentColor = if (isCurrent) {
-            MaterialTheme.colorScheme.onPrimary
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        shadowElevation = style.shadowElevation,
+        shape = shape,
+        color = lerp(muted, MaterialTheme.colorScheme.primary, progress),
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        shadowElevation = style.shadowElevation * progress,
         tonalElevation = 0.dp,
-        border = style.borderStroke(),
+        border = if (isActive) style.borderStroke() else null,
         modifier = modifier
-            .height(tocLabelHeight(isCurrent))
-            .widthIn(max = if (isCurrent) LabelMaxWidth else InactiveLabelMaxWidth)
+            .zIndex(progress)
+            .then(if (isActive && testTag != null) Modifier.testTag(testTag) else Modifier)
+            // A mark sits by the track; the bubble stands off it the way the bookmark list's
+            // does, so the finger on the thumb does not cover the name.
+            .padding(end = TrackWidth)
+            .offset {
+                IntOffset(
+                    -androidx.compose.ui.unit.lerp(MarkGap, BubbleGap, progress).roundToPx(),
+                    topPx.roundToInt()
+                )
+            }
+            .onSizeChanged { heightPx = it.height.toFloat() }
     ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(
-                horizontal = if (isCurrent) 8.dp else 6.dp,
-                vertical = if (isCurrent) 3.dp else 2.dp
-            ),
-            // The active label is the one being read, so its heading level is worth showing; an
-            // inactive one carries its level in the length of its tick instead.
-            style = when {
-                !isCurrent -> MaterialTheme.typography.labelSmall
-                level <= 2 -> MaterialTheme.typography.labelLarge
-                else -> MaterialTheme.typography.labelMedium
-            },
-            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-            maxLines = 1,
-            softWrap = false,
-            textAlign = TextAlign.End,
-            overflow = TextOverflow.Ellipsis
-        )
+        Box(
+            modifier = if (animated) Modifier.animateContentSize(tween(GROW_MILLIS)) else Modifier
+        ) {
+            if (isActive) {
+                Text(
+                    text = text,
+                    modifier = Modifier
+                        .padding(
+                            start = BubbleHorizontalPadding,
+                            top = BubbleVerticalPadding,
+                            // Room for the arrow, which the shape cuts out of the right edge.
+                            end = BubbleHorizontalPadding + BubbleArrowWidth,
+                            bottom = BubbleVerticalPadding
+                        )
+                        .widthIn(max = BubbleMaxTextWidth)
+                        .alpha(progress),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                Spacer(Modifier.size(markWidth, MarkHeight))
+            }
+        }
     }
 }
 
-/** Kept next to [TocLabel] because the track's label spacing and centring both need it. */
-internal fun tocLabelHeight(isCurrent: Boolean): Dp =
-    if (isCurrent) LabelHeight else InactiveLabelHeight
+/**
+ * The bookmark list cursor's speech bubble, with the arrow [arrowWidthPx] wide — zero for a plain
+ * pill, which is what a mark is. Corners are capped at half the height, so the same shape is a
+ * fully rounded pill at a mark's few pixels and the bubble's rounded rectangle once grown.
+ */
+private fun sectionMarkShape(arrowWidthPx: Float, cornerPx: Float, arrowFraction: Float) =
+    GenericShape { size, _ ->
+        val corner = min(cornerPx, size.height / 2f)
+        val bodyWidth = (size.width - arrowWidthPx).coerceAtLeast(0f)
+        addRoundRect(
+            RoundRect(
+                left = 0f, top = 0f, right = bodyWidth, bottom = size.height,
+                cornerRadius = CornerRadius(corner)
+            )
+        )
+        if (arrowWidthPx > 0.5f) {
+            val arrowY = size.height * arrowFraction
+            val arrowHalf = min(
+                arrowWidthPx * 0.7f,
+                min((arrowY - corner).coerceAtLeast(0f), (size.height - arrowY - corner).coerceAtLeast(0f))
+            )
+            moveTo(bodyWidth, arrowY - arrowHalf)
+            lineTo(size.width, arrowY)
+            lineTo(bodyWidth, arrowY + arrowHalf)
+            close()
+        }
+    }
+
+/** The label naming the section the thumb is in. */
+internal const val ACTIVE_SECTION_TAG = "ReaderTocActiveSection"
+
+private const val GROW_MILLIS = 180
 
 private val ThumbHeight = 28.dp
 private val ThumbWidth = 4.dp
 private val TrackWidth = 2.dp
-private val TickWidth = 10.dp
 private val TouchTargetWidth = 24.dp
-private val LabelHeight = 24.dp
-private val InactiveLabelHeight = 18.dp
-private val LabelMaxWidth = 220.dp
-private val InactiveLabelMaxWidth = 132.dp
+
+/** How far either side of its mark a heading holds the article still. */
+private val DwellHalfHeight = 10.dp
+
+private val MarkHeight = 4.dp
+private val MarkWidthMajor = 12.dp
+private val MarkWidthMinor = 8.dp
+private val MarkGap = 3.dp
+
+// The bookmark list cursor's bubble, so the two read as the same control.
+private val BubbleGap = 15.dp
+private val BubbleArrowWidth = 12.dp
+private val BubbleCornerRadius = 10.dp
+private val BubbleHorizontalPadding = 10.dp
+private val BubbleVerticalPadding = 7.dp
+private val BubbleElevation = 4.dp
+private val BubbleMaxTextWidth = 220.dp

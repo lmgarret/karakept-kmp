@@ -539,11 +539,11 @@ here fires from touch, and the tooltip is placed clear of the pointer hotspot
 ### Reader scroll cursor
 
 **`ReaderScrollCursor`** (`ui/components/reader/ReaderScrollCursor.kt`) — the reader's fast-scroll
-thumb, and its table-of-contents preview. Grabbing the thumb lays the article's headings out along
-the track at the scroll position each one sits at, with the section the thumb points at picked out,
-so a drag is aimed at a section rather than at a percentage. Gated on the "Scroll cursor" reader
-setting (`SettingsRepository.readerScrollCursor`) and on Reader mode — the table of contents comes
-from the native renderer's own parse, so Web mode has none.
+thumb, and its table-of-contents preview. Grabbing the thumb lays every heading out along the track
+as a small muted pill at the place that scrolls to it; the section the thumb is in grows out of its
+pill into the bookmark list cursor's accent bubble, named, and shrinks back when the thumb moves on.
+Gated on the "Scroll cursor" reader setting (`SettingsRepository.readerScrollCursor`) and on Reader
+mode — the table of contents comes from the native renderer's own parse, so Web mode has none.
 
 The table of contents comes from both ends of the reader at once, because neither end has both:
 
@@ -577,15 +577,22 @@ back to a `scrollToItem` pair.
 > **Rule:** a section's place on the track is the **scroll offset that brings its heading into
 > view**, not the heading's own position in the document — the two differ by
 > `rememberViewerChromeInsets().topPx`, since the top bar is painted over the list rather than
-> reserved by the Scaffold. Projecting the document position put every section a bar's height too
-> far down: a section went current only once its heading had scrolled that far past the top of the
-> readable area, and dropping the thumb on a label landed its heading behind the bar. Taking the
-> band off in `projectToc` puts the thumb, the active label and the drop target in one coordinate —
-> the one `onScrollTo` moves the list in — so all three agree.
+> reserved by the Scaffold. `projectToc` takes the band off, so the thumb, the active section and
+> the place a drop lands share one coordinate. The result is a position in the article, so it is
+> projected once per layout change, not per scroll frame.
 
-Only the section being pointed at is a full pill; the rest are context, at smaller type and a
-narrower truncation (`tocLabelHeight`). Label spacing stays keyed to the active label, the tallest,
-so shrinking the inactive ones reduces their footprint rather than packing more onto the track.
+> **Rule:** the thumb-to-scroll map is **not linear** — each heading has a *dwell*, a short stretch
+> of track over which the article holds still with that heading at the readable top
+> (`ReaderCursorTrack`, `ui/utils/ReaderScrollCursorUtils.kt`). Linearly, a pixel of thumb moves a
+> long article tens of pixels, so the frame in which a heading crossed the top was skipped and its
+> section was first named with the heading already behind the bar — correct thresholds, never a
+> frame showing it. Dwells take at most a third of the way to a neighbour so the map stays
+> continuous, and the idle thumb uses the inverse (`thumbAt`) so a thumb let go on a dwell stays
+> on its mark. `ReaderScrollCursorDragTest` drags a real rendered article and checks, frame by
+> frame, against the headings' own laid-out positions rather than anything the cursor computes.
+
+The finger holds the thumb by its middle: mapping it over the whole track, as the bookmark list's
+cursor does, drifts half a thumb from the marks towards each end — as wide as a dwell.
 
 Two things the cursor goes through rather than around:
 

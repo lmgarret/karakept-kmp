@@ -85,56 +85,108 @@ class ReaderScrollCursorUtilsTest {
     }
 
     @Test
-    fun labelsAreThinnedToWhatFitsAlongTheTrack() {
-        // Ten evenly spread sections over a 1000px track: one every 100px, but a label needs 250.
-        val fractions = List(10) { it / 10f }
+    fun aListParkedOnAHeadingWithinAPixelHasReachedIt() {
+        // Scrolling to a section rounds its fraction to whole pixels; read back, the list can sit a
+        // hair short of the heading. The cursor passes that much slack.
+        assertEquals(0, sectionIndexAt(listOf(0.40002f), 0.4f, epsilon = 0.0001f))
+        assertEquals(-1, sectionIndexAt(listOf(0.40002f), 0.4f, epsilon = 0f))
+    }
 
-        val picked = pickTocLabels(fractions, trackHeightPx = 1000f, minSpacingPx = 250f, current = 0)
+    // ---- the dwell track ----
 
-        assertEquals(listOf(0, 3, 6, 9), picked)
+    @Test
+    fun withoutSectionsTheThumbIsTheScrollPosition() {
+        val track = readerCursorTrack(emptyList(), dwellHalfWidth = 0.05f)
+
+        for (t in listOf(0f, 0.25f, 0.5f, 1f)) {
+            assertEquals(t, track.scrollAt(t))
+            assertEquals(t, track.thumbAt(t))
+        }
     }
 
     @Test
-    fun theSectionBeingPointedAtIsAlwaysLabelled() {
-        val fractions = List(10) { it / 10f }
+    fun theListHoldsStillOnAHeadingAcrossItsDwell() {
+        // The fix for headings never being seen: over its dwell, the scroll is exactly the offset
+        // that brings the heading into view, however far the finger moves inside it.
+        val track = readerCursorTrack(listOf(0.4f), dwellHalfWidth = 0.05f)
 
-        val picked = pickTocLabels(fractions, trackHeightPx = 1000f, minSpacingPx = 250f, current = 4)
-
-        assertTrue(4 in picked)
-        assertEquals(picked.sorted(), picked)
+        for (t in listOf(0.35f, 0.38f, 0.4f, 0.42f, 0.45f)) {
+            assertEquals(0.4f, track.scrollAt(t), "thumb at $t")
+        }
     }
 
     @Test
-    fun labelsSpreadOutwardsFromTheThumbInBothDirections() {
-        val fractions = List(10) { it / 10f }
+    fun outsideTheDwellsTheTrackRunsStraightFromOneToTheNext() {
+        val track = readerCursorTrack(listOf(0.4f), dwellHalfWidth = 0.05f)
 
-        val picked = pickTocLabels(fractions, trackHeightPx = 1000f, minSpacingPx = 250f, current = 4)
-
-        assertTrue(picked.any { it < 4 }, "sections above the thumb should still be named")
-        assertTrue(picked.any { it > 4 }, "sections below the thumb should still be named")
+        // From the top of the track to the dwell's start, 0 → 0.4 over 0 → 0.35.
+        assertEquals(0.2f, track.scrollAt(0.175f), 1e-5f)
+        // From the dwell's end to the bottom, 0.4 → 1 over 0.45 → 1.
+        assertEquals(0.7f, track.scrollAt(0.725f), 1e-5f)
     }
 
     @Test
-    fun labelCountIsCapped() {
-        val fractions = List(200) { it / 200f }
+    fun theArticleNeverJumpsOrRunsBackwardsUnderTheFinger() {
+        // Two sections 0.02 apart, one near each end: the cases where dwells crowd each other.
+        val track = readerCursorTrack(listOf(0.05f, 0.3f, 0.32f, 0.6f, 0.98f), dwellHalfWidth = 0.04f)
 
-        val picked = pickTocLabels(
-            fractions, trackHeightPx = 100_000f, minSpacingPx = 1f, current = 100, maxLabels = 6
-        )
-
-        assertEquals(6, picked.size)
+        val step = 1f / 2000
+        var previous = track.scrollAt(0f)
+        for (i in 1..2000) {
+            val scroll = track.scrollAt(i * step)
+            assertTrue(scroll >= previous, "scroll ran backwards at ${i * step}")
+            // Never steeper than three times the average, so never a jump.
+            assertTrue(scroll - previous <= 3f * step + 1e-5f, "scroll jumped at ${i * step}")
+            previous = scroll
+        }
+        assertEquals(0f, track.scrollAt(0f))
+        assertEquals(1f, track.scrollAt(1f))
     }
 
     @Test
-    fun aSingleSectionIsLabelledEvenWhenTheTrackIsTiny() {
-        assertEquals(
-            listOf(0),
-            pickTocLabels(listOf(0.5f), trackHeightPx = 40f, minSpacingPx = 250f, current = 0)
-        )
+    fun crowdedDwellsAreNarrowedWithASlopeLeftBetweenThem() {
+        // Two short sections each still get a dwell, a third of the way to the other at most,
+        // so the article moves from one heading to the next instead of jumping.
+        val track = readerCursorTrack(listOf(0.5f, 0.53f), dwellHalfWidth = 0.05f)
+
+        assertEquals(0.51f, track.dwells[0].end, 1e-5f)
+        assertEquals(0.52f, track.dwells[1].start, 1e-5f)
+        assertEquals(0.5f, track.scrollAt(0.505f))
+        assertEquals(0.515f, track.scrollAt(0.515f), 1e-5f)
+        assertEquals(0.53f, track.scrollAt(0.525f))
     }
 
     @Test
-    fun noSectionsMeansNoLabels() {
-        assertTrue(pickTocLabels(emptyList(), 1000f, 250f, current = -1).isEmpty())
+    fun aDwellNeverRunsOffEitherEndOfTheTrack() {
+        val track = readerCursorTrack(listOf(0f, 1f), dwellHalfWidth = 0.05f)
+
+        assertEquals(0f, track.dwells[0].start)
+        assertEquals(1f, track.dwells[1].end)
+    }
+
+    @Test
+    fun aSectionRunningBackwardsIsHeldAtTheOneBeforeIt() {
+        val track = readerCursorTrack(listOf(0.5f, 0.3f), dwellHalfWidth = 0.02f)
+
+        assertEquals(listOf(0.5f, 0.5f), track.dwells.map { it.scroll })
+    }
+
+    @Test
+    fun aThumbLetGoOnADwellStaysOnItsMark() {
+        // The inverse is what the idle thumb uses. Mapped linearly instead, a thumb let go on a
+        // dwell would hop off it the moment the drag ended.
+        val track = readerCursorTrack(listOf(0.4f), dwellHalfWidth = 0.05f)
+
+        assertEquals(track.dwells[0].center, track.thumbAt(0.4f))
+        assertEquals(track.dwells[0].center, track.thumbAt(0.40001f, epsilon = 0.0001f))
+    }
+
+    @Test
+    fun theIdleThumbRetracesTheDragEverywhereElse() {
+        val track = readerCursorTrack(listOf(0.2f, 0.55f, 0.8f), dwellHalfWidth = 0.03f)
+
+        for (t in listOf(0.05f, 0.12f, 0.3f, 0.45f, 0.65f, 0.9f, 0.99f)) {
+            assertEquals(t, track.thumbAt(track.scrollAt(t)), 1e-4f, "thumb at $t")
+        }
     }
 }
